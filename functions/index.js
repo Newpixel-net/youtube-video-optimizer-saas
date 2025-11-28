@@ -267,23 +267,42 @@ async function getVideoMetadata(videoId) {
     }
 
     const video = response.data.items[0];
-    const snippet = video.snippet;
-    const statistics = video.statistics;
+    const snippet = video.snippet || {};
+    const statistics = video.statistics || {};
+    const contentDetails = video.contentDetails || {};
 
+    // Parse duration to human-readable format
+    const rawDuration = contentDetails.duration || 'PT0S';
+    const durationMatch = rawDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    let duration = 'Unknown';
+    if (durationMatch) {
+      const hours = parseInt(durationMatch[1] || 0);
+      const minutes = parseInt(durationMatch[2] || 0);
+      const seconds = parseInt(durationMatch[3] || 0);
+      if (hours > 0) {
+        duration = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+    }
+
+    // Return object with field names matching what optimizeVideo expects
+    // All fields have default values to prevent Firestore undefined errors
     return {
-      videoId,
+      videoId: videoId || '',
       title: snippet.title || 'Untitled',
       description: snippet.description || '',
-      channelTitle: snippet.channelTitle,
-      channelId: snippet.channelId,
-      publishedAt: snippet.publishedAt,
-      thumbnail: snippet.thumbnails.high?.url || snippet.thumbnails.default?.url,
+      channelTitle: snippet.channelTitle || 'Unknown Channel',
+      channelId: snippet.channelId || '',
+      publishedAt: snippet.publishedAt || null,
+      thumbnail: (snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url) || '',
       tags: snippet.tags || [],
-      categoryId: snippet.categoryId,
-      views: parseInt(statistics.viewCount) || 0,
-      likes: parseInt(statistics.likeCount) || 0,
-      comments: parseInt(statistics.commentCount) || 0,
-      duration: video.contentDetails.duration,
+      categoryId: snippet.categoryId || '',
+      viewCount: parseInt(statistics.viewCount) || 0,
+      likeCount: parseInt(statistics.likeCount) || 0,
+      commentCount: parseInt(statistics.commentCount) || 0,
+      duration: duration,
+      rawDuration: rawDuration,
       defaultLanguage: snippet.defaultLanguage || 'en'
     };
   } catch (error) {
