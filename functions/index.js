@@ -49,7 +49,65 @@ async function requireAdmin(context) {
 async function getUser(uid) {
   const userDoc = await db.collection('users').doc(uid).get();
   if (!userDoc.exists) {
-    throw new functions.https.HttpsError('not-found', 'User not found');
+    // Auto-create user profile if missing
+    console.log('User document not found, creating profile for:', uid);
+    const defaultPlan = 'free';
+    const defaultLimits = {
+      warpOptimizer: { dailyLimit: 3 },
+      titleGenerator: { dailyLimit: 3 },
+      descriptionGenerator: { dailyLimit: 3 },
+      tagGenerator: { dailyLimit: 3 }
+    };
+
+    const newUserData = {
+      uid: uid,
+      email: '',
+      displayName: '',
+      photoURL: '',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
+      isActive: true,
+      isAdmin: false,
+      subscription: {
+        plan: defaultPlan,
+        status: 'active',
+        startDate: admin.firestore.FieldValue.serverTimestamp(),
+        endDate: null,
+        autoRenew: false
+      },
+      usage: {
+        warpOptimizer: {
+          usedToday: 0,
+          limit: defaultLimits.warpOptimizer.dailyLimit,
+          lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+          cooldownUntil: null
+        },
+        titleGenerator: {
+          usedToday: 0,
+          limit: defaultLimits.titleGenerator.dailyLimit,
+          lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+          cooldownUntil: null
+        },
+        descriptionGenerator: {
+          usedToday: 0,
+          limit: defaultLimits.descriptionGenerator.dailyLimit,
+          lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+          cooldownUntil: null
+        },
+        tagGenerator: {
+          usedToday: 0,
+          limit: defaultLimits.tagGenerator.dailyLimit,
+          lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+          cooldownUntil: null
+        }
+      },
+      notes: '',
+      customLimits: {}
+    };
+
+    await db.collection('users').doc(uid).set(newUserData);
+    console.log('User profile created successfully');
+    return newUserData;
   }
   return userDoc.data();
 }
