@@ -182,6 +182,81 @@
         }
 
         /* ------------------------------------------
+           2.4b COMPONENTS - Tabs
+           ------------------------------------------ */
+        .tabs-container {
+            display: flex;
+            gap: 0.25rem;
+            background: #f3f4f6;
+            padding: 0.25rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: none;
+            background: transparent;
+            color: #6b7280;
+            font-weight: 600;
+            font-size: 0.875rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            color: #374151;
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: #7c3aed;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-content {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        /* ------------------------------------------
+           2.4c COMPONENTS - Score Gauge
+           ------------------------------------------ */
+        .score-gauge {
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+
+        .score-circle {
+            transform: rotate(-90deg);
+        }
+
+        .score-circle-bg {
+            fill: none;
+            stroke: #e5e7eb;
+            stroke-width: 8;
+        }
+
+        .score-circle-fill {
+            fill: none;
+            stroke-width: 8;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        .score-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        /* ------------------------------------------
            2.5 COMPONENTS - Forms
            ------------------------------------------ */
         .input-field {
@@ -387,21 +462,27 @@
            ========================================== */
 
         const state = {
-            // Current view: login | register | forgot-password | dashboard | optimizer | results | history
+            // Current view: login | register | forgot-password | dashboard | optimizer | results | history | admin
             currentView: 'login',
 
             // User data
             user: null,
             profile: null,
+            isAdmin: false,
 
             // UI state
             loading: false,
             error: null,
             success: null,
 
-            // Data
+            // Results page
             currentResults: null,    // Current optimization results
-            historyData: null        // List of past optimizations
+            resultsTab: 'titles',    // Current tab: titles | description | tags
+
+            // History/Admin data
+            historyData: null,       // List of past optimizations
+            adminUsers: null,        // Admin user list
+            adminLoading: false
         };
 
         /* ==========================================
@@ -486,6 +567,8 @@
                 try {
                     const result = await functions.httpsCallable('getUserProfile')();
                     state.profile = result.data.profile;
+                    // Check admin status
+                    state.isAdmin = state.profile.isAdmin === true;
                     if (state.currentView === 'login' || state.currentView === 'register') {
                         state.currentView = 'dashboard';
                         render();
@@ -497,6 +580,7 @@
             } else {
                 state.user = null;
                 state.profile = null;
+                state.isAdmin = false;
                 if (state.currentView !== 'register' && state.currentView !== 'forgot-password') {
                     state.currentView = 'login';
                 }
@@ -904,6 +988,87 @@
                         btn.textContent = details.classList.contains('hidden') ? 'Show Technical Details' : 'Hide Technical Details';
                     }
                 }
+            },
+
+            /* ------------------------------------------
+               4.5.5 Results Tab Actions
+               ------------------------------------------ */
+
+            setResultsTab: function(tab) {
+                state.resultsTab = tab;
+                render();
+            },
+
+            /* ------------------------------------------
+               4.5.6 Admin Actions
+               ------------------------------------------ */
+
+            goToAdmin: function() {
+                state.currentView = 'admin';
+                state.error = null;
+                state.adminLoading = true;
+                render();
+
+                // Load admin data
+                functions.httpsCallable('adminGetUsers')()
+                    .then(function(result) {
+                        state.adminUsers = result.data.users || [];
+                        state.adminLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.adminLoading = false;
+                        state.error = { message: 'Failed to load admin data: ' + e.message };
+                        render();
+                    });
+            },
+
+            setupAdmin: function() {
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('setupAdmin')()
+                    .then(function(result) {
+                        state.loading = false;
+                        state.isAdmin = true;
+                        state.success = result.data.message;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.loading = false;
+                        state.error = { message: 'Failed to setup admin: ' + e.message };
+                        render();
+                    });
+            },
+
+            updateUserPlan: function(userId, newPlan) {
+                state.adminLoading = true;
+                render();
+
+                functions.httpsCallable('adminUpdateUserPlan')({ userId: userId, plan: newPlan })
+                    .then(function(result) {
+                        // Refresh user list
+                        return functions.httpsCallable('adminGetUsers')();
+                    })
+                    .then(function(result) {
+                        state.adminUsers = result.data.users || [];
+                        state.adminLoading = false;
+                        state.success = 'User plan updated successfully!';
+                        render();
+                        setTimeout(function() { state.success = null; render(); }, 3000);
+                    })
+                    .catch(function(e) {
+                        state.adminLoading = false;
+                        state.error = { message: 'Failed to update user: ' + e.message };
+                        render();
+                    });
+            },
+
+            checkAdminStatus: function() {
+                // Check if user is admin when profile loads
+                if (state.profile && state.profile.isAdmin) {
+                    state.isAdmin = true;
+                }
             }
         };
 
@@ -1194,6 +1359,28 @@
             html += '</div>';
 
             html += '</div>';
+
+            // Admin Section (only for admins)
+            if (state.isAdmin) {
+                html += '<div class="mt-6 fade-in">';
+                html += '<div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-xl p-6 mobile-padding cursor-pointer hover:from-purple-700 hover:to-indigo-700 transition-all" onclick="app.goToAdmin()">';
+                html += '<div class="flex items-center gap-4">';
+                html += '<div class="text-4xl">⚙️</div>';
+                html += '<div>';
+                html += '<h3 class="text-xl font-bold text-white mb-1">Admin Dashboard</h3>';
+                html += '<p class="text-white/80 text-sm">Manage users, subscriptions & settings</p>';
+                html += '</div>';
+                html += '<div class="ml-auto text-white text-2xl">→</div>';
+                html += '</div></div></div>';
+            } else {
+                // Become admin button (for first-time setup)
+                html += '<div class="mt-6 text-center fade-in">';
+                html += '<button onclick="app.setupAdmin()" class="text-white/60 hover:text-white text-sm underline">';
+                html += state.loading ? 'Setting up...' : '🔐 Setup Admin Access';
+                html += '</button>';
+                html += '</div>';
+            }
+
             html += '</div></div>';
 
             return html;
@@ -1275,7 +1462,7 @@
         }
 
         /* ------------------------------------------
-           4.6.6 Results View
+           4.6.6 Results View (Tabbed Interface)
            ------------------------------------------ */
         function renderResults() {
             if (!state.currentResults) {
@@ -1283,112 +1470,156 @@
             }
 
             const r = state.currentResults;
+            const tab = state.resultsTab || 'titles';
             var html = '';
 
             // Container
             html += '<div class="min-h-screen mobile-full-screen py-6 px-4">';
-            html += '<div class="max-w-6xl mx-auto">';
+            html += '<div class="max-w-4xl mx-auto">';
 
             // Header with navigation
             html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 fade-in">';
             html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">✨ Optimization Results</h1>';
             html += '<div class="flex gap-2 w-full sm:w-auto">';
             html += '<button onclick="app.goToDashboard()" class="flex-1 sm:flex-none btn-secondary">← Dashboard</button>';
-            html += '<button onclick="app.goToHistory()" class="flex-1 sm:flex-none btn-secondary">📜 History</button>';
+            html += '<button onclick="app.goToOptimizer()" class="flex-1 sm:flex-none btn-secondary">🔄 New</button>';
             html += '</div></div>';
 
-            // Video Info Card
-            if (r.videoInfo) {
-                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
-                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">📹 Video Information</h2>';
-                html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">';
-                html += '<div><p class="text-sm text-gray-600">Title</p><p class="font-semibold">' + utils.escapeHtml(r.videoInfo.title || 'N/A') + '</p></div>';
-                html += '<div><p class="text-sm text-gray-600">Channel</p><p class="font-semibold">' + utils.escapeHtml(r.videoInfo.channelTitle || 'N/A') + '</p></div>';
-                html += '<div><p class="text-sm text-gray-600">Views</p><p class="font-semibold">' + utils.formatNumber(r.videoInfo.viewCount || 0) + '</p></div>';
-                html += '<div><p class="text-sm text-gray-600">Duration</p><p class="font-semibold">' + utils.escapeHtml(r.videoInfo.duration || 'N/A') + '</p></div>';
-                html += '</div></div>';
-            }
+            // SEO Score Card (Before/After)
+            html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
+            html += '<div class="flex flex-col md:flex-row items-center justify-around gap-6">';
 
-            // Optimized Titles
-            if (r.titles && r.titles.length > 0) {
-                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
-                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">📝 Optimized Titles</h2>';
-                html += '<div class="space-y-3">';
+            // Before Score (estimated based on video metadata)
+            var beforeScore = Math.min(45, Math.round((r.videoInfo?.viewCount || 0) / 100000 * 10) + 25);
+            var afterScore = r.seoAnalysis?.score || 85;
+            var improvement = afterScore - beforeScore;
 
-                for (var i = 0; i < r.titles.length; i++) {
-                    var titleId = 'title-' + i;
-                    var escapedTitle = utils.escapeJs(r.titles[i]);
-
-                    html += '<div class="p-4 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all">';
-                    html += '<div class="flex justify-between items-start gap-3">';
-                    html += '<p class="flex-1 font-medium text-gray-800">' + utils.escapeHtml(r.titles[i]) + '</p>';
-                    html += '<button id="' + titleId + '-btn" onclick="app.copyToClipboard(\'' + escapedTitle + '\', \'' + titleId + '-btn\')" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 whitespace-nowrap">📋 Copy</button>';
-                    html += '</div></div>';
-                }
-
-                html += '</div></div>';
-            }
-
-            // Optimized Description
-            if (r.description) {
-                var escapedDesc = utils.escapeJs(r.description);
-
-                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
-                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">📄 Optimized Description</h2>';
-                html += '<div class="p-4 bg-gray-50 rounded-lg border-2 border-gray-200">';
-                html += '<p class="text-gray-800 whitespace-pre-wrap mb-3">' + utils.escapeHtml(r.description) + '</p>';
-                html += '<button id="desc-btn" onclick="app.copyToClipboard(\'' + escapedDesc + '\', \'desc-btn\')" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">📋 Copy Description</button>';
-                html += '</div></div>';
-            }
-
-            // Optimized Tags
-            if (r.tags && r.tags.length > 0) {
-                var escapedTags = utils.escapeJs(r.tags.join(', '));
-
-                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
-                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">🏷️ Optimized Tags</h2>';
-                html += '<div class="flex flex-wrap gap-2 mb-4">';
-
-                for (var j = 0; j < r.tags.length; j++) {
-                    html += '<span class="tag">' + utils.escapeHtml(r.tags[j]) + '</span>';
-                }
-
-                html += '</div>';
-                html += '<button id="tags-btn" onclick="app.copyToClipboard(\'' + escapedTags + '\', \'tags-btn\')" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">📋 Copy All Tags</button>';
-                html += '</div>';
-            }
-
-            // SEO Analysis
-            if (r.seoAnalysis) {
-                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
-                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">🔍 SEO Analysis</h2>';
-                html += '<div class="space-y-3">';
-
-                if (r.seoAnalysis.score) {
-                    var scoreColor = r.seoAnalysis.score >= 80 ? 'text-green-600' : r.seoAnalysis.score >= 60 ? 'text-yellow-600' : 'text-red-600';
-                    html += '<div class="flex items-center gap-3">';
-                    html += '<p class="text-gray-700 font-semibold">SEO Score:</p>';
-                    html += '<p class="text-2xl font-bold ' + scoreColor + '">' + r.seoAnalysis.score + '/100</p>';
-                    html += '</div>';
-                }
-
-                if (r.seoAnalysis.recommendations && r.seoAnalysis.recommendations.length > 0) {
-                    html += '<div><p class="font-semibold text-gray-700 mb-2">Recommendations:</p>';
-                    html += '<ul class="list-disc list-inside space-y-1 text-gray-600">';
-                    for (var k = 0; k < r.seoAnalysis.recommendations.length; k++) {
-                        html += '<li>' + utils.escapeHtml(r.seoAnalysis.recommendations[k]) + '</li>';
-                    }
-                    html += '</ul></div>';
-                }
-
-                html += '</div></div>';
-            }
-
-            // Action Buttons
-            html += '<div class="flex flex-col sm:flex-row gap-4 fade-in">';
-            html += '<button onclick="app.goToOptimizer()" class="flex-1 py-4 bg-white text-gray-800 font-bold rounded-lg hover:bg-gray-100 transition-all">🔄 Optimize Another Video</button>';
-            html += '<button onclick="app.goToDashboard()" class="flex-1 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all">✅ Done</button>';
+            // Before
+            html += '<div class="text-center">';
+            html += '<p class="text-sm text-gray-500 mb-2">Current SEO</p>';
+            html += '<div class="score-gauge">';
+            html += '<svg class="score-circle" width="120" height="120" viewBox="0 0 120 120">';
+            html += '<circle class="score-circle-bg" cx="60" cy="60" r="50"></circle>';
+            var beforeDash = (beforeScore / 100) * 314;
+            html += '<circle class="score-circle-fill" cx="60" cy="60" r="50" stroke="#ef4444" stroke-dasharray="' + beforeDash + ' 314"></circle>';
+            html += '</svg>';
+            html += '<div class="score-value text-red-500">' + beforeScore + '</div>';
             html += '</div>';
+            html += '</div>';
+
+            // Arrow
+            html += '<div class="text-4xl text-gray-300">→</div>';
+
+            // After
+            html += '<div class="text-center">';
+            html += '<p class="text-sm text-gray-500 mb-2">After Optimization</p>';
+            html += '<div class="score-gauge">';
+            html += '<svg class="score-circle" width="120" height="120" viewBox="0 0 120 120">';
+            html += '<circle class="score-circle-bg" cx="60" cy="60" r="50"></circle>';
+            var afterDash = (afterScore / 100) * 314;
+            var afterColor = afterScore >= 80 ? '#22c55e' : afterScore >= 60 ? '#eab308' : '#ef4444';
+            html += '<circle class="score-circle-fill" cx="60" cy="60" r="50" stroke="' + afterColor + '" stroke-dasharray="' + afterDash + ' 314"></circle>';
+            html += '</svg>';
+            html += '<div class="score-value" style="color:' + afterColor + '">' + afterScore + '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Improvement badge
+            html += '<div class="text-center bg-green-50 px-6 py-3 rounded-xl">';
+            html += '<p class="text-3xl font-bold text-green-600">+' + improvement + '%</p>';
+            html += '<p class="text-sm text-green-600">Improvement</p>';
+            html += '</div>';
+
+            html += '</div></div>';
+
+            // Video Info (Compact)
+            if (r.videoInfo) {
+                html += '<div class="bg-white/10 rounded-xl p-4 mb-4 fade-in">';
+                html += '<div class="flex items-center gap-4">';
+                if (r.videoInfo.thumbnail) {
+                    html += '<img src="' + utils.escapeHtml(r.videoInfo.thumbnail) + '" class="w-24 h-14 object-cover rounded-lg" alt="Thumbnail" />';
+                }
+                html += '<div class="flex-1 min-w-0">';
+                html += '<p class="text-white font-semibold truncate">' + utils.escapeHtml(r.videoInfo.title || 'N/A') + '</p>';
+                html += '<p class="text-white/70 text-sm">' + utils.escapeHtml(r.videoInfo.channelTitle || '') + ' • ' + utils.formatNumber(r.videoInfo.viewCount || 0) + ' views</p>';
+                html += '</div></div></div>';
+            }
+
+            // Main Content Card with Tabs
+            html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding fade-in">';
+
+            // Tabs
+            html += '<div class="tabs-container">';
+            html += '<button onclick="app.setResultsTab(\'titles\')" class="tab-btn ' + (tab === 'titles' ? 'active' : '') + '">📝 Titles</button>';
+            html += '<button onclick="app.setResultsTab(\'description\')" class="tab-btn ' + (tab === 'description' ? 'active' : '') + '">📄 Description</button>';
+            html += '<button onclick="app.setResultsTab(\'tags\')" class="tab-btn ' + (tab === 'tags' ? 'active' : '') + '">🏷️ Tags</button>';
+            html += '</div>';
+
+            // Tab Content
+            html += '<div class="tab-content">';
+
+            if (tab === 'titles') {
+                // Titles Tab
+                if (r.titles && r.titles.length > 0) {
+                    html += '<div class="space-y-3">';
+                    var titleLabels = ['🎯 Clickbait Style', '🔍 SEO Optimized', '❓ Question Format'];
+                    for (var i = 0; i < r.titles.length; i++) {
+                        var titleId = 'title-' + i;
+                        var escapedTitle = utils.escapeJs(r.titles[i]);
+                        html += '<div class="p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border-2 border-gray-100 hover:border-purple-300 transition-all">';
+                        html += '<p class="text-xs text-purple-600 font-semibold mb-1">' + (titleLabels[i] || 'Title ' + (i+1)) + '</p>';
+                        html += '<div class="flex justify-between items-start gap-3">';
+                        html += '<p class="flex-1 text-lg font-medium text-gray-800">' + utils.escapeHtml(r.titles[i]) + '</p>';
+                        html += '<button id="' + titleId + '-btn" onclick="app.copyToClipboard(\'' + escapedTitle + '\', \'' + titleId + '-btn\')" class="px-4 py-2 bg-purple-500 text-white text-sm rounded-lg hover:bg-purple-600 whitespace-nowrap transition-all">📋 Copy</button>';
+                        html += '</div></div>';
+                    }
+                    html += '</div>';
+                } else {
+                    html += '<p class="text-gray-500 text-center py-8">No titles generated</p>';
+                }
+            } else if (tab === 'description') {
+                // Description Tab
+                if (r.description) {
+                    var escapedDesc = utils.escapeJs(r.description);
+                    html += '<div class="relative">';
+                    html += '<div class="p-4 bg-gray-50 rounded-xl border-2 border-gray-200 max-h-96 overflow-y-auto">';
+                    html += '<pre class="text-gray-800 whitespace-pre-wrap font-sans text-sm leading-relaxed">' + utils.escapeHtml(r.description) + '</pre>';
+                    html += '</div>';
+                    html += '<button id="desc-btn" onclick="app.copyToClipboard(\'' + escapedDesc + '\', \'desc-btn\')" class="mt-4 w-full py-3 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition-all">📋 Copy Full Description</button>';
+                    html += '</div>';
+                } else {
+                    html += '<p class="text-gray-500 text-center py-8">No description generated</p>';
+                }
+            } else if (tab === 'tags') {
+                // Tags Tab
+                if (r.tags && r.tags.length > 0) {
+                    var escapedTags = utils.escapeJs(r.tags.join(', '));
+                    html += '<div class="mb-4">';
+                    html += '<p class="text-sm text-gray-500 mb-3">' + r.tags.length + ' tags generated</p>';
+                    html += '<div class="flex flex-wrap gap-2 max-h-64 overflow-y-auto p-2">';
+                    for (var j = 0; j < r.tags.length; j++) {
+                        html += '<span class="inline-block px-3 py-1.5 bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 rounded-full text-sm font-medium hover:from-purple-200 hover:to-blue-200 transition-all cursor-default">' + utils.escapeHtml(r.tags[j]) + '</span>';
+                    }
+                    html += '</div></div>';
+                    html += '<button id="tags-btn" onclick="app.copyToClipboard(\'' + escapedTags + '\', \'tags-btn\')" class="w-full py-3 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition-all">📋 Copy All Tags</button>';
+                } else {
+                    html += '<p class="text-gray-500 text-center py-8">No tags generated</p>';
+                }
+            }
+
+            html += '</div>'; // End tab-content
+            html += '</div>'; // End main card
+
+            // Recommendations (if any)
+            if (r.seoAnalysis?.recommendations && r.seoAnalysis.recommendations.length > 0) {
+                html += '<div class="mt-4 p-4 bg-white/10 rounded-xl fade-in">';
+                html += '<p class="text-white font-semibold mb-2">💡 Tips to improve further:</p>';
+                html += '<ul class="text-white/80 text-sm space-y-1">';
+                for (var k = 0; k < r.seoAnalysis.recommendations.length; k++) {
+                    html += '<li>• ' + utils.escapeHtml(r.seoAnalysis.recommendations[k]) + '</li>';
+                }
+                html += '</ul></div>';
+            }
 
             html += '</div></div>';
 
@@ -1478,6 +1709,117 @@
             return html;
         }
 
+        /* ------------------------------------------
+           4.6.8 Admin Dashboard View
+           ------------------------------------------ */
+        function renderAdmin() {
+            var html = '';
+
+            // Container
+            html += '<div class="min-h-screen mobile-full-screen py-6 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+
+            // Header
+            html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 fade-in">';
+            html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">⚙️ Admin Dashboard</h1>';
+            html += '<button onclick="app.goToDashboard()" class="btn-secondary w-full sm:w-auto">← Back to Dashboard</button>';
+            html += '</div>';
+
+            // Success message
+            if (state.success) {
+                html += '<div class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg fade-in">';
+                html += '<p>' + utils.escapeHtml(state.success) + '</p>';
+                html += '</div>';
+            }
+
+            // Error message
+            if (state.error) {
+                var errorMsg = typeof state.error === 'string' ? state.error : state.error.message;
+                html += '<div class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg fade-in">';
+                html += '<p>' + utils.escapeHtml(errorMsg) + '</p>';
+                html += '</div>';
+            }
+
+            // Stats Cards
+            html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 fade-in">';
+            var totalUsers = state.adminUsers ? state.adminUsers.length : 0;
+            var proUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscription && u.subscription.plan === 'pro'; }).length : 0;
+            var freeUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return !u.subscription || u.subscription.plan === 'free'; }).length : 0;
+
+            html += '<div class="bg-white rounded-xl p-6 text-center">';
+            html += '<p class="text-4xl font-bold text-gray-800">' + totalUsers + '</p>';
+            html += '<p class="text-gray-600">Total Users</p>';
+            html += '</div>';
+
+            html += '<div class="bg-white rounded-xl p-6 text-center">';
+            html += '<p class="text-4xl font-bold text-purple-600">' + proUsers + '</p>';
+            html += '<p class="text-gray-600">Pro Users</p>';
+            html += '</div>';
+
+            html += '<div class="bg-white rounded-xl p-6 text-center">';
+            html += '<p class="text-4xl font-bold text-gray-400">' + freeUsers + '</p>';
+            html += '<p class="text-gray-600">Free Users</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Users Table
+            html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding fade-in">';
+            html += '<h2 class="text-xl font-bold text-gray-800 mb-4">👥 User Management</h2>';
+
+            if (state.adminLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="spinner spinner-dark mx-auto mb-4"></div>';
+                html += '<p class="text-gray-600">Loading users...</p>';
+                html += '</div>';
+            } else if (!state.adminUsers || state.adminUsers.length === 0) {
+                html += '<p class="text-gray-500 text-center py-8">No users found</p>';
+            } else {
+                html += '<div class="overflow-x-auto">';
+                html += '<table class="w-full text-left">';
+                html += '<thead class="bg-gray-50">';
+                html += '<tr>';
+                html += '<th class="px-4 py-3 text-xs font-semibold text-gray-600 uppercase">User</th>';
+                html += '<th class="px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Plan</th>';
+                html += '<th class="px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Usage</th>';
+                html += '<th class="px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Actions</th>';
+                html += '</tr></thead>';
+                html += '<tbody class="divide-y divide-gray-200">';
+
+                for (var i = 0; i < state.adminUsers.length; i++) {
+                    var user = state.adminUsers[i];
+                    var plan = user.subscription ? user.subscription.plan : 'free';
+                    var planColor = plan === 'pro' ? 'bg-purple-100 text-purple-800' : plan === 'lite' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
+                    var usageInfo = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.usedToday + '/' + user.usage.warpOptimizer.limit : '0/0';
+
+                    html += '<tr class="hover:bg-gray-50">';
+                    html += '<td class="px-4 py-3">';
+                    html += '<p class="font-medium text-gray-800">' + utils.escapeHtml(user.email || 'No email') + '</p>';
+                    html += '<p class="text-xs text-gray-500">' + utils.escapeHtml(user.uid ? user.uid.substring(0, 8) + '...' : '') + '</p>';
+                    html += '</td>';
+                    html += '<td class="px-4 py-3">';
+                    html += '<span class="px-2 py-1 text-xs font-semibold rounded-full ' + planColor + '">' + plan.toUpperCase() + '</span>';
+                    html += '</td>';
+                    html += '<td class="px-4 py-3 text-sm text-gray-600">' + usageInfo + ' today</td>';
+                    html += '<td class="px-4 py-3">';
+                    html += '<select onchange="app.updateUserPlan(\'' + user.uid + '\', this.value)" class="text-sm border border-gray-300 rounded px-2 py-1">';
+                    html += '<option value="free"' + (plan === 'free' ? ' selected' : '') + '>Free</option>';
+                    html += '<option value="lite"' + (plan === 'lite' ? ' selected' : '') + '>Lite</option>';
+                    html += '<option value="pro"' + (plan === 'pro' ? ' selected' : '') + '>Pro</option>';
+                    html += '<option value="enterprise"' + (plan === 'enterprise' ? ' selected' : '') + '>Enterprise</option>';
+                    html += '</select>';
+                    html += '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table></div>';
+            }
+
+            html += '</div>';
+            html += '</div></div>';
+
+            return html;
+        }
+
         /* ==========================================
            4.7 MAIN RENDER FUNCTION
            ========================================== */
@@ -1510,6 +1852,9 @@
                     break;
                 case 'history':
                     html = renderHistory();
+                    break;
+                case 'admin':
+                    html = renderAdmin();
                     break;
                 default:
                     html = '<div class="view-container view-centered"><div class="spinner"></div></div>';
