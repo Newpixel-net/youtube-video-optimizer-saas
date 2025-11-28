@@ -494,76 +494,90 @@ exports.optimizeVideo = functions.https.onCall(async (data, context) => {
   try {
     const uid = await verifyAuth(context);
     const usageCheck = await checkUsageLimit(uid, 'warpOptimizer');
-    
+
     const { videoUrl } = data;
     if (!videoUrl) throw new functions.https.HttpsError('invalid-argument', 'Video URL required');
-    
+
     const startTime = Date.now();
     const videoId = extractVideoId(videoUrl);
     const metadata = await getVideoMetadata(videoId);
     const transcript = await getVideoTranscript(videoId);
-    
-    const [titles, description, tags] = await Promise.all([
+
+    const [titlesResult, description, tagsResult] = await Promise.all([
       generateTitlesInternal(metadata, transcript),
       generateDescriptionInternal(metadata, transcript),
       generateTagsInternal(metadata, transcript)
     ]);
-    
+
+    // Convert titles object to array for frontend
+    const titlesArray = [
+      titlesResult.clickbait || metadata.title,
+      titlesResult.seo || metadata.title,
+      titlesResult.question || metadata.title
+    ].filter(Boolean);
+
+    // Flatten tags object to array for frontend
+    const tagsArray = [
+      ...(tagsResult.primary || []),
+      ...(tagsResult.secondary || []),
+      ...(tagsResult.longTail || []),
+      ...(tagsResult.trending || [])
+    ];
+
     const processingTime = Math.round((Date.now() - startTime) / 1000);
-    
-    // Calculate simple SEO score
+
+    // Calculate SEO score using the arrays
     const seoScore = Math.min(100, Math.round(
-      (titles.length * 5) + 
-      (description.length > 200 ? 20 : 10) + 
-      (tags.length * 2) +
-      (metadata.viewCount > 10000 ? 20 : 10)
+      (titlesArray.length * 10) +
+      (description && description.length > 200 ? 20 : 10) +
+      (Math.min(tagsArray.length, 30) * 1.5) +
+      (metadata.viewCount > 10000 ? 15 : 5)
     ));
-    
+
     const seoRecommendations = [];
-    if (titles.length < 5) seoRecommendations.push('Consider adding more title variations');
-    if (description.length < 200) seoRecommendations.push('Description could be more detailed');
-    if (tags.length < 15) seoRecommendations.push('Add more relevant tags for better discoverability');
-    
+    if (titlesArray.length < 3) seoRecommendations.push('Consider adding more title variations');
+    if (!description || description.length < 200) seoRecommendations.push('Description could be more detailed');
+    if (tagsArray.length < 15) seoRecommendations.push('Add more relevant tags for better discoverability');
+    if (tagsArray.length > 0 && tagsArray.length < 30) seoRecommendations.push('Try to use 30-50 tags for maximum reach');
+
     const seoAnalysis = {
       score: seoScore,
       recommendations: seoRecommendations
     };
-    
+
+    // Prepare data for Firestore (ensure no undefined values)
+    const videoInfo = {
+      title: metadata.title || '',
+      channelTitle: metadata.channelTitle || '',
+      viewCount: metadata.viewCount || 0,
+      duration: metadata.duration || '',
+      thumbnail: metadata.thumbnail || ''
+    };
+
     // Save to optimizations collection (for history)
     const optimizationRef = await db.collection('optimizations').add({
       userId: uid,
-      videoUrl,
-      videoInfo: {
-        title: metadata.title,
-        channelTitle: metadata.channelTitle,
-        viewCount: metadata.viewCount,
-        duration: metadata.duration,
-        thumbnail: metadata.thumbnail
-      },
-      titles,
-      description,
-      tags,
+      videoUrl: videoUrl || '',
+      videoInfo,
+      titles: titlesArray,
+      description: description || '',
+      tags: tagsArray,
       seoAnalysis,
+      timestamp: Date.now(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    
+
     await incrementUsage(uid, 'warpOptimizer');
     await logUsage(uid, 'warp_optimizer_used', { videoId, processingTime });
-    
+
     return {
       success: true,
       optimizationId: optimizationRef.id,
-      videoInfo: {
-        title: metadata.title,
-        channelTitle: metadata.channelTitle,
-        viewCount: metadata.viewCount,
-        duration: metadata.duration,
-        thumbnail: metadata.thumbnail
-      },
-      titles,
-      description,
-      tags,
+      videoInfo,
+      titles: titlesArray,
+      description: description || '',
+      tags: tagsArray,
       seoAnalysis,
       usageRemaining: usageCheck.remaining
     };
