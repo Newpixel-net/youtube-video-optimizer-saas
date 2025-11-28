@@ -39,8 +39,8 @@ async function isAdmin(uid) {
 
 async function requireAdmin(context) {
   const uid = await verifyAuth(context);
-  const admin = await isAdmin(uid);
-  if (!admin) {
+  const isUserAdmin = await isAdmin(uid);
+  if (!isUserAdmin) {
     throw new functions.https.HttpsError('permission-denied', 'Admin access required');
   }
   return uid;
@@ -855,9 +855,9 @@ exports.adminSetCustomLimits = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.adminGetQuotaSettings = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-
   try {
+    await requireAdmin(context);
+
     const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
     if (!settingsDoc.exists) {
       // Return defaults
@@ -873,20 +873,22 @@ exports.adminGetQuotaSettings = functions.https.onCall(async (data, context) => 
       settings: settingsDoc.data()
     };
   } catch (error) {
+    console.error('adminGetQuotaSettings error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', 'Failed to get quota settings: ' + error.message);
   }
 });
 
 exports.adminSetQuotaSettings = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-
-  const { resetTimeMinutes } = data || {};
-
-  if (!resetTimeMinutes || resetTimeMinutes < 1) {
-    throw new functions.https.HttpsError('invalid-argument', 'Reset time must be at least 1 minute');
-  }
-
   try {
+    await requireAdmin(context);
+
+    const { resetTimeMinutes } = data || {};
+
+    if (!resetTimeMinutes || resetTimeMinutes < 1) {
+      throw new functions.https.HttpsError('invalid-argument', 'Reset time must be at least 1 minute');
+    }
+
     await db.collection('settings').doc('quotaSettings').set({
       resetTimeMinutes: parseInt(resetTimeMinutes),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -898,25 +900,27 @@ exports.adminSetQuotaSettings = functions.https.onCall(async (data, context) => 
       message: `Quota reset time set to ${resetTimeMinutes} minutes`
     };
   } catch (error) {
+    console.error('adminSetQuotaSettings error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', 'Failed to update quota settings: ' + error.message);
   }
 });
 
 exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-
-  const { userId, tool, bonusAmount } = data || {};
-
-  if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
-  if (!tool) throw new functions.https.HttpsError('invalid-argument', 'Tool name required');
-  if (!bonusAmount || bonusAmount < 1) throw new functions.https.HttpsError('invalid-argument', 'Bonus amount must be at least 1');
-
-  const validTools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
-  if (!validTools.includes(tool)) {
-    throw new functions.https.HttpsError('invalid-argument', 'Invalid tool: ' + tool);
-  }
-
   try {
+    await requireAdmin(context);
+
+    const { userId, tool, bonusAmount } = data || {};
+
+    if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+    if (!tool) throw new functions.https.HttpsError('invalid-argument', 'Tool name required');
+    if (!bonusAmount || bonusAmount < 1) throw new functions.https.HttpsError('invalid-argument', 'Bonus amount must be at least 1');
+
+    const validTools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+    if (!validTools.includes(tool)) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid tool: ' + tool);
+    }
+
     // Check if user exists
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) {
@@ -947,7 +951,7 @@ exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
       newTotal: newBonus
     };
   } catch (error) {
-    console.error('Grant bonus error:', error);
+    console.error('adminGrantBonusUses error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', 'Failed to grant bonus uses: ' + error.message);
   }
@@ -955,52 +959,52 @@ exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
 
 // Initialize/Update subscription plans with correct limits
 exports.adminInitPlans = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-
-  const plans = {
-    free: {
-      name: 'Free',
-      price: 0,
-      limits: {
-        warpOptimizer: { dailyLimit: 3, cooldownHours: 0 },
-        titleGenerator: { dailyLimit: 3, cooldownHours: 0 },
-        descriptionGenerator: { dailyLimit: 3, cooldownHours: 0 },
-        tagGenerator: { dailyLimit: 3, cooldownHours: 0 }
-      }
-    },
-    lite: {
-      name: 'Lite',
-      price: 9.99,
-      limits: {
-        warpOptimizer: { dailyLimit: 5, cooldownHours: 0 },
-        titleGenerator: { dailyLimit: 5, cooldownHours: 0 },
-        descriptionGenerator: { dailyLimit: 5, cooldownHours: 0 },
-        tagGenerator: { dailyLimit: 5, cooldownHours: 0 }
-      }
-    },
-    pro: {
-      name: 'Pro',
-      price: 19.99,
-      limits: {
-        warpOptimizer: { dailyLimit: 10, cooldownHours: 0 },
-        titleGenerator: { dailyLimit: 10, cooldownHours: 0 },
-        descriptionGenerator: { dailyLimit: 10, cooldownHours: 0 },
-        tagGenerator: { dailyLimit: 10, cooldownHours: 0 }
-      }
-    },
-    enterprise: {
-      name: 'Enterprise',
-      price: 49.99,
-      limits: {
-        warpOptimizer: { dailyLimit: 50, cooldownHours: 0 },
-        titleGenerator: { dailyLimit: 50, cooldownHours: 0 },
-        descriptionGenerator: { dailyLimit: 50, cooldownHours: 0 },
-        tagGenerator: { dailyLimit: 50, cooldownHours: 0 }
-      }
-    }
-  };
-
   try {
+    await requireAdmin(context);
+
+    const plans = {
+      free: {
+        name: 'Free',
+        price: 0,
+        limits: {
+          warpOptimizer: { dailyLimit: 3, cooldownHours: 0 },
+          titleGenerator: { dailyLimit: 3, cooldownHours: 0 },
+          descriptionGenerator: { dailyLimit: 3, cooldownHours: 0 },
+          tagGenerator: { dailyLimit: 3, cooldownHours: 0 }
+        }
+      },
+      lite: {
+        name: 'Lite',
+        price: 9.99,
+        limits: {
+          warpOptimizer: { dailyLimit: 5, cooldownHours: 0 },
+          titleGenerator: { dailyLimit: 5, cooldownHours: 0 },
+          descriptionGenerator: { dailyLimit: 5, cooldownHours: 0 },
+          tagGenerator: { dailyLimit: 5, cooldownHours: 0 }
+        }
+      },
+      pro: {
+        name: 'Pro',
+        price: 19.99,
+        limits: {
+          warpOptimizer: { dailyLimit: 10, cooldownHours: 0 },
+          titleGenerator: { dailyLimit: 10, cooldownHours: 0 },
+          descriptionGenerator: { dailyLimit: 10, cooldownHours: 0 },
+          tagGenerator: { dailyLimit: 10, cooldownHours: 0 }
+        }
+      },
+      enterprise: {
+        name: 'Enterprise',
+        price: 49.99,
+        limits: {
+          warpOptimizer: { dailyLimit: 50, cooldownHours: 0 },
+          titleGenerator: { dailyLimit: 50, cooldownHours: 0 },
+          descriptionGenerator: { dailyLimit: 50, cooldownHours: 0 },
+          tagGenerator: { dailyLimit: 50, cooldownHours: 0 }
+        }
+      }
+    };
+
     const batch = db.batch();
 
     for (const [planId, planData] of Object.entries(plans)) {
@@ -1016,6 +1020,8 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
       plans: Object.keys(plans)
     };
   } catch (error) {
+    console.error('adminInitPlans error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', 'Failed to initialize plans: ' + error.message);
   }
 });
@@ -1845,106 +1851,38 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, text overlay";
     const seed = Math.floor(Math.random() * 999999999999);
 
-    // Call RunPod API - HiDream using ComfyUI workflow format
+    // Generate a signed URL for Firebase Storage upload
+    const bucket = admin.storage().bucket();
+    const fileName = `thumbnails/${uid}/${Date.now()}_${seed}.png`;
+    const file = bucket.file(fileName);
+
+    // Generate signed URL for uploading (PUT with octet-stream)
+    const [uploadUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 30 * 60 * 1000, // 30 minutes
+      contentType: 'application/octet-stream',
+    });
+
+    // Call RunPod API - HiDream text-to-image
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
 
-    // ComfyUI workflow format based on hidream_t2i_api.json
-    const comfyWorkflow = {
-      "3": {
-        "inputs": {
-          "seed": seed,
-          "steps": 35,
-          "cfg": 5,
-          "sampler_name": "euler",
-          "scheduler": "simple",
-          "denoise": 1,
-          "model": ["70", 0],
-          "positive": ["16", 0],
-          "negative": ["40", 0],
-          "latent_image": ["53", 0]
-        },
-        "class_type": "KSampler",
-        "_meta": { "title": "KSampler" }
-      },
-      "8": {
-        "inputs": {
-          "samples": ["3", 0],
-          "vae": ["55", 0]
-        },
-        "class_type": "VAEDecode",
-        "_meta": { "title": "VAE Decode" }
-      },
-      "9": {
-        "inputs": {
-          "filename_prefix": "ComfyUI",
-          "images": ["8", 0]
-        },
-        "class_type": "SaveImage",
-        "_meta": { "title": "Save Image" }
-      },
-      "16": {
-        "inputs": {
-          "text": imagePrompt,
-          "clip": ["54", 0]
-        },
-        "class_type": "CLIPTextEncode",
-        "_meta": { "title": "Positive Prompt" }
-      },
-      "40": {
-        "inputs": {
-          "text": negativePrompt,
-          "clip": ["54", 0]
-        },
-        "class_type": "CLIPTextEncode",
-        "_meta": { "title": "Negative Prompt" }
-      },
-      "53": {
-        "inputs": {
-          "width": 1280,
-          "height": 720,
-          "batch_size": 1
-        },
-        "class_type": "EmptySD3LatentImage",
-        "_meta": { "title": "EmptySD3LatentImage" }
-      },
-      "54": {
-        "inputs": {
-          "clip_name1": "clip_l_hidream.safetensors",
-          "clip_name2": "clip_g_hidream.safetensors",
-          "clip_name3": "t5xxl_fp8_e4m3fn_scaled.safetensors",
-          "clip_name4": "llama_3.1_8b_instruct_fp8_scaled.safetensors"
-        },
-        "class_type": "QuadrupleCLIPLoader",
-        "_meta": { "title": "QuadrupleCLIPLoader" }
-      },
-      "55": {
-        "inputs": {
-          "vae_name": "ae.safetensors"
-        },
-        "class_type": "VAELoader",
-        "_meta": { "title": "Load VAE" }
-      },
-      "69": {
-        "inputs": {
-          "unet_name": "hidream_i1_full_fp16.safetensors",
-          "weight_dtype": "fp8_e4m3fn"
-        },
-        "class_type": "UNETLoader",
-        "_meta": { "title": "Load Diffusion Model" }
-      },
-      "70": {
-        "inputs": {
-          "shift": 3.0,
-          "model": ["69", 0]
-        },
-        "class_type": "ModelSamplingSD3",
-        "_meta": { "title": "ModelSamplingSD3" }
-      }
-    };
-
+    // Send all required parameters including image_upload_url
     const runpodResponse = await axios.post(runpodEndpoint, {
       input: {
-        workflow: comfyWorkflow
+        positive_prompt: imagePrompt,
+        negative_prompt: negativePrompt,
+        width: 1280,
+        height: 720,
+        batch_size: 1,
+        shift: 3.0,
+        seed: seed,
+        steps: 35,
+        cfg: 5,
+        sampler_name: "euler",
+        scheduler: "simple",
+        denoise: 1,
+        image_upload_url: uploadUrl
       }
     }, {
       headers: {
@@ -1957,15 +1895,20 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const jobId = runpodResponse.data.id;
     const status = runpodResponse.data.status;
 
+    // Generate public URL for the uploaded image
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
     await incrementUsage(uid, 'warpOptimizer');
-    await logUsage(uid, 'thumbnail_generation', { title, jobId });
+    await logUsage(uid, 'thumbnail_generation', { title, jobId, fileName });
 
     return {
       success: true,
       jobId,
       status,
       prompt: imagePrompt,
-      message: 'Thumbnail generation started. Use checkThumbnailStatus to get the result.',
+      imageUrl: publicUrl,
+      fileName: fileName,
+      message: 'Thumbnail generation started. Image will be available at imageUrl when complete.',
       checkEndpoint: `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`
     };
 
