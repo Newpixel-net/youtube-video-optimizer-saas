@@ -1991,34 +1991,54 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const seed = Math.floor(Math.random() * 999999999999);
 
     // Generate a signed URL for Firebase Storage upload
-    const bucket = admin.storage().bucket();
-    const fileName = `thumbnails/${uid}/${Date.now()}_${seed}.png`;
-    const file = bucket.file(fileName);
-
-    // Try to generate signed URL - requires IAM permission
+    // Try default bucket first, fallback to .appspot.com format if needed
+    let bucket;
     let uploadUrl;
-    try {
-      const [signedUrl] = await file.getSignedUrl({
-        version: 'v4',
-        action: 'write',
-        expires: Date.now() + 30 * 60 * 1000, // 30 minutes
-        contentType: 'application/octet-stream',
-      });
-      uploadUrl = signedUrl;
-    } catch (signError) {
-      console.error('Failed to generate signed URL:', signError.message);
+    const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || 'ytseo-6d1b0';
+    const fileName = `thumbnails/${uid}/${Date.now()}_${seed}.png`;
 
-      // Check if it's a permission error
-      if (signError.message.includes('iam.serviceAccounts.signBlob') ||
-          signError.message.includes('Permission') ||
-          signError.message.includes('denied')) {
-        throw new functions.https.HttpsError(
-          'failed-precondition',
-          'Firebase Storage permission not configured. Please grant "Service Account Token Creator" role to your Cloud Functions service account in Google Cloud Console > IAM.'
-        );
+    // Try to get bucket and generate signed URL
+    const bucketNames = [
+      null, // Use default bucket first
+      `${projectId}.appspot.com`, // Traditional format
+      `${projectId}.firebasestorage.app` // New format
+    ];
+
+    for (const bucketName of bucketNames) {
+      try {
+        bucket = bucketName ? admin.storage().bucket(bucketName) : admin.storage().bucket();
+        console.log('Trying storage bucket:', bucket.name);
+        const file = bucket.file(fileName);
+
+        const [signedUrl] = await file.getSignedUrl({
+          version: 'v4',
+          action: 'write',
+          expires: Date.now() + 30 * 60 * 1000, // 30 minutes
+          contentType: 'application/octet-stream',
+        });
+        uploadUrl = signedUrl;
+        console.log('Successfully generated signed URL for bucket:', bucket.name);
+        break; // Success, exit loop
+      } catch (signError) {
+        console.error(`Failed to generate signed URL for bucket ${bucket?.name || 'default'}:`, signError.message);
+
+        // If it's the last bucket option, throw the error
+        if (bucketName === bucketNames[bucketNames.length - 1]) {
+          if (signError.message.includes('iam.serviceAccounts.signBlob') ||
+              signError.message.includes('Permission') ||
+              signError.message.includes('denied')) {
+            throw new functions.https.HttpsError(
+              'failed-precondition',
+              'Firebase Storage permission not configured. Please grant "Service Account Token Creator" role to your Cloud Functions service account in Google Cloud Console > IAM.'
+            );
+          }
+          throw new functions.https.HttpsError('internal', 'Failed to prepare storage: ' + signError.message);
+        }
+        // Otherwise continue to next bucket option
       }
-      throw new functions.https.HttpsError('internal', 'Failed to prepare storage: ' + signError.message);
     }
+
+    const file = bucket.file(fileName);
 
     // Call RunPod API - HiDream text-to-image
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
@@ -2071,8 +2091,10 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const status = runpodResponse.data.status;
     console.log('RunPod job started:', { jobId, status });
 
-    // Generate public URL for the uploaded image
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    // Generate public URL for the uploaded image using Firebase Storage download URL format
+    // The .firebasestorage.app bucket format requires this specific URL structure
+    const encodedFileName = encodeURIComponent(fileName);
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
 
     await incrementUsage(uid, 'warpOptimizer');
     await logUsage(uid, 'thumbnail_generation', { title, jobId, fileName });
