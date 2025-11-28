@@ -9,14 +9,11 @@ const { OpenAI } = require('openai');
 const { google } = require('googleapis');
 const axios = require('axios');
 
-// Explicit initialization with project ID
+// Explicit initialization with project ID (required for Firestore in some deployment contexts)
 admin.initializeApp({
   projectId: 'ytseo-6d1b0'
 });
 const db = admin.firestore();
-
-// Log initialization status
-console.log('Firebase Admin initialized. Apps:', admin.apps.length);
 
 const openai = new OpenAI({
   apiKey: functions.config().openai?.key || process.env.OPENAI_API_KEY
@@ -745,35 +742,20 @@ exports.generateTags = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.getUserProfile = functions.https.onCall(async (data, context) => {
-  console.log('getUserProfile called - V2 EXPLICIT PROJECT');
-
-  // Step 1: Check auth
   if (!context.auth) {
-    console.log('No auth context');
     throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
   }
 
   const uid = context.auth.uid;
-  console.log('User ID:', uid);
-
-  // Log environment info
-  console.log('GCLOUD_PROJECT:', process.env.GCLOUD_PROJECT);
-  console.log('FIREBASE_CONFIG:', process.env.FIREBASE_CONFIG);
-  console.log('Admin apps count:', admin.apps.length);
 
   try {
-    // Step 2: Try Firestore read with explicit error catching
-    console.log('Creating Firestore reference for user:', uid);
     const userRef = db.collection('users').doc(uid);
-    console.log('Reference created, attempting get()...');
     const userSnap = await userRef.get();
-    console.log('Firestore read SUCCESS! Document exists:', userSnap.exists);
 
     let userData;
 
     if (!userSnap.exists) {
-      // Create minimal user document
-      console.log('Creating new user...');
+      // Create new user with default free plan
       userData = {
         uid: uid,
         email: context.auth.token?.email || '',
@@ -790,12 +772,10 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
         }
       };
       await userRef.set(userData);
-      console.log('User created');
     } else {
       userData = userSnap.data();
-      console.log('User data retrieved');
 
-      // Convert any Timestamps to ISO strings
+      // Convert Firestore Timestamps to ISO strings for serialization
       if (userData.createdAt?.toDate) userData.createdAt = userData.createdAt.toDate().toISOString();
       if (userData.lastLoginAt?.toDate) userData.lastLoginAt = userData.lastLoginAt.toDate().toISOString();
       if (userData.subscription?.startDate?.toDate) userData.subscription.startDate = userData.subscription.startDate.toDate().toISOString();
@@ -808,20 +788,15 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
       });
     }
 
-    // Step 3: Build simple response
-    const response = {
+    return {
       success: true,
       profile: userData,
       quotaInfo: {},
       resetTimeMinutes: 1440
     };
 
-    console.log('Returning response');
-    return response;
-
   } catch (error) {
-    console.error('getUserProfile FATAL ERROR:', error.message);
-    console.error('Stack:', error.stack);
+    console.error('getUserProfile error:', error.message);
     throw new functions.https.HttpsError('internal', 'Profile error: ' + error.message);
   }
 });
