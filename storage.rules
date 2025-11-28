@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Thumbnails folder
+    // Note: Cloud Functions using Admin SDK bypass these rules
+    match /thumbnails/{userId}/{fileName} {
+      // Allow public read access for thumbnails (needed for sharing/display)
+      allow read: if true;
+
+      // Allow authenticated users to write to their own folder
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Deny access to all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
