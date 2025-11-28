@@ -70,10 +70,22 @@ service cloud.firestore {
     // ============================================
     // ADMIN SETTINGS
     // ============================================
-    
+
     match /adminSettings/{document} {
       // Only admins can read/write settings
       allow read, write: if isAdmin();
+    }
+
+    // ============================================
+    // SETTINGS (Quota settings, etc.)
+    // ============================================
+
+    match /settings/{document} {
+      // Anyone authenticated can read settings (for quota info)
+      allow read: if isAuthenticated();
+
+      // Only admins can write settings
+      allow write: if isAdmin();
     }
     
     // ============================================

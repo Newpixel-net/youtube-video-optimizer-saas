@@ -59,6 +59,7 @@ async function getUser(uid) {
       tagGenerator: { dailyLimit: 3 }
     };
 
+    // Use serverTimestamp for Firestore storage
     const newUserData = {
       uid: uid,
       email: '',
@@ -107,7 +108,10 @@ async function getUser(uid) {
 
     await db.collection('users').doc(uid).set(newUserData);
     console.log('User profile created successfully');
-    return newUserData;
+
+    // Re-read the document to get actual timestamp values (not sentinel objects)
+    const createdDoc = await db.collection('users').doc(uid).get();
+    return createdDoc.data();
   }
   return userDoc.data();
 }
@@ -735,11 +739,26 @@ exports.generateTags = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.getUserProfile = functions.https.onCall(async (data, context) => {
-  try {
-    const uid = await verifyAuth(context);
-    const user = await getUser(uid);
+  console.log('getUserProfile called');
 
-    // Get quota settings for reset time info
+  try {
+    // Step 1: Verify authentication
+    console.log('Step 1: Verifying auth...');
+    const uid = await verifyAuth(context);
+    console.log('Auth verified, uid:', uid);
+
+    // Step 2: Get user document
+    console.log('Step 2: Getting user...');
+    const user = await getUser(uid);
+    console.log('User retrieved:', user ? 'exists' : 'null');
+
+    if (!user) {
+      console.error('User object is null/undefined');
+      throw new functions.https.HttpsError('not-found', 'User profile not found');
+    }
+
+    // Step 3: Get quota settings
+    console.log('Step 3: Getting quota settings...');
     let resetTimeMinutes = 1440; // Default 24 hours
     try {
       const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
@@ -747,10 +766,12 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
         resetTimeMinutes = settingsDoc.data().resetTimeMinutes;
       }
     } catch (e) {
-      console.log('Using default reset time');
+      console.log('Using default reset time, error:', e.message);
     }
+    console.log('Reset time:', resetTimeMinutes);
 
-    // Calculate reset timestamps for each tool
+    // Step 4: Calculate quota info
+    console.log('Step 4: Calculating quota info...');
     const now = Date.now();
     const resetIntervalMs = resetTimeMinutes * 60 * 1000;
     const quotaInfo = {};
@@ -776,15 +797,38 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
         };
       }
     });
+    console.log('Quota info calculated for tools:', Object.keys(quotaInfo));
 
-    return {
+    // Step 5: Prepare response - sanitize user object to avoid serialization issues
+    console.log('Step 5: Preparing response...');
+
+    // Convert Firestore Timestamps to milliseconds for serialization
+    const sanitizedUser = JSON.parse(JSON.stringify(user, (key, value) => {
+      // Handle Firestore Timestamp objects
+      if (value && typeof value === 'object') {
+        if (value._seconds !== undefined) {
+          return value._seconds * 1000;
+        }
+        if (typeof value.toMillis === 'function') {
+          return value.toMillis();
+        }
+      }
+      return value;
+    }));
+
+    const response = {
       success: true,
-      profile: user,
+      profile: sanitizedUser,
       quotaInfo: quotaInfo,
       resetTimeMinutes: resetTimeMinutes
     };
+
+    console.log('Response prepared, returning...');
+    return response;
+
   } catch (error) {
     console.error('getUserProfile error:', error);
+    console.error('Error stack:', error.stack);
     if (error instanceof functions.https.HttpsError) {
       throw error;
     }
