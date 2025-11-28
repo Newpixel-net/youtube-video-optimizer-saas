@@ -1615,18 +1615,34 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
 
     const imagePrompt = promptGeneratorResponse.choices[0].message.content.trim();
 
-    // Call RunPod API
+    // Call RunPod API - FLUX workflow with all required parameters
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
 
     const runpodResponse = await axios.post(runpodEndpoint, {
       input: {
+        // Core prompts
         positive_prompt: imagePrompt,
-        negative_prompt: "blurry, low quality, distorted, ugly, bad anatomy, watermark, signature, text",
+        negative_prompt: "blurry, low quality, distorted, ugly, bad anatomy, watermark, signature, text, nsfw",
+
+        // Image dimensions (YouTube thumbnail)
         width: 1280,
         height: 720,
-        num_inference_steps: 30,
-        guidance_scale: 7.5,
-        batch_size: 1
+
+        // Generation parameters
+        num_inference_steps: 28,
+        guidance_scale: 3.5,
+        batch_size: 1,
+
+        // FLUX-specific parameters
+        shift: 1.0,
+        seed: Math.floor(Math.random() * 2147483647),
+
+        // Additional common parameters
+        scheduler: "euler",
+        num_images: 1,
+        sampler_name: "euler",
+        cfg_scale: 3.5,
+        steps: 28
       }
     }, {
       headers: {
