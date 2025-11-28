@@ -2145,7 +2145,23 @@
                 var quotaData = state.quotaInfo && state.quotaInfo[tool.key] ? state.quotaInfo[tool.key] : null;
                 var totalLimit = quotaData ? quotaData.totalLimit : usage.limit;
                 var bonusUses = quotaData ? quotaData.bonusUses : 0;
-                var nextResetMs = quotaData ? quotaData.nextResetMs : 0;
+
+                // Calculate nextResetMs - use quotaInfo if available, otherwise calculate from usage.lastResetAt
+                var nextResetMs = 0;
+                if (quotaData && quotaData.nextResetMs) {
+                    nextResetMs = quotaData.nextResetMs;
+                } else if (usage.lastResetAt) {
+                    // Fallback: calculate from lastResetAt if quotaInfo isn't available
+                    var lastResetTime = usage.lastResetAt;
+                    if (typeof lastResetTime === 'object' && lastResetTime.seconds) {
+                        lastResetTime = lastResetTime.seconds * 1000;
+                    } else if (typeof lastResetTime === 'object' && lastResetTime._seconds) {
+                        lastResetTime = lastResetTime._seconds * 1000;
+                    }
+                    var resetIntervalMs = (state.resetTimeMinutes || 1440) * 60 * 1000;
+                    nextResetMs = lastResetTime + resetIntervalMs;
+                }
+
                 var remainingUses = totalLimit - usage.usedToday;
                 var isExhausted = remainingUses <= 0;
 
@@ -2163,8 +2179,13 @@
                 html += '</div>';
 
                 // Show countdown if quota exhausted, otherwise show remaining
-                if (isExhausted && nextResetMs > 0) {
+                if (isExhausted) {
                     var now = Date.now();
+                    // If no nextResetMs, calculate a fallback based on reset interval
+                    if (!nextResetMs || nextResetMs <= now) {
+                        var resetIntervalMs = (state.resetTimeMinutes || 1440) * 60 * 1000;
+                        nextResetMs = now + resetIntervalMs;
+                    }
                     var remainingMs = Math.max(0, nextResetMs - now);
                     html += '<div class="flex items-center justify-between">';
                     html += '<p class="text-sm lg:text-base text-red-500 font-medium">⏱️ Resets in:</p>';

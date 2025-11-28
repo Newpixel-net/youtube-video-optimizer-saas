@@ -923,10 +923,16 @@ exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('not-found', 'User not found');
     }
 
-    // Add bonus uses
-    await db.collection('users').doc(userId).update({
-      [`bonusUses.${tool}`]: admin.firestore.FieldValue.increment(parseInt(bonusAmount))
-    });
+    const userData = userDoc.data();
+    const currentBonus = userData.bonusUses?.[tool] || 0;
+    const newBonus = currentBonus + parseInt(bonusAmount);
+
+    // Use set with merge to ensure bonusUses map exists
+    await db.collection('users').doc(userId).set({
+      bonusUses: {
+        [tool]: newBonus
+      }
+    }, { merge: true });
 
     // Log this action
     await logUsage(userId, 'bonus_uses_granted', {
@@ -937,9 +943,11 @@ exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
 
     return {
       success: true,
-      message: `Granted ${bonusAmount} bonus uses for ${tool} to user`
+      message: `Granted ${bonusAmount} bonus uses for ${tool} to user`,
+      newTotal: newBonus
     };
   } catch (error) {
+    console.error('Grant bonus error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', 'Failed to grant bonus uses: ' + error.message);
   }
@@ -1834,22 +1842,109 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     });
 
     const imagePrompt = promptGeneratorResponse.choices[0].message.content.trim();
+    const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, text overlay";
+    const seed = Math.floor(Math.random() * 999999999999);
 
-    // Call RunPod API - HiDream text-to-image (rps-hidream-t2i template)
-    // Required params based on error messages: positive_prompt, batch_size, shift
+    // Call RunPod API - HiDream using ComfyUI workflow format
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
+
+    // ComfyUI workflow format based on hidream_t2i_api.json
+    const comfyWorkflow = {
+      "3": {
+        "inputs": {
+          "seed": seed,
+          "steps": 35,
+          "cfg": 5,
+          "sampler_name": "euler",
+          "scheduler": "simple",
+          "denoise": 1,
+          "model": ["70", 0],
+          "positive": ["16", 0],
+          "negative": ["40", 0],
+          "latent_image": ["53", 0]
+        },
+        "class_type": "KSampler",
+        "_meta": { "title": "KSampler" }
+      },
+      "8": {
+        "inputs": {
+          "samples": ["3", 0],
+          "vae": ["55", 0]
+        },
+        "class_type": "VAEDecode",
+        "_meta": { "title": "VAE Decode" }
+      },
+      "9": {
+        "inputs": {
+          "filename_prefix": "ComfyUI",
+          "images": ["8", 0]
+        },
+        "class_type": "SaveImage",
+        "_meta": { "title": "Save Image" }
+      },
+      "16": {
+        "inputs": {
+          "text": imagePrompt,
+          "clip": ["54", 0]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": { "title": "Positive Prompt" }
+      },
+      "40": {
+        "inputs": {
+          "text": negativePrompt,
+          "clip": ["54", 0]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": { "title": "Negative Prompt" }
+      },
+      "53": {
+        "inputs": {
+          "width": 1280,
+          "height": 720,
+          "batch_size": 1
+        },
+        "class_type": "EmptySD3LatentImage",
+        "_meta": { "title": "EmptySD3LatentImage" }
+      },
+      "54": {
+        "inputs": {
+          "clip_name1": "clip_l_hidream.safetensors",
+          "clip_name2": "clip_g_hidream.safetensors",
+          "clip_name3": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+          "clip_name4": "llama_3.1_8b_instruct_fp8_scaled.safetensors"
+        },
+        "class_type": "QuadrupleCLIPLoader",
+        "_meta": { "title": "QuadrupleCLIPLoader" }
+      },
+      "55": {
+        "inputs": {
+          "vae_name": "ae.safetensors"
+        },
+        "class_type": "VAELoader",
+        "_meta": { "title": "Load VAE" }
+      },
+      "69": {
+        "inputs": {
+          "unet_name": "hidream_i1_full_fp16.safetensors",
+          "weight_dtype": "fp8_e4m3fn"
+        },
+        "class_type": "UNETLoader",
+        "_meta": { "title": "Load Diffusion Model" }
+      },
+      "70": {
+        "inputs": {
+          "shift": 3.0,
+          "model": ["69", 0]
+        },
+        "class_type": "ModelSamplingSD3",
+        "_meta": { "title": "ModelSamplingSD3" }
+      }
+    };
 
     const runpodResponse = await axios.post(runpodEndpoint, {
       input: {
-        positive_prompt: imagePrompt,
-        negative_prompt: "blurry, low quality, ugly, distorted, watermark, text, nsfw",
-        width: 1280,
-        height: 720,
-        batch_size: 1,
-        shift: 3.0,
-        steps: 28,
-        guidance_scale: 5.0,
-        seed: Math.floor(Math.random() * 999999999)
+        workflow: comfyWorkflow
       }
     }, {
       headers: {
