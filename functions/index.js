@@ -1604,7 +1604,7 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
 
     const runpodResponse = await axios.post(runpodEndpoint, {
       input: {
-        prompt: imagePrompt,
+        positive_prompt: imagePrompt,
         negative_prompt: "blurry, low quality, distorted, ugly, bad anatomy, watermark, signature, text",
         width: 1280,
         height: 720,
