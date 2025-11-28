@@ -449,49 +449,232 @@ function formatTimestamp(seconds) {
   return `${minutes}:${secs.toString().padStart(2, '0')}`;
 }
 
+// ==============================================
+// CONTENT TYPE DETECTION
+// ==============================================
+
+// YouTube Category IDs: 10 = Music, 20 = Gaming, 22 = People & Blogs, 24 = Entertainment,
+// 25 = News & Politics, 26 = Howto & Style, 27 = Education, 28 = Science & Technology
+const YOUTUBE_CATEGORIES = {
+  '10': 'music',
+  '20': 'gaming',
+  '22': 'vlog',
+  '23': 'comedy',
+  '24': 'entertainment',
+  '25': 'news',
+  '26': 'howto',
+  '27': 'education',
+  '28': 'tech'
+};
+
+function detectContentType(metadata) {
+  const title = (metadata.title || '').toLowerCase();
+  const channelTitle = (metadata.channelTitle || '').toLowerCase();
+  const description = (metadata.description || '').toLowerCase();
+  const tags = (metadata.tags || []).map(t => t.toLowerCase());
+  const categoryId = metadata.categoryId || '';
+
+  // 1. Check for auto-generated YouTube music channels ("Artist - Topic")
+  if (channelTitle.endsWith(' - topic') || channelTitle.includes('- topic')) {
+    return { type: 'music', subtype: 'song', confidence: 'high', source: 'topic_channel' };
+  }
+
+  // 2. Check YouTube category ID
+  if (categoryId === '10') {
+    // Music category - determine subtype
+    const subtype = detectMusicSubtype(title, description, tags);
+    return { type: 'music', subtype, confidence: 'high', source: 'category' };
+  }
+
+  // 3. Music keywords detection
+  const musicKeywords = ['official audio', 'official video', 'music video', 'official music',
+    'lyric video', 'lyrics', 'ft.', 'feat.', 'prod.', 'remix', 'cover', 'acoustic version',
+    'official visualizer', 'audio', 'full album', 'ep', 'single', '(official)', '[official]'];
+  const musicGenres = ['hip hop', 'rap', 'rock', 'pop', 'jazz', 'classical', 'electronic',
+    'edm', 'r&b', 'rnb', 'country', 'metal', 'punk', 'indie', 'soul', 'funk', 'reggae',
+    'house', 'techno', 'trap', 'drill', 'dubstep', 'dnb', 'drum and bass'];
+
+  if (musicKeywords.some(kw => title.includes(kw) || description.includes(kw)) ||
+      musicGenres.some(genre => tags.includes(genre))) {
+    const subtype = detectMusicSubtype(title, description, tags);
+    return { type: 'music', subtype, confidence: 'medium', source: 'keywords' };
+  }
+
+  // 4. Check for other content types
+  if (categoryId && YOUTUBE_CATEGORIES[categoryId]) {
+    return { type: YOUTUBE_CATEGORIES[categoryId], subtype: 'general', confidence: 'high', source: 'category' };
+  }
+
+  // 5. Keyword-based detection for other types
+  if (title.includes('tutorial') || title.includes('how to') || title.includes('guide')) {
+    return { type: 'tutorial', subtype: 'educational', confidence: 'medium', source: 'keywords' };
+  }
+  if (title.includes('review') || title.includes('unboxing')) {
+    return { type: 'review', subtype: 'product', confidence: 'medium', source: 'keywords' };
+  }
+  if (title.includes('gameplay') || title.includes('playthrough') || title.includes('let\'s play')) {
+    return { type: 'gaming', subtype: 'gameplay', confidence: 'medium', source: 'keywords' };
+  }
+  if (title.includes('vlog') || title.includes('day in my life') || title.includes('grwm')) {
+    return { type: 'vlog', subtype: 'lifestyle', confidence: 'medium', source: 'keywords' };
+  }
+  if (title.includes('podcast') || title.includes('interview') || title.includes('conversation')) {
+    return { type: 'podcast', subtype: 'talk', confidence: 'medium', source: 'keywords' };
+  }
+
+  // Default
+  return { type: 'general', subtype: 'unknown', confidence: 'low', source: 'default' };
+}
+
+function detectMusicSubtype(title, description, tags) {
+  const titleLower = title.toLowerCase();
+
+  if (titleLower.includes('full album') || titleLower.includes('album')) return 'album';
+  if (titleLower.includes('playlist') || titleLower.includes('mix')) return 'playlist';
+  if (titleLower.includes('remix')) return 'remix';
+  if (titleLower.includes('cover')) return 'cover';
+  if (titleLower.includes('live') || titleLower.includes('concert')) return 'live';
+  if (titleLower.includes('lyric') || titleLower.includes('lyrics')) return 'lyric_video';
+  if (titleLower.includes('music video') || titleLower.includes('official video')) return 'music_video';
+  if (titleLower.includes('visualizer')) return 'visualizer';
+
+  return 'song'; // Default music subtype
+}
+
+function getContentTypeContext(contentType) {
+  const { type, subtype } = contentType;
+
+  if (type === 'music') {
+    return {
+      titleInstructions: `
+MUSIC CONTENT DETECTED - This is a ${subtype === 'song' ? 'song/track' : subtype}.
+DO NOT create motivational or educational titles. Create MUSIC-appropriate titles:
+- Include artist name and track title
+- Use music-related terms: "Official Audio", "Lyrics", "Full Track", etc.
+- Highlight genre, mood, or musical elements
+- For remixes: mention original artist and remixer
+- Keep it authentic to music industry standards`,
+
+      descriptionInstructions: `
+MUSIC CONTENT DETECTED - This is a ${subtype === 'song' ? 'song/track' : subtype}.
+DO NOT create educational or motivational descriptions. Create a MUSIC description:
+
+Include:
+1. 🎵 Song/Track info (artist, title, album if applicable)
+2. 🎧 Genre and musical style
+3. 📀 Release info (if available)
+4. 🎤 Credits (producers, features, writers if known)
+5. ⏱️ Simple timestamp if multiple sections exist
+6. 🔗 Links section for: Spotify, Apple Music, streaming platforms
+7. Music-related hashtags (#NewMusic #[Genre] #[ArtistName])
+
+DO NOT include:
+- Motivational hooks or life advice
+- Educational key points or bullet lists
+- Call-to-actions about "achieving goals"
+- Non-music related content`,
+
+      tagsInstructions: `
+MUSIC CONTENT DETECTED - Generate MUSIC-specific tags:
+
+1. Primary (5-8): Artist name, song title, genre, album name
+2. Secondary (8-12): Related artists, music style, mood tags, record label
+3. Long-tail (10-15): "[Artist] new song 2024", "[Genre] music", "best [genre] songs"
+4. Trending (5-10): Current music trends, viral sounds, playlist names
+
+DO NOT include tags about motivation, self-help, productivity, or educational content.
+Focus on: artist discovery, genre, mood, similar artists, music platform names.`
+    };
+  }
+
+  if (type === 'gaming') {
+    return {
+      titleInstructions: `GAMING CONTENT - Include game name, type of content (gameplay, review, guide), and gaming-specific hooks.`,
+      descriptionInstructions: `GAMING CONTENT - Include game info, platform, gameplay timestamps, and gaming community links.`,
+      tagsInstructions: `GAMING CONTENT - Focus on game name, platform, game genre, gaming terms, esports if relevant.`
+    };
+  }
+
+  if (type === 'tutorial' || type === 'howto' || type === 'education') {
+    return {
+      titleInstructions: `EDUCATIONAL/TUTORIAL CONTENT - Focus on the problem being solved, include "How to", step counts, or results promises.`,
+      descriptionInstructions: `EDUCATIONAL CONTENT - Include clear problem statement, numbered steps, resources, and practical takeaways.`,
+      tagsInstructions: `EDUCATIONAL CONTENT - Focus on topic keywords, skill levels, related topics, and problem-solution phrases.`
+    };
+  }
+
+  // Default for general content
+  return {
+    titleInstructions: `Create engaging titles appropriate for the video's actual content and subject matter.`,
+    descriptionInstructions: `Create a description that accurately represents the video content with relevant sections.`,
+    tagsInstructions: `Create tags relevant to the actual video content and subject matter.`
+  };
+}
+
 async function generateTitlesInternal(metadata, transcript) {
   const transcriptText = transcript.fullText || '';
-  const titlePrompt = `Generate 3 viral YouTube titles for this video.
 
-Video: ${metadata.title}
+  // Detect content type using metadata
+  const contentType = detectContentType(metadata);
+  const context = getContentTypeContext(contentType);
+
+  const titlePrompt = `Generate 3 YouTube titles for this video.
+
+=== VIDEO METADATA ===
+Title: ${metadata.title}
+Channel: ${metadata.channelTitle}
+Category ID: ${metadata.categoryId || 'Unknown'}
+Tags: ${(metadata.tags || []).slice(0, 10).join(', ')}
 Description: ${metadata.description?.substring(0, 500) || ''}
-Transcript: ${transcriptText.substring(0, 2000)}
+Transcript: ${transcriptText.substring(0, 1500)}
 
-DETECT VIDEO TYPE (music, tutorial, review, gaming, vlog, etc.) and add appropriate suffixes.
+=== DETECTED CONTENT TYPE ===
+Type: ${contentType.type} (${contentType.subtype})
+Confidence: ${contentType.confidence}
+Detection Source: ${contentType.source}
 
-Create 3 titles (60-70 chars each):
-1. CLICKBAIT: Curiosity-driven
-2. SEO-OPTIMIZED: Keyword-rich
-3. QUESTION FORMAT: Addresses pain point
+=== CRITICAL INSTRUCTIONS ===
+${context.titleInstructions}
+
+Create 3 titles (60-70 chars each) appropriate for ${contentType.type.toUpperCase()} content:
+1. ATTENTION-GRABBING: Eye-catching but relevant to ${contentType.type}
+2. SEO-OPTIMIZED: Keyword-rich for ${contentType.type} discovery
+3. DESCRIPTIVE: Clear about what the content actually is
 
 Return ONLY valid JSON:
 {
   "clickbait": "title",
   "seo": "title",
   "question": "title",
-  "detectedType": "type"
+  "detectedType": "${contentType.type}"
 }`;
+
+  const systemPrompt = contentType.type === 'music'
+    ? 'You are a music industry expert. Create titles appropriate for music content. Never create motivational or self-help titles for songs. Return only valid JSON.'
+    : 'Create engaging YouTube titles appropriate for the detected content type. Return only valid JSON.';
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o',
     messages: [
-      { role: 'system', content: 'Create viral YouTube titles. Return only valid JSON.' },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: titlePrompt }
     ],
     temperature: 0.8,
     max_tokens: 400
   });
-  
+
   try {
     const responseText = completion.choices[0].message.content.trim();
     const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(cleanJson);
+    const result = JSON.parse(cleanJson);
+    result.detectedType = contentType.type; // Ensure we use our detected type
+    return result;
   } catch (error) {
-    return { 
-      clickbait: metadata.title, 
-      seo: metadata.title, 
+    return {
+      clickbait: metadata.title,
+      seo: metadata.title,
       question: metadata.title,
-      detectedType: 'general'
+      detectedType: contentType.type
     };
   }
 }
@@ -499,47 +682,80 @@ Return ONLY valid JSON:
 async function generateDescriptionInternal(metadata, transcript) {
   const transcriptText = transcript.fullText || '';
   const durationSeconds = parseDuration(metadata.duration);
-  
-  const descriptionPrompt = `Create YouTube description for this video.
 
-Video: ${metadata.title}
+  // Detect content type using metadata
+  const contentType = detectContentType(metadata);
+  const context = getContentTypeContext(contentType);
+
+  const descriptionPrompt = `Create a YouTube description for this video.
+
+=== VIDEO METADATA ===
+Title: ${metadata.title}
+Channel: ${metadata.channelTitle}
+Category ID: ${metadata.categoryId || 'Unknown'}
 Duration: ${formatTimestamp(durationSeconds)}
-Transcript: ${transcriptText.substring(0, 3000)}
+Tags: ${(metadata.tags || []).slice(0, 10).join(', ')}
+Transcript: ${transcriptText.substring(0, 2500)}
 
-Include:
-1. Hook (2-3 sentences)
-2. Key points (3-5 bullets with emojis)
-3. Timestamps (every 2-3 min)
-4. Resources/Links
-5. Call-to-action
-6. 3-5 hashtags`;
+=== DETECTED CONTENT TYPE ===
+Type: ${contentType.type} (${contentType.subtype})
+Confidence: ${contentType.confidence}
+Detection Source: ${contentType.source}
+
+=== CRITICAL INSTRUCTIONS ===
+${context.descriptionInstructions}
+
+Create a description that is SPECIFICALLY appropriate for ${contentType.type.toUpperCase()} content.`;
+
+  const systemPrompt = contentType.type === 'music'
+    ? `You are a music industry professional writing descriptions for music releases.
+NEVER write motivational or self-help content for songs.
+Focus on: artist info, track details, genre, streaming links, credits.
+Write in the style of official music channel descriptions.`
+    : `Create engaging YouTube descriptions appropriate for ${contentType.type} content.`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o',
     messages: [
-      { role: 'system', content: 'Create engaging YouTube descriptions.' },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: descriptionPrompt }
     ],
     temperature: 0.7,
     max_tokens: 1000
   });
-  
+
   return completion.choices[0].message.content.trim();
 }
 
 async function generateTagsInternal(metadata, transcript) {
   const transcriptText = transcript.fullText || '';
-  
+
+  // Detect content type using metadata
+  const contentType = detectContentType(metadata);
+  const context = getContentTypeContext(contentType);
+
   const tagsPrompt = `Generate YouTube tags for this video.
 
-Video: ${metadata.title}
-Transcript: ${transcriptText.substring(0, 2000)}
+=== VIDEO METADATA ===
+Title: ${metadata.title}
+Channel: ${metadata.channelTitle}
+Category ID: ${metadata.categoryId || 'Unknown'}
+Existing Tags: ${(metadata.tags || []).join(', ')}
+Transcript: ${transcriptText.substring(0, 1500)}
 
-Create 30-50 tags in categories:
-1. Primary (5-8)
-2. Secondary (8-12)
-3. Long-tail (10-15)
-4. Trending (5-10)
+=== DETECTED CONTENT TYPE ===
+Type: ${contentType.type} (${contentType.subtype})
+Confidence: ${contentType.confidence}
+Detection Source: ${contentType.source}
+
+=== CRITICAL INSTRUCTIONS ===
+${context.tagsInstructions}
+
+Generate 30-50 tags SPECIFICALLY for ${contentType.type.toUpperCase()} content in these categories:
+1. Primary (5-8): Core ${contentType.type} tags
+2. Secondary (8-12): Related ${contentType.type} tags
+3. Long-tail (10-15): Specific search phrases for ${contentType.type}
+4. Trending (5-10): Current trends in ${contentType.type}
 
 Return ONLY valid JSON:
 {
@@ -549,16 +765,23 @@ Return ONLY valid JSON:
   "trending": ["trend"]
 }`;
 
+  const systemPrompt = contentType.type === 'music'
+    ? `You are a music SEO expert. Generate tags for music discovery.
+Focus on: artist names, song titles, genres, moods, similar artists, music platforms.
+NEVER include motivational, self-help, or productivity tags for music content.
+Return only valid JSON.`
+    : `Generate YouTube tags appropriate for ${contentType.type} content. Return only valid JSON.`;
+
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o',
     messages: [
-      { role: 'system', content: 'Generate YouTube tags. Return only valid JSON.' },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: tagsPrompt }
     ],
     temperature: 0.7,
     max_tokens: 800
   });
-  
+
   try {
     const responseText = completion.choices[0].message.content.trim();
     const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
