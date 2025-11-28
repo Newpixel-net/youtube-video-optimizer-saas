@@ -39,6 +39,8 @@ build/
 
 # Temporary files
 *.tmp
-.temp/serviceAccountKey.json 
-*.json 
-.env 
+.temp/
+
+# Sensitive files (keep firebase.json and firestore.indexes.json)
+**/serviceAccountKey*.json
+**/credentials*.json
