@@ -2799,7 +2799,14 @@
                     var user = state.adminUsers[i];
                     var plan = user.subscription ? user.subscription.plan : 'free';
                     var planColor = plan === 'pro' ? 'bg-purple-100 text-purple-800' : plan === 'lite' ? 'bg-blue-100 text-blue-800' : plan === 'enterprise' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800';
-                    var usageInfo = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.usedToday + '/' + user.usage.warpOptimizer.limit : '0/0';
+
+                    // Calculate total limit including bonus uses
+                    var baseLimit = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.limit : 0;
+                    var bonusUses = user.bonusUses && user.bonusUses.warpOptimizer ? user.bonusUses.warpOptimizer : 0;
+                    var totalLimit = baseLimit + bonusUses;
+                    var usedToday = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.usedToday : 0;
+                    var usageInfo = usedToday + '/' + totalLimit;
+                    var bonusIndicator = bonusUses > 0 ? ' <span class="text-green-600 text-xs">(+' + bonusUses + ')</span>' : '';
 
                     html += '<tr class="hover:bg-gray-50 transition-colors">';
                     html += '<td class="px-6 py-5">';
@@ -2810,7 +2817,7 @@
                     html += '<span class="px-3 py-1.5 text-sm font-semibold rounded-full ' + planColor + '">' + plan.toUpperCase() + '</span>';
                     html += '</td>';
                     html += '<td class="px-6 py-5 hidden sm:table-cell">';
-                    html += '<span class="text-base text-gray-700 font-medium">' + usageInfo + '</span>';
+                    html += '<span class="text-base text-gray-700 font-medium">' + usageInfo + '</span>' + bonusIndicator;
                     html += '<span class="text-sm text-gray-500 ml-1">today</span>';
                     html += '</td>';
                     html += '<td class="px-6 py-5">';

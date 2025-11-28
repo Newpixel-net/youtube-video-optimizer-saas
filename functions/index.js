@@ -790,6 +790,7 @@ exports.adminGetUsers = functions.https.onCall(async (data, context) => {
         email: userData.email || '',
         subscription: userData.subscription || { plan: 'free' },
         usage: userData.usage || {},
+        bonusUses: userData.bonusUses || {},  // Include bonus uses for display
         isAdmin: userData.isAdmin || false,
         createdAt: userData.createdAt?.toDate?.()?.toISOString() || null,
         lastLoginAt: userData.lastLoginAt?.toDate?.()?.toISOString() || null
@@ -1894,13 +1895,30 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const fileName = `thumbnails/${uid}/${Date.now()}_${seed}.png`;
     const file = bucket.file(fileName);
 
-    // Generate signed URL for uploading (PUT with octet-stream)
-    const [uploadUrl] = await file.getSignedUrl({
-      version: 'v4',
-      action: 'write',
-      expires: Date.now() + 30 * 60 * 1000, // 30 minutes
-      contentType: 'application/octet-stream',
-    });
+    // Try to generate signed URL - requires IAM permission
+    let uploadUrl;
+    try {
+      const [signedUrl] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 30 * 60 * 1000, // 30 minutes
+        contentType: 'application/octet-stream',
+      });
+      uploadUrl = signedUrl;
+    } catch (signError) {
+      console.error('Failed to generate signed URL:', signError.message);
+
+      // Check if it's a permission error
+      if (signError.message.includes('iam.serviceAccounts.signBlob') ||
+          signError.message.includes('Permission') ||
+          signError.message.includes('denied')) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          'Firebase Storage permission not configured. Please grant "Service Account Token Creator" role to your Cloud Functions service account in Google Cloud Console > IAM.'
+        );
+      }
+      throw new functions.https.HttpsError('internal', 'Failed to prepare storage: ' + signError.message);
+    }
 
     // Call RunPod API - HiDream text-to-image
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
