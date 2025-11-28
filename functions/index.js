@@ -256,35 +256,77 @@ async function getVideoTranscript(videoId) {
 }
 
 async function getVideoMetadata(videoId) {
-  const response = await youtube.videos.list({
-    part: ['snippet', 'statistics', 'contentDetails'],
-    id: [videoId]
-  });
-  
-  if (!response.data.items || response.data.items.length === 0) {
-    throw new Error('Video not found');
+  try {
+    const response = await youtube.videos.list({
+      part: ['snippet', 'statistics', 'contentDetails'],
+      id: [videoId]
+    });
+
+    if (!response.data.items || response.data.items.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'Video not found. Please check the URL and try again.');
+    }
+
+    const video = response.data.items[0];
+    const snippet = video.snippet;
+    const statistics = video.statistics;
+
+    return {
+      videoId,
+      title: snippet.title || 'Untitled',
+      description: snippet.description || '',
+      channelName: snippet.channelTitle,
+      channelId: snippet.channelId,
+      publishedAt: snippet.publishedAt,
+      thumbnail: snippet.thumbnails.high?.url || snippet.thumbnails.default?.url,
+      tags: snippet.tags || [],
+      categoryId: snippet.categoryId,
+      views: parseInt(statistics.viewCount) || 0,
+      likes: parseInt(statistics.likeCount) || 0,
+      comments: parseInt(statistics.commentCount) || 0,
+      duration: video.contentDetails.duration,
+      defaultLanguage: snippet.defaultLanguage || 'en'
+    };
+  } catch (error) {
+    // Check for specific YouTube API errors
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+
+    const errorMessage = error.message || '';
+    const errorCode = error.code || error.response?.status;
+
+    // YouTube API not enabled
+    if (errorMessage.includes('API') && errorMessage.includes('not been used') ||
+        errorMessage.includes('accessNotConfigured') ||
+        errorMessage.includes('YouTube Data API v3 has not been enabled')) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'YouTube API not enabled. Please enable YouTube Data API v3 in Google Cloud Console.'
+      );
+    }
+
+    // API key issues
+    if (errorMessage.includes('API key') || errorMessage.includes('invalid key') || errorCode === 400) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'YouTube API key is invalid or missing. Please check the API configuration.'
+      );
+    }
+
+    // Quota exceeded
+    if (errorMessage.includes('quota') || errorCode === 403) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'YouTube API quota exceeded. Please try again later or upgrade the API quota.'
+      );
+    }
+
+    // Network or other errors
+    throw new functions.https.HttpsError(
+      'internal',
+      'Failed to fetch video data: ' + errorMessage
+    );
   }
-  
-  const video = response.data.items[0];
-  const snippet = video.snippet;
-  const statistics = video.statistics;
-  
-  return {
-    videoId,
-    title: snippet.title || 'Untitled',
-    description: snippet.description || '',
-    channelName: snippet.channelTitle,
-    channelId: snippet.channelId,
-    publishedAt: snippet.publishedAt,
-    thumbnail: snippet.thumbnails.high?.url || snippet.thumbnails.default?.url,
-    tags: snippet.tags || [],
-    categoryId: snippet.categoryId,
-    views: parseInt(statistics.viewCount) || 0,
-    likes: parseInt(statistics.likeCount) || 0,
-    comments: parseInt(statistics.commentCount) || 0,
-    duration: video.contentDetails.duration,
-    defaultLanguage: snippet.defaultLanguage || 'en'
-  };
 }
 
 function parseDuration(duration) {
