@@ -839,7 +839,7 @@
            ========================================== */
 
         const state = {
-            // Current view: login | register | forgot-password | dashboard | optimizer | results | history | admin
+            // Current view: login | register | forgot-password | dashboard | optimizer | results | history | admin | competitor | trends | thumbnail
             currentView: 'login',
 
             // User data
@@ -872,7 +872,14 @@
             // History/Admin data
             historyData: null,       // List of past optimizations
             adminUsers: null,        // Admin user list
-            adminLoading: false
+            adminLoading: false,
+
+            // New features state
+            competitorResults: null,  // Competitor analysis results
+            trendResults: null,       // Trend prediction results
+            thumbnailJob: null,       // Thumbnail generation job
+            thumbnailStatus: null,    // Thumbnail job status
+            thumbnailImage: null      // Generated thumbnail URL
         };
 
         // Loading progress simulation
@@ -1085,6 +1092,29 @@
                         state.error = 'Failed to load history';
                         render();
                     });
+            },
+
+            goToCompetitor: function() {
+                state.currentView = 'competitor';
+                state.error = null;
+                state.competitorResults = null;
+                render();
+            },
+
+            goToTrends: function() {
+                state.currentView = 'trends';
+                state.error = null;
+                state.trendResults = null;
+                render();
+            },
+
+            goToThumbnail: function() {
+                state.currentView = 'thumbnail';
+                state.error = null;
+                state.thumbnailJob = null;
+                state.thumbnailStatus = null;
+                state.thumbnailImage = null;
+                render();
             },
 
             /* ------------------------------------------
@@ -1502,6 +1532,162 @@
                 if (state.profile && state.profile.isAdmin) {
                     state.isAdmin = true;
                 }
+            },
+
+            /* ------------------------------------------
+               4.5.5 Competitor Analysis Actions
+               ------------------------------------------ */
+            analyzeCompetitor: function(e) {
+                e.preventDefault();
+                const url = document.getElementById('competitor-url').value.trim();
+
+                if (!url) {
+                    state.error = { message: 'Please enter a competitor video URL' };
+                    render();
+                    return;
+                }
+
+                state.loading = true;
+                state.error = null;
+                state.loadingSteps = [
+                    { name: 'Fetching video data', icon: '🎬' },
+                    { name: 'Analyzing channel', icon: '📺' },
+                    { name: 'Evaluating SEO', icon: '🔍' },
+                    { name: 'Finding weaknesses', icon: '🎯' },
+                    { name: 'Generating strategy', icon: '📊' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeCompetitor')({ videoUrl: url })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.competitorResults = result.data;
+                        state.loading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.loading = false;
+                        state.error = { message: 'Analysis failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            /* ------------------------------------------
+               4.5.6 Trend Predictor Actions
+               ------------------------------------------ */
+            predictTrends: function(e) {
+                e.preventDefault();
+                const niche = document.getElementById('trend-niche').value.trim();
+                const country = document.getElementById('trend-country').value || 'US';
+
+                if (!niche) {
+                    state.error = { message: 'Please enter a niche/topic' };
+                    render();
+                    return;
+                }
+
+                state.loading = true;
+                state.error = null;
+                state.loadingSteps = [
+                    { name: 'Scanning trending videos', icon: '📈' },
+                    { name: 'Analyzing patterns', icon: '🔍' },
+                    { name: 'Identifying opportunities', icon: '🎯' },
+                    { name: 'Predicting future trends', icon: '🔮' },
+                    { name: 'Generating video ideas', icon: '💡' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('predictTrends')({ niche: niche, country: country })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.trendResults = result.data;
+                        state.loading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.loading = false;
+                        state.error = { message: 'Prediction failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            /* ------------------------------------------
+               4.5.7 Thumbnail Generator Actions
+               ------------------------------------------ */
+            generateThumbnail: function(e) {
+                e.preventDefault();
+                const title = document.getElementById('thumbnail-title').value.trim();
+                const customPrompt = document.getElementById('thumbnail-prompt').value.trim();
+
+                if (!title) {
+                    state.error = { message: 'Please enter a video title' };
+                    render();
+                    return;
+                }
+
+                state.loading = true;
+                state.error = null;
+                state.thumbnailImage = null;
+                state.loadingSteps = [
+                    { name: 'Creating AI prompt', icon: '✨' },
+                    { name: 'Starting generation', icon: '🎨' },
+                    { name: 'Rendering image', icon: '🖼️' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('generateThumbnail')({ title: title, customPrompt: customPrompt })
+                    .then(function(result) {
+                        state.thumbnailJob = result.data;
+                        // Start polling for result
+                        app.pollThumbnailStatus(result.data.jobId);
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.loading = false;
+                        state.error = { message: 'Generation failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            pollThumbnailStatus: function(jobId) {
+                var pollInterval = setInterval(function() {
+                    functions.httpsCallable('checkThumbnailStatus')({ jobId: jobId })
+                        .then(function(result) {
+                            state.thumbnailStatus = result.data.status;
+
+                            if (result.data.status === 'COMPLETED') {
+                                clearInterval(pollInterval);
+                                stopLoadingProgress();
+                                state.loading = false;
+                                state.thumbnailImage = result.data.output;
+                                render();
+                            } else if (result.data.status === 'FAILED') {
+                                clearInterval(pollInterval);
+                                stopLoadingProgress();
+                                state.loading = false;
+                                state.error = { message: 'Thumbnail generation failed: ' + (result.data.error || 'Unknown error') };
+                                render();
+                            } else {
+                                // Still processing, update progress
+                                if (state.loadingProgress < 90) {
+                                    state.loadingProgress += 5;
+                                }
+                                render();
+                            }
+                        })
+                        .catch(function(e) {
+                            clearInterval(pollInterval);
+                            stopLoadingProgress();
+                            state.loading = false;
+                            state.error = { message: 'Status check failed: ' + e.message };
+                            render();
+                        });
+                }, 3000); // Poll every 3 seconds
             }
         };
 
@@ -1774,30 +1960,59 @@
 
             html += '</div>';
 
-            // Action Cards - bigger and more impressive
-            html += '<div class="grid grid-cols-1 lg:grid-cols-2 dashboard-grid-2 mobile-grid-cols-1 gap-6 lg:gap-8 fade-in">';
+            // Main Tools Section Title
+            html += '<h2 class="text-2xl lg:text-3xl font-bold text-white mb-6 fade-in">🛠️ AI Tools</h2>';
+
+            // Action Cards - 5 tools in responsive grid
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 fade-in">';
 
             // Optimizer Card
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-8 lg:p-10 tool-card cursor-pointer border border-gray-100" onclick="app.goToOptimizer()">';
-            html += '<div class="w-20 h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl flex items-center justify-center text-5xl lg:text-6xl shadow-xl mb-6">🎬</div>';
-            html += '<h3 class="text-2xl lg:text-3xl font-bold text-gray-800 mb-3">Start Optimizing</h3>';
-            html += '<p class="text-gray-600 mb-6 text-base lg:text-lg">Transform your video with AI-powered SEO optimization</p>';
-            html += '<div class="flex items-center text-blue-600 font-bold text-lg group">';
-            html += '<span>Get Started</span>';
-            html += '<span class="ml-2 group-hover:translate-x-2 transition-transform text-2xl">→</span>';
-            html += '</div>';
-            html += '</div>';
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100" onclick="app.goToOptimizer()">';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🚀</div>';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Video Optimizer</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">AI-powered SEO optimization for your videos</p>';
+            html += '<div class="flex items-center text-blue-600 font-bold group">';
+            html += '<span>Optimize</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            html += '</div></div>';
+
+            // Competitor Analysis Card (NEW)
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToCompetitor()">';
+            html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-red-500 to-orange-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🎯</div>';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Competitor Analysis</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Analyze competitors and find ways to beat them</p>';
+            html += '<div class="flex items-center text-red-600 font-bold group">';
+            html += '<span>Analyze</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            html += '</div></div>';
+
+            // Trend Predictor Card (NEW)
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToTrends()">';
+            html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">📈</div>';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Trend Predictor</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Predict viral trends before they happen</p>';
+            html += '<div class="flex items-center text-cyan-600 font-bold group">';
+            html += '<span>Predict</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            html += '</div></div>';
+
+            // Thumbnail Generator Card (NEW)
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToThumbnail()">';
+            html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-pink-500 to-rose-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🎨</div>';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">AI Thumbnails</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Generate click-worthy thumbnails with AI</p>';
+            html += '<div class="flex items-center text-pink-600 font-bold group">';
+            html += '<span>Generate</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            html += '</div></div>';
 
             // History Card
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-8 lg:p-10 tool-card cursor-pointer border border-gray-100" onclick="app.goToHistory()">';
-            html += '<div class="w-20 h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-purple-500 to-pink-600 rounded-3xl flex items-center justify-center text-5xl lg:text-6xl shadow-xl mb-6">📜</div>';
-            html += '<h3 class="text-2xl lg:text-3xl font-bold text-gray-800 mb-3">View History</h3>';
-            html += '<p class="text-gray-600 mb-6 text-base lg:text-lg">Access all your past optimizations and results</p>';
-            html += '<div class="flex items-center text-purple-600 font-bold text-lg group">';
-            html += '<span>View History</span>';
-            html += '<span class="ml-2 group-hover:translate-x-2 transition-transform text-2xl">→</span>';
-            html += '</div>';
-            html += '</div>';
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100" onclick="app.goToHistory()">';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">📜</div>';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">History</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">View all your past optimizations</p>';
+            html += '<div class="flex items-center text-purple-600 font-bold group">';
+            html += '<span>View</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            html += '</div></div>';
 
             html += '</div>';
 
@@ -2313,6 +2528,337 @@
             return html;
         }
 
+        /* ------------------------------------------
+           4.6.9 Competitor Analysis View
+           ------------------------------------------ */
+        function renderCompetitor() {
+            var html = '';
+
+            html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+
+            // Back button
+            html += '<button onclick="app.goToDashboard()" class="mb-6 btn-secondary">← Back to Dashboard</button>';
+
+            // Header
+            html += '<div class="text-center mb-8 fade-in">';
+            html += '<div class="w-20 h-20 bg-gradient-to-br from-red-500 to-orange-600 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-4 shadow-xl">🎯</div>';
+            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">Competitor Analysis</h1>';
+            html += '<p class="text-white/80 text-lg">Analyze any competitor video and get strategies to beat them</p>';
+            html += '</div>';
+
+            // Form Card
+            if (!state.competitorResults) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding max-w-2xl mx-auto fade-in">';
+
+                if (state.error) {
+                    html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message) + '</div>';
+                }
+
+                html += '<form onsubmit="app.analyzeCompetitor(event)">';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Competitor Video URL</label>';
+                html += '<input type="text" id="competitor-url" placeholder="https://www.youtube.com/watch?v=..." class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-red-500 focus:outline-none text-lg" required />';
+                html += '</div>';
+                html += '<button type="submit" class="btn-primary bg-gradient-to-r from-red-500 to-orange-600" ' + (state.loading ? 'disabled' : '') + '>';
+                html += state.loading ? '⏳ Analyzing...' : '🎯 Analyze Competitor';
+                html += '</button>';
+                html += '</form>';
+
+                // Loading Animation
+                if (state.loading) {
+                    html += '<div class="mt-8 loading-container">';
+                    html += '<div class="flex items-center justify-between mb-6">';
+                    html += '<div class="flex items-center gap-4"><div class="loading-emoji">🔍</div><div><h3 class="text-xl font-bold text-gray-800">Analyzing Competitor</h3></div></div>';
+                    html += '<div class="progress-percentage">' + Math.round(state.loadingProgress) + '%</div>';
+                    html += '</div>';
+                    html += '<div class="progress-bar-container mb-4"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            } else {
+                // Results Display
+                var r = state.competitorResults;
+                var c = r.competitor;
+                var a = r.analysis;
+
+                // Competitor Info Card
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mb-6 fade-in">';
+                html += '<div class="flex flex-col md:flex-row gap-6">';
+                if (c.thumbnail) {
+                    html += '<img src="' + utils.escapeHtml(c.thumbnail) + '" class="w-full md:w-64 h-36 object-cover rounded-xl" />';
+                }
+                html += '<div class="flex-1">';
+                html += '<h2 class="text-xl font-bold text-gray-800 mb-2">' + utils.escapeHtml(c.title) + '</h2>';
+                html += '<p class="text-gray-600 mb-3">' + utils.escapeHtml(c.channelTitle) + '</p>';
+                html += '<div class="flex flex-wrap gap-4 text-sm">';
+                html += '<span class="bg-gray-100 px-3 py-1 rounded-full">👁️ ' + utils.formatNumber(c.viewCount) + ' views</span>';
+                html += '<span class="bg-gray-100 px-3 py-1 rounded-full">👍 ' + utils.formatNumber(c.likeCount) + ' likes</span>';
+                html += '<span class="bg-gray-100 px-3 py-1 rounded-full">💬 ' + utils.formatNumber(c.commentCount) + ' comments</span>';
+                html += '</div></div></div></div>';
+
+                // SEO Score & Difficulty
+                html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 fade-in">';
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 text-center">';
+                html += '<p class="text-5xl font-bold ' + (a.seoScore >= 70 ? 'text-green-500' : a.seoScore >= 50 ? 'text-yellow-500' : 'text-red-500') + '">' + a.seoScore + '</p>';
+                html += '<p class="text-gray-600 font-medium">Competitor SEO Score</p>';
+                html += '</div>';
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 text-center">';
+                var diffColor = a.estimatedDifficulty === 'easy' ? 'text-green-500' : a.estimatedDifficulty === 'medium' ? 'text-yellow-500' : 'text-red-500';
+                html += '<p class="text-4xl font-bold ' + diffColor + '">' + (a.estimatedDifficulty || 'medium').toUpperCase() + '</p>';
+                html += '<p class="text-gray-600 font-medium">Difficulty to Beat</p>';
+                html += '</div>';
+                html += '<div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-xl p-6 text-center text-white">';
+                html += '<p class="text-4xl font-bold">🎯</p>';
+                html += '<p class="font-medium">Ready to Beat!</p>';
+                html += '</div></div>';
+
+                // Analysis Sections
+                html += '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 fade-in">';
+
+                // Strengths
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6">';
+                html += '<h3 class="text-xl font-bold text-gray-800 mb-4">💪 Their Strengths</h3>';
+                html += '<ul class="space-y-2">';
+                (a.strengths || []).forEach(function(s) { html += '<li class="flex items-start gap-2"><span class="text-green-500">✓</span><span>' + utils.escapeHtml(s) + '</span></li>'; });
+                html += '</ul></div>';
+
+                // Weaknesses
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6">';
+                html += '<h3 class="text-xl font-bold text-gray-800 mb-4">🎯 Their Weaknesses</h3>';
+                html += '<ul class="space-y-2">';
+                (a.weaknesses || []).forEach(function(w) { html += '<li class="flex items-start gap-2"><span class="text-red-500">✗</span><span>' + utils.escapeHtml(w) + '</span></li>'; });
+                html += '</ul></div>';
+
+                // Better Titles
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6">';
+                html += '<h3 class="text-xl font-bold text-gray-800 mb-4">📝 Better Titles to Use</h3>';
+                html += '<ul class="space-y-2">';
+                (a.betterTitles || []).forEach(function(t) { html += '<li class="p-3 bg-blue-50 rounded-lg text-blue-800 font-medium">' + utils.escapeHtml(t) + '</li>'; });
+                html += '</ul></div>';
+
+                // Opportunities
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6">';
+                html += '<h3 class="text-xl font-bold text-gray-800 mb-4">💡 Opportunities</h3>';
+                html += '<ul class="space-y-2">';
+                (a.opportunities || []).forEach(function(o) { html += '<li class="flex items-start gap-2"><span class="text-purple-500">★</span><span>' + utils.escapeHtml(o) + '</span></li>'; });
+                html += '</ul></div>';
+                html += '</div>';
+
+                // Summary
+                html += '<div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-xl p-6 mt-6 fade-in">';
+                html += '<h3 class="text-xl font-bold text-white mb-3">📋 Strategy Summary</h3>';
+                html += '<p class="text-white/90 text-lg">' + utils.escapeHtml(a.summary || '') + '</p>';
+                html += '</div>';
+
+                // New Analysis Button
+                html += '<div class="text-center mt-8">';
+                html += '<button onclick="state.competitorResults=null;render();" class="btn-secondary">Analyze Another Competitor</button>';
+                html += '</div>';
+            }
+
+            html += '</div></div>';
+            return html;
+        }
+
+        /* ------------------------------------------
+           4.6.10 Trend Predictor View
+           ------------------------------------------ */
+        function renderTrends() {
+            var html = '';
+
+            html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+
+            html += '<button onclick="app.goToDashboard()" class="mb-6 btn-secondary">← Back to Dashboard</button>';
+
+            html += '<div class="text-center mb-8 fade-in">';
+            html += '<div class="w-20 h-20 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-4 shadow-xl">📈</div>';
+            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">Trend Predictor</h1>';
+            html += '<p class="text-white/80 text-lg">Discover trending topics and predict what will go viral</p>';
+            html += '</div>';
+
+            if (!state.trendResults) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding max-w-2xl mx-auto fade-in">';
+
+                if (state.error) {
+                    html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message) + '</div>';
+                }
+
+                html += '<form onsubmit="app.predictTrends(event)">';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Your Niche / Topic</label>';
+                html += '<input type="text" id="trend-niche" placeholder="e.g., Gaming, Cooking, Tech Reviews..." class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-cyan-500 focus:outline-none text-lg" required />';
+                html += '</div>';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Country/Region</label>';
+                html += '<select id="trend-country" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-cyan-500 focus:outline-none text-lg">';
+                html += '<option value="US">United States</option><option value="GB">United Kingdom</option><option value="CA">Canada</option>';
+                html += '<option value="AU">Australia</option><option value="DE">Germany</option><option value="FR">France</option>';
+                html += '<option value="IN">India</option><option value="BR">Brazil</option><option value="JP">Japan</option>';
+                html += '</select></div>';
+                html += '<button type="submit" class="btn-primary bg-gradient-to-r from-cyan-500 to-blue-600" ' + (state.loading ? 'disabled' : '') + '>';
+                html += state.loading ? '⏳ Predicting...' : '🔮 Predict Trends';
+                html += '</button>';
+                html += '</form>';
+
+                if (state.loading) {
+                    html += '<div class="mt-8 loading-container">';
+                    html += '<div class="flex items-center justify-between mb-6">';
+                    html += '<div class="flex items-center gap-4"><div class="loading-emoji">🔮</div><div><h3 class="text-xl font-bold text-gray-800">Predicting Trends</h3></div></div>';
+                    html += '<div class="progress-percentage">' + Math.round(state.loadingProgress) + '%</div>';
+                    html += '</div>';
+                    html += '<div class="progress-bar-container mb-4"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            } else {
+                var r = state.trendResults;
+                var p = r.predictions;
+
+                // Current Trends
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mb-6 fade-in">';
+                html += '<h3 class="text-2xl font-bold text-gray-800 mb-4">🔥 Current Trends in "' + utils.escapeHtml(r.niche) + '"</h3>';
+                html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
+                (p.currentTrends || []).forEach(function(t) {
+                    var gColor = t.growthRate === 'rising' ? 'text-green-500' : t.growthRate === 'stable' ? 'text-yellow-500' : 'text-red-500';
+                    html += '<div class="p-4 bg-gray-50 rounded-xl">';
+                    html += '<div class="flex items-center justify-between mb-2">';
+                    html += '<span class="font-bold text-gray-800">' + utils.escapeHtml(t.topic) + '</span>';
+                    html += '<span class="' + gColor + ' font-medium">' + (t.growthRate === 'rising' ? '↑' : t.growthRate === 'declining' ? '↓' : '→') + '</span>';
+                    html += '</div>';
+                    html += '<p class="text-sm text-gray-600">' + utils.escapeHtml(t.description) + '</p>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Predicted Trends
+                html += '<div class="bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl shadow-xl p-6 mb-6 fade-in">';
+                html += '<h3 class="text-2xl font-bold text-white mb-4">🔮 Predicted Future Trends</h3>';
+                html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
+                (p.predictedTrends || []).forEach(function(t) {
+                    var confBadge = t.confidence === 'high' ? 'bg-green-500' : t.confidence === 'medium' ? 'bg-yellow-500' : 'bg-gray-500';
+                    html += '<div class="p-4 bg-white/10 backdrop-blur rounded-xl">';
+                    html += '<div class="flex items-center justify-between mb-2">';
+                    html += '<span class="font-bold text-white">' + utils.escapeHtml(t.topic) + '</span>';
+                    html += '<span class="' + confBadge + ' text-white text-xs px-2 py-1 rounded-full">' + (t.confidence || 'medium') + '</span>';
+                    html += '</div>';
+                    html += '<p class="text-sm text-white/80 mb-2">' + utils.escapeHtml(t.reasoning) + '</p>';
+                    html += '<p class="text-xs text-white/60">⏰ ' + utils.escapeHtml(t.timeframe || '2-4 weeks') + '</p>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Video Ideas
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mb-6 fade-in">';
+                html += '<h3 class="text-2xl font-bold text-gray-800 mb-4">💡 Video Ideas for You</h3>';
+                html += '<div class="space-y-4">';
+                (p.videoIdeas || []).forEach(function(v, i) {
+                    html += '<div class="p-4 border-2 border-gray-100 rounded-xl hover:border-blue-200 transition-all">';
+                    html += '<div class="flex items-start justify-between">';
+                    html += '<div><span class="text-2xl mr-3">' + (i+1) + '.</span><span class="font-bold text-gray-800 text-lg">' + utils.escapeHtml(v.title) + '</span></div>';
+                    html += '<span class="bg-green-100 text-green-700 text-sm px-3 py-1 rounded-full font-medium">' + utils.escapeHtml(v.estimatedViews || '50K+') + '</span>';
+                    html += '</div>';
+                    html += '<p class="text-gray-600 mt-2 ml-8">' + utils.escapeHtml(v.description) + '</p>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Hashtags
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 fade-in">';
+                html += '<h3 class="text-xl font-bold text-gray-800 mb-4">#️⃣ Trending Hashtags</h3>';
+                html += '<div class="flex flex-wrap gap-2">';
+                (p.hashtagsToUse || []).forEach(function(h) {
+                    html += '<span class="bg-blue-100 text-blue-700 px-4 py-2 rounded-full font-medium">' + utils.escapeHtml(h) + '</span>';
+                });
+                html += '</div></div>';
+
+                html += '<div class="text-center mt-8">';
+                html += '<button onclick="state.trendResults=null;render();" class="btn-secondary">Predict for Another Niche</button>';
+                html += '</div>';
+            }
+
+            html += '</div></div>';
+            return html;
+        }
+
+        /* ------------------------------------------
+           4.6.11 Thumbnail Generator View
+           ------------------------------------------ */
+        function renderThumbnail() {
+            var html = '';
+
+            html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
+            html += '<div class="max-w-4xl mx-auto">';
+
+            html += '<button onclick="app.goToDashboard()" class="mb-6 btn-secondary">← Back to Dashboard</button>';
+
+            html += '<div class="text-center mb-8 fade-in">';
+            html += '<div class="w-20 h-20 bg-gradient-to-br from-pink-500 to-rose-600 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-4 shadow-xl">🎨</div>';
+            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">AI Thumbnail Generator</h1>';
+            html += '<p class="text-white/80 text-lg">Generate eye-catching thumbnails with AI</p>';
+            html += '</div>';
+
+            html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding fade-in">';
+
+            if (state.error) {
+                html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message) + '</div>';
+            }
+
+            if (!state.thumbnailImage) {
+                html += '<form onsubmit="app.generateThumbnail(event)">';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Video Title</label>';
+                html += '<input type="text" id="thumbnail-title" placeholder="Enter your video title..." class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none text-lg" required />';
+                html += '</div>';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Custom Style (Optional)</label>';
+                html += '<textarea id="thumbnail-prompt" placeholder="e.g., Dramatic lighting, person looking shocked, bold text overlay area..." class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none text-lg h-24"></textarea>';
+                html += '</div>';
+                html += '<button type="submit" class="btn-primary bg-gradient-to-r from-pink-500 to-rose-600" ' + (state.loading ? 'disabled' : '') + '>';
+                html += state.loading ? '⏳ Generating...' : '🎨 Generate Thumbnail';
+                html += '</button>';
+                html += '</form>';
+
+                if (state.loading) {
+                    html += '<div class="mt-8 loading-container">';
+                    html += '<div class="flex items-center justify-between mb-6">';
+                    html += '<div class="flex items-center gap-4"><div class="loading-emoji">🎨</div><div><h3 class="text-xl font-bold text-gray-800">Creating Thumbnail</h3><p class="text-gray-500">This may take 30-60 seconds...</p></div></div>';
+                    html += '<div class="progress-percentage">' + Math.round(state.loadingProgress) + '%</div>';
+                    html += '</div>';
+                    html += '<div class="progress-bar-container mb-4"><div class="progress-bar-fill bg-gradient-to-r from-pink-500 to-rose-600" style="width:' + state.loadingProgress + '%"></div></div>';
+                    if (state.thumbnailJob) {
+                        html += '<p class="text-sm text-gray-500 text-center">Job ID: ' + state.thumbnailJob.jobId + '</p>';
+                    }
+                    html += '</div>';
+                }
+            } else {
+                // Show generated thumbnail
+                html += '<div class="text-center">';
+                html += '<h3 class="text-2xl font-bold text-gray-800 mb-4">✨ Your AI Thumbnail</h3>';
+
+                if (typeof state.thumbnailImage === 'string') {
+                    html += '<img src="' + utils.escapeHtml(state.thumbnailImage) + '" class="w-full max-w-2xl mx-auto rounded-xl shadow-lg mb-6" alt="Generated Thumbnail" />';
+                } else if (state.thumbnailImage && state.thumbnailImage.image) {
+                    html += '<img src="data:image/png;base64,' + state.thumbnailImage.image + '" class="w-full max-w-2xl mx-auto rounded-xl shadow-lg mb-6" alt="Generated Thumbnail" />';
+                } else {
+                    html += '<div class="bg-gray-100 p-8 rounded-xl mb-6">';
+                    html += '<p class="text-gray-600">Thumbnail generated! Check the output format.</p>';
+                    html += '<pre class="text-xs text-left overflow-auto mt-4">' + JSON.stringify(state.thumbnailImage, null, 2) + '</pre>';
+                    html += '</div>';
+                }
+
+                html += '<div class="flex justify-center gap-4">';
+                html += '<button onclick="state.thumbnailImage=null;state.thumbnailJob=null;render();" class="btn-secondary">Generate Another</button>';
+                html += '</div></div>';
+            }
+
+            html += '</div></div></div>';
+            return html;
+        }
+
         /* ==========================================
            4.7 MAIN RENDER FUNCTION
            ========================================== */
@@ -2348,6 +2894,15 @@
                     break;
                 case 'admin':
                     html = renderAdmin();
+                    break;
+                case 'competitor':
+                    html = renderCompetitor();
+                    break;
+                case 'trends':
+                    html = renderTrends();
+                    break;
+                case 'thumbnail':
+                    html = renderThumbnail();
                     break;
                 default:
                     html = '<div class="view-container view-centered"><div class="spinner"></div></div>';
