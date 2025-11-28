@@ -1,0 +1,110 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid));
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // ============================================
+    // USER PROFILES
+    // ============================================
+    
+    match /users/{userId} {
+      // Users can read their own profile, admins can read all
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can only update specific fields (not subscription or usage)
+      allow update: if isOwner(userId) && 
+                       request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['displayName', 'photoURL', 'lastLoginAt']);
+      
+      // Only Cloud Functions can create users (via Admin SDK)
+      allow create: if false;
+      
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // OPTIMIZATIONS (HISTORY)
+    // ============================================
+    
+    match /optimizations/{optimizationId} {
+      // Users can read their own optimizations
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Cloud Functions create optimizations (via Admin SDK which bypasses rules)
+      // Users cannot create/update directly from client
+      allow create, update: if false;
+      
+      // Users can delete their own optimization history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // SUBSCRIPTION PLANS
+    // ============================================
+    
+    match /subscriptionPlans/{planId} {
+      // Everyone can read plans (for pricing page)
+      allow read: if true;
+      
+      // Only admins can create/update/delete plans
+      allow write: if isAdmin();
+    }
+    
+    // ============================================
+    // ADMIN SETTINGS
+    // ============================================
+    
+    match /adminSettings/{document} {
+      // Only admins can read/write settings
+      allow read, write: if isAdmin();
+    }
+    
+    // ============================================
+    // ADMIN USERS
+    // ============================================
+    
+    match /adminUsers/{userId} {
+      // Only admins can manage admin users
+      allow read, write: if isAdmin();
+    }
+    
+    // ============================================
+    // USAGE LOGS
+    // ============================================
+    
+    match /usageLogs/{logId} {
+      // Only admins can read logs
+      allow read: if isAdmin();
+      
+      // Cloud Functions write logs (via Admin SDK)
+      allow write: if false;
+    }
+    
+    // ============================================
+    // LEGACY ANALYSES (from old system)
+    // ============================================
+    
+    match /analyses/{analysisId} {
+      // Anyone can read/write (legacy compatibility)
+      // TODO: Add proper auth when migrating old system
+      allow read, write: if true;
+    }
+  }
+}

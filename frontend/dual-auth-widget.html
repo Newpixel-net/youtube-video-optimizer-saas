@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>YouTube Video Optimizer</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        .spinner { border: 3px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; width: 40px; height: 40px; animation: spin 0.6s linear infinite; }
+        .tool-card { transition: all 0.3s ease; }
+        .tool-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .google-btn { transition: all 0.3s ease; }
+        .google-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2); }
+        .usage-bar { transition: width 0.5s ease-out; }
+        .input-field { transition: all 0.3s ease; }
+        .input-field:focus { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        html, body { 
+            margin: 0; 
+            padding: 0; 
+            width: 100%; 
+            height: 100%;
+            overflow-x: hidden;
+        }
+        
+        body { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        #app-root {
+            width: 100%;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+        }
+        
+        /* Mobile-specific improvements */
+        @media (max-width: 768px) {
+            body {
+                -webkit-text-size-adjust: 100%;
+            }
+            
+            .mobile-full-screen {
+                min-height: 100vh;
+                min-height: -webkit-fill-available;
+                padding: 1rem;
+            }
+            
+            .mobile-card {
+                width: 100%;
+                max-width: 100%;
+                margin: 0;
+            }
+            
+            .mobile-padding {
+                padding: 1.5rem !important;
+            }
+            
+            .mobile-text-lg {
+                font-size: 1.25rem !important;
+            }
+            
+            .mobile-text-xl {
+                font-size: 1.5rem !important;
+            }
+            
+            .mobile-grid-cols-1 {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .mobile-gap-4 {
+                gap: 1rem !important;
+            }
+        }
+        
+        /* Improve touch targets on mobile */
+        @media (max-width: 768px) {
+            button, .google-btn, input {
+                min-height: 48px;
+                font-size: 16px; /* Prevents iOS zoom */
+            }
+        }
+        
+        /* Safe area insets for notched devices */
+        @supports (padding: max(0px)) {
+            body {
+                padding-left: max(0px, env(safe-area-inset-left));
+                padding-right: max(0px, env(safe-area-inset-right));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app-root"></div>
+    
+    <script>
+    (function() {
+        'use strict';
+        
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase not loaded');
+            return;
+        }
+        
+        // Firebase Config - CORRECT API KEY (FIXED TYPO!)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAGczY5ZEIJdTq25BpQdia3lv2I556wOZo",
+            authDomain: "ytseo-6d1b0.firebaseapp.com",
+            projectId: "ytseo-6d1b0",
+            storageBucket: "ytseo-6d1b0.firebasestorage.app",
+            messagingSenderId: "382790048044",
+            appId: "1:382790048044:web:cd427679ff72108c1f3489"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const functions = firebase.functions();
+        
+        // State
+        const state = {
+            currentView: 'login', // login, register, forgot-password, dashboard, optimizer, results, history
+            user: null,
+            profile: null,
+            loading: false,
+            error: null,
+            success: null,
+            currentResults: null, // Store current optimization results
+            historyData: null // Store history of optimizations
+        };
+        
+        // Utils
+        const utils = {
+            formatNumber: function(n) {
+                if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+                if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+                return String(n);
+            },
+            getUsagePercent: function(used, limit) {
+                return Math.min(100, Math.round((used / limit) * 100));
+            },
+            getUsageColor: function(p) {
+                if (p >= 80) return 'bg-red-500';
+                if (p >= 60) return 'bg-yellow-500';
+                return 'bg-green-500';
+            },
+            validateEmail: function(email) {
+                const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return re.test(email);
+            }
+        };
+        
+        // Auth Handler
+        auth.onAuthStateChanged(async function(user) {
+            if (user) {
+                state.user = user;
+                // Don't log sensitive user info to console
+                try {
+                    const result = await functions.httpsCallable('getUserProfile')();
+                    state.profile = result.data.profile;
+                    if (state.currentView === 'login' || state.currentView === 'register') {
+                        state.currentView = 'dashboard';
+                        render();
+                    }
+                } catch (e) {
+                    // Only log error type, not full details
+                    state.error = 'Failed to load profile';
+                    render();
+                }
+            } else {
+                state.user = null;
+                state.profile = null;
+                if (state.currentView !== 'register' && state.currentView !== 'forgot-password') {
+                    state.currentView = 'login';
+                }
+                render();
+            }
+        });
+        
+        // Actions
+        window.app = {
+            // Navigation
+            goToLogin: function() {
+                state.currentView = 'login';
+                state.error = null;
+                state.success = null;
+                render();
+            },
+            goToRegister: function() {
+                state.currentView = 'register';
+                state.error = null;
+                state.success = null;
+                render();
+            },
+            goToForgotPassword: function() {
+                state.currentView = 'forgot-password';
+                state.error = null;
+                state.success = null;
+                render();
+            },
+            goToDashboard: function() {
+                state.currentView = 'dashboard';
+                state.error = null;
+                render();
+            },
+            goToOptimizer: function() {
+                state.currentView = 'optimizer';
+                state.error = null;
+                render();
+            },
+            goToResults: function() {
+                state.currentView = 'results';
+                state.error = null;
+                render();
+            },
+            goToHistory: function() {
+                state.currentView = 'history';
+                state.error = null;
+                state.loading = true;
+                render();
+                
+                // Fetch history from backend
+                functions.httpsCallable('getOptimizationHistory')()
+                    .then(function(result) {
+                        state.historyData = result.data.history || [];
+                        state.loading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.loading = false;
+                        state.error = 'Failed to load history';
+                        render();
+                    });
+            },
+            
+            // Google Sign-In
+            signInWithGoogle: function() {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                // Add custom parameters to ensure we use the correct OAuth client
+                provider.setCustomParameters({
+                    prompt: 'select_account'
+                });
+                
+                state.loading = true;
+                render();
+                
+                auth.signInWithPopup(provider)
+                    .then(function(result) {
+                        // Success - don't log sensitive user data
+                        state.loading = false;
+                    })
+                    .catch(function(error) {
+                        state.loading = false;
+                        state.error = 'Google sign-in failed. Please try again.';
+                        render();
+                    });
+            },
+            
+            // Email/Password Registration
+            register: function(e) {
+                e.preventDefault();
+                const email = document.getElementById('register-email').value.trim();
+                const password = document.getElementById('register-password').value;
+                const confirmPassword = document.getElementById('register-confirm-password').value;
+                
+                state.error = null;
+                
+                if (!utils.validateEmail(email)) {
+                    state.error = 'Please enter a valid email address';
+                    render();
+                    return;
+                }
+                
+                if (password.length < 6) {
+                    state.error = 'Password must be at least 6 characters';
+                    render();
+                    return;
+                }
+                
+                if (password !== confirmPassword) {
+                    state.error = 'Passwords do not match';
+                    render();
+                    return;
+                }
+                
+                state.loading = true;
+                render();
+                
+                auth.createUserWithEmailAndPassword(email, password)
+                    .then(function(result) {
+                        // Success - don't log user data
+                        state.loading = false;
+                    })
+                    .catch(function(error) {
+                        state.loading = false;
+                        
+                        if (error.code === 'auth/email-already-in-use') {
+                            state.error = 'This email is already registered. Please sign in.';
+                        } else if (error.code === 'auth/invalid-email') {
+                            state.error = 'Invalid email address';
+                        } else if (error.code === 'auth/weak-password') {
+                            state.error = 'Password is too weak';
+                        } else {
+                            state.error = 'Registration failed: ' + error.message;
+                        }
+                        render();
+                    });
+            },
+            
+            // Email/Password Sign In
+            signIn: function(e) {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value.trim();
+                const password = document.getElementById('login-password').value;
+                
+                state.error = null;
+                
+                if (!email || !password) {
+                    state.error = 'Please enter email and password';
+                    render();
+                    return;
+                }
+                
+                state.loading = true;
+                render();
+                
+                auth.signInWithEmailAndPassword(email, password)
+                    .then(function(result) {
+                        // Success - don't log user data
+                        state.loading = false;
+                    })
+                    .catch(function(error) {
+                        state.loading = false;
+                        
+                        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                            state.error = 'Invalid email or password';
+                        } else if (error.code === 'auth/invalid-email') {
+                            state.error = 'Invalid email address';
+                        } else if (error.code === 'auth/user-disabled') {
+                            state.error = 'This account has been disabled';
+                        } else {
+                            state.error = 'Sign in failed: ' + error.message;
+                        }
+                        render();
+                    });
+            },
+            
+            // Password Reset
+            resetPassword: function(e) {
+                e.preventDefault();
+                const email = document.getElementById('reset-email').value.trim();
+                
+                state.error = null;
+                state.success = null;
+                
+                if (!utils.validateEmail(email)) {
+                    state.error = 'Please enter a valid email address';
+                    render();
+                    return;
+                }
+                
+                state.loading = true;
+                render();
+                
+                auth.sendPasswordResetEmail(email)
+                    .then(function() {
+                        // Success - don't log email
+                        state.loading = false;
+                        state.success = 'Password reset email sent! Check your inbox.';
+                        render();
+                    })
+                    .catch(function(error) {
+                        state.loading = false;
+                        
+                        if (error.code === 'auth/user-not-found') {
+                            state.error = 'No account found with this email';
+                        } else if (error.code === 'auth/invalid-email') {
+                            state.error = 'Invalid email address';
+                        } else {
+                            state.error = 'Failed to send reset email: ' + error.message;
+                        }
+                        render();
+                    });
+            },
+            
+            signOut: function() {
+                auth.signOut();
+            },
+            
+            // Optimizer
+            optimize: function(e) {
+                e.preventDefault();
+                const url = document.getElementById('video-url').value.trim();
+                if (!url) {
+                    state.error = 'Please enter a video URL';
+                    render();
+                    return;
+                }
+                state.loading = true;
+                state.error = null;
+                render();
+                
+                functions.httpsCallable('optimizeVideo')({ videoUrl: url })
+                    .then(function(result) {
+                        // Success - save results and show results page
+                        state.currentResults = result.data;
+                        state.loading = false;
+                        state.currentView = 'results';
+                        return functions.httpsCallable('getUserProfile')();
+                    })
+                    .then(function(result) {
+                        state.profile = result.data.profile;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.loading = false;
+                        state.error = 'Optimization failed. Please try again.';
+                        render();
+                    });
+            },
+            
+            // Copy to clipboard helper
+            copyToClipboard: function(text, buttonId) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function() {
+                        // Show success feedback
+                        const btn = document.getElementById(buttonId);
+                        if (btn) {
+                            const originalText = btn.innerHTML;
+                            btn.innerHTML = '✅ Copied!';
+                            btn.classList.add('bg-green-500');
+                            setTimeout(function() {
+                                btn.innerHTML = originalText;
+                                btn.classList.remove('bg-green-500');
+                            }, 2000);
+                        }
+                    });
+                } else {
+                    // Fallback for older browsers
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        const btn = document.getElementById(buttonId);
+                        if (btn) {
+                            const originalText = btn.innerHTML;
+                            btn.innerHTML = '✅ Copied!';
+                            setTimeout(function() {
+                                btn.innerHTML = originalText;
+                            }, 2000);
+                        }
+                    } catch (err) {
+                        alert('Copy failed. Please copy manually.');
+                    }
+                    document.body.removeChild(textarea);
+                }
+            },
+            
+            // View history item details
+            viewHistoryItem: function(index) {
+                if (state.historyData && state.historyData[index]) {
+                    state.currentResults = state.historyData[index];
+                    state.currentView = 'results';
+                    render();
+                }
+            }
+        };
+        
+        // Render Functions
+        function renderLogin() {
+            var html = '<div class="min-h-screen mobile-full-screen flex items-center justify-center px-4 py-8">';
+            html += '<div class="max-w-md w-full mobile-card">';
+            html += '<div class="text-center mb-8 fade-in">';
+            html += '<div class="text-6xl mb-4">🎬</div>';
+            html += '<h1 class="text-4xl mobile-text-xl font-bold text-white mb-2">YouTube Video Optimizer</h1>';
+            html += '<p class="text-white/80 text-lg mobile-text-lg">AI-powered video optimization</p>';
+            html += '</div>';
+            
+            html += '<div class="bg-white rounded-2xl shadow-2xl p-8 mobile-padding fade-in">';
+            html += '<h2 class="text-2xl mobile-text-xl font-bold text-gray-800 mb-6">Sign In</h2>';
+            
+            if (state.error) {
+                html += '<div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">' + state.error + '</div>';
+            }
+            
+            // Google Sign-In Button
+            html += '<button onclick="app.signInWithGoogle()" class="google-btn w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 rounded-xl py-4 px-6 text-gray-700 font-semibold hover:border-gray-400 mb-6"';
+            if (state.loading) html += ' disabled';
+            html += '>';
+            html += '<svg width="20" height="20" viewBox="0 0 20 20"><path fill="#4285F4" d="M19.6 10.23c0-.82-.1-1.42-.25-2.05H10v3.72h5.5c-.15.96-.74 2.31-2.04 3.22v2.45h3.16c1.89-1.73 2.98-4.3 2.98-7.34z"/><path fill="#34A853" d="M13.46 15.13c-.83.59-1.96 1-3.46 1-2.64 0-4.88-1.74-5.68-4.15H1.07v2.52C2.72 17.75 6.09 20 10 20c2.7 0 4.96-.89 6.62-2.42l-3.16-2.45z"/><path fill="#FBBC05" d="M3.99 10c0-.69.12-1.35.32-1.97V5.51H1.07A9.973 9.973 0 000 10c0 1.61.39 3.14 1.07 4.49l3.24-2.52c-.2-.62-.32-1.28-.32-1.97z"/><path fill="#EA4335" d="M10 3.88c1.88 0 3.13.81 3.85 1.48l2.84-2.76C14.96.99 12.7 0 10 0 6.09 0 2.72 2.25 1.07 5.51l3.24 2.52C5.12 5.62 7.36 3.88 10 3.88z"/></svg>';
+            html += state.loading ? 'Signing in...' : 'Sign in with Google';
+            html += '</button>';
+            
+            html += '<div class="relative my-6"><div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-300"></div></div><div class="relative flex justify-center text-sm"><span class="px-2 bg-white text-gray-500">Or sign in with email</span></div></div>';
+            
+            // Email/Password Form
+            html += '<form onsubmit="app.signIn(event)">';
+            html += '<div class="mb-4">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Email</label>';
+            html += '<input type="email" id="login-email" required class="input-field w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" placeholder="your@email.com" />';
+            html += '</div>';
+            
+            html += '<div class="mb-6">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Password</label>';
+            html += '<input type="password" id="login-password" required class="input-field w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" placeholder="••••••••" />';
+            html += '</div>';
+            
+            html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all"';
+            if (state.loading) html += ' disabled';
+            html += '>';
+            html += state.loading ? '⏳ Signing in...' : '🚀 Sign In';
+            html += '</button></form>';
+            
+            html += '<div class="mt-6 text-center">';
+            html += '<button onclick="app.goToForgotPassword()" class="text-blue-600 hover:text-blue-700 font-semibold">Forgot Password?</button>';
+            html += '</div>';
+            
+            html += '<div class="mt-4 pt-4 border-t border-gray-200 text-center">';
+            html += '<p class="text-gray-600">Don\'t have an account?</p>';
+            html += '<button onclick="app.goToRegister()" class="mt-2 text-purple-600 hover:text-purple-700 font-bold">Create Account →</button>';
+            html += '</div>';
+            
+            html += '</div></div></div>';
+            return html;
+        }
+        
+        function renderRegister() {
+            var html = '<div class="min-h-screen flex items-center justify-center px-4 py-8">';
+            html += '<div class="max-w-md w-full">';
+            html += '<div class="text-center mb-8 fade-in">';
+            html += '<div class="text-6xl mb-4">🎬</div>';
+            html += '<h1 class="text-4xl font-bold text-white mb-2">Create Account</h1>';
+            html += '<p class="text-white/80 text-lg">Start optimizing your videos</p>';
+            html += '</div>';
+            
+            html += '<div class="bg-white rounded-2xl shadow-2xl p-8 fade-in">';
+            html += '<h2 class="text-2xl font-bold text-gray-800 mb-6">Register</h2>';
+            
+            if (state.error) {
+                html += '<div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">' + state.error + '</div>';
+            }
+            
+            // Google Sign-In Button
+            html += '<button onclick="app.signInWithGoogle()" class="google-btn w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 rounded-xl py-4 px-6 text-gray-700 font-semibold hover:border-gray-400 mb-6"';
+            if (state.loading) html += ' disabled';
+            html += '>';
+            html += '<svg width="20" height="20" viewBox="0 0 20 20"><path fill="#4285F4" d="M19.6 10.23c0-.82-.1-1.42-.25-2.05H10v3.72h5.5c-.15.96-.74 2.31-2.04 3.22v2.45h3.16c1.89-1.73 2.98-4.3 2.98-7.34z"/><path fill="#34A853" d="M13.46 15.13c-.83.59-1.96 1-3.46 1-2.64 0-4.88-1.74-5.68-4.15H1.07v2.52C2.72 17.75 6.09 20 10 20c2.7 0 4.96-.89 6.62-2.42l-3.16-2.45z"/><path fill="#FBBC05" d="M3.99 10c0-.69.12-1.35.32-1.97V5.51H1.07A9.973 9.973 0 000 10c0 1.61.39 3.14 1.07 4.49l3.24-2.52c-.2-.62-.32-1.28-.32-1.97z"/><path fill="#EA4335" d="M10 3.88c1.88 0 3.13.81 3.85 1.48l2.84-2.76C14.96.99 12.7 0 10 0 6.09 0 2.72 2.25 1.07 5.51l3.24 2.52C5.12 5.62 7.36 3.88 10 3.88z"/></svg>';
+            html += state.loading ? 'Creating account...' : 'Sign up with Google';
+            html += '</button>';
+            
+            html += '<div class="relative my-6"><div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-300"></div></div><div class="relative flex justify-center text-sm"><span class="px-2 bg-white text-gray-500">Or register with email</span></div></div>';
+            
+            // Email/Password Form
+            html += '<form onsubmit="app.register(event)">';
+            html += '<div class="mb-4">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Email</label>';
+            html += '<input type="email" id="register-email" required class="input-field w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" placeholder="your@email.com" />';
+            html += '</div>';
+            
+            html += '<div class="mb-4">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Password (min 6 characters)</label>';
+            html += '<input type="password" id="register-password" required minlength="6" class="input-field w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" placeholder="••••••••" />';
+            html += '</div>';
+            
+            html += '<div class="mb-6">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Confirm Password</label>';
+            html += '<input type="password" id="register-confirm-password" required minlength="6" class="input-field w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" placeholder="••••••••" />';
+            html += '</div>';
+            
+            html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all"';
+            if (state.loading) html += ' disabled';
+            html += '>';
+            html += state.loading ? '⏳ Creating account...' : '🎉 Create Account';
+            html += '</button>';
+            html += '</form>';
+            
+            html += '<div class="mt-6 pt-4 border-t border-gray-200 text-center">';
+            html += '<p class="text-gray-600">Already have an account?</p>';
+            html += '<button onclick="app.goToLogin()" class="mt-2 text-purple-600 hover:text-purple-700 font-bold">Sign In →</button>';
+            html += '</div>';
+            
+            html += '</div></div></div>';
+            return html;
+        }
+        
+        function renderForgotPassword() {
+            var html = '<div class="min-h-screen flex items-center justify-center px-4 py-8">';
+            html += '<div class="max-w-md w-full">';
+            html += '<div class="text-center mb-8 fade-in">';
+            html += '<div class="text-6xl mb-4">🔐</div>';
+            html += '<h1 class="text-4xl font-bold text-white mb-2">Reset Password</h1>';
+            html += '<p class="text-white/80 text-lg">We\'ll send you a reset link</p>';
+            html += '</div>';
+            
+            html += '<div class="bg-white rounded-2xl shadow-2xl p-8 fade-in">';
+            html += '<h2 class="text-2xl font-bold text-gray-800 mb-6">Forgot Password?</h2>';
+            
+            if (state.error) {
+                html += '<div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">' + state.error + '</div>';
+            }
+            
+            if (state.success) {
+                html += '<div class="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm">' + state.success + '</div>';
+            }
+            
+            html += '<form onsubmit="app.resetPassword(event)">';
+            html += '<div class="mb-6">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Email Address</label>';
+            html += '<input type="email" id="reset-email" required class="input-field w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" placeholder="your@email.com" />';
+            html += '<p class="text-sm text-gray-500 mt-2">Enter your email and we\'ll send you a password reset link</p>';
+            html += '</div>';
+            
+            html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all"';
+            if (state.loading) html += ' disabled';
+            html += '>';
+            html += state.loading ? '⏳ Sending...' : '📧 Send Reset Link';
+            html += '</button>';
+            html += '</form>';
+            
+            html += '<div class="mt-6 pt-4 border-t border-gray-200 text-center">';
+            html += '<button onclick="app.goToLogin()" class="text-purple-600 hover:text-purple-700 font-bold">← Back to Sign In</button>';
+            html += '</div>';
+            
+            html += '</div></div></div>';
+            return html;
+        }
+        
+        function renderDashboard() {
+            if (!state.profile) {
+                return '<div class="text-white text-center py-12">Loading profile...</div>';
+            }
+            
+            const p = state.profile;
+            const plan = p.subscription.plan;
+            const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
+            
+            var html = '<div class="min-h-screen mobile-full-screen py-6 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+            html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 fade-in gap-4">';
+            html += '<div><h1 class="text-3xl mobile-text-xl font-bold text-white">Welcome back!</h1>';
+            html += '<p class="text-white/80 text-sm sm:text-base">Email: <span class="font-semibold">' + (p.email || '') + '</span></p>';
+            html += '<p class="text-white/80 text-sm sm:text-base">Plan: <span class="font-semibold">' + planName + '</span></p></div>';
+            html += '<button onclick="app.signOut()" class="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 w-full sm:w-auto">Sign Out</button>';
+            html += '</div>';
+            
+            html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mobile-grid-cols-1 gap-4 mobile-gap-4 mb-8 fade-in">';
+            
+            var tools = [
+                { name: 'Warp Optimizer', key: 'warpOptimizer', emoji: '🚀' },
+                { name: 'Title Generator', key: 'titleGenerator', emoji: '📝' },
+                { name: 'Description', key: 'descriptionGenerator', emoji: '📄' },
+                { name: 'Tag Generator', key: 'tagGenerator', emoji: '🏷️' }
+            ];
+            
+            for (var i = 0; i < tools.length; i++) {
+                var tool = tools[i];
+                var usage = p.usage[tool.key];
+                var percent = utils.getUsagePercent(usage.usedToday, usage.limit);
+                var color = utils.getUsageColor(percent);
+                
+                html += '<div class="bg-white rounded-xl shadow-lg p-6 mobile-padding">';
+                html += '<div class="flex justify-between items-start mb-3">';
+                html += '<span class="text-3xl">' + tool.emoji + '</span>';
+                html += '<span class="text-2xl mobile-text-lg font-bold text-gray-800">' + usage.usedToday + '/' + usage.limit + '</span>';
+                html += '</div>';
+                html += '<h4 class="font-semibold text-gray-700 mb-3 text-sm sm:text-base">' + tool.name + '</h4>';
+                html += '<div class="w-full bg-gray-200 rounded-full h-2 mb-2">';
+                html += '<div class="' + color + ' h-2 rounded-full usage-bar" style="width:' + percent + '%"></div>';
+                html += '</div>';
+                html += '<p class="text-xs text-gray-500 mt-2">' + (usage.limit - usage.usedToday) + ' uses remaining</p>';
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 mobile-grid-cols-1 gap-6 mobile-gap-4 fade-in">';
+            html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding tool-card cursor-pointer" onclick="app.goToOptimizer()">';
+            html += '<div class="text-5xl mb-4">🎬</div>';
+            html += '<h3 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-2">Start Optimizing</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm sm:text-base">Optimize your video with AI</p>';
+            html += '<div class="flex items-center text-blue-600 font-semibold">Get Started →</div>';
+            html += '</div>';
+            html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding tool-card cursor-pointer" onclick="app.goToHistory()">';
+            html += '<div class="text-5xl mb-4">📜</div>';
+            html += '<h3 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-2">History</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm sm:text-base">View past optimizations</p>';
+            html += '<div class="flex items-center text-purple-600 font-semibold">View History →</div>';
+            html += '</div></div>';
+            html += '</div></div>';
+            
+            return html;
+        }
+        
+        function renderOptimizer() {
+            var html = '<div class="min-h-screen mobile-full-screen py-12 px-4">';
+            html += '<div class="max-w-4xl mx-auto">';
+            html += '<button onclick="app.goToDashboard()" class="mb-6 px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30">← Back</button>';
+            html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding fade-in">';
+            html += '<h2 class="text-3xl mobile-text-xl font-bold text-gray-800 mb-6">🚀 Video Optimizer</h2>';
+            
+            if (state.error) {
+                html += '<div class="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">';
+                html += '<p class="font-semibold">⚠️ ' + state.error + '</p></div>';
+            }
+            
+            html += '<form onsubmit="app.optimize(event)">';
+            html += '<div class="mb-6">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">YouTube Video URL</label>';
+            html += '<input type="text" id="video-url" placeholder="https://www.youtube.com/watch?v=..." class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" required />';
+            html += '</div>';
+            html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700"';
+            if (state.loading) html += ' disabled';
+            html += '>';
+            html += state.loading ? '⏳ Optimizing...' : '🚀 Optimize Video';
+            html += '</button></form>';
+            
+            if (state.loading) {
+                html += '<div class="mt-8 text-center">';
+                html += '<div class="spinner mx-auto mb-4"></div>';
+                html += '<p class="text-gray-600">Processing... This takes 30-60 seconds</p>';
+                html += '</div>';
+            }
+            
+            html += '</div></div></div>';
+            return html;
+        }
+        
+        function renderResults() {
+            if (!state.currentResults) {
+                return '<div class="text-white text-center py-12">No results available</div>';
+            }
+            
+            const r = state.currentResults;
+            
+            var html = '<div class="min-h-screen mobile-full-screen py-6 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+            
+            // Header with navigation
+            html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 fade-in">';
+            html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">✨ Optimization Results</h1>';
+            html += '<div class="flex gap-2 w-full sm:w-auto">';
+            html += '<button onclick="app.goToDashboard()" class="flex-1 sm:flex-none px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30">← Dashboard</button>';
+            html += '<button onclick="app.goToHistory()" class="flex-1 sm:flex-none px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30">📜 History</button>';
+            html += '</div></div>';
+            
+            // Video Info Card
+            if (r.videoInfo) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
+                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">📹 Video Information</h2>';
+                html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">';
+                html += '<div><p class="text-sm text-gray-600">Title</p><p class="font-semibold">' + (r.videoInfo.title || 'N/A') + '</p></div>';
+                html += '<div><p class="text-sm text-gray-600">Channel</p><p class="font-semibold">' + (r.videoInfo.channelTitle || 'N/A') + '</p></div>';
+                html += '<div><p class="text-sm text-gray-600">Views</p><p class="font-semibold">' + utils.formatNumber(r.videoInfo.viewCount || 0) + '</p></div>';
+                html += '<div><p class="text-sm text-gray-600">Duration</p><p class="font-semibold">' + (r.videoInfo.duration || 'N/A') + '</p></div>';
+                html += '</div></div>';
+            }
+            
+            // Optimized Titles
+            if (r.titles && r.titles.length > 0) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
+                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">📝 Optimized Titles</h2>';
+                html += '<div class="space-y-3">';
+                for (var i = 0; i < r.titles.length; i++) {
+                    var titleId = 'title-' + i;
+                    html += '<div class="p-4 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all">';
+                    html += '<div class="flex justify-between items-start gap-3">';
+                    html += '<p class="flex-1 font-medium text-gray-800">' + r.titles[i] + '</p>';
+                    html += '<button id="' + titleId + '-btn" onclick="app.copyToClipboard(\'' + r.titles[i].replace(/'/g, "\\'") + '\', \'' + titleId + '-btn\')" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 whitespace-nowrap">📋 Copy</button>';
+                    html += '</div></div>';
+                }
+                html += '</div></div>';
+            }
+            
+            // Optimized Description
+            if (r.description) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
+                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">📄 Optimized Description</h2>';
+                html += '<div class="p-4 bg-gray-50 rounded-lg border-2 border-gray-200">';
+                html += '<p class="text-gray-800 whitespace-pre-wrap mb-3">' + r.description + '</p>';
+                html += '<button id="desc-btn" onclick="app.copyToClipboard(\'' + r.description.replace(/'/g, "\\'").replace(/\n/g, '\\n') + '\', \'desc-btn\')" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">📋 Copy Description</button>';
+                html += '</div></div>';
+            }
+            
+            // Optimized Tags
+            if (r.tags && r.tags.length > 0) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
+                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">🏷️ Optimized Tags</h2>';
+                html += '<div class="flex flex-wrap gap-2 mb-4">';
+                for (var j = 0; j < r.tags.length; j++) {
+                    html += '<span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">' + r.tags[j] + '</span>';
+                }
+                html += '</div>';
+                html += '<button id="tags-btn" onclick="app.copyToClipboard(\'' + r.tags.join(', ').replace(/'/g, "\\'") + '\', \'tags-btn\')" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">📋 Copy All Tags</button>';
+                html += '</div>';
+            }
+            
+            // SEO Analysis
+            if (r.seoAnalysis) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
+                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-4">🔍 SEO Analysis</h2>';
+                html += '<div class="space-y-3">';
+                if (r.seoAnalysis.score) {
+                    var scoreColor = r.seoAnalysis.score >= 80 ? 'text-green-600' : r.seoAnalysis.score >= 60 ? 'text-yellow-600' : 'text-red-600';
+                    html += '<div class="flex items-center gap-3">';
+                    html += '<p class="text-gray-700 font-semibold">SEO Score:</p>';
+                    html += '<p class="text-2xl font-bold ' + scoreColor + '">' + r.seoAnalysis.score + '/100</p>';
+                    html += '</div>';
+                }
+                if (r.seoAnalysis.recommendations && r.seoAnalysis.recommendations.length > 0) {
+                    html += '<div><p class="font-semibold text-gray-700 mb-2">Recommendations:</p>';
+                    html += '<ul class="list-disc list-inside space-y-1 text-gray-600">';
+                    for (var k = 0; k < r.seoAnalysis.recommendations.length; k++) {
+                        html += '<li>' + r.seoAnalysis.recommendations[k] + '</li>';
+                    }
+                    html += '</ul></div>';
+                }
+                html += '</div></div>';
+            }
+            
+            // Action Buttons
+            html += '<div class="flex flex-col sm:flex-row gap-4 fade-in">';
+            html += '<button onclick="app.goToOptimizer()" class="flex-1 py-4 bg-white text-gray-800 font-bold rounded-lg hover:bg-gray-100 transition-all">🔄 Optimize Another Video</button>';
+            html += '<button onclick="app.goToDashboard()" class="flex-1 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all">✅ Done</button>';
+            html += '</div>';
+            
+            html += '</div></div>';
+            return html;
+        }
+        
+        function renderHistory() {
+            var html = '<div class="min-h-screen mobile-full-screen py-6 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+            
+            // Header
+            html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 fade-in">';
+            html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">📜 Optimization History</h1>';
+            html += '<button onclick="app.goToDashboard()" class="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 w-full sm:w-auto">← Back to Dashboard</button>';
+            html += '</div>';
+            
+            if (state.loading) {
+                html += '<div class="text-center py-12">';
+                html += '<div class="spinner mx-auto mb-4"></div>';
+                html += '<p class="text-white">Loading history...</p>';
+                html += '</div>';
+            } else if (state.error) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding text-center">';
+                html += '<p class="text-red-600 font-semibold">⚠️ ' + state.error + '</p>';
+                html += '<button onclick="app.goToHistory()" class="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Try Again</button>';
+                html += '</div>';
+            } else if (!state.historyData || state.historyData.length === 0) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-12 mobile-padding text-center fade-in">';
+                html += '<div class="text-6xl mb-4">📭</div>';
+                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-2">No Optimizations Yet</h2>';
+                html += '<p class="text-gray-600 mb-6">Start optimizing videos to see your history here!</p>';
+                html += '<button onclick="app.goToOptimizer()" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700">🚀 Start Optimizing</button>';
+                html += '</div>';
+            } else {
+                html += '<div class="space-y-4 fade-in">';
+                for (var i = 0; i < state.historyData.length; i++) {
+                    var item = state.historyData[i];
+                    var date = new Date(item.timestamp || item.createdAt).toLocaleDateString();
+                    var time = new Date(item.timestamp || item.createdAt).toLocaleTimeString();
+                    
+                    html += '<div class="bg-white rounded-xl shadow-lg p-6 mobile-padding hover:shadow-xl transition-all">';
+                    html += '<div class="flex flex-col sm:flex-row justify-between items-start gap-4">';
+                    html += '<div class="flex-1">';
+                    html += '<h3 class="font-bold text-lg text-gray-800 mb-2">' + (item.videoInfo && item.videoInfo.title ? item.videoInfo.title : 'Video Optimization') + '</h3>';
+                    html += '<div class="flex flex-wrap gap-4 text-sm text-gray-600">';
+                    html += '<span>📅 ' + date + '</span>';
+                    html += '<span>🕐 ' + time + '</span>';
+                    if (item.videoInfo && item.videoInfo.channelTitle) {
+                        html += '<span>📺 ' + item.videoInfo.channelTitle + '</span>';
+                    }
+                    html += '</div>';
+                    if (item.titles && item.titles.length > 0) {
+                        html += '<p class="mt-2 text-sm text-gray-700"><strong>Best Title:</strong> ' + item.titles[0] + '</p>';
+                    }
+                    html += '</div>';
+                    html += '<div class="flex gap-2">';
+                    html += '<button onclick="app.viewHistoryItem(' + i + ')" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 whitespace-nowrap">👁️ View</button>';
+                    html += '</div>';
+                    html += '</div></div>';
+                }
+                html += '</div>';
+            }
+            
+            html += '</div></div>';
+            return html;
+        }
+        
+        // Main render
+        function render() {
+            const root = document.getElementById('app-root');
+            if (!root) return;
+            
+            var html = '';
+            
+            switch(state.currentView) {
+                case 'login':
+                    html = renderLogin();
+                    break;
+                case 'register':
+                    html = renderRegister();
+                    break;
+                case 'forgot-password':
+                    html = renderForgotPassword();
+                    break;
+                case 'dashboard':
+                    html = renderDashboard();
+                    break;
+                case 'optimizer':
+                    html = renderOptimizer();
+                    break;
+                case 'results':
+                    html = renderResults();
+                    break;
+                case 'history':
+                    html = renderHistory();
+                    break;
+                default:
+                    html = '<div class="text-white text-center py-12">Loading...</div>';
+            }
+            
+            root.innerHTML = html;
+        }
+        
+        // Initial render
+        render();
+        
+    })();
+    </script>
+</body>
+</html>
