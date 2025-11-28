@@ -707,51 +707,75 @@ exports.deleteOptimization = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.adminGetUsers = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-  const { limit = 50, offset = 0, plan = null } = data;
-  
-  let query = db.collection('users').orderBy('createdAt', 'desc').limit(limit).offset(offset);
-  if (plan) query = query.where('subscription.plan', '==', plan);
-  
-  const snapshot = await query.get();
-  const users = [];
-  snapshot.forEach(doc => {
-    const userData = doc.data();
-    users.push({
-      id: doc.id,
-      ...userData,
-      createdAt: userData.createdAt?.toDate().toISOString(),
-      lastLoginAt: userData.lastLoginAt?.toDate().toISOString()
+  try {
+    await requireAdmin(context);
+
+    // Handle case where data might be null/undefined
+    const safeData = data || {};
+    const limitCount = safeData.limit || 100;
+    const planFilter = safeData.plan || null;
+
+    let query = db.collection('users').orderBy('createdAt', 'desc').limit(limitCount);
+    if (planFilter) {
+      query = query.where('subscription.plan', '==', planFilter);
+    }
+
+    const snapshot = await query.get();
+    const users = [];
+
+    snapshot.forEach(doc => {
+      const userData = doc.data();
+      users.push({
+        uid: doc.id,
+        email: userData.email || '',
+        subscription: userData.subscription || { plan: 'free' },
+        usage: userData.usage || {},
+        isAdmin: userData.isAdmin || false,
+        createdAt: userData.createdAt?.toDate?.()?.toISOString() || null,
+        lastLoginAt: userData.lastLoginAt?.toDate?.()?.toISOString() || null
+      });
     });
-  });
-  
-  return { success: true, users, count: users.length };
+
+    return { success: true, users, count: users.length };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to fetch users: ' + error.message);
+  }
 });
 
 exports.adminUpdateUserPlan = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-  const { userId, newPlan } = data;
-  
-  const planDoc = await db.collection('subscriptionPlans').doc(newPlan).get();
-  if (!planDoc.exists) throw new functions.https.HttpsError('invalid-argument', 'Invalid plan');
-  
-  const planLimits = planDoc.data().limits;
-  await db.collection('users').doc(userId).update({
-    'subscription.plan': newPlan,
-    'subscription.startDate': admin.firestore.FieldValue.serverTimestamp(),
-    'usage.warpOptimizer.limit': planLimits.warpOptimizer.dailyLimit,
-    'usage.warpOptimizer.usedToday': 0,
-    'usage.warpOptimizer.cooldownUntil': null,
-    'usage.titleGenerator.limit': planLimits.titleGenerator.dailyLimit,
-    'usage.titleGenerator.usedToday': 0,
-    'usage.descriptionGenerator.limit': planLimits.descriptionGenerator.dailyLimit,
-    'usage.descriptionGenerator.usedToday': 0,
-    'usage.tagGenerator.limit': planLimits.tagGenerator.dailyLimit,
-    'usage.tagGenerator.usedToday': 0
-  });
-  
-  await logUsage(userId, 'plan_changed_by_admin', { newPlan, changedBy: context.auth.uid });
-  return { success: true };
+  try {
+    await requireAdmin(context);
+    const { userId, plan, newPlan } = data || {};
+    const targetPlan = plan || newPlan; // Accept both 'plan' and 'newPlan'
+
+    if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+    if (!targetPlan) throw new functions.https.HttpsError('invalid-argument', 'Plan required');
+
+    const planDoc = await db.collection('subscriptionPlans').doc(targetPlan).get();
+    if (!planDoc.exists) throw new functions.https.HttpsError('invalid-argument', 'Invalid plan: ' + targetPlan);
+
+    const planLimits = planDoc.data().limits;
+    await db.collection('users').doc(userId).update({
+      'subscription.plan': targetPlan,
+      'subscription.startDate': admin.firestore.FieldValue.serverTimestamp(),
+      'usage.warpOptimizer.limit': planLimits.warpOptimizer.dailyLimit,
+      'usage.warpOptimizer.usedToday': 0,
+      'usage.warpOptimizer.cooldownUntil': null,
+      'usage.titleGenerator.limit': planLimits.titleGenerator.dailyLimit,
+      'usage.titleGenerator.usedToday': 0,
+      'usage.descriptionGenerator.limit': planLimits.descriptionGenerator.dailyLimit,
+      'usage.descriptionGenerator.usedToday': 0,
+      'usage.tagGenerator.limit': planLimits.tagGenerator.dailyLimit,
+      'usage.tagGenerator.usedToday': 0
+    });
+
+    await logUsage(userId, 'plan_changed_by_admin', { plan: targetPlan, changedBy: context.auth.uid });
+    return { success: true, message: 'User plan updated to ' + targetPlan };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to update user plan: ' + error.message);
+  }
 });
 
 exports.adminSetCustomLimits = functions.https.onCall(async (data, context) => {
