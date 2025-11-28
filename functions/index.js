@@ -1300,3 +1300,369 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
+
+// ==============================================
+// NEW FEATURE: COMPETITOR ANALYSIS
+// ==============================================
+
+exports.analyzeCompetitor = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  await checkUsageLimit(uid, 'warpOptimizer');
+
+  const { videoUrl } = data;
+  if (!videoUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video URL is required');
+  }
+
+  try {
+    const videoId = extractVideoId(videoUrl);
+
+    // Get competitor video data
+    const videoResponse = await youtube.videos.list({
+      part: 'snippet,statistics,contentDetails',
+      id: videoId
+    });
+
+    if (!videoResponse.data.items || videoResponse.data.items.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'Competitor video not found');
+    }
+
+    const video = videoResponse.data.items[0];
+    const snippet = video.snippet;
+    const stats = video.statistics;
+
+    // Get channel data
+    const channelResponse = await youtube.channels.list({
+      part: 'snippet,statistics',
+      id: snippet.channelId
+    });
+
+    const channel = channelResponse.data.items?.[0];
+
+    // Analyze with AI
+    const analysisPrompt = `You are a YouTube SEO expert. Analyze this competitor's video and provide actionable insights to BEAT their performance.
+
+COMPETITOR VIDEO DATA:
+- Title: ${snippet.title}
+- Description: ${snippet.description?.substring(0, 500) || 'No description'}
+- Tags: ${snippet.tags?.join(', ') || 'No visible tags'}
+- Views: ${parseInt(stats.viewCount || 0).toLocaleString()}
+- Likes: ${parseInt(stats.likeCount || 0).toLocaleString()}
+- Comments: ${parseInt(stats.commentCount || 0).toLocaleString()}
+- Channel: ${snippet.channelTitle}
+- Channel Subscribers: ${channel?.statistics?.subscriberCount ? parseInt(channel.statistics.subscriberCount).toLocaleString() : 'Hidden'}
+- Published: ${snippet.publishedAt}
+
+Provide your analysis in this EXACT JSON format:
+{
+  "seoScore": <number 0-100>,
+  "strengths": ["strength1", "strength2", "strength3"],
+  "weaknesses": ["weakness1", "weakness2", "weakness3"],
+  "opportunities": ["opportunity1", "opportunity2", "opportunity3"],
+  "betterTitles": ["title1", "title2", "title3"],
+  "betterTags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "contentGaps": ["gap1", "gap2"],
+  "engagementTips": ["tip1", "tip2", "tip3"],
+  "estimatedDifficulty": "<easy|medium|hard>",
+  "summary": "2-3 sentence summary of how to beat this competitor"
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: analysisPrompt }],
+      temperature: 0.7,
+      max_tokens: 1500
+    });
+
+    let analysis;
+    try {
+      const responseText = aiResponse.choices[0].message.content.trim();
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      analysis = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
+    } catch (e) {
+      analysis = {
+        seoScore: 70,
+        strengths: ['Unable to parse full analysis'],
+        weaknesses: [],
+        opportunities: [],
+        betterTitles: [],
+        betterTags: [],
+        contentGaps: [],
+        engagementTips: [],
+        estimatedDifficulty: 'medium',
+        summary: aiResponse.choices[0].message.content
+      };
+    }
+
+    await incrementUsage(uid, 'warpOptimizer');
+    await logUsage(uid, 'competitor_analysis', { videoId, competitorChannel: snippet.channelTitle });
+
+    return {
+      success: true,
+      competitor: {
+        videoId,
+        title: snippet.title,
+        channelTitle: snippet.channelTitle,
+        channelId: snippet.channelId,
+        thumbnail: snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url,
+        viewCount: parseInt(stats.viewCount || 0),
+        likeCount: parseInt(stats.likeCount || 0),
+        commentCount: parseInt(stats.commentCount || 0),
+        publishedAt: snippet.publishedAt,
+        tags: snippet.tags || [],
+        channelSubscribers: channel?.statistics?.subscriberCount ? parseInt(channel.statistics.subscriberCount) : null
+      },
+      analysis
+    };
+
+  } catch (error) {
+    console.error('Competitor analysis error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ==============================================
+// NEW FEATURE: TREND PREDICTOR
+// ==============================================
+
+exports.predictTrends = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  await checkUsageLimit(uid, 'warpOptimizer');
+
+  const { niche, country = 'US' } = data;
+  if (!niche) {
+    throw new functions.https.HttpsError('invalid-argument', 'Niche/topic is required');
+  }
+
+  try {
+    // Get trending videos in the niche
+    const searchResponse = await youtube.search.list({
+      part: 'snippet',
+      q: niche,
+      type: 'video',
+      order: 'viewCount',
+      publishedAfter: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // Last 7 days
+      maxResults: 15,
+      regionCode: country
+    });
+
+    const trendingVideos = searchResponse.data.items || [];
+
+    // Get video statistics
+    const videoIds = trendingVideos.map(v => v.id.videoId).filter(Boolean);
+    let videoStats = [];
+
+    if (videoIds.length > 0) {
+      const statsResponse = await youtube.videos.list({
+        part: 'statistics,snippet',
+        id: videoIds.join(',')
+      });
+      videoStats = statsResponse.data.items || [];
+    }
+
+    // Prepare data for AI analysis
+    const trendData = videoStats.map(v => ({
+      title: v.snippet.title,
+      views: parseInt(v.statistics.viewCount || 0),
+      likes: parseInt(v.statistics.likeCount || 0),
+      channel: v.snippet.channelTitle,
+      published: v.snippet.publishedAt
+    }));
+
+    const trendPrompt = `You are a YouTube trend analyst and viral content predictor. Based on this recent trending data in the "${niche}" niche, predict upcoming trends.
+
+RECENT TRENDING VIDEOS (last 7 days):
+${trendData.map((v, i) => `${i+1}. "${v.title}" - ${v.views.toLocaleString()} views by ${v.channel}`).join('\n')}
+
+Analyze patterns and predict what will trend next. Provide in this EXACT JSON format:
+{
+  "currentTrends": [
+    {"topic": "topic1", "description": "why it's trending", "growthRate": "rising|stable|declining"},
+    {"topic": "topic2", "description": "why it's trending", "growthRate": "rising|stable|declining"},
+    {"topic": "topic3", "description": "why it's trending", "growthRate": "rising|stable|declining"}
+  ],
+  "predictedTrends": [
+    {"topic": "predicted1", "reasoning": "why this will trend", "confidence": "high|medium|low", "timeframe": "1-2 weeks|2-4 weeks|1-2 months"},
+    {"topic": "predicted2", "reasoning": "why this will trend", "confidence": "high|medium|low", "timeframe": "1-2 weeks|2-4 weeks|1-2 months"},
+    {"topic": "predicted3", "reasoning": "why this will trend", "confidence": "high|medium|low", "timeframe": "1-2 weeks|2-4 weeks|1-2 months"}
+  ],
+  "videoIdeas": [
+    {"title": "Suggested video title 1", "description": "Brief description of content", "estimatedViews": "10K-50K|50K-100K|100K-500K|500K+"},
+    {"title": "Suggested video title 2", "description": "Brief description of content", "estimatedViews": "10K-50K|50K-100K|100K-500K|500K+"},
+    {"title": "Suggested video title 3", "description": "Brief description of content", "estimatedViews": "10K-50K|50K-100K|100K-500K|500K+"},
+    {"title": "Suggested video title 4", "description": "Brief description of content", "estimatedViews": "10K-50K|50K-100K|100K-500K|500K+"},
+    {"title": "Suggested video title 5", "description": "Brief description of content", "estimatedViews": "10K-50K|50K-100K|100K-500K|500K+"}
+  ],
+  "bestUploadTimes": ["Day time1", "Day time2", "Day time3"],
+  "hashtagsToUse": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"],
+  "summary": "2-3 sentence summary of the trend landscape in this niche"
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: trendPrompt }],
+      temperature: 0.8,
+      max_tokens: 2000
+    });
+
+    let predictions;
+    try {
+      const responseText = aiResponse.choices[0].message.content.trim();
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      predictions = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
+    } catch (e) {
+      predictions = {
+        currentTrends: [],
+        predictedTrends: [],
+        videoIdeas: [],
+        bestUploadTimes: [],
+        hashtagsToUse: [],
+        summary: aiResponse.choices[0].message.content
+      };
+    }
+
+    await incrementUsage(uid, 'warpOptimizer');
+    await logUsage(uid, 'trend_prediction', { niche, country });
+
+    return {
+      success: true,
+      niche,
+      country,
+      analyzedVideos: trendData.length,
+      topPerformers: trendData.slice(0, 5),
+      predictions
+    };
+
+  } catch (error) {
+    console.error('Trend prediction error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ==============================================
+// NEW FEATURE: AI THUMBNAIL GENERATOR (RunPod)
+// ==============================================
+
+exports.generateThumbnail = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  await checkUsageLimit(uid, 'warpOptimizer');
+
+  const { title, style = 'youtube_thumbnail', customPrompt } = data;
+  if (!title) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video title is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    // Generate optimized prompt for thumbnail
+    const promptGeneratorResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{
+        role: 'user',
+        content: `Create a detailed image generation prompt for a YouTube thumbnail. The video title is: "${title}"
+
+Style guidelines:
+- Eye-catching and click-worthy
+- Bold colors and high contrast
+- Professional YouTube thumbnail aesthetic
+- Should include relevant visual elements
+- Text overlay areas should be considered
+
+${customPrompt ? `Additional requirements: ${customPrompt}` : ''}
+
+Provide ONLY the image generation prompt, no explanations. Make it detailed and specific for best results.`
+      }],
+      temperature: 0.7,
+      max_tokens: 300
+    });
+
+    const imagePrompt = promptGeneratorResponse.choices[0].message.content.trim();
+
+    // Call RunPod API
+    const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
+
+    const runpodResponse = await axios.post(runpodEndpoint, {
+      input: {
+        prompt: imagePrompt,
+        negative_prompt: "blurry, low quality, distorted, ugly, bad anatomy, watermark, signature, text",
+        width: 1280,
+        height: 720,
+        num_inference_steps: 30,
+        guidance_scale: 7.5
+      }
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${runpodKey}`
+      },
+      timeout: 30000
+    });
+
+    const jobId = runpodResponse.data.id;
+    const status = runpodResponse.data.status;
+
+    await incrementUsage(uid, 'warpOptimizer');
+    await logUsage(uid, 'thumbnail_generation', { title, jobId });
+
+    return {
+      success: true,
+      jobId,
+      status,
+      prompt: imagePrompt,
+      message: 'Thumbnail generation started. Use checkThumbnailStatus to get the result.',
+      checkEndpoint: `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`
+    };
+
+  } catch (error) {
+    console.error('Thumbnail generation error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// Check thumbnail generation status
+exports.checkThumbnailStatus = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { jobId } = data;
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    const statusResponse = await axios.get(
+      `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${runpodKey}`
+        },
+        timeout: 10000
+      }
+    );
+
+    const result = statusResponse.data;
+
+    return {
+      success: true,
+      jobId,
+      status: result.status,
+      output: result.output || null,
+      error: result.error || null
+    };
+
+  } catch (error) {
+    console.error('Check thumbnail status error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
