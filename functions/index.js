@@ -9,8 +9,14 @@ const { OpenAI } = require('openai');
 const { google } = require('googleapis');
 const axios = require('axios');
 
-admin.initializeApp();
+// Explicit initialization with project ID
+admin.initializeApp({
+  projectId: 'ytseo-6d1b0'
+});
 const db = admin.firestore();
+
+// Log initialization status
+console.log('Firebase Admin initialized. Apps:', admin.apps.length);
 
 const openai = new OpenAI({
   apiKey: functions.config().openai?.key || process.env.OPENAI_API_KEY
@@ -739,7 +745,7 @@ exports.generateTags = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.getUserProfile = functions.https.onCall(async (data, context) => {
-  console.log('getUserProfile called - DIAGNOSTIC VERSION');
+  console.log('getUserProfile called - V2 EXPLICIT PROJECT');
 
   // Step 1: Check auth
   if (!context.auth) {
@@ -750,15 +756,16 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
   const uid = context.auth.uid;
   console.log('User ID:', uid);
 
-  // Log service account info for debugging
-  const projectId = process.env.GCLOUD_PROJECT || process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG).projectId : 'unknown';
-  console.log('Project ID:', projectId);
-  console.log('Function identity:', process.env.FUNCTION_IDENTITY || 'default');
+  // Log environment info
+  console.log('GCLOUD_PROJECT:', process.env.GCLOUD_PROJECT);
+  console.log('FIREBASE_CONFIG:', process.env.FIREBASE_CONFIG);
+  console.log('Admin apps count:', admin.apps.length);
 
   try {
-    // Step 2: Simple Firestore read
-    console.log('Attempting Firestore read for user:', uid);
+    // Step 2: Try Firestore read with explicit error catching
+    console.log('Creating Firestore reference for user:', uid);
     const userRef = db.collection('users').doc(uid);
+    console.log('Reference created, attempting get()...');
     const userSnap = await userRef.get();
     console.log('Firestore read SUCCESS! Document exists:', userSnap.exists);
 
