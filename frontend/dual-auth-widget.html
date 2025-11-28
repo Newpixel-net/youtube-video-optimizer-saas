@@ -884,7 +884,16 @@
             // Thumbnail from optimizer context
             lastOptimization: null,   // Last optimization results for thumbnail context
             thumbnailStyle: 'professional', // professional | dramatic | minimal | bold
-            thumbnailFromOptimizer: false   // Flag if user came from optimizer results
+            thumbnailFromOptimizer: false,   // Flag if user came from optimizer results
+
+            // Quota settings (from getUserProfile)
+            quotaInfo: null,           // Quota info for each tool with reset times
+            resetTimeMinutes: 1440,    // Admin-configured reset time in minutes
+            countdownInterval: null,    // Interval for countdown timer
+
+            // Admin settings
+            adminQuotaSettings: null,   // For admin panel
+            adminSelectedUser: null     // Selected user for bonus uses
         };
 
         // Loading progress simulation - OPTIMIZED to prevent flickering
@@ -960,6 +969,52 @@
             }
             state.loadingProgress = 100;
             state.loadingStep = state.loadingSteps.length - 1;
+        }
+
+        // Countdown timer for quota reset
+        function startCountdownTimer() {
+            if (state.countdownInterval) {
+                clearInterval(state.countdownInterval);
+            }
+            state.countdownInterval = setInterval(function() {
+                updateCountdownDisplays();
+            }, 1000);
+        }
+
+        function updateCountdownDisplays() {
+            var countdownEls = document.querySelectorAll('.quota-countdown');
+            var now = Date.now();
+            countdownEls.forEach(function(el) {
+                var resetAt = parseInt(el.getAttribute('data-reset-at'));
+                if (resetAt) {
+                    var remaining = Math.max(0, resetAt - now);
+                    if (remaining > 0) {
+                        var hours = Math.floor(remaining / 3600000);
+                        var minutes = Math.floor((remaining % 3600000) / 60000);
+                        var seconds = Math.floor((remaining % 60000) / 1000);
+                        var timeStr = '';
+                        if (hours > 0) timeStr += hours + 'h ';
+                        if (minutes > 0 || hours > 0) timeStr += minutes + 'm ';
+                        timeStr += seconds + 's';
+                        el.textContent = timeStr;
+                    } else {
+                        el.textContent = 'Ready!';
+                        el.classList.add('text-green-500');
+                    }
+                }
+            });
+        }
+
+        function formatCountdown(ms) {
+            if (ms <= 0) return 'Ready!';
+            var hours = Math.floor(ms / 3600000);
+            var minutes = Math.floor((ms % 3600000) / 60000);
+            var seconds = Math.floor((ms % 60000) / 1000);
+            var parts = [];
+            if (hours > 0) parts.push(hours + 'h');
+            if (minutes > 0 || hours > 0) parts.push(minutes + 'm');
+            parts.push(seconds + 's');
+            return parts.join(' ');
         }
 
         /* ==========================================
@@ -1044,8 +1099,12 @@
                 try {
                     const result = await functions.httpsCallable('getUserProfile')();
                     state.profile = result.data.profile;
+                    state.quotaInfo = result.data.quotaInfo || null;
+                    state.resetTimeMinutes = result.data.resetTimeMinutes || 1440;
                     // Check admin status
                     state.isAdmin = state.profile.isAdmin === true;
+                    // Start countdown timer if on dashboard
+                    startCountdownTimer();
                     if (state.currentView === 'login' || state.currentView === 'register') {
                         state.currentView = 'dashboard';
                         render();
@@ -1577,6 +1636,72 @@
                 }
             },
 
+            setQuotaResetTime: function() {
+                var resetMinutes = parseInt(document.getElementById('reset-time-input').value);
+                if (!resetMinutes || resetMinutes < 1) {
+                    state.error = { message: 'Please enter a valid number of minutes (minimum 1)' };
+                    render();
+                    return;
+                }
+
+                state.adminLoading = true;
+                render();
+
+                functions.httpsCallable('adminSetQuotaSettings')({ resetTimeMinutes: resetMinutes })
+                    .then(function(result) {
+                        state.adminLoading = false;
+                        state.resetTimeMinutes = resetMinutes;
+                        state.success = 'Quota reset time updated to ' + resetMinutes + ' minutes!';
+                        render();
+                        setTimeout(function() { state.success = null; render(); }, 3000);
+                    })
+                    .catch(function(e) {
+                        state.adminLoading = false;
+                        state.error = { message: 'Failed to update reset time: ' + e.message };
+                        render();
+                    });
+            },
+
+            grantBonusUses: function() {
+                var userId = document.getElementById('bonus-user-select').value;
+                var tool = document.getElementById('bonus-tool-select').value;
+                var amount = parseInt(document.getElementById('bonus-amount-input').value);
+
+                if (!userId) {
+                    state.error = { message: 'Please select a user' };
+                    render();
+                    return;
+                }
+                if (!amount || amount < 1) {
+                    state.error = { message: 'Please enter a valid bonus amount (minimum 1)' };
+                    render();
+                    return;
+                }
+
+                state.adminLoading = true;
+                render();
+
+                functions.httpsCallable('adminGrantBonusUses')({ userId: userId, tool: tool, bonusAmount: amount })
+                    .then(function(result) {
+                        state.adminLoading = false;
+                        state.success = 'Granted ' + amount + ' bonus uses for ' + tool + '!';
+                        // Refresh user list
+                        return functions.httpsCallable('adminGetUsers')();
+                    })
+                    .then(function(result) {
+                        if (result && result.data) {
+                            state.adminUsers = result.data.users || [];
+                        }
+                        render();
+                        setTimeout(function() { state.success = null; render(); }, 3000);
+                    })
+                    .catch(function(e) {
+                        state.adminLoading = false;
+                        state.error = { message: 'Failed to grant bonus: ' + e.message };
+                        render();
+                    });
+            },
+
             /* ------------------------------------------
                4.5.5 Competitor Analysis Actions
                ------------------------------------------ */
@@ -2016,19 +2141,42 @@
             for (var i = 0; i < tools.length; i++) {
                 var tool = tools[i];
                 var usage = p.usage[tool.key];
-                var percent = utils.getUsagePercent(usage.usedToday, usage.limit);
+                // Get quota info with bonus uses if available
+                var quotaData = state.quotaInfo && state.quotaInfo[tool.key] ? state.quotaInfo[tool.key] : null;
+                var totalLimit = quotaData ? quotaData.totalLimit : usage.limit;
+                var bonusUses = quotaData ? quotaData.bonusUses : 0;
+                var nextResetMs = quotaData ? quotaData.nextResetMs : 0;
+                var remainingUses = totalLimit - usage.usedToday;
+                var isExhausted = remainingUses <= 0;
+
+                var percent = utils.getUsagePercent(usage.usedToday, totalLimit);
                 var color = utils.getUsageColor(percent);
 
                 html += '<div class="bg-white rounded-2xl shadow-lg p-6 lg:p-8 mobile-padding hover:shadow-xl transition-all">';
                 html += '<div class="flex justify-between items-start mb-4">';
                 html += '<div class="w-14 h-14 lg:w-16 lg:h-16 bg-gradient-to-br ' + tool.color + ' rounded-2xl flex items-center justify-center text-3xl lg:text-4xl shadow-lg">' + tool.emoji + '</div>';
-                html += '<span class="text-3xl lg:text-4xl font-bold text-gray-800">' + usage.usedToday + '<span class="text-xl lg:text-2xl text-gray-400">/' + usage.limit + '</span></span>';
+                html += '<span class="text-3xl lg:text-4xl font-bold text-gray-800">' + usage.usedToday + '<span class="text-xl lg:text-2xl text-gray-400">/' + totalLimit + '</span></span>';
                 html += '</div>';
                 html += '<h4 class="font-bold text-gray-800 text-lg lg:text-xl mb-3">' + tool.name + '</h4>';
                 html += '<div class="w-full bg-gray-100 rounded-full h-3 mb-3">';
                 html += '<div class="' + color + ' h-3 rounded-full usage-bar transition-all" style="width:' + percent + '%"></div>';
                 html += '</div>';
-                html += '<p class="text-sm lg:text-base text-gray-500 font-medium">' + (usage.limit - usage.usedToday) + ' uses remaining today</p>';
+
+                // Show countdown if quota exhausted, otherwise show remaining
+                if (isExhausted && nextResetMs > 0) {
+                    var now = Date.now();
+                    var remainingMs = Math.max(0, nextResetMs - now);
+                    html += '<div class="flex items-center justify-between">';
+                    html += '<p class="text-sm lg:text-base text-red-500 font-medium">⏱️ Resets in:</p>';
+                    html += '<span class="quota-countdown text-red-600 font-bold text-lg" data-reset-at="' + nextResetMs + '">' + formatCountdown(remainingMs) + '</span>';
+                    html += '</div>';
+                } else {
+                    var remainingText = remainingUses + ' uses remaining';
+                    if (bonusUses > 0) {
+                        remainingText += ' <span class="text-green-600">(+' + bonusUses + ' bonus)</span>';
+                    }
+                    html += '<p class="text-sm lg:text-base text-gray-500 font-medium">' + remainingText + '</p>';
+                }
                 html += '</div>';
             }
 
@@ -2609,6 +2757,65 @@
             }
 
             html += '</div>';
+
+            // Quota Settings Section
+            html += '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">';
+
+            // Reset Time Settings
+            html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding fade-in">';
+            html += '<h2 class="text-2xl font-bold text-gray-800 mb-4">⏱️ Quota Reset Time</h2>';
+            html += '<p class="text-gray-600 mb-6">Set how often user quotas reset (in minutes). Default is 1440 minutes (24 hours).</p>';
+            html += '<div class="flex gap-4 items-end">';
+            html += '<div class="flex-1">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Reset Interval (minutes)</label>';
+            html += '<input type="number" id="reset-time-input" value="' + (state.resetTimeMinutes || 1440) + '" min="1" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-lg" />';
+            html += '<p class="text-sm text-gray-500 mt-2">Examples: 60 = 1 hour, 240 = 4 hours, 1440 = 24 hours</p>';
+            html += '</div>';
+            html += '<button onclick="app.setQuotaResetTime()" class="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold rounded-xl hover:from-purple-600 hover:to-indigo-700 transition-all">Save</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Grant Bonus Uses
+            html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding fade-in">';
+            html += '<h2 class="text-2xl font-bold text-gray-800 mb-4">🎁 Grant Bonus Uses</h2>';
+            html += '<p class="text-gray-600 mb-6">Give extra uses to a specific user as a gift or bonus.</p>';
+
+            // User selector
+            html += '<div class="mb-4">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Select User</label>';
+            html += '<select id="bonus-user-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-lg">';
+            html += '<option value="">-- Select a user --</option>';
+            if (state.adminUsers) {
+                for (var j = 0; j < state.adminUsers.length; j++) {
+                    var u = state.adminUsers[j];
+                    html += '<option value="' + u.uid + '">' + utils.escapeHtml(u.email || u.uid) + '</option>';
+                }
+            }
+            html += '</select>';
+            html += '</div>';
+
+            // Tool selector
+            html += '<div class="mb-4">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Select Tool</label>';
+            html += '<select id="bonus-tool-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-lg">';
+            html += '<option value="warpOptimizer">Warp Optimizer</option>';
+            html += '<option value="titleGenerator">Title Generator</option>';
+            html += '<option value="descriptionGenerator">Description Generator</option>';
+            html += '<option value="tagGenerator">Tag Generator</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Amount
+            html += '<div class="mb-4">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Bonus Amount</label>';
+            html += '<input type="number" id="bonus-amount-input" value="5" min="1" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-lg" />';
+            html += '</div>';
+
+            html += '<button onclick="app.grantBonusUses()" class="w-full px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all">🎁 Grant Bonus Uses</button>';
+            html += '</div>';
+
+            html += '</div>'; // End grid
+
             html += '</div></div>';
 
             return html;
