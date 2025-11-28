@@ -1851,10 +1851,23 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, text overlay";
     const seed = Math.floor(Math.random() * 999999999999);
 
+    // Generate a signed URL for Firebase Storage upload
+    const bucket = admin.storage().bucket();
+    const fileName = `thumbnails/${uid}/${Date.now()}_${seed}.png`;
+    const file = bucket.file(fileName);
+
+    // Generate signed URL for uploading (PUT with octet-stream)
+    const [uploadUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 30 * 60 * 1000, // 30 minutes
+      contentType: 'application/octet-stream',
+    });
+
     // Call RunPod API - HiDream text-to-image
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
 
-    // Send parameters directly - the handler expects these at the input level
+    // Send all required parameters including image_upload_url
     const runpodResponse = await axios.post(runpodEndpoint, {
       input: {
         positive_prompt: imagePrompt,
@@ -1868,7 +1881,8 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
         cfg: 5,
         sampler_name: "euler",
         scheduler: "simple",
-        denoise: 1
+        denoise: 1,
+        image_upload_url: uploadUrl
       }
     }, {
       headers: {
@@ -1881,15 +1895,20 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const jobId = runpodResponse.data.id;
     const status = runpodResponse.data.status;
 
+    // Generate public URL for the uploaded image
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
     await incrementUsage(uid, 'warpOptimizer');
-    await logUsage(uid, 'thumbnail_generation', { title, jobId });
+    await logUsage(uid, 'thumbnail_generation', { title, jobId, fileName });
 
     return {
       success: true,
       jobId,
       status,
       prompt: imagePrompt,
-      message: 'Thumbnail generation started. Use checkThumbnailStatus to get the result.',
+      imageUrl: publicUrl,
+      fileName: fileName,
+      message: 'Thumbnail generation started. Image will be available at imageUrl when complete.',
       checkEndpoint: `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`
     };
 
