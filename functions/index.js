@@ -1012,10 +1012,41 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
       });
     }
 
+    // Build quotaInfo with bonus uses included
+    const tools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+    const quotaInfo = {};
+    const resetIntervalMs = 24 * 60 * 60 * 1000; // 24 hours in ms
+    const now = Date.now();
+
+    for (const tool of tools) {
+      const usage = userData.usage?.[tool] || { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() };
+      const bonusUses = userData.bonusUses?.[tool] || 0;
+      const baseLimit = usage.limit || 3;
+      const totalLimit = baseLimit + bonusUses;
+
+      // Calculate next reset time
+      let lastResetTime = usage.lastResetAt;
+      if (typeof lastResetTime === 'string') {
+        lastResetTime = new Date(lastResetTime).getTime();
+      } else if (lastResetTime && typeof lastResetTime === 'object') {
+        lastResetTime = (lastResetTime.seconds || lastResetTime._seconds || 0) * 1000;
+      }
+      const nextResetMs = (lastResetTime || now) + resetIntervalMs;
+
+      quotaInfo[tool] = {
+        baseLimit: baseLimit,
+        bonusUses: bonusUses,
+        totalLimit: totalLimit,
+        usedToday: usage.usedToday || 0,
+        remaining: Math.max(0, totalLimit - (usage.usedToday || 0)),
+        nextResetMs: nextResetMs
+      };
+    }
+
     return {
       success: true,
       profile: userData,
-      quotaInfo: {},
+      quotaInfo: quotaInfo,
       resetTimeMinutes: 1440
     };
 
