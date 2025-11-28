@@ -1056,6 +1056,22 @@ exports.getOptimizationHistory = functions.https.onCall(async (data, context) =>
     const history = [];
     snapshot.forEach(doc => {
       const data = doc.data();
+      // Safe timestamp handling - handle various timestamp formats
+      let timestamp = Date.now();
+      try {
+        if (data.createdAt && typeof data.createdAt.toMillis === 'function') {
+          timestamp = data.createdAt.toMillis();
+        } else if (data.createdAt && data.createdAt._seconds) {
+          timestamp = data.createdAt._seconds * 1000;
+        } else if (data.createdAt instanceof Date) {
+          timestamp = data.createdAt.getTime();
+        } else if (typeof data.createdAt === 'number') {
+          timestamp = data.createdAt;
+        }
+      } catch (e) {
+        console.log('Timestamp parsing error for doc:', doc.id, e);
+      }
+
       history.push({
         id: doc.id,
         videoUrl: data.videoUrl || '',
@@ -1064,7 +1080,7 @@ exports.getOptimizationHistory = functions.https.onCall(async (data, context) =>
         description: data.description || '',
         tags: data.tags || [],
         seoAnalysis: data.seoAnalysis || null,
-        timestamp: data.createdAt ? data.createdAt.toMillis() : Date.now(),
+        timestamp: timestamp,
         createdAt: data.createdAt
       });
     });
@@ -1609,7 +1625,8 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
         width: 1280,
         height: 720,
         num_inference_steps: 30,
-        guidance_scale: 7.5
+        guidance_scale: 7.5,
+        batch_size: 1
       }
     }, {
       headers: {

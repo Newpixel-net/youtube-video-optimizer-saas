@@ -2901,8 +2901,28 @@
             }
             html += '</div>';
 
-            // Video Context Card (if from optimizer)
-            if (hasVideoContext && videoInfo.thumbnail) {
+            // Loading Section - Show at TOP when generating
+            if (state.loading && !state.thumbnailImage) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding mb-6 fade-in">';
+                html += '<div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">';
+                html += '<div class="flex items-center gap-4"><div class="loading-emoji">🎨</div><div><h3 class="text-xl font-bold text-gray-800">Creating Your Thumbnail</h3><p class="text-gray-500">AI is generating your image...</p></div></div>';
+                html += '<div class="progress-percentage">' + Math.round(state.loadingProgress) + '%</div>';
+                html += '</div>';
+                html += '<div class="progress-bar-container mb-6"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                for (var li = 0; li < state.loadingSteps.length; li++) {
+                    var lstep = state.loadingSteps[li];
+                    var lstepClass = li < state.loadingStep ? 'completed' : li === state.loadingStep ? 'active' : 'pending';
+                    html += '<div class="loading-step ' + lstepClass + '">';
+                    html += '<div class="step-icon ' + lstepClass + '">' + (lstepClass === 'completed' ? '✓' : lstep.icon) + '</div>';
+                    html += '<span class="text-sm font-medium">' + lstep.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div></div>';
+            }
+
+            // Video Context Card (if from optimizer) - show when not loading
+            if (hasVideoContext && videoInfo.thumbnail && !state.loading) {
                 html += '<div class="bg-white/10 backdrop-blur rounded-2xl p-4 mb-6 fade-in">';
                 html += '<div class="flex items-center gap-4">';
                 html += '<img src="' + utils.escapeHtml(videoInfo.thumbnail) + '" class="w-32 h-18 object-cover rounded-lg" />';
@@ -2976,59 +2996,73 @@
                 html += state.loading ? '⏳ Generating...' : '🎨 Generate AI Thumbnail';
                 html += '</button>';
                 html += '</form>';
-
-                // Loading Animation
-                if (state.loading) {
-                    html += '<div class="mt-8 loading-container">';
-                    html += '<div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">';
-                    html += '<div class="flex items-center gap-4"><div class="loading-emoji">🎨</div><div><h3 class="text-xl font-bold text-gray-800">Creating Your Thumbnail</h3><p class="text-gray-500">AI is generating your image...</p></div></div>';
-                    html += '<div class="progress-percentage">' + Math.round(state.loadingProgress) + '%</div>';
-                    html += '</div>';
-                    html += '<div class="progress-bar-container mb-6"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
-                    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
-                    for (var i = 0; i < state.loadingSteps.length; i++) {
-                        var step = state.loadingSteps[i];
-                        var stepClass = i < state.loadingStep ? 'completed' : i === state.loadingStep ? 'active' : 'pending';
-                        var iconClass = stepClass;
-                        html += '<div class="loading-step ' + stepClass + '">';
-                        html += '<div class="step-icon ' + iconClass + '">' + (stepClass === 'completed' ? '✓' : step.icon) + '</div>';
-                        html += '<span class="text-sm font-medium">' + step.name + '</span>';
-                        html += '</div>';
-                    }
-                    html += '</div></div>';
-                }
             } else {
                 // Show generated thumbnail
                 html += '<div class="text-center">';
-                html += '<div class="inline-block bg-gradient-to-r from-green-400 to-emerald-500 text-white px-4 py-2 rounded-full mb-4 font-semibold">✨ Thumbnail Generated!</div>';
 
-                // Display thumbnail
+                // Parse output - handle various RunPod response formats
                 var imgSrc = '';
-                if (typeof state.thumbnailImage === 'string') {
-                    imgSrc = state.thumbnailImage;
-                } else if (state.thumbnailImage && state.thumbnailImage.image) {
-                    imgSrc = 'data:image/png;base64,' + state.thumbnailImage.image;
-                } else if (state.thumbnailImage && state.thumbnailImage.images && state.thumbnailImage.images[0]) {
-                    imgSrc = state.thumbnailImage.images[0];
+                var outputData = state.thumbnailImage;
+                var hasError = false;
+                var errorMsg = '';
+
+                // Check for error in response
+                if (outputData && (outputData.message || outputData.error)) {
+                    hasError = true;
+                    errorMsg = outputData.message || outputData.error || 'Unknown error';
                 }
 
-                if (imgSrc) {
+                if (!hasError) {
+                    // Try to extract image from various formats
+                    if (typeof outputData === 'string' && (outputData.startsWith('http') || outputData.startsWith('data:'))) {
+                        imgSrc = outputData;
+                    } else if (outputData) {
+                        // Common RunPod output formats
+                        if (outputData.image_url) imgSrc = outputData.image_url;
+                        else if (outputData.image && typeof outputData.image === 'string') {
+                            imgSrc = outputData.image.startsWith('http') || outputData.image.startsWith('data:')
+                                ? outputData.image
+                                : 'data:image/png;base64,' + outputData.image;
+                        }
+                        else if (outputData.images && outputData.images[0]) imgSrc = outputData.images[0];
+                        else if (outputData.result) {
+                            imgSrc = outputData.result.startsWith && (outputData.result.startsWith('http') || outputData.result.startsWith('data:'))
+                                ? outputData.result
+                                : 'data:image/png;base64,' + outputData.result;
+                        }
+                        else if (outputData.output && typeof outputData.output === 'string') imgSrc = outputData.output;
+                        else if (outputData.url) imgSrc = outputData.url;
+                    }
+                }
+
+                if (hasError) {
+                    // Show error message
+                    html += '<div class="inline-block bg-gradient-to-r from-red-400 to-rose-500 text-white px-4 py-2 rounded-full mb-4 font-semibold">⚠️ Generation Issue</div>';
+                    html += '<div class="bg-red-50 border border-red-200 p-6 rounded-xl mb-6 max-w-2xl mx-auto">';
+                    html += '<p class="text-red-700 font-medium mb-2">The AI service returned an error:</p>';
+                    html += '<p class="text-red-600">' + utils.escapeHtml(errorMsg) + '</p>';
+                    html += '</div>';
+                } else if (imgSrc) {
+                    html += '<div class="inline-block bg-gradient-to-r from-green-400 to-emerald-500 text-white px-4 py-2 rounded-full mb-4 font-semibold">✨ Thumbnail Generated!</div>';
                     html += '<div class="relative inline-block">';
                     html += '<img src="' + utils.escapeHtml(imgSrc) + '" class="w-full max-w-2xl mx-auto rounded-xl shadow-2xl mb-6" alt="Generated Thumbnail" />';
                     html += '<div class="absolute bottom-8 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">1280 × 720</div>';
                     html += '</div>';
                 } else {
-                    html += '<div class="bg-gray-100 p-8 rounded-xl mb-6 max-w-2xl mx-auto">';
-                    html += '<p class="text-gray-600 mb-4">Thumbnail generated! Output:</p>';
-                    html += '<pre class="text-xs text-left overflow-auto bg-gray-200 p-4 rounded">' + JSON.stringify(state.thumbnailImage, null, 2) + '</pre>';
+                    // Unknown format - show debug info
+                    html += '<div class="inline-block bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 rounded-full mb-4 font-semibold">⚠️ Check Output Format</div>';
+                    html += '<div class="bg-yellow-50 border border-yellow-200 p-6 rounded-xl mb-6 max-w-2xl mx-auto text-left">';
+                    html += '<p class="text-yellow-700 font-medium mb-2">Thumbnail generated but format not recognized:</p>';
+                    html += '<pre class="text-xs overflow-auto bg-yellow-100 p-4 rounded max-h-40">' + JSON.stringify(outputData, null, 2) + '</pre>';
+                    html += '<p class="text-yellow-600 text-sm mt-2">Please share this with support to fix the integration.</p>';
                     html += '</div>';
                 }
 
                 html += '<div class="flex flex-col sm:flex-row justify-center gap-4 mt-6">';
-                if (imgSrc) {
+                if (imgSrc && !hasError) {
                     html += '<a href="' + imgSrc + '" download="thumbnail.png" class="btn-primary bg-gradient-to-r from-green-500 to-emerald-600 inline-flex items-center justify-center gap-2"><span>📥</span> Download Thumbnail</a>';
                 }
-                html += '<button onclick="state.thumbnailImage=null;state.thumbnailJob=null;render();" class="btn-secondary">🔄 Generate Another</button>';
+                html += '<button onclick="state.thumbnailImage=null;state.thumbnailJob=null;render();" class="btn-secondary">🔄 Try Again</button>';
                 html += '</div></div>';
             }
 
