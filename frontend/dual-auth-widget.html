@@ -130,6 +130,118 @@
             border-top-color: #3b82f6;
         }
 
+        /* Professional Loading Animation */
+        @keyframes progressPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-5px) rotate(2deg); }
+            75% { transform: translateY(5px) rotate(-2deg); }
+        }
+
+        .loading-container {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 1.5rem;
+            padding: 3rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-bar-container {
+            background: #e2e8f0;
+            border-radius: 1rem;
+            height: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 1rem;
+            background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2s ease-in-out infinite;
+            transition: width 0.5s ease-out;
+        }
+
+        .progress-percentage {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+
+        .loading-step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.875rem 1.25rem;
+            border-radius: 0.875rem;
+            transition: all 0.3s ease;
+        }
+
+        .loading-step.active {
+            background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+        }
+
+        .loading-step.completed {
+            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        }
+
+        .step-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .step-icon.pending {
+            background: #e2e8f0;
+            color: #94a3b8;
+        }
+
+        .step-icon.active {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .step-icon.completed {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+        }
+
+        .loading-emoji {
+            font-size: 4rem;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .loading-tip {
+            background: rgba(99, 102, 241, 0.1);
+            border-left: 4px solid #6366f1;
+            padding: 1rem 1.25rem;
+            border-radius: 0 0.75rem 0.75rem 0;
+        }
+
         /* ------------------------------------------
            2.3 COMPONENTS - Buttons
            ------------------------------------------ */
@@ -380,25 +492,74 @@
             width: 100%;
         }
 
-        /* Desktop-optimized widths - use more screen space */
-        @media (min-width: 1280px) {
+        /* Desktop-optimized widths - use FULL screen space */
+        @media (min-width: 1024px) {
             .max-w-6xl {
-                max-width: 82rem !important;
+                max-width: 95% !important;
+                padding-left: 2rem;
+                padding-right: 2rem;
             }
             .max-w-4xl {
-                max-width: 64rem !important;
+                max-width: 80% !important;
+                min-width: 800px;
+            }
+        }
+
+        @media (min-width: 1280px) {
+            .max-w-6xl {
+                max-width: 94% !important;
+            }
+            .max-w-4xl {
+                max-width: 75% !important;
+                min-width: 900px;
+            }
+            .view-container {
+                padding: 2rem 2.5rem;
             }
         }
 
         @media (min-width: 1536px) {
             .max-w-6xl {
-                max-width: 90rem !important;
+                max-width: 92% !important;
             }
             .max-w-4xl {
-                max-width: 72rem !important;
+                max-width: 70% !important;
+                min-width: 1000px;
             }
             .view-container {
-                padding: 2.5rem 3rem;
+                padding: 2.5rem 4rem;
+            }
+        }
+
+        @media (min-width: 1920px) {
+            .max-w-6xl {
+                max-width: 90% !important;
+            }
+            .max-w-4xl {
+                max-width: 65% !important;
+                min-width: 1100px;
+            }
+            .view-container {
+                padding: 3rem 5rem;
+            }
+        }
+
+        /* Dashboard grid - more columns on larger screens */
+        @media (min-width: 1280px) {
+            .dashboard-grid-4 {
+                grid-template-columns: repeat(4, 1fr) !important;
+            }
+            .dashboard-grid-2 {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+
+        @media (min-width: 1536px) {
+            .dashboard-grid-4 {
+                gap: 1.5rem !important;
+            }
+            .dashboard-grid-2 {
+                gap: 2rem !important;
             }
         }
 
@@ -691,6 +852,19 @@
             error: null,
             success: null,
 
+            // Loading progress state
+            loadingProgress: 0,
+            loadingStep: 0,
+            loadingSteps: [
+                { name: 'Fetching video data', icon: '🎬' },
+                { name: 'Analyzing content', icon: '🔍' },
+                { name: 'Generating titles', icon: '📝' },
+                { name: 'Writing description', icon: '📄' },
+                { name: 'Creating tags', icon: '🏷️' },
+                { name: 'Calculating SEO score', icon: '📊' }
+            ],
+            loadingInterval: null,
+
             // Results page
             currentResults: null,    // Current optimization results
             resultsTab: 'titles',    // Current tab: titles | description | tags
@@ -700,6 +874,46 @@
             adminUsers: null,        // Admin user list
             adminLoading: false
         };
+
+        // Loading progress simulation
+        function startLoadingProgress() {
+            state.loadingProgress = 0;
+            state.loadingStep = 0;
+
+            if (state.loadingInterval) {
+                clearInterval(state.loadingInterval);
+            }
+
+            state.loadingInterval = setInterval(function() {
+                if (state.loadingProgress < 95) {
+                    // Simulate realistic progress with varying speeds
+                    var increment = Math.random() * 3 + 1;
+                    if (state.loadingProgress > 70) increment = Math.random() * 1 + 0.5;
+                    if (state.loadingProgress > 85) increment = Math.random() * 0.5 + 0.2;
+
+                    state.loadingProgress = Math.min(95, state.loadingProgress + increment);
+
+                    // Update current step based on progress
+                    if (state.loadingProgress < 15) state.loadingStep = 0;
+                    else if (state.loadingProgress < 30) state.loadingStep = 1;
+                    else if (state.loadingProgress < 50) state.loadingStep = 2;
+                    else if (state.loadingProgress < 70) state.loadingStep = 3;
+                    else if (state.loadingProgress < 85) state.loadingStep = 4;
+                    else state.loadingStep = 5;
+
+                    render();
+                }
+            }, 500);
+        }
+
+        function stopLoadingProgress() {
+            if (state.loadingInterval) {
+                clearInterval(state.loadingInterval);
+                state.loadingInterval = null;
+            }
+            state.loadingProgress = 100;
+            state.loadingStep = state.loadingSteps.length - 1;
+        }
 
         /* ==========================================
            4.3 UTILITY FUNCTIONS
@@ -1058,10 +1272,12 @@
 
                 state.loading = true;
                 state.error = null;
+                startLoadingProgress();
                 render();
 
                 functions.httpsCallable('optimizeVideo')({ videoUrl: url })
                     .then(function(result) {
+                        stopLoadingProgress();
                         state.currentResults = result.data;
                         state.loading = false;
                         state.currentView = 'results';
@@ -1072,6 +1288,7 @@
                         render();
                     })
                     .catch(function(e) {
+                        stopLoadingProgress();
                         state.loading = false;
 
                         // Parse Firebase error for detailed message
@@ -1511,27 +1728,29 @@
             var html = '';
 
             // Container
-            html += '<div class="min-h-screen mobile-full-screen py-6 px-4">';
+            html += '<div class="min-h-screen mobile-full-screen py-8 px-4 lg:py-12">';
             html += '<div class="max-w-6xl mx-auto">';
 
-            // Header
-            html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 fade-in gap-4">';
+            // Header - larger and more prominent
+            html += '<div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 fade-in gap-6">';
             html += '<div>';
-            html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">Welcome back!</h1>';
-            html += '<p class="text-white/80 text-sm sm:text-base">Email: <span class="font-semibold">' + utils.escapeHtml(p.email || '') + '</span></p>';
-            html += '<p class="text-white/80 text-sm sm:text-base">Plan: <span class="font-semibold">' + planName + '</span></p>';
+            html += '<h1 class="text-4xl lg:text-5xl font-bold text-white mb-3">Welcome back!</h1>';
+            html += '<div class="flex flex-wrap gap-4 text-white/90">';
+            html += '<span class="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full backdrop-blur"><span class="text-lg">📧</span> ' + utils.escapeHtml(p.email || '') + '</span>';
+            html += '<span class="flex items-center gap-2 bg-gradient-to-r from-purple-500/30 to-indigo-500/30 px-4 py-2 rounded-full backdrop-blur font-semibold"><span class="text-lg">⭐</span> ' + planName + ' Plan</span>';
             html += '</div>';
-            html += '<button onclick="app.signOut()" class="btn-secondary w-full sm:w-auto">Sign Out</button>';
+            html += '</div>';
+            html += '<button onclick="app.signOut()" class="btn-secondary">Sign Out</button>';
             html += '</div>';
 
-            // Usage Stats Grid
-            html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mobile-grid-cols-1 gap-4 mobile-gap-4 mb-8 fade-in">';
+            // Usage Stats Grid - bigger cards
+            html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 dashboard-grid-4 mobile-grid-cols-1 gap-5 lg:gap-6 mb-10 fade-in">';
 
             var tools = [
-                { name: 'Warp Optimizer', key: 'warpOptimizer', emoji: '🚀' },
-                { name: 'Title Generator', key: 'titleGenerator', emoji: '📝' },
-                { name: 'Description', key: 'descriptionGenerator', emoji: '📄' },
-                { name: 'Tag Generator', key: 'tagGenerator', emoji: '🏷️' }
+                { name: 'Warp Optimizer', key: 'warpOptimizer', emoji: '🚀', color: 'from-blue-500 to-indigo-600' },
+                { name: 'Title Generator', key: 'titleGenerator', emoji: '📝', color: 'from-purple-500 to-pink-600' },
+                { name: 'Description', key: 'descriptionGenerator', emoji: '📄', color: 'from-orange-500 to-red-600' },
+                { name: 'Tag Generator', key: 'tagGenerator', emoji: '🏷️', color: 'from-green-500 to-teal-600' }
             ];
 
             for (var i = 0; i < tools.length; i++) {
@@ -1540,61 +1759,60 @@
                 var percent = utils.getUsagePercent(usage.usedToday, usage.limit);
                 var color = utils.getUsageColor(percent);
 
-                html += '<div class="bg-white rounded-xl shadow-lg p-6 mobile-padding">';
-                html += '<div class="flex justify-between items-start mb-3">';
-                html += '<span class="text-3xl">' + tool.emoji + '</span>';
-                html += '<span class="text-2xl mobile-text-lg font-bold text-gray-800">' + usage.usedToday + '/' + usage.limit + '</span>';
+                html += '<div class="bg-white rounded-2xl shadow-lg p-6 lg:p-8 mobile-padding hover:shadow-xl transition-all">';
+                html += '<div class="flex justify-between items-start mb-4">';
+                html += '<div class="w-14 h-14 lg:w-16 lg:h-16 bg-gradient-to-br ' + tool.color + ' rounded-2xl flex items-center justify-center text-3xl lg:text-4xl shadow-lg">' + tool.emoji + '</div>';
+                html += '<span class="text-3xl lg:text-4xl font-bold text-gray-800">' + usage.usedToday + '<span class="text-xl lg:text-2xl text-gray-400">/' + usage.limit + '</span></span>';
                 html += '</div>';
-                html += '<h4 class="font-semibold text-gray-700 mb-3 text-sm sm:text-base">' + tool.name + '</h4>';
-                html += '<div class="w-full bg-gray-200 rounded-full h-2 mb-2">';
-                html += '<div class="' + color + ' h-2 rounded-full usage-bar" style="width:' + percent + '%"></div>';
+                html += '<h4 class="font-bold text-gray-800 text-lg lg:text-xl mb-3">' + tool.name + '</h4>';
+                html += '<div class="w-full bg-gray-100 rounded-full h-3 mb-3">';
+                html += '<div class="' + color + ' h-3 rounded-full usage-bar transition-all" style="width:' + percent + '%"></div>';
                 html += '</div>';
-                html += '<p class="text-xs text-gray-500 mt-2">' + (usage.limit - usage.usedToday) + ' uses remaining</p>';
+                html += '<p class="text-sm lg:text-base text-gray-500 font-medium">' + (usage.limit - usage.usedToday) + ' uses remaining today</p>';
                 html += '</div>';
             }
 
             html += '</div>';
 
-            // Action Cards
-            html += '<div class="grid grid-cols-1 md:grid-cols-2 mobile-grid-cols-1 gap-6 mobile-gap-4 fade-in">';
+            // Action Cards - bigger and more impressive
+            html += '<div class="grid grid-cols-1 lg:grid-cols-2 dashboard-grid-2 mobile-grid-cols-1 gap-6 lg:gap-8 fade-in">';
 
             // Optimizer Card
-            html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding tool-card cursor-pointer" onclick="app.goToOptimizer()">';
-            html += '<div class="text-5xl mb-4">🎬</div>';
-            html += '<h3 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-2">Start Optimizing</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm sm:text-base">Optimize your video with AI</p>';
-            html += '<div class="flex items-center text-blue-600 font-semibold">Get Started →</div>';
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-8 lg:p-10 tool-card cursor-pointer border border-gray-100" onclick="app.goToOptimizer()">';
+            html += '<div class="w-20 h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl flex items-center justify-center text-5xl lg:text-6xl shadow-xl mb-6">🎬</div>';
+            html += '<h3 class="text-2xl lg:text-3xl font-bold text-gray-800 mb-3">Start Optimizing</h3>';
+            html += '<p class="text-gray-600 mb-6 text-base lg:text-lg">Transform your video with AI-powered SEO optimization</p>';
+            html += '<div class="flex items-center text-blue-600 font-bold text-lg group">';
+            html += '<span>Get Started</span>';
+            html += '<span class="ml-2 group-hover:translate-x-2 transition-transform text-2xl">→</span>';
+            html += '</div>';
             html += '</div>';
 
             // History Card
-            html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding tool-card cursor-pointer" onclick="app.goToHistory()">';
-            html += '<div class="text-5xl mb-4">📜</div>';
-            html += '<h3 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-2">History</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm sm:text-base">View past optimizations</p>';
-            html += '<div class="flex items-center text-purple-600 font-semibold">View History →</div>';
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-8 lg:p-10 tool-card cursor-pointer border border-gray-100" onclick="app.goToHistory()">';
+            html += '<div class="w-20 h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-purple-500 to-pink-600 rounded-3xl flex items-center justify-center text-5xl lg:text-6xl shadow-xl mb-6">📜</div>';
+            html += '<h3 class="text-2xl lg:text-3xl font-bold text-gray-800 mb-3">View History</h3>';
+            html += '<p class="text-gray-600 mb-6 text-base lg:text-lg">Access all your past optimizations and results</p>';
+            html += '<div class="flex items-center text-purple-600 font-bold text-lg group">';
+            html += '<span>View History</span>';
+            html += '<span class="ml-2 group-hover:translate-x-2 transition-transform text-2xl">→</span>';
+            html += '</div>';
             html += '</div>';
 
             html += '</div>';
 
             // Admin Section (only for admins)
             if (state.isAdmin) {
-                html += '<div class="mt-6 fade-in">';
-                html += '<div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-xl p-6 mobile-padding cursor-pointer hover:from-purple-700 hover:to-indigo-700 transition-all" onclick="app.goToAdmin()">';
-                html += '<div class="flex items-center gap-4">';
-                html += '<div class="text-4xl">⚙️</div>';
-                html += '<div>';
-                html += '<h3 class="text-xl font-bold text-white mb-1">Admin Dashboard</h3>';
-                html += '<p class="text-white/80 text-sm">Manage users, subscriptions & settings</p>';
+                html += '<div class="mt-8 fade-in">';
+                html += '<div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-xl p-8 mobile-padding cursor-pointer hover:from-purple-700 hover:to-indigo-700 transition-all hover:shadow-2xl hover:scale-[1.02]" onclick="app.goToAdmin()">';
+                html += '<div class="flex items-center gap-5">';
+                html += '<div class="text-5xl">⚙️</div>';
+                html += '<div class="flex-1">';
+                html += '<h3 class="text-2xl font-bold text-white mb-1">Admin Dashboard</h3>';
+                html += '<p class="text-white/80">Manage users, subscriptions & analytics</p>';
                 html += '</div>';
-                html += '<div class="ml-auto text-white text-2xl">→</div>';
+                html += '<div class="text-white text-3xl">→</div>';
                 html += '</div></div></div>';
-            } else {
-                // Become admin button (for first-time setup)
-                html += '<div class="mt-6 text-center fade-in">';
-                html += '<button onclick="app.setupAdmin()" class="text-white/60 hover:text-white text-sm underline">';
-                html += state.loading ? 'Setting up...' : '🔐 Setup Admin Access';
-                html += '</button>';
-                html += '</div>';
             }
 
             html += '</div></div>';
@@ -1664,11 +1882,63 @@
             html += '</button>';
             html += '</form>';
 
-            // Loading indicator
+            // Professional Loading Animation
             if (state.loading) {
-                html += '<div class="mt-8 text-center">';
-                html += '<div class="spinner spinner-dark mx-auto mb-4"></div>';
-                html += '<p class="text-gray-600">Processing... This takes 30-60 seconds</p>';
+                var progress = Math.round(state.loadingProgress);
+                var currentStep = state.loadingStep;
+                var tips = [
+                    '💡 Tip: Titles with numbers get 36% more clicks!',
+                    '💡 Did you know? Descriptions over 200 words rank higher.',
+                    '💡 Pro tip: Use 8-15 relevant tags for best results.',
+                    '💡 Fun fact: Question-based titles increase engagement by 23%.'
+                ];
+                var randomTip = tips[Math.floor(progress / 25) % tips.length];
+
+                html += '<div class="mt-8 loading-container fade-in">';
+
+                // Header with emoji and percentage
+                html += '<div class="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">';
+                html += '<div class="flex items-center gap-4">';
+                html += '<div class="loading-emoji">🚀</div>';
+                html += '<div>';
+                html += '<h3 class="text-2xl font-bold text-gray-800">Optimizing Your Video</h3>';
+                html += '<p class="text-gray-500">AI magic in progress...</p>';
+                html += '</div></div>';
+                html += '<div class="progress-percentage">' + progress + '%</div>';
+                html += '</div>';
+
+                // Progress Bar
+                html += '<div class="mb-8">';
+                html += '<div class="progress-bar-container">';
+                html += '<div class="progress-bar-fill" style="width: ' + progress + '%"></div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Steps Grid
+                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">';
+                for (var s = 0; s < state.loadingSteps.length; s++) {
+                    var step = state.loadingSteps[s];
+                    var stepStatus = s < currentStep ? 'completed' : (s === currentStep ? 'active' : 'pending');
+                    var iconStatus = stepStatus;
+
+                    html += '<div class="loading-step ' + stepStatus + '">';
+                    html += '<div class="step-icon ' + iconStatus + '">';
+                    if (stepStatus === 'completed') {
+                        html += '✓';
+                    } else {
+                        html += step.icon;
+                    }
+                    html += '</div>';
+                    html += '<span class="text-sm font-medium ' + (stepStatus === 'pending' ? 'text-gray-400' : 'text-gray-700') + '">' + step.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                // Tip
+                html += '<div class="loading-tip">';
+                html += '<p class="text-sm text-indigo-700">' + randomTip + '</p>';
+                html += '</div>';
+
                 html += '</div>';
             }
 
