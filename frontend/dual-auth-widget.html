@@ -492,55 +492,55 @@
             width: 100%;
         }
 
-        /* Desktop-optimized widths - use FULL screen space */
+        /* Desktop-optimized widths - balanced sizing (reduced 10%) */
         @media (min-width: 1024px) {
             .max-w-6xl {
-                max-width: 95% !important;
-                padding-left: 2rem;
-                padding-right: 2rem;
+                max-width: 88% !important;
+                padding-left: 1.5rem;
+                padding-right: 1.5rem;
             }
             .max-w-4xl {
-                max-width: 80% !important;
-                min-width: 800px;
+                max-width: 72% !important;
+                min-width: 700px;
             }
         }
 
         @media (min-width: 1280px) {
             .max-w-6xl {
-                max-width: 94% !important;
+                max-width: 86% !important;
             }
             .max-w-4xl {
-                max-width: 75% !important;
-                min-width: 900px;
+                max-width: 68% !important;
+                min-width: 800px;
             }
             .view-container {
-                padding: 2rem 2.5rem;
+                padding: 1.75rem 2rem;
             }
         }
 
         @media (min-width: 1536px) {
             .max-w-6xl {
-                max-width: 92% !important;
+                max-width: 84% !important;
             }
             .max-w-4xl {
-                max-width: 70% !important;
-                min-width: 1000px;
+                max-width: 62% !important;
+                min-width: 900px;
             }
             .view-container {
-                padding: 2.5rem 4rem;
+                padding: 2rem 3rem;
             }
         }
 
         @media (min-width: 1920px) {
             .max-w-6xl {
-                max-width: 90% !important;
+                max-width: 82% !important;
             }
             .max-w-4xl {
-                max-width: 65% !important;
-                min-width: 1100px;
+                max-width: 58% !important;
+                min-width: 1000px;
             }
             .view-container {
-                padding: 3rem 5rem;
+                padding: 2.5rem 4rem;
             }
         }
 
@@ -879,10 +879,15 @@
             trendResults: null,       // Trend prediction results
             thumbnailJob: null,       // Thumbnail generation job
             thumbnailStatus: null,    // Thumbnail job status
-            thumbnailImage: null      // Generated thumbnail URL
+            thumbnailImage: null,     // Generated thumbnail URL
+
+            // Thumbnail from optimizer context
+            lastOptimization: null,   // Last optimization results for thumbnail context
+            thumbnailStyle: 'professional', // professional | dramatic | minimal | bold
+            thumbnailFromOptimizer: false   // Flag if user came from optimizer results
         };
 
-        // Loading progress simulation
+        // Loading progress simulation - OPTIMIZED to prevent flickering
         function startLoadingProgress() {
             state.loadingProgress = 0;
             state.loadingStep = 0;
@@ -901,6 +906,7 @@
                     state.loadingProgress = Math.min(95, state.loadingProgress + increment);
 
                     // Update current step based on progress
+                    var oldStep = state.loadingStep;
                     if (state.loadingProgress < 15) state.loadingStep = 0;
                     else if (state.loadingProgress < 30) state.loadingStep = 1;
                     else if (state.loadingProgress < 50) state.loadingStep = 2;
@@ -908,9 +914,43 @@
                     else if (state.loadingProgress < 85) state.loadingStep = 4;
                     else state.loadingStep = 5;
 
-                    render();
+                    // OPTIMIZED: Only update specific elements instead of full render
+                    updateLoadingUI();
                 }
             }, 500);
+        }
+
+        // Targeted loading UI update to prevent flickering
+        function updateLoadingUI() {
+            // Update percentage display
+            var percentEls = document.querySelectorAll('.progress-percentage');
+            percentEls.forEach(function(el) {
+                el.textContent = Math.round(state.loadingProgress) + '%';
+            });
+
+            // Update progress bar
+            var barEls = document.querySelectorAll('.progress-bar-fill');
+            barEls.forEach(function(el) {
+                el.style.width = state.loadingProgress + '%';
+            });
+
+            // Update step icons
+            var stepEls = document.querySelectorAll('.loading-step');
+            stepEls.forEach(function(el, index) {
+                var iconEl = el.querySelector('.step-icon');
+                if (index < state.loadingStep) {
+                    el.className = 'loading-step completed';
+                    if (iconEl) {
+                        iconEl.className = 'step-icon completed';
+                        iconEl.textContent = '✓';
+                    }
+                } else if (index === state.loadingStep) {
+                    el.className = 'loading-step active';
+                    if (iconEl) {
+                        iconEl.className = 'step-icon active';
+                    }
+                }
+            });
         }
 
         function stopLoadingProgress() {
@@ -1108,12 +1148,13 @@
                 render();
             },
 
-            goToThumbnail: function() {
+            goToThumbnail: function(fromOptimizer) {
                 state.currentView = 'thumbnail';
                 state.error = null;
                 state.thumbnailJob = null;
                 state.thumbnailStatus = null;
                 state.thumbnailImage = null;
+                state.thumbnailFromOptimizer = fromOptimizer === true;
                 render();
             },
 
@@ -1309,6 +1350,7 @@
                     .then(function(result) {
                         stopLoadingProgress();
                         state.currentResults = result.data;
+                        state.lastOptimization = result.data; // Save for thumbnail generator
                         state.loading = false;
                         state.currentView = 'results';
                         return functions.httpsCallable('getUserProfile')();
@@ -1437,6 +1479,7 @@
             viewHistoryItem: function(index) {
                 if (state.historyData && state.historyData[index]) {
                     state.currentResults = state.historyData[index];
+                    state.lastOptimization = state.historyData[index]; // For thumbnail generator
                     state.currentView = 'results';
                     render();
                 }
@@ -1618,10 +1661,36 @@
             /* ------------------------------------------
                4.5.7 Thumbnail Generator Actions
                ------------------------------------------ */
+            setThumbnailStyle: function(style) {
+                state.thumbnailStyle = style;
+                render();
+            },
+
             generateThumbnail: function(e) {
                 e.preventDefault();
-                const title = document.getElementById('thumbnail-title').value.trim();
-                const customPrompt = document.getElementById('thumbnail-prompt').value.trim();
+                var title = document.getElementById('thumbnail-title').value.trim();
+                var customPrompt = document.getElementById('thumbnail-prompt')?.value.trim() || '';
+
+                // Get video context if available
+                var videoContext = '';
+                if (state.lastOptimization && state.thumbnailFromOptimizer) {
+                    var opt = state.lastOptimization;
+                    var videoInfo = opt.videoInfo || {};
+                    videoContext = 'Video context: ' + (videoInfo.channelTitle || '') + ' channel. ';
+                    if (opt.tags && opt.tags.length > 0) {
+                        videoContext += 'Keywords: ' + opt.tags.slice(0, 5).join(', ') + '. ';
+                    }
+                }
+
+                // Build style-specific prompt
+                var stylePrompts = {
+                    professional: 'Clean, professional look with sharp focus, studio lighting, high contrast',
+                    dramatic: 'Dramatic lighting, intense colors, bold shadows, cinematic feel',
+                    minimal: 'Minimalist design, soft colors, clean background, elegant simplicity',
+                    bold: 'Vibrant colors, eye-catching, bold graphics, high energy, dynamic composition'
+                };
+
+                var fullPrompt = stylePrompts[state.thumbnailStyle] + '. ' + videoContext + customPrompt;
 
                 if (!title) {
                     state.error = { message: 'Please enter a video title' };
@@ -1633,14 +1702,19 @@
                 state.error = null;
                 state.thumbnailImage = null;
                 state.loadingSteps = [
+                    { name: 'Analyzing video context', icon: '🔍' },
                     { name: 'Creating AI prompt', icon: '✨' },
-                    { name: 'Starting generation', icon: '🎨' },
-                    { name: 'Rendering image', icon: '🖼️' }
+                    { name: 'Generating image', icon: '🎨' },
+                    { name: 'Rendering HD', icon: '🖼️' }
                 ];
                 startLoadingProgress();
                 render();
 
-                functions.httpsCallable('generateThumbnail')({ title: title, customPrompt: customPrompt })
+                functions.httpsCallable('generateThumbnail')({
+                    title: title,
+                    customPrompt: fullPrompt,
+                    style: state.thumbnailStyle
+                })
                     .then(function(result) {
                         state.thumbnailJob = result.data;
                         // Start polling for result
@@ -2323,6 +2397,18 @@
                 html += '</ul></div>';
             }
 
+            // Thumbnail Generator CTA
+            html += '<div class="mt-6 p-6 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-2xl border border-white/20 fade-in">';
+            html += '<div class="flex flex-col sm:flex-row items-center justify-between gap-4">';
+            html += '<div class="text-center sm:text-left">';
+            html += '<h3 class="text-xl font-bold text-white mb-1">🎨 Create an Eye-Catching Thumbnail</h3>';
+            html += '<p class="text-white/70 text-sm">Use AI to generate a professional thumbnail based on your optimized video content</p>';
+            html += '</div>';
+            html += '<button onclick="app.goToThumbnail(true)" class="whitespace-nowrap px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold rounded-xl hover:from-pink-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105">';
+            html += '✨ Generate Thumbnail';
+            html += '</button>';
+            html += '</div></div>';
+
             html += '</div></div>';
 
             return html;
@@ -2785,23 +2871,50 @@
         }
 
         /* ------------------------------------------
-           4.6.11 Thumbnail Generator View
+           4.6.11 Thumbnail Generator View (ADVANCED)
            ------------------------------------------ */
         function renderThumbnail() {
             var html = '';
+            var hasVideoContext = state.lastOptimization && state.thumbnailFromOptimizer;
+            var videoInfo = hasVideoContext ? (state.lastOptimization.videoInfo || {}) : {};
+            var optimizedTitles = hasVideoContext ? (state.lastOptimization.titles || []) : [];
+            var suggestedTitle = optimizedTitles[0] || videoInfo.title || '';
 
             html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
-            html += '<div class="max-w-4xl mx-auto">';
+            html += '<div class="max-w-5xl mx-auto">';
 
-            html += '<button onclick="app.goToDashboard()" class="mb-6 btn-secondary">← Back to Dashboard</button>';
+            // Back button
+            if (hasVideoContext) {
+                html += '<button onclick="app.goToResults()" class="mb-6 btn-secondary">← Back to Results</button>';
+            } else {
+                html += '<button onclick="app.goToDashboard()" class="mb-6 btn-secondary">← Back to Dashboard</button>';
+            }
 
+            // Header
             html += '<div class="text-center mb-8 fade-in">';
             html += '<div class="w-20 h-20 bg-gradient-to-br from-pink-500 to-rose-600 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-4 shadow-xl">🎨</div>';
             html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">AI Thumbnail Generator</h1>';
-            html += '<p class="text-white/80 text-lg">Generate eye-catching thumbnails with AI</p>';
+            if (hasVideoContext) {
+                html += '<p class="text-white/80 text-lg">Create a thumbnail for your optimized video</p>';
+            } else {
+                html += '<p class="text-white/80 text-lg">Generate click-worthy thumbnails with AI</p>';
+            }
             html += '</div>';
 
-            html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding fade-in">';
+            // Video Context Card (if from optimizer)
+            if (hasVideoContext && videoInfo.thumbnail) {
+                html += '<div class="bg-white/10 backdrop-blur rounded-2xl p-4 mb-6 fade-in">';
+                html += '<div class="flex items-center gap-4">';
+                html += '<img src="' + utils.escapeHtml(videoInfo.thumbnail) + '" class="w-32 h-18 object-cover rounded-lg" />';
+                html += '<div>';
+                html += '<p class="text-white font-semibold">' + utils.escapeHtml(videoInfo.title || 'Your Video') + '</p>';
+                html += '<p class="text-white/70 text-sm">' + utils.escapeHtml(videoInfo.channelTitle || '') + '</p>';
+                html += '<span class="inline-block mt-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">✓ Video context loaded</span>';
+                html += '</div></div></div>';
+            }
+
+            // Main Form Card
+            html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding fade-in">';
 
             if (state.error) {
                 html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message) + '</div>';
@@ -2809,49 +2922,113 @@
 
             if (!state.thumbnailImage) {
                 html += '<form onsubmit="app.generateThumbnail(event)">';
+
+                // Title Input (pre-filled if from optimizer)
                 html += '<div class="mb-6">';
                 html += '<label class="block text-gray-700 font-semibold mb-2">Video Title</label>';
-                html += '<input type="text" id="thumbnail-title" placeholder="Enter your video title..." class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none text-lg" required />';
+                html += '<input type="text" id="thumbnail-title" value="' + utils.escapeHtml(suggestedTitle) + '" placeholder="Enter your video title..." class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none text-lg" required />';
+                if (hasVideoContext && optimizedTitles.length > 1) {
+                    html += '<p class="text-sm text-gray-500 mt-2">💡 Or try: <span class="text-pink-600 cursor-pointer hover:underline" onclick="document.getElementById(\'thumbnail-title\').value=\'' + utils.escapeHtml(optimizedTitles[1]).replace(/'/g, "\\'") + '\'">' + utils.escapeHtml(optimizedTitles[1]) + '</span></p>';
+                }
                 html += '</div>';
+
+                // Style Selection
                 html += '<div class="mb-6">';
-                html += '<label class="block text-gray-700 font-semibold mb-2">Custom Style (Optional)</label>';
-                html += '<textarea id="thumbnail-prompt" placeholder="e.g., Dramatic lighting, person looking shocked, bold text overlay area..." class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none text-lg h-24"></textarea>';
+                html += '<label class="block text-gray-700 font-semibold mb-3">Thumbnail Style</label>';
+                html += '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">';
+
+                var styles = [
+                    { id: 'professional', name: 'Professional', icon: '💼', desc: 'Clean & sharp', color: 'blue' },
+                    { id: 'dramatic', name: 'Dramatic', icon: '🎭', desc: 'Bold & intense', color: 'purple' },
+                    { id: 'minimal', name: 'Minimal', icon: '✨', desc: 'Simple & elegant', color: 'gray' },
+                    { id: 'bold', name: 'Bold', icon: '🔥', desc: 'Eye-catching', color: 'orange' }
+                ];
+
+                styles.forEach(function(s) {
+                    var isActive = state.thumbnailStyle === s.id;
+                    var borderClass = isActive ? 'border-pink-500 bg-pink-50' : 'border-gray-200 hover:border-pink-300';
+                    html += '<div onclick="app.setThumbnailStyle(\'' + s.id + '\')" class="cursor-pointer p-4 border-2 ' + borderClass + ' rounded-xl text-center transition-all">';
+                    html += '<div class="text-3xl mb-1">' + s.icon + '</div>';
+                    html += '<p class="font-semibold text-gray-800">' + s.name + '</p>';
+                    html += '<p class="text-xs text-gray-500">' + s.desc + '</p>';
+                    if (isActive) html += '<span class="inline-block mt-2 text-pink-600 text-xs font-medium">✓ Selected</span>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Custom Prompt
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Additional Details <span class="text-gray-400 font-normal">(Optional)</span></label>';
+                html += '<textarea id="thumbnail-prompt" placeholder="e.g., Include a person looking surprised, bright red arrow pointing right, space for text on the left side..." class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none h-20"></textarea>';
                 html += '</div>';
-                html += '<button type="submit" class="btn-primary bg-gradient-to-r from-pink-500 to-rose-600" ' + (state.loading ? 'disabled' : '') + '>';
-                html += state.loading ? '⏳ Generating...' : '🎨 Generate Thumbnail';
+
+                // Tips Section
+                html += '<div class="bg-gradient-to-r from-pink-50 to-purple-50 p-4 rounded-xl mb-6">';
+                html += '<h4 class="font-semibold text-gray-800 mb-2">💡 Pro Tips for Better Thumbnails</h4>';
+                html += '<ul class="text-sm text-gray-600 space-y-1">';
+                html += '<li>• Use faces with emotions - they get 38% more clicks</li>';
+                html += '<li>• Keep text minimal - the AI will leave space for overlay</li>';
+                html += '<li>• High contrast colors stand out in YouTube feed</li>';
+                html += '</ul></div>';
+
+                // Submit Button
+                html += '<button type="submit" class="btn-primary bg-gradient-to-r from-pink-500 to-rose-600 text-lg py-4" ' + (state.loading ? 'disabled' : '') + '>';
+                html += state.loading ? '⏳ Generating...' : '🎨 Generate AI Thumbnail';
                 html += '</button>';
                 html += '</form>';
 
+                // Loading Animation
                 if (state.loading) {
                     html += '<div class="mt-8 loading-container">';
-                    html += '<div class="flex items-center justify-between mb-6">';
-                    html += '<div class="flex items-center gap-4"><div class="loading-emoji">🎨</div><div><h3 class="text-xl font-bold text-gray-800">Creating Thumbnail</h3><p class="text-gray-500">This may take 30-60 seconds...</p></div></div>';
+                    html += '<div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">';
+                    html += '<div class="flex items-center gap-4"><div class="loading-emoji">🎨</div><div><h3 class="text-xl font-bold text-gray-800">Creating Your Thumbnail</h3><p class="text-gray-500">AI is generating your image...</p></div></div>';
                     html += '<div class="progress-percentage">' + Math.round(state.loadingProgress) + '%</div>';
                     html += '</div>';
-                    html += '<div class="progress-bar-container mb-4"><div class="progress-bar-fill bg-gradient-to-r from-pink-500 to-rose-600" style="width:' + state.loadingProgress + '%"></div></div>';
-                    if (state.thumbnailJob) {
-                        html += '<p class="text-sm text-gray-500 text-center">Job ID: ' + state.thumbnailJob.jobId + '</p>';
+                    html += '<div class="progress-bar-container mb-6"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
+                    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                    for (var i = 0; i < state.loadingSteps.length; i++) {
+                        var step = state.loadingSteps[i];
+                        var stepClass = i < state.loadingStep ? 'completed' : i === state.loadingStep ? 'active' : 'pending';
+                        var iconClass = stepClass;
+                        html += '<div class="loading-step ' + stepClass + '">';
+                        html += '<div class="step-icon ' + iconClass + '">' + (stepClass === 'completed' ? '✓' : step.icon) + '</div>';
+                        html += '<span class="text-sm font-medium">' + step.name + '</span>';
+                        html += '</div>';
                     }
-                    html += '</div>';
+                    html += '</div></div>';
                 }
             } else {
                 // Show generated thumbnail
                 html += '<div class="text-center">';
-                html += '<h3 class="text-2xl font-bold text-gray-800 mb-4">✨ Your AI Thumbnail</h3>';
+                html += '<div class="inline-block bg-gradient-to-r from-green-400 to-emerald-500 text-white px-4 py-2 rounded-full mb-4 font-semibold">✨ Thumbnail Generated!</div>';
 
+                // Display thumbnail
+                var imgSrc = '';
                 if (typeof state.thumbnailImage === 'string') {
-                    html += '<img src="' + utils.escapeHtml(state.thumbnailImage) + '" class="w-full max-w-2xl mx-auto rounded-xl shadow-lg mb-6" alt="Generated Thumbnail" />';
+                    imgSrc = state.thumbnailImage;
                 } else if (state.thumbnailImage && state.thumbnailImage.image) {
-                    html += '<img src="data:image/png;base64,' + state.thumbnailImage.image + '" class="w-full max-w-2xl mx-auto rounded-xl shadow-lg mb-6" alt="Generated Thumbnail" />';
+                    imgSrc = 'data:image/png;base64,' + state.thumbnailImage.image;
+                } else if (state.thumbnailImage && state.thumbnailImage.images && state.thumbnailImage.images[0]) {
+                    imgSrc = state.thumbnailImage.images[0];
+                }
+
+                if (imgSrc) {
+                    html += '<div class="relative inline-block">';
+                    html += '<img src="' + utils.escapeHtml(imgSrc) + '" class="w-full max-w-2xl mx-auto rounded-xl shadow-2xl mb-6" alt="Generated Thumbnail" />';
+                    html += '<div class="absolute bottom-8 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">1280 × 720</div>';
+                    html += '</div>';
                 } else {
-                    html += '<div class="bg-gray-100 p-8 rounded-xl mb-6">';
-                    html += '<p class="text-gray-600">Thumbnail generated! Check the output format.</p>';
-                    html += '<pre class="text-xs text-left overflow-auto mt-4">' + JSON.stringify(state.thumbnailImage, null, 2) + '</pre>';
+                    html += '<div class="bg-gray-100 p-8 rounded-xl mb-6 max-w-2xl mx-auto">';
+                    html += '<p class="text-gray-600 mb-4">Thumbnail generated! Output:</p>';
+                    html += '<pre class="text-xs text-left overflow-auto bg-gray-200 p-4 rounded">' + JSON.stringify(state.thumbnailImage, null, 2) + '</pre>';
                     html += '</div>';
                 }
 
-                html += '<div class="flex justify-center gap-4">';
-                html += '<button onclick="state.thumbnailImage=null;state.thumbnailJob=null;render();" class="btn-secondary">Generate Another</button>';
+                html += '<div class="flex flex-col sm:flex-row justify-center gap-4 mt-6">';
+                if (imgSrc) {
+                    html += '<a href="' + imgSrc + '" download="thumbnail.png" class="btn-primary bg-gradient-to-r from-green-500 to-emerald-600 inline-flex items-center justify-center gap-2"><span>📥</span> Download Thumbnail</a>';
+                }
+                html += '<button onclick="state.thumbnailImage=null;state.thumbnailJob=null;render();" class="btn-secondary">🔄 Generate Another</button>';
                 html += '</div></div>';
             }
 

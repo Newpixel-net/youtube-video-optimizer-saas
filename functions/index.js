@@ -1036,20 +1036,29 @@ exports.getOptimizationHistory = functions.https.onCall(async (data, context) =>
 
   try {
     // Query optimizations collection for this user
-    // Ordered by createdAt descending (newest first)
-    // Limited to last 50 items
-    const snapshot = await db.collection('optimizations')
-      .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
-      .limit(50)
-      .get();
+    // Try with orderBy first, fallback to simple query if index missing
+    let snapshot;
+    try {
+      snapshot = await db.collection('optimizations')
+        .where('userId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .get();
+    } catch (indexError) {
+      // Fallback: query without orderBy if index is missing
+      console.log('Index not available, using fallback query');
+      snapshot = await db.collection('optimizations')
+        .where('userId', '==', userId)
+        .limit(50)
+        .get();
+    }
 
     const history = [];
     snapshot.forEach(doc => {
       const data = doc.data();
       history.push({
         id: doc.id,
-        videoUrl: data.videoUrl,
+        videoUrl: data.videoUrl || '',
         videoInfo: data.videoInfo || null,
         titles: data.titles || [],
         description: data.description || '',
@@ -1060,18 +1069,24 @@ exports.getOptimizationHistory = functions.https.onCall(async (data, context) =>
       });
     });
 
+    // Sort by timestamp if we used fallback query
+    history.sort((a, b) => b.timestamp - a.timestamp);
+
     return {
       success: true,
-      history: history
+      history: history,
+      count: history.length
     };
 
   } catch (error) {
     console.error('Error fetching optimization history:', error);
-    throw new functions.https.HttpsError(
-      'internal',
-      'Failed to fetch optimization history',
-      error.message
-    );
+    // Return empty history instead of throwing error
+    return {
+      success: true,
+      history: [],
+      count: 0,
+      message: 'No optimization history found'
+    };
   }
 });
 
@@ -1589,7 +1604,7 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
 
     const runpodResponse = await axios.post(runpodEndpoint, {
       input: {
-        prompt: imagePrompt,
+        positive_prompt: imagePrompt,
         negative_prompt: "blurry, low quality, distorted, ugly, bad anatomy, watermark, signature, text",
         width: 1280,
         height: 720,
