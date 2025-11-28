@@ -739,7 +739,7 @@ exports.generateTags = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.getUserProfile = functions.https.onCall(async (data, context) => {
-  console.log('getUserProfile called - MINIMAL VERSION');
+  console.log('getUserProfile called - DIAGNOSTIC VERSION');
 
   // Step 1: Check auth
   if (!context.auth) {
@@ -750,12 +750,17 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
   const uid = context.auth.uid;
   console.log('User ID:', uid);
 
+  // Log service account info for debugging
+  const projectId = process.env.GCLOUD_PROJECT || process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG).projectId : 'unknown';
+  console.log('Project ID:', projectId);
+  console.log('Function identity:', process.env.FUNCTION_IDENTITY || 'default');
+
   try {
     // Step 2: Simple Firestore read
-    console.log('Reading user document...');
+    console.log('Attempting Firestore read for user:', uid);
     const userRef = db.collection('users').doc(uid);
     const userSnap = await userRef.get();
-    console.log('Document exists:', userSnap.exists);
+    console.log('Firestore read SUCCESS! Document exists:', userSnap.exists);
 
     let userData;
 
