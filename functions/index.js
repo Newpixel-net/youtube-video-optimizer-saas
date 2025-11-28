@@ -274,7 +274,7 @@ async function getVideoMetadata(videoId) {
       videoId,
       title: snippet.title || 'Untitled',
       description: snippet.description || '',
-      channelName: snippet.channelTitle,
+      channelTitle: snippet.channelTitle,
       channelId: snippet.channelId,
       publishedAt: snippet.publishedAt,
       thumbnail: snippet.thumbnails.high?.url || snippet.thumbnails.default?.url,
