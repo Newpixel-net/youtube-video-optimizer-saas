@@ -739,100 +739,78 @@ exports.generateTags = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.getUserProfile = functions.https.onCall(async (data, context) => {
-  console.log('getUserProfile called');
+  console.log('getUserProfile called - MINIMAL VERSION');
+
+  // Step 1: Check auth
+  if (!context.auth) {
+    console.log('No auth context');
+    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
+  }
+
+  const uid = context.auth.uid;
+  console.log('User ID:', uid);
 
   try {
-    // Step 1: Verify authentication
-    console.log('Step 1: Verifying auth...');
-    const uid = await verifyAuth(context);
-    console.log('Auth verified, uid:', uid);
+    // Step 2: Simple Firestore read
+    console.log('Reading user document...');
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    console.log('Document exists:', userSnap.exists);
 
-    // Step 2: Get user document
-    console.log('Step 2: Getting user...');
-    const user = await getUser(uid);
-    console.log('User retrieved:', user ? 'exists' : 'null');
+    let userData;
 
-    if (!user) {
-      console.error('User object is null/undefined');
-      throw new functions.https.HttpsError('not-found', 'User profile not found');
+    if (!userSnap.exists) {
+      // Create minimal user document
+      console.log('Creating new user...');
+      userData = {
+        uid: uid,
+        email: context.auth.token?.email || '',
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+        isActive: true,
+        isAdmin: false,
+        subscription: { plan: 'free', status: 'active' },
+        usage: {
+          warpOptimizer: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
+          titleGenerator: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
+          descriptionGenerator: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
+          tagGenerator: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() }
+        }
+      };
+      await userRef.set(userData);
+      console.log('User created');
+    } else {
+      userData = userSnap.data();
+      console.log('User data retrieved');
+
+      // Convert any Timestamps to ISO strings
+      if (userData.createdAt?.toDate) userData.createdAt = userData.createdAt.toDate().toISOString();
+      if (userData.lastLoginAt?.toDate) userData.lastLoginAt = userData.lastLoginAt.toDate().toISOString();
+      if (userData.subscription?.startDate?.toDate) userData.subscription.startDate = userData.subscription.startDate.toDate().toISOString();
+
+      // Convert usage timestamps
+      ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'].forEach(tool => {
+        if (userData.usage?.[tool]?.lastResetAt?.toDate) {
+          userData.usage[tool].lastResetAt = userData.usage[tool].lastResetAt.toDate().toISOString();
+        }
+      });
     }
 
-    // Step 3: Get quota settings
-    console.log('Step 3: Getting quota settings...');
-    let resetTimeMinutes = 1440; // Default 24 hours
-    try {
-      const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
-      if (settingsDoc.exists && settingsDoc.data().resetTimeMinutes) {
-        resetTimeMinutes = settingsDoc.data().resetTimeMinutes;
-      }
-    } catch (e) {
-      console.log('Using default reset time, error:', e.message);
-    }
-    console.log('Reset time:', resetTimeMinutes);
-
-    // Step 4: Calculate quota info
-    console.log('Step 4: Calculating quota info...');
-    const now = Date.now();
-    const resetIntervalMs = resetTimeMinutes * 60 * 1000;
-    const quotaInfo = {};
-
-    const tools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
-    tools.forEach(tool => {
-      const usage = user.usage?.[tool];
-      if (usage) {
-        const lastResetMs = usage.lastResetAt?.toMillis?.() || now;
-        const nextResetMs = lastResetMs + resetIntervalMs;
-        const bonusUses = user.bonusUses?.[tool] || 0;
-        const totalLimit = (usage.limit || 0) + bonusUses;
-
-        quotaInfo[tool] = {
-          used: usage.usedToday || 0,
-          limit: usage.limit || 0,
-          bonusUses: bonusUses,
-          totalLimit: totalLimit,
-          remaining: Math.max(0, totalLimit - (usage.usedToday || 0)),
-          lastResetMs: lastResetMs,
-          nextResetMs: nextResetMs,
-          remainingMs: Math.max(0, nextResetMs - now)
-        };
-      }
-    });
-    console.log('Quota info calculated for tools:', Object.keys(quotaInfo));
-
-    // Step 5: Prepare response - sanitize user object to avoid serialization issues
-    console.log('Step 5: Preparing response...');
-
-    // Convert Firestore Timestamps to milliseconds for serialization
-    const sanitizedUser = JSON.parse(JSON.stringify(user, (key, value) => {
-      // Handle Firestore Timestamp objects
-      if (value && typeof value === 'object') {
-        if (value._seconds !== undefined) {
-          return value._seconds * 1000;
-        }
-        if (typeof value.toMillis === 'function') {
-          return value.toMillis();
-        }
-      }
-      return value;
-    }));
-
+    // Step 3: Build simple response
     const response = {
       success: true,
-      profile: sanitizedUser,
-      quotaInfo: quotaInfo,
-      resetTimeMinutes: resetTimeMinutes
+      profile: userData,
+      quotaInfo: {},
+      resetTimeMinutes: 1440
     };
 
-    console.log('Response prepared, returning...');
+    console.log('Returning response');
     return response;
 
   } catch (error) {
-    console.error('getUserProfile error:', error);
-    console.error('Error stack:', error.stack);
-    if (error instanceof functions.https.HttpsError) {
-      throw error;
-    }
-    throw new functions.https.HttpsError('internal', 'Failed to load profile: ' + error.message);
+    console.error('getUserProfile FATAL ERROR:', error.message);
+    console.error('Stack:', error.stack);
+    throw new functions.https.HttpsError('internal', 'Profile error: ' + error.message);
   }
 });
 
