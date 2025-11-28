@@ -1034,57 +1034,58 @@ exports.getOptimizationHistory = functions.https.onCall(async (data, context) =>
 
   const userId = context.auth.uid;
 
-  try {
-    // Query optimizations collection for this user
-    // Try with orderBy first, fallback to simple query if index missing
-    let snapshot;
+  // Helper function to sanitize any value to plain JSON
+  const sanitize = (obj) => {
+    if (obj === null || obj === undefined) return null;
     try {
-      snapshot = await db.collection('optimizations')
-        .where('userId', '==', userId)
-        .orderBy('createdAt', 'desc')
-        .limit(50)
-        .get();
-    } catch (indexError) {
-      // Fallback: query without orderBy if index is missing
-      console.log('Index not available, using fallback query');
-      snapshot = await db.collection('optimizations')
-        .where('userId', '==', userId)
-        .limit(50)
-        .get();
+      return JSON.parse(JSON.stringify(obj));
+    } catch (e) {
+      return null;
     }
+  };
+
+  // Helper to safely get timestamp as number
+  const getTimestamp = (field) => {
+    if (!field) return Date.now();
+    if (typeof field === 'number') return field;
+    if (typeof field.toMillis === 'function') return field.toMillis();
+    if (field._seconds) return field._seconds * 1000;
+    if (field instanceof Date) return field.getTime();
+    return Date.now();
+  };
+
+  try {
+    // Simple query without orderBy to avoid index issues
+    const snapshot = await db.collection('optimizations')
+      .where('userId', '==', userId)
+      .limit(50)
+      .get();
 
     const history = [];
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      // Safe timestamp handling - handle various timestamp formats
-      let timestamp = Date.now();
-      try {
-        if (data.createdAt && typeof data.createdAt.toMillis === 'function') {
-          timestamp = data.createdAt.toMillis();
-        } else if (data.createdAt && data.createdAt._seconds) {
-          timestamp = data.createdAt._seconds * 1000;
-        } else if (data.createdAt instanceof Date) {
-          timestamp = data.createdAt.getTime();
-        } else if (typeof data.createdAt === 'number') {
-          timestamp = data.createdAt;
-        }
-      } catch (e) {
-        console.log('Timestamp parsing error for doc:', doc.id, e);
-      }
 
-      history.push({
-        id: doc.id,
-        videoUrl: data.videoUrl || '',
-        videoInfo: data.videoInfo || null,
-        titles: data.titles || [],
-        description: data.description || '',
-        tags: data.tags || [],
-        seoAnalysis: data.seoAnalysis || null,
-        timestamp: timestamp
-      });
+    snapshot.forEach(doc => {
+      try {
+        const docData = doc.data();
+
+        // Extract and sanitize each field individually
+        const item = {
+          id: String(doc.id),
+          videoUrl: String(docData.videoUrl || ''),
+          videoInfo: sanitize(docData.videoInfo),
+          titles: Array.isArray(docData.titles) ? docData.titles.map(t => String(t)) : [],
+          description: String(docData.description || ''),
+          tags: Array.isArray(docData.tags) ? docData.tags.map(t => String(t)) : [],
+          seoAnalysis: sanitize(docData.seoAnalysis),
+          timestamp: getTimestamp(docData.createdAt)
+        };
+
+        history.push(item);
+      } catch (docError) {
+        console.error('Error processing doc:', doc.id, docError);
+      }
     });
 
-    // Sort by timestamp if we used fallback query
+    // Sort by timestamp descending
     history.sort((a, b) => b.timestamp - a.timestamp);
 
     return {
@@ -1095,12 +1096,10 @@ exports.getOptimizationHistory = functions.https.onCall(async (data, context) =>
 
   } catch (error) {
     console.error('Error fetching optimization history:', error);
-    // Return empty history instead of throwing error
     return {
       success: true,
       history: [],
-      count: 0,
-      message: 'No optimization history found'
+      count: 0
     };
   }
 });
@@ -1614,12 +1613,21 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
 
     const imagePrompt = promptGeneratorResponse.choices[0].message.content.trim();
 
-    // Call RunPod API - HiDream text-to-image
+    // Call RunPod API - HiDream text-to-image (rps-hidream-t2i template)
+    // Required params based on error messages: positive_prompt, batch_size, shift
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
 
     const runpodResponse = await axios.post(runpodEndpoint, {
       input: {
-        prompt: imagePrompt
+        positive_prompt: imagePrompt,
+        negative_prompt: "blurry, low quality, ugly, distorted, watermark, text, nsfw",
+        width: 1280,
+        height: 720,
+        batch_size: 1,
+        shift: 3.0,
+        steps: 28,
+        guidance_scale: 5.0,
+        seed: Math.floor(Math.random() * 999999999)
       }
     }, {
       headers: {
