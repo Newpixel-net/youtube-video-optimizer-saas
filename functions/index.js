@@ -39,8 +39,8 @@ async function isAdmin(uid) {
 
 async function requireAdmin(context) {
   const uid = await verifyAuth(context);
-  const admin = await isAdmin(uid);
-  if (!admin) {
+  const isUserAdmin = await isAdmin(uid);
+  if (!isUserAdmin) {
     throw new functions.https.HttpsError('permission-denied', 'Admin access required');
   }
   return uid;
@@ -855,9 +855,9 @@ exports.adminSetCustomLimits = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.adminGetQuotaSettings = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-
   try {
+    await requireAdmin(context);
+
     const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
     if (!settingsDoc.exists) {
       // Return defaults
@@ -873,20 +873,22 @@ exports.adminGetQuotaSettings = functions.https.onCall(async (data, context) => 
       settings: settingsDoc.data()
     };
   } catch (error) {
+    console.error('adminGetQuotaSettings error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', 'Failed to get quota settings: ' + error.message);
   }
 });
 
 exports.adminSetQuotaSettings = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-
-  const { resetTimeMinutes } = data || {};
-
-  if (!resetTimeMinutes || resetTimeMinutes < 1) {
-    throw new functions.https.HttpsError('invalid-argument', 'Reset time must be at least 1 minute');
-  }
-
   try {
+    await requireAdmin(context);
+
+    const { resetTimeMinutes } = data || {};
+
+    if (!resetTimeMinutes || resetTimeMinutes < 1) {
+      throw new functions.https.HttpsError('invalid-argument', 'Reset time must be at least 1 minute');
+    }
+
     await db.collection('settings').doc('quotaSettings').set({
       resetTimeMinutes: parseInt(resetTimeMinutes),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -898,25 +900,27 @@ exports.adminSetQuotaSettings = functions.https.onCall(async (data, context) => 
       message: `Quota reset time set to ${resetTimeMinutes} minutes`
     };
   } catch (error) {
+    console.error('adminSetQuotaSettings error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', 'Failed to update quota settings: ' + error.message);
   }
 });
 
 exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-
-  const { userId, tool, bonusAmount } = data || {};
-
-  if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
-  if (!tool) throw new functions.https.HttpsError('invalid-argument', 'Tool name required');
-  if (!bonusAmount || bonusAmount < 1) throw new functions.https.HttpsError('invalid-argument', 'Bonus amount must be at least 1');
-
-  const validTools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
-  if (!validTools.includes(tool)) {
-    throw new functions.https.HttpsError('invalid-argument', 'Invalid tool: ' + tool);
-  }
-
   try {
+    await requireAdmin(context);
+
+    const { userId, tool, bonusAmount } = data || {};
+
+    if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+    if (!tool) throw new functions.https.HttpsError('invalid-argument', 'Tool name required');
+    if (!bonusAmount || bonusAmount < 1) throw new functions.https.HttpsError('invalid-argument', 'Bonus amount must be at least 1');
+
+    const validTools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+    if (!validTools.includes(tool)) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid tool: ' + tool);
+    }
+
     // Check if user exists
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) {
@@ -947,7 +951,7 @@ exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
       newTotal: newBonus
     };
   } catch (error) {
-    console.error('Grant bonus error:', error);
+    console.error('adminGrantBonusUses error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', 'Failed to grant bonus uses: ' + error.message);
   }
@@ -955,52 +959,52 @@ exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
 
 // Initialize/Update subscription plans with correct limits
 exports.adminInitPlans = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-
-  const plans = {
-    free: {
-      name: 'Free',
-      price: 0,
-      limits: {
-        warpOptimizer: { dailyLimit: 3, cooldownHours: 0 },
-        titleGenerator: { dailyLimit: 3, cooldownHours: 0 },
-        descriptionGenerator: { dailyLimit: 3, cooldownHours: 0 },
-        tagGenerator: { dailyLimit: 3, cooldownHours: 0 }
-      }
-    },
-    lite: {
-      name: 'Lite',
-      price: 9.99,
-      limits: {
-        warpOptimizer: { dailyLimit: 5, cooldownHours: 0 },
-        titleGenerator: { dailyLimit: 5, cooldownHours: 0 },
-        descriptionGenerator: { dailyLimit: 5, cooldownHours: 0 },
-        tagGenerator: { dailyLimit: 5, cooldownHours: 0 }
-      }
-    },
-    pro: {
-      name: 'Pro',
-      price: 19.99,
-      limits: {
-        warpOptimizer: { dailyLimit: 10, cooldownHours: 0 },
-        titleGenerator: { dailyLimit: 10, cooldownHours: 0 },
-        descriptionGenerator: { dailyLimit: 10, cooldownHours: 0 },
-        tagGenerator: { dailyLimit: 10, cooldownHours: 0 }
-      }
-    },
-    enterprise: {
-      name: 'Enterprise',
-      price: 49.99,
-      limits: {
-        warpOptimizer: { dailyLimit: 50, cooldownHours: 0 },
-        titleGenerator: { dailyLimit: 50, cooldownHours: 0 },
-        descriptionGenerator: { dailyLimit: 50, cooldownHours: 0 },
-        tagGenerator: { dailyLimit: 50, cooldownHours: 0 }
-      }
-    }
-  };
-
   try {
+    await requireAdmin(context);
+
+    const plans = {
+      free: {
+        name: 'Free',
+        price: 0,
+        limits: {
+          warpOptimizer: { dailyLimit: 3, cooldownHours: 0 },
+          titleGenerator: { dailyLimit: 3, cooldownHours: 0 },
+          descriptionGenerator: { dailyLimit: 3, cooldownHours: 0 },
+          tagGenerator: { dailyLimit: 3, cooldownHours: 0 }
+        }
+      },
+      lite: {
+        name: 'Lite',
+        price: 9.99,
+        limits: {
+          warpOptimizer: { dailyLimit: 5, cooldownHours: 0 },
+          titleGenerator: { dailyLimit: 5, cooldownHours: 0 },
+          descriptionGenerator: { dailyLimit: 5, cooldownHours: 0 },
+          tagGenerator: { dailyLimit: 5, cooldownHours: 0 }
+        }
+      },
+      pro: {
+        name: 'Pro',
+        price: 19.99,
+        limits: {
+          warpOptimizer: { dailyLimit: 10, cooldownHours: 0 },
+          titleGenerator: { dailyLimit: 10, cooldownHours: 0 },
+          descriptionGenerator: { dailyLimit: 10, cooldownHours: 0 },
+          tagGenerator: { dailyLimit: 10, cooldownHours: 0 }
+        }
+      },
+      enterprise: {
+        name: 'Enterprise',
+        price: 49.99,
+        limits: {
+          warpOptimizer: { dailyLimit: 50, cooldownHours: 0 },
+          titleGenerator: { dailyLimit: 50, cooldownHours: 0 },
+          descriptionGenerator: { dailyLimit: 50, cooldownHours: 0 },
+          tagGenerator: { dailyLimit: 50, cooldownHours: 0 }
+        }
+      }
+    };
+
     const batch = db.batch();
 
     for (const [planId, planData] of Object.entries(plans)) {
@@ -1016,6 +1020,8 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
       plans: Object.keys(plans)
     };
   } catch (error) {
+    console.error('adminInitPlans error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', 'Failed to initialize plans: ' + error.message);
   }
 });
