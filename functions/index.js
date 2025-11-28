@@ -1080,8 +1080,7 @@ exports.getOptimizationHistory = functions.https.onCall(async (data, context) =>
         description: data.description || '',
         tags: data.tags || [],
         seoAnalysis: data.seoAnalysis || null,
-        timestamp: timestamp,
-        createdAt: data.createdAt
+        timestamp: timestamp
       });
     });
 
@@ -1615,18 +1614,12 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
 
     const imagePrompt = promptGeneratorResponse.choices[0].message.content.trim();
 
-    // Call RunPod API
+    // Call RunPod API - HiDream text-to-image
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
 
     const runpodResponse = await axios.post(runpodEndpoint, {
       input: {
-        positive_prompt: imagePrompt,
-        negative_prompt: "blurry, low quality, distorted, ugly, bad anatomy, watermark, signature, text",
-        width: 1280,
-        height: 720,
-        num_inference_steps: 30,
-        guidance_scale: 7.5,
-        batch_size: 1
+        prompt: imagePrompt
       }
     }, {
       headers: {
