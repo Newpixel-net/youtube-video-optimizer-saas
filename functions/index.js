@@ -1080,8 +1080,7 @@ exports.getOptimizationHistory = functions.https.onCall(async (data, context) =>
         description: data.description || '',
         tags: data.tags || [],
         seoAnalysis: data.seoAnalysis || null,
-        timestamp: timestamp,
-        createdAt: data.createdAt
+        timestamp: timestamp
       });
     });
 
