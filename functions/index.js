@@ -49,7 +49,65 @@ async function requireAdmin(context) {
 async function getUser(uid) {
   const userDoc = await db.collection('users').doc(uid).get();
   if (!userDoc.exists) {
-    throw new functions.https.HttpsError('not-found', 'User not found');
+    // Auto-create user profile if missing
+    console.log('User document not found, creating profile for:', uid);
+    const defaultPlan = 'free';
+    const defaultLimits = {
+      warpOptimizer: { dailyLimit: 3 },
+      titleGenerator: { dailyLimit: 3 },
+      descriptionGenerator: { dailyLimit: 3 },
+      tagGenerator: { dailyLimit: 3 }
+    };
+
+    const newUserData = {
+      uid: uid,
+      email: '',
+      displayName: '',
+      photoURL: '',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
+      isActive: true,
+      isAdmin: false,
+      subscription: {
+        plan: defaultPlan,
+        status: 'active',
+        startDate: admin.firestore.FieldValue.serverTimestamp(),
+        endDate: null,
+        autoRenew: false
+      },
+      usage: {
+        warpOptimizer: {
+          usedToday: 0,
+          limit: defaultLimits.warpOptimizer.dailyLimit,
+          lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+          cooldownUntil: null
+        },
+        titleGenerator: {
+          usedToday: 0,
+          limit: defaultLimits.titleGenerator.dailyLimit,
+          lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+          cooldownUntil: null
+        },
+        descriptionGenerator: {
+          usedToday: 0,
+          limit: defaultLimits.descriptionGenerator.dailyLimit,
+          lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+          cooldownUntil: null
+        },
+        tagGenerator: {
+          usedToday: 0,
+          limit: defaultLimits.tagGenerator.dailyLimit,
+          lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+          cooldownUntil: null
+        }
+      },
+      notes: '',
+      customLimits: {}
+    };
+
+    await db.collection('users').doc(uid).set(newUserData);
+    console.log('User profile created successfully');
+    return newUserData;
   }
   return userDoc.data();
 }
@@ -677,53 +735,61 @@ exports.generateTags = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.getUserProfile = functions.https.onCall(async (data, context) => {
-  const uid = await verifyAuth(context);
-  const user = await getUser(uid);
-
-  // Get quota settings for reset time info
-  let resetTimeMinutes = 1440; // Default 24 hours
   try {
-    const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
-    if (settingsDoc.exists && settingsDoc.data().resetTimeMinutes) {
-      resetTimeMinutes = settingsDoc.data().resetTimeMinutes;
+    const uid = await verifyAuth(context);
+    const user = await getUser(uid);
+
+    // Get quota settings for reset time info
+    let resetTimeMinutes = 1440; // Default 24 hours
+    try {
+      const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
+      if (settingsDoc.exists && settingsDoc.data().resetTimeMinutes) {
+        resetTimeMinutes = settingsDoc.data().resetTimeMinutes;
+      }
+    } catch (e) {
+      console.log('Using default reset time');
     }
-  } catch (e) {
-    console.log('Using default reset time');
+
+    // Calculate reset timestamps for each tool
+    const now = Date.now();
+    const resetIntervalMs = resetTimeMinutes * 60 * 1000;
+    const quotaInfo = {};
+
+    const tools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+    tools.forEach(tool => {
+      const usage = user.usage?.[tool];
+      if (usage) {
+        const lastResetMs = usage.lastResetAt?.toMillis?.() || now;
+        const nextResetMs = lastResetMs + resetIntervalMs;
+        const bonusUses = user.bonusUses?.[tool] || 0;
+        const totalLimit = (usage.limit || 0) + bonusUses;
+
+        quotaInfo[tool] = {
+          used: usage.usedToday || 0,
+          limit: usage.limit || 0,
+          bonusUses: bonusUses,
+          totalLimit: totalLimit,
+          remaining: Math.max(0, totalLimit - (usage.usedToday || 0)),
+          lastResetMs: lastResetMs,
+          nextResetMs: nextResetMs,
+          remainingMs: Math.max(0, nextResetMs - now)
+        };
+      }
+    });
+
+    return {
+      success: true,
+      profile: user,
+      quotaInfo: quotaInfo,
+      resetTimeMinutes: resetTimeMinutes
+    };
+  } catch (error) {
+    console.error('getUserProfile error:', error);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    throw new functions.https.HttpsError('internal', 'Failed to load profile: ' + error.message);
   }
-
-  // Calculate reset timestamps for each tool
-  const now = Date.now();
-  const resetIntervalMs = resetTimeMinutes * 60 * 1000;
-  const quotaInfo = {};
-
-  const tools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
-  tools.forEach(tool => {
-    const usage = user.usage?.[tool];
-    if (usage) {
-      const lastResetMs = usage.lastResetAt?.toMillis?.() || now;
-      const nextResetMs = lastResetMs + resetIntervalMs;
-      const bonusUses = user.bonusUses?.[tool] || 0;
-      const totalLimit = (usage.limit || 0) + bonusUses;
-
-      quotaInfo[tool] = {
-        used: usage.usedToday || 0,
-        limit: usage.limit || 0,
-        bonusUses: bonusUses,
-        totalLimit: totalLimit,
-        remaining: Math.max(0, totalLimit - (usage.usedToday || 0)),
-        lastResetMs: lastResetMs,
-        nextResetMs: nextResetMs,
-        remainingMs: Math.max(0, nextResetMs - now)
-      };
-    }
-  });
-
-  return {
-    success: true,
-    profile: user,
-    quotaInfo: quotaInfo,
-    resetTimeMinutes: resetTimeMinutes
-  };
 });
 
 exports.getHistory = functions.https.onCall(async (data, context) => {
@@ -790,6 +856,7 @@ exports.adminGetUsers = functions.https.onCall(async (data, context) => {
         email: userData.email || '',
         subscription: userData.subscription || { plan: 'free' },
         usage: userData.usage || {},
+        bonusUses: userData.bonusUses || {},  // Include bonus uses for display
         isAdmin: userData.isAdmin || false,
         createdAt: userData.createdAt?.toDate?.()?.toISOString() || null,
         lastLoginAt: userData.lastLoginAt?.toDate?.()?.toISOString() || null
@@ -1894,13 +1961,30 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const fileName = `thumbnails/${uid}/${Date.now()}_${seed}.png`;
     const file = bucket.file(fileName);
 
-    // Generate signed URL for uploading (PUT with octet-stream)
-    const [uploadUrl] = await file.getSignedUrl({
-      version: 'v4',
-      action: 'write',
-      expires: Date.now() + 30 * 60 * 1000, // 30 minutes
-      contentType: 'application/octet-stream',
-    });
+    // Try to generate signed URL - requires IAM permission
+    let uploadUrl;
+    try {
+      const [signedUrl] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 30 * 60 * 1000, // 30 minutes
+        contentType: 'application/octet-stream',
+      });
+      uploadUrl = signedUrl;
+    } catch (signError) {
+      console.error('Failed to generate signed URL:', signError.message);
+
+      // Check if it's a permission error
+      if (signError.message.includes('iam.serviceAccounts.signBlob') ||
+          signError.message.includes('Permission') ||
+          signError.message.includes('denied')) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          'Firebase Storage permission not configured. Please grant "Service Account Token Creator" role to your Cloud Functions service account in Google Cloud Console > IAM.'
+        );
+      }
+      throw new functions.https.HttpsError('internal', 'Failed to prepare storage: ' + signError.message);
+    }
 
     // Call RunPod API - HiDream text-to-image
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
