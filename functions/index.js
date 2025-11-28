@@ -9,9 +9,10 @@ const { OpenAI } = require('openai');
 const { google } = require('googleapis');
 const axios = require('axios');
 
-// Explicit initialization with project ID (required for Firestore in some deployment contexts)
+// Explicit initialization with project ID and storage bucket
 admin.initializeApp({
-  projectId: 'ytseo-6d1b0'
+  projectId: 'ytseo-6d1b0',
+  storageBucket: 'ytseo-6d1b0.firebasestorage.app'
 });
 const db = admin.firestore();
 
@@ -1966,51 +1967,34 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const seed = Math.floor(Math.random() * 999999999999);
 
     // Generate a signed URL for Firebase Storage upload
-    // Try default bucket first, fallback to .appspot.com format if needed
-    let bucket;
-    let uploadUrl;
-    const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || 'ytseo-6d1b0';
+    // Use the configured default bucket (ytseo-6d1b0.firebasestorage.app)
     const fileName = `thumbnails/${uid}/${Date.now()}_${seed}.png`;
+    const bucket = admin.storage().bucket();
+    let uploadUrl;
 
-    // Try to get bucket and generate signed URL
-    const bucketNames = [
-      null, // Use default bucket first
-      `${projectId}.appspot.com`, // Traditional format
-      `${projectId}.firebasestorage.app` // New format
-    ];
+    console.log('Using storage bucket:', bucket.name);
 
-    for (const bucketName of bucketNames) {
-      try {
-        bucket = bucketName ? admin.storage().bucket(bucketName) : admin.storage().bucket();
-        console.log('Trying storage bucket:', bucket.name);
-        const file = bucket.file(fileName);
-
-        const [signedUrl] = await file.getSignedUrl({
-          version: 'v4',
-          action: 'write',
-          expires: Date.now() + 30 * 60 * 1000, // 30 minutes
-          contentType: 'application/octet-stream',
-        });
-        uploadUrl = signedUrl;
-        console.log('Successfully generated signed URL for bucket:', bucket.name);
-        break; // Success, exit loop
-      } catch (signError) {
-        console.error(`Failed to generate signed URL for bucket ${bucket?.name || 'default'}:`, signError.message);
-
-        // If it's the last bucket option, throw the error
-        if (bucketName === bucketNames[bucketNames.length - 1]) {
-          if (signError.message.includes('iam.serviceAccounts.signBlob') ||
-              signError.message.includes('Permission') ||
-              signError.message.includes('denied')) {
-            throw new functions.https.HttpsError(
-              'failed-precondition',
-              'Firebase Storage permission not configured. Please grant "Service Account Token Creator" role to your Cloud Functions service account in Google Cloud Console > IAM.'
-            );
-          }
-          throw new functions.https.HttpsError('internal', 'Failed to prepare storage: ' + signError.message);
-        }
-        // Otherwise continue to next bucket option
+    try {
+      const file = bucket.file(fileName);
+      const [signedUrl] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 30 * 60 * 1000, // 30 minutes
+        contentType: 'application/octet-stream',
+      });
+      uploadUrl = signedUrl;
+      console.log('Successfully generated signed URL for bucket:', bucket.name);
+    } catch (signError) {
+      console.error(`Failed to generate signed URL:`, signError.message);
+      if (signError.message.includes('iam.serviceAccounts.signBlob') ||
+          signError.message.includes('Permission') ||
+          signError.message.includes('denied')) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          'Firebase Storage permission not configured. Please grant "Service Account Token Creator" role to your Cloud Functions service account in Google Cloud Console > IAM.'
+        );
       }
+      throw new functions.https.HttpsError('internal', 'Failed to prepare storage: ' + signError.message);
     }
 
     const file = bucket.file(fileName);
