@@ -893,7 +893,11 @@
 
             // Admin settings
             adminQuotaSettings: null,   // For admin panel
-            adminSelectedUser: null     // Selected user for bonus uses
+            adminSelectedUser: null,    // Selected user for bonus uses
+
+            // Bonus history
+            bonusHistory: null,         // User's bonus history
+            showBonusHistory: false     // Modal visibility
         };
 
         // Loading progress simulation - OPTIMIZED to prevent flickering
@@ -1223,6 +1227,30 @@
                 state.thumbnailStatus = null;
                 state.thumbnailImage = null;
                 state.thumbnailFromOptimizer = fromOptimizer === true;
+                render();
+            },
+
+            // Bonus history modal functions
+            openBonusHistory: function() {
+                state.showBonusHistory = true;
+                state.bonusHistory = null;
+                render();
+
+                // Fetch bonus history from backend
+                functions.httpsCallable('getBonusHistory')()
+                    .then(function(result) {
+                        state.bonusHistory = result.data.history || [];
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.bonusHistory = [];
+                        state.error = { message: 'Failed to load bonus history' };
+                        render();
+                    });
+            },
+
+            closeBonusHistory: function() {
+                state.showBonusHistory = false;
                 render();
             },
 
@@ -2210,6 +2238,7 @@
                 // Get quota info with bonus uses if available
                 var quotaData = state.quotaInfo && state.quotaInfo[tool.key] ? state.quotaInfo[tool.key] : null;
                 var totalLimit = quotaData ? quotaData.totalLimit : usage.limit;
+                var baseLimit = quotaData ? quotaData.baseLimit : usage.limit;
                 var bonusUses = quotaData ? quotaData.bonusUses : 0;
 
                 // Calculate nextResetMs - use quotaInfo if available, otherwise calculate from usage.lastResetAt
@@ -2237,7 +2266,12 @@
                 html += '<div class="bg-white rounded-2xl shadow-lg p-6 lg:p-8 mobile-padding hover:shadow-xl transition-all">';
                 html += '<div class="flex justify-between items-start mb-4">';
                 html += '<div class="w-14 h-14 lg:w-16 lg:h-16 bg-gradient-to-br ' + tool.color + ' rounded-2xl flex items-center justify-center text-3xl lg:text-4xl shadow-lg">' + tool.emoji + '</div>';
-                html += '<span class="text-3xl lg:text-4xl font-bold text-gray-800">' + usage.usedToday + '<span class="text-xl lg:text-2xl text-gray-400">/' + totalLimit + '</span></span>';
+                html += '<div class="text-right">';
+                html += '<span class="text-3xl lg:text-4xl font-bold text-gray-800">' + usage.usedToday + '<span class="text-xl lg:text-2xl text-gray-400">/' + baseLimit + '</span></span>';
+                if (bonusUses > 0) {
+                    html += '<span class="text-lg lg:text-xl font-bold text-green-500 ml-1">+' + bonusUses + '</span>';
+                }
+                html += '</div>';
                 html += '</div>';
                 html += '<h4 class="font-bold text-gray-800 text-lg lg:text-xl mb-3">' + tool.name + '</h4>';
                 html += '<div class="w-full bg-gray-100 rounded-full h-3 mb-3">';
@@ -2259,15 +2293,32 @@
                     html += '</div>';
                 } else {
                     var remainingText = remainingUses + ' uses remaining';
-                    if (bonusUses > 0) {
-                        remainingText += ' <span class="text-green-600">(+' + bonusUses + ' bonus)</span>';
-                    }
                     html += '<p class="text-sm lg:text-base text-gray-500 font-medium">' + remainingText + '</p>';
                 }
                 html += '</div>';
             }
 
             html += '</div>';
+
+            // Check if user has any bonus uses to show history link
+            var hasBonusUses = false;
+            var toolKeys = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+            for (var j = 0; j < toolKeys.length; j++) {
+                var qd = state.quotaInfo && state.quotaInfo[toolKeys[j]] ? state.quotaInfo[toolKeys[j]] : null;
+                if (qd && qd.bonusUses > 0) {
+                    hasBonusUses = true;
+                    break;
+                }
+            }
+
+            // Show bonus history link if user has bonus uses
+            if (hasBonusUses) {
+                html += '<div class="flex justify-end mb-4 fade-in">';
+                html += '<button onclick="app.openBonusHistory()" class="text-sm text-green-400 hover:text-green-300 transition-colors flex items-center gap-1">';
+                html += '<span>🎁</span> View Bonus History';
+                html += '</button>';
+                html += '</div>';
+            }
 
             // Main Tools Section Title
             html += '<h2 class="text-2xl lg:text-3xl font-bold text-white mb-6 fade-in">🛠️ AI Tools</h2>';
@@ -2340,6 +2391,69 @@
             }
 
             html += '</div></div>';
+
+            // Bonus History Modal
+            if (state.showBonusHistory) {
+                html += '<div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onclick="app.closeBonusHistory()">';
+                html += '<div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden" onclick="event.stopPropagation()">';
+                html += '<div class="bg-gradient-to-r from-green-500 to-emerald-600 p-6">';
+                html += '<div class="flex justify-between items-center">';
+                html += '<h3 class="text-xl font-bold text-white flex items-center gap-2"><span>🎁</span> Bonus History</h3>';
+                html += '<button onclick="app.closeBonusHistory()" class="text-white/80 hover:text-white text-2xl">&times;</button>';
+                html += '</div>';
+                html += '</div>';
+                html += '<div class="p-6 overflow-y-auto max-h-[60vh]">';
+
+                if (state.bonusHistory === null) {
+                    // Loading
+                    html += '<div class="flex items-center justify-center py-8">';
+                    html += '<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>';
+                    html += '</div>';
+                } else if (state.bonusHistory.length === 0) {
+                    // No history
+                    html += '<div class="text-center py-8 text-gray-500">';
+                    html += '<p>No bonus history found.</p>';
+                    html += '</div>';
+                } else {
+                    // History list
+                    html += '<div class="space-y-3">';
+                    var toolNames = {
+                        warpOptimizer: 'Warp Optimizer',
+                        titleGenerator: 'Title Generator',
+                        descriptionGenerator: 'Description Generator',
+                        tagGenerator: 'Tag Generator'
+                    };
+                    var toolEmojis = {
+                        warpOptimizer: '🚀',
+                        titleGenerator: '📝',
+                        descriptionGenerator: '📄',
+                        tagGenerator: '🏷️'
+                    };
+                    for (var h = 0; h < state.bonusHistory.length; h++) {
+                        var bonus = state.bonusHistory[h];
+                        var toolDisplayName = toolNames[bonus.tool] || bonus.tool;
+                        var toolEmoji = toolEmojis[bonus.tool] || '🎁';
+                        var bonusDate = new Date(bonus.timestamp);
+                        var dateStr = bonusDate.toLocaleDateString() + ' ' + bonusDate.toLocaleTimeString();
+
+                        html += '<div class="bg-gray-50 rounded-lg p-4 flex items-center justify-between">';
+                        html += '<div class="flex items-center gap-3">';
+                        html += '<span class="text-2xl">' + toolEmoji + '</span>';
+                        html += '<div>';
+                        html += '<p class="font-semibold text-gray-800">' + toolDisplayName + '</p>';
+                        html += '<p class="text-sm text-gray-500">' + dateStr + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '<span class="text-xl font-bold text-green-600">+' + bonus.amount + '</span>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
 
             return html;
         }

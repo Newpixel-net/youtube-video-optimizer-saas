@@ -1012,10 +1012,41 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
       });
     }
 
+    // Build quotaInfo with bonus uses included
+    const tools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+    const quotaInfo = {};
+    const resetIntervalMs = 24 * 60 * 60 * 1000; // 24 hours in ms
+    const now = Date.now();
+
+    for (const tool of tools) {
+      const usage = userData.usage?.[tool] || { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() };
+      const bonusUses = userData.bonusUses?.[tool] || 0;
+      const baseLimit = usage.limit || 3;
+      const totalLimit = baseLimit + bonusUses;
+
+      // Calculate next reset time
+      let lastResetTime = usage.lastResetAt;
+      if (typeof lastResetTime === 'string') {
+        lastResetTime = new Date(lastResetTime).getTime();
+      } else if (lastResetTime && typeof lastResetTime === 'object') {
+        lastResetTime = (lastResetTime.seconds || lastResetTime._seconds || 0) * 1000;
+      }
+      const nextResetMs = (lastResetTime || now) + resetIntervalMs;
+
+      quotaInfo[tool] = {
+        baseLimit: baseLimit,
+        bonusUses: bonusUses,
+        totalLimit: totalLimit,
+        usedToday: usage.usedToday || 0,
+        remaining: Math.max(0, totalLimit - (usage.usedToday || 0)),
+        nextResetMs: nextResetMs
+      };
+    }
+
     return {
       success: true,
       profile: userData,
-      quotaInfo: {},
+      quotaInfo: quotaInfo,
       resetTimeMinutes: 1440
     };
 
@@ -1655,6 +1686,77 @@ exports.getOptimizationHistory = functions.https.onCall(async (data, context) =>
 
   } catch (error) {
     console.error('Error fetching optimization history:', error);
+    return {
+      success: true,
+      history: [],
+      count: 0
+    };
+  }
+});
+
+// ==============================================
+// BONUS HISTORY
+// ==============================================
+
+exports.getBonusHistory = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'User must be authenticated to view bonus history'
+    );
+  }
+
+  const userId = context.auth.uid;
+
+  // Helper to safely get timestamp as number
+  const getTimestamp = (field) => {
+    if (!field) return Date.now();
+    if (typeof field === 'number') return field;
+    if (typeof field.toMillis === 'function') return field.toMillis();
+    if (field._seconds) return field._seconds * 1000;
+    if (field instanceof Date) return field.getTime();
+    return Date.now();
+  };
+
+  try {
+    // Query usageLogs for bonus_uses_granted actions for this user
+    const snapshot = await db.collection('usageLogs')
+      .where('userId', '==', userId)
+      .where('action', '==', 'bonus_uses_granted')
+      .limit(50)
+      .get();
+
+    const history = [];
+
+    snapshot.forEach(doc => {
+      try {
+        const docData = doc.data();
+        const metadata = docData.metadata || {};
+
+        history.push({
+          id: String(doc.id),
+          tool: String(metadata.tool || 'unknown'),
+          amount: parseInt(metadata.amount) || 0,
+          grantedBy: String(metadata.grantedBy || 'admin'),
+          timestamp: getTimestamp(docData.timestamp)
+        });
+      } catch (docError) {
+        console.error('Error processing bonus log:', doc.id, docError);
+      }
+    });
+
+    // Sort by timestamp descending (most recent first)
+    history.sort((a, b) => b.timestamp - a.timestamp);
+
+    return {
+      success: true,
+      history: history,
+      count: history.length
+    };
+
+  } catch (error) {
+    console.error('Error fetching bonus history:', error);
     return {
       success: true,
       history: [],
