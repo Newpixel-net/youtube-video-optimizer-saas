@@ -60,57 +60,73 @@ async function checkUsageLimit(uid, toolType) {
   if (!user) {
     throw new functions.https.HttpsError('not-found', 'User not found');
   }
-  
-  const usage = user.usage[toolType];
-  const now = admin.firestore.Timestamp.now();
-  
-  if (usage.cooldownUntil && usage.cooldownUntil.toMillis() > now.toMillis()) {
-    const remainingSeconds = Math.ceil((usage.cooldownUntil.toMillis() - now.toMillis()) / 1000);
-    const remainingHours = Math.ceil(remainingSeconds / 3600);
-    throw new functions.https.HttpsError(
-      'resource-exhausted',
-      `Cooldown active. Try again in ${remainingHours} hour(s).`,
-      { remainingSeconds, remainingHours, cooldownUntil: usage.cooldownUntil.toMillis() }
-    );
+
+  const usage = user.usage?.[toolType];
+  if (!usage) {
+    throw new functions.https.HttpsError('not-found', 'Usage data not found for tool: ' + toolType);
   }
-  
-  const lastReset = usage.lastResetAt.toDate();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  if (lastReset < today) {
+
+  const now = admin.firestore.Timestamp.now();
+  const nowMs = now.toMillis();
+
+  // Get custom reset time from settings (default 1440 minutes = 24 hours)
+  let resetMinutes = 1440;
+  try {
+    const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
+    if (settingsDoc.exists && settingsDoc.data().resetTimeMinutes) {
+      resetMinutes = settingsDoc.data().resetTimeMinutes;
+    }
+  } catch (e) {
+    console.log('Using default reset time');
+  }
+
+  // Check if reset is due based on custom reset time
+  const lastResetMs = usage.lastResetAt ? usage.lastResetAt.toMillis() : 0;
+  const resetIntervalMs = resetMinutes * 60 * 1000;
+  const nextResetMs = lastResetMs + resetIntervalMs;
+
+  if (nowMs >= nextResetMs) {
+    // Time to reset
     await db.collection('users').doc(uid).update({
       [`usage.${toolType}.usedToday`]: 0,
-      [`usage.${toolType}.lastResetAt`]: admin.firestore.FieldValue.serverTimestamp(),
-      [`usage.${toolType}.cooldownUntil`]: null
+      [`usage.${toolType}.lastResetAt`]: admin.firestore.FieldValue.serverTimestamp()
     });
     usage.usedToday = 0;
-    usage.cooldownUntil = null;
   }
-  
-  if (usage.usedToday >= usage.limit) {
-    const planDoc = await db.collection('subscriptionPlans').doc(user.subscription.plan).get();
-    const cooldownHours = planDoc.data().limits[toolType].cooldownHours;
-    
-    if (cooldownHours > 0) {
-      const cooldownUntil = new Date(now.toMillis() + (cooldownHours * 60 * 60 * 1000));
-      await db.collection('users').doc(uid).update({
-        [`usage.${toolType}.cooldownUntil`]: admin.firestore.Timestamp.fromDate(cooldownUntil)
-      });
-      throw new functions.https.HttpsError(
-        'resource-exhausted',
-        `Daily limit reached (${usage.limit}). Try again in ${cooldownHours} hour(s).`,
-        { limit: usage.limit, cooldownHours, cooldownUntil: cooldownUntil.getTime() }
-      );
-    }
+
+  // Calculate total available uses (regular limit + bonus)
+  const bonusUses = user.bonusUses?.[toolType] || 0;
+  const totalLimit = usage.limit + bonusUses;
+
+  if (usage.usedToday >= totalLimit) {
+    // Calculate time until next reset
+    const currentLastReset = usage.lastResetAt ? usage.lastResetAt.toMillis() : nowMs;
+    const resetAtMs = currentLastReset + resetIntervalMs;
+    const remainingMs = Math.max(0, resetAtMs - nowMs);
+    const remainingSeconds = Math.ceil(remainingMs / 1000);
+    const remainingMinutes = Math.ceil(remainingSeconds / 60);
+
     throw new functions.https.HttpsError(
       'resource-exhausted',
-      `Daily limit reached (${usage.limit}). Resets tomorrow.`,
-      { limit: usage.limit }
+      `Quota exhausted (${usage.usedToday}/${totalLimit}). Resets in ${remainingMinutes} minutes.`,
+      {
+        limit: totalLimit,
+        used: usage.usedToday,
+        bonusUses: bonusUses,
+        resetAtMs: resetAtMs,
+        remainingMs: remainingMs,
+        remainingSeconds: remainingSeconds,
+        remainingMinutes: remainingMinutes
+      }
     );
   }
-  
-  return { allowed: true, remaining: usage.limit - usage.usedToday - 1 };
+
+  return {
+    allowed: true,
+    remaining: totalLimit - usage.usedToday - 1,
+    limit: totalLimit,
+    bonusUses: bonusUses
+  };
 }
 
 async function incrementUsage(uid, toolType) {
@@ -663,7 +679,51 @@ exports.generateTags = functions.https.onCall(async (data, context) => {
 exports.getUserProfile = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   const user = await getUser(uid);
-  return { success: true, profile: user };
+
+  // Get quota settings for reset time info
+  let resetTimeMinutes = 1440; // Default 24 hours
+  try {
+    const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
+    if (settingsDoc.exists && settingsDoc.data().resetTimeMinutes) {
+      resetTimeMinutes = settingsDoc.data().resetTimeMinutes;
+    }
+  } catch (e) {
+    console.log('Using default reset time');
+  }
+
+  // Calculate reset timestamps for each tool
+  const now = Date.now();
+  const resetIntervalMs = resetTimeMinutes * 60 * 1000;
+  const quotaInfo = {};
+
+  const tools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+  tools.forEach(tool => {
+    const usage = user.usage?.[tool];
+    if (usage) {
+      const lastResetMs = usage.lastResetAt?.toMillis?.() || now;
+      const nextResetMs = lastResetMs + resetIntervalMs;
+      const bonusUses = user.bonusUses?.[tool] || 0;
+      const totalLimit = (usage.limit || 0) + bonusUses;
+
+      quotaInfo[tool] = {
+        used: usage.usedToday || 0,
+        limit: usage.limit || 0,
+        bonusUses: bonusUses,
+        totalLimit: totalLimit,
+        remaining: Math.max(0, totalLimit - (usage.usedToday || 0)),
+        lastResetMs: lastResetMs,
+        nextResetMs: nextResetMs,
+        remainingMs: Math.max(0, nextResetMs - now)
+      };
+    }
+  });
+
+  return {
+    success: true,
+    profile: user,
+    quotaInfo: quotaInfo,
+    resetTimeMinutes: resetTimeMinutes
+  };
 });
 
 exports.getHistory = functions.https.onCall(async (data, context) => {
@@ -781,13 +841,175 @@ exports.adminUpdateUserPlan = functions.https.onCall(async (data, context) => {
 exports.adminSetCustomLimits = functions.https.onCall(async (data, context) => {
   await requireAdmin(context);
   const { userId, tool, limit, cooldownHours } = data;
-  
+
   await db.collection('users').doc(userId).update({
     [`usage.${tool}.limit`]: limit,
     [`customLimits.${tool}`]: { limit, cooldownHours }
   });
-  
+
   return { success: true };
+});
+
+// ==============================================
+// QUOTA SETTINGS (Admin)
+// ==============================================
+
+exports.adminGetQuotaSettings = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  try {
+    const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
+    if (!settingsDoc.exists) {
+      // Return defaults
+      return {
+        success: true,
+        settings: {
+          resetTimeMinutes: 1440 // 24 hours default
+        }
+      };
+    }
+    return {
+      success: true,
+      settings: settingsDoc.data()
+    };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to get quota settings: ' + error.message);
+  }
+});
+
+exports.adminSetQuotaSettings = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { resetTimeMinutes } = data || {};
+
+  if (!resetTimeMinutes || resetTimeMinutes < 1) {
+    throw new functions.https.HttpsError('invalid-argument', 'Reset time must be at least 1 minute');
+  }
+
+  try {
+    await db.collection('settings').doc('quotaSettings').set({
+      resetTimeMinutes: parseInt(resetTimeMinutes),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: context.auth.uid
+    }, { merge: true });
+
+    return {
+      success: true,
+      message: `Quota reset time set to ${resetTimeMinutes} minutes`
+    };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to update quota settings: ' + error.message);
+  }
+});
+
+exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { userId, tool, bonusAmount } = data || {};
+
+  if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+  if (!tool) throw new functions.https.HttpsError('invalid-argument', 'Tool name required');
+  if (!bonusAmount || bonusAmount < 1) throw new functions.https.HttpsError('invalid-argument', 'Bonus amount must be at least 1');
+
+  const validTools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+  if (!validTools.includes(tool)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid tool: ' + tool);
+  }
+
+  try {
+    // Check if user exists
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'User not found');
+    }
+
+    // Add bonus uses
+    await db.collection('users').doc(userId).update({
+      [`bonusUses.${tool}`]: admin.firestore.FieldValue.increment(parseInt(bonusAmount))
+    });
+
+    // Log this action
+    await logUsage(userId, 'bonus_uses_granted', {
+      tool,
+      amount: bonusAmount,
+      grantedBy: context.auth.uid
+    });
+
+    return {
+      success: true,
+      message: `Granted ${bonusAmount} bonus uses for ${tool} to user`
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to grant bonus uses: ' + error.message);
+  }
+});
+
+// Initialize/Update subscription plans with correct limits
+exports.adminInitPlans = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const plans = {
+    free: {
+      name: 'Free',
+      price: 0,
+      limits: {
+        warpOptimizer: { dailyLimit: 3, cooldownHours: 0 },
+        titleGenerator: { dailyLimit: 3, cooldownHours: 0 },
+        descriptionGenerator: { dailyLimit: 3, cooldownHours: 0 },
+        tagGenerator: { dailyLimit: 3, cooldownHours: 0 }
+      }
+    },
+    lite: {
+      name: 'Lite',
+      price: 9.99,
+      limits: {
+        warpOptimizer: { dailyLimit: 5, cooldownHours: 0 },
+        titleGenerator: { dailyLimit: 5, cooldownHours: 0 },
+        descriptionGenerator: { dailyLimit: 5, cooldownHours: 0 },
+        tagGenerator: { dailyLimit: 5, cooldownHours: 0 }
+      }
+    },
+    pro: {
+      name: 'Pro',
+      price: 19.99,
+      limits: {
+        warpOptimizer: { dailyLimit: 10, cooldownHours: 0 },
+        titleGenerator: { dailyLimit: 10, cooldownHours: 0 },
+        descriptionGenerator: { dailyLimit: 10, cooldownHours: 0 },
+        tagGenerator: { dailyLimit: 10, cooldownHours: 0 }
+      }
+    },
+    enterprise: {
+      name: 'Enterprise',
+      price: 49.99,
+      limits: {
+        warpOptimizer: { dailyLimit: 50, cooldownHours: 0 },
+        titleGenerator: { dailyLimit: 50, cooldownHours: 0 },
+        descriptionGenerator: { dailyLimit: 50, cooldownHours: 0 },
+        tagGenerator: { dailyLimit: 50, cooldownHours: 0 }
+      }
+    }
+  };
+
+  try {
+    const batch = db.batch();
+
+    for (const [planId, planData] of Object.entries(plans)) {
+      const planRef = db.collection('subscriptionPlans').doc(planId);
+      batch.set(planRef, planData, { merge: true });
+    }
+
+    await batch.commit();
+
+    return {
+      success: true,
+      message: 'Subscription plans initialized/updated successfully',
+      plans: Object.keys(plans)
+    };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to initialize plans: ' + error.message);
+  }
 });
 
 exports.adminGetAnalytics = functions.https.onCall(async (data, context) => {
