@@ -677,53 +677,61 @@ exports.generateTags = functions.https.onCall(async (data, context) => {
 // ==============================================
 
 exports.getUserProfile = functions.https.onCall(async (data, context) => {
-  const uid = await verifyAuth(context);
-  const user = await getUser(uid);
-
-  // Get quota settings for reset time info
-  let resetTimeMinutes = 1440; // Default 24 hours
   try {
-    const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
-    if (settingsDoc.exists && settingsDoc.data().resetTimeMinutes) {
-      resetTimeMinutes = settingsDoc.data().resetTimeMinutes;
+    const uid = await verifyAuth(context);
+    const user = await getUser(uid);
+
+    // Get quota settings for reset time info
+    let resetTimeMinutes = 1440; // Default 24 hours
+    try {
+      const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
+      if (settingsDoc.exists && settingsDoc.data().resetTimeMinutes) {
+        resetTimeMinutes = settingsDoc.data().resetTimeMinutes;
+      }
+    } catch (e) {
+      console.log('Using default reset time');
     }
-  } catch (e) {
-    console.log('Using default reset time');
+
+    // Calculate reset timestamps for each tool
+    const now = Date.now();
+    const resetIntervalMs = resetTimeMinutes * 60 * 1000;
+    const quotaInfo = {};
+
+    const tools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+    tools.forEach(tool => {
+      const usage = user.usage?.[tool];
+      if (usage) {
+        const lastResetMs = usage.lastResetAt?.toMillis?.() || now;
+        const nextResetMs = lastResetMs + resetIntervalMs;
+        const bonusUses = user.bonusUses?.[tool] || 0;
+        const totalLimit = (usage.limit || 0) + bonusUses;
+
+        quotaInfo[tool] = {
+          used: usage.usedToday || 0,
+          limit: usage.limit || 0,
+          bonusUses: bonusUses,
+          totalLimit: totalLimit,
+          remaining: Math.max(0, totalLimit - (usage.usedToday || 0)),
+          lastResetMs: lastResetMs,
+          nextResetMs: nextResetMs,
+          remainingMs: Math.max(0, nextResetMs - now)
+        };
+      }
+    });
+
+    return {
+      success: true,
+      profile: user,
+      quotaInfo: quotaInfo,
+      resetTimeMinutes: resetTimeMinutes
+    };
+  } catch (error) {
+    console.error('getUserProfile error:', error);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    throw new functions.https.HttpsError('internal', 'Failed to load profile: ' + error.message);
   }
-
-  // Calculate reset timestamps for each tool
-  const now = Date.now();
-  const resetIntervalMs = resetTimeMinutes * 60 * 1000;
-  const quotaInfo = {};
-
-  const tools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
-  tools.forEach(tool => {
-    const usage = user.usage?.[tool];
-    if (usage) {
-      const lastResetMs = usage.lastResetAt?.toMillis?.() || now;
-      const nextResetMs = lastResetMs + resetIntervalMs;
-      const bonusUses = user.bonusUses?.[tool] || 0;
-      const totalLimit = (usage.limit || 0) + bonusUses;
-
-      quotaInfo[tool] = {
-        used: usage.usedToday || 0,
-        limit: usage.limit || 0,
-        bonusUses: bonusUses,
-        totalLimit: totalLimit,
-        remaining: Math.max(0, totalLimit - (usage.usedToday || 0)),
-        lastResetMs: lastResetMs,
-        nextResetMs: nextResetMs,
-        remainingMs: Math.max(0, nextResetMs - now)
-      };
-    }
-  });
-
-  return {
-    success: true,
-    profile: user,
-    quotaInfo: quotaInfo,
-    resetTimeMinutes: resetTimeMinutes
-  };
 });
 
 exports.getHistory = functions.https.onCall(async (data, context) => {
