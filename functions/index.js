@@ -1421,16 +1421,23 @@ exports.getSubscriptionPlans = functions.https.onCall(async (data, context) => {
 });
 
 // ==============================================
-// ADS TOOL (LEGACY - NO AUTH)
+// ADS TOOL (LEGACY - NOW SECURED WITH AUTH)
 // ==============================================
 
 exports.analyzeVideo = functions.https.onCall(async (data, context) => {
+  // SECURITY FIX: Require authentication
+  const uid = await verifyAuth(context);
+
   try {
     const { videoUrl } = data;
+    if (!videoUrl) {
+      throw new functions.https.HttpsError('invalid-argument', 'Video URL is required');
+    }
+
     const videoId = extractVideoId(videoUrl);
     const metadata = await getVideoMetadata(videoId);
     const transcript = await getVideoTranscript(videoId);
-    
+
     const analysisPrompt = `Analyze for advertising: ${metadata.title}
 
 Provide:
@@ -1449,7 +1456,9 @@ Provide:
       temperature: 0.7,
       max_tokens: 2000
     });
-    
+
+    await logUsage(uid, 'analyze_video_legacy', { videoId });
+
     return {
       success: true,
       videoData: metadata,
@@ -1457,18 +1466,28 @@ Provide:
       timestamp: new Date().toISOString()
     };
   } catch (error) {
-    throw new functions.https.HttpsError('internal', error.message);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Analysis failed. Please try again.');
   }
 });
 
 exports.generateComments = functions.https.onCall(async (data, context) => {
+  // SECURITY FIX: Require authentication
+  const uid = await verifyAuth(context);
+
   try {
     const { videoUrl, count = 50 } = data;
+    if (!videoUrl) {
+      throw new functions.https.HttpsError('invalid-argument', 'Video URL is required');
+    }
+    // Limit count to prevent abuse
+    const safeCount = Math.min(Math.max(1, count), 100);
+
     const videoId = extractVideoId(videoUrl);
     const metadata = await getVideoMetadata(videoId);
     const transcript = await getVideoTranscript(videoId);
-    
-    const commentsPrompt = `Generate ${count} YouTube comments.
+
+    const commentsPrompt = `Generate ${safeCount} YouTube comments.
 
 Video: ${metadata.title}
 Transcript: ${transcript.fullText.substring(0, 2000)}
@@ -1487,11 +1506,13 @@ Return JSON array: [{text, persona, length}]`;
       temperature: 0.95,
       max_tokens: 3000
     });
-    
+
     const responseText = completion.choices[0].message.content.trim();
     const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const comments = JSON.parse(cleanJson);
-    
+
+    await logUsage(uid, 'generate_comments_legacy', { videoId, count: safeCount });
+
     return {
       success: true,
       comments,
@@ -1500,20 +1521,28 @@ Return JSON array: [{text, persona, length}]`;
       timestamp: new Date().toISOString()
     };
   } catch (error) {
-    throw new functions.https.HttpsError('internal', error.message);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Comment generation failed. Please try again.');
   }
 });
 
 exports.optimizeCampaign = functions.https.onCall(async (data, context) => {
+  // SECURITY FIX: Require authentication
+  const uid = await verifyAuth(context);
+
   try {
     const { videoUrl, budget, targetAudience } = data;
+    if (!videoUrl) {
+      throw new functions.https.HttpsError('invalid-argument', 'Video URL is required');
+    }
+
     const videoId = extractVideoId(videoUrl);
     const metadata = await getVideoMetadata(videoId);
-    
+
     const campaignPrompt = `Create campaign strategy.
 Video: ${metadata.title}
-Budget: $${budget}
-Target: ${targetAudience}`;
+Budget: $${budget || 'Not specified'}
+Target: ${targetAudience || 'General audience'}`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -1524,7 +1553,9 @@ Target: ${targetAudience}`;
       temperature: 0.7,
       max_tokens: 2000
     });
-    
+
+    await logUsage(uid, 'optimize_campaign_legacy', { videoId });
+
     return {
       success: true,
       strategy: completion.choices[0].message.content,
@@ -1532,35 +1563,54 @@ Target: ${targetAudience}`;
       timestamp: new Date().toISOString()
     };
   } catch (error) {
-    throw new functions.https.HttpsError('internal', error.message);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Campaign optimization failed. Please try again.');
   }
 });
 
 exports.saveAnalysis = functions.https.onCall(async (data, context) => {
+  // SECURITY FIX: Require authentication and track ownership
+  const uid = await verifyAuth(context);
+
   const { videoUrl, analysis, comments } = data;
+  if (!videoUrl || !analysis) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video URL and analysis are required');
+  }
+
   const docRef = await db.collection('analyses').add({
+    userId: uid,  // SECURITY FIX: Track ownership
     videoUrl,
     analysis,
     comments: comments || null,
     createdAt: admin.firestore.FieldValue.serverTimestamp()
   });
+
+  await logUsage(uid, 'save_analysis_legacy', { analysisId: docRef.id });
+
   return { success: true, id: docRef.id };
 });
 
 exports.analyzeCompetitors = functions.https.onCall(async (data, context) => {
+  // SECURITY FIX: Require authentication
+  const uid = await verifyAuth(context);
+
   try {
     const { channelName } = data;
+    if (!channelName) {
+      throw new functions.https.HttpsError('invalid-argument', 'Channel name is required');
+    }
+
     const searchResponse = await youtube.search.list({
       part: ['snippet'],
       q: channelName,
       type: ['channel'],
       maxResults: 1
     });
-    
+
     if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
-      throw new Error('Channel not found');
+      throw new functions.https.HttpsError('not-found', 'Channel not found');
     }
-    
+
     const channelId = searchResponse.data.items[0].snippet.channelId;
     const videosResponse = await youtube.search.list({
       part: ['snippet'],
@@ -1569,7 +1619,7 @@ exports.analyzeCompetitors = functions.https.onCall(async (data, context) => {
       maxResults: 10,
       type: ['video']
     });
-    
+
     const videos = videosResponse.data.items.map(item => ({
       videoId: item.id.videoId,
       title: item.snippet.title,
@@ -1577,20 +1627,30 @@ exports.analyzeCompetitors = functions.https.onCall(async (data, context) => {
       publishedAt: item.snippet.publishedAt,
       thumbnail: item.snippet.thumbnails.medium.url
     }));
-    
+
+    await logUsage(uid, 'analyze_competitors_legacy', { channelName, channelId });
+
     return { success: true, channelId, videos, count: videos.length };
   } catch (error) {
-    throw new functions.https.HttpsError('internal', error.message);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Competitor analysis failed. Please try again.');
   }
 });
 
 exports.searchHistory = functions.https.onCall(async (data, context) => {
-  const { limit = 10 } = data;
+  // SECURITY FIX: Require authentication and only return user's own data
+  const uid = await verifyAuth(context);
+
+  const { limit = 10 } = data || {};
+  // Limit the maximum to prevent abuse
+  const safeLimit = Math.min(Math.max(1, limit), 50);
+
   const snapshot = await db.collection('analyses')
+    .where('userId', '==', uid)  // SECURITY FIX: Only return user's own analyses
     .orderBy('createdAt', 'desc')
-    .limit(limit)
+    .limit(safeLimit)
     .get();
-  
+
   const results = [];
   snapshot.forEach(doc => {
     results.push({
@@ -1599,13 +1659,47 @@ exports.searchHistory = functions.https.onCall(async (data, context) => {
       createdAt: doc.data().createdAt?.toDate().toISOString()
     });
   });
-  
+
   return { success: true, results, count: results.length };
 });
 
 exports.deleteAnalysis = functions.https.onCall(async (data, context) => {
-  const { id } = data;
+  // SECURITY FIX: Require authentication and verify ownership
+  const uid = await verifyAuth(context);
+
+  const { id } = data || {};
+  if (!id) {
+    throw new functions.https.HttpsError('invalid-argument', 'Analysis ID is required');
+  }
+
+  // SECURITY FIX: Check ownership before deleting
+  const doc = await db.collection('analyses').doc(id).get();
+
+  if (!doc.exists) {
+    throw new functions.https.HttpsError('not-found', 'Analysis not found');
+  }
+
+  const docData = doc.data();
+
+  // Allow deletion if user owns the record OR if it's a legacy record without userId (admin can delete)
+  // For legacy records without userId, check if user is admin
+  if (docData.userId && docData.userId !== uid) {
+    // Has userId but doesn't match - check if admin
+    const isUserAdmin = await isAdmin(uid);
+    if (!isUserAdmin) {
+      throw new functions.https.HttpsError('permission-denied', 'You can only delete your own analyses');
+    }
+  } else if (!docData.userId) {
+    // Legacy record without userId - only admins can delete
+    const isUserAdmin = await isAdmin(uid);
+    if (!isUserAdmin) {
+      throw new functions.https.HttpsError('permission-denied', 'Legacy analyses can only be deleted by administrators');
+    }
+  }
+
   await db.collection('analyses').doc(id).delete();
+  await logUsage(uid, 'delete_analysis_legacy', { analysisId: id });
+
   return { success: true };
 });
 
@@ -1766,7 +1860,7 @@ exports.getBonusHistory = functions.https.onCall(async (data, context) => {
 });
 
 // ==============================================
-// SETUP ADMIN USER (One-time setup)
+// SETUP ADMIN USER (One-time setup - ONLY when no admins exist)
 // ==============================================
 
 exports.setupAdmin = functions.https.onCall(async (data, context) => {
@@ -1795,7 +1889,22 @@ exports.setupAdmin = functions.https.onCall(async (data, context) => {
       };
     }
 
-    // Make user an admin
+    // SECURITY FIX: Check if ANY admins exist in the system
+    // If admins exist, this endpoint cannot be used for self-promotion
+    const existingAdmins = await db.collection('adminUsers').limit(1).get();
+
+    if (!existingAdmins.empty) {
+      // Admins already exist - reject self-promotion attempt
+      console.warn(`Security: User ${userEmail} (${userId}) attempted unauthorized admin setup`);
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Admin access can only be granted by an existing administrator. Please contact your system administrator.'
+      );
+    }
+
+    // No admins exist - this is first-time setup, allow it
+    console.log(`First-time admin setup by ${userEmail}`);
+
     await db.collection('adminUsers')
       .doc(userId)
       .set({
@@ -1803,7 +1912,7 @@ exports.setupAdmin = functions.https.onCall(async (data, context) => {
         email: userEmail,
         isAdmin: true,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        createdBy: 'self-setup'
+        createdBy: 'first-time-setup'
       });
 
     // Also update user profile
@@ -1813,19 +1922,23 @@ exports.setupAdmin = functions.https.onCall(async (data, context) => {
         isAdmin: true
       });
 
+    await logUsage(userId, 'first_admin_setup', { email: userEmail });
+
     return {
       success: true,
-      message: 'You are now an admin!',
+      message: 'You are now the first admin! Additional admins must be added through the admin panel.',
       email: userEmail,
       userId: userId
     };
 
   } catch (error) {
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
     console.error('Error setting up admin:', error);
     throw new functions.https.HttpsError(
       'internal',
-      'Failed to set up admin access',
-      error.message
+      'Failed to set up admin access'
     );
   }
 });
