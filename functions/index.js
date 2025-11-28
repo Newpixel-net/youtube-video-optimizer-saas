@@ -880,29 +880,52 @@ exports.adminGetQuotaSettings = functions.https.onCall(async (data, context) => 
 });
 
 exports.adminSetQuotaSettings = functions.https.onCall(async (data, context) => {
+  console.log('adminSetQuotaSettings called with data:', JSON.stringify(data));
+
   try {
-    await requireAdmin(context);
+    // Verify admin status
+    const adminId = await requireAdmin(context);
+    console.log('Admin verified:', adminId);
 
     const { resetTimeMinutes } = data || {};
+    console.log('Parsed resetTimeMinutes:', resetTimeMinutes);
 
     if (!resetTimeMinutes || resetTimeMinutes < 1) {
       throw new functions.https.HttpsError('invalid-argument', 'Reset time must be at least 1 minute');
     }
 
+    const resetValue = parseInt(resetTimeMinutes);
+    console.log('Saving reset time:', resetValue);
+
     await db.collection('settings').doc('quotaSettings').set({
-      resetTimeMinutes: parseInt(resetTimeMinutes),
+      resetTimeMinutes: resetValue,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedBy: context.auth.uid
     }, { merge: true });
 
+    console.log('Settings saved successfully');
+
     return {
       success: true,
-      message: `Quota reset time set to ${resetTimeMinutes} minutes`
+      message: `Quota reset time set to ${resetValue} minutes`
     };
   } catch (error) {
     console.error('adminSetQuotaSettings error:', error);
-    if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', 'Failed to update quota settings: ' + error.message);
+    console.error('Error stack:', error.stack);
+
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+
+    // Provide more specific error message
+    let errorMessage = 'Failed to update quota settings';
+    if (error.code === 'permission-denied' || error.message?.includes('permission')) {
+      errorMessage = 'Permission denied. Check Firestore security rules for "settings" collection.';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    throw new functions.https.HttpsError('internal', errorMessage);
   }
 });
 
@@ -1821,16 +1844,18 @@ exports.generateThumbnail = functions.https.onCall(async (data, context) => {
 
   const runpodKey = functions.config().runpod?.key;
   if (!runpodKey) {
-    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured. Please set it with: firebase functions:config:set runpod.key="YOUR_KEY"');
   }
 
   try {
-    // Generate optimized prompt for thumbnail
-    const promptGeneratorResponse = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [{
-        role: 'user',
-        content: `Create a detailed image generation prompt for a YouTube thumbnail. The video title is: "${title}"
+    // Generate optimized prompt for thumbnail using OpenAI
+    let imagePrompt;
+    try {
+      const promptGeneratorResponse = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [{
+          role: 'user',
+          content: `Create a detailed image generation prompt for a YouTube thumbnail. The video title is: "${title}"
 
 Style guidelines:
 - Eye-catching and click-worthy
@@ -1842,12 +1867,25 @@ Style guidelines:
 ${customPrompt ? `Additional requirements: ${customPrompt}` : ''}
 
 Provide ONLY the image generation prompt, no explanations. Make it detailed and specific for best results.`
-      }],
-      temperature: 0.7,
-      max_tokens: 300
-    });
+        }],
+        temperature: 0.7,
+        max_tokens: 300
+      });
 
-    const imagePrompt = promptGeneratorResponse.choices[0].message.content.trim();
+      imagePrompt = promptGeneratorResponse?.choices?.[0]?.message?.content?.trim();
+    } catch (openaiError) {
+      console.error('OpenAI prompt generation failed:', openaiError);
+      // Fallback: create a direct prompt from title and style
+      imagePrompt = `Professional YouTube thumbnail for video titled "${title}". ${customPrompt || 'Eye-catching, high contrast, vibrant colors, professional quality, 4K resolution, dramatic lighting.'}`;
+    }
+
+    // Validate imagePrompt is not empty
+    if (!imagePrompt || imagePrompt.length < 10) {
+      console.log('Generated empty or too short prompt, using fallback');
+      imagePrompt = `Professional YouTube thumbnail for video titled "${title}". Eye-catching design with bold colors, high contrast, dramatic lighting, clean composition, suitable for YouTube, 4K quality.`;
+    }
+
+    console.log('Generated image prompt:', imagePrompt.substring(0, 100) + '...');
     const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, text overlay";
     const seed = Math.floor(Math.random() * 999999999999);
 
@@ -1867,33 +1905,53 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     // Call RunPod API - HiDream text-to-image
     const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
 
-    // Send all required parameters including image_upload_url
-    const runpodResponse = await axios.post(runpodEndpoint, {
-      input: {
-        positive_prompt: imagePrompt,
-        negative_prompt: negativePrompt,
-        width: 1280,
-        height: 720,
-        batch_size: 1,
-        shift: 3.0,
-        seed: seed,
-        steps: 35,
-        cfg: 5,
-        sampler_name: "euler",
-        scheduler: "simple",
-        denoise: 1,
-        image_upload_url: uploadUrl
-      }
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${runpodKey}`
-      },
-      timeout: 30000
-    });
+    // Build input object with all required parameters
+    const runpodInput = {
+      positive_prompt: imagePrompt,
+      negative_prompt: negativePrompt,
+      width: 1280,
+      height: 720,
+      batch_size: 1,
+      shift: 3.0,
+      seed: seed,
+      steps: 35,
+      cfg: 5,
+      sampler_name: "euler",
+      scheduler: "simple",
+      denoise: 1,
+      image_upload_url: uploadUrl
+    };
+
+    // Log full request for debugging
+    console.log('RunPod request input:', JSON.stringify({
+      ...runpodInput,
+      positive_prompt: runpodInput.positive_prompt.substring(0, 100) + '...',
+      image_upload_url: '[SIGNED_URL]'
+    }));
+
+    // Send request to RunPod
+    let runpodResponse;
+    try {
+      runpodResponse = await axios.post(runpodEndpoint, {
+        input: runpodInput
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${runpodKey}`
+        },
+        timeout: 30000
+      });
+    } catch (runpodError) {
+      console.error('RunPod API call failed:', runpodError.response?.data || runpodError.message);
+      throw new functions.https.HttpsError(
+        'internal',
+        `RunPod API error: ${runpodError.response?.data?.message || runpodError.message}`
+      );
+    }
 
     const jobId = runpodResponse.data.id;
     const status = runpodResponse.data.status;
+    console.log('RunPod job started:', { jobId, status });
 
     // Generate public URL for the uploaded image
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;

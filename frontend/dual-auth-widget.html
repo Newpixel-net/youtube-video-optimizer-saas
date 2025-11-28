@@ -1657,7 +1657,15 @@
                     })
                     .catch(function(e) {
                         state.adminLoading = false;
-                        state.error = { message: 'Failed to update reset time: ' + e.message };
+                        // Firebase Functions errors have code, message, and details
+                        var errorMsg = e.message || 'Unknown error';
+                        if (e.details) errorMsg = e.details;
+                        // If only got error code, provide more context
+                        if (errorMsg === 'internal' || errorMsg === 'INTERNAL') {
+                            errorMsg = 'Server error occurred. Please check Firebase Functions logs for details.';
+                        }
+                        console.error('Admin setQuotaResetTime error:', e);
+                        state.error = { message: 'Failed to update reset time: ' + errorMsg };
                         render();
                     });
             },
@@ -1854,7 +1862,22 @@
             },
 
             pollThumbnailStatus: function(jobId) {
+                var pollCount = 0;
+                var maxPolls = 60; // Maximum 3 minutes (60 * 3 seconds)
+
                 var pollInterval = setInterval(function() {
+                    pollCount++;
+
+                    // Check if exceeded max polls
+                    if (pollCount > maxPolls) {
+                        clearInterval(pollInterval);
+                        stopLoadingProgress();
+                        state.loading = false;
+                        state.error = { message: 'Generation timed out. Please try again.' };
+                        render();
+                        return;
+                    }
+
                     functions.httpsCallable('checkThumbnailStatus')({ jobId: jobId })
                         .then(function(result) {
                             state.thumbnailStatus = result.data.status;
@@ -1863,28 +1886,55 @@
                                 clearInterval(pollInterval);
                                 stopLoadingProgress();
                                 state.loading = false;
-                                state.thumbnailImage = result.data.output;
+
+                                // The image URL was set in the initial generateThumbnail call
+                                // RunPod uploads to Firebase Storage at state.thumbnailJob.imageUrl
+                                var imageUrl = state.thumbnailJob?.imageUrl;
+
+                                // Also check if RunPod returns output with image data
+                                var runpodOutput = result.data.output;
+
+                                // Try multiple sources for the image
+                                if (imageUrl) {
+                                    // Use Firebase Storage URL (preferred)
+                                    state.thumbnailImage = imageUrl;
+                                } else if (runpodOutput) {
+                                    // Fallback to RunPod output
+                                    state.thumbnailImage = runpodOutput;
+                                } else {
+                                    state.error = { message: 'Image generated but URL not available. Check Firebase Storage.' };
+                                }
+
                                 render();
                             } else if (result.data.status === 'FAILED') {
                                 clearInterval(pollInterval);
                                 stopLoadingProgress();
                                 state.loading = false;
-                                state.error = { message: 'Thumbnail generation failed: ' + (result.data.error || 'Unknown error') };
+                                var errorDetail = result.data.error || 'Unknown error';
+                                if (typeof errorDetail === 'object') {
+                                    errorDetail = errorDetail.message || JSON.stringify(errorDetail);
+                                }
+                                state.error = { message: 'Thumbnail generation failed: ' + errorDetail };
                                 render();
                             } else {
-                                // Still processing, update progress
+                                // Still processing (IN_QUEUE or IN_PROGRESS), update progress
                                 if (state.loadingProgress < 90) {
-                                    state.loadingProgress += 5;
+                                    state.loadingProgress += 2;
                                 }
-                                render();
+                                updateLoadingUI();
                             }
                         })
                         .catch(function(e) {
-                            clearInterval(pollInterval);
-                            stopLoadingProgress();
-                            state.loading = false;
-                            state.error = { message: 'Status check failed: ' + e.message };
-                            render();
+                            // Don't clear interval on transient errors, just log
+                            console.error('Thumbnail status check error:', e);
+                            if (pollCount > 5) {
+                                // Only fail after multiple attempts
+                                clearInterval(pollInterval);
+                                stopLoadingProgress();
+                                state.loading = false;
+                                state.error = { message: 'Status check failed: ' + e.message };
+                                render();
+                            }
                         });
                 }, 3000); // Poll every 3 seconds
             }
