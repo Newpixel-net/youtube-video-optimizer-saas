@@ -3798,14 +3798,22 @@ exports.analyzeReportImages = functions.https.onCall(async (data, context) => {
       }
     }));
 
-    const systemPrompt = `You are an expert Google Ads campaign analyst. Analyze the provided campaign screenshots and extract all visible data.
+    const systemPrompt = `You are an expert YouTube channel growth strategist and Google Ads analyst. Analyze the provided campaign screenshots and extract all visible data.
 
-Your analysis should be thorough and actionable. The report will be sent to a client, so be professional but encouraging.
+Your analysis should be thorough and actionable. The report will be sent to a YouTube creator client, so be professional, encouraging, and focus on helping them grow their channel.
 
 IMPORTANT: Your response MUST be valid JSON with this exact structure:
 {
   "campaignType": "Search|Display|Video|Shopping|Performance Max|Discovery",
   "dateRange": "extracted date range from screenshots",
+  "youtubeMetrics": {
+    "publicViews": "number with commas as shown (e.g., '15,443') or null",
+    "impressions": "number with commas as shown (e.g., '19,824') or null",
+    "videoTitle": "full video title if visible or null",
+    "adType": "ad type like 'Responsive video ad' or null",
+    "adGroup": "ad group name if visible or null",
+    "status": "Eligible|Paused|etc or null"
+  },
   "metrics": {
     "impressions": number or null,
     "clicks": number or null,
@@ -3820,30 +3828,48 @@ IMPORTANT: Your response MUST be valid JSON with this exact structure:
   "performance": {
     "overall": "Excellent|Good|Average|Needs Improvement|Poor",
     "trend": "Improving|Stable|Declining",
-    "highlights": ["array of positive points"],
+    "highlights": ["array of positive points about campaign/channel"],
     "concerns": ["array of areas needing attention"]
   },
   "recommendations": [
     {
       "priority": "High|Medium|Low",
-      "category": "Bidding|Keywords|Targeting|Ads|Budget|Other",
-      "title": "Short recommendation title",
-      "description": "Detailed explanation of the recommendation",
-      "expectedImpact": "Expected improvement from implementing this"
+      "category": "Thumbnails|Titles|Descriptions|Content|Posting Schedule|Engagement|SEO|Branding|Analytics",
+      "title": "Short recommendation title for YouTube channel improvement",
+      "description": "Detailed explanation focused on YouTube channel growth",
+      "expectedImpact": "Expected improvement in views, subscribers, or engagement"
     }
   ],
-  "summary": "2-3 sentence executive summary of the campaign performance",
-  "nextSteps": "Suggested immediate actions",
-  "fiverCTA": "A compelling call-to-action suggesting they purchase advanced optimization services"
+  "summary": "2-3 sentence executive summary of the campaign performance and channel growth potential",
+  "nextSteps": "Suggested immediate actions for channel improvement",
+  "fiverCTA": "A compelling call-to-action suggesting they purchase professional YouTube optimization services"
 }
 
-Be specific with numbers when visible. If a metric isn't visible, use null.
-Provide at least 3-5 detailed recommendations.
-The Fiverr CTA should be persuasive but not pushy, focusing on the value of professional optimization.`;
+CRITICAL INSTRUCTIONS:
+1. Extract "YouTube public views" metric - this is the MOST IMPORTANT metric. Look for columns labeled "YouTube public views" in the screenshots.
+2. Extract "Impr." (Impressions) and "Video" (video title) columns.
+3. Look for "Ad type" (e.g., "Responsive video ad") and "Status" (e.g., "Eligible").
+4. For recommendations, focus on YOUTUBE CHANNEL IMPROVEMENT, not Google Ads optimization:
+   - Thumbnail design and optimization
+   - Video title strategies (CTR improvement)
+   - Description and tags optimization
+   - Content quality and watch time
+   - Posting schedule and consistency
+   - Audience engagement tactics
+   - Channel branding and identity
+   - Analytics interpretation
+5. Be specific with numbers when visible. If a metric isn't visible, use null.
+6. Provide at least 4-6 detailed YouTube growth recommendations.
+7. The CTA should focus on professional YouTube channel optimization services.`;
 
     const userPrompt = `Analyze these Google Ads campaign screenshots${campaignName ? ` for the "${campaignName}" campaign` : ''}.${additionalContext ? `\n\nAdditional context: ${additionalContext}` : ''}
 
-Extract all visible metrics, assess performance, and provide actionable recommendations.`;
+PRIORITY EXTRACTION:
+1. Find and extract "YouTube public views" - this is the most important metric for the client
+2. Extract impressions, video title, ad type, and status
+3. Provide YouTube CHANNEL growth recommendations (thumbnails, titles, content strategy, etc.)
+
+Extract all visible metrics and provide actionable YouTube channel improvement recommendations.`;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
