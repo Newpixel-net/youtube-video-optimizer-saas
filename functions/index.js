@@ -3949,6 +3949,7 @@ exports.createCampaignReport = functions.https.onCall(async (data, context) => {
         title: campaignName || 'Campaign Performance Report',
         summary: aiAnalysis?.summary || '',
         metrics: aiAnalysis?.metrics || {},
+        youtubeMetrics: aiAnalysis?.youtubeMetrics || {},
         performance: aiAnalysis?.performance || {},
         recommendations: aiAnalysis?.recommendations || [],
         callToAction: aiAnalysis?.fiverCTA || ''
