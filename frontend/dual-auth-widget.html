@@ -461,6 +461,365 @@
             transform: rotate(45deg);
         }
 
+        /* Image Lightbox Modal */
+        .lightbox-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .lightbox-content {
+            position: relative;
+            max-width: 95vw;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .lightbox-image {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: -50px;
+            right: 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox-nav:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .lightbox-nav.prev { left: -70px; }
+        .lightbox-nav.next { right: -70px; }
+
+        .lightbox-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .lightbox-download {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .lightbox-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(34, 197, 94, 0.4);
+        }
+
+        .lightbox-counter {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            margin-top: 1rem;
+        }
+
+        /* Report Image Gallery */
+        .report-image-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .report-image-item:hover {
+            transform: scale(1.02);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .report-image-item img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .report-image-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .report-image-item:hover .report-image-overlay {
+            opacity: 1;
+        }
+
+        .report-image-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .report-image-btn {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.9);
+            color: #1e293b;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            transition: all 0.2s ease;
+        }
+
+        .report-image-btn:hover {
+            background: white;
+            transform: translateY(-2px);
+        }
+
+        /* YouTube Performance Hero Section */
+        .youtube-hero {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .youtube-hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff0000 0%, #ff4444 50%, #ff6666 100%);
+        }
+
+        .youtube-hero-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: white;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .youtube-hero-main {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .youtube-hero-main::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        }
+
+        .youtube-views-label {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .youtube-views-value {
+            color: white;
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 1rem;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .youtube-view-rate {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .view-rate-bar {
+            flex: 1;
+            max-width: 200px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .view-rate-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+            border-radius: 4px;
+            transition: width 1s ease;
+        }
+
+        .view-rate-text {
+            color: #fbbf24;
+            font-weight: 700;
+            font-size: 1.125rem;
+        }
+
+        .youtube-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .youtube-metric-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .youtube-metric-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .youtube-metric-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .youtube-metric-value {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .youtube-metric-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 0.25rem;
+        }
+
+        .youtube-video-info {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .youtube-video-title {
+            color: white;
+            font-weight: 600;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .youtube-video-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .youtube-video-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.75rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.8rem;
+        }
+
+        .youtube-video-tag.status-eligible {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+        }
+
+        @media (max-width: 640px) {
+            .youtube-hero { padding: 1.25rem; }
+            .youtube-views-value { font-size: 2.5rem; }
+            .youtube-metrics-grid { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+            .youtube-metric-card { padding: 0.75rem 0.5rem; }
+            .youtube-metric-value { font-size: 1.125rem; }
+            .lightbox-nav { display: none; }
+        }
+
         /* ------------------------------------------
            2.3 COMPONENTS - Buttons
            ------------------------------------------ */
@@ -1349,7 +1708,12 @@
             showNotifications: false,    // Notification dropdown visibility
 
             // Report modals
-            sendModalReportId: null      // Report ID for send modal
+            sendModalReportId: null,     // Report ID for send modal
+
+            // Lightbox state
+            lightboxOpen: false,         // Is lightbox open
+            lightboxImages: [],          // Array of image URLs
+            lightboxIndex: 0             // Current image index
         };
 
         // Loading progress simulation - OPTIMIZED to prevent flickering
@@ -2938,6 +3302,124 @@
                 render();
             },
 
+            // Drag and Drop Handler
+            handleImageDrop: function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                var uploadZone = document.getElementById('upload-zone');
+                if (uploadZone) uploadZone.classList.remove('drag-over');
+
+                var files = event.dataTransfer.files;
+                if (!files || files.length === 0) return;
+
+                var maxImages = 6;
+                var currentCount = state.reportImages.length;
+                var remainingSlots = maxImages - currentCount;
+
+                if (files.length > remainingSlots) {
+                    state.error = 'Maximum ' + maxImages + ' images allowed. You can add ' + remainingSlots + ' more.';
+                    render();
+                    return;
+                }
+
+                for (var i = 0; i < files.length && i < remainingSlots; i++) {
+                    var file = files[i];
+
+                    // Validate file type
+                    if (!file.type.match(/^image\/(png|jpe?g|webp)$/)) {
+                        state.error = 'Only PNG, JPG, and WebP images are supported';
+                        render();
+                        return;
+                    }
+
+                    // Validate file size (10MB max)
+                    if (file.size > 10 * 1024 * 1024) {
+                        state.error = 'Each image must be under 10MB';
+                        render();
+                        return;
+                    }
+
+                    // Read file and create preview
+                    (function(f) {
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            state.reportImages.push({
+                                file: f,
+                                preview: e.target.result,
+                                base64: e.target.result.split(',')[1],
+                                mimeType: f.type,
+                                name: f.name
+                            });
+                            render();
+                        };
+                        reader.readAsDataURL(f);
+                    })(file);
+                }
+            },
+
+            handleDragOver: function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                var uploadZone = document.getElementById('upload-zone');
+                if (uploadZone) uploadZone.classList.add('drag-over');
+            },
+
+            handleDragLeave: function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                var uploadZone = document.getElementById('upload-zone');
+                if (uploadZone) uploadZone.classList.remove('drag-over');
+            },
+
+            // Lightbox Functions
+            openLightbox: function(images, index) {
+                state.lightboxImages = images;
+                state.lightboxIndex = index || 0;
+                state.lightboxOpen = true;
+                document.body.style.overflow = 'hidden';
+                render();
+            },
+
+            closeLightbox: function() {
+                state.lightboxOpen = false;
+                state.lightboxImages = [];
+                state.lightboxIndex = 0;
+                document.body.style.overflow = '';
+                render();
+            },
+
+            prevLightboxImage: function() {
+                if (state.lightboxIndex > 0) {
+                    state.lightboxIndex--;
+                    render();
+                }
+            },
+
+            nextLightboxImage: function() {
+                if (state.lightboxIndex < state.lightboxImages.length - 1) {
+                    state.lightboxIndex++;
+                    render();
+                }
+            },
+
+            downloadImage: function(url, filename) {
+                // Create a temporary link to download the image
+                var link = document.createElement('a');
+                link.href = url;
+                link.download = filename || 'campaign-screenshot.png';
+                link.target = '_blank';
+
+                // For cross-origin images, open in new tab
+                if (url.includes('firebasestorage.googleapis.com')) {
+                    window.open(url, '_blank');
+                } else {
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            },
+
             // AI Analysis
             analyzeReportImages: async function() {
                 if (state.reportImages.length === 0) {
@@ -3830,6 +4312,24 @@
                 html += '</div>';
             }
 
+            // My Campaign Reports Card (for clients) - positioned above AI Tools
+            html += '<div class="mb-8 fade-in">';
+            html += '<div class="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl shadow-xl p-8 mobile-padding cursor-pointer hover:from-emerald-600 hover:to-teal-700 transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" onclick="app.goToClientReports()">';
+            if (state.unreadCount > 0) {
+                html += '<div class="absolute top-4 right-4 flex items-center gap-2">';
+                html += '<span class="notification-dot"></span>';
+                html += '<span class="bg-white/20 text-white text-sm font-bold px-3 py-1 rounded-full">' + state.unreadCount + ' New</span>';
+                html += '</div>';
+            }
+            html += '<div class="flex items-center gap-5">';
+            html += '<div class="text-5xl">📊</div>';
+            html += '<div class="flex-1">';
+            html += '<h3 class="text-2xl font-bold text-white mb-1">My Campaign Reports</h3>';
+            html += '<p class="text-white/80">View your Google Ads performance reports</p>';
+            html += '</div>';
+            html += '<div class="text-white text-3xl">→</div>';
+            html += '</div></div></div>';
+
             // Main Tools Section Title
             html += '<h2 class="text-2xl lg:text-3xl font-bold text-white mb-6 fade-in">🛠️ AI Tools</h2>';
 
@@ -3895,24 +4395,6 @@
             html += '</div></div>';
 
             html += '</div>';
-
-            // My Campaign Reports Card (for clients)
-            html += '<div class="mt-8 fade-in">';
-            html += '<div class="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl shadow-xl p-8 mobile-padding cursor-pointer hover:from-emerald-600 hover:to-teal-700 transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" onclick="app.goToClientReports()">';
-            if (state.unreadCount > 0) {
-                html += '<div class="absolute top-4 right-4 flex items-center gap-2">';
-                html += '<span class="notification-dot"></span>';
-                html += '<span class="bg-white/20 text-white text-sm font-bold px-3 py-1 rounded-full">' + state.unreadCount + ' New</span>';
-                html += '</div>';
-            }
-            html += '<div class="flex items-center gap-5">';
-            html += '<div class="text-5xl">📊</div>';
-            html += '<div class="flex-1">';
-            html += '<h3 class="text-2xl font-bold text-white mb-1">My Campaign Reports</h3>';
-            html += '<p class="text-white/80">View your Google Ads performance reports</p>';
-            html += '</div>';
-            html += '<div class="text-white text-3xl">→</div>';
-            html += '</div></div></div>';
 
             // Admin Section (only for admins)
             if (state.isAdmin) {
@@ -5432,8 +5914,8 @@
             html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mb-8 fade-in">';
             html += '<h2 class="text-2xl font-bold text-gray-800 mb-6">📸 Create New Report</h2>';
 
-            // Upload Zone
-            html += '<div id="upload-zone" class="upload-zone' + (state.reportImages.length > 0 ? ' has-images' : '') + '" onclick="document.getElementById(\'image-input\').click()">';
+            // Upload Zone with drag-and-drop support
+            html += '<div id="upload-zone" class="upload-zone' + (state.reportImages.length > 0 ? ' has-images' : '') + '" onclick="document.getElementById(\'image-input\').click()" ondragover="app.handleDragOver(event)" ondragleave="app.handleDragLeave(event)" ondrop="app.handleImageDrop(event)">';
             html += '<input type="file" id="image-input" accept="image/*" multiple style="display:none" onchange="app.handleImageUpload(event)" />';
 
             if (state.reportImages.length === 0) {
@@ -5863,7 +6345,80 @@
                 html += '<p class="text-gray-600">Loading report...</p>';
                 html += '</div>';
             } else {
-                // Report Content
+                // YouTube Performance Hero Section
+                var ytMetrics = content.youtubeMetrics || {};
+                if (ytMetrics.publicViews || ytMetrics.impressions) {
+                    html += '<div class="youtube-hero fade-in">';
+                    html += '<div class="youtube-hero-title"><span>🎬</span> YouTube Campaign Performance</div>';
+
+                    // Main Views Card
+                    if (ytMetrics.publicViews) {
+                        var viewRate = 0;
+                        if (ytMetrics.publicViews && ytMetrics.impressions) {
+                            viewRate = Math.round((parseInt(String(ytMetrics.publicViews).replace(/,/g, '')) / parseInt(String(ytMetrics.impressions).replace(/,/g, ''))) * 1000) / 10;
+                        }
+                        html += '<div class="youtube-hero-main">';
+                        html += '<div class="youtube-views-label"><span>👁️</span> YouTube Public Views</div>';
+                        html += '<div class="youtube-views-value">' + utils.escapeHtml(String(ytMetrics.publicViews)) + '</div>';
+                        if (viewRate > 0) {
+                            html += '<div class="youtube-view-rate">';
+                            html += '<div class="view-rate-bar"><div class="view-rate-fill" style="width:' + Math.min(viewRate, 100) + '%"></div></div>';
+                            html += '<span class="view-rate-text">' + viewRate + '% View Rate</span>';
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    }
+
+                    // Supporting Metrics Grid
+                    html += '<div class="youtube-metrics-grid">';
+                    if (ytMetrics.impressions) {
+                        html += '<div class="youtube-metric-card">';
+                        html += '<div class="youtube-metric-icon">📊</div>';
+                        html += '<div class="youtube-metric-value">' + utils.escapeHtml(String(ytMetrics.impressions)) + '</div>';
+                        html += '<div class="youtube-metric-label">Impressions</div>';
+                        html += '</div>';
+                    }
+                    if (ytMetrics.publicViews) {
+                        var viewRateCalc = ytMetrics.impressions ? Math.round((parseInt(String(ytMetrics.publicViews).replace(/,/g, '')) / parseInt(String(ytMetrics.impressions).replace(/,/g, ''))) * 1000) / 10 : 0;
+                        html += '<div class="youtube-metric-card">';
+                        html += '<div class="youtube-metric-icon">📈</div>';
+                        html += '<div class="youtube-metric-value">' + viewRateCalc + '%</div>';
+                        html += '<div class="youtube-metric-label">View Rate</div>';
+                        html += '</div>';
+                    }
+                    if (ytMetrics.status) {
+                        html += '<div class="youtube-metric-card">';
+                        html += '<div class="youtube-metric-icon">✅</div>';
+                        html += '<div class="youtube-metric-value" style="font-size:1rem;">' + utils.escapeHtml(ytMetrics.status) + '</div>';
+                        html += '<div class="youtube-metric-label">Status</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+
+                    // Video Info
+                    if (ytMetrics.videoTitle || ytMetrics.adType) {
+                        html += '<div class="youtube-video-info">';
+                        if (ytMetrics.videoTitle) {
+                            html += '<div class="youtube-video-title"><span>🎥</span> ' + utils.escapeHtml(ytMetrics.videoTitle) + '</div>';
+                        }
+                        html += '<div class="youtube-video-meta">';
+                        if (ytMetrics.adType) {
+                            html += '<span class="youtube-video-tag"><span>📺</span> ' + utils.escapeHtml(ytMetrics.adType) + '</span>';
+                        }
+                        if (ytMetrics.adGroup) {
+                            html += '<span class="youtube-video-tag"><span>📁</span> ' + utils.escapeHtml(ytMetrics.adGroup) + '</span>';
+                        }
+                        if (ytMetrics.status) {
+                            html += '<span class="youtube-video-tag status-eligible"><span>✓</span> ' + utils.escapeHtml(ytMetrics.status) + '</span>';
+                        }
+                        html += '</div>';
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                }
+
+                // Report Content Card
                 html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 fade-in">';
 
                 // Summary
@@ -5874,22 +6429,35 @@
                     html += '</div>';
                 }
 
-                // Images
+                // Images with Lightbox and Download
                 if (report.images && report.images.length > 0) {
+                    var imageUrls = report.images.map(function(img) { return img.url; });
                     html += '<div class="mb-8">';
-                    html += '<h3 class="font-bold text-gray-800 mb-4">📸 Campaign Screenshots</h3>';
+                    html += '<div class="flex items-center justify-between mb-4">';
+                    html += '<h3 class="font-bold text-gray-800">📸 Campaign Screenshots</h3>';
+                    html += '<span class="text-sm text-gray-500">Click to enlarge</span>';
+                    html += '</div>';
                     html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
                     for (var i = 0; i < report.images.length; i++) {
-                        html += '<img src="' + utils.escapeHtml(report.images[i].url) + '" class="rounded-xl shadow-lg w-full" alt="Screenshot ' + (i + 1) + '" />';
+                        var imgUrl = utils.escapeHtml(report.images[i].url);
+                        html += '<div class="report-image-item" onclick="app.openLightbox(' + JSON.stringify(imageUrls).replace(/"/g, '&quot;') + ', ' + i + ')">';
+                        html += '<img src="' + imgUrl + '" alt="Screenshot ' + (i + 1) + '" />';
+                        html += '<div class="report-image-overlay">';
+                        html += '<div class="report-image-actions">';
+                        html += '<button class="report-image-btn" onclick="event.stopPropagation(); app.openLightbox(' + JSON.stringify(imageUrls).replace(/"/g, '&quot;') + ', ' + i + ')"><span>🔍</span> View</button>';
+                        html += '<button class="report-image-btn" onclick="event.stopPropagation(); app.downloadImage(\'' + imgUrl + '\', \'screenshot-' + (i + 1) + '.png\')"><span>⬇️</span> Download</button>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
                     }
                     html += '</div>';
                     html += '</div>';
                 }
 
-                // Metrics
+                // Metrics (Google Ads metrics)
                 if (content.metrics && Object.keys(content.metrics).length > 0) {
                     html += '<div class="mb-8">';
-                    html += '<h3 class="font-bold text-gray-800 mb-4">📈 Key Metrics</h3>';
+                    html += '<h3 class="font-bold text-gray-800 mb-4">📈 Campaign Metrics</h3>';
                     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">';
                     var metricLabels = {
                         impressions: 'Impressions',
@@ -5913,24 +6481,53 @@
                     html += '</div>';
                 }
 
-                // Recommendations
+                // YouTube Channel Recommendations (enhanced styling)
                 if (content.recommendations && content.recommendations.length > 0) {
                     html += '<div class="mb-8">';
-                    html += '<h3 class="font-bold text-gray-800 mb-4">💡 Recommendations</h3>';
+                    html += '<div class="flex items-center gap-3 mb-4">';
+                    html += '<div class="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center text-white text-xl">🎬</div>';
+                    html += '<div>';
+                    html += '<h3 class="font-bold text-gray-800">YouTube Channel Recommendations</h3>';
+                    html += '<p class="text-sm text-gray-500">Expert tips to grow your channel</p>';
+                    html += '</div>';
+                    html += '</div>';
                     html += '<div class="space-y-4">';
                     for (var r = 0; r < content.recommendations.length; r++) {
                         var rec = content.recommendations[r];
                         var title = typeof rec === 'string' ? rec : rec.title;
                         var desc = typeof rec === 'object' ? rec.description : '';
                         var priority = typeof rec === 'object' ? (rec.priority || 'medium').toLowerCase() : 'medium';
+                        var category = typeof rec === 'object' ? (rec.category || '') : '';
+                        var impact = typeof rec === 'object' ? (rec.expectedImpact || '') : '';
+
+                        // Category icons
+                        var categoryIcon = '💡';
+                        if (category.toLowerCase().includes('thumbnail')) categoryIcon = '🖼️';
+                        else if (category.toLowerCase().includes('title')) categoryIcon = '✏️';
+                        else if (category.toLowerCase().includes('description')) categoryIcon = '📝';
+                        else if (category.toLowerCase().includes('content')) categoryIcon = '🎥';
+                        else if (category.toLowerCase().includes('schedule') || category.toLowerCase().includes('posting')) categoryIcon = '📅';
+                        else if (category.toLowerCase().includes('engagement')) categoryIcon = '💬';
+                        else if (category.toLowerCase().includes('seo') || category.toLowerCase().includes('tag')) categoryIcon = '🔍';
+                        else if (category.toLowerCase().includes('brand')) categoryIcon = '🎨';
 
                         html += '<div class="recommendation-card priority-' + priority + '">';
                         html += '<div class="flex items-start gap-3">';
-                        html += '<span class="text-2xl">💡</span>';
-                        html += '<div>';
+                        html += '<span class="text-2xl">' + categoryIcon + '</span>';
+                        html += '<div class="flex-1">';
+                        html += '<div class="flex items-center gap-2 flex-wrap mb-1">';
                         html += '<p class="font-bold text-gray-800">' + utils.escapeHtml(title) + '</p>';
+                        if (priority === 'high') {
+                            html += '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">High Priority</span>';
+                        } else if (priority === 'medium') {
+                            html += '<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-semibold">Medium</span>';
+                        }
+                        html += '</div>';
                         if (desc) {
                             html += '<p class="text-gray-600 mt-1">' + utils.escapeHtml(desc) + '</p>';
+                        }
+                        if (impact) {
+                            html += '<p class="text-sm text-green-600 mt-2 font-medium">💪 Expected Impact: ' + utils.escapeHtml(impact) + '</p>';
                         }
                         html += '</div>';
                         html += '</div>';
@@ -5943,7 +6540,7 @@
                 // Call to Action
                 if (content.callToAction) {
                     html += '<div class="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-6 text-white">';
-                    html += '<h3 class="font-bold text-xl mb-2">🚀 Ready to Optimize?</h3>';
+                    html += '<h3 class="font-bold text-xl mb-2">🚀 Ready to Optimize Your Channel?</h3>';
                     html += '<p class="text-white/90 mb-4">' + utils.escapeHtml(content.callToAction) + '</p>';
                     html += '</div>';
                 }
@@ -6036,6 +6633,58 @@
                     app.initSwipeDots();
                     app.initDesktopCarousel();
                 }, 50);
+            }
+
+            // Render lightbox overlay if open
+            if (state.lightboxOpen && state.lightboxImages.length > 0) {
+                var lightboxHtml = '<div class="lightbox-overlay" onclick="app.closeLightbox()">';
+                lightboxHtml += '<div class="lightbox-content" onclick="event.stopPropagation()">';
+                lightboxHtml += '<button class="lightbox-close" onclick="app.closeLightbox()">×</button>';
+
+                // Navigation arrows
+                if (state.lightboxImages.length > 1) {
+                    if (state.lightboxIndex > 0) {
+                        lightboxHtml += '<button class="lightbox-nav prev" onclick="app.prevLightboxImage()">‹</button>';
+                    }
+                    if (state.lightboxIndex < state.lightboxImages.length - 1) {
+                        lightboxHtml += '<button class="lightbox-nav next" onclick="app.nextLightboxImage()">›</button>';
+                    }
+                }
+
+                // Current image
+                var currentImg = state.lightboxImages[state.lightboxIndex];
+                lightboxHtml += '<img src="' + currentImg + '" class="lightbox-image" alt="Screenshot" />';
+
+                // Actions
+                lightboxHtml += '<div class="lightbox-actions">';
+                lightboxHtml += '<button class="lightbox-download" onclick="app.downloadImage(\'' + currentImg + '\', \'screenshot-' + (state.lightboxIndex + 1) + '.png\')">⬇️ Download Image</button>';
+                lightboxHtml += '</div>';
+
+                // Counter
+                if (state.lightboxImages.length > 1) {
+                    lightboxHtml += '<div class="lightbox-counter">' + (state.lightboxIndex + 1) + ' / ' + state.lightboxImages.length + '</div>';
+                }
+
+                lightboxHtml += '</div></div>';
+
+                // Append to body
+                var lightboxDiv = document.createElement('div');
+                lightboxDiv.id = 'lightbox-container';
+                lightboxDiv.innerHTML = lightboxHtml;
+                document.body.appendChild(lightboxDiv);
+
+                // Keyboard navigation
+                document.onkeydown = function(e) {
+                    if (!state.lightboxOpen) return;
+                    if (e.key === 'Escape') app.closeLightbox();
+                    if (e.key === 'ArrowLeft') app.prevLightboxImage();
+                    if (e.key === 'ArrowRight') app.nextLightboxImage();
+                };
+            } else {
+                // Remove lightbox if closed
+                var existingLightbox = document.getElementById('lightbox-container');
+                if (existingLightbox) existingLightbox.remove();
+                document.onkeydown = null;
             }
         }
 
