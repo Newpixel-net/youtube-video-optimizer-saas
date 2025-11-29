@@ -2829,6 +2829,16 @@ exports.getCompetitorHistory = functions.https.onCall(async (data, context) => {
   const safeLimit = Math.min(Math.max(1, parseInt(limit) || 20), 50);
   const safeOffset = Math.max(0, parseInt(offset) || 0);
 
+  // Safe timestamp handler
+  const getTs = (field) => {
+    if (!field) return Date.now();
+    if (typeof field === 'number') return field;
+    if (typeof field.toMillis === 'function') return field.toMillis();
+    if (field._seconds) return field._seconds * 1000;
+    if (field instanceof Date) return field.getTime();
+    return Date.now();
+  };
+
   try {
     const snapshot = await db.collection('competitorHistory')
       .where('userId', '==', uid)
@@ -2839,12 +2849,19 @@ exports.getCompetitorHistory = functions.https.onCall(async (data, context) => {
 
     const history = [];
     snapshot.forEach(doc => {
-      const data = doc.data();
-      history.push({
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate().toISOString()
-      });
+      try {
+        const docData = doc.data();
+        const timestamp = getTs(docData.createdAt);
+        const { createdAt, ...rest } = docData; // Exclude raw createdAt
+        history.push({
+          id: doc.id,
+          ...rest,
+          timestamp,
+          createdAt: new Date(timestamp).toISOString()
+        });
+      } catch (e) {
+        console.error('Error processing competitor doc:', doc.id, e);
+      }
     });
 
     return { success: true, history, count: history.length };
@@ -2863,6 +2880,16 @@ exports.getTrendHistory = functions.https.onCall(async (data, context) => {
   const safeLimit = Math.min(Math.max(1, parseInt(limit) || 20), 50);
   const safeOffset = Math.max(0, parseInt(offset) || 0);
 
+  // Safe timestamp handler
+  const getTs = (field) => {
+    if (!field) return Date.now();
+    if (typeof field === 'number') return field;
+    if (typeof field.toMillis === 'function') return field.toMillis();
+    if (field._seconds) return field._seconds * 1000;
+    if (field instanceof Date) return field.getTime();
+    return Date.now();
+  };
+
   try {
     const snapshot = await db.collection('trendHistory')
       .where('userId', '==', uid)
@@ -2873,12 +2900,19 @@ exports.getTrendHistory = functions.https.onCall(async (data, context) => {
 
     const history = [];
     snapshot.forEach(doc => {
-      const data = doc.data();
-      history.push({
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate().toISOString()
-      });
+      try {
+        const docData = doc.data();
+        const timestamp = getTs(docData.createdAt);
+        const { createdAt, ...rest } = docData; // Exclude raw createdAt
+        history.push({
+          id: doc.id,
+          ...rest,
+          timestamp,
+          createdAt: new Date(timestamp).toISOString()
+        });
+      } catch (e) {
+        console.error('Error processing trend doc:', doc.id, e);
+      }
     });
 
     return { success: true, history, count: history.length };
@@ -2897,6 +2931,16 @@ exports.getThumbnailHistory = functions.https.onCall(async (data, context) => {
   const safeLimit = Math.min(Math.max(1, parseInt(limit) || 20), 50);
   const safeOffset = Math.max(0, parseInt(offset) || 0);
 
+  // Safe timestamp handler
+  const getTs = (field) => {
+    if (!field) return Date.now();
+    if (typeof field === 'number') return field;
+    if (typeof field.toMillis === 'function') return field.toMillis();
+    if (field._seconds) return field._seconds * 1000;
+    if (field instanceof Date) return field.getTime();
+    return Date.now();
+  };
+
   try {
     const snapshot = await db.collection('thumbnailHistory')
       .where('userId', '==', uid)
@@ -2907,12 +2951,19 @@ exports.getThumbnailHistory = functions.https.onCall(async (data, context) => {
 
     const history = [];
     snapshot.forEach(doc => {
-      const data = doc.data();
-      history.push({
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate().toISOString()
-      });
+      try {
+        const docData = doc.data();
+        const timestamp = getTs(docData.createdAt);
+        const { createdAt, ...rest } = docData; // Exclude raw createdAt
+        history.push({
+          id: doc.id,
+          ...rest,
+          timestamp,
+          createdAt: new Date(timestamp).toISOString()
+        });
+      } catch (e) {
+        console.error('Error processing thumbnail doc:', doc.id, e);
+      }
     });
 
     return { success: true, history, count: history.length };
@@ -3039,17 +3090,52 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
         .get()
     ]);
 
+    // Safe timestamp handler - handles various Firestore timestamp formats
+    const getTimestamp = (field) => {
+      if (!field) return Date.now();
+      if (typeof field === 'number') return field;
+      if (typeof field.toMillis === 'function') return field.toMillis();
+      if (field._seconds) return field._seconds * 1000;
+      if (field instanceof Date) return field.getTime();
+      return Date.now();
+    };
+
+    // Safe serialization - removes non-serializable Firestore objects
+    const sanitize = (obj) => {
+      if (obj === null || obj === undefined) return null;
+      try {
+        return JSON.parse(JSON.stringify(obj));
+      } catch (e) {
+        return null;
+      }
+    };
+
     const formatHistory = (snap, type) => {
       const items = [];
       snap.forEach(doc => {
-        const data = doc.data();
-        items.push({
-          id: doc.id,
-          type,
-          ...data,
-          createdAt: data.createdAt?.toDate().toISOString(),
-          timestamp: data.createdAt?.toMillis() || Date.now()
-        });
+        try {
+          const data = doc.data();
+          const timestamp = getTimestamp(data.createdAt);
+
+          // Create clean item without raw createdAt (non-serializable)
+          const item = {
+            id: doc.id,
+            type,
+            timestamp,
+            createdAt: new Date(timestamp).toISOString()
+          };
+
+          // Safely copy other fields, excluding raw createdAt
+          Object.keys(data).forEach(key => {
+            if (key !== 'createdAt') {
+              item[key] = sanitize(data[key]) ?? data[key];
+            }
+          });
+
+          items.push(item);
+        } catch (docError) {
+          console.error('Error processing history doc:', doc.id, docError);
+        }
       });
       return items;
     };
