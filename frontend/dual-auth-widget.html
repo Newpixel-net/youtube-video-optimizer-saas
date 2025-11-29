@@ -3225,6 +3225,7 @@
                             title: document.getElementById('campaign-name')?.value || 'Campaign Performance Report',
                             summary: state.reportAnalysis.summary || '',
                             metrics: state.reportAnalysis.metrics || {},
+                            youtubeMetrics: state.reportAnalysis.youtubeMetrics || {},
                             performance: state.reportAnalysis.performance || {},
                             recommendations: state.reportAnalysis.recommendations || [],
                             callToAction: state.reportAnalysis.fiverCTA || ''
@@ -3547,6 +3548,7 @@
                         title: title,
                         summary: summary,
                         metrics: state.editingReport.editedContent?.metrics || state.editingReport.aiAnalysis?.metrics || {},
+                        youtubeMetrics: state.editingReport.editedContent?.youtubeMetrics || state.editingReport.aiAnalysis?.youtubeMetrics || {},
                         performance: state.editingReport.editedContent?.performance || state.editingReport.aiAnalysis?.performance || {},
                         recommendations: recommendations,
                         callToAction: cta
@@ -5985,9 +5987,48 @@
                     html += '</div>';
                 }
 
-                // Metrics Grid
+                // YouTube Metrics Section
+                if (analysis.youtubeMetrics) {
+                    var ytMetrics = analysis.youtubeMetrics;
+                    var hasYoutubeMetrics = ytMetrics.publicViews || ytMetrics.impressions || ytMetrics.videoTitle || ytMetrics.adType || ytMetrics.adGroup || ytMetrics.status;
+
+                    if (hasYoutubeMetrics) {
+                        html += '<h3 class="font-bold text-gray-800 mb-3">📈 Extracted Metrics</h3>';
+                        html += '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">';
+
+                        // YouTube-specific metrics with labels
+                        var youtubeMetricLabels = {
+                            publicViews: 'Public Views',
+                            impressions: 'Impressions',
+                            videoTitle: 'Video Title',
+                            adType: 'Ad Type',
+                            adGroup: 'Ad Group',
+                            status: 'Status'
+                        };
+
+                        for (var ytKey in youtubeMetricLabels) {
+                            if (ytMetrics[ytKey] !== null && ytMetrics[ytKey] !== undefined && ytMetrics[ytKey] !== '') {
+                                html += '<div class="metric-card">';
+                                // For longer text values like videoTitle, truncate if needed
+                                var displayValue = String(ytMetrics[ytKey]);
+                                if (ytKey === 'videoTitle' && displayValue.length > 30) {
+                                    displayValue = displayValue.substring(0, 30) + '...';
+                                }
+                                html += '<div class="metric-value" title="' + utils.escapeHtml(String(ytMetrics[ytKey])) + '">' + utils.escapeHtml(displayValue) + '</div>';
+                                html += '<div class="metric-label">' + youtubeMetricLabels[ytKey] + '</div>';
+                                html += '</div>';
+                            }
+                        }
+                        html += '</div>';
+                    }
+                }
+
+                // Standard Metrics Grid (Google Ads metrics)
                 if (analysis.metrics) {
-                    html += '<h3 class="font-bold text-gray-800 mb-3">📈 Extracted Metrics</h3>';
+                    // Only show header if we didn't already show YouTube metrics header
+                    if (!analysis.youtubeMetrics || !(analysis.youtubeMetrics.publicViews || analysis.youtubeMetrics.impressions || analysis.youtubeMetrics.videoTitle || analysis.youtubeMetrics.adType || analysis.youtubeMetrics.adGroup || analysis.youtubeMetrics.status)) {
+                        html += '<h3 class="font-bold text-gray-800 mb-3">📈 Extracted Metrics</h3>';
+                    }
                     html += '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">';
                     var metricLabels = {
                         impressions: 'Impressions',
