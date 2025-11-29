@@ -110,6 +110,21 @@ service cloud.firestore {
     }
     
     // ============================================
+    // PLACEMENT FINDER HISTORY
+    // ============================================
+
+    match /placementFinderHistory/{historyId} {
+      // Users can read their own placement finder history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create/update history (via Admin SDK which bypasses rules)
+      allow create, update: if false;
+
+      // Users can delete their own placement finder history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
     // LEGACY ANALYSES (from old system) - NOW SECURED
     // ============================================
 
