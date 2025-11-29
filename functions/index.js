@@ -182,9 +182,29 @@ async function checkUsageLimit(uid, toolType) {
     throw new functions.https.HttpsError('not-found', 'User not found');
   }
 
-  const usage = user.usage?.[toolType];
+  let usage = user.usage?.[toolType];
+
+  // Auto-create usage data for new tools if missing (for existing users)
   if (!usage) {
-    throw new functions.https.HttpsError('not-found', 'Usage data not found for tool: ' + toolType);
+    const defaultLimit = 2; // Free plan default
+    const newUsageData = {
+      usedToday: 0,
+      limit: defaultLimit,
+      lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+      cooldownUntil: null
+    };
+
+    // Create the missing tool usage in Firestore
+    await db.collection('users').doc(uid).update({
+      [`usage.${toolType}`]: newUsageData
+    });
+
+    // Use default values for this request (serverTimestamp won't be resolved yet)
+    usage = {
+      usedToday: 0,
+      limit: defaultLimit,
+      lastResetAt: admin.firestore.Timestamp.now()
+    };
   }
 
   const now = admin.firestore.Timestamp.now();
