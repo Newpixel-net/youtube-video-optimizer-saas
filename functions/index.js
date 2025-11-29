@@ -1,6 +1,18 @@
 /**
  * YouTube Tools - Complete SaaS Backend
  * 20+ Cloud Functions with Authentication, Usage Limits, and Admin Panel
+ *
+ * SECURITY NOTES:
+ * - All user-facing functions require authentication via verifyAuth()
+ * - Admin functions require admin status via requireAdmin()
+ * - Error messages are sanitized via sanitizeErrorMessage() to prevent info disclosure
+ * - Rate limiting is implemented via quota system + burst protection
+ *
+ * RATE LIMITING RECOMMENDATIONS:
+ * For production, consider implementing:
+ * 1. Firebase App Check - https://firebase.google.com/docs/app-check
+ * 2. Cloud Armor - for DDoS protection
+ * 3. API Gateway rate limiting
  */
 
 const functions = require('firebase-functions');
@@ -15,6 +27,49 @@ admin.initializeApp({
   storageBucket: 'ytseo-6d1b0.firebasestorage.app'
 });
 const db = admin.firestore();
+
+// ==============================================
+// RATE LIMITING - Burst Protection
+// ==============================================
+
+/**
+ * Simple in-memory rate limiter for burst protection
+ * Note: This resets on each function cold start, so it's only for burst protection.
+ * For persistent rate limiting, use the quota system in Firestore.
+ */
+const rateLimitStore = new Map();
+
+function checkRateLimit(userId, action, maxRequestsPerMinute = 10) {
+  const key = `${userId}:${action}`;
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute window
+
+  // Get or create entry
+  let entry = rateLimitStore.get(key);
+  if (!entry || now - entry.windowStart > windowMs) {
+    entry = { windowStart: now, count: 0 };
+  }
+
+  entry.count++;
+  rateLimitStore.set(key, entry);
+
+  // Clean old entries periodically (simple cleanup)
+  if (rateLimitStore.size > 10000) {
+    const cutoff = now - windowMs;
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (v.windowStart < cutoff) rateLimitStore.delete(k);
+    }
+  }
+
+  if (entry.count > maxRequestsPerMinute) {
+    throw new functions.https.HttpsError(
+      'resource-exhausted',
+      'Too many requests. Please wait a moment and try again.'
+    );
+  }
+
+  return true;
+}
 
 const openai = new OpenAI({
   apiKey: functions.config().openai?.key || process.env.OPENAI_API_KEY
@@ -208,6 +263,66 @@ async function logUsage(uid, action, metadata = {}) {
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
     metadata
   });
+}
+
+/**
+ * SECURITY: Sanitize error messages to prevent information disclosure
+ * Removes sensitive details like file paths, API keys, and internal structure
+ */
+function sanitizeErrorMessage(error, defaultMessage = 'An error occurred. Please try again.') {
+  if (!error) return defaultMessage;
+
+  const message = error.message || String(error);
+
+  // Patterns that indicate sensitive information
+  const sensitivePatterns = [
+    /\/home\/[^\s]+/gi,              // File paths
+    /\/var\/[^\s]+/gi,               // System paths
+    /node_modules/gi,                 // Node internals
+    /at\s+[^\s]+\s+\([^)]+\)/gi,     // Stack trace lines
+    /sk-[a-zA-Z0-9]+/gi,             // OpenAI API keys
+    /AIza[a-zA-Z0-9_-]+/gi,          // Google API keys
+    /Bearer\s+[^\s]+/gi,             // Bearer tokens
+    /password|secret|credential/gi,   // Sensitive terms
+    /ECONNREFUSED|ETIMEDOUT/gi,      // Network internals
+  ];
+
+  // Check if the message contains sensitive info
+  for (const pattern of sensitivePatterns) {
+    if (pattern.test(message)) {
+      console.error('Sanitized error (original logged):', message);
+      return defaultMessage;
+    }
+  }
+
+  // Known safe error messages that can be passed through
+  const safeErrorPrefixes = [
+    'Video not found',
+    'Channel not found',
+    'User not found',
+    'Invalid YouTube URL',
+    'Video URL is required',
+    'Quota exhausted',
+    'User must be logged in',
+    'Admin access required',
+    'Permission denied',
+    'Invalid argument',
+  ];
+
+  for (const prefix of safeErrorPrefixes) {
+    if (message.startsWith(prefix) || message.includes(prefix)) {
+      return message;
+    }
+  }
+
+  // If the message is short and doesn't look like a stack trace, allow it
+  if (message.length < 100 && !message.includes('\n') && !message.includes('    at ')) {
+    return message;
+  }
+
+  // Default: return generic message and log the original
+  console.error('Sanitized error (original logged):', message);
+  return defaultMessage;
 }
 
 // ==============================================
@@ -798,6 +913,10 @@ Return only valid JSON.`
 exports.optimizeVideo = functions.https.onCall(async (data, context) => {
   try {
     const uid = await verifyAuth(context);
+
+    // SECURITY: Burst rate limiting (max 5 optimization requests per minute)
+    checkRateLimit(uid, 'optimizeVideo', 5);
+
     const usageCheck = await checkUsageLimit(uid, 'warpOptimizer');
 
     const { videoUrl } = data;
@@ -891,13 +1010,14 @@ exports.optimizeVideo = functions.https.onCall(async (data, context) => {
       await logUsage(context.auth.uid, 'warp_optimizer_failed', { error: error.message });
     }
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Video optimization failed. Please try again.'));
   }
 });
 
 exports.generateTitles = functions.https.onCall(async (data, context) => {
   try {
     const uid = await verifyAuth(context);
+    checkRateLimit(uid, 'generateTitles', 10);
     const usageCheck = await checkUsageLimit(uid, 'titleGenerator');
     const { videoUrl } = data;
     if (!videoUrl) throw new functions.https.HttpsError('invalid-argument', 'Video URL required');
@@ -913,7 +1033,7 @@ exports.generateTitles = functions.https.onCall(async (data, context) => {
     return { success: true, videoData: metadata, titles, usageRemaining: usageCheck.remaining };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Title generation failed. Please try again.'));
   }
 });
 
@@ -935,7 +1055,7 @@ exports.generateDescription = functions.https.onCall(async (data, context) => {
     return { success: true, videoData: metadata, description, usageRemaining: usageCheck.remaining };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Description generation failed. Please try again.'));
   }
 });
 
@@ -957,7 +1077,7 @@ exports.generateTags = functions.https.onCall(async (data, context) => {
     return { success: true, videoData: metadata, tags, usageRemaining: usageCheck.remaining };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Tag generation failed. Please try again.'));
   }
 });
 
@@ -1052,7 +1172,7 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
 
   } catch (error) {
     console.error('getUserProfile error:', error.message);
-    throw new functions.https.HttpsError('internal', 'Profile error: ' + error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to load profile. Please try again.'));
   }
 });
 
@@ -1130,7 +1250,7 @@ exports.adminGetUsers = functions.https.onCall(async (data, context) => {
     return { success: true, users, count: users.length };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', 'Failed to fetch users: ' + error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to fetch users. Please try again.'));
   }
 });
 
@@ -1165,20 +1285,64 @@ exports.adminUpdateUserPlan = functions.https.onCall(async (data, context) => {
     return { success: true, message: 'User plan updated to ' + targetPlan };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', 'Failed to update user plan: ' + error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update user plan. Please try again.'));
   }
 });
 
 exports.adminSetCustomLimits = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-  const { userId, tool, limit, cooldownHours } = data;
+  const adminUid = await requireAdmin(context);
+
+  const { userId, tool, limit, cooldownHours } = data || {};
+
+  // SECURITY FIX: Validate all inputs
+  if (!userId || typeof userId !== 'string') {
+    throw new functions.https.HttpsError('invalid-argument', 'Valid user ID is required');
+  }
+
+  if (!tool || typeof tool !== 'string') {
+    throw new functions.https.HttpsError('invalid-argument', 'Tool name is required');
+  }
+
+  // Validate tool is one of the allowed values to prevent field injection
+  const validTools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+  if (!validTools.includes(tool)) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      `Invalid tool: ${tool}. Must be one of: ${validTools.join(', ')}`
+    );
+  }
+
+  // Validate limit is a positive number
+  const safeLimit = parseInt(limit);
+  if (isNaN(safeLimit) || safeLimit < 0 || safeLimit > 10000) {
+    throw new functions.https.HttpsError('invalid-argument', 'Limit must be a number between 0 and 10000');
+  }
+
+  // Validate cooldownHours is a non-negative number
+  const safeCooldown = parseInt(cooldownHours) || 0;
+  if (safeCooldown < 0 || safeCooldown > 720) {
+    throw new functions.https.HttpsError('invalid-argument', 'Cooldown hours must be between 0 and 720');
+  }
+
+  // Verify user exists
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
 
   await db.collection('users').doc(userId).update({
-    [`usage.${tool}.limit`]: limit,
-    [`customLimits.${tool}`]: { limit, cooldownHours }
+    [`usage.${tool}.limit`]: safeLimit,
+    [`customLimits.${tool}`]: { limit: safeLimit, cooldownHours: safeCooldown }
   });
 
-  return { success: true };
+  await logUsage(userId, 'custom_limits_set', {
+    tool,
+    limit: safeLimit,
+    cooldownHours: safeCooldown,
+    setBy: adminUid
+  });
+
+  return { success: true, message: `Custom limits set for ${tool}` };
 });
 
 // ==============================================
@@ -1206,27 +1370,24 @@ exports.adminGetQuotaSettings = functions.https.onCall(async (data, context) => 
   } catch (error) {
     console.error('adminGetQuotaSettings error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', 'Failed to get quota settings: ' + error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get quota settings. Please try again.'));
   }
 });
 
 exports.adminSetQuotaSettings = functions.https.onCall(async (data, context) => {
-  console.log('adminSetQuotaSettings called with data:', JSON.stringify(data));
+  // SECURITY: Don't log full request data - only log safe operation info
 
   try {
     // Verify admin status
     const adminId = await requireAdmin(context);
-    console.log('Admin verified:', adminId);
 
     const { resetTimeMinutes } = data || {};
-    console.log('Parsed resetTimeMinutes:', resetTimeMinutes);
 
     if (!resetTimeMinutes || resetTimeMinutes < 1) {
       throw new functions.https.HttpsError('invalid-argument', 'Reset time must be at least 1 minute');
     }
 
     const resetValue = parseInt(resetTimeMinutes);
-    console.log('Saving reset time:', resetValue);
 
     await db.collection('settings').doc('quotaSettings').set({
       resetTimeMinutes: resetValue,
@@ -1234,7 +1395,7 @@ exports.adminSetQuotaSettings = functions.https.onCall(async (data, context) => 
       updatedBy: context.auth.uid
     }, { merge: true });
 
-    console.log('Settings saved successfully');
+    console.log('Quota settings updated by admin:', adminId.substring(0, 8) + '...');
 
     return {
       success: true,
@@ -1307,7 +1468,7 @@ exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
   } catch (error) {
     console.error('adminGrantBonusUses error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', 'Failed to grant bonus uses: ' + error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to grant bonus uses. Please try again.'));
   }
 });
 
@@ -1376,7 +1537,7 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
   } catch (error) {
     console.error('adminInitPlans error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', 'Failed to initialize plans: ' + error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to initialize plans. Please try again.'));
   }
 });
 
@@ -2100,7 +2261,7 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
 
   } catch (error) {
     console.error('Error fixing user profile:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to fix user profile. Please try again.'));
   }
 });
 
@@ -2221,7 +2382,7 @@ Provide your analysis in this EXACT JSON format:
   } catch (error) {
     console.error('Competitor analysis error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Competitor analysis failed. Please try again.'));
   }
 });
 
@@ -2340,7 +2501,7 @@ Analyze patterns and predict what will trend next. Provide in this EXACT JSON fo
   } catch (error) {
     console.error('Trend prediction error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Trend prediction failed. Please try again.'));
   }
 });
 
@@ -2350,6 +2511,7 @@ Analyze patterns and predict what will trend next. Provide in this EXACT JSON fo
 
 exports.generateThumbnail = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'generateThumbnail', 3); // Lower limit for expensive AI operation
   await checkUsageLimit(uid, 'warpOptimizer');
 
   const { title, style = 'youtube_thumbnail', customPrompt } = data;
@@ -2457,12 +2619,13 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
       image_upload_url: uploadUrl
     };
 
-    // Log full request for debugging
-    console.log('RunPod request input:', JSON.stringify({
-      ...runpodInput,
-      positive_prompt: runpodInput.positive_prompt.substring(0, 100) + '...',
-      image_upload_url: '[SIGNED_URL]'
-    }));
+    // SECURITY: Log sanitized request info only (no sensitive data)
+    console.log('RunPod request:', {
+      width: runpodInput.width,
+      height: runpodInput.height,
+      steps: runpodInput.steps,
+      promptLength: runpodInput.positive_prompt?.length || 0
+    });
 
     // Send request to RunPod
     let runpodResponse;
@@ -2477,10 +2640,11 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
         timeout: 30000
       });
     } catch (runpodError) {
-      console.error('RunPod API call failed:', runpodError.response?.data || runpodError.message);
+      // SECURITY: Log error internally but return sanitized message
+      console.error('RunPod API call failed:', runpodError.message);
       throw new functions.https.HttpsError(
         'internal',
-        `RunPod API error: ${runpodError.response?.data?.message || runpodError.message}`
+        'Image generation service unavailable. Please try again later.'
       );
     }
 
@@ -2510,7 +2674,7 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
   } catch (error) {
     console.error('Thumbnail generation error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Thumbnail generation failed. Please try again.'));
   }
 });
 
@@ -2551,6 +2715,6 @@ exports.checkThumbnailStatus = functions.https.onCall(async (data, context) => {
 
   } catch (error) {
     console.error('Check thumbnail status error:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check thumbnail status. Please try again.'));
   }
 });
