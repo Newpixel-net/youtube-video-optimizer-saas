@@ -54,7 +54,11 @@ firebase emulators:start
 ### Current Branch: `claude/fix-recurring-issue-01Mc4jyJeGSeB1N8Gqk1qhVH`
 
 **Files Modified:**
-- `frontend/dual-auth-widget.html` - Added Placement Finder history support in frontend
+- `frontend/dual-auth-widget.html` - Multiple updates:
+  - Added Placement Finder history support (state, loading, tabs, display)
+  - Added compact desktop usage carousel (replaces square cards)
+  - Added drag-to-scroll functionality for desktop carousel
+  - Added CSS for compact usage cells
 - `WORKFLOW.md` - Created this workflow documentation
 
 ---
