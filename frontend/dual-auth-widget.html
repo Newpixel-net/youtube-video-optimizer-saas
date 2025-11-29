@@ -752,7 +752,7 @@
             }
         }
 
-        /* Desktop: Hide swipe container, show grid (outside mobile media query) */
+        /* Desktop: Hide swipe container, show carousel (outside mobile media query) */
         @media (min-width: 769px) {
             .mobile-swipe-container {
                 display: none !important;
@@ -761,8 +761,141 @@
                 display: none !important;
             }
             .desktop-usage-grid {
-                display: grid !important;
+                display: none !important;
             }
+            .desktop-usage-carousel {
+                display: flex !important;
+            }
+        }
+
+        /* Desktop Usage Carousel - Compact Horizontal Strip */
+        .desktop-usage-carousel {
+            display: none;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+            gap: 1rem;
+            padding: 0.5rem 0;
+            margin-bottom: 2rem;
+            cursor: grab;
+            user-select: none;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.3) transparent;
+        }
+
+        .desktop-usage-carousel:active {
+            cursor: grabbing;
+        }
+
+        .desktop-usage-carousel::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .desktop-usage-carousel::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+
+        .desktop-usage-carousel::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 3px;
+        }
+
+        .desktop-usage-carousel::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.5);
+        }
+
+        .compact-usage-cell {
+            flex: 0 0 auto;
+            min-width: 180px;
+            max-width: 200px;
+            background: white;
+            border-radius: 1rem;
+            padding: 1rem 1.25rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+
+        .compact-usage-cell:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+
+        .compact-cell-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .compact-cell-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .compact-cell-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .compact-cell-name {
+            font-weight: 700;
+            font-size: 0.875rem;
+            color: #1f2937;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .compact-cell-usage {
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+
+        .compact-cell-usage strong {
+            font-size: 1rem;
+            color: #1f2937;
+        }
+
+        .compact-cell-bonus {
+            color: #10b981;
+            font-weight: 700;
+        }
+
+        .compact-progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .compact-progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .compact-cell-footer {
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+
+        .compact-cell-footer.exhausted {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        .compact-cell-countdown {
+            font-weight: 700;
+            color: #dc2626;
         }
 
         /* Small phones (up to 375px) */
@@ -947,11 +1080,12 @@
 
             // History/Admin data
             historyData: null,       // List of past optimizations
-            historyTab: 'all',       // Current history tab: 'all', 'optimization', 'competitor', 'trend', 'thumbnail'
+            historyTab: 'all',       // Current history tab: 'all', 'optimization', 'competitor', 'trend', 'thumbnail', 'placement'
             allHistory: null,        // Combined history from all types
             competitorHistory: null, // Competitor analysis history
             trendHistory: null,      // Trend predictor history
             thumbnailHistory: null,  // Thumbnail history
+            placementHistory: null,  // Placement Finder history
             historyCounts: null,     // Counts for each history type
             adminUsers: null,        // Admin user list
             adminLoading: false,
@@ -1300,6 +1434,7 @@
                 state.competitorHistory = null;
                 state.trendHistory = null;
                 state.thumbnailHistory = null;
+                state.placementHistory = null;
                 state.historyCounts = null;
                 render();
 
@@ -1312,6 +1447,7 @@
                         state.competitorHistory = data.history.competitor || [];
                         state.trendHistory = data.history.trends || [];
                         state.thumbnailHistory = data.history.thumbnails || [];
+                        state.placementHistory = data.history.placements || [];
                         state.historyCounts = data.counts || {};
                         state.loading = false;
                         render();
@@ -1449,6 +1585,54 @@
                         });
                     });
                 }
+            },
+
+            // Initialize desktop carousel drag-to-scroll
+            initDesktopCarousel: function() {
+                var carousel = document.getElementById('desktopUsageCarousel');
+                if (!carousel) return;
+
+                var isDown = false;
+                var startX;
+                var scrollLeft;
+
+                carousel.addEventListener('mousedown', function(e) {
+                    isDown = true;
+                    carousel.classList.add('active');
+                    startX = e.pageX - carousel.offsetLeft;
+                    scrollLeft = carousel.scrollLeft;
+                    e.preventDefault();
+                });
+
+                carousel.addEventListener('mouseleave', function() {
+                    isDown = false;
+                    carousel.classList.remove('active');
+                });
+
+                carousel.addEventListener('mouseup', function() {
+                    isDown = false;
+                    carousel.classList.remove('active');
+                });
+
+                carousel.addEventListener('mousemove', function(e) {
+                    if (!isDown) return;
+                    e.preventDefault();
+                    var x = e.pageX - carousel.offsetLeft;
+                    var walk = (x - startX) * 1.5; // Scroll speed multiplier
+                    carousel.scrollLeft = scrollLeft - walk;
+                });
+
+                // Touch support for hybrid devices
+                carousel.addEventListener('touchstart', function(e) {
+                    startX = e.touches[0].pageX - carousel.offsetLeft;
+                    scrollLeft = carousel.scrollLeft;
+                }, { passive: true });
+
+                carousel.addEventListener('touchmove', function(e) {
+                    var x = e.touches[0].pageX - carousel.offsetLeft;
+                    var walk = (x - startX) * 1.5;
+                    carousel.scrollLeft = scrollLeft - walk;
+                }, { passive: true });
             },
 
             /* ------------------------------------------
@@ -2720,7 +2904,89 @@
                 return cardHtml;
             }
 
-            // Desktop Grid (hidden on mobile)
+            // Helper function to generate compact usage cell for desktop carousel
+            function generateCompactUsageCell(tool) {
+                var usage = (p.usage && p.usage[tool.key]) || { usedToday: 0, limit: 2, lastResetAt: new Date().toISOString() };
+                var quotaData = state.quotaInfo && state.quotaInfo[tool.key] ? state.quotaInfo[tool.key] : null;
+                var totalLimit = quotaData ? quotaData.totalLimit : (usage.limit || 2);
+                var baseLimit = quotaData ? quotaData.baseLimit : (usage.limit || 2);
+                var bonusUses = quotaData ? quotaData.bonusUses : 0;
+
+                var nextResetMs = 0;
+                if (quotaData && quotaData.nextResetMs) {
+                    nextResetMs = quotaData.nextResetMs;
+                } else if (usage.lastResetAt) {
+                    var lastResetTime = usage.lastResetAt;
+                    if (typeof lastResetTime === 'object' && lastResetTime.seconds) {
+                        lastResetTime = lastResetTime.seconds * 1000;
+                    } else if (typeof lastResetTime === 'object' && lastResetTime._seconds) {
+                        lastResetTime = lastResetTime._seconds * 1000;
+                    } else if (typeof lastResetTime === 'string') {
+                        lastResetTime = new Date(lastResetTime).getTime();
+                    }
+                    var resetIntervalMs = (state.resetTimeMinutes || 1440) * 60 * 1000;
+                    nextResetMs = lastResetTime + resetIntervalMs;
+                }
+
+                var remainingUses = totalLimit - usage.usedToday;
+                var isExhausted = remainingUses <= 0;
+                var percent = utils.getUsagePercent(usage.usedToday, totalLimit);
+
+                // Determine progress bar color class
+                var progressColor = 'bg-gradient-to-r from-green-400 to-green-500';
+                if (percent >= 100) {
+                    progressColor = 'bg-gradient-to-r from-red-400 to-red-500';
+                } else if (percent >= 50) {
+                    progressColor = 'bg-gradient-to-r from-yellow-400 to-orange-500';
+                }
+
+                var cellHtml = '<div class="compact-usage-cell">';
+
+                // Header: Icon + Info
+                cellHtml += '<div class="compact-cell-header">';
+                cellHtml += '<div class="compact-cell-icon bg-gradient-to-br ' + tool.color + '">' + tool.emoji + '</div>';
+                cellHtml += '<div class="compact-cell-info">';
+                cellHtml += '<div class="compact-cell-name">' + tool.name + '</div>';
+                cellHtml += '<div class="compact-cell-usage"><strong>' + usage.usedToday + '</strong>/' + baseLimit;
+                if (bonusUses > 0) {
+                    cellHtml += ' <span class="compact-cell-bonus">+' + bonusUses + '</span>';
+                }
+                cellHtml += '</div>';
+                cellHtml += '</div>';
+                cellHtml += '</div>';
+
+                // Progress bar
+                cellHtml += '<div class="compact-progress-bar">';
+                cellHtml += '<div class="compact-progress-fill ' + progressColor + '" style="width:' + percent + '%"></div>';
+                cellHtml += '</div>';
+
+                // Footer: remaining or countdown
+                if (isExhausted) {
+                    var now = Date.now();
+                    if (!nextResetMs || nextResetMs <= now) {
+                        var resetIntervalMs = (state.resetTimeMinutes || 1440) * 60 * 1000;
+                        nextResetMs = now + resetIntervalMs;
+                    }
+                    var remainingMs = Math.max(0, nextResetMs - now);
+                    cellHtml += '<div class="compact-cell-footer exhausted">';
+                    cellHtml += '⏱️ <span class="compact-cell-countdown quota-countdown" data-reset-at="' + nextResetMs + '">' + formatCountdown(remainingMs) + '</span>';
+                    cellHtml += '</div>';
+                } else {
+                    cellHtml += '<div class="compact-cell-footer">' + remainingUses + ' remaining</div>';
+                }
+
+                cellHtml += '</div>';
+                return cellHtml;
+            }
+
+            // Desktop Carousel (hidden on mobile) - compact horizontal strip
+            html += '<div class="desktop-usage-carousel fade-in" id="desktopUsageCarousel">';
+            for (var i = 0; i < tools.length; i++) {
+                html += generateCompactUsageCell(tools[i]);
+            }
+            html += '</div>';
+
+            // Desktop Grid - kept for fallback but hidden by CSS
             html += '<div class="desktop-usage-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 dashboard-grid-4 gap-5 lg:gap-6 mb-10 fade-in">';
             for (var i = 0; i < tools.length; i++) {
                 html += generateUsageCard(tools[i], '');
@@ -3263,11 +3529,12 @@
                 html += '<div class="flex flex-wrap border-b border-gray-200">';
 
                 var tabs = [
-                    { id: 'all', label: 'All', icon: '📋', count: (counts.optimizations || 0) + (counts.competitor || 0) + (counts.trends || 0) + (counts.thumbnails || 0) },
+                    { id: 'all', label: 'All', icon: '📋', count: (counts.optimizations || 0) + (counts.competitor || 0) + (counts.trends || 0) + (counts.thumbnails || 0) + (counts.placements || 0) },
                     { id: 'optimization', label: 'Video', icon: '🎬', count: counts.optimizations || 0 },
                     { id: 'competitor', label: 'Competitor', icon: '🔍', count: counts.competitor || 0 },
                     { id: 'trend', label: 'Trends', icon: '📈', count: counts.trends || 0 },
-                    { id: 'thumbnail', label: 'Thumbnails', icon: '🎨', count: counts.thumbnails || 0 }
+                    { id: 'thumbnail', label: 'Thumbnails', icon: '🎨', count: counts.thumbnails || 0 },
+                    { id: 'placement', label: 'Placements', icon: '📍', count: counts.placements || 0 }
                 ];
 
                 for (var t = 0; t < tabs.length; t++) {
@@ -3299,6 +3566,8 @@
                     items = state.trendHistory || [];
                 } else if (state.historyTab === 'thumbnail') {
                     items = state.thumbnailHistory || [];
+                } else if (state.historyTab === 'placement') {
+                    items = state.placementHistory || [];
                 }
 
                 // Empty state for current tab
@@ -3349,7 +3618,7 @@
                                 typeColor = 'bg-orange-100 text-orange-800';
                                 break;
                             case 'placement':
-                                typeIcon = '🎬';
+                                typeIcon = '📍';
                                 typeBadge = 'Placement Finder';
                                 typeColor = 'bg-violet-100 text-violet-800';
                                 break;
@@ -4356,10 +4625,11 @@
 
             root.innerHTML = html;
 
-            // Initialize mobile swipe dots after DOM update (dashboard only)
+            // Initialize mobile swipe dots and desktop carousel after DOM update (dashboard only)
             if (state.currentView === 'dashboard') {
                 setTimeout(function() {
                     app.initSwipeDots();
+                    app.initDesktopCarousel();
                 }, 50);
             }
         }
