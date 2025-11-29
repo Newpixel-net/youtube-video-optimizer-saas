@@ -1146,10 +1146,19 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
     const resetIntervalMs = 24 * 60 * 60 * 1000; // 24 hours in ms
     const now = Date.now();
 
+    // Ensure userData.usage has all tool keys (for existing users with old structure)
+    if (!userData.usage) {
+      userData.usage = {};
+    }
+
     for (const tool of tools) {
-      const usage = userData.usage?.[tool] || { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() };
+      // Add default usage data for missing tools
+      if (!userData.usage[tool]) {
+        userData.usage[tool] = { usedToday: 0, limit: 2, lastResetAt: new Date().toISOString() };
+      }
+      const usage = userData.usage[tool];
       const bonusUses = userData.bonusUses?.[tool] || 0;
-      const baseLimit = usage.limit || 3;
+      const baseLimit = usage.limit || 2;
       const totalLimit = baseLimit + bonusUses;
 
       // Calculate next reset time
