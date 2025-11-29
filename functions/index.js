@@ -3798,12 +3798,30 @@ exports.analyzeReportImages = functions.https.onCall(async (data, context) => {
       }
     }));
 
-    const systemPrompt = `You are an expert YouTube channel growth strategist and Google Ads analyst. Analyze the provided campaign screenshots and extract all visible data.
+    const systemPrompt = `You are an expert YouTube channel growth strategist and Google Ads analyst creating a professional client report. Your task is to provide COMPREHENSIVE VISUAL ANALYSIS of the provided campaign screenshots.
 
-Your analysis should be thorough and actionable. The report will be sent to a YouTube creator client, so be professional, encouraging, and focus on helping them grow their channel.
+## YOUR ROLE
+You are preparing a detailed report for a YouTube creator client. This report should demonstrate deep expertise by thoroughly analyzing every visual element in the screenshots - not just extracting numbers, but interpreting what the data MEANS and what the visuals SHOW.
 
-IMPORTANT: Your response MUST be valid JSON with this exact structure:
+## VISUAL ANALYSIS REQUIREMENTS
+For EACH screenshot, you must:
+1. **Describe what you see**: Layout, columns, charts, graphs, status indicators, color coding, warning icons
+2. **Interpret visual trends**: Are graphs going up/down? What colors indicate? What do status badges mean?
+3. **Note all visible text**: Campaign names, video titles, ad group names, labels, column headers
+4. **Identify data patterns**: Which metrics stand out? Any anomalies? Comparisons between rows?
+5. **Describe the dashboard context**: What Google Ads section is this? What time period? What filters are applied?
+
+## RESPONSE FORMAT
+Your response MUST be valid JSON with this exact structure:
 {
+  "screenshotAnalysis": [
+    {
+      "imageNumber": 1,
+      "description": "Detailed 3-5 sentence description of what this screenshot shows visually - the layout, visible data, charts, colors, and notable elements",
+      "keyObservations": ["Specific observation 1", "Specific observation 2", "Specific observation 3"],
+      "dataExtracted": "Summary of key metrics visible in this specific image"
+    }
+  ],
   "campaignType": "Search|Display|Video|Shopping|Performance Max|Discovery",
   "dateRange": "extracted date range from screenshots",
   "youtubeMetrics": {
@@ -3815,12 +3833,12 @@ IMPORTANT: Your response MUST be valid JSON with this exact structure:
     "status": "Eligible|Paused|etc or null"
   },
   "metrics": {
-    "impressions": number or null,
-    "clicks": number or null,
+    "impressions": "number or null",
+    "clicks": "number or null",
     "ctr": "percentage string or null",
     "avgCpc": "currency string or null",
     "cost": "currency string or null",
-    "conversions": number or null,
+    "conversions": "number or null",
     "conversionRate": "percentage string or null",
     "costPerConversion": "currency string or null",
     "impressionShare": "percentage string or null"
@@ -3828,28 +3846,32 @@ IMPORTANT: Your response MUST be valid JSON with this exact structure:
   "performance": {
     "overall": "Excellent|Good|Average|Needs Improvement|Poor",
     "trend": "Improving|Stable|Declining",
-    "highlights": ["array of positive points about campaign/channel"],
-    "concerns": ["array of areas needing attention"]
+    "highlights": ["array of positive points - reference specific visual evidence from screenshots"],
+    "concerns": ["array of concerns - reference specific visual evidence from screenshots"]
   },
   "recommendations": [
     {
       "priority": "High|Medium|Low",
       "category": "Thumbnails|Titles|Descriptions|Content|Posting Schedule|Engagement|SEO|Branding|Analytics",
-      "title": "Short recommendation title for YouTube channel improvement",
-      "description": "Detailed explanation focused on YouTube channel growth",
-      "expectedImpact": "Expected improvement in views, subscribers, or engagement"
+      "title": "Short recommendation title",
+      "description": "Detailed explanation that references what you observed in the screenshots. Connect your advice to specific data points you saw.",
+      "expectedImpact": "Expected improvement with specific projections based on current metrics",
+      "evidenceFromScreenshots": "Quote or reference the specific data from screenshots that supports this recommendation"
     }
   ],
-  "summary": "2-3 sentence executive summary of the campaign performance and channel growth potential",
-  "nextSteps": "Suggested immediate actions for channel improvement",
-  "fiverCTA": "A compelling call-to-action suggesting they purchase professional YouTube optimization services"
+  "narrativeSummary": "A 4-6 sentence professional narrative summary that weaves together observations from ALL screenshots. Reference specific visuals, trends, and data points. This should read like a professional analyst's assessment, not just a list of numbers.",
+  "summary": "2-3 sentence executive summary",
+  "nextSteps": "Prioritized immediate actions with specific targets based on current metrics",
+  "fiverCTA": "A compelling call-to-action for professional YouTube optimization services"
 }
 
-CRITICAL INSTRUCTIONS:
-1. Extract "YouTube public views" metric - this is the MOST IMPORTANT metric. Look for columns labeled "YouTube public views" in the screenshots.
-2. Extract "Impr." (Impressions) and "Video" (video title) columns.
-3. Look for "Ad type" (e.g., "Responsive video ad") and "Status" (e.g., "Eligible").
-4. For recommendations, focus on YOUTUBE CHANNEL IMPROVEMENT, not Google Ads optimization:
+## CRITICAL INSTRUCTIONS
+1. **SCREENSHOT ANALYSIS IS MANDATORY**: The "screenshotAnalysis" array must have one entry per image. Describe what you LITERALLY SEE.
+2. Extract "YouTube public views" metric - look for columns labeled "YouTube public views" in the screenshots.
+3. Extract "Impr." (Impressions), "Video" (video title), "Ad type", and "Status" columns.
+4. **Connect recommendations to visual evidence**: Every recommendation should reference specific data you observed.
+5. **Be descriptive about charts/graphs**: If you see a performance graph, describe if it trends up, down, has spikes, etc.
+6. For recommendations, focus on YOUTUBE CHANNEL IMPROVEMENT:
    - Thumbnail design and optimization
    - Video title strategies (CTR improvement)
    - Description and tags optimization
@@ -3857,19 +3879,36 @@ CRITICAL INSTRUCTIONS:
    - Posting schedule and consistency
    - Audience engagement tactics
    - Channel branding and identity
-   - Analytics interpretation
-5. Be specific with numbers when visible. If a metric isn't visible, use null.
-6. Provide at least 4-6 detailed YouTube growth recommendations.
-7. The CTA should focus on professional YouTube channel optimization services.`;
+7. Provide at least 4-6 detailed, evidence-based YouTube growth recommendations.
+8. The narrativeSummary should tell a STORY about what the screenshots reveal.`;
 
-    const userPrompt = `Analyze these Google Ads campaign screenshots${campaignName ? ` for the "${campaignName}" campaign` : ''}.${additionalContext ? `\n\nAdditional context: ${additionalContext}` : ''}
+    const userPrompt = `Analyze these ${images.length} Google Ads campaign screenshot(s)${campaignName ? ` for the "${campaignName}" campaign` : ''}.${additionalContext ? `\n\nAdditional context: ${additionalContext}` : ''}
 
-PRIORITY EXTRACTION:
-1. Find and extract "YouTube public views" - this is the most important metric for the client
-2. Extract impressions, video title, ad type, and status
-3. Provide YouTube CHANNEL growth recommendations (thumbnails, titles, content strategy, etc.)
+## REQUIRED ANALYSIS
 
-Extract all visible metrics and provide actionable YouTube channel improvement recommendations.`;
+### Step 1: Visual Description (MOST IMPORTANT)
+For each screenshot, describe in detail:
+- What dashboard/section is shown
+- What columns, metrics, and data are visible
+- Any charts, graphs, or visual indicators
+- Colors, status badges, icons, or warnings
+- The overall layout and what it tells us
+
+### Step 2: Data Extraction
+- Find "YouTube public views" - the most important metric
+- Extract impressions, video title, ad type, status
+- Note any other visible performance metrics
+
+### Step 3: Professional Analysis
+- What story do these screenshots tell about the campaign?
+- What patterns or trends are visible?
+- What should the client understand from this data?
+
+### Step 4: Recommendations
+- Provide YouTube CHANNEL growth recommendations (thumbnails, titles, content strategy)
+- Connect each recommendation to specific data you observed in the screenshots
+
+Remember: Describe what you SEE, not just what numbers say. The client wants to understand their campaign visually.`;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -3883,7 +3922,7 @@ Extract all visible metrics and provide actionable YouTube channel improvement r
           ]
         }
       ],
-      max_tokens: 4000,
+      max_tokens: 6000,
       temperature: 0.3
     });
 

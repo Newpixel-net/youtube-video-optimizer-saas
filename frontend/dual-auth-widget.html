@@ -303,8 +303,84 @@
             border-radius: 16px;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
             overflow: hidden;
-            z-index: 100;
+            z-index: 1001;
             margin-top: 8px;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .notification-empty {
+            padding: 2rem;
+            text-align: center;
+            color: #94a3b8;
+        }
+
+        .notification-empty-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
+        }
+
+        /* Click-outside overlay for notifications */
+        .notification-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 999;
+        }
+
+        /* Global Header */
+        .global-header {
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 1rem;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .global-header > * {
+            pointer-events: auto;
+        }
+
+        .global-header-content {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* View Transitions */
+        .view-transitioning {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        .view-entering {
+            animation: viewEnter 0.25s ease-out forwards;
+        }
+
+        @keyframes viewEnter {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Hide carousel during initialization */
+        .carousel-initializing {
+            visibility: hidden;
+        }
+
+        .carousel-ready {
+            visibility: visible;
+            animation: fadeIn 0.3s ease-out;
         }
 
         .upload-zone {
@@ -3807,6 +3883,13 @@
                 render();
             },
 
+            closeNotifications: function() {
+                if (state.showNotifications) {
+                    state.showNotifications = false;
+                    render();
+                }
+            },
+
             markAllNotificationsRead: async function() {
                 try {
                     var markNotificationRead = firebase.functions().httpsCallable('markNotificationRead');
@@ -4085,40 +4168,10 @@
             html += '</div>';
             html += '</div>';
             html += '<div class="flex items-center gap-4">';
-            // Notification Bell (only if unread notifications exist)
-            if (state.unreadCount > 0) {
-                html += '<div class="notification-bell relative" onclick="app.toggleNotifications()">';
-                html += '<span class="text-2xl">🔔</span>';
-                html += '<span class="notification-badge">' + state.unreadCount + '</span>';
-                html += '</div>';
-            }
+            // Note: Notification bell is now rendered globally via renderGlobalHeader()
             html += '<button onclick="app.signOut()" class="btn-secondary">Sign Out</button>';
             html += '</div>';
             html += '</div>';
-
-            // Notification Dropdown
-            if (state.showNotifications && state.notifications.length > 0) {
-                html += '<div class="notification-dropdown fade-in" style="position: fixed; top: 80px; right: 20px; z-index: 1000;">';
-                html += '<div class="p-4 border-b border-gray-100 flex justify-between items-center">';
-                html += '<h4 class="font-bold text-gray-800">Notifications</h4>';
-                html += '<button onclick="app.markAllNotificationsRead()" class="text-sm text-blue-600 hover:underline">Mark all read</button>';
-                html += '</div>';
-                html += '<div class="max-h-64 overflow-y-auto">';
-                for (var n = 0; n < state.notifications.length; n++) {
-                    var notif = state.notifications[n];
-                    html += '<div class="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50" onclick="app.openNotificationReport(\'' + notif.reportId + '\', \'' + notif.id + '\')">';
-                    html += '<div class="flex items-start gap-3">';
-                    html += '<span class="text-2xl">📊</span>';
-                    html += '<div>';
-                    html += '<p class="font-semibold text-gray-800 text-sm">' + utils.escapeHtml(notif.title) + '</p>';
-                    html += '<p class="text-gray-500 text-xs mt-1">' + utils.escapeHtml(notif.message) + '</p>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                }
-                html += '</div>';
-                html += '</div>';
-            }
 
             // Usage Stats - Tools data
             var tools = [
@@ -6470,6 +6523,19 @@
                     html += '</div>';
                 }
 
+                // Narrative Summary (detailed visual analysis)
+                if (content.narrativeSummary) {
+                    html += '<div class="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 mb-8 border border-blue-100">';
+                    html += '<div class="flex items-start gap-3">';
+                    html += '<span class="text-2xl">📊</span>';
+                    html += '<div>';
+                    html += '<h3 class="font-bold text-gray-800 mb-2">Detailed Analysis</h3>';
+                    html += '<p class="text-gray-700 leading-relaxed">' + utils.escapeHtml(content.narrativeSummary) + '</p>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
                 // Images with Lightbox and Download
                 if (report.images && report.images.length > 0) {
                     var imageUrls = report.images.map(function(img) { return img.url; });
@@ -6489,6 +6555,48 @@
                         html += '<button class="report-image-btn" onclick="event.stopPropagation(); app.downloadImage(\'' + imgUrl + '\', \'screenshot-' + (i + 1) + '.png\')"><span>⬇️</span> Download</button>';
                         html += '</div>';
                         html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Screenshot Analysis (visual descriptions from AI)
+                if (content.screenshotAnalysis && content.screenshotAnalysis.length > 0) {
+                    html += '<div class="mb-8">';
+                    html += '<div class="flex items-center gap-3 mb-4">';
+                    html += '<div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xl">🔍</div>';
+                    html += '<div>';
+                    html += '<h3 class="font-bold text-gray-800">Visual Analysis</h3>';
+                    html += '<p class="text-sm text-gray-500">Detailed breakdown of each screenshot</p>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '<div class="space-y-4">';
+                    for (var sa = 0; sa < content.screenshotAnalysis.length; sa++) {
+                        var analysis = content.screenshotAnalysis[sa];
+                        html += '<div class="bg-gray-50 rounded-xl p-5 border border-gray-100">';
+                        html += '<div class="flex items-center gap-2 mb-3">';
+                        html += '<span class="w-7 h-7 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-sm">' + (analysis.imageNumber || (sa + 1)) + '</span>';
+                        html += '<span class="font-semibold text-gray-800">Screenshot ' + (analysis.imageNumber || (sa + 1)) + '</span>';
+                        html += '</div>';
+                        if (analysis.description) {
+                            html += '<p class="text-gray-700 mb-3">' + utils.escapeHtml(analysis.description) + '</p>';
+                        }
+                        if (analysis.keyObservations && analysis.keyObservations.length > 0) {
+                            html += '<div class="space-y-2">';
+                            for (var ko = 0; ko < analysis.keyObservations.length; ko++) {
+                                html += '<div class="flex items-start gap-2">';
+                                html += '<span class="text-green-500 mt-0.5">✓</span>';
+                                html += '<span class="text-gray-600 text-sm">' + utils.escapeHtml(analysis.keyObservations[ko]) + '</span>';
+                                html += '</div>';
+                            }
+                            html += '</div>';
+                        }
+                        if (analysis.dataExtracted) {
+                            html += '<div class="mt-3 pt-3 border-t border-gray-200">';
+                            html += '<p class="text-sm text-gray-500"><span class="font-medium text-gray-700">Key Data:</span> ' + utils.escapeHtml(analysis.dataExtracted) + '</p>';
+                            html += '</div>';
+                        }
                         html += '</div>';
                     }
                     html += '</div>';
@@ -6567,6 +6675,13 @@
                         if (desc) {
                             html += '<p class="text-gray-600 mt-1">' + utils.escapeHtml(desc) + '</p>';
                         }
+                        // Show evidence from screenshots if available
+                        var evidence = typeof rec === 'object' ? (rec.evidenceFromScreenshots || '') : '';
+                        if (evidence) {
+                            html += '<div class="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-100">';
+                            html += '<p class="text-sm text-blue-700"><span class="font-medium">📸 Evidence:</span> ' + utils.escapeHtml(evidence) + '</p>';
+                            html += '</div>';
+                        }
                         if (impact) {
                             html += '<p class="text-sm text-green-600 mt-2 font-medium">💪 Expected Impact: ' + utils.escapeHtml(impact) + '</p>';
                         }
@@ -6600,8 +6715,89 @@
         }
 
         /* ==========================================
-           4.7 MAIN RENDER FUNCTION
+           4.7 GLOBAL HEADER (Notification Bell)
            ========================================== */
+
+        function renderGlobalHeader() {
+            // Only show on authenticated views (not login, register, forgot-password, initializing)
+            var authViews = ['login', 'register', 'forgot-password', 'initializing'];
+            if (authViews.indexOf(state.currentView) !== -1) {
+                return '';
+            }
+
+            // Don't show if no user
+            if (!state.user) {
+                return '';
+            }
+
+            var html = '';
+
+            // Click-outside overlay (only when dropdown is open)
+            if (state.showNotifications) {
+                html += '<div class="notification-overlay" onclick="app.closeNotifications()"></div>';
+            }
+
+            // Global header
+            html += '<div class="global-header">';
+            html += '<div class="global-header-content">';
+
+            // Notification Bell (always visible when logged in)
+            html += '<div class="notification-bell relative" onclick="event.stopPropagation(); app.toggleNotifications()">';
+            html += '<span class="text-2xl">🔔</span>';
+            if (state.unreadCount > 0) {
+                html += '<span class="notification-badge">' + state.unreadCount + '</span>';
+            }
+
+            // Notification Dropdown
+            if (state.showNotifications) {
+                html += '<div class="notification-dropdown" onclick="event.stopPropagation()">';
+                html += '<div class="p-4 border-b border-gray-100 flex justify-between items-center">';
+                html += '<h4 class="font-bold text-gray-800">Notifications</h4>';
+                if (state.notifications.length > 0) {
+                    html += '<button onclick="app.markAllNotificationsRead()" class="text-sm text-blue-600 hover:underline">Mark all read</button>';
+                }
+                html += '</div>';
+
+                if (state.notifications.length > 0) {
+                    html += '<div class="max-h-64 overflow-y-auto">';
+                    for (var n = 0; n < state.notifications.length; n++) {
+                        var notif = state.notifications[n];
+                        html += '<div class="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50" onclick="app.openNotificationReport(\'' + notif.reportId + '\', \'' + notif.id + '\')">';
+                        html += '<div class="flex items-start gap-3">';
+                        html += '<span class="text-2xl">📊</span>';
+                        html += '<div>';
+                        html += '<p class="font-semibold text-gray-800 text-sm">' + utils.escapeHtml(notif.title) + '</p>';
+                        html += '<p class="text-gray-500 text-xs mt-1">' + utils.escapeHtml(notif.message) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                } else {
+                    // Empty state
+                    html += '<div class="notification-empty">';
+                    html += '<div class="notification-empty-icon">🔔</div>';
+                    html += '<p class="font-medium text-gray-600">No new notifications</p>';
+                    html += '<p class="text-sm mt-1">You\'re all caught up!</p>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+
+            html += '</div>'; // End notification-bell
+
+            html += '</div>'; // End global-header-content
+            html += '</div>'; // End global-header
+
+            return html;
+        }
+
+        /* ==========================================
+           4.8 MAIN RENDER FUNCTION
+           ========================================== */
+
+        // Track previous view for transitions
+        var previousView = null;
 
         function render() {
             const root = document.getElementById('app-root');
@@ -6666,14 +6862,63 @@
                     html = '<div class="view-container view-centered"><div class="spinner"></div></div>';
             }
 
-            root.innerHTML = html;
+            // Check if this is a view change (not just a re-render)
+            var isViewChange = previousView !== null && previousView !== state.currentView;
+            previousView = state.currentView;
+
+            // Apply smooth transition for view changes
+            if (isViewChange) {
+                root.classList.add('view-transitioning');
+                root.innerHTML = html;
+                // Use requestAnimationFrame for smoother transition
+                requestAnimationFrame(function() {
+                    root.classList.remove('view-transitioning');
+                    root.classList.add('view-entering');
+                    // Remove animation class after it completes
+                    setTimeout(function() {
+                        root.classList.remove('view-entering');
+                    }, 250);
+                });
+            } else {
+                root.innerHTML = html;
+            }
+
+            // Render global header (notification bell) for authenticated views
+            var existingHeader = document.getElementById('global-header-container');
+            var headerHtml = renderGlobalHeader();
+            if (headerHtml) {
+                if (!existingHeader) {
+                    existingHeader = document.createElement('div');
+                    existingHeader.id = 'global-header-container';
+                    document.body.appendChild(existingHeader);
+                }
+                existingHeader.innerHTML = headerHtml;
+            } else if (existingHeader) {
+                existingHeader.remove();
+            }
 
             // Initialize mobile swipe dots and desktop carousel after DOM update (dashboard only)
             if (state.currentView === 'dashboard') {
-                setTimeout(function() {
+                // Pre-hide carousel elements to prevent flash
+                var carouselEl = document.getElementById('desktopUsageCarousel');
+                var swipeEl = document.getElementById('usageSwipeContainer');
+                if (carouselEl) carouselEl.classList.add('carousel-initializing');
+                if (swipeEl) swipeEl.classList.add('carousel-initializing');
+
+                // Use requestAnimationFrame instead of setTimeout for smoother init
+                requestAnimationFrame(function() {
                     app.initSwipeDots();
                     app.initDesktopCarousel();
-                }, 50);
+                    // Show carousel elements after init
+                    if (carouselEl) {
+                        carouselEl.classList.remove('carousel-initializing');
+                        carouselEl.classList.add('carousel-ready');
+                    }
+                    if (swipeEl) {
+                        swipeEl.classList.remove('carousel-initializing');
+                        swipeEl.classList.add('carousel-ready');
+                    }
+                });
             }
 
             // Render lightbox overlay if open
