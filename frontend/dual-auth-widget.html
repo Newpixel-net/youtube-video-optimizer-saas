@@ -1645,6 +1645,475 @@
                 max-width: 32rem;
             }
         }
+
+        /* ------------------------------------------
+           2.13 ENTERPRISE PAGE - Gold 3D Graphics
+           ------------------------------------------ */
+
+        /* Enterprise Page Background */
+        .enterprise-bg {
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .enterprise-bg::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at center, rgba(255, 215, 0, 0.03) 0%, transparent 50%);
+            animation: enterpriseGlow 15s ease-in-out infinite;
+        }
+
+        @keyframes enterpriseGlow {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(5%, 5%) scale(1.1); }
+        }
+
+        /* Gold 3D Text Effect */
+        .gold-text {
+            background: linear-gradient(180deg, #f5d742 0%, #d4a726 25%, #b8860b 50%, #d4a726 75%, #f5d742 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 2px 10px rgba(212, 167, 38, 0.3);
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .gold-text-3d {
+            background: linear-gradient(180deg, #ffd700 0%, #ffec8b 20%, #daa520 40%, #b8860b 60%, #cd853f 80%, #daa520 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative;
+            text-shadow:
+                0 1px 0 rgba(255, 215, 0, 0.4),
+                0 2px 0 rgba(218, 165, 32, 0.3),
+                0 3px 0 rgba(184, 134, 11, 0.2),
+                0 4px 0 rgba(139, 90, 43, 0.1),
+                0 5px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Gold Gradient Border */
+        .gold-border {
+            border: 2px solid transparent;
+            background: linear-gradient(#1a1a2e, #1a1a2e) padding-box,
+                        linear-gradient(135deg, #ffd700, #b8860b, #ffd700) border-box;
+        }
+
+        /* Gold Glow Effect */
+        .gold-glow {
+            box-shadow:
+                0 0 20px rgba(255, 215, 0, 0.15),
+                0 0 40px rgba(255, 215, 0, 0.1),
+                0 0 60px rgba(255, 215, 0, 0.05),
+                inset 0 0 60px rgba(255, 215, 0, 0.02);
+        }
+
+        /* Enterprise Card Styles */
+        .enterprise-card {
+            background: linear-gradient(145deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.9) 100%);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 24px;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .enterprise-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #ffd700, #b8860b, #ffd700, #b8860b, #ffd700);
+            background-size: 200% 100%;
+            animation: goldShimmer 3s ease-in-out infinite;
+        }
+
+        .enterprise-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at center, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .enterprise-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(255, 215, 0, 0.5);
+            box-shadow:
+                0 25px 50px rgba(0, 0, 0, 0.4),
+                0 0 40px rgba(255, 215, 0, 0.15);
+        }
+
+        .enterprise-card:hover::after {
+            opacity: 1;
+        }
+
+        @keyframes goldShimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Enterprise Tool Icon */
+        .enterprise-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(145deg, #ffd700 0%, #b8860b 50%, #8b6914 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            box-shadow:
+                0 10px 30px rgba(255, 215, 0, 0.3),
+                inset 0 2px 4px rgba(255, 255, 255, 0.4),
+                inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .enterprise-icon::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            right: 2px;
+            height: 40%;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%);
+            border-radius: 18px 18px 50% 50%;
+        }
+
+        /* Locked Feature Overlay */
+        .enterprise-locked {
+            position: relative;
+        }
+
+        .enterprise-locked::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 24px;
+            z-index: 10;
+            backdrop-filter: blur(2px);
+        }
+
+        .enterprise-locked-badge {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 11;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 2px solid rgba(255, 215, 0, 0.5);
+            border-radius: 16px;
+            padding: 1.5rem 2rem;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .lock-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upgrade-btn {
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #ffd700 0%, #b8860b 100%);
+            color: #1a1a2e;
+            font-weight: 700;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+        }
+
+        .upgrade-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.4);
+        }
+
+        /* Enterprise Hero Section */
+        .enterprise-hero {
+            text-align: center;
+            padding: 3rem 1rem;
+            position: relative;
+        }
+
+        .enterprise-hero-icon {
+            font-size: 5rem;
+            margin-bottom: 1.5rem;
+            animation: float 3s ease-in-out infinite;
+            filter: drop-shadow(0 10px 30px rgba(255, 215, 0, 0.4));
+        }
+
+        .enterprise-crown {
+            display: inline-block;
+            animation: crownFloat 4s ease-in-out infinite;
+        }
+
+        @keyframes crownFloat {
+            0%, 100% { transform: translateY(0) rotate(-5deg); }
+            50% { transform: translateY(-15px) rotate(5deg); }
+        }
+
+        /* 3D Diamond Effect */
+        .diamond-3d {
+            position: relative;
+            display: inline-block;
+        }
+
+        .diamond-3d::before {
+            content: '💎';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 3rem;
+            opacity: 0.3;
+            filter: blur(8px);
+            animation: diamondPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes diamondPulse {
+            0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.3; }
+            50% { transform: translateX(-50%) scale(1.2); opacity: 0.5; }
+        }
+
+        /* Enterprise Stats Bar */
+        .enterprise-stats {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 2rem 0;
+        }
+
+        .enterprise-stat {
+            background: linear-gradient(145deg, rgba(255, 215, 0, 0.1) 0%, rgba(184, 134, 11, 0.1) 100%);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 16px;
+            padding: 1rem 2rem;
+            text-align: center;
+        }
+
+        .enterprise-stat-value {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #ffd700;
+        }
+
+        .enterprise-stat-label {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 0.25rem;
+        }
+
+        /* Gold Sparkle Animation */
+        .gold-sparkle {
+            position: relative;
+        }
+
+        .gold-sparkle::after {
+            content: '✨';
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 1.5rem;
+            animation: sparkle 1.5s ease-in-out infinite;
+        }
+
+        @keyframes sparkle {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        /* Enterprise Tabs */
+        .enterprise-tabs {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(255, 215, 0, 0.05);
+            padding: 0.5rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 215, 0, 0.1);
+            margin-bottom: 2rem;
+            overflow-x: auto;
+        }
+
+        .enterprise-tab {
+            flex: 1;
+            min-width: 120px;
+            padding: 0.875rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .enterprise-tab:hover {
+            color: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .enterprise-tab.active {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(184, 134, 11, 0.2) 100%);
+            color: #ffd700;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+
+        /* PRO Badge */
+        .pro-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.75rem;
+            background: linear-gradient(135deg, #ffd700 0%, #b8860b 100%);
+            color: #1a1a2e;
+            font-size: 0.7rem;
+            font-weight: 800;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
+        }
+
+        /* Bulk Input Toggle */
+        .input-toggle {
+            display: flex;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 0.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .input-toggle-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .input-toggle-btn.active {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+        }
+
+        /* Viral Score Meter */
+        .viral-meter {
+            background: linear-gradient(90deg, #22c55e 0%, #eab308 50%, #ef4444 100%);
+            height: 12px;
+            border-radius: 6px;
+            position: relative;
+            margin: 1rem 0;
+        }
+
+        .viral-meter-indicator {
+            position: absolute;
+            top: -8px;
+            width: 28px;
+            height: 28px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 700;
+            transform: translateX(-50%);
+            transition: left 1s ease;
+        }
+
+        /* Script Writer Styles */
+        .script-section {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .script-section-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: white;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .script-content {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.8;
+            font-size: 0.95rem;
+        }
+
+        /* Monetization Gauge */
+        .monetization-ring {
+            position: relative;
+            width: 180px;
+            height: 180px;
+        }
+
+        .monetization-ring svg {
+            transform: rotate(-90deg);
+        }
+
+        .monetization-ring-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 12;
+        }
+
+        .monetization-ring-fill {
+            fill: none;
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1.5s ease;
+        }
+
+        .monetization-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .monetization-amount {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #22c55e;
+        }
+
+        .monetization-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+        }
     </style>
 </head>
 
@@ -1789,7 +2258,35 @@
             // Lightbox state
             lightboxOpen: false,         // Is lightbox open
             lightboxImages: [],          // Array of image URLs
-            lightboxIndex: 0             // Current image index
+            lightboxIndex: 0,            // Current image index
+
+            // Enterprise Features State
+            enterpriseTab: 'bulk-optimizer',  // Current enterprise tab
+
+            // Channel Audit Pro
+            channelAuditResults: null,        // Channel audit results
+            channelAuditLoading: false,       // Loading state
+
+            // Bulk Video Optimizer
+            bulkInputMode: 'paste',           // 'paste' or 'csv'
+            bulkVideoUrls: [],                // List of video URLs
+            bulkResults: null,                // Bulk optimization results
+            bulkProgress: 0,                  // Progress percentage
+            bulkCurrentVideo: 0,              // Current video being processed
+
+            // Viral Score Predictor
+            viralResults: null,               // Viral prediction results
+            viralLoading: false,              // Loading state
+
+            // Monetization Analyzer
+            monetizationResults: null,        // Monetization analysis results
+            monetizationLoading: false,       // Loading state
+
+            // Script Writer Pro
+            scriptResults: null,              // Generated script
+            scriptLoading: false,             // Loading state
+            scriptType: 'tutorial',           // Script type: tutorial, review, vlog, etc.
+            scriptDuration: '10'              // Target duration in minutes
         };
 
         // Loading progress simulation - OPTIMIZED to prevent flickering
@@ -2173,6 +2670,74 @@
                 state.error = null;
                 state.placementResults = null;
                 state.placementLoading = false;
+                render();
+            },
+
+            // Enterprise Page Navigation
+            goToEnterprise: function(tab) {
+                state.currentView = 'enterprise';
+                state.error = null;
+                if (tab) state.enterpriseTab = tab;
+                render();
+            },
+
+            setEnterpriseTab: function(tab) {
+                state.enterpriseTab = tab;
+                state.error = null;
+                render();
+            },
+
+            // Channel Audit Pro (Main Dashboard)
+            goToChannelAudit: function() {
+                state.currentView = 'channel-audit';
+                state.error = null;
+                state.channelAuditResults = null;
+                state.channelAuditLoading = false;
+                render();
+            },
+
+            // Check if user has PRO/Enterprise access
+            hasEnterpriseAccess: function() {
+                var plan = (state.profile && state.profile.subscription && state.profile.subscription.plan) || 'free';
+                return plan === 'pro' || plan === 'enterprise';
+            },
+
+            // Bulk Video Optimizer Functions
+            setBulkInputMode: function(mode) {
+                state.bulkInputMode = mode;
+                render();
+            },
+
+            parseBulkUrls: function() {
+                var textarea = document.getElementById('bulk-urls-input');
+                if (!textarea) return;
+                var text = textarea.value.trim();
+                var urls = text.split(/[\n,]/).map(function(u) { return u.trim(); }).filter(function(u) {
+                    return u.match(/youtube\.com|youtu\.be/);
+                });
+                state.bulkVideoUrls = urls;
+                render();
+            },
+
+            handleBulkCsvUpload: function(event) {
+                var file = event.target.files[0];
+                if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var text = e.target.result;
+                    var urls = text.split(/[\n,]/).map(function(u) { return u.trim(); }).filter(function(u) {
+                        return u.match(/youtube\.com|youtu\.be/);
+                    });
+                    state.bulkVideoUrls = urls;
+                    render();
+                };
+                reader.readAsText(file);
+            },
+
+            clearBulkUrls: function() {
+                state.bulkVideoUrls = [];
+                state.bulkResults = null;
+                state.bulkProgress = 0;
                 render();
             },
 
@@ -3257,6 +3822,256 @@
                     state.error = { message: 'Failed to copy: ' + err.message };
                     render();
                 });
+            },
+
+            /* ------------------------------------------
+               4.5.9 Channel Audit Pro Actions
+               ------------------------------------------ */
+            runChannelAudit: function(e) {
+                e.preventDefault();
+                var channelUrl = document.getElementById('channel-audit-url').value.trim();
+
+                if (!channelUrl) {
+                    state.error = { message: 'Please enter a YouTube channel URL' };
+                    render();
+                    return;
+                }
+
+                state.channelAuditLoading = true;
+                state.error = null;
+                state.loadingProgress = 0;
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('auditChannel')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.channelAuditResults = result.data;
+                        state.channelAuditLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.channelAuditLoading = false;
+                        state.error = { message: 'Failed to audit channel: ' + e.message };
+                        render();
+                    });
+            },
+
+            copyAuditReport: function() {
+                if (!state.channelAuditResults) return;
+
+                var results = state.channelAuditResults;
+                var channel = results.channelInfo || {};
+                var audit = results.audit || {};
+                var scores = audit.scores || {};
+
+                var report = '📊 CHANNEL AUDIT REPORT\n';
+                report += '═══════════════════════════════════\n\n';
+                report += '🔗 Channel: ' + (channel.name || 'N/A') + '\n';
+                report += '👥 Subscribers: ' + (channel.subscribersFormatted || '0') + '\n';
+                report += '📹 Videos: ' + (channel.videoCount || '0') + '\n\n';
+                report += '📈 SCORES\n';
+                report += '──────────────────\n';
+                report += '• Overall: ' + (scores.overall || 0) + '/100\n';
+                report += '• SEO Health: ' + (scores.seo || 0) + '/100\n';
+                report += '• Content Quality: ' + (scores.content || 0) + '/100\n';
+                report += '• Engagement: ' + (scores.engagement || 0) + '/100\n';
+                report += '• Consistency: ' + (scores.consistency || 0) + '/100\n\n';
+
+                if (audit.strengths && audit.strengths.length > 0) {
+                    report += '💪 STRENGTHS\n';
+                    report += '──────────────────\n';
+                    audit.strengths.forEach(function(s) { report += '• ' + s + '\n'; });
+                    report += '\n';
+                }
+
+                if (audit.weaknesses && audit.weaknesses.length > 0) {
+                    report += '⚠️ AREAS FOR IMPROVEMENT\n';
+                    report += '──────────────────\n';
+                    audit.weaknesses.forEach(function(w) { report += '• ' + w + '\n'; });
+                    report += '\n';
+                }
+
+                if (audit.recommendations && audit.recommendations.length > 0) {
+                    report += '💡 RECOMMENDATIONS\n';
+                    report += '──────────────────\n';
+                    audit.recommendations.forEach(function(r) {
+                        report += '• [' + (r.priority || 'medium').toUpperCase() + '] ' + (r.title || r) + '\n';
+                    });
+                }
+
+                navigator.clipboard.writeText(report).then(function() {
+                    state.copySuccess = 'Audit report copied to clipboard!';
+                    render();
+                    setTimeout(function() { state.copySuccess = null; render(); }, 3000);
+                });
+            },
+
+            /* ------------------------------------------
+               4.5.9a Enterprise Features Actions
+               ------------------------------------------ */
+
+            // Bulk Video Optimizer
+            runBulkOptimization: function() {
+                if (!state.bulkVideoUrls || state.bulkVideoUrls.length === 0) {
+                    state.error = { message: 'Please add video URLs first' };
+                    render();
+                    return;
+                }
+
+                state.loading = true;
+                state.bulkProgress = 0;
+                state.bulkCurrentVideo = 0;
+                render();
+
+                functions.httpsCallable('bulkOptimize')({ videoUrls: state.bulkVideoUrls })
+                    .then(function(result) {
+                        state.bulkResults = result.data.results;
+                        state.loading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.loading = false;
+                        state.error = { message: 'Bulk optimization failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            // Viral Score Predictor
+            predictViralScore: function(e) {
+                e.preventDefault();
+                var input = document.getElementById('viral-input').value.trim();
+                var category = document.getElementById('viral-category').value;
+
+                if (!input) {
+                    state.error = { message: 'Please enter a video URL or topic' };
+                    render();
+                    return;
+                }
+
+                state.viralLoading = true;
+                state.error = null;
+                render();
+
+                functions.httpsCallable('predictViralScore')({ input: input, category: category })
+                    .then(function(result) {
+                        state.viralResults = result.data;
+                        state.viralLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.viralLoading = false;
+                        state.error = { message: 'Viral prediction failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            resetViralPredictor: function() {
+                state.viralResults = null;
+                state.viralLoading = false;
+                state.error = null;
+                render();
+            },
+
+            // Monetization Analyzer
+            analyzeMonetization: function(e) {
+                e.preventDefault();
+                var channelUrl = document.getElementById('monetization-channel').value.trim();
+
+                if (!channelUrl) {
+                    state.error = { message: 'Please enter a channel URL' };
+                    render();
+                    return;
+                }
+
+                state.monetizationLoading = true;
+                state.error = null;
+                render();
+
+                functions.httpsCallable('analyzeMonetization')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        state.monetizationResults = result.data;
+                        state.monetizationLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.monetizationLoading = false;
+                        state.error = { message: 'Monetization analysis failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            resetMonetization: function() {
+                state.monetizationResults = null;
+                state.monetizationLoading = false;
+                state.error = null;
+                render();
+            },
+
+            // Script Writer Pro
+            generateScript: function(e) {
+                e.preventDefault();
+                var topic = document.getElementById('script-topic').value.trim();
+                var scriptType = document.getElementById('script-type').value;
+                var duration = document.getElementById('script-duration').value;
+                var notes = document.getElementById('script-notes').value.trim();
+
+                if (!topic) {
+                    state.error = { message: 'Please enter a video topic' };
+                    render();
+                    return;
+                }
+
+                state.scriptLoading = true;
+                state.error = null;
+                render();
+
+                functions.httpsCallable('generateScript')({
+                    topic: topic,
+                    scriptType: scriptType,
+                    duration: parseInt(duration),
+                    notes: notes
+                })
+                    .then(function(result) {
+                        state.scriptResults = result.data;
+                        state.scriptLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.scriptLoading = false;
+                        state.error = { message: 'Script generation failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            copyScript: function() {
+                if (!state.scriptResults) return;
+
+                var script = '';
+                if (state.scriptResults.title) {
+                    script += '📝 ' + state.scriptResults.title + '\n\n';
+                }
+
+                var sections = state.scriptResults.sections || [];
+                sections.forEach(function(section) {
+                    script += '【' + section.title + '】\n';
+                    if (section.duration) script += '(' + section.duration + ')\n';
+                    script += section.content + '\n\n';
+                });
+
+                navigator.clipboard.writeText(script).then(function() {
+                    state.copySuccess = 'Script copied to clipboard!';
+                    render();
+                    setTimeout(function() { state.copySuccess = null; render(); }, 3000);
+                });
+            },
+
+            resetScriptWriter: function() {
+                state.scriptResults = null;
+                state.scriptLoading = false;
+                state.error = null;
+                render();
             },
 
             /* ------------------------------------------
@@ -4430,14 +5245,14 @@
             html += '<span>Generate</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
-            // Placement Finder Card (NEW)
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToPlacement()">';
+            // Channel Audit Pro Card (NEW)
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToChannelAudit()">';
             html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
-            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-500 to-violet-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🎬</div>';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Placement Finder</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Find YouTube channels for Google Ads placements</p>';
-            html += '<div class="flex items-center text-purple-600 font-bold group">';
-            html += '<span>Find Channels</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">📊</div>';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Channel Audit Pro</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Complete channel analysis: SEO, performance & strategy</p>';
+            html += '<div class="flex items-center text-emerald-600 font-bold group">';
+            html += '<span>Audit Channel</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
             // History Card
@@ -4450,6 +5265,23 @@
             html += '</div></div>';
 
             html += '</div>';
+
+            // Enterprise Suite Banner
+            html += '<div class="mt-8 fade-in">';
+            html += '<div class="relative bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-600 rounded-2xl shadow-2xl p-8 mobile-padding cursor-pointer hover:shadow-[0_20px_60px_rgba(255,215,0,0.3)] transition-all hover:scale-[1.02] overflow-hidden" onclick="app.goToEnterprise()">';
+            html += '<div class="absolute inset-0 bg-[url(\'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjEpIiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=\')] opacity-30"></div>';
+            html += '<div class="relative flex flex-col md:flex-row items-center gap-6">';
+            html += '<div class="text-6xl md:text-7xl animate-bounce">👑</div>';
+            html += '<div class="flex-1 text-center md:text-left">';
+            html += '<div class="flex items-center justify-center md:justify-start gap-3 mb-2">';
+            html += '<h3 class="text-2xl md:text-3xl font-bold text-white drop-shadow-lg">Enterprise Suite</h3>';
+            html += '<span class="pro-badge">PRO</span>';
+            html += '</div>';
+            html += '<p class="text-white/90 text-lg">Bulk Optimizer • Viral Predictor • Monetization Analyzer • Script Writer • Placement Finder</p>';
+            html += '</div>';
+            html += '<div class="text-white text-4xl hidden md:block">→</div>';
+            html += '</div>';
+            html += '</div></div>';
 
             // Admin Section (only for admins)
             if (state.isAdmin) {
@@ -5943,6 +6775,738 @@
         }
 
         /* ------------------------------------------
+           4.6.14a Channel Audit Pro View
+           ------------------------------------------ */
+        function renderChannelAudit() {
+            var html = '';
+            var results = state.channelAuditResults;
+
+            html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+
+            // Navigation
+            html += '<div class="flex flex-wrap gap-3 mb-6">';
+            html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
+            html += '</div>';
+
+            // Header
+            html += '<div class="text-center mb-8 fade-in">';
+            html += '<div class="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-4 shadow-xl">📊</div>';
+            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">Channel Audit Pro</h1>';
+            html += '<p class="text-white/80 text-lg">Complete channel analysis: SEO health, performance & content strategy</p>';
+            html += '</div>';
+
+            // Error Message
+            if (state.error) {
+                html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message || state.error) + '</div>';
+            }
+
+            // Loading State
+            if (state.channelAuditLoading) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding mb-6 fade-in">';
+                html += '<div class="flex flex-col items-center justify-center py-12">';
+                html += '<div class="loading-emoji mb-4">📊</div>';
+                html += '<h3 class="text-xl font-bold text-gray-800 mb-2">Auditing Your Channel</h3>';
+                html += '<p class="text-gray-500 mb-6">Analyzing SEO, performance, and content strategy...</p>';
+                html += '<div class="progress-bar-container w-64 mb-4"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
+                html += '<p class="text-sm text-gray-400">' + Math.round(state.loadingProgress) + '% complete</p>';
+                html += '</div></div>';
+            }
+
+            // Input Form (show when no results)
+            if (!results && !state.channelAuditLoading) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding fade-in">';
+                html += '<div class="max-w-xl mx-auto">';
+
+                html += '<div class="text-center mb-6">';
+                html += '<p class="text-gray-600 text-lg">Enter any YouTube channel URL to get a comprehensive audit including SEO health, content performance, and strategic recommendations.</p>';
+                html += '</div>';
+
+                html += '<form onsubmit="app.runChannelAudit(event)">';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">YouTube Channel URL</label>';
+                html += '<input type="text" id="channel-audit-url" placeholder="https://youtube.com/@channel or youtube.com/channel/..." class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-lg" required />';
+                html += '<p class="text-sm text-gray-500 mt-2">Supports: @handle, /channel/ID, /c/name formats</p>';
+                html += '</div>';
+
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl text-lg">';
+                html += '📊 Start Channel Audit';
+                html += '</button>';
+                html += '</form>';
+
+                // What You Get Section
+                html += '<div class="mt-8 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 rounded-xl">';
+                html += '<h4 class="font-semibold text-gray-800 mb-4">📋 What You\'ll Get:</h4>';
+                html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">';
+                html += '<div class="flex items-center gap-2 text-sm text-gray-600"><span class="text-emerald-500">✓</span> SEO Health Score</div>';
+                html += '<div class="flex items-center gap-2 text-sm text-gray-600"><span class="text-emerald-500">✓</span> Content Performance Analysis</div>';
+                html += '<div class="flex items-center gap-2 text-sm text-gray-600"><span class="text-emerald-500">✓</span> Upload Consistency Rating</div>';
+                html += '<div class="flex items-center gap-2 text-sm text-gray-600"><span class="text-emerald-500">✓</span> Engagement Metrics</div>';
+                html += '<div class="flex items-center gap-2 text-sm text-gray-600"><span class="text-emerald-500">✓</span> Thumbnail Quality Check</div>';
+                html += '<div class="flex items-center gap-2 text-sm text-gray-600"><span class="text-emerald-500">✓</span> Strategic Recommendations</div>';
+                html += '<div class="flex items-center gap-2 text-sm text-gray-600"><span class="text-emerald-500">✓</span> Competitor Comparison</div>';
+                html += '<div class="flex items-center gap-2 text-sm text-gray-600"><span class="text-emerald-500">✓</span> Growth Opportunities</div>';
+                html += '</div>';
+                html += '</div>';
+
+                html += '</div></div>';
+            }
+
+            // Results Section
+            if (results) {
+                var channel = results.channelInfo || {};
+                var audit = results.audit || {};
+                var scores = audit.scores || {};
+
+                // Channel Info Header
+                html += '<div class="bg-white/10 backdrop-blur rounded-2xl p-5 mb-6 fade-in">';
+                html += '<div class="flex flex-wrap items-center gap-4">';
+                if (channel.thumbnail) {
+                    html += '<img src="' + utils.escapeHtml(channel.thumbnail) + '" class="w-20 h-20 object-cover rounded-full border-4 border-white/20" />';
+                }
+                html += '<div class="flex-1 min-w-[200px]">';
+                html += '<p class="text-white font-bold text-xl">' + utils.escapeHtml(channel.name || 'Channel') + '</p>';
+                html += '<p class="text-white/70">' + utils.escapeHtml(channel.subscribersFormatted || '0') + ' subscribers • ' + utils.escapeHtml(channel.videoCount || '0') + ' videos</p>';
+                html += '</div>';
+                html += '<div class="text-center">';
+                html += '<div class="text-4xl font-bold text-white">' + (scores.overall || 0) + '</div>';
+                html += '<div class="text-white/60 text-sm">Overall Score</div>';
+                html += '</div>';
+                html += '</div></div>';
+
+                // Score Cards Grid
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">';
+                var scoreCards = [
+                    { label: 'SEO Health', score: scores.seo || 0, icon: '🔍', color: 'emerald' },
+                    { label: 'Content Quality', score: scores.content || 0, icon: '📹', color: 'blue' },
+                    { label: 'Engagement', score: scores.engagement || 0, icon: '💬', color: 'purple' },
+                    { label: 'Consistency', score: scores.consistency || 0, icon: '📅', color: 'orange' }
+                ];
+                for (var sc = 0; sc < scoreCards.length; sc++) {
+                    var card = scoreCards[sc];
+                    var scoreColor = card.score >= 80 ? 'text-green-500' : card.score >= 50 ? 'text-yellow-500' : 'text-red-500';
+                    html += '<div class="bg-white rounded-2xl shadow-lg p-4 text-center">';
+                    html += '<div class="text-3xl mb-2">' + card.icon + '</div>';
+                    html += '<div class="text-2xl font-bold ' + scoreColor + '">' + card.score + '</div>';
+                    html += '<div class="text-gray-500 text-sm">' + card.label + '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                // Analysis Details
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 fade-in">';
+
+                // Strengths
+                if (audit.strengths && audit.strengths.length > 0) {
+                    html += '<div class="mb-6">';
+                    html += '<h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><span>💪</span> Strengths</h3>';
+                    html += '<div class="space-y-2">';
+                    for (var s = 0; s < audit.strengths.length; s++) {
+                        html += '<div class="flex items-start gap-3 p-3 bg-green-50 rounded-lg">';
+                        html += '<span class="text-green-500 text-lg">✓</span>';
+                        html += '<p class="text-gray-700">' + utils.escapeHtml(audit.strengths[s]) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div></div>';
+                }
+
+                // Weaknesses
+                if (audit.weaknesses && audit.weaknesses.length > 0) {
+                    html += '<div class="mb-6">';
+                    html += '<h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><span>⚠️</span> Areas for Improvement</h3>';
+                    html += '<div class="space-y-2">';
+                    for (var w = 0; w < audit.weaknesses.length; w++) {
+                        html += '<div class="flex items-start gap-3 p-3 bg-yellow-50 rounded-lg">';
+                        html += '<span class="text-yellow-500 text-lg">!</span>';
+                        html += '<p class="text-gray-700">' + utils.escapeHtml(audit.weaknesses[w]) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div></div>';
+                }
+
+                // Recommendations
+                if (audit.recommendations && audit.recommendations.length > 0) {
+                    html += '<div class="mb-6">';
+                    html += '<h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><span>💡</span> Strategic Recommendations</h3>';
+                    html += '<div class="space-y-3">';
+                    for (var r = 0; r < audit.recommendations.length; r++) {
+                        var rec = audit.recommendations[r];
+                        var priority = rec.priority || 'medium';
+                        var priorityColor = priority === 'high' ? 'border-red-500 bg-red-50' : priority === 'medium' ? 'border-yellow-500 bg-yellow-50' : 'border-green-500 bg-green-50';
+                        html += '<div class="recommendation-card ' + priorityColor + ' border-l-4 p-4 rounded-r-lg">';
+                        html += '<div class="flex items-center justify-between mb-2">';
+                        html += '<span class="font-semibold text-gray-800">' + utils.escapeHtml(rec.title || rec) + '</span>';
+                        html += '<span class="text-xs font-bold uppercase px-2 py-1 rounded ' + (priority === 'high' ? 'bg-red-100 text-red-700' : priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') + '">' + priority + '</span>';
+                        html += '</div>';
+                        if (rec.description) {
+                            html += '<p class="text-gray-600 text-sm">' + utils.escapeHtml(rec.description) + '</p>';
+                        }
+                        html += '</div>';
+                    }
+                    html += '</div></div>';
+                }
+
+                // Actions
+                html += '<div class="flex flex-wrap gap-3 pt-4 border-t border-gray-100">';
+                html += '<button onclick="app.goToChannelAudit()" class="btn-secondary">🔄 New Audit</button>';
+                html += '<button onclick="app.copyAuditReport()" class="btn-secondary">📋 Copy Report</button>';
+                html += '</div>';
+
+                html += '</div>';
+            }
+
+            html += '</div></div>';
+            return html;
+        }
+
+        /* ------------------------------------------
+           4.6.14b Enterprise Suite View
+           ------------------------------------------ */
+        function renderEnterprise() {
+            var html = '';
+            var plan = (state.profile && state.profile.subscription && state.profile.subscription.plan) || 'free';
+            var hasAccess = plan === 'pro' || plan === 'enterprise';
+            var tab = state.enterpriseTab || 'bulk-optimizer';
+
+            html += '<div class="min-h-screen enterprise-bg py-8 px-4">';
+            html += '<div class="max-w-6xl mx-auto relative">';
+
+            // Navigation
+            html += '<div class="flex flex-wrap gap-3 mb-6">';
+            html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
+            html += '</div>';
+
+            // Hero Section with Gold 3D Graphics
+            html += '<div class="enterprise-hero fade-in">';
+            html += '<div class="enterprise-crown text-7xl mb-4">👑</div>';
+            html += '<h1 class="text-4xl lg:text-5xl font-bold gold-text-3d mb-4">Enterprise Suite</h1>';
+            html += '<p class="text-white/80 text-xl max-w-2xl mx-auto mb-6">Premium AI tools for serious YouTube creators and agencies</p>';
+
+            // Stats Bar
+            html += '<div class="enterprise-stats">';
+            html += '<div class="enterprise-stat"><div class="enterprise-stat-value">5</div><div class="enterprise-stat-label">Pro Tools</div></div>';
+            html += '<div class="enterprise-stat"><div class="enterprise-stat-value">∞</div><div class="enterprise-stat-label">Videos</div></div>';
+            html += '<div class="enterprise-stat"><div class="enterprise-stat-value">AI</div><div class="enterprise-stat-label">Powered</div></div>';
+            html += '</div>';
+
+            if (!hasAccess) {
+                html += '<div class="mt-6 inline-block px-6 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 font-bold rounded-xl">';
+                html += '🔒 Upgrade to PRO to unlock all features';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Enterprise Tabs
+            html += '<div class="enterprise-tabs">';
+            var tabs = [
+                { id: 'bulk-optimizer', label: '🎯 Bulk Optimizer', icon: '🎯' },
+                { id: 'placement-finder', label: '🎬 Placements', icon: '🎬' },
+                { id: 'viral-predictor', label: '🔮 Viral Score', icon: '🔮' },
+                { id: 'monetization', label: '💰 Monetization', icon: '💰' },
+                { id: 'script-writer', label: '📝 Script Writer', icon: '📝' }
+            ];
+            for (var t = 0; t < tabs.length; t++) {
+                var isActive = tab === tabs[t].id;
+                html += '<button onclick="app.setEnterpriseTab(\'' + tabs[t].id + '\')" class="enterprise-tab' + (isActive ? ' active' : '') + '">' + tabs[t].label + '</button>';
+            }
+            html += '</div>';
+
+            // Tab Content
+            html += '<div class="fade-in">';
+
+            // Bulk Video Optimizer Tab
+            if (tab === 'bulk-optimizer') {
+                html += renderBulkOptimizerTab(hasAccess);
+            }
+
+            // Placement Finder Tab
+            if (tab === 'placement-finder') {
+                html += renderPlacementFinderTab(hasAccess);
+            }
+
+            // Viral Score Predictor Tab
+            if (tab === 'viral-predictor') {
+                html += renderViralPredictorTab(hasAccess);
+            }
+
+            // Monetization Analyzer Tab
+            if (tab === 'monetization') {
+                html += renderMonetizationTab(hasAccess);
+            }
+
+            // Script Writer Pro Tab
+            if (tab === 'script-writer') {
+                html += renderScriptWriterTab(hasAccess);
+            }
+
+            html += '</div>';
+
+            html += '</div></div>';
+            return html;
+        }
+
+        // Bulk Video Optimizer Tab Content
+        function renderBulkOptimizerTab(hasAccess) {
+            var html = '';
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">🎯</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Bulk Video Optimizer</h2>';
+            html += '<p class="text-white/60">Optimize multiple videos at once with AI</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Input Mode Toggle
+            html += '<div class="input-toggle">';
+            html += '<button onclick="app.setBulkInputMode(\'paste\')" class="input-toggle-btn' + (state.bulkInputMode === 'paste' ? ' active' : '') + '">📝 Paste Links</button>';
+            html += '<button onclick="app.setBulkInputMode(\'csv\')" class="input-toggle-btn' + (state.bulkInputMode === 'csv' ? ' active' : '') + '">📄 Upload CSV</button>';
+            html += '</div>';
+
+            if (state.bulkInputMode === 'paste') {
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white/80 font-medium mb-2">Paste YouTube Video URLs (one per line)</label>';
+                html += '<textarea id="bulk-urls-input" onkeyup="app.parseBulkUrls()" rows="6" placeholder="https://youtube.com/watch?v=abc123&#10;https://youtube.com/watch?v=def456&#10;https://youtu.be/ghi789" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none"></textarea>';
+                html += '</div>';
+            } else {
+                html += '<div class="mb-6">';
+                html += '<div class="upload-zone bg-white/5 border-dashed border-2 border-white/20 hover:border-amber-500 p-8 rounded-xl text-center cursor-pointer" onclick="document.getElementById(\'bulk-csv-input\').click()">';
+                html += '<input type="file" id="bulk-csv-input" accept=".csv,.txt" style="display:none" onchange="app.handleBulkCsvUpload(event)" />';
+                html += '<div class="text-4xl mb-3">📄</div>';
+                html += '<p class="text-white font-medium">Drop CSV file here or click to browse</p>';
+                html += '<p class="text-white/50 text-sm mt-2">CSV should have YouTube URLs in first column</p>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Video URLs List
+            if (state.bulkVideoUrls && state.bulkVideoUrls.length > 0) {
+                html += '<div class="mb-6 p-4 bg-white/5 rounded-xl">';
+                html += '<div class="flex items-center justify-between mb-3">';
+                html += '<span class="text-white font-medium">' + state.bulkVideoUrls.length + ' videos detected</span>';
+                html += '<button onclick="app.clearBulkUrls()" class="text-red-400 hover:text-red-300 text-sm">Clear All</button>';
+                html += '</div>';
+                html += '<div class="max-h-40 overflow-y-auto space-y-1">';
+                for (var u = 0; u < Math.min(state.bulkVideoUrls.length, 10); u++) {
+                    html += '<div class="text-white/60 text-sm truncate">• ' + utils.escapeHtml(state.bulkVideoUrls[u]) + '</div>';
+                }
+                if (state.bulkVideoUrls.length > 10) {
+                    html += '<div class="text-white/40 text-sm">... and ' + (state.bulkVideoUrls.length - 10) + ' more</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+
+                html += '<button onclick="app.runBulkOptimization()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 font-bold rounded-xl hover:from-amber-600 hover:to-yellow-600 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '🚀 Optimize ' + state.bulkVideoUrls.length + ' Videos';
+                html += '</button>';
+            }
+
+            // Progress / Results
+            if (state.bulkResults) {
+                html += '<div class="mt-6 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">';
+                html += '<div class="flex items-center gap-3 text-green-400">';
+                html += '<span class="text-2xl">✓</span>';
+                html += '<div>';
+                html += '<p class="font-semibold">Optimization Complete!</p>';
+                html += '<p class="text-sm opacity-70">' + state.bulkResults.length + ' videos optimized successfully</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Placement Finder Tab Content (moved from main dashboard)
+        function renderPlacementFinderTab(hasAccess) {
+            var html = '';
+            var results = state.placementResults;
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">🎬</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Placement Finder</h2>';
+            html += '<p class="text-white/60">Find YouTube channels for Google Ads placements</p>';
+            html += '</div>';
+            html += '</div>';
+
+            if (!results && !state.loading) {
+                html += '<form onsubmit="app.findPlacements(event)">';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white/80 font-medium mb-2">Your YouTube Channel URL</label>';
+                html += '<input type="text" id="placement-channel-url" placeholder="https://youtube.com/@yourchannel" class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none" required />';
+                html += '</div>';
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-purple-500 to-violet-600 text-white font-bold rounded-xl hover:from-purple-600 hover:to-violet-700 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '🔍 Find Placement Channels';
+                html += '</button>';
+                html += '</form>';
+            }
+
+            // Loading State
+            if (state.loading && !results) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji text-5xl mb-4">🎬</div>';
+                html += '<p class="text-white font-medium">Finding placement channels...</p>';
+                html += '<div class="progress-bar-container w-48 mx-auto mt-4"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
+                html += '</div>';
+            }
+
+            // Results
+            if (results && results.placements) {
+                html += '<div class="mb-4 flex items-center justify-between">';
+                html += '<span class="text-green-400 font-semibold">✓ ' + results.placements.length + ' channels found</span>';
+                html += '<button onclick="app.copyAllPlacements()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium">📋 Copy All</button>';
+                html += '</div>';
+                html += '<div class="max-h-64 overflow-y-auto space-y-2">';
+                for (var p = 0; p < Math.min(results.placements.length, 15); p++) {
+                    var pl = results.placements[p];
+                    html += '<div class="flex items-center justify-between p-3 bg-white/5 rounded-lg">';
+                    html += '<div class="flex items-center gap-3">';
+                    if (pl.thumbnail) {
+                        html += '<img src="' + utils.escapeHtml(pl.thumbnail) + '" class="w-10 h-10 rounded-full" />';
+                    }
+                    html += '<div>';
+                    html += '<p class="text-white font-medium">' + utils.escapeHtml(pl.channelName) + '</p>';
+                    html += '<p class="text-white/50 text-sm">' + utils.escapeHtml(pl.subscribersFormatted) + '</p>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '<a href="' + utils.escapeHtml(pl.channelUrl) + '" target="_blank" class="text-purple-400 hover:text-purple-300">🔗</a>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '<button onclick="app.goToPlacement()" class="mt-4 w-full py-3 border border-white/20 text-white rounded-xl hover:bg-white/5">🔍 New Search</button>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Viral Score Predictor Tab Content
+        function renderViralPredictorTab(hasAccess) {
+            var html = '';
+            var results = state.viralResults;
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">🔮</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Viral Score Predictor</h2>';
+            html += '<p class="text-white/60">Predict viral potential & get recommendations to go viral</p>';
+            html += '</div>';
+            html += '</div>';
+
+            if (!results && !state.viralLoading) {
+                html += '<form onsubmit="app.predictViralScore(event)">';
+                html += '<div class="mb-4">';
+                html += '<label class="block text-white/80 font-medium mb-2">Video URL or Topic</label>';
+                html += '<input type="text" id="viral-input" placeholder="Paste video URL or describe your video topic" class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none" required />';
+                html += '</div>';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white/80 font-medium mb-2">Category (Optional)</label>';
+                html += '<select id="viral-category" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:border-amber-500 focus:outline-none">';
+                html += '<option value="">Auto-detect</option>';
+                html += '<option value="gaming">Gaming</option>';
+                html += '<option value="education">Education</option>';
+                html += '<option value="entertainment">Entertainment</option>';
+                html += '<option value="music">Music</option>';
+                html += '<option value="tech">Tech</option>';
+                html += '<option value="lifestyle">Lifestyle</option>';
+                html += '</select>';
+                html += '</div>';
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white font-bold rounded-xl hover:from-fuchsia-600 hover:to-purple-700 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '🔮 Predict Viral Potential';
+                html += '</button>';
+                html += '</form>';
+            }
+
+            // Loading
+            if (state.viralLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji text-5xl mb-4">🔮</div>';
+                html += '<p class="text-white font-medium">Analyzing viral potential...</p>';
+                html += '</div>';
+            }
+
+            // Results
+            if (results) {
+                var viralScore = results.viralScore || 0;
+                var viralColor = viralScore >= 80 ? '#22c55e' : viralScore >= 50 ? '#eab308' : '#ef4444';
+
+                html += '<div class="text-center mb-6">';
+                html += '<div class="text-6xl font-bold mb-2" style="color: ' + viralColor + '">' + viralScore + '%</div>';
+                html += '<p class="text-white/70 text-lg">Viral Potential Score</p>';
+                html += '<div class="viral-meter mt-4"><div class="viral-meter-indicator" style="left: ' + viralScore + '%">🔥</div></div>';
+                html += '</div>';
+
+                // Viral Tips
+                if (results.tips && results.tips.length > 0) {
+                    html += '<div class="mb-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🚀 How to Make It Viral:</h3>';
+                    html += '<div class="space-y-3">';
+                    for (var vt = 0; vt < results.tips.length; vt++) {
+                        var tip = results.tips[vt];
+                        html += '<div class="p-4 bg-white/5 rounded-xl border border-white/10">';
+                        html += '<div class="flex items-start gap-3">';
+                        html += '<span class="text-2xl">' + (tip.icon || '💡') + '</span>';
+                        html += '<div>';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(tip.title) + '</p>';
+                        html += '<p class="text-white/60 text-sm mt-1">' + utils.escapeHtml(tip.description) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Trending Elements to Include
+                if (results.trendingElements && results.trendingElements.length > 0) {
+                    html += '<div class="mb-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-3">📈 Trending Elements to Include:</h3>';
+                    html += '<div class="flex flex-wrap gap-2">';
+                    for (var te = 0; te < results.trendingElements.length; te++) {
+                        html += '<span class="px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-300 text-sm">' + utils.escapeHtml(results.trendingElements[te]) + '</span>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '<button onclick="app.resetViralPredictor()" class="mt-4 w-full py-3 border border-white/20 text-white rounded-xl hover:bg-white/5">🔮 New Prediction</button>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Monetization Analyzer Tab Content
+        function renderMonetizationTab(hasAccess) {
+            var html = '';
+            var results = state.monetizationResults;
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">💰</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Monetization Analyzer</h2>';
+            html += '<p class="text-white/60">Estimate earnings & discover monetization opportunities</p>';
+            html += '</div>';
+            html += '</div>';
+
+            if (!results && !state.monetizationLoading) {
+                html += '<form onsubmit="app.analyzeMonetization(event)">';
+                html += '<div class="mb-4">';
+                html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL</label>';
+                html += '<input type="text" id="monetization-channel" placeholder="https://youtube.com/@channel" class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none" required />';
+                html += '</div>';
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '💰 Analyze Monetization';
+                html += '</button>';
+                html += '</form>';
+            }
+
+            // Loading
+            if (state.monetizationLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji text-5xl mb-4">💰</div>';
+                html += '<p class="text-white font-medium">Analyzing monetization potential...</p>';
+                html += '</div>';
+            }
+
+            // Results
+            if (results) {
+                // Revenue Gauge
+                html += '<div class="flex justify-center mb-6">';
+                html += '<div class="monetization-ring">';
+                var circumference = 2 * Math.PI * 70;
+                var offset = circumference - (results.revenueScore / 100) * circumference;
+                html += '<svg width="180" height="180">';
+                html += '<circle class="monetization-ring-bg" cx="90" cy="90" r="70"/>';
+                html += '<circle class="monetization-ring-fill" cx="90" cy="90" r="70" stroke="#22c55e" stroke-dasharray="' + circumference + '" stroke-dashoffset="' + offset + '"/>';
+                html += '</svg>';
+                html += '<div class="monetization-value">';
+                html += '<div class="monetization-amount">$' + (results.estimatedMonthly || '0') + '</div>';
+                html += '<div class="monetization-label">Est. Monthly</div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Revenue Breakdown
+                html += '<div class="grid grid-cols-2 gap-4 mb-6">';
+                var revenueCards = [
+                    { label: 'AdSense', value: '$' + (results.adsense || '0'), icon: '📺' },
+                    { label: 'Sponsors', value: '$' + (results.sponsors || '0'), icon: '🤝' },
+                    { label: 'Memberships', value: '$' + (results.memberships || '0'), icon: '⭐' },
+                    { label: 'Super Chats', value: '$' + (results.superChats || '0'), icon: '💬' }
+                ];
+                for (var rc = 0; rc < revenueCards.length; rc++) {
+                    html += '<div class="p-4 bg-white/5 rounded-xl text-center">';
+                    html += '<div class="text-2xl mb-1">' + revenueCards[rc].icon + '</div>';
+                    html += '<div class="text-xl font-bold text-green-400">' + revenueCards[rc].value + '</div>';
+                    html += '<div class="text-white/50 text-sm">' + revenueCards[rc].label + '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                // Opportunities
+                if (results.opportunities && results.opportunities.length > 0) {
+                    html += '<div class="mb-4">';
+                    html += '<h3 class="text-lg font-bold text-white mb-3">💡 Monetization Opportunities:</h3>';
+                    html += '<div class="space-y-2">';
+                    for (var mo = 0; mo < results.opportunities.length; mo++) {
+                        html += '<div class="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">';
+                        html += '<span class="text-green-400">$</span>';
+                        html += '<p class="text-white/80">' + utils.escapeHtml(results.opportunities[mo]) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '<button onclick="app.resetMonetization()" class="mt-4 w-full py-3 border border-white/20 text-white rounded-xl hover:bg-white/5">💰 New Analysis</button>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Script Writer Pro Tab Content
+        function renderScriptWriterTab(hasAccess) {
+            var html = '';
+            var results = state.scriptResults;
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">📝</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Script Writer Pro</h2>';
+            html += '<p class="text-white/60">AI-powered video scripts with hooks, structure & CTAs</p>';
+            html += '</div>';
+            html += '</div>';
+
+            if (!results && !state.scriptLoading) {
+                html += '<form onsubmit="app.generateScript(event)">';
+                html += '<div class="mb-4">';
+                html += '<label class="block text-white/80 font-medium mb-2">Video Topic</label>';
+                html += '<input type="text" id="script-topic" placeholder="e.g., How to start a YouTube channel in 2024" class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none" required />';
+                html += '</div>';
+                html += '<div class="grid grid-cols-2 gap-4 mb-4">';
+                html += '<div>';
+                html += '<label class="block text-white/80 font-medium mb-2">Script Type</label>';
+                html += '<select id="script-type" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:border-amber-500 focus:outline-none">';
+                html += '<option value="tutorial">Tutorial</option>';
+                html += '<option value="review">Product Review</option>';
+                html += '<option value="vlog">Vlog</option>';
+                html += '<option value="listicle">Top 10/Listicle</option>';
+                html += '<option value="explainer">Explainer</option>';
+                html += '<option value="story">Story/Documentary</option>';
+                html += '</select>';
+                html += '</div>';
+                html += '<div>';
+                html += '<label class="block text-white/80 font-medium mb-2">Duration (min)</label>';
+                html += '<select id="script-duration" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:border-amber-500 focus:outline-none">';
+                html += '<option value="3">Short (3 min)</option>';
+                html += '<option value="5">Medium (5 min)</option>';
+                html += '<option value="10" selected>Standard (10 min)</option>';
+                html += '<option value="15">Long (15 min)</option>';
+                html += '<option value="20">Extended (20+ min)</option>';
+                html += '</select>';
+                html += '</div>';
+                html += '</div>';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white/80 font-medium mb-2">Additional Notes (Optional)</label>';
+                html += '<textarea id="script-notes" rows="2" placeholder="Any specific points to cover, tone preferences, etc." class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none"></textarea>';
+                html += '</div>';
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '📝 Generate Script';
+                html += '</button>';
+                html += '</form>';
+            }
+
+            // Loading
+            if (state.scriptLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji text-5xl mb-4">📝</div>';
+                html += '<p class="text-white font-medium">Writing your script...</p>';
+                html += '<p class="text-white/50 text-sm mt-2">This may take a minute for longer scripts</p>';
+                html += '</div>';
+            }
+
+            // Results
+            if (results) {
+                html += '<div class="mb-4 flex items-center justify-between">';
+                html += '<span class="text-white font-medium">' + utils.escapeHtml(results.title || 'Your Script') + '</span>';
+                html += '<button onclick="app.copyScript()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium">📋 Copy Script</button>';
+                html += '</div>';
+
+                // Script Sections
+                var sections = results.sections || [];
+                for (var ss = 0; ss < sections.length; ss++) {
+                    var section = sections[ss];
+                    html += '<div class="script-section">';
+                    html += '<div class="script-section-header">';
+                    html += '<span class="text-xl">' + (section.icon || '📍') + '</span>';
+                    html += '<span>' + utils.escapeHtml(section.title) + '</span>';
+                    if (section.duration) {
+                        html += '<span class="ml-auto text-white/40 text-sm">' + section.duration + '</span>';
+                    }
+                    html += '</div>';
+                    html += '<div class="script-content">' + utils.escapeHtml(section.content).replace(/\n/g, '<br>') + '</div>';
+                    html += '</div>';
+                }
+
+                html += '<button onclick="app.resetScriptWriter()" class="mt-4 w-full py-3 border border-white/20 text-white rounded-xl hover:bg-white/5">📝 New Script</button>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        /* ------------------------------------------
            4.6.14 Admin Reports View (Campaign Reports Manager)
            ------------------------------------------ */
         function renderAdminReports() {
@@ -6857,6 +8421,12 @@
                     break;
                 case 'view-report':
                     html = renderViewReport();
+                    break;
+                case 'channel-audit':
+                    html = renderChannelAudit();
+                    break;
+                case 'enterprise':
+                    html = renderEnterprise();
                     break;
                 default:
                     html = '<div class="view-container view-centered"><div class="spinner"></div></div>';
