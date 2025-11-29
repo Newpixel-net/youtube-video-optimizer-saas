@@ -912,8 +912,11 @@
            ========================================== */
 
         const state = {
-            // Current view: login | register | forgot-password | dashboard | optimizer | results | history | admin | competitor | trends | thumbnail
-            currentView: 'login',
+            // Current view: initializing | login | register | forgot-password | dashboard | optimizer | results | history | admin | competitor | trends | thumbnail
+            currentView: 'initializing',
+
+            // App initialization state
+            initializing: true,
 
             // User data
             user: null,
@@ -1186,6 +1189,9 @@
 
         // Auth state listener
         auth.onAuthStateChanged(async function(user) {
+            var wasInitializing = state.initializing;
+            state.initializing = false;
+
             if (user) {
                 state.user = user;
                 try {
@@ -1197,12 +1203,14 @@
                     state.isAdmin = state.profile.isAdmin === true;
                     // Start countdown timer if on dashboard
                     startCountdownTimer();
-                    if (state.currentView === 'login' || state.currentView === 'register') {
+                    // Redirect to dashboard if coming from initializing, login, or register
+                    if (wasInitializing || state.currentView === 'login' || state.currentView === 'register' || state.currentView === 'initializing') {
                         state.currentView = 'dashboard';
-                        render();
                     }
+                    render();
                 } catch (e) {
                     state.error = 'Failed to load profile';
+                    state.currentView = 'login';
                     render();
                 }
             } else {
@@ -1247,10 +1255,27 @@
                 render();
             },
 
-            goToDashboard: function() {
+            goToDashboard: function(skipRefresh) {
                 state.currentView = 'dashboard';
                 state.error = null;
                 render();
+
+                // Refresh profile data unless explicitly skipped
+                if (!skipRefresh && state.user) {
+                    functions.httpsCallable('getUserProfile')()
+                        .then(function(result) {
+                            state.profile = result.data.profile;
+                            state.quotaInfo = result.data.quotaInfo || null;
+                            state.resetTimeMinutes = result.data.resetTimeMinutes || 1440;
+                            state.isAdmin = state.profile.isAdmin === true;
+                            startCountdownTimer();
+                            render();
+                        })
+                        .catch(function(e) {
+                            // Silently fail - keep showing cached data
+                            console.warn('Failed to refresh profile:', e);
+                        });
+                }
             },
 
             goToOptimizer: function() {
@@ -2240,6 +2265,21 @@
         /* ==========================================
            4.6 RENDER FUNCTIONS (Views)
            ========================================== */
+
+        /* ------------------------------------------
+           4.6.0 Initializing View (Loading Screen)
+           ------------------------------------------ */
+        function renderInitializing() {
+            var html = '';
+            html += '<div class="min-h-screen flex items-center justify-center">';
+            html += '<div class="text-center fade-in">';
+            html += '<div class="text-7xl mb-6">🎬</div>';
+            html += '<div class="spinner mx-auto mb-4"></div>';
+            html += '<p class="text-white/80 text-lg">Loading...</p>';
+            html += '</div>';
+            html += '</div>';
+            return html;
+        }
 
         /* ------------------------------------------
            4.6.1 Login View
@@ -3911,6 +3951,9 @@
 
             // Route to correct view
             switch (state.currentView) {
+                case 'initializing':
+                    html = renderInitializing();
+                    break;
                 case 'login':
                     html = renderLogin();
                     break;
