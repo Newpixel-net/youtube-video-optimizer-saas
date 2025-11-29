@@ -1178,15 +1178,21 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
 
 exports.getHistory = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { limit = 20, offset = 0 } = data;
-  
+  checkRateLimit(uid, 'getHistory', 20);
+
+  const { limit = 20, offset = 0 } = data || {};
+
+  // SECURITY: Bound limit and offset to prevent resource exhaustion
+  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 20), 100);
+  const safeOffset = Math.max(0, parseInt(offset) || 0);
+
   const snapshot = await db.collection('optimizations')
     .where('userId', '==', uid)
     .orderBy('createdAt', 'desc')
-    .limit(limit)
-    .offset(offset)
+    .limit(safeLimit)
+    .offset(safeOffset)
     .get();
-  
+
   const history = [];
   snapshot.forEach(doc => {
     history.push({
@@ -1195,7 +1201,7 @@ exports.getHistory = functions.https.onCall(async (data, context) => {
       createdAt: doc.data().createdAt?.toDate().toISOString()
     });
   });
-  
+
   return { success: true, history, count: history.length };
 });
 
