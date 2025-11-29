@@ -38,11 +38,11 @@ const subscriptionPlans = [
         cooldownHours: 12
       },
       competitorAnalysis: {
-        dailyLimit: 2,
+        dailyLimit: 1,
         cooldownHours: 0
       },
       trendPredictor: {
-        dailyLimit: 2,
+        dailyLimit: 1,
         cooldownHours: 0
       },
       thumbnailGenerator: {
@@ -52,8 +52,8 @@ const subscriptionPlans = [
     },
     features: [
       '2 Warp optimizations per day',
-      '2 Competitor analyses per day',
-      '2 Trend predictions per day',
+      '1 Competitor analyses per day',
+      '1 Trend predictions per day',
       '2 AI thumbnails per day',
       'Basic support'
     ],
@@ -72,27 +72,27 @@ const subscriptionPlans = [
     },
     limits: {
       warpOptimizer: {
-        dailyLimit: 5,
+        dailyLimit: 3,
         cooldownHours: 6
       },
       competitorAnalysis: {
-        dailyLimit: 5,
+        dailyLimit: 2,
         cooldownHours: 0
       },
       trendPredictor: {
-        dailyLimit: 5,
+        dailyLimit: 2,
         cooldownHours: 0
       },
       thumbnailGenerator: {
-        dailyLimit: 5,
+        dailyLimit: 2,
         cooldownHours: 0
       }
     },
     features: [
-      '5 Warp optimizations per day',
-      '5 Competitor analyses per day',
-      '5 Trend predictions per day',
-      '5 AI thumbnails per day',
+      '3 Warp optimizations per day',
+      '2 Competitor analyses per day',
+      '2 Trend predictions per day',
+      '2 AI thumbnails per day',
       'History saved 30 days',
       'Priority support'
     ],
@@ -115,23 +115,23 @@ const subscriptionPlans = [
         cooldownHours: 2
       },
       competitorAnalysis: {
-        dailyLimit: 20,
+        dailyLimit: 10,
         cooldownHours: 0
       },
       trendPredictor: {
-        dailyLimit: 20,
+        dailyLimit: 10,
         cooldownHours: 0
       },
       thumbnailGenerator: {
-        dailyLimit: 20,
+        dailyLimit: 10,
         cooldownHours: 0
       }
     },
     features: [
       '20 Warp optimizations per day',
-      '20 Competitor analyses per day',
-      '20 Trend predictions per day',
-      '20 AI thumbnails per day',
+      '10 Competitor analyses per day',
+      '10 Trend predictions per day',
+      '10 AI thumbnails per day',
       'Unlimited history',
       '24/7 priority support',
       'API access'
@@ -195,7 +195,7 @@ const adminSettings = {
   trialDuration: 7,
   trialPlan: 'lite',
   notifications: {
-    newUserEmail: 'admin@example.com', // Change this to your email
+    newUserEmail: 'newpixel.net1@gmail.com', // Change this to your email
     alertOnHighUsage: true
   },
   features: {
