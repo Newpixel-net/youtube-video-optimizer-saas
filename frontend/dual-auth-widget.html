@@ -2201,7 +2201,7 @@
             }
 
             const p = state.profile;
-            const plan = p.subscription.plan;
+            const plan = (p.subscription && p.subscription.plan) || 'free';
             const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
 
             var html = '';
@@ -2234,8 +2234,8 @@
 
             for (var i = 0; i < tools.length; i++) {
                 var tool = tools[i];
-                // Fallback for existing users who don't have new tool keys yet
-                var usage = p.usage[tool.key] || { usedToday: 0, limit: 2, lastResetAt: new Date().toISOString() };
+                // Fallback for existing users who don't have new tool keys yet (also handle if p.usage is missing)
+                var usage = (p.usage && p.usage[tool.key]) || { usedToday: 0, limit: 2, lastResetAt: new Date().toISOString() };
                 // Get quota info with bonus uses if available
                 var quotaData = state.quotaInfo && state.quotaInfo[tool.key] ? state.quotaInfo[tool.key] : null;
                 var totalLimit = quotaData ? quotaData.totalLimit : (usage.limit || 2);
@@ -2253,6 +2253,9 @@
                         lastResetTime = lastResetTime.seconds * 1000;
                     } else if (typeof lastResetTime === 'object' && lastResetTime._seconds) {
                         lastResetTime = lastResetTime._seconds * 1000;
+                    } else if (typeof lastResetTime === 'string') {
+                        // Handle ISO string dates
+                        lastResetTime = new Date(lastResetTime).getTime();
                     }
                     var resetIntervalMs = (state.resetTimeMinutes || 1440) * 60 * 1000;
                     nextResetMs = lastResetTime + resetIntervalMs;
