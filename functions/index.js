@@ -182,9 +182,29 @@ async function checkUsageLimit(uid, toolType) {
     throw new functions.https.HttpsError('not-found', 'User not found');
   }
 
-  const usage = user.usage?.[toolType];
+  let usage = user.usage?.[toolType];
+
+  // Auto-create usage data for new tools if missing (for existing users)
   if (!usage) {
-    throw new functions.https.HttpsError('not-found', 'Usage data not found for tool: ' + toolType);
+    const defaultLimit = 2; // Free plan default
+    const newUsageData = {
+      usedToday: 0,
+      limit: defaultLimit,
+      lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+      cooldownUntil: null
+    };
+
+    // Create the missing tool usage in Firestore
+    await db.collection('users').doc(uid).update({
+      [`usage.${toolType}`]: newUsageData
+    });
+
+    // Use default values for this request (serverTimestamp won't be resolved yet)
+    usage = {
+      usedToday: 0,
+      limit: defaultLimit,
+      lastResetAt: admin.firestore.Timestamp.now()
+    };
   }
 
   const now = admin.firestore.Timestamp.now();
@@ -334,8 +354,11 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
     const settingsDoc = await db.collection('adminSettings').doc('config').get();
     const defaultPlan = settingsDoc.data()?.defaultPlan || 'free';
     const planDoc = await db.collection('subscriptionPlans').doc(defaultPlan).get();
-    const planLimits = planDoc.data().limits;
-    
+    const planLimits = planDoc.data()?.limits || {};
+
+    // Default limits for each tool (fallback if plan doesn't have new tool keys)
+    const defaultToolLimit = 2;
+
     await db.collection('users').doc(user.uid).set({
       uid: user.uid,
       email: user.email,
@@ -355,25 +378,25 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       usage: {
         warpOptimizer: {
           usedToday: 0,
-          limit: planLimits.warpOptimizer.dailyLimit,
+          limit: planLimits.warpOptimizer?.dailyLimit || defaultToolLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
         competitorAnalysis: {
           usedToday: 0,
-          limit: planLimits.competitorAnalysis.dailyLimit,
+          limit: planLimits.competitorAnalysis?.dailyLimit || defaultToolLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
         trendPredictor: {
           usedToday: 0,
-          limit: planLimits.trendPredictor.dailyLimit,
+          limit: planLimits.trendPredictor?.dailyLimit || defaultToolLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
         thumbnailGenerator: {
           usedToday: 0,
-          limit: planLimits.thumbnailGenerator.dailyLimit,
+          limit: planLimits.thumbnailGenerator?.dailyLimit || defaultToolLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         }
@@ -1146,10 +1169,19 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
     const resetIntervalMs = 24 * 60 * 60 * 1000; // 24 hours in ms
     const now = Date.now();
 
+    // Ensure userData.usage has all tool keys (for existing users with old structure)
+    if (!userData.usage) {
+      userData.usage = {};
+    }
+
     for (const tool of tools) {
-      const usage = userData.usage?.[tool] || { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() };
+      // Add default usage data for missing tools
+      if (!userData.usage[tool]) {
+        userData.usage[tool] = { usedToday: 0, limit: 2, lastResetAt: new Date().toISOString() };
+      }
+      const usage = userData.usage[tool];
       const bonusUses = userData.bonusUses?.[tool] || 0;
-      const baseLimit = usage.limit || 3;
+      const baseLimit = usage.limit || 2;
       const totalLimit = baseLimit + bonusUses;
 
       // Calculate next reset time
@@ -1280,18 +1312,20 @@ exports.adminUpdateUserPlan = functions.https.onCall(async (data, context) => {
     const planDoc = await db.collection('subscriptionPlans').doc(targetPlan).get();
     if (!planDoc.exists) throw new functions.https.HttpsError('invalid-argument', 'Invalid plan: ' + targetPlan);
 
-    const planLimits = planDoc.data().limits;
+    const planLimits = planDoc.data()?.limits || {};
+    const defaultToolLimit = 2;
+
     await db.collection('users').doc(userId).update({
       'subscription.plan': targetPlan,
       'subscription.startDate': admin.firestore.FieldValue.serverTimestamp(),
-      'usage.warpOptimizer.limit': planLimits.warpOptimizer.dailyLimit,
+      'usage.warpOptimizer.limit': planLimits.warpOptimizer?.dailyLimit || defaultToolLimit,
       'usage.warpOptimizer.usedToday': 0,
       'usage.warpOptimizer.cooldownUntil': null,
-      'usage.competitorAnalysis.limit': planLimits.competitorAnalysis.dailyLimit,
+      'usage.competitorAnalysis.limit': planLimits.competitorAnalysis?.dailyLimit || defaultToolLimit,
       'usage.competitorAnalysis.usedToday': 0,
-      'usage.trendPredictor.limit': planLimits.trendPredictor.dailyLimit,
+      'usage.trendPredictor.limit': planLimits.trendPredictor?.dailyLimit || defaultToolLimit,
       'usage.trendPredictor.usedToday': 0,
-      'usage.thumbnailGenerator.limit': planLimits.thumbnailGenerator.dailyLimit,
+      'usage.thumbnailGenerator.limit': planLimits.thumbnailGenerator?.dailyLimit || defaultToolLimit,
       'usage.thumbnailGenerator.usedToday': 0
     });
 
@@ -2140,12 +2174,8 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
       const defaultPlan = settingsDoc.exists ? settingsDoc.data()?.defaultPlan || 'free' : 'free';
       
       const planDoc = await db.collection('subscriptionPlans').doc(defaultPlan).get();
-      const planLimits = planDoc.exists ? planDoc.data().limits : {
-        warpOptimizer: { dailyLimit: 5 },
-        competitorAnalysis: { dailyLimit: 5 },
-        trendPredictor: { dailyLimit: 5 },
-        thumbnailGenerator: { dailyLimit: 5 }
-      };
+      const planLimits = planDoc.exists ? (planDoc.data()?.limits || {}) : {};
+      const defaultToolLimit = 2;
 
       await db.collection('users').doc(userId).set({
         uid: userId,
@@ -2167,28 +2197,28 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
           warpOptimizer: {
             usedToday: 0,
             usedTotal: 0,
-            limit: planLimits.warpOptimizer.dailyLimit,
+            limit: planLimits.warpOptimizer?.dailyLimit || defaultToolLimit,
             lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
             cooldownUntil: null
           },
           competitorAnalysis: {
             usedToday: 0,
             usedTotal: 0,
-            limit: planLimits.competitorAnalysis.dailyLimit,
+            limit: planLimits.competitorAnalysis?.dailyLimit || defaultToolLimit,
             lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
             cooldownUntil: null
           },
           trendPredictor: {
             usedToday: 0,
             usedTotal: 0,
-            limit: planLimits.trendPredictor.dailyLimit,
+            limit: planLimits.trendPredictor?.dailyLimit || defaultToolLimit,
             lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
             cooldownUntil: null
           },
           thumbnailGenerator: {
             usedToday: 0,
             usedTotal: 0,
-            limit: planLimits.thumbnailGenerator.dailyLimit,
+            limit: planLimits.thumbnailGenerator?.dailyLimit || defaultToolLimit,
             lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
             cooldownUntil: null
           }
@@ -2214,39 +2244,35 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
       needsUpdate = true;
 
       const planDoc = await db.collection('subscriptionPlans').doc(userData.subscription?.plan || 'free').get();
-      const planLimits = planDoc.exists ? planDoc.data().limits : {
-        warpOptimizer: { dailyLimit: 5 },
-        competitorAnalysis: { dailyLimit: 5 },
-        trendPredictor: { dailyLimit: 5 },
-        thumbnailGenerator: { dailyLimit: 5 }
-      };
+      const planLimits = planDoc.exists ? (planDoc.data()?.limits || {}) : {};
+      const defaultToolLimit = 2;
 
       updates.usage = {
         warpOptimizer: {
           usedToday: 0,
           usedTotal: 0,
-          limit: planLimits.warpOptimizer.dailyLimit,
+          limit: planLimits.warpOptimizer?.dailyLimit || defaultToolLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
         competitorAnalysis: {
           usedToday: 0,
           usedTotal: 0,
-          limit: planLimits.competitorAnalysis.dailyLimit,
+          limit: planLimits.competitorAnalysis?.dailyLimit || defaultToolLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
         trendPredictor: {
           usedToday: 0,
           usedTotal: 0,
-          limit: planLimits.trendPredictor.dailyLimit,
+          limit: planLimits.trendPredictor?.dailyLimit || defaultToolLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
         thumbnailGenerator: {
           usedToday: 0,
           usedTotal: 0,
-          limit: planLimits.thumbnailGenerator.dailyLimit,
+          limit: planLimits.thumbnailGenerator?.dailyLimit || defaultToolLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         }
