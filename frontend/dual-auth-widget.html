@@ -492,25 +492,25 @@
             width: 100%;
         }
 
-        /* Desktop-optimized widths - balanced sizing (reduced 10%) */
+        /* Desktop-optimized widths - expanded for better space utilization */
         @media (min-width: 1024px) {
             .max-w-6xl {
-                max-width: 88% !important;
+                max-width: 94% !important;
                 padding-left: 1.5rem;
                 padding-right: 1.5rem;
             }
             .max-w-4xl {
-                max-width: 72% !important;
+                max-width: 80% !important;
                 min-width: 700px;
             }
         }
 
         @media (min-width: 1280px) {
             .max-w-6xl {
-                max-width: 86% !important;
+                max-width: 92% !important;
             }
             .max-w-4xl {
-                max-width: 68% !important;
+                max-width: 76% !important;
                 min-width: 800px;
             }
             .view-container {
@@ -520,10 +520,10 @@
 
         @media (min-width: 1536px) {
             .max-w-6xl {
-                max-width: 84% !important;
+                max-width: 90% !important;
             }
             .max-w-4xl {
-                max-width: 62% !important;
+                max-width: 72% !important;
                 min-width: 900px;
             }
             .view-container {
@@ -533,10 +533,12 @@
 
         @media (min-width: 1920px) {
             .max-w-6xl {
-                max-width: 82% !important;
+                max-width: 88% !important;
+                max-width: min(88%, 1800px) !important;
             }
             .max-w-4xl {
-                max-width: 58% !important;
+                max-width: 68% !important;
+                max-width: min(68%, 1200px) !important;
                 min-width: 1000px;
             }
             .view-container {
