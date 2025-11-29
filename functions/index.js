@@ -2418,21 +2418,33 @@ Provide your analysis in this EXACT JSON format:
     await incrementUsage(uid, 'competitorAnalysis');
     await logUsage(uid, 'competitor_analysis', { videoId, competitorChannel: snippet.channelTitle });
 
+    const competitorData = {
+      videoId,
+      title: snippet.title,
+      channelTitle: snippet.channelTitle,
+      channelId: snippet.channelId,
+      thumbnail: snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url,
+      viewCount: parseInt(stats.viewCount || 0),
+      likeCount: parseInt(stats.likeCount || 0),
+      commentCount: parseInt(stats.commentCount || 0),
+      publishedAt: snippet.publishedAt,
+      tags: snippet.tags || [],
+      channelSubscribers: channel?.statistics?.subscriberCount ? parseInt(channel.statistics.subscriberCount) : null
+    };
+
+    // Save to history
+    const historyRef = await db.collection('competitorHistory').add({
+      userId: uid,
+      videoUrl,
+      competitor: competitorData,
+      analysis,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
     return {
       success: true,
-      competitor: {
-        videoId,
-        title: snippet.title,
-        channelTitle: snippet.channelTitle,
-        channelId: snippet.channelId,
-        thumbnail: snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url,
-        viewCount: parseInt(stats.viewCount || 0),
-        likeCount: parseInt(stats.likeCount || 0),
-        commentCount: parseInt(stats.commentCount || 0),
-        publishedAt: snippet.publishedAt,
-        tags: snippet.tags || [],
-        channelSubscribers: channel?.statistics?.subscriberCount ? parseInt(channel.statistics.subscriberCount) : null
-      },
+      historyId: historyRef.id,
+      competitor: competitorData,
       analysis
     };
 
@@ -2547,8 +2559,20 @@ Analyze patterns and predict what will trend next. Provide in this EXACT JSON fo
     await incrementUsage(uid, 'trendPredictor');
     await logUsage(uid, 'trend_prediction', { niche, country });
 
+    // Save to history
+    const historyRef = await db.collection('trendHistory').add({
+      userId: uid,
+      niche,
+      country,
+      analyzedVideos: trendData.length,
+      topPerformers: trendData.slice(0, 5),
+      predictions,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
     return {
       success: true,
+      historyId: historyRef.id,
       niche,
       country,
       analyzedVideos: trendData.length,
@@ -2718,8 +2742,23 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     await incrementUsage(uid, 'thumbnailGenerator');
     await logUsage(uid, 'thumbnail_generation', { title, jobId, fileName });
 
+    // Save to history
+    const historyRef = await db.collection('thumbnailHistory').add({
+      userId: uid,
+      title,
+      style: style || 'youtube_thumbnail',
+      customPrompt: customPrompt || null,
+      prompt: imagePrompt,
+      jobId,
+      status,
+      imageUrl: publicUrl,
+      fileName,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
     return {
       success: true,
+      historyId: historyRef.id,
       jobId,
       status,
       prompt: imagePrompt,
@@ -2774,5 +2813,275 @@ exports.checkThumbnailStatus = functions.https.onCall(async (data, context) => {
   } catch (error) {
     console.error('Check thumbnail status error:', error);
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check thumbnail status. Please try again.'));
+  }
+});
+
+// ==============================================
+// HISTORY RETRIEVAL & MANAGEMENT FUNCTIONS
+// ==============================================
+
+// Get Competitor Analysis History
+exports.getCompetitorHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getCompetitorHistory', 20);
+
+  const { limit = 20, offset = 0 } = data || {};
+  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 20), 50);
+  const safeOffset = Math.max(0, parseInt(offset) || 0);
+
+  try {
+    const snapshot = await db.collection('competitorHistory')
+      .where('userId', '==', uid)
+      .orderBy('createdAt', 'desc')
+      .limit(safeLimit)
+      .offset(safeOffset)
+      .get();
+
+    const history = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      history.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate().toISOString()
+      });
+    });
+
+    return { success: true, history, count: history.length };
+  } catch (error) {
+    console.error('Get competitor history error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to load history.');
+  }
+});
+
+// Get Trend Predictor History
+exports.getTrendHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getTrendHistory', 20);
+
+  const { limit = 20, offset = 0 } = data || {};
+  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 20), 50);
+  const safeOffset = Math.max(0, parseInt(offset) || 0);
+
+  try {
+    const snapshot = await db.collection('trendHistory')
+      .where('userId', '==', uid)
+      .orderBy('createdAt', 'desc')
+      .limit(safeLimit)
+      .offset(safeOffset)
+      .get();
+
+    const history = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      history.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate().toISOString()
+      });
+    });
+
+    return { success: true, history, count: history.length };
+  } catch (error) {
+    console.error('Get trend history error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to load history.');
+  }
+});
+
+// Get Thumbnail History
+exports.getThumbnailHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getThumbnailHistory', 20);
+
+  const { limit = 20, offset = 0 } = data || {};
+  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 20), 50);
+  const safeOffset = Math.max(0, parseInt(offset) || 0);
+
+  try {
+    const snapshot = await db.collection('thumbnailHistory')
+      .where('userId', '==', uid)
+      .orderBy('createdAt', 'desc')
+      .limit(safeLimit)
+      .offset(safeOffset)
+      .get();
+
+    const history = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      history.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate().toISOString()
+      });
+    });
+
+    return { success: true, history, count: history.length };
+  } catch (error) {
+    console.error('Get thumbnail history error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to load history.');
+  }
+});
+
+// Delete Competitor Analysis
+exports.deleteCompetitorAnalysis = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  const { id } = data || {};
+  if (!id) {
+    throw new functions.https.HttpsError('invalid-argument', 'History ID is required');
+  }
+
+  try {
+    const doc = await db.collection('competitorHistory').doc(id).get();
+    if (!doc.exists || doc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized to delete this item');
+    }
+
+    await db.collection('competitorHistory').doc(id).delete();
+    return { success: true, message: 'Analysis deleted successfully' };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Delete competitor analysis error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to delete analysis.');
+  }
+});
+
+// Delete Trend Prediction
+exports.deleteTrendPrediction = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  const { id } = data || {};
+  if (!id) {
+    throw new functions.https.HttpsError('invalid-argument', 'History ID is required');
+  }
+
+  try {
+    const doc = await db.collection('trendHistory').doc(id).get();
+    if (!doc.exists || doc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized to delete this item');
+    }
+
+    await db.collection('trendHistory').doc(id).delete();
+    return { success: true, message: 'Prediction deleted successfully' };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Delete trend prediction error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to delete prediction.');
+  }
+});
+
+// Delete Thumbnail (also deletes from Storage)
+exports.deleteThumbnail = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  const { id } = data || {};
+  if (!id) {
+    throw new functions.https.HttpsError('invalid-argument', 'History ID is required');
+  }
+
+  try {
+    const doc = await db.collection('thumbnailHistory').doc(id).get();
+    if (!doc.exists || doc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized to delete this item');
+    }
+
+    const thumbnailData = doc.data();
+
+    // Delete from Firebase Storage if file exists
+    if (thumbnailData.fileName) {
+      try {
+        const bucket = admin.storage().bucket();
+        await bucket.file(thumbnailData.fileName).delete();
+      } catch (storageError) {
+        console.log('Storage file may not exist or already deleted:', storageError.message);
+      }
+    }
+
+    await db.collection('thumbnailHistory').doc(id).delete();
+    return { success: true, message: 'Thumbnail deleted successfully' };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Delete thumbnail error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to delete thumbnail.');
+  }
+});
+
+// Get All History (Unified View)
+exports.getAllHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getAllHistory', 10);
+
+  const { limit = 10 } = data || {};
+  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 20);
+
+  try {
+    // Fetch from all history collections in parallel
+    const [optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap] = await Promise.all([
+      db.collection('optimizations')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get(),
+      db.collection('competitorHistory')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get(),
+      db.collection('trendHistory')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get(),
+      db.collection('thumbnailHistory')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get()
+    ]);
+
+    const formatHistory = (snap, type) => {
+      const items = [];
+      snap.forEach(doc => {
+        const data = doc.data();
+        items.push({
+          id: doc.id,
+          type,
+          ...data,
+          createdAt: data.createdAt?.toDate().toISOString(),
+          timestamp: data.createdAt?.toMillis() || Date.now()
+        });
+      });
+      return items;
+    };
+
+    const allHistory = [
+      ...formatHistory(optimizationsSnap, 'optimization'),
+      ...formatHistory(competitorSnap, 'competitor'),
+      ...formatHistory(trendSnap, 'trend'),
+      ...formatHistory(thumbnailSnap, 'thumbnail')
+    ];
+
+    // Sort by timestamp descending
+    allHistory.sort((a, b) => b.timestamp - a.timestamp);
+
+    return {
+      success: true,
+      history: {
+        all: allHistory.slice(0, safeLimit * 2),
+        optimizations: formatHistory(optimizationsSnap, 'optimization'),
+        competitor: formatHistory(competitorSnap, 'competitor'),
+        trends: formatHistory(trendSnap, 'trend'),
+        thumbnails: formatHistory(thumbnailSnap, 'thumbnail')
+      },
+      counts: {
+        optimizations: optimizationsSnap.size,
+        competitor: competitorSnap.size,
+        trends: trendSnap.size,
+        thumbnails: thumbnailSnap.size
+      }
+    };
+  } catch (error) {
+    console.error('Get all history error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to load history.');
   }
 });

@@ -676,26 +676,6 @@
                 transform: scale(1.3);
             }
 
-            /* Hide swipe container on desktop */
-            @media (min-width: 640px) {
-                .mobile-swipe-container {
-                    display: none !important;
-                }
-                .mobile-swipe-dots {
-                    display: none !important;
-                }
-                .desktop-usage-grid {
-                    display: grid !important;
-                }
-            }
-
-            /* Show swipe container only on mobile */
-            @media (max-width: 639px) {
-                .desktop-usage-grid {
-                    display: none !important;
-                }
-            }
-
             .mobile-gap-4 {
                 gap: 1rem !important;
             }
@@ -758,6 +738,30 @@
             /* Full width buttons on mobile */
             .btn-secondary {
                 width: 100%;
+            }
+
+            /* Hide desktop grid on mobile, show swipe container */
+            .desktop-usage-grid {
+                display: none !important;
+            }
+            .mobile-swipe-container {
+                display: flex !important;
+            }
+            .mobile-swipe-dots {
+                display: flex !important;
+            }
+        }
+
+        /* Desktop: Hide swipe container, show grid (outside mobile media query) */
+        @media (min-width: 769px) {
+            .mobile-swipe-container {
+                display: none !important;
+            }
+            .mobile-swipe-dots {
+                display: none !important;
+            }
+            .desktop-usage-grid {
+                display: grid !important;
             }
         }
 
@@ -940,6 +944,12 @@
 
             // History/Admin data
             historyData: null,       // List of past optimizations
+            historyTab: 'all',       // Current history tab: 'all', 'optimization', 'competitor', 'trend', 'thumbnail'
+            allHistory: null,        // Combined history from all types
+            competitorHistory: null, // Competitor analysis history
+            trendHistory: null,      // Trend predictor history
+            thumbnailHistory: null,  // Thumbnail history
+            historyCounts: null,     // Counts for each history type
             adminUsers: null,        // Admin user list
             adminLoading: false,
 
@@ -1255,16 +1265,29 @@
                 render();
             },
 
-            goToHistory: function() {
+            goToHistory: function(tab) {
                 state.currentView = 'history';
                 state.error = null;
                 state.loading = true;
+                state.historyTab = tab || 'all';
+                state.allHistory = null;
+                state.historyData = null;
+                state.competitorHistory = null;
+                state.trendHistory = null;
+                state.thumbnailHistory = null;
+                state.historyCounts = null;
                 render();
 
-                // Fetch history from backend
-                functions.httpsCallable('getOptimizationHistory')()
+                // Fetch all history from backend
+                functions.httpsCallable('getAllHistory')({ limit: 20 })
                     .then(function(result) {
-                        state.historyData = result.data.history || [];
+                        var data = result.data;
+                        state.allHistory = data.history.all || [];
+                        state.historyData = data.history.optimizations || [];
+                        state.competitorHistory = data.history.competitor || [];
+                        state.trendHistory = data.history.trends || [];
+                        state.thumbnailHistory = data.history.thumbnails || [];
+                        state.historyCounts = data.counts || {};
                         state.loading = false;
                         render();
                     })
@@ -1273,6 +1296,11 @@
                         state.error = 'Failed to load history';
                         render();
                     });
+            },
+
+            setHistoryTab: function(tab) {
+                state.historyTab = tab;
+                render();
             },
 
             goToCompetitor: function() {
@@ -1688,13 +1716,122 @@
                 }
             },
 
-            viewHistoryItem: function(index) {
-                if (state.historyData && state.historyData[index]) {
-                    state.currentResults = state.historyData[index];
-                    state.lastOptimization = state.historyData[index]; // For thumbnail generator
+            viewHistoryItem: function(index, id) {
+                var item = null;
+                if (id) {
+                    // Find by ID (from "all" tab)
+                    item = (state.allHistory || []).find(function(h) { return h.id === id && h.type === 'optimization'; });
+                    if (!item) item = (state.historyData || []).find(function(h) { return h.id === id; });
+                } else if (state.historyData && state.historyData[index]) {
+                    item = state.historyData[index];
+                }
+                if (item) {
+                    state.currentResults = item;
+                    state.lastOptimization = item; // For thumbnail generator
                     state.currentView = 'results';
                     render();
                 }
+            },
+
+            viewCompetitorHistory: function(index, id) {
+                var item = null;
+                if (id) {
+                    item = (state.allHistory || []).find(function(h) { return h.id === id && h.type === 'competitor'; });
+                    if (!item) item = (state.competitorHistory || []).find(function(h) { return h.id === id; });
+                } else if (state.competitorHistory && state.competitorHistory[index]) {
+                    item = state.competitorHistory[index];
+                }
+                if (item) {
+                    state.competitorResults = item;
+                    state.currentView = 'competitor';
+                    render();
+                }
+            },
+
+            viewTrendHistory: function(index, id) {
+                var item = null;
+                if (id) {
+                    item = (state.allHistory || []).find(function(h) { return h.id === id && h.type === 'trend'; });
+                    if (!item) item = (state.trendHistory || []).find(function(h) { return h.id === id; });
+                } else if (state.trendHistory && state.trendHistory[index]) {
+                    item = state.trendHistory[index];
+                }
+                if (item) {
+                    state.trendResults = item;
+                    state.currentView = 'trends';
+                    render();
+                }
+            },
+
+            viewThumbnailHistory: function(index, id) {
+                var item = null;
+                if (id) {
+                    item = (state.allHistory || []).find(function(h) { return h.id === id && h.type === 'thumbnail'; });
+                    if (!item) item = (state.thumbnailHistory || []).find(function(h) { return h.id === id; });
+                } else if (state.thumbnailHistory && state.thumbnailHistory[index]) {
+                    item = state.thumbnailHistory[index];
+                }
+                if (item) {
+                    state.thumbnailImage = item.imageUrl;
+                    state.thumbnailJob = { id: item.jobId };
+                    state.thumbnailStatus = item.status;
+                    state.currentView = 'thumbnail';
+                    render();
+                }
+            },
+
+            deleteHistoryItem: function(type, id, index) {
+                if (!confirm('Are you sure you want to delete this item?')) return;
+
+                var functionName;
+                switch(type) {
+                    case 'optimization': functionName = 'deleteOptimization'; break;
+                    case 'competitor': functionName = 'deleteCompetitorAnalysis'; break;
+                    case 'trend': functionName = 'deleteTrendPrediction'; break;
+                    case 'thumbnail': functionName = 'deleteThumbnail'; break;
+                    default: return;
+                }
+
+                state.loading = true;
+                render();
+
+                functions.httpsCallable(functionName)({ id: id })
+                    .then(function(result) {
+                        // Remove from local state
+                        switch(type) {
+                            case 'optimization':
+                                state.historyData.splice(index, 1);
+                                state.historyCounts.optimizations--;
+                                break;
+                            case 'competitor':
+                                state.competitorHistory.splice(index, 1);
+                                state.historyCounts.competitor--;
+                                break;
+                            case 'trend':
+                                state.trendHistory.splice(index, 1);
+                                state.historyCounts.trends--;
+                                break;
+                            case 'thumbnail':
+                                state.thumbnailHistory.splice(index, 1);
+                                state.historyCounts.thumbnails--;
+                                break;
+                        }
+                        // Also remove from allHistory
+                        if (state.allHistory) {
+                            state.allHistory = state.allHistory.filter(function(item) {
+                                return item.id !== id;
+                            });
+                        }
+                        state.loading = false;
+                        state.success = 'Item deleted successfully';
+                        render();
+                        setTimeout(function() { state.success = null; render(); }, 3000);
+                    })
+                    .catch(function(e) {
+                        state.loading = false;
+                        state.error = 'Failed to delete: ' + e.message;
+                        render();
+                    });
             },
 
             toggleErrorDetails: function() {
@@ -2597,8 +2734,11 @@
             html += '<div class="min-h-screen mobile-full-screen py-12 px-4">';
             html += '<div class="max-w-4xl mx-auto">';
 
-            // Back button
-            html += '<button onclick="app.goToDashboard()" class="mb-6 px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30">← Back</button>';
+            // Navigation buttons
+            html += '<div class="flex flex-wrap gap-3 mb-6">';
+            html += '<button onclick="app.goToDashboard()" class="px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30">← Back</button>';
+            html += '<button onclick="app.goToHistory(\'optimization\')" class="px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30">📜 View History</button>';
+            html += '</div>';
 
             // Card
             html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding fade-in">';
@@ -2897,6 +3037,7 @@
            ------------------------------------------ */
         function renderHistory() {
             var html = '';
+            var counts = state.historyCounts || {};
 
             // Container
             html += '<div class="min-h-screen mobile-full-screen py-6 px-4">';
@@ -2904,9 +3045,16 @@
 
             // Header
             html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 fade-in">';
-            html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">📜 Optimization History</h1>';
+            html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">📜 Activity History</h1>';
             html += '<button onclick="app.goToDashboard()" class="btn-secondary w-full sm:w-auto">← Back to Dashboard</button>';
             html += '</div>';
+
+            // Success message
+            if (state.success) {
+                html += '<div class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg fade-in">';
+                html += '<p>' + utils.escapeHtml(state.success) + '</p>';
+                html += '</div>';
+            }
 
             // Loading state
             if (state.loading) {
@@ -2922,52 +3070,179 @@
                 html += '<button onclick="app.goToHistory()" class="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Try Again</button>';
                 html += '</div>';
             }
-            // Empty state
-            else if (!state.historyData || state.historyData.length === 0) {
-                html += '<div class="bg-white rounded-2xl shadow-xl p-12 mobile-padding text-center fade-in">';
-                html += '<div class="text-6xl mb-4">📭</div>';
-                html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-2">No Optimizations Yet</h2>';
-                html += '<p class="text-gray-600 mb-6">Start optimizing videos to see your history here!</p>';
-                html += '<button onclick="app.goToOptimizer()" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700">🚀 Start Optimizing</button>';
-                html += '</div>';
-            }
-            // History list
             else {
-                html += '<div class="space-y-4 fade-in">';
+                // Tab Navigation
+                html += '<div class="bg-white rounded-xl shadow-lg mb-6 fade-in overflow-hidden">';
+                html += '<div class="flex flex-wrap border-b border-gray-200">';
 
-                for (var i = 0; i < state.historyData.length; i++) {
-                    var item = state.historyData[i];
-                    var timestamp = item.timestamp || item.createdAt;
-                    var dateInfo = utils.formatDate(timestamp);
+                var tabs = [
+                    { id: 'all', label: 'All', icon: '📋', count: (counts.optimizations || 0) + (counts.competitor || 0) + (counts.trends || 0) + (counts.thumbnails || 0) },
+                    { id: 'optimization', label: 'Video', icon: '🎬', count: counts.optimizations || 0 },
+                    { id: 'competitor', label: 'Competitor', icon: '🔍', count: counts.competitor || 0 },
+                    { id: 'trend', label: 'Trends', icon: '📈', count: counts.trends || 0 },
+                    { id: 'thumbnail', label: 'Thumbnails', icon: '🎨', count: counts.thumbnails || 0 }
+                ];
 
-                    html += '<div class="bg-white rounded-xl shadow-lg p-6 mobile-padding hover:shadow-xl transition-all">';
-                    html += '<div class="flex flex-col sm:flex-row justify-between items-start gap-4">';
-
-                    // Info section
-                    html += '<div class="flex-1">';
-                    html += '<h3 class="font-bold text-lg text-gray-800 mb-2">' + utils.escapeHtml(item.videoInfo && item.videoInfo.title ? item.videoInfo.title : 'Video Optimization') + '</h3>';
-                    html += '<div class="flex flex-wrap gap-4 text-sm text-gray-600">';
-                    html += '<span>📅 ' + dateInfo.date + '</span>';
-                    html += '<span>🕐 ' + dateInfo.time + '</span>';
-                    if (item.videoInfo && item.videoInfo.channelTitle) {
-                        html += '<span>📺 ' + utils.escapeHtml(item.videoInfo.channelTitle) + '</span>';
+                for (var t = 0; t < tabs.length; t++) {
+                    var tab = tabs[t];
+                    var isActive = state.historyTab === tab.id;
+                    var tabClass = isActive
+                        ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50'
+                        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50';
+                    html += '<button onclick="app.setHistoryTab(\'' + tab.id + '\')" class="flex-1 min-w-0 px-3 py-3 text-sm font-medium ' + tabClass + ' transition-colors">';
+                    html += '<span class="hidden sm:inline">' + tab.icon + ' </span>' + tab.label;
+                    if (tab.count > 0) {
+                        html += ' <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full ' + (isActive ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700') + '">' + tab.count + '</span>';
                     }
-                    html += '</div>';
+                    html += '</button>';
+                }
+                html += '</div></div>';
 
-                    if (item.titles && item.titles.length > 0) {
-                        html += '<p class="mt-2 text-sm text-gray-700"><strong>Best Title:</strong> ' + utils.escapeHtml(item.titles[0]) + '</p>';
-                    }
-                    html += '</div>';
+                // Get items based on current tab
+                var items = [];
+                var itemType = state.historyTab;
 
-                    // Action buttons
-                    html += '<div class="flex gap-2">';
-                    html += '<button onclick="app.viewHistoryItem(' + i + ')" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 whitespace-nowrap">👁️ View</button>';
-                    html += '</div>';
-
-                    html += '</div></div>';
+                if (state.historyTab === 'all') {
+                    items = state.allHistory || [];
+                } else if (state.historyTab === 'optimization') {
+                    items = state.historyData || [];
+                } else if (state.historyTab === 'competitor') {
+                    items = state.competitorHistory || [];
+                } else if (state.historyTab === 'trend') {
+                    items = state.trendHistory || [];
+                } else if (state.historyTab === 'thumbnail') {
+                    items = state.thumbnailHistory || [];
                 }
 
-                html += '</div>';
+                // Empty state for current tab
+                if (!items || items.length === 0) {
+                    html += '<div class="bg-white rounded-2xl shadow-xl p-12 mobile-padding text-center fade-in">';
+                    html += '<div class="text-6xl mb-4">📭</div>';
+                    html += '<h2 class="text-2xl mobile-text-lg font-bold text-gray-800 mb-2">No History Yet</h2>';
+                    html += '<p class="text-gray-600 mb-6">Start using tools to see your history here!</p>';
+                    html += '<button onclick="app.goToDashboard()" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700">🚀 Go to Dashboard</button>';
+                    html += '</div>';
+                }
+                // History list
+                else {
+                    html += '<div class="space-y-4 fade-in">';
+
+                    for (var i = 0; i < items.length; i++) {
+                        var item = items[i];
+                        var type = state.historyTab === 'all' ? item.type : state.historyTab;
+                        var timestamp = item.timestamp || item.createdAt;
+                        var dateInfo = utils.formatDate(timestamp);
+
+                        html += '<div class="bg-white rounded-xl shadow-lg p-6 mobile-padding hover:shadow-xl transition-all">';
+                        html += '<div class="flex flex-col sm:flex-row justify-between items-start gap-4">';
+
+                        // Type badge
+                        var typeBadge = '';
+                        var typeIcon = '';
+                        var typeColor = '';
+                        switch(type) {
+                            case 'optimization':
+                                typeIcon = '🎬';
+                                typeBadge = 'Video Optimization';
+                                typeColor = 'bg-blue-100 text-blue-800';
+                                break;
+                            case 'competitor':
+                                typeIcon = '🔍';
+                                typeBadge = 'Competitor Analysis';
+                                typeColor = 'bg-purple-100 text-purple-800';
+                                break;
+                            case 'trend':
+                                typeIcon = '📈';
+                                typeBadge = 'Trend Prediction';
+                                typeColor = 'bg-green-100 text-green-800';
+                                break;
+                            case 'thumbnail':
+                                typeIcon = '🎨';
+                                typeBadge = 'Thumbnail';
+                                typeColor = 'bg-orange-100 text-orange-800';
+                                break;
+                        }
+
+                        // Info section
+                        html += '<div class="flex-1">';
+
+                        // Type badge (only show in "all" tab)
+                        if (state.historyTab === 'all') {
+                            html += '<span class="inline-block px-2 py-1 text-xs font-semibold rounded-full ' + typeColor + ' mb-2">' + typeIcon + ' ' + typeBadge + '</span>';
+                        }
+
+                        // Title based on type
+                        var title = '';
+                        var subtitle = '';
+                        switch(type) {
+                            case 'optimization':
+                                title = (item.videoInfo && item.videoInfo.title) ? item.videoInfo.title : 'Video Optimization';
+                                if (item.titles && item.titles.length > 0) {
+                                    subtitle = '<strong>Best Title:</strong> ' + utils.escapeHtml(item.titles[0]);
+                                }
+                                break;
+                            case 'competitor':
+                                title = (item.competitor && item.competitor.title) ? item.competitor.title : 'Competitor Analysis';
+                                if (item.competitor && item.competitor.channelTitle) {
+                                    subtitle = '<strong>Channel:</strong> ' + utils.escapeHtml(item.competitor.channelTitle);
+                                }
+                                break;
+                            case 'trend':
+                                title = item.niche ? 'Trends: ' + item.niche : 'Trend Analysis';
+                                subtitle = '<strong>Country:</strong> ' + (item.country || 'US') + ' | <strong>Videos Analyzed:</strong> ' + (item.analyzedVideos || 0);
+                                break;
+                            case 'thumbnail':
+                                title = item.title || 'AI Thumbnail';
+                                subtitle = '<strong>Style:</strong> ' + (item.style || 'Default');
+                                break;
+                        }
+
+                        html += '<h3 class="font-bold text-lg text-gray-800 mb-2">' + utils.escapeHtml(title) + '</h3>';
+                        html += '<div class="flex flex-wrap gap-4 text-sm text-gray-600 mb-2">';
+                        html += '<span>📅 ' + dateInfo.date + '</span>';
+                        html += '<span>🕐 ' + dateInfo.time + '</span>';
+                        html += '</div>';
+
+                        if (subtitle) {
+                            html += '<p class="text-sm text-gray-700">' + subtitle + '</p>';
+                        }
+
+                        // Show thumbnail preview for thumbnail items
+                        if (type === 'thumbnail' && item.imageUrl) {
+                            html += '<div class="mt-3"><img src="' + utils.escapeHtml(item.imageUrl) + '" alt="Thumbnail" class="h-20 rounded-lg shadow-sm"></div>';
+                        }
+
+                        html += '</div>';
+
+                        // Action buttons
+                        html += '<div class="flex gap-2 flex-shrink-0">';
+
+                        // View button based on type
+                        switch(type) {
+                            case 'optimization':
+                                html += '<button onclick="app.viewHistoryItem(' + (state.historyTab === 'all' ? 'null, \'' + item.id + '\'' : i) + ')" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 whitespace-nowrap text-sm">👁️ View</button>';
+                                break;
+                            case 'competitor':
+                                html += '<button onclick="app.viewCompetitorHistory(' + (state.historyTab === 'all' ? 'null, \'' + item.id + '\'' : i) + ')" class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 whitespace-nowrap text-sm">👁️ View</button>';
+                                break;
+                            case 'trend':
+                                html += '<button onclick="app.viewTrendHistory(' + (state.historyTab === 'all' ? 'null, \'' + item.id + '\'' : i) + ')" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 whitespace-nowrap text-sm">👁️ View</button>';
+                                break;
+                            case 'thumbnail':
+                                html += '<button onclick="app.viewThumbnailHistory(' + (state.historyTab === 'all' ? 'null, \'' + item.id + '\'' : i) + ')" class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 whitespace-nowrap text-sm">👁️ View</button>';
+                                break;
+                        }
+
+                        // Delete button
+                        html += '<button onclick="app.deleteHistoryItem(\'' + type + '\', \'' + item.id + '\', ' + i + ')" class="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 whitespace-nowrap text-sm">🗑️</button>';
+
+                        html += '</div>';
+
+                        html += '</div></div>';
+                    }
+
+                    html += '</div>';
+                }
             }
 
             html += '</div></div>';
@@ -3167,8 +3442,11 @@
             html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
             html += '<div class="max-w-6xl mx-auto">';
 
-            // Back button
-            html += '<button onclick="app.goToDashboard()" class="mb-6 btn-secondary">← Back to Dashboard</button>';
+            // Navigation buttons
+            html += '<div class="flex flex-wrap gap-3 mb-6">';
+            html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
+            html += '<button onclick="app.goToHistory(\'competitor\')" class="btn-secondary">📜 View History</button>';
+            html += '</div>';
 
             // Header
             html += '<div class="text-center mb-8 fade-in">';
@@ -3301,7 +3579,11 @@
             html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
             html += '<div class="max-w-6xl mx-auto">';
 
-            html += '<button onclick="app.goToDashboard()" class="mb-6 btn-secondary">← Back to Dashboard</button>';
+            // Navigation buttons
+            html += '<div class="flex flex-wrap gap-3 mb-6">';
+            html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
+            html += '<button onclick="app.goToHistory(\'trend\')" class="btn-secondary">📜 View History</button>';
+            html += '</div>';
 
             html += '<div class="text-center mb-8 fade-in">';
             html += '<div class="w-20 h-20 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-4 shadow-xl">📈</div>';
@@ -3427,12 +3709,15 @@
             html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
             html += '<div class="max-w-5xl mx-auto">';
 
-            // Back button
+            // Navigation buttons
+            html += '<div class="flex flex-wrap gap-3 mb-6">';
             if (hasVideoContext) {
-                html += '<button onclick="app.goToResults()" class="mb-6 btn-secondary">← Back to Results</button>';
+                html += '<button onclick="app.goToResults()" class="btn-secondary">← Back to Results</button>';
             } else {
-                html += '<button onclick="app.goToDashboard()" class="mb-6 btn-secondary">← Back to Dashboard</button>';
+                html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
             }
+            html += '<button onclick="app.goToHistory(\'thumbnail\')" class="btn-secondary">📜 View History</button>';
+            html += '</div>';
 
             // Header
             html += '<div class="text-center mb-8 fade-in">';
