@@ -629,6 +629,73 @@
                 grid-template-columns: 1fr !important;
             }
 
+            /* Mobile Swipeable Usage Cards */
+            .mobile-swipe-container {
+                display: flex;
+                overflow-x: auto;
+                scroll-snap-type: x mandatory;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+                gap: 1rem;
+                padding: 0.5rem 0;
+                margin: 0 -1rem;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+
+            .mobile-swipe-container::-webkit-scrollbar {
+                display: none;
+            }
+
+            .mobile-swipe-card {
+                flex: 0 0 85%;
+                scroll-snap-align: center;
+                scroll-snap-stop: always;
+            }
+
+            .mobile-swipe-dots {
+                display: flex;
+                justify-content: center;
+                gap: 0.5rem;
+                margin-top: 1rem;
+                margin-bottom: 0.5rem;
+            }
+
+            .mobile-swipe-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background-color: rgba(255, 255, 255, 0.4);
+                transition: all 0.3s ease;
+                cursor: pointer;
+            }
+
+            .mobile-swipe-dot.active {
+                background-color: white;
+                transform: scale(1.3);
+            }
+
+            /* Hide swipe container on desktop */
+            @media (min-width: 640px) {
+                .mobile-swipe-container {
+                    display: none !important;
+                }
+                .mobile-swipe-dots {
+                    display: none !important;
+                }
+                .desktop-usage-grid {
+                    display: grid !important;
+                }
+            }
+
+            /* Show swipe container only on mobile */
+            @media (max-width: 639px) {
+                .desktop-usage-grid {
+                    display: none !important;
+                }
+            }
+
             .mobile-gap-4 {
                 gap: 1rem !important;
             }
@@ -1254,6 +1321,53 @@
             closeBonusHistory: function() {
                 state.showBonusHistory = false;
                 render();
+            },
+
+            // Scroll to specific usage card (mobile swipe)
+            scrollToUsageCard: function(index) {
+                var container = document.getElementById('usageSwipeContainer');
+                if (container) {
+                    var cards = container.querySelectorAll('.mobile-swipe-card');
+                    if (cards[index]) {
+                        cards[index].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                    }
+                }
+            },
+
+            // Initialize swipe dots listener
+            initSwipeDots: function() {
+                var container = document.getElementById('usageSwipeContainer');
+                var dotsContainer = document.getElementById('usageSwipeDots');
+                if (container && dotsContainer) {
+                    container.addEventListener('scroll', function() {
+                        var cards = container.querySelectorAll('.mobile-swipe-card');
+                        var containerRect = container.getBoundingClientRect();
+                        var containerCenter = containerRect.left + containerRect.width / 2;
+
+                        var closestIndex = 0;
+                        var closestDistance = Infinity;
+
+                        cards.forEach(function(card, index) {
+                            var cardRect = card.getBoundingClientRect();
+                            var cardCenter = cardRect.left + cardRect.width / 2;
+                            var distance = Math.abs(containerCenter - cardCenter);
+
+                            if (distance < closestDistance) {
+                                closestDistance = distance;
+                                closestIndex = index;
+                            }
+                        });
+
+                        var dots = dotsContainer.querySelectorAll('.mobile-swipe-dot');
+                        dots.forEach(function(dot, index) {
+                            if (index === closestIndex) {
+                                dot.classList.add('active');
+                            } else {
+                                dot.classList.remove('active');
+                            }
+                        });
+                    });
+                }
             },
 
             /* ------------------------------------------
@@ -2224,9 +2338,7 @@
             html += '<button onclick="app.signOut()" class="btn-secondary">Sign Out</button>';
             html += '</div>';
 
-            // Usage Stats Grid - bigger cards
-            html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 dashboard-grid-4 mobile-grid-cols-1 gap-5 lg:gap-6 mb-10 fade-in">';
-
+            // Usage Stats - Tools data
             var tools = [
                 { name: 'Warp Optimizer', key: 'warpOptimizer', emoji: '🚀', color: 'from-blue-500 to-indigo-600' },
                 { name: 'Competitor Analysis', key: 'competitorAnalysis', emoji: '🎯', color: 'from-red-500 to-orange-600' },
@@ -2234,29 +2346,24 @@
                 { name: 'AI Thumbnails', key: 'thumbnailGenerator', emoji: '🎨', color: 'from-pink-500 to-rose-600' }
             ];
 
-            for (var i = 0; i < tools.length; i++) {
-                var tool = tools[i];
-                // Fallback for existing users who don't have new tool keys yet (also handle if p.usage is missing)
+            // Helper function to generate card HTML
+            function generateUsageCard(tool, extraClass) {
                 var usage = (p.usage && p.usage[tool.key]) || { usedToday: 0, limit: 2, lastResetAt: new Date().toISOString() };
-                // Get quota info with bonus uses if available
                 var quotaData = state.quotaInfo && state.quotaInfo[tool.key] ? state.quotaInfo[tool.key] : null;
                 var totalLimit = quotaData ? quotaData.totalLimit : (usage.limit || 2);
                 var baseLimit = quotaData ? quotaData.baseLimit : (usage.limit || 2);
                 var bonusUses = quotaData ? quotaData.bonusUses : 0;
 
-                // Calculate nextResetMs - use quotaInfo if available, otherwise calculate from usage.lastResetAt
                 var nextResetMs = 0;
                 if (quotaData && quotaData.nextResetMs) {
                     nextResetMs = quotaData.nextResetMs;
                 } else if (usage.lastResetAt) {
-                    // Fallback: calculate from lastResetAt if quotaInfo isn't available
                     var lastResetTime = usage.lastResetAt;
                     if (typeof lastResetTime === 'object' && lastResetTime.seconds) {
                         lastResetTime = lastResetTime.seconds * 1000;
                     } else if (typeof lastResetTime === 'object' && lastResetTime._seconds) {
                         lastResetTime = lastResetTime._seconds * 1000;
                     } else if (typeof lastResetTime === 'string') {
-                        // Handle ISO string dates
                         lastResetTime = new Date(lastResetTime).getTime();
                     }
                     var resetIntervalMs = (state.resetTimeMinutes || 1440) * 60 * 1000;
@@ -2265,45 +2372,61 @@
 
                 var remainingUses = totalLimit - usage.usedToday;
                 var isExhausted = remainingUses <= 0;
-
                 var percent = utils.getUsagePercent(usage.usedToday, totalLimit);
                 var color = utils.getUsageColor(percent);
 
-                html += '<div class="bg-white rounded-2xl shadow-lg p-6 lg:p-8 mobile-padding hover:shadow-xl transition-all">';
-                html += '<div class="flex justify-between items-start mb-4">';
-                html += '<div class="w-14 h-14 lg:w-16 lg:h-16 bg-gradient-to-br ' + tool.color + ' rounded-2xl flex items-center justify-center text-3xl lg:text-4xl shadow-lg">' + tool.emoji + '</div>';
-                html += '<div class="text-right">';
-                html += '<span class="text-3xl lg:text-4xl font-bold text-gray-800">' + usage.usedToday + '<span class="text-xl lg:text-2xl text-gray-400">/' + baseLimit + '</span></span>';
+                var cardHtml = '<div class="bg-white rounded-2xl shadow-lg p-6 lg:p-8 mobile-padding hover:shadow-xl transition-all ' + (extraClass || '') + '">';
+                cardHtml += '<div class="flex justify-between items-start mb-4">';
+                cardHtml += '<div class="w-14 h-14 lg:w-16 lg:h-16 bg-gradient-to-br ' + tool.color + ' rounded-2xl flex items-center justify-center text-3xl lg:text-4xl shadow-lg">' + tool.emoji + '</div>';
+                cardHtml += '<div class="text-right">';
+                cardHtml += '<span class="text-3xl lg:text-4xl font-bold text-gray-800">' + usage.usedToday + '<span class="text-xl lg:text-2xl text-gray-400">/' + baseLimit + '</span></span>';
                 if (bonusUses > 0) {
-                    html += '<span class="text-lg lg:text-xl font-bold text-green-500 ml-1">+' + bonusUses + '</span>';
+                    cardHtml += '<span class="text-lg lg:text-xl font-bold text-green-500 ml-1">+' + bonusUses + '</span>';
                 }
-                html += '</div>';
-                html += '</div>';
-                html += '<h4 class="font-bold text-gray-800 text-lg lg:text-xl mb-3">' + tool.name + '</h4>';
-                html += '<div class="w-full bg-gray-100 rounded-full h-3 mb-3">';
-                html += '<div class="' + color + ' h-3 rounded-full usage-bar transition-all" style="width:' + percent + '%"></div>';
-                html += '</div>';
+                cardHtml += '</div>';
+                cardHtml += '</div>';
+                cardHtml += '<h4 class="font-bold text-gray-800 text-lg lg:text-xl mb-3">' + tool.name + '</h4>';
+                cardHtml += '<div class="w-full bg-gray-100 rounded-full h-3 mb-3">';
+                cardHtml += '<div class="' + color + ' h-3 rounded-full usage-bar transition-all" style="width:' + percent + '%"></div>';
+                cardHtml += '</div>';
 
-                // Show countdown if quota exhausted, otherwise show remaining
                 if (isExhausted) {
                     var now = Date.now();
-                    // If no nextResetMs, calculate a fallback based on reset interval
                     if (!nextResetMs || nextResetMs <= now) {
                         var resetIntervalMs = (state.resetTimeMinutes || 1440) * 60 * 1000;
                         nextResetMs = now + resetIntervalMs;
                     }
                     var remainingMs = Math.max(0, nextResetMs - now);
-                    html += '<div class="flex items-center justify-between">';
-                    html += '<p class="text-sm lg:text-base text-red-500 font-medium">⏱️ Resets in:</p>';
-                    html += '<span class="quota-countdown text-red-600 font-bold text-lg" data-reset-at="' + nextResetMs + '">' + formatCountdown(remainingMs) + '</span>';
-                    html += '</div>';
+                    cardHtml += '<div class="flex items-center justify-between">';
+                    cardHtml += '<p class="text-sm lg:text-base text-red-500 font-medium">⏱️ Resets in:</p>';
+                    cardHtml += '<span class="quota-countdown text-red-600 font-bold text-lg" data-reset-at="' + nextResetMs + '">' + formatCountdown(remainingMs) + '</span>';
+                    cardHtml += '</div>';
                 } else {
-                    var remainingText = remainingUses + ' uses remaining';
-                    html += '<p class="text-sm lg:text-base text-gray-500 font-medium">' + remainingText + '</p>';
+                    cardHtml += '<p class="text-sm lg:text-base text-gray-500 font-medium">' + remainingUses + ' uses remaining</p>';
                 }
-                html += '</div>';
+                cardHtml += '</div>';
+                return cardHtml;
             }
 
+            // Desktop Grid (hidden on mobile)
+            html += '<div class="desktop-usage-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 dashboard-grid-4 gap-5 lg:gap-6 mb-10 fade-in">';
+            for (var i = 0; i < tools.length; i++) {
+                html += generateUsageCard(tools[i], '');
+            }
+            html += '</div>';
+
+            // Mobile Swipeable Container (hidden on desktop)
+            html += '<div class="mobile-swipe-container mb-2 fade-in" id="usageSwipeContainer">';
+            for (var i = 0; i < tools.length; i++) {
+                html += generateUsageCard(tools[i], 'mobile-swipe-card');
+            }
+            html += '</div>';
+
+            // Mobile Swipe Dots
+            html += '<div class="mobile-swipe-dots mb-8" id="usageSwipeDots">';
+            for (var i = 0; i < tools.length; i++) {
+                html += '<div class="mobile-swipe-dot' + (i === 0 ? ' active' : '') + '" data-index="' + i + '" onclick="app.scrollToUsageCard(' + i + ')"></div>';
+            }
             html += '</div>';
 
             // Check if user has any bonus uses to show history link
@@ -3541,6 +3664,13 @@
             }
 
             root.innerHTML = html;
+
+            // Initialize mobile swipe dots after DOM update (dashboard only)
+            if (state.currentView === 'dashboard') {
+                setTimeout(function() {
+                    app.initSwipeDots();
+                }, 50);
+            }
         }
 
         /* ==========================================
