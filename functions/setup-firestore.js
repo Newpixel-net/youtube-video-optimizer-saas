@@ -37,22 +37,24 @@ const subscriptionPlans = [
         dailyLimit: 2,
         cooldownHours: 12
       },
-      titleGenerator: {
-        dailyLimit: 5,
+      competitorAnalysis: {
+        dailyLimit: 2,
         cooldownHours: 0
       },
-      descriptionGenerator: {
-        dailyLimit: 3,
+      trendPredictor: {
+        dailyLimit: 2,
         cooldownHours: 0
       },
-      tagGenerator: {
-        dailyLimit: 5,
+      thumbnailGenerator: {
+        dailyLimit: 2,
         cooldownHours: 0
       }
     },
     features: [
       '2 Warp optimizations per day',
-      '12-hour cooldown',
+      '2 Competitor analyses per day',
+      '2 Trend predictions per day',
+      '2 AI thumbnails per day',
       'Basic support'
     ],
     isActive: true,
@@ -73,22 +75,24 @@ const subscriptionPlans = [
         dailyLimit: 5,
         cooldownHours: 6
       },
-      titleGenerator: {
-        dailyLimit: 20,
+      competitorAnalysis: {
+        dailyLimit: 5,
         cooldownHours: 0
       },
-      descriptionGenerator: {
-        dailyLimit: 15,
+      trendPredictor: {
+        dailyLimit: 5,
         cooldownHours: 0
       },
-      tagGenerator: {
-        dailyLimit: 25,
+      thumbnailGenerator: {
+        dailyLimit: 5,
         cooldownHours: 0
       }
     },
     features: [
       '5 Warp optimizations per day',
-      '6-hour cooldown',
+      '5 Competitor analyses per day',
+      '5 Trend predictions per day',
+      '5 AI thumbnails per day',
       'History saved 30 days',
       'Priority support'
     ],
@@ -110,22 +114,24 @@ const subscriptionPlans = [
         dailyLimit: 20,
         cooldownHours: 2
       },
-      titleGenerator: {
-        dailyLimit: 100,
+      competitorAnalysis: {
+        dailyLimit: 20,
         cooldownHours: 0
       },
-      descriptionGenerator: {
-        dailyLimit: 50,
+      trendPredictor: {
+        dailyLimit: 20,
         cooldownHours: 0
       },
-      tagGenerator: {
-        dailyLimit: 100,
+      thumbnailGenerator: {
+        dailyLimit: 20,
         cooldownHours: 0
       }
     },
     features: [
       '20 Warp optimizations per day',
-      '2-hour cooldown',
+      '20 Competitor analyses per day',
+      '20 Trend predictions per day',
+      '20 AI thumbnails per day',
       'Unlimited history',
       '24/7 priority support',
       'API access'
@@ -148,21 +154,24 @@ const subscriptionPlans = [
         dailyLimit: 999999,
         cooldownHours: 0
       },
-      titleGenerator: {
+      competitorAnalysis: {
         dailyLimit: 999999,
         cooldownHours: 0
       },
-      descriptionGenerator: {
+      trendPredictor: {
         dailyLimit: 999999,
         cooldownHours: 0
       },
-      tagGenerator: {
+      thumbnailGenerator: {
         dailyLimit: 999999,
         cooldownHours: 0
       }
     },
     features: [
       'Unlimited optimizations',
+      'Unlimited competitor analyses',
+      'Unlimited trend predictions',
+      'Unlimited AI thumbnails',
       'No cooldown',
       'Unlimited history',
       'Dedicated support',

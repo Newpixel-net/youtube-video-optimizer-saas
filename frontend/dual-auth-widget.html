@@ -2227,9 +2227,9 @@
 
             var tools = [
                 { name: 'Warp Optimizer', key: 'warpOptimizer', emoji: '🚀', color: 'from-blue-500 to-indigo-600' },
-                { name: 'Title Generator', key: 'titleGenerator', emoji: '📝', color: 'from-purple-500 to-pink-600' },
-                { name: 'Description', key: 'descriptionGenerator', emoji: '📄', color: 'from-orange-500 to-red-600' },
-                { name: 'Tag Generator', key: 'tagGenerator', emoji: '🏷️', color: 'from-green-500 to-teal-600' }
+                { name: 'Competitor Analysis', key: 'competitorAnalysis', emoji: '🎯', color: 'from-red-500 to-orange-600' },
+                { name: 'Trend Predictor', key: 'trendPredictor', emoji: '📈', color: 'from-cyan-500 to-blue-600' },
+                { name: 'AI Thumbnails', key: 'thumbnailGenerator', emoji: '🎨', color: 'from-pink-500 to-rose-600' }
             ];
 
             for (var i = 0; i < tools.length; i++) {
@@ -2302,7 +2302,7 @@
 
             // Check if user has any bonus uses to show history link
             var hasBonusUses = false;
-            var toolKeys = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+            var toolKeys = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator'];
             for (var j = 0; j < toolKeys.length; j++) {
                 var qd = state.quotaInfo && state.quotaInfo[toolKeys[j]] ? state.quotaInfo[toolKeys[j]] : null;
                 if (qd && qd.bonusUses > 0) {
@@ -2419,15 +2419,15 @@
                     html += '<div class="space-y-3">';
                     var toolNames = {
                         warpOptimizer: 'Warp Optimizer',
-                        titleGenerator: 'Title Generator',
-                        descriptionGenerator: 'Description Generator',
-                        tagGenerator: 'Tag Generator'
+                        competitorAnalysis: 'Competitor Analysis',
+                        trendPredictor: 'Trend Predictor',
+                        thumbnailGenerator: 'AI Thumbnails'
                     };
                     var toolEmojis = {
                         warpOptimizer: '🚀',
-                        titleGenerator: '📝',
-                        descriptionGenerator: '📄',
-                        tagGenerator: '🏷️'
+                        competitorAnalysis: '🎯',
+                        trendPredictor: '📈',
+                        thumbnailGenerator: '🎨'
                     };
                     for (var h = 0; h < state.bonusHistory.length; h++) {
                         var bonus = state.bonusHistory[h];
@@ -3007,9 +3007,9 @@
             html += '<label class="block text-gray-700 font-semibold mb-2">Select Tool</label>';
             html += '<select id="bonus-tool-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-lg">';
             html += '<option value="warpOptimizer">Warp Optimizer</option>';
-            html += '<option value="titleGenerator">Title Generator</option>';
-            html += '<option value="descriptionGenerator">Description Generator</option>';
-            html += '<option value="tagGenerator">Tag Generator</option>';
+            html += '<option value="competitorAnalysis">Competitor Analysis</option>';
+            html += '<option value="trendPredictor">Trend Predictor</option>';
+            html += '<option value="thumbnailGenerator">AI Thumbnails</option>';
             html += '</select>';
             html += '</div>';
 
