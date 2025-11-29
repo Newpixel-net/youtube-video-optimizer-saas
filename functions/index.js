@@ -1315,18 +1315,34 @@ exports.adminUpdateUserPlan = functions.https.onCall(async (data, context) => {
     const planLimits = planDoc.data()?.limits || {};
     const defaultToolLimit = 2;
 
+    // Create complete usage structures for all tools (ensures tools exist even if missing)
     await db.collection('users').doc(userId).update({
       'subscription.plan': targetPlan,
       'subscription.startDate': admin.firestore.FieldValue.serverTimestamp(),
-      'usage.warpOptimizer.limit': planLimits.warpOptimizer?.dailyLimit || defaultToolLimit,
-      'usage.warpOptimizer.usedToday': 0,
-      'usage.warpOptimizer.cooldownUntil': null,
-      'usage.competitorAnalysis.limit': planLimits.competitorAnalysis?.dailyLimit || defaultToolLimit,
-      'usage.competitorAnalysis.usedToday': 0,
-      'usage.trendPredictor.limit': planLimits.trendPredictor?.dailyLimit || defaultToolLimit,
-      'usage.trendPredictor.usedToday': 0,
-      'usage.thumbnailGenerator.limit': planLimits.thumbnailGenerator?.dailyLimit || defaultToolLimit,
-      'usage.thumbnailGenerator.usedToday': 0
+      'usage.warpOptimizer': {
+        usedToday: 0,
+        limit: planLimits.warpOptimizer?.dailyLimit || defaultToolLimit,
+        lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+        cooldownUntil: null
+      },
+      'usage.competitorAnalysis': {
+        usedToday: 0,
+        limit: planLimits.competitorAnalysis?.dailyLimit || defaultToolLimit,
+        lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+        cooldownUntil: null
+      },
+      'usage.trendPredictor': {
+        usedToday: 0,
+        limit: planLimits.trendPredictor?.dailyLimit || defaultToolLimit,
+        lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+        cooldownUntil: null
+      },
+      'usage.thumbnailGenerator': {
+        usedToday: 0,
+        limit: planLimits.thumbnailGenerator?.dailyLimit || defaultToolLimit,
+        lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+        cooldownUntil: null
+      }
     });
 
     await logUsage(userId, 'plan_changed_by_admin', { plan: targetPlan, changedBy: context.auth.uid });
