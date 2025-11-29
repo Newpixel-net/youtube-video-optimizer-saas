@@ -947,11 +947,12 @@
 
             // History/Admin data
             historyData: null,       // List of past optimizations
-            historyTab: 'all',       // Current history tab: 'all', 'optimization', 'competitor', 'trend', 'thumbnail'
+            historyTab: 'all',       // Current history tab: 'all', 'optimization', 'competitor', 'trend', 'thumbnail', 'placement'
             allHistory: null,        // Combined history from all types
             competitorHistory: null, // Competitor analysis history
             trendHistory: null,      // Trend predictor history
             thumbnailHistory: null,  // Thumbnail history
+            placementHistory: null,  // Placement Finder history
             historyCounts: null,     // Counts for each history type
             adminUsers: null,        // Admin user list
             adminLoading: false,
@@ -1300,6 +1301,7 @@
                 state.competitorHistory = null;
                 state.trendHistory = null;
                 state.thumbnailHistory = null;
+                state.placementHistory = null;
                 state.historyCounts = null;
                 render();
 
@@ -1312,6 +1314,7 @@
                         state.competitorHistory = data.history.competitor || [];
                         state.trendHistory = data.history.trends || [];
                         state.thumbnailHistory = data.history.thumbnails || [];
+                        state.placementHistory = data.history.placements || [];
                         state.historyCounts = data.counts || {};
                         state.loading = false;
                         render();
@@ -3263,11 +3266,12 @@
                 html += '<div class="flex flex-wrap border-b border-gray-200">';
 
                 var tabs = [
-                    { id: 'all', label: 'All', icon: '📋', count: (counts.optimizations || 0) + (counts.competitor || 0) + (counts.trends || 0) + (counts.thumbnails || 0) },
+                    { id: 'all', label: 'All', icon: '📋', count: (counts.optimizations || 0) + (counts.competitor || 0) + (counts.trends || 0) + (counts.thumbnails || 0) + (counts.placements || 0) },
                     { id: 'optimization', label: 'Video', icon: '🎬', count: counts.optimizations || 0 },
                     { id: 'competitor', label: 'Competitor', icon: '🔍', count: counts.competitor || 0 },
                     { id: 'trend', label: 'Trends', icon: '📈', count: counts.trends || 0 },
-                    { id: 'thumbnail', label: 'Thumbnails', icon: '🎨', count: counts.thumbnails || 0 }
+                    { id: 'thumbnail', label: 'Thumbnails', icon: '🎨', count: counts.thumbnails || 0 },
+                    { id: 'placement', label: 'Placements', icon: '📍', count: counts.placements || 0 }
                 ];
 
                 for (var t = 0; t < tabs.length; t++) {
@@ -3299,6 +3303,8 @@
                     items = state.trendHistory || [];
                 } else if (state.historyTab === 'thumbnail') {
                     items = state.thumbnailHistory || [];
+                } else if (state.historyTab === 'placement') {
+                    items = state.placementHistory || [];
                 }
 
                 // Empty state for current tab
@@ -3349,7 +3355,7 @@
                                 typeColor = 'bg-orange-100 text-orange-800';
                                 break;
                             case 'placement':
-                                typeIcon = '🎬';
+                                typeIcon = '📍';
                                 typeBadge = 'Placement Finder';
                                 typeColor = 'bg-violet-100 text-violet-800';
                                 break;
