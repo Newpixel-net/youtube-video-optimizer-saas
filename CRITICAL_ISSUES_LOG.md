@@ -147,6 +147,75 @@ match /thumbnails/{userId}/{fileName} {
 
 ---
 
+## Issue #2: History 500 Error (Recurring - Fixed 4+ times)
+
+**Date**: 2025-11-29
+
+**Symptom**:
+- Activity History page shows "Failed to load history"
+- Console shows "Failed to load resource: the server responded with a status of 500"
+- Error occurs when calling `getAllHistory`, `getCompetitorHistory`, `getTrendHistory`, or `getThumbnailHistory` functions
+
+**What DID NOT fix it (recurring issue)**:
+- Previous fixes only applied to `getOptimizationHistory` function
+- The fix kept "coming back" because other history functions were not fixed
+- A duplicate file `functions/getOptimizationHistory.js` existed with buggy code
+
+**Root Cause**:
+Unsafe timestamp serialization in history functions. The code used:
+```javascript
+// WRONG - fails when createdAt is not a proper Firestore Timestamp
+createdAt: data.createdAt?.toDate().toISOString(),
+timestamp: data.createdAt?.toMillis() || Date.now()
+```
+
+The optional chaining `?.` only checks if `createdAt` is nullish, NOT if it has the expected methods (`toDate`, `toMillis`). When `createdAt` exists but is a different format (number, serialized `_seconds`, Date object), these methods don't exist and the call fails.
+
+**The ACTUAL fix**:
+Use a safe timestamp handler that checks for all possible formats:
+```javascript
+const getTimestamp = (field) => {
+  if (!field) return Date.now();
+  if (typeof field === 'number') return field;
+  if (typeof field.toMillis === 'function') return field.toMillis();
+  if (field._seconds) return field._seconds * 1000;
+  if (field instanceof Date) return field.getTime();
+  return Date.now();
+};
+```
+
+And never include raw `createdAt` in the response (non-serializable Firestore object).
+
+**Functions Fixed**:
+- `getAllHistory` (used by Activity History page)
+- `getCompetitorHistory`
+- `getTrendHistory`
+- `getThumbnailHistory`
+- `getOptimizationHistory` (was already fixed)
+
+**Deployment Command**:
+```bash
+firebase deploy --only functions:getAllHistory,functions:getCompetitorHistory,functions:getTrendHistory,functions:getThumbnailHistory
+```
+
+Or deploy all functions:
+```bash
+firebase deploy --only functions
+```
+
+**File location**: `functions/index.js` (lines ~2823-3090)
+
+**Also removed**: `functions/getOptimizationHistory.js` (duplicate file with buggy code)
+
+**Related commits**:
+- `6ad1a92` - First fix for getOptimizationHistory
+- `fd051e7` - Added safe timestamp handling
+- `b62e05e` - Fixed ALL history functions (final fix)
+
+**Time wasted**: ~6+ hours across multiple sessions
+
+---
+
 ## Template for Future Issues
 
 ### Issue #X: [Title]

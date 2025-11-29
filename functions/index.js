@@ -3067,7 +3067,7 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
 
   try {
     // Fetch from all history collections in parallel
-    const [optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap] = await Promise.all([
+    const [optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap, placementSnap] = await Promise.all([
       db.collection('optimizations')
         .where('userId', '==', uid)
         .orderBy('createdAt', 'desc')
@@ -3084,6 +3084,11 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
         .limit(safeLimit)
         .get(),
       db.collection('thumbnailHistory')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get(),
+      db.collection('placementFinderHistory')
         .where('userId', '==', uid)
         .orderBy('createdAt', 'desc')
         .limit(safeLimit)
@@ -3144,7 +3149,8 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       ...formatHistory(optimizationsSnap, 'optimization'),
       ...formatHistory(competitorSnap, 'competitor'),
       ...formatHistory(trendSnap, 'trend'),
-      ...formatHistory(thumbnailSnap, 'thumbnail')
+      ...formatHistory(thumbnailSnap, 'thumbnail'),
+      ...formatHistory(placementSnap, 'placement')
     ];
 
     // Sort by timestamp descending
@@ -3157,17 +3163,521 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
         optimizations: formatHistory(optimizationsSnap, 'optimization'),
         competitor: formatHistory(competitorSnap, 'competitor'),
         trends: formatHistory(trendSnap, 'trend'),
-        thumbnails: formatHistory(thumbnailSnap, 'thumbnail')
+        thumbnails: formatHistory(thumbnailSnap, 'thumbnail'),
+        placements: formatHistory(placementSnap, 'placement')
       },
       counts: {
         optimizations: optimizationsSnap.size,
         competitor: competitorSnap.size,
         trends: trendSnap.size,
-        thumbnails: thumbnailSnap.size
+        thumbnails: thumbnailSnap.size,
+        placements: placementSnap.size
       }
     };
   } catch (error) {
     console.error('Get all history error:', error);
     throw new functions.https.HttpsError('internal', 'Failed to load history.');
+  }
+});
+
+// ==============================================
+// PLACEMENT FINDER - Find YouTube Channels for Google Ads
+// ==============================================
+
+/**
+ * Extract channel ID from various YouTube channel URL formats
+ * Supports: /channel/UCxxx, /@handle, /c/customname, /user/username
+ */
+function extractChannelInfo(url) {
+  const patterns = [
+    // Channel ID format: youtube.com/channel/UCxxxxxx
+    { regex: /youtube\.com\/channel\/([^\/\?&]+)/, type: 'id' },
+    // Handle format: youtube.com/@handle
+    { regex: /youtube\.com\/@([^\/\?&]+)/, type: 'handle' },
+    // Custom URL: youtube.com/c/customname
+    { regex: /youtube\.com\/c\/([^\/\?&]+)/, type: 'custom' },
+    // User format: youtube.com/user/username
+    { regex: /youtube\.com\/user\/([^\/\?&]+)/, type: 'user' }
+  ];
+
+  for (const { regex, type } of patterns) {
+    const match = url.match(regex);
+    if (match) return { value: match[1], type };
+  }
+
+  throw new Error('Invalid YouTube channel URL. Please use a valid channel link.');
+}
+
+/**
+ * Find Placements - Main function to find YouTube channels for Google Ads
+ * Analyzes user's channel and finds similar high-exposure channels
+ */
+exports.findPlacements = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'findPlacements', 5);
+  await checkUsageLimit(uid, 'placementFinder');
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required');
+  }
+
+  try {
+    // Step 1: Extract channel info from URL
+    const channelInfo = extractChannelInfo(channelUrl);
+
+    // Step 2: Get channel details from YouTube API
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,brandingSettings,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,brandingSettings,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      // For custom URLs and usernames, search first
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,brandingSettings,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
+
+    if (!channelResponse.data.items?.length) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found');
+    }
+
+    const userChannel = channelResponse.data.items[0];
+    const channelId = userChannel.id;
+    const channelName = userChannel.snippet.title;
+    const channelDescription = userChannel.snippet.description || '';
+    const subscriberCount = parseInt(userChannel.statistics.subscriberCount) || 0;
+    const channelThumbnail = userChannel.snippet.thumbnails?.medium?.url || userChannel.snippet.thumbnails?.default?.url;
+
+    // Step 3: Get recent videos to understand content
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'date',
+      maxResults: 15
+    });
+
+    const recentVideoTitles = videosResponse.data.items?.map(v => v.snippet.title) || [];
+    const topicCategories = userChannel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Step 4: Use AI to analyze channel and generate search criteria
+    const analysisPrompt = `You are a YouTube advertising expert. Analyze this channel to find similar channels for Google Ads Placement targeting.
+
+CHANNEL DATA:
+- Name: ${channelName}
+- Description: ${channelDescription.substring(0, 500)}
+- Subscribers: ${subscriberCount.toLocaleString()}
+- Topics: ${topicCategories.join(', ') || 'Not specified'}
+- Recent Videos: ${recentVideoTitles.slice(0, 10).join(' | ')}
+
+Respond in this EXACT JSON format:
+{
+  "niche": "Primary content niche (2-4 words)",
+  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "audienceDescription": "Brief description of the target audience (age, interests, demographics)",
+  "searchQueries": ["search query 1", "search query 2", "search query 3"],
+  "contentStyle": "Brief description of content style",
+  "channelCategories": ["category1", "category2"]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: analysisPrompt }],
+      temperature: 0.7,
+      max_tokens: 800
+    });
+
+    let analysis;
+    try {
+      const responseText = aiResponse.choices[0].message.content.trim();
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      analysis = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
+    } catch (e) {
+      analysis = {
+        niche: 'General Content',
+        keywords: [channelName],
+        audienceDescription: 'General YouTube viewers',
+        searchQueries: [channelName, ...topicCategories],
+        contentStyle: 'Video content',
+        channelCategories: topicCategories
+      };
+    }
+
+    // Step 5: Search for similar channels using multiple queries
+    const allChannelIds = new Set();
+    const searchQueries = [...analysis.searchQueries, ...analysis.keywords.slice(0, 2)];
+
+    for (const query of searchQueries.slice(0, 3)) {
+      try {
+        const searchResponse = await youtube.search.list({
+          part: 'snippet',
+          q: query,
+          type: 'channel',
+          maxResults: 15,
+          relevanceLanguage: 'en'
+        });
+
+        searchResponse.data.items?.forEach(item => {
+          if (item.snippet.channelId !== channelId) {
+            allChannelIds.add(item.snippet.channelId);
+          }
+        });
+      } catch (e) {
+        console.log('Search query failed:', query, e.message);
+      }
+    }
+
+    // Step 6: Get detailed info for found channels (batch request)
+    const channelIds = Array.from(allChannelIds).slice(0, 50);
+
+    if (channelIds.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'No similar channels found. Try a different channel.');
+    }
+
+    const detailsResponse = await youtube.channels.list({
+      part: 'snippet,statistics',
+      id: channelIds.join(','),
+      maxResults: 50
+    });
+
+    // Step 7: Filter and score channels
+    const placements = detailsResponse.data.items
+      ?.map(ch => {
+        const subs = parseInt(ch.statistics.subscriberCount) || 0;
+        const views = parseInt(ch.statistics.viewCount) || 0;
+        const videos = parseInt(ch.statistics.videoCount) || 0;
+
+        // Calculate relevance score based on engagement metrics
+        let score = 50;
+        if (subs > 10000) score += 10;
+        if (subs > 100000) score += 10;
+        if (subs > 1000000) score += 10;
+        if (views > 1000000) score += 10;
+        if (videos > 50) score += 5;
+        if (videos > 200) score += 5;
+
+        return {
+          channelId: ch.id,
+          channelName: ch.snippet.title,
+          channelUrl: `https://www.youtube.com/channel/${ch.id}`,
+          handle: ch.snippet.customUrl || null,
+          thumbnail: ch.snippet.thumbnails?.medium?.url || ch.snippet.thumbnails?.default?.url,
+          description: (ch.snippet.description || '').substring(0, 150),
+          subscribers: subs,
+          subscribersFormatted: formatNumber(subs),
+          totalViews: views,
+          videoCount: videos,
+          relevanceScore: Math.min(score, 100)
+        };
+      })
+      .filter(ch => ch.subscribers >= 1000) // Minimum 1K subscribers
+      .sort((a, b) => b.relevanceScore - a.relevanceScore || b.subscribers - a.subscribers)
+      .slice(0, 30);
+
+    if (placements.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'No quality channels found. The analyzed channel may be too niche.');
+    }
+
+    // Step 8: Save to history
+    const historyData = {
+      userId: uid,
+      channelUrl,
+      channelInfo: {
+        id: channelId,
+        name: channelName,
+        subscribers: subscriberCount,
+        thumbnail: channelThumbnail,
+        description: channelDescription.substring(0, 300)
+      },
+      analysis: {
+        niche: analysis.niche,
+        keywords: analysis.keywords,
+        audienceDescription: analysis.audienceDescription,
+        contentStyle: analysis.contentStyle
+      },
+      placements,
+      totalFound: placements.length,
+      searchQueries: searchQueries.slice(0, 5),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const historyRef = await db.collection('placementFinderHistory').add(historyData);
+
+    // Step 9: Update usage
+    await incrementUsage(uid, 'placementFinder');
+    await logUsage(uid, 'placement_finder', {
+      channelId,
+      channelName,
+      placementsFound: placements.length
+    });
+
+    return {
+      success: true,
+      historyId: historyRef.id,
+      channelInfo: historyData.channelInfo,
+      analysis: historyData.analysis,
+      placements,
+      totalFound: placements.length,
+      maxAllowed: 50
+    };
+
+  } catch (error) {
+    console.error('Placement finder error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal',
+      sanitizeErrorMessage(error, 'Failed to find placements. Please try again.'));
+  }
+});
+
+/**
+ * Helper to format large numbers (1000 -> 1K, 1000000 -> 1M)
+ */
+function formatNumber(num) {
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return num.toString();
+}
+
+/**
+ * Find More Placements - Add 10 more channels to existing search
+ */
+exports.findMorePlacements = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'findMorePlacements', 10);
+
+  const { historyId } = data;
+  if (!historyId) {
+    throw new functions.https.HttpsError('invalid-argument', 'History ID is required');
+  }
+
+  try {
+    // Get existing history entry
+    const historyDoc = await db.collection('placementFinderHistory').doc(historyId).get();
+
+    if (!historyDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'History entry not found');
+    }
+
+    const historyData = historyDoc.data();
+
+    if (historyData.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const currentPlacements = historyData.placements || [];
+
+    if (currentPlacements.length >= 50) {
+      throw new functions.https.HttpsError('resource-exhausted', 'Maximum of 50 placements reached');
+    }
+
+    // Get IDs of already found channels to exclude
+    const existingIds = new Set(currentPlacements.map(p => p.channelId));
+    existingIds.add(historyData.channelInfo.id); // Also exclude user's own channel
+
+    // Search for more channels using stored queries
+    const searchQueries = historyData.searchQueries || historyData.analysis?.keywords || [];
+    const allNewChannelIds = new Set();
+
+    for (const query of searchQueries) {
+      try {
+        // Use pageToken or different query variations to get different results
+        const searchResponse = await youtube.search.list({
+          part: 'snippet',
+          q: `${query} channel`,
+          type: 'channel',
+          maxResults: 20,
+          relevanceLanguage: 'en'
+        });
+
+        searchResponse.data.items?.forEach(item => {
+          if (!existingIds.has(item.snippet.channelId)) {
+            allNewChannelIds.add(item.snippet.channelId);
+          }
+        });
+      } catch (e) {
+        console.log('Search query failed:', query, e.message);
+      }
+    }
+
+    const newChannelIds = Array.from(allNewChannelIds).slice(0, 15);
+
+    if (newChannelIds.length === 0) {
+      return {
+        success: true,
+        message: 'No more channels found matching your criteria',
+        placements: currentPlacements,
+        totalFound: currentPlacements.length,
+        maxAllowed: 50,
+        added: 0
+      };
+    }
+
+    // Get channel details
+    const detailsResponse = await youtube.channels.list({
+      part: 'snippet,statistics',
+      id: newChannelIds.join(',')
+    });
+
+    const newPlacements = detailsResponse.data.items
+      ?.map(ch => {
+        const subs = parseInt(ch.statistics.subscriberCount) || 0;
+        const views = parseInt(ch.statistics.viewCount) || 0;
+        const videos = parseInt(ch.statistics.videoCount) || 0;
+
+        let score = 50;
+        if (subs > 10000) score += 10;
+        if (subs > 100000) score += 10;
+        if (subs > 1000000) score += 10;
+        if (views > 1000000) score += 10;
+        if (videos > 50) score += 5;
+        if (videos > 200) score += 5;
+
+        return {
+          channelId: ch.id,
+          channelName: ch.snippet.title,
+          channelUrl: `https://www.youtube.com/channel/${ch.id}`,
+          handle: ch.snippet.customUrl || null,
+          thumbnail: ch.snippet.thumbnails?.medium?.url || ch.snippet.thumbnails?.default?.url,
+          description: (ch.snippet.description || '').substring(0, 150),
+          subscribers: subs,
+          subscribersFormatted: formatNumber(subs),
+          totalViews: views,
+          videoCount: videos,
+          relevanceScore: Math.min(score, 100)
+        };
+      })
+      .filter(ch => ch.subscribers >= 1000)
+      .sort((a, b) => b.relevanceScore - a.relevanceScore || b.subscribers - a.subscribers)
+      .slice(0, 10);
+
+    // Combine and limit to 50
+    const combinedPlacements = [...currentPlacements, ...newPlacements].slice(0, 50);
+
+    // Update history document
+    await db.collection('placementFinderHistory').doc(historyId).update({
+      placements: combinedPlacements,
+      totalFound: combinedPlacements.length,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    await logUsage(uid, 'placement_finder_expand', {
+      historyId,
+      added: newPlacements.length,
+      total: combinedPlacements.length
+    });
+
+    return {
+      success: true,
+      placements: combinedPlacements,
+      totalFound: combinedPlacements.length,
+      maxAllowed: 50,
+      added: newPlacements.length
+    };
+
+  } catch (error) {
+    console.error('Find more placements error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal',
+      sanitizeErrorMessage(error, 'Failed to find more placements.'));
+  }
+});
+
+/**
+ * Get Placement Finder History
+ */
+exports.getPlacementFinderHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getPlacementFinderHistory', 20);
+
+  const { limit = 20, offset = 0 } = data || {};
+  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 20), 50);
+  const safeOffset = Math.max(0, parseInt(offset) || 0);
+
+  // Safe timestamp handler
+  const getTs = (field) => {
+    if (!field) return Date.now();
+    if (typeof field === 'number') return field;
+    if (typeof field.toMillis === 'function') return field.toMillis();
+    if (field._seconds) return field._seconds * 1000;
+    if (field instanceof Date) return field.getTime();
+    return Date.now();
+  };
+
+  try {
+    const snapshot = await db.collection('placementFinderHistory')
+      .where('userId', '==', uid)
+      .orderBy('createdAt', 'desc')
+      .limit(safeLimit)
+      .offset(safeOffset)
+      .get();
+
+    const history = [];
+    snapshot.forEach(doc => {
+      try {
+        const docData = doc.data();
+        const timestamp = getTs(docData.createdAt);
+        const { createdAt, updatedAt, ...rest } = docData;
+        history.push({
+          id: doc.id,
+          ...rest,
+          timestamp,
+          createdAt: new Date(timestamp).toISOString()
+        });
+      } catch (e) {
+        console.error('Error processing placement doc:', doc.id, e);
+      }
+    });
+
+    return { success: true, history, count: history.length };
+  } catch (error) {
+    console.error('Get placement finder history error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to load history.');
+  }
+});
+
+/**
+ * Delete Placement Finder Entry
+ */
+exports.deletePlacementFinder = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  const { id } = data || {};
+  if (!id) {
+    throw new functions.https.HttpsError('invalid-argument', 'History ID is required');
+  }
+
+  try {
+    const doc = await db.collection('placementFinderHistory').doc(id).get();
+    if (!doc.exists || doc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized to delete this item');
+    }
+
+    await db.collection('placementFinderHistory').doc(id).delete();
+    return { success: true, message: 'Placement search deleted successfully' };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Delete placement finder error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to delete.');
   }
 });

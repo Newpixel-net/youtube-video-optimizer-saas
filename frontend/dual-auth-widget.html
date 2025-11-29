@@ -1352,6 +1352,34 @@
                 render();
             },
 
+            goToPlacement: function() {
+                state.currentView = 'placement';
+                state.error = null;
+                state.placementResults = null;
+                state.placementLoading = false;
+                render();
+            },
+
+            viewPlacementHistory: function(id) {
+                // Find the item from history
+                var item = (state.allHistory || []).find(function(h) { return h.id === id && h.type === 'placement'; });
+                if (!item && state.placementHistory) {
+                    item = state.placementHistory.find(function(h) { return h.id === id; });
+                }
+                if (item) {
+                    state.placementResults = {
+                        historyId: item.id,
+                        channelInfo: item.channelInfo,
+                        analysis: item.analysis,
+                        placements: item.placements || [],
+                        totalFound: item.totalFound || 0,
+                        maxAllowed: 50
+                    };
+                    state.currentView = 'placement';
+                    render();
+                }
+            },
+
             // Bonus history modal functions
             openBonusHistory: function() {
                 state.showBonusHistory = true;
@@ -1814,6 +1842,7 @@
                     case 'competitor': functionName = 'deleteCompetitorAnalysis'; break;
                     case 'trend': functionName = 'deleteTrendPrediction'; break;
                     case 'thumbnail': functionName = 'deleteThumbnail'; break;
+                    case 'placement': functionName = 'deletePlacementFinder'; break;
                     default: return;
                 }
 
@@ -1839,6 +1868,10 @@
                             case 'thumbnail':
                                 state.thumbnailHistory.splice(index, 1);
                                 state.historyCounts.thumbnails--;
+                                break;
+                            case 'placement':
+                                if (state.placementHistory) state.placementHistory.splice(index, 1);
+                                if (state.historyCounts) state.historyCounts.placements--;
                                 break;
                         }
                         // Also remove from allHistory
@@ -2259,6 +2292,107 @@
                             }
                         });
                 }, 3000); // Poll every 3 seconds
+            },
+
+            /* ------------------------------------------
+               4.5.8 Placement Finder Actions
+               ------------------------------------------ */
+            findPlacements: function(e) {
+                e.preventDefault();
+                var channelUrl = document.getElementById('placement-channel-url').value.trim();
+
+                if (!channelUrl) {
+                    state.error = { message: 'Please enter your YouTube channel URL' };
+                    render();
+                    return;
+                }
+
+                state.placementLoading = true;
+                state.loading = true;
+                state.error = null;
+                state.loadingSteps = [
+                    { name: 'Analyzing your channel', icon: '📺' },
+                    { name: 'Understanding your content', icon: '🔍' },
+                    { name: 'Identifying your niche', icon: '🎯' },
+                    { name: 'Searching similar channels', icon: '🔎' },
+                    { name: 'Scoring relevance', icon: '📊' },
+                    { name: 'Compiling results', icon: '✨' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('findPlacements')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.placementResults = result.data;
+                        state.placementLoading = false;
+                        state.loading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.placementLoading = false;
+                        state.loading = false;
+                        state.error = { message: 'Failed to find placements: ' + e.message };
+                        render();
+                    });
+            },
+
+            findMorePlacements: function() {
+                if (!state.placementResults || !state.placementResults.historyId) return;
+
+                state.placementLoading = true;
+                render();
+
+                functions.httpsCallable('findMorePlacements')({ historyId: state.placementResults.historyId })
+                    .then(function(result) {
+                        state.placementResults.placements = result.data.placements;
+                        state.placementResults.totalFound = result.data.totalFound;
+                        state.placementLoading = false;
+                        if (result.data.added === 0) {
+                            state.error = { message: 'No more channels found matching your criteria.' };
+                        }
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.placementLoading = false;
+                        state.error = { message: 'Failed to find more: ' + e.message };
+                        render();
+                    });
+            },
+
+            copyAllPlacements: function() {
+                if (!state.placementResults || !state.placementResults.placements) return;
+
+                var urls = state.placementResults.placements.map(function(p) {
+                    return p.channelUrl;
+                }).join('\n');
+
+                navigator.clipboard.writeText(urls).then(function() {
+                    state.copySuccess = 'Copied ' + state.placementResults.placements.length + ' channel URLs!';
+                    render();
+                    setTimeout(function() {
+                        state.copySuccess = null;
+                        render();
+                    }, 3000);
+                }).catch(function(err) {
+                    state.error = { message: 'Failed to copy: ' + err.message };
+                    render();
+                });
+            },
+
+            copySinglePlacement: function(url) {
+                navigator.clipboard.writeText(url).then(function() {
+                    state.copySuccess = 'Channel URL copied!';
+                    render();
+                    setTimeout(function() {
+                        state.copySuccess = null;
+                        render();
+                    }, 2000);
+                }).catch(function(err) {
+                    state.error = { message: 'Failed to copy: ' + err.message };
+                    render();
+                });
             }
         };
 
@@ -2520,7 +2654,8 @@
                 { name: 'Warp Optimizer', key: 'warpOptimizer', emoji: '🚀', color: 'from-blue-500 to-indigo-600' },
                 { name: 'Competitor Analysis', key: 'competitorAnalysis', emoji: '🎯', color: 'from-red-500 to-orange-600' },
                 { name: 'Trend Predictor', key: 'trendPredictor', emoji: '📈', color: 'from-cyan-500 to-blue-600' },
-                { name: 'AI Thumbnails', key: 'thumbnailGenerator', emoji: '🎨', color: 'from-pink-500 to-rose-600' }
+                { name: 'AI Thumbnails', key: 'thumbnailGenerator', emoji: '🎨', color: 'from-pink-500 to-rose-600' },
+                { name: 'Placement Finder', key: 'placementFinder', emoji: '🎬', color: 'from-purple-500 to-violet-600' }
             ];
 
             // Helper function to generate card HTML
@@ -2671,6 +2806,16 @@
             html += '<span>Generate</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
+            // Placement Finder Card (NEW)
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToPlacement()">';
+            html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-500 to-violet-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🎬</div>';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Placement Finder</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Find YouTube channels for Google Ads placements</p>';
+            html += '<div class="flex items-center text-purple-600 font-bold group">';
+            html += '<span>Find Channels</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            html += '</div></div>';
+
             // History Card
             html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100" onclick="app.goToHistory()">';
             html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">📜</div>';
@@ -2727,13 +2872,15 @@
                         warpOptimizer: 'Warp Optimizer',
                         competitorAnalysis: 'Competitor Analysis',
                         trendPredictor: 'Trend Predictor',
-                        thumbnailGenerator: 'AI Thumbnails'
+                        thumbnailGenerator: 'AI Thumbnails',
+                        placementFinder: 'Placement Finder'
                     };
                     var toolEmojis = {
                         warpOptimizer: '🚀',
                         competitorAnalysis: '🎯',
                         trendPredictor: '📈',
-                        thumbnailGenerator: '🎨'
+                        thumbnailGenerator: '🎨',
+                        placementFinder: '🎬'
                     };
                     for (var h = 0; h < state.bonusHistory.length; h++) {
                         var bonus = state.bonusHistory[h];
@@ -3201,6 +3348,11 @@
                                 typeBadge = 'Thumbnail';
                                 typeColor = 'bg-orange-100 text-orange-800';
                                 break;
+                            case 'placement':
+                                typeIcon = '🎬';
+                                typeBadge = 'Placement Finder';
+                                typeColor = 'bg-violet-100 text-violet-800';
+                                break;
                         }
 
                         // Info section
@@ -3234,6 +3386,10 @@
                             case 'thumbnail':
                                 title = item.title || 'AI Thumbnail';
                                 subtitle = '<strong>Style:</strong> ' + (item.style || 'Default');
+                                break;
+                            case 'placement':
+                                title = (item.channelInfo && item.channelInfo.name) ? item.channelInfo.name : 'Placement Search';
+                                subtitle = '<strong>Channels Found:</strong> ' + (item.totalFound || 0) + ' | <strong>Niche:</strong> ' + ((item.analysis && item.analysis.niche) || 'N/A');
                                 break;
                         }
 
@@ -3270,6 +3426,9 @@
                                 break;
                             case 'thumbnail':
                                 html += '<button onclick="app.viewThumbnailHistory(' + (state.historyTab === 'all' ? 'null, \'' + item.id + '\'' : i) + ')" class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 whitespace-nowrap text-sm">👁️ View</button>';
+                                break;
+                            case 'placement':
+                                html += '<button onclick="app.viewPlacementHistory(\'' + item.id + '\')" class="px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 whitespace-nowrap text-sm">👁️ View</button>';
                                 break;
                         }
 
@@ -3454,6 +3613,7 @@
             html += '<option value="competitorAnalysis">Competitor Analysis</option>';
             html += '<option value="trendPredictor">Trend Predictor</option>';
             html += '<option value="thumbnailGenerator">AI Thumbnails</option>';
+            html += '<option value="placementFinder">Placement Finder</option>';
             html += '</select>';
             html += '</div>';
 
@@ -3939,6 +4099,206 @@
             return html;
         }
 
+        /* ------------------------------------------
+           4.6.12 Placement Finder View
+           ------------------------------------------ */
+        function renderPlacement() {
+            var html = '';
+            var results = state.placementResults;
+
+            html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+
+            // Navigation buttons
+            html += '<div class="flex flex-wrap gap-3 mb-6">';
+            html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
+            html += '</div>';
+
+            // Header
+            html += '<div class="text-center mb-8 fade-in">';
+            html += '<div class="w-20 h-20 bg-gradient-to-br from-purple-500 to-violet-600 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-4 shadow-xl">🎬</div>';
+            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">Placement Finder</h1>';
+            html += '<p class="text-white/80 text-lg">Find successful YouTube channels for your Google Ads placements</p>';
+            html += '</div>';
+
+            // Copy Success Toast
+            if (state.copySuccess) {
+                html += '<div class="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-xl shadow-xl z-50 fade-in">';
+                html += '✅ ' + utils.escapeHtml(state.copySuccess);
+                html += '</div>';
+            }
+
+            // Error Message
+            if (state.error) {
+                html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message) + '</div>';
+            }
+
+            // Loading Section
+            if (state.loading && !results) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding mb-6 fade-in">';
+                html += '<div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">';
+                html += '<div class="flex items-center gap-4"><div class="loading-emoji">🎬</div><div><h3 class="text-xl font-bold text-gray-800">Finding Placement Channels</h3><p class="text-gray-500">Analyzing your channel and finding matches...</p></div></div>';
+                html += '<div class="progress-percentage">' + Math.round(state.loadingProgress) + '%</div>';
+                html += '</div>';
+                html += '<div class="progress-bar-container mb-6"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">';
+                for (var li = 0; li < state.loadingSteps.length; li++) {
+                    var lstep = state.loadingSteps[li];
+                    var lstepClass = li < state.loadingStep ? 'completed' : li === state.loadingStep ? 'active' : 'pending';
+                    html += '<div class="loading-step ' + lstepClass + '">';
+                    html += '<div class="step-icon ' + lstepClass + '">' + (lstepClass === 'completed' ? '✓' : lstep.icon) + '</div>';
+                    html += '<span class="text-sm font-medium">' + lstep.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div></div>';
+            }
+
+            // Input Form (show when no results)
+            if (!results && !state.loading) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding fade-in">';
+                html += '<div class="max-w-xl mx-auto">';
+
+                html += '<div class="text-center mb-6">';
+                html += '<p class="text-gray-600 text-lg">Enter your YouTube channel link and we\'ll find successful channels whose audience may like your content.</p>';
+                html += '</div>';
+
+                html += '<form onsubmit="app.findPlacements(event)">';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Your YouTube Channel URL</label>';
+                html += '<input type="text" id="placement-channel-url" placeholder="https://youtube.com/@yourchannel" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-lg" required />';
+                html += '<p class="text-sm text-gray-500 mt-2">Supports: youtube.com/@handle, youtube.com/channel/..., youtube.com/c/...</p>';
+                html += '</div>';
+
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-purple-500 to-violet-600 text-white font-bold rounded-xl hover:from-purple-600 hover:to-violet-700 transition-all shadow-lg hover:shadow-xl text-lg">';
+                html += '🔍 Find Placement Channels';
+                html += '</button>';
+                html += '</form>';
+
+                // Tips Section
+                html += '<div class="mt-8 bg-gradient-to-r from-purple-50 to-violet-50 p-5 rounded-xl">';
+                html += '<h4 class="font-semibold text-gray-800 mb-3">💡 What is Placement Targeting?</h4>';
+                html += '<ul class="text-sm text-gray-600 space-y-2">';
+                html += '<li>• <strong>Google Ads Placements</strong> let you show ads on specific YouTube channels</li>';
+                html += '<li>• Find channels with audiences similar to your content</li>';
+                html += '<li>• Copy channel URLs directly into your Google Ads campaign</li>';
+                html += '<li>• Target viewers who are already interested in your niche</li>';
+                html += '</ul>';
+                html += '</div>';
+
+                html += '</div></div>';
+            }
+
+            // Results Section
+            if (results && results.placements) {
+                var placements = results.placements;
+                var channelInfo = results.channelInfo || {};
+                var analysis = results.analysis || {};
+
+                // Channel Info Card
+                html += '<div class="bg-white/10 backdrop-blur rounded-2xl p-5 mb-6 fade-in">';
+                html += '<div class="flex flex-wrap items-center gap-4">';
+                if (channelInfo.thumbnail) {
+                    html += '<img src="' + utils.escapeHtml(channelInfo.thumbnail) + '" class="w-16 h-16 object-cover rounded-full" />';
+                }
+                html += '<div class="flex-1 min-w-[200px]">';
+                html += '<p class="text-white font-bold text-lg">' + utils.escapeHtml(channelInfo.name || 'Your Channel') + '</p>';
+                html += '<p class="text-white/70">' + utils.escapeHtml(analysis.niche || '') + '</p>';
+                if (analysis.audienceDescription) {
+                    html += '<p class="text-white/60 text-sm mt-1">👥 ' + utils.escapeHtml(analysis.audienceDescription) + '</p>';
+                }
+                html += '</div>';
+                html += '<div class="bg-green-500 text-white px-4 py-2 rounded-full font-bold">';
+                html += '✓ ' + placements.length + ' Channels Found';
+                html += '</div>';
+                html += '</div></div>';
+
+                // Action Buttons
+                html += '<div class="flex flex-wrap gap-3 mb-6">';
+                html += '<button onclick="app.copyAllPlacements()" class="btn-primary bg-gradient-to-r from-green-500 to-emerald-600 flex items-center gap-2">';
+                html += '<span>📋</span> Copy All ' + placements.length + ' Channels';
+                html += '</button>';
+                if (placements.length < 50) {
+                    html += '<button onclick="app.findMorePlacements()" class="btn-secondary flex items-center gap-2" ' + (state.placementLoading ? 'disabled' : '') + '>';
+                    if (state.placementLoading) {
+                        html += '<span class="animate-spin">⏳</span> Finding...';
+                    } else {
+                        html += '<span>🔄</span> Find 10 More (' + (50 - placements.length) + ' remaining)';
+                    }
+                    html += '</button>';
+                }
+                html += '<button onclick="app.goToPlacement()" class="btn-secondary flex items-center gap-2">';
+                html += '<span>🔍</span> New Search';
+                html += '</button>';
+                html += '</div>';
+
+                // Results Grid
+                html += '<div class="bg-white rounded-2xl shadow-xl p-4 lg:p-6 fade-in">';
+                html += '<div class="overflow-x-auto">';
+                html += '<table class="w-full">';
+                html += '<thead>';
+                html += '<tr class="border-b-2 border-gray-100">';
+                html += '<th class="text-left py-3 px-2 text-gray-600 font-semibold">#</th>';
+                html += '<th class="text-left py-3 px-2 text-gray-600 font-semibold">Channel</th>';
+                html += '<th class="text-left py-3 px-2 text-gray-600 font-semibold hidden md:table-cell">Subscribers</th>';
+                html += '<th class="text-left py-3 px-2 text-gray-600 font-semibold hidden lg:table-cell">Score</th>';
+                html += '<th class="text-right py-3 px-2 text-gray-600 font-semibold">Actions</th>';
+                html += '</tr>';
+                html += '</thead>';
+                html += '<tbody>';
+
+                for (var i = 0; i < placements.length; i++) {
+                    var p = placements[i];
+                    html += '<tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">';
+                    html += '<td class="py-3 px-2 text-gray-400 font-medium">' + (i + 1) + '</td>';
+                    html += '<td class="py-3 px-2">';
+                    html += '<div class="flex items-center gap-3">';
+                    if (p.thumbnail) {
+                        html += '<img src="' + utils.escapeHtml(p.thumbnail) + '" class="w-10 h-10 rounded-full object-cover" />';
+                    } else {
+                        html += '<div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-400">📺</div>';
+                    }
+                    html += '<div>';
+                    html += '<p class="font-semibold text-gray-800">' + utils.escapeHtml(p.channelName) + '</p>';
+                    if (p.handle) {
+                        html += '<p class="text-sm text-gray-500">' + utils.escapeHtml(p.handle) + '</p>';
+                    }
+                    html += '<p class="text-sm text-gray-500 md:hidden">' + utils.escapeHtml(p.subscribersFormatted) + ' subscribers</p>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</td>';
+                    html += '<td class="py-3 px-2 hidden md:table-cell">';
+                    html += '<span class="font-semibold text-gray-700">' + utils.escapeHtml(p.subscribersFormatted) + '</span>';
+                    html += '</td>';
+                    html += '<td class="py-3 px-2 hidden lg:table-cell">';
+                    var scoreColor = p.relevanceScore >= 80 ? 'green' : p.relevanceScore >= 60 ? 'yellow' : 'gray';
+                    html += '<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-' + scoreColor + '-100 text-' + scoreColor + '-700">' + p.relevanceScore + '%</span>';
+                    html += '</td>';
+                    html += '<td class="py-3 px-2 text-right">';
+                    html += '<div class="flex justify-end gap-2">';
+                    html += '<a href="' + utils.escapeHtml(p.channelUrl) + '" target="_blank" class="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Visit Channel">🔗</a>';
+                    html += '<button onclick="app.copySinglePlacement(\'' + utils.escapeHtml(p.channelUrl) + '\')" class="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Copy URL">📋</button>';
+                    html += '</div>';
+                    html += '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody>';
+                html += '</table>';
+                html += '</div>';
+
+                // Footer info
+                html += '<div class="mt-4 pt-4 border-t border-gray-100 flex flex-wrap justify-between items-center gap-4">';
+                html += '<p class="text-sm text-gray-500">Showing ' + placements.length + ' of maximum 50 channels</p>';
+                html += '<p class="text-sm text-gray-500">💡 Tip: Copy all and paste directly into Google Ads Placements</p>';
+                html += '</div>';
+
+                html += '</div>';
+            }
+
+            html += '</div></div>';
+            return html;
+        }
+
         /* ==========================================
            4.7 MAIN RENDER FUNCTION
            ========================================== */
@@ -3986,6 +4346,9 @@
                     break;
                 case 'thumbnail':
                     html = renderThumbnail();
+                    break;
+                case 'placement':
+                    html = renderPlacement();
                     break;
                 default:
                     html = '<div class="view-container view-centered"><div class="spinner"></div></div>';
