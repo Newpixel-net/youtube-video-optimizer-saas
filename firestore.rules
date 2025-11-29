@@ -143,5 +143,36 @@ service cloud.firestore {
       allow delete: if isAuthenticated() &&
                       (resource.data.userId == request.auth.uid || isAdmin());
     }
+
+    // ============================================
+    // CAMPAIGN REPORTS (Admin-created reports for clients)
+    // ============================================
+
+    match /campaignReports/{reportId} {
+      // Admins can read all reports
+      // Clients can only read reports assigned to them
+      allow read: if isAuthenticated() &&
+                    (isAdmin() || resource.data.clientId == request.auth.uid);
+
+      // Only Cloud Functions (Admin SDK) can create/update/delete
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
+    // USER NOTIFICATIONS
+    // ============================================
+
+    match /userNotifications/{notificationId} {
+      // Users can only read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can update their own notifications (mark as read)
+      allow update: if isAuthenticated() &&
+                      resource.data.userId == request.auth.uid &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+
+      // Only Cloud Functions can create/delete notifications
+      allow create, delete: if false;
+    }
   }
 }

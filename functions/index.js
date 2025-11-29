@@ -3681,3 +3681,763 @@ exports.deletePlacementFinder = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError('internal', 'Failed to delete.');
   }
 });
+
+// ==============================================
+// CAMPAIGN REPORTS (Admin Feature)
+// ==============================================
+
+/**
+ * Upload Campaign Report Images
+ * Admin uploads screenshots from Google Ads campaigns
+ */
+exports.uploadReportImages = functions.https.onCall(async (data, context) => {
+  const adminId = await requireAdmin(context);
+  checkRateLimit(adminId, 'uploadReportImages', 20);
+
+  const { images } = data || {};
+
+  if (!images || !Array.isArray(images) || images.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'At least one image is required');
+  }
+
+  if (images.length > 6) {
+    throw new functions.https.HttpsError('invalid-argument', 'Maximum 6 images allowed');
+  }
+
+  try {
+    const bucket = admin.storage().bucket();
+    const reportId = db.collection('campaignReports').doc().id;
+    const uploadedImages = [];
+
+    for (let i = 0; i < images.length; i++) {
+      const imageData = images[i];
+
+      // Validate base64 image data
+      if (!imageData.base64 || !imageData.mimeType) {
+        throw new functions.https.HttpsError('invalid-argument', `Invalid image data at index ${i}`);
+      }
+
+      // Support common image formats
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+      if (!allowedTypes.includes(imageData.mimeType)) {
+        throw new functions.https.HttpsError('invalid-argument', `Unsupported image type: ${imageData.mimeType}`);
+      }
+
+      // Decode base64
+      const buffer = Buffer.from(imageData.base64, 'base64');
+
+      // Validate file size (max 10MB per image)
+      if (buffer.length > 10 * 1024 * 1024) {
+        throw new functions.https.HttpsError('invalid-argument', `Image ${i + 1} exceeds 10MB limit`);
+      }
+
+      // Generate filename
+      const extension = imageData.mimeType.split('/')[1];
+      const fileName = `campaign-reports/${reportId}/image_${i + 1}_${Date.now()}.${extension}`;
+
+      // Upload to Firebase Storage
+      const file = bucket.file(fileName);
+      await file.save(buffer, {
+        metadata: {
+          contentType: imageData.mimeType,
+          metadata: {
+            uploadedBy: adminId,
+            reportId: reportId
+          }
+        }
+      });
+
+      // Get signed URL (valid for 7 days)
+      const [url] = await file.getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 7 * 24 * 60 * 60 * 1000
+      });
+
+      uploadedImages.push({
+        url: url,
+        storageRef: fileName,
+        uploadedAt: new Date().toISOString(),
+        index: i + 1
+      });
+    }
+
+    return {
+      success: true,
+      reportId: reportId,
+      images: uploadedImages,
+      message: `${uploadedImages.length} images uploaded successfully`
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Upload report images error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to upload images'));
+  }
+});
+
+/**
+ * Analyze Campaign Report Images with GPT-4 Vision
+ * Uses AI to extract metrics and generate recommendations
+ */
+exports.analyzeReportImages = functions.https.onCall(async (data, context) => {
+  const adminId = await requireAdmin(context);
+  checkRateLimit(adminId, 'analyzeReportImages', 10);
+
+  const { images, campaignName, additionalContext } = data || {};
+
+  if (!images || !Array.isArray(images) || images.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'At least one image is required');
+  }
+
+  try {
+    // Build image content for GPT-4 Vision
+    const imageContent = images.map((img, index) => ({
+      type: 'image_url',
+      image_url: {
+        url: img.base64 ? `data:${img.mimeType};base64,${img.base64}` : img.url,
+        detail: 'high'
+      }
+    }));
+
+    const systemPrompt = `You are an expert Google Ads campaign analyst. Analyze the provided campaign screenshots and extract all visible data.
+
+Your analysis should be thorough and actionable. The report will be sent to a client, so be professional but encouraging.
+
+IMPORTANT: Your response MUST be valid JSON with this exact structure:
+{
+  "campaignType": "Search|Display|Video|Shopping|Performance Max|Discovery",
+  "dateRange": "extracted date range from screenshots",
+  "metrics": {
+    "impressions": number or null,
+    "clicks": number or null,
+    "ctr": "percentage string or null",
+    "avgCpc": "currency string or null",
+    "cost": "currency string or null",
+    "conversions": number or null,
+    "conversionRate": "percentage string or null",
+    "costPerConversion": "currency string or null",
+    "impressionShare": "percentage string or null"
+  },
+  "performance": {
+    "overall": "Excellent|Good|Average|Needs Improvement|Poor",
+    "trend": "Improving|Stable|Declining",
+    "highlights": ["array of positive points"],
+    "concerns": ["array of areas needing attention"]
+  },
+  "recommendations": [
+    {
+      "priority": "High|Medium|Low",
+      "category": "Bidding|Keywords|Targeting|Ads|Budget|Other",
+      "title": "Short recommendation title",
+      "description": "Detailed explanation of the recommendation",
+      "expectedImpact": "Expected improvement from implementing this"
+    }
+  ],
+  "summary": "2-3 sentence executive summary of the campaign performance",
+  "nextSteps": "Suggested immediate actions",
+  "fiverCTA": "A compelling call-to-action suggesting they purchase advanced optimization services"
+}
+
+Be specific with numbers when visible. If a metric isn't visible, use null.
+Provide at least 3-5 detailed recommendations.
+The Fiverr CTA should be persuasive but not pushy, focusing on the value of professional optimization.`;
+
+    const userPrompt = `Analyze these Google Ads campaign screenshots${campaignName ? ` for the "${campaignName}" campaign` : ''}.${additionalContext ? `\n\nAdditional context: ${additionalContext}` : ''}
+
+Extract all visible metrics, assess performance, and provide actionable recommendations.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: userPrompt },
+            ...imageContent
+          ]
+        }
+      ],
+      max_tokens: 4000,
+      temperature: 0.3
+    });
+
+    const content = response.choices[0]?.message?.content || '';
+
+    // Try to parse JSON response
+    let analysis;
+    try {
+      // Extract JSON from response (handle markdown code blocks)
+      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) ||
+                        content.match(/```\s*([\s\S]*?)\s*```/) ||
+                        [null, content];
+      analysis = JSON.parse(jsonMatch[1] || content);
+    } catch (parseError) {
+      console.error('Failed to parse AI response as JSON:', parseError);
+      // Return raw response if parsing fails
+      analysis = {
+        rawResponse: content,
+        parseError: true,
+        summary: 'Analysis completed. Please review the raw response.',
+        recommendations: [],
+        metrics: {}
+      };
+    }
+
+    return {
+      success: true,
+      analysis: analysis,
+      analyzedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Analyze report images error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to analyze images'));
+  }
+});
+
+/**
+ * Create Campaign Report
+ * Save a new campaign report (draft or ready)
+ */
+exports.createCampaignReport = functions.https.onCall(async (data, context) => {
+  const adminId = await requireAdmin(context);
+  checkRateLimit(adminId, 'createCampaignReport', 20);
+
+  const { reportId, images, aiAnalysis, editedContent, campaignName, status } = data || {};
+
+  if (!images || images.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'At least one image is required');
+  }
+
+  try {
+    const docId = reportId || db.collection('campaignReports').doc().id;
+
+    const reportData = {
+      adminId: adminId,
+      clientId: null,
+      status: status || 'draft',
+      campaignName: campaignName || 'Campaign Report',
+      images: images,
+      aiAnalysis: aiAnalysis || null,
+      editedContent: editedContent || {
+        title: campaignName || 'Campaign Performance Report',
+        summary: aiAnalysis?.summary || '',
+        metrics: aiAnalysis?.metrics || {},
+        performance: aiAnalysis?.performance || {},
+        recommendations: aiAnalysis?.recommendations || [],
+        callToAction: aiAnalysis?.fiverCTA || ''
+      },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      sentAt: null,
+      viewedAt: null,
+      clientViewedCount: 0
+    };
+
+    await db.collection('campaignReports').doc(docId).set(reportData);
+
+    return {
+      success: true,
+      reportId: docId,
+      message: 'Report created successfully'
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Create campaign report error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to create report'));
+  }
+});
+
+/**
+ * Update Campaign Report
+ * Admin edits report content
+ */
+exports.updateCampaignReport = functions.https.onCall(async (data, context) => {
+  const adminId = await requireAdmin(context);
+  checkRateLimit(adminId, 'updateCampaignReport', 30);
+
+  const { reportId, editedContent, campaignName, status } = data || {};
+
+  if (!reportId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Report ID is required');
+  }
+
+  try {
+    const reportRef = db.collection('campaignReports').doc(reportId);
+    const reportDoc = await reportRef.get();
+
+    if (!reportDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Report not found');
+    }
+
+    const updateData = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    if (editedContent) {
+      updateData.editedContent = editedContent;
+    }
+    if (campaignName) {
+      updateData.campaignName = campaignName;
+    }
+    if (status) {
+      updateData.status = status;
+    }
+
+    await reportRef.update(updateData);
+
+    return {
+      success: true,
+      message: 'Report updated successfully'
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Update campaign report error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update report'));
+  }
+});
+
+/**
+ * Delete Campaign Report
+ * Admin deletes a report and its images
+ */
+exports.deleteCampaignReport = functions.https.onCall(async (data, context) => {
+  const adminId = await requireAdmin(context);
+  checkRateLimit(adminId, 'deleteCampaignReport', 20);
+
+  const { reportId } = data || {};
+
+  if (!reportId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Report ID is required');
+  }
+
+  try {
+    const reportRef = db.collection('campaignReports').doc(reportId);
+    const reportDoc = await reportRef.get();
+
+    if (!reportDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Report not found');
+    }
+
+    const reportData = reportDoc.data();
+
+    // Delete images from storage
+    const bucket = admin.storage().bucket();
+    if (reportData.images && Array.isArray(reportData.images)) {
+      for (const image of reportData.images) {
+        if (image.storageRef) {
+          try {
+            await bucket.file(image.storageRef).delete();
+          } catch (e) {
+            console.log('Image already deleted or not found:', image.storageRef);
+          }
+        }
+      }
+    }
+
+    // Delete any notifications related to this report
+    const notificationsSnapshot = await db.collection('userNotifications')
+      .where('reportId', '==', reportId)
+      .get();
+
+    const batch = db.batch();
+    notificationsSnapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    batch.delete(reportRef);
+    await batch.commit();
+
+    return {
+      success: true,
+      message: 'Report deleted successfully'
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Delete campaign report error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to delete report'));
+  }
+});
+
+/**
+ * Send Report to Client
+ * Assign report to a user and create notification
+ */
+exports.sendReportToClient = functions.https.onCall(async (data, context) => {
+  const adminId = await requireAdmin(context);
+  checkRateLimit(adminId, 'sendReportToClient', 20);
+
+  const { reportId, clientId } = data || {};
+
+  if (!reportId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Report ID is required');
+  }
+  if (!clientId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Client ID is required');
+  }
+
+  try {
+    // Verify client exists
+    const clientDoc = await db.collection('users').doc(clientId).get();
+    if (!clientDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Client not found');
+    }
+
+    // Get report
+    const reportRef = db.collection('campaignReports').doc(reportId);
+    const reportDoc = await reportRef.get();
+
+    if (!reportDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Report not found');
+    }
+
+    const reportData = reportDoc.data();
+    const campaignName = reportData.campaignName || 'Campaign Report';
+
+    // Update report with client assignment
+    await reportRef.update({
+      clientId: clientId,
+      status: 'sent',
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Create notification for client
+    await db.collection('userNotifications').add({
+      userId: clientId,
+      type: 'new_report',
+      reportId: reportId,
+      title: `New Campaign Report: ${campaignName}`,
+      message: 'Your campaign performance report is ready to view.',
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      message: `Report sent to ${clientDoc.data().email || 'client'}`
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Send report to client error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to send report'));
+  }
+});
+
+/**
+ * Get Admin Reports
+ * Fetch all campaign reports for admin
+ */
+exports.getAdminReports = functions.https.onCall(async (data, context) => {
+  const adminId = await requireAdmin(context);
+  checkRateLimit(adminId, 'getAdminReports', 30);
+
+  const { limit: queryLimit, status } = data || {};
+
+  try {
+    let query = db.collection('campaignReports')
+      .orderBy('createdAt', 'desc');
+
+    if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    if (queryLimit) {
+      query = query.limit(queryLimit);
+    } else {
+      query = query.limit(50);
+    }
+
+    const snapshot = await query.get();
+    const reports = [];
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+
+      // Get client info if assigned
+      let clientInfo = null;
+      if (data.clientId) {
+        const clientDoc = await db.collection('users').doc(data.clientId).get();
+        if (clientDoc.exists) {
+          clientInfo = {
+            uid: data.clientId,
+            email: clientDoc.data().email
+          };
+        }
+      }
+
+      // Safe timestamp serialization
+      const createdAt = data.createdAt;
+      const sentAt = data.sentAt;
+      const viewedAt = data.viewedAt;
+
+      reports.push({
+        id: doc.id,
+        ...data,
+        createdAt: createdAt ? (createdAt.toDate ? createdAt.toDate().toISOString() : createdAt) : null,
+        sentAt: sentAt ? (sentAt.toDate ? sentAt.toDate().toISOString() : sentAt) : null,
+        viewedAt: viewedAt ? (viewedAt.toDate ? viewedAt.toDate().toISOString() : viewedAt) : null,
+        updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt) : null,
+        clientInfo: clientInfo
+      });
+    }
+
+    return {
+      success: true,
+      reports: reports,
+      count: reports.length
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Get admin reports error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to load reports'));
+  }
+});
+
+/**
+ * Get Client Reports
+ * Fetch reports assigned to a specific client
+ */
+exports.getClientReports = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getClientReports', 30);
+
+  try {
+    const snapshot = await db.collection('campaignReports')
+      .where('clientId', '==', uid)
+      .where('status', 'in', ['sent', 'viewed'])
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get();
+
+    const reports = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const createdAt = data.createdAt;
+      const sentAt = data.sentAt;
+
+      return {
+        id: doc.id,
+        campaignName: data.campaignName,
+        status: data.status,
+        images: data.images,
+        editedContent: data.editedContent,
+        createdAt: createdAt ? (createdAt.toDate ? createdAt.toDate().toISOString() : createdAt) : null,
+        sentAt: sentAt ? (sentAt.toDate ? sentAt.toDate().toISOString() : sentAt) : null
+      };
+    });
+
+    return {
+      success: true,
+      reports: reports,
+      count: reports.length
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Get client reports error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to load reports'));
+  }
+});
+
+/**
+ * Mark Report as Viewed
+ * Track when a client views their report
+ */
+exports.markReportViewed = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'markReportViewed', 30);
+
+  const { reportId } = data || {};
+
+  if (!reportId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Report ID is required');
+  }
+
+  try {
+    const reportRef = db.collection('campaignReports').doc(reportId);
+    const reportDoc = await reportRef.get();
+
+    if (!reportDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Report not found');
+    }
+
+    const reportData = reportDoc.data();
+
+    // Verify user is the assigned client
+    if (reportData.clientId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized to view this report');
+    }
+
+    // Update view count and status
+    const updates = {
+      clientViewedCount: admin.firestore.FieldValue.increment(1)
+    };
+
+    // Set first view time and status if not already viewed
+    if (reportData.status === 'sent') {
+      updates.status = 'viewed';
+      updates.viewedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    await reportRef.update(updates);
+
+    return {
+      success: true,
+      message: 'Report marked as viewed'
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Mark report viewed error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update report'));
+  }
+});
+
+/**
+ * Get Unread Notifications
+ * Get notification count and list for a user
+ */
+exports.getUnreadNotifications = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getUnreadNotifications', 60);
+
+  try {
+    const snapshot = await db.collection('userNotifications')
+      .where('userId', '==', uid)
+      .where('isRead', '==', false)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+
+    const notifications = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const createdAt = data.createdAt;
+
+      return {
+        id: doc.id,
+        type: data.type,
+        reportId: data.reportId,
+        title: data.title,
+        message: data.message,
+        isRead: data.isRead,
+        createdAt: createdAt ? (createdAt.toDate ? createdAt.toDate().toISOString() : createdAt) : null
+      };
+    });
+
+    return {
+      success: true,
+      notifications: notifications,
+      unreadCount: notifications.length
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Get unread notifications error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to load notifications'));
+  }
+});
+
+/**
+ * Mark Notification as Read
+ * Clear notification for a user
+ */
+exports.markNotificationRead = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'markNotificationRead', 60);
+
+  const { notificationId, markAll } = data || {};
+
+  try {
+    if (markAll) {
+      // Mark all unread notifications as read
+      const snapshot = await db.collection('userNotifications')
+        .where('userId', '==', uid)
+        .where('isRead', '==', false)
+        .get();
+
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { isRead: true });
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        message: `${snapshot.docs.length} notifications marked as read`
+      };
+    } else if (notificationId) {
+      // Mark specific notification as read
+      const notificationRef = db.collection('userNotifications').doc(notificationId);
+      const notificationDoc = await notificationRef.get();
+
+      if (!notificationDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Notification not found');
+      }
+
+      if (notificationDoc.data().userId !== uid) {
+        throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+      }
+
+      await notificationRef.update({ isRead: true });
+
+      return {
+        success: true,
+        message: 'Notification marked as read'
+      };
+    } else {
+      throw new functions.https.HttpsError('invalid-argument', 'Notification ID or markAll flag required');
+    }
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Mark notification read error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update notification'));
+  }
+});
+
+/**
+ * Get Single Report (for viewing)
+ * Get a specific report with full details
+ */
+exports.getCampaignReport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getCampaignReport', 30);
+
+  const { reportId } = data || {};
+
+  if (!reportId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Report ID is required');
+  }
+
+  try {
+    const reportDoc = await db.collection('campaignReports').doc(reportId).get();
+
+    if (!reportDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Report not found');
+    }
+
+    const reportData = reportDoc.data();
+    const isUserAdmin = await isAdmin(uid);
+
+    // Check authorization
+    if (!isUserAdmin && reportData.clientId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized to view this report');
+    }
+
+    // Serialize timestamps
+    const createdAt = reportData.createdAt;
+    const sentAt = reportData.sentAt;
+    const viewedAt = reportData.viewedAt;
+
+    return {
+      success: true,
+      report: {
+        id: reportDoc.id,
+        ...reportData,
+        createdAt: createdAt ? (createdAt.toDate ? createdAt.toDate().toISOString() : createdAt) : null,
+        sentAt: sentAt ? (sentAt.toDate ? sentAt.toDate().toISOString() : sentAt) : null,
+        viewedAt: viewedAt ? (viewedAt.toDate ? viewedAt.toDate().toISOString() : viewedAt) : null,
+        updatedAt: reportData.updatedAt ? (reportData.updatedAt.toDate ? reportData.updatedAt.toDate().toISOString() : reportData.updatedAt) : null
+      }
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Get campaign report error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to load report'));
+  }
+});

@@ -11,6 +11,16 @@ service firebase.storage {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Campaign report images folder (admin only)
+    // Note: Cloud Functions using Admin SDK bypass these rules for writes
+    match /campaign-reports/{reportId}/{fileName} {
+      // Allow authenticated users to read (for viewing reports)
+      allow read: if request.auth != null;
+
+      // Writes are handled by Cloud Functions with Admin SDK
+      allow write: if false;
+    }
+
     // Deny access to all other paths
     match /{allPaths=**} {
       allow read, write: if false;

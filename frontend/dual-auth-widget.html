@@ -243,6 +243,225 @@
         }
 
         /* ------------------------------------------
+           2.2.5 NOTIFICATION & REPORT STYLES
+           ------------------------------------------ */
+        @keyframes notificationPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+        }
+
+        @keyframes notificationGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(34, 197, 94, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.8), 0 0 30px rgba(34, 197, 94, 0.4); }
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 6px;
+            animation: notificationPulse 2s ease-in-out infinite;
+        }
+
+        .notification-dot {
+            width: 12px;
+            height: 12px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            border-radius: 50%;
+            animation: notificationGlow 2s ease-in-out infinite;
+        }
+
+        .notification-bell {
+            position: relative;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .notification-bell:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .notification-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            width: 320px;
+            max-height: 400px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            z-index: 100;
+            margin-top: 8px;
+        }
+
+        .upload-zone {
+            border: 3px dashed #cbd5e1;
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #f8fafc;
+        }
+
+        .upload-zone:hover, .upload-zone.drag-over {
+            border-color: #6366f1;
+            background: #eef2ff;
+        }
+
+        .upload-zone.has-images {
+            border-style: solid;
+            border-color: #22c55e;
+            background: #f0fdf4;
+        }
+
+        .image-preview {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            background: #f1f5f9;
+        }
+
+        .image-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .image-preview .remove-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .image-preview .remove-btn:hover {
+            background: #dc2626;
+            transform: scale(1.1);
+        }
+
+        .report-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0;
+        }
+
+        .report-card:hover {
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-draft { background: #f1f5f9; color: #64748b; }
+        .status-ready { background: #dbeafe; color: #2563eb; }
+        .status-sent { background: #dcfce7; color: #16a34a; }
+        .status-viewed { background: #f3e8ff; color: #9333ea; }
+
+        .metric-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .recommendation-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1rem;
+            border-left: 4px solid;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .recommendation-card.priority-high { border-left-color: #ef4444; }
+        .recommendation-card.priority-medium { border-left-color: #f59e0b; }
+        .recommendation-card.priority-low { border-left-color: #22c55e; }
+
+        .client-report-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .client-report-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+        }
+
+        .client-report-card.has-new::after {
+            content: 'NEW';
+            position: absolute;
+            top: 12px;
+            right: -28px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 4px 32px;
+            transform: rotate(45deg);
+        }
+
+        /* ------------------------------------------
            2.3 COMPONENTS - Buttons
            ------------------------------------------ */
         .btn-primary {
@@ -1113,7 +1332,24 @@
 
             // Bonus history
             bonusHistory: null,         // User's bonus history
-            showBonusHistory: false     // Modal visibility
+            showBonusHistory: false,    // Modal visibility
+
+            // Campaign Reports (Admin feature)
+            campaignReports: null,       // List of all reports (admin view)
+            clientReports: null,         // Reports for current user
+            currentReport: null,         // Report being viewed/edited
+            reportImages: [],            // Images for new report
+            reportAnalysis: null,        // AI analysis result
+            reportLoading: false,        // Loading state for report operations
+            editingReport: null,         // Report being edited
+
+            // Notifications
+            notifications: [],           // User's notifications
+            unreadCount: 0,              // Unread notification count
+            showNotifications: false,    // Notification dropdown visibility
+
+            // Report modals
+            sendModalReportId: null      // Report ID for send modal
         };
 
         // Loading progress simulation - OPTIMIZED to prevent flickering
@@ -1392,6 +1628,7 @@
             goToDashboard: function(skipRefresh) {
                 state.currentView = 'dashboard';
                 state.error = null;
+                state.showNotifications = false;
                 render();
 
                 // Refresh profile data unless explicitly skipped
@@ -1409,6 +1646,9 @@
                             // Silently fail - keep showing cached data
                             console.warn('Failed to refresh profile:', e);
                         });
+
+                    // Load notifications
+                    this.loadNotifications();
                 }
             },
 
@@ -2577,6 +2817,536 @@
                     state.error = { message: 'Failed to copy: ' + err.message };
                     render();
                 });
+            },
+
+            /* ------------------------------------------
+               4.5.10 Campaign Reports Functions
+               ------------------------------------------ */
+
+            // Navigation
+            goToAdminReports: function() {
+                state.currentView = 'admin-reports';
+                state.error = null;
+                state.success = null;
+                state.reportImages = [];
+                state.reportAnalysis = null;
+                state.sendModalReportId = null;
+                this.loadAdminReports();
+                render();
+            },
+
+            goToClientReports: function() {
+                state.currentView = 'client-reports';
+                state.error = null;
+                state.success = null;
+                this.loadClientReports();
+                render();
+            },
+
+            goToReportEditor: function() {
+                if (!state.reportAnalysis && !state.editingReport) {
+                    state.error = 'No report to edit';
+                    render();
+                    return;
+                }
+
+                if (!state.editingReport) {
+                    // Creating new report from analysis
+                    state.editingReport = {
+                        id: null,
+                        campaignName: document.getElementById('campaign-name')?.value || 'Campaign Report',
+                        images: state.reportImages,
+                        aiAnalysis: state.reportAnalysis,
+                        editedContent: {
+                            title: document.getElementById('campaign-name')?.value || 'Campaign Performance Report',
+                            summary: state.reportAnalysis.summary || '',
+                            metrics: state.reportAnalysis.metrics || {},
+                            performance: state.reportAnalysis.performance || {},
+                            recommendations: state.reportAnalysis.recommendations || [],
+                            callToAction: state.reportAnalysis.fiverCTA || ''
+                        }
+                    };
+                }
+
+                state.currentView = 'report-editor';
+                state.error = null;
+                state.success = null;
+                render();
+            },
+
+            // Image Upload Handling
+            handleImageUpload: function(event) {
+                var files = event.target.files;
+                if (!files || files.length === 0) return;
+
+                var maxImages = 6;
+                var currentCount = state.reportImages.length;
+                var remainingSlots = maxImages - currentCount;
+
+                if (files.length > remainingSlots) {
+                    state.error = 'Maximum ' + maxImages + ' images allowed. You can add ' + remainingSlots + ' more.';
+                    render();
+                    return;
+                }
+
+                for (var i = 0; i < files.length && i < remainingSlots; i++) {
+                    var file = files[i];
+
+                    // Validate file type
+                    if (!file.type.match(/^image\/(png|jpe?g|webp)$/)) {
+                        state.error = 'Only PNG, JPG, and WebP images are supported';
+                        render();
+                        return;
+                    }
+
+                    // Validate file size (10MB max)
+                    if (file.size > 10 * 1024 * 1024) {
+                        state.error = 'Each image must be under 10MB';
+                        render();
+                        return;
+                    }
+
+                    // Read file and create preview
+                    (function(f) {
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            state.reportImages.push({
+                                file: f,
+                                preview: e.target.result,
+                                base64: e.target.result.split(',')[1],
+                                mimeType: f.type,
+                                name: f.name
+                            });
+                            render();
+                        };
+                        reader.readAsDataURL(f);
+                    })(file);
+                }
+
+                // Clear input
+                event.target.value = '';
+            },
+
+            removeReportImage: function(index) {
+                state.reportImages.splice(index, 1);
+                render();
+            },
+
+            clearReportImages: function() {
+                state.reportImages = [];
+                state.reportAnalysis = null;
+                render();
+            },
+
+            // AI Analysis
+            analyzeReportImages: async function() {
+                if (state.reportImages.length === 0) {
+                    state.error = 'Please upload at least one image';
+                    render();
+                    return;
+                }
+
+                state.reportLoading = true;
+                state.error = null;
+                render();
+
+                try {
+                    var campaignName = document.getElementById('campaign-name')?.value || '';
+                    var additionalContext = document.getElementById('additional-context')?.value || '';
+
+                    var analyzeReportImages = firebase.functions().httpsCallable('analyzeReportImages');
+                    var result = await analyzeReportImages({
+                        images: state.reportImages.map(function(img) {
+                            return {
+                                base64: img.base64,
+                                mimeType: img.mimeType
+                            };
+                        }),
+                        campaignName: campaignName,
+                        additionalContext: additionalContext
+                    });
+
+                    if (result.data.success) {
+                        state.reportAnalysis = result.data.analysis;
+                        state.success = 'AI analysis completed successfully!';
+                    } else {
+                        state.error = 'Analysis failed. Please try again.';
+                    }
+                } catch (err) {
+                    console.error('Analysis error:', err);
+                    state.error = err.message || 'Failed to analyze images';
+                } finally {
+                    state.reportLoading = false;
+                    render();
+                }
+            },
+
+            // Save Report
+            saveReportAsDraft: async function() {
+                if (!state.reportAnalysis || state.reportImages.length === 0) {
+                    state.error = 'No analysis to save';
+                    render();
+                    return;
+                }
+
+                state.reportLoading = true;
+                state.error = null;
+                render();
+
+                try {
+                    // First upload images to storage
+                    var uploadReportImages = firebase.functions().httpsCallable('uploadReportImages');
+                    var uploadResult = await uploadReportImages({
+                        images: state.reportImages.map(function(img) {
+                            return {
+                                base64: img.base64,
+                                mimeType: img.mimeType
+                            };
+                        })
+                    });
+
+                    if (!uploadResult.data.success) {
+                        throw new Error('Failed to upload images');
+                    }
+
+                    // Then create the report
+                    var createCampaignReport = firebase.functions().httpsCallable('createCampaignReport');
+                    var campaignName = document.getElementById('campaign-name')?.value || 'Campaign Report';
+
+                    var result = await createCampaignReport({
+                        reportId: uploadResult.data.reportId,
+                        images: uploadResult.data.images,
+                        aiAnalysis: state.reportAnalysis,
+                        campaignName: campaignName,
+                        status: 'draft'
+                    });
+
+                    if (result.data.success) {
+                        state.success = 'Report saved as draft!';
+                        state.reportImages = [];
+                        state.reportAnalysis = null;
+                        this.loadAdminReports();
+                    }
+                } catch (err) {
+                    console.error('Save report error:', err);
+                    state.error = err.message || 'Failed to save report';
+                } finally {
+                    state.reportLoading = false;
+                    render();
+                }
+            },
+
+            saveReportChanges: async function() {
+                if (!state.editingReport) {
+                    state.error = 'No report to save';
+                    render();
+                    return;
+                }
+
+                state.reportLoading = true;
+                state.error = null;
+                render();
+
+                try {
+                    var title = document.getElementById('edit-title')?.value || '';
+                    var summary = document.getElementById('edit-summary')?.value || '';
+                    var cta = document.getElementById('edit-cta')?.value || '';
+
+                    // Get recommendations from inputs
+                    var recInputs = document.querySelectorAll('.rec-input');
+                    var recommendations = [];
+                    recInputs.forEach(function(input) {
+                        if (input.value.trim()) {
+                            recommendations.push({ title: input.value.trim() });
+                        }
+                    });
+
+                    var editedContent = {
+                        title: title,
+                        summary: summary,
+                        metrics: state.editingReport.editedContent?.metrics || state.editingReport.aiAnalysis?.metrics || {},
+                        performance: state.editingReport.editedContent?.performance || state.editingReport.aiAnalysis?.performance || {},
+                        recommendations: recommendations,
+                        callToAction: cta
+                    };
+
+                    if (state.editingReport.id) {
+                        // Update existing report
+                        var updateCampaignReport = firebase.functions().httpsCallable('updateCampaignReport');
+                        var result = await updateCampaignReport({
+                            reportId: state.editingReport.id,
+                            editedContent: editedContent,
+                            campaignName: title,
+                            status: 'ready'
+                        });
+
+                        if (result.data.success) {
+                            state.success = 'Report updated successfully!';
+                            state.editingReport.editedContent = editedContent;
+                        }
+                    } else {
+                        // Create new report
+                        var uploadReportImages = firebase.functions().httpsCallable('uploadReportImages');
+                        var uploadResult = await uploadReportImages({
+                            images: state.editingReport.images.map(function(img) {
+                                return {
+                                    base64: img.base64,
+                                    mimeType: img.mimeType
+                                };
+                            })
+                        });
+
+                        if (!uploadResult.data.success) {
+                            throw new Error('Failed to upload images');
+                        }
+
+                        var createCampaignReport = firebase.functions().httpsCallable('createCampaignReport');
+                        var result = await createCampaignReport({
+                            reportId: uploadResult.data.reportId,
+                            images: uploadResult.data.images,
+                            aiAnalysis: state.editingReport.aiAnalysis,
+                            editedContent: editedContent,
+                            campaignName: title,
+                            status: 'ready'
+                        });
+
+                        if (result.data.success) {
+                            state.success = 'Report created successfully!';
+                            state.editingReport.id = result.data.reportId;
+                            state.editingReport.images = uploadResult.data.images;
+                        }
+                    }
+                } catch (err) {
+                    console.error('Save changes error:', err);
+                    state.error = err.message || 'Failed to save changes';
+                } finally {
+                    state.reportLoading = false;
+                    render();
+                }
+            },
+
+            // Edit/Delete Reports
+            editReport: async function(reportId) {
+                state.reportLoading = true;
+                render();
+
+                try {
+                    var getCampaignReport = firebase.functions().httpsCallable('getCampaignReport');
+                    var result = await getCampaignReport({ reportId: reportId });
+
+                    if (result.data.success) {
+                        state.editingReport = result.data.report;
+                        state.currentView = 'report-editor';
+                    }
+                } catch (err) {
+                    console.error('Load report error:', err);
+                    state.error = err.message || 'Failed to load report';
+                } finally {
+                    state.reportLoading = false;
+                    render();
+                }
+            },
+
+            deleteReport: async function(reportId) {
+                if (!confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+                    return;
+                }
+
+                state.reportLoading = true;
+                render();
+
+                try {
+                    var deleteCampaignReport = firebase.functions().httpsCallable('deleteCampaignReport');
+                    var result = await deleteCampaignReport({ reportId: reportId });
+
+                    if (result.data.success) {
+                        state.success = 'Report deleted successfully';
+                        this.loadAdminReports();
+                    }
+                } catch (err) {
+                    console.error('Delete report error:', err);
+                    state.error = err.message || 'Failed to delete report';
+                } finally {
+                    state.reportLoading = false;
+                    render();
+                }
+            },
+
+            // Send to Client
+            openSendModal: function(reportId) {
+                state.sendModalReportId = reportId;
+                render();
+            },
+
+            closeSendModal: function() {
+                state.sendModalReportId = null;
+                render();
+            },
+
+            sendReportToClient: async function() {
+                var clientId = document.getElementById('send-client-select')?.value;
+                if (!clientId) {
+                    state.error = 'Please select a client';
+                    render();
+                    return;
+                }
+
+                state.reportLoading = true;
+                render();
+
+                try {
+                    var sendReportToClient = firebase.functions().httpsCallable('sendReportToClient');
+                    var result = await sendReportToClient({
+                        reportId: state.sendModalReportId,
+                        clientId: clientId
+                    });
+
+                    if (result.data.success) {
+                        state.success = result.data.message;
+                        state.sendModalReportId = null;
+                        this.loadAdminReports();
+                    }
+                } catch (err) {
+                    console.error('Send report error:', err);
+                    state.error = err.message || 'Failed to send report';
+                } finally {
+                    state.reportLoading = false;
+                    render();
+                }
+            },
+
+            // Load Reports
+            loadAdminReports: async function() {
+                try {
+                    var getAdminReports = firebase.functions().httpsCallable('getAdminReports');
+                    var result = await getAdminReports({});
+
+                    if (result.data.success) {
+                        state.campaignReports = result.data.reports;
+                    }
+                } catch (err) {
+                    console.error('Load admin reports error:', err);
+                    state.campaignReports = [];
+                }
+                render();
+            },
+
+            loadClientReports: async function() {
+                try {
+                    var getClientReports = firebase.functions().httpsCallable('getClientReports');
+                    var result = await getClientReports({});
+
+                    if (result.data.success) {
+                        state.clientReports = result.data.reports;
+                    }
+                } catch (err) {
+                    console.error('Load client reports error:', err);
+                    state.clientReports = [];
+                }
+                render();
+            },
+
+            // View Report (Client)
+            viewReport: async function(reportId) {
+                state.currentReport = { id: null };
+                state.currentView = 'view-report';
+                render();
+
+                try {
+                    var getCampaignReport = firebase.functions().httpsCallable('getCampaignReport');
+                    var result = await getCampaignReport({ reportId: reportId });
+
+                    if (result.data.success) {
+                        state.currentReport = result.data.report;
+
+                        // Mark as viewed
+                        var markReportViewed = firebase.functions().httpsCallable('markReportViewed');
+                        await markReportViewed({ reportId: reportId });
+
+                        // Update local state
+                        if (state.clientReports) {
+                            state.clientReports = state.clientReports.map(function(r) {
+                                if (r.id === reportId) {
+                                    r.status = 'viewed';
+                                }
+                                return r;
+                            });
+                        }
+
+                        // Refresh notifications
+                        this.loadNotifications();
+                    }
+                } catch (err) {
+                    console.error('View report error:', err);
+                    state.error = err.message || 'Failed to load report';
+                }
+                render();
+            },
+
+            // Recommendations editing
+            addRecommendation: function() {
+                if (!state.editingReport) return;
+                if (!state.editingReport.editedContent) {
+                    state.editingReport.editedContent = { recommendations: [] };
+                }
+                if (!state.editingReport.editedContent.recommendations) {
+                    state.editingReport.editedContent.recommendations = [];
+                }
+                state.editingReport.editedContent.recommendations.push({ title: '' });
+                render();
+            },
+
+            removeRecommendation: function(index) {
+                if (!state.editingReport?.editedContent?.recommendations) return;
+                state.editingReport.editedContent.recommendations.splice(index, 1);
+                render();
+            },
+
+            // Notifications
+            loadNotifications: async function() {
+                try {
+                    var getUnreadNotifications = firebase.functions().httpsCallable('getUnreadNotifications');
+                    var result = await getUnreadNotifications({});
+
+                    if (result.data.success) {
+                        state.notifications = result.data.notifications;
+                        state.unreadCount = result.data.unreadCount;
+                    }
+                } catch (err) {
+                    console.error('Load notifications error:', err);
+                }
+                render();
+            },
+
+            toggleNotifications: function() {
+                state.showNotifications = !state.showNotifications;
+                render();
+            },
+
+            markAllNotificationsRead: async function() {
+                try {
+                    var markNotificationRead = firebase.functions().httpsCallable('markNotificationRead');
+                    await markNotificationRead({ markAll: true });
+                    state.notifications = [];
+                    state.unreadCount = 0;
+                    state.showNotifications = false;
+                } catch (err) {
+                    console.error('Mark notifications error:', err);
+                }
+                render();
+            },
+
+            openNotificationReport: async function(reportId, notificationId) {
+                // Mark notification as read
+                try {
+                    var markNotificationRead = firebase.functions().httpsCallable('markNotificationRead');
+                    await markNotificationRead({ notificationId: notificationId });
+                } catch (err) {
+                    console.error('Mark notification error:', err);
+                }
+
+                state.showNotifications = false;
+                this.viewReport(reportId);
             }
         };
 
@@ -2830,8 +3600,41 @@
             html += '<span class="flex items-center gap-2 bg-gradient-to-r from-purple-500/30 to-indigo-500/30 px-4 py-2 rounded-full backdrop-blur font-semibold"><span class="text-lg">⭐</span> ' + planName + ' Plan</span>';
             html += '</div>';
             html += '</div>';
+            html += '<div class="flex items-center gap-4">';
+            // Notification Bell (only if unread notifications exist)
+            if (state.unreadCount > 0) {
+                html += '<div class="notification-bell relative" onclick="app.toggleNotifications()">';
+                html += '<span class="text-2xl">🔔</span>';
+                html += '<span class="notification-badge">' + state.unreadCount + '</span>';
+                html += '</div>';
+            }
             html += '<button onclick="app.signOut()" class="btn-secondary">Sign Out</button>';
             html += '</div>';
+            html += '</div>';
+
+            // Notification Dropdown
+            if (state.showNotifications && state.notifications.length > 0) {
+                html += '<div class="notification-dropdown fade-in" style="position: fixed; top: 80px; right: 20px; z-index: 1000;">';
+                html += '<div class="p-4 border-b border-gray-100 flex justify-between items-center">';
+                html += '<h4 class="font-bold text-gray-800">Notifications</h4>';
+                html += '<button onclick="app.markAllNotificationsRead()" class="text-sm text-blue-600 hover:underline">Mark all read</button>';
+                html += '</div>';
+                html += '<div class="max-h-64 overflow-y-auto">';
+                for (var n = 0; n < state.notifications.length; n++) {
+                    var notif = state.notifications[n];
+                    html += '<div class="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50" onclick="app.openNotificationReport(\'' + notif.reportId + '\', \'' + notif.id + '\')">';
+                    html += '<div class="flex items-start gap-3">';
+                    html += '<span class="text-2xl">📊</span>';
+                    html += '<div>';
+                    html += '<p class="font-semibold text-gray-800 text-sm">' + utils.escapeHtml(notif.title) + '</p>';
+                    html += '<p class="text-gray-500 text-xs mt-1">' + utils.escapeHtml(notif.message) + '</p>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
 
             // Usage Stats - Tools data
             var tools = [
@@ -3093,9 +3896,30 @@
 
             html += '</div>';
 
+            // My Campaign Reports Card (for clients)
+            html += '<div class="mt-8 fade-in">';
+            html += '<div class="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl shadow-xl p-8 mobile-padding cursor-pointer hover:from-emerald-600 hover:to-teal-700 transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" onclick="app.goToClientReports()">';
+            if (state.unreadCount > 0) {
+                html += '<div class="absolute top-4 right-4 flex items-center gap-2">';
+                html += '<span class="notification-dot"></span>';
+                html += '<span class="bg-white/20 text-white text-sm font-bold px-3 py-1 rounded-full">' + state.unreadCount + ' New</span>';
+                html += '</div>';
+            }
+            html += '<div class="flex items-center gap-5">';
+            html += '<div class="text-5xl">📊</div>';
+            html += '<div class="flex-1">';
+            html += '<h3 class="text-2xl font-bold text-white mb-1">My Campaign Reports</h3>';
+            html += '<p class="text-white/80">View your Google Ads performance reports</p>';
+            html += '</div>';
+            html += '<div class="text-white text-3xl">→</div>';
+            html += '</div></div></div>';
+
             // Admin Section (only for admins)
             if (state.isAdmin) {
                 html += '<div class="mt-8 fade-in">';
+                html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">';
+
+                // Admin Dashboard Card
                 html += '<div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-xl p-8 mobile-padding cursor-pointer hover:from-purple-700 hover:to-indigo-700 transition-all hover:shadow-2xl hover:scale-[1.02]" onclick="app.goToAdmin()">';
                 html += '<div class="flex items-center gap-5">';
                 html += '<div class="text-5xl">⚙️</div>';
@@ -3104,7 +3928,20 @@
                 html += '<p class="text-white/80">Manage users, subscriptions & analytics</p>';
                 html += '</div>';
                 html += '<div class="text-white text-3xl">→</div>';
-                html += '</div></div></div>';
+                html += '</div></div>';
+
+                // Campaign Reports Card (Admin)
+                html += '<div class="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl shadow-xl p-8 mobile-padding cursor-pointer hover:from-amber-600 hover:to-orange-700 transition-all hover:shadow-2xl hover:scale-[1.02]" onclick="app.goToAdminReports()">';
+                html += '<div class="flex items-center gap-5">';
+                html += '<div class="text-5xl">📊</div>';
+                html += '<div class="flex-1">';
+                html += '<h3 class="text-2xl font-bold text-white mb-1">Campaign Reports</h3>';
+                html += '<p class="text-white/80">Create & send client reports</p>';
+                html += '</div>';
+                html += '<div class="text-white text-3xl">→</div>';
+                html += '</div></div>';
+
+                html += '</div></div>';
             }
 
             html += '</div></div>';
@@ -4568,6 +5405,562 @@
             return html;
         }
 
+        /* ------------------------------------------
+           4.6.14 Admin Reports View (Campaign Reports Manager)
+           ------------------------------------------ */
+        function renderAdminReports() {
+            var html = '';
+
+            html += '<div class="min-h-screen mobile-full-screen py-6 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+
+            // Header
+            html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 fade-in">';
+            html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">📊 Campaign Reports</h1>';
+            html += '<button onclick="app.goToAdmin()" class="btn-secondary w-full sm:w-auto">← Back to Admin</button>';
+            html += '</div>';
+
+            // Success/Error messages
+            if (state.success) {
+                html += '<div class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg fade-in">' + utils.escapeHtml(state.success) + '</div>';
+            }
+            if (state.error) {
+                html += '<div class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg fade-in">' + utils.escapeHtml(state.error) + '</div>';
+            }
+
+            // Create New Report Section
+            html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mb-8 fade-in">';
+            html += '<h2 class="text-2xl font-bold text-gray-800 mb-6">📸 Create New Report</h2>';
+
+            // Upload Zone
+            html += '<div id="upload-zone" class="upload-zone' + (state.reportImages.length > 0 ? ' has-images' : '') + '" onclick="document.getElementById(\'image-input\').click()">';
+            html += '<input type="file" id="image-input" accept="image/*" multiple style="display:none" onchange="app.handleImageUpload(event)" />';
+
+            if (state.reportImages.length === 0) {
+                html += '<div class="text-5xl mb-4">📤</div>';
+                html += '<p class="text-xl font-bold text-gray-700 mb-2">Drop Google Ads Screenshots Here</p>';
+                html += '<p class="text-gray-500">or click to browse (3-6 images recommended)</p>';
+                html += '<p class="text-sm text-gray-400 mt-4">Supports: PNG, JPG, WebP (max 10MB each)</p>';
+            } else {
+                html += '<div class="text-green-600 font-bold text-lg mb-2">✓ ' + state.reportImages.length + ' images ready</div>';
+                html += '<p class="text-gray-500 text-sm">Click to add more or use buttons below</p>';
+            }
+            html += '</div>';
+
+            // Image Previews
+            if (state.reportImages.length > 0) {
+                html += '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-6">';
+                for (var i = 0; i < state.reportImages.length; i++) {
+                    html += '<div class="image-preview">';
+                    html += '<img src="' + state.reportImages[i].preview + '" alt="Screenshot ' + (i + 1) + '" />';
+                    html += '<button class="remove-btn" onclick="event.stopPropagation(); app.removeReportImage(' + i + ')">×</button>';
+                    html += '<div class="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded">' + (i + 1) + '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                // Campaign Name Input
+                html += '<div class="mt-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Campaign Name</label>';
+                html += '<input type="text" id="campaign-name" placeholder="e.g., Q4 Search Campaign" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none" />';
+                html += '</div>';
+
+                // Additional Context
+                html += '<div class="mt-4">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Additional Context (optional)</label>';
+                html += '<textarea id="additional-context" rows="2" placeholder="Any specific details about the campaign..." class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none resize-none"></textarea>';
+                html += '</div>';
+
+                // Action Buttons
+                html += '<div class="flex flex-wrap gap-4 mt-6">';
+                html += '<button onclick="app.analyzeReportImages()" class="flex-1 px-6 py-4 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold rounded-xl hover:from-purple-600 hover:to-indigo-700 transition-all flex items-center justify-center gap-2" ' + (state.reportLoading ? 'disabled' : '') + '>';
+                if (state.reportLoading) {
+                    html += '<span class="animate-spin">⏳</span> Analyzing with AI...';
+                } else {
+                    html += '<span>🤖</span> Analyze with AI';
+                }
+                html += '</button>';
+                html += '<button onclick="app.clearReportImages()" class="px-6 py-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all">Clear All</button>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            // AI Analysis Results
+            if (state.reportAnalysis) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mb-8 fade-in">';
+                html += '<div class="flex justify-between items-center mb-6">';
+                html += '<h2 class="text-2xl font-bold text-gray-800">🤖 AI Analysis</h2>';
+                html += '<span class="status-badge status-ready">Analysis Complete</span>';
+                html += '</div>';
+
+                var analysis = state.reportAnalysis;
+
+                // Summary
+                if (analysis.summary) {
+                    html += '<div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 mb-6">';
+                    html += '<p class="text-gray-700">' + utils.escapeHtml(analysis.summary) + '</p>';
+                    html += '</div>';
+                }
+
+                // Metrics Grid
+                if (analysis.metrics) {
+                    html += '<h3 class="font-bold text-gray-800 mb-3">📈 Extracted Metrics</h3>';
+                    html += '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">';
+                    var metricLabels = {
+                        impressions: 'Impressions',
+                        clicks: 'Clicks',
+                        ctr: 'CTR',
+                        avgCpc: 'Avg CPC',
+                        cost: 'Cost',
+                        conversions: 'Conversions',
+                        conversionRate: 'Conv Rate',
+                        costPerConversion: 'Cost/Conv'
+                    };
+                    for (var key in metricLabels) {
+                        if (analysis.metrics[key] !== null && analysis.metrics[key] !== undefined) {
+                            html += '<div class="metric-card">';
+                            html += '<div class="metric-value">' + utils.escapeHtml(String(analysis.metrics[key])) + '</div>';
+                            html += '<div class="metric-label">' + metricLabels[key] + '</div>';
+                            html += '</div>';
+                        }
+                    }
+                    html += '</div>';
+                }
+
+                // Performance
+                if (analysis.performance) {
+                    html += '<h3 class="font-bold text-gray-800 mb-3">⭐ Performance Assessment</h3>';
+                    html += '<div class="bg-gray-50 rounded-xl p-4 mb-6">';
+                    var perfColor = analysis.performance.overall === 'Excellent' ? 'green' : analysis.performance.overall === 'Good' ? 'blue' : analysis.performance.overall === 'Average' ? 'yellow' : 'red';
+                    html += '<div class="flex items-center gap-3 mb-3">';
+                    html += '<span class="px-3 py-1 bg-' + perfColor + '-100 text-' + perfColor + '-700 rounded-full font-bold">' + utils.escapeHtml(analysis.performance.overall || 'N/A') + '</span>';
+                    html += '<span class="text-gray-500">Trend: ' + utils.escapeHtml(analysis.performance.trend || 'N/A') + '</span>';
+                    html += '</div>';
+                    if (analysis.performance.highlights && analysis.performance.highlights.length > 0) {
+                        html += '<div class="mb-2"><span class="font-semibold text-green-600">✓ Highlights:</span></div>';
+                        html += '<ul class="list-disc list-inside text-gray-600 mb-3">';
+                        for (var h = 0; h < analysis.performance.highlights.length; h++) {
+                            html += '<li>' + utils.escapeHtml(analysis.performance.highlights[h]) + '</li>';
+                        }
+                        html += '</ul>';
+                    }
+                    if (analysis.performance.concerns && analysis.performance.concerns.length > 0) {
+                        html += '<div class="mb-2"><span class="font-semibold text-orange-600">⚠ Areas for Improvement:</span></div>';
+                        html += '<ul class="list-disc list-inside text-gray-600">';
+                        for (var c = 0; c < analysis.performance.concerns.length; c++) {
+                            html += '<li>' + utils.escapeHtml(analysis.performance.concerns[c]) + '</li>';
+                        }
+                        html += '</ul>';
+                    }
+                    html += '</div>';
+                }
+
+                // Recommendations
+                if (analysis.recommendations && analysis.recommendations.length > 0) {
+                    html += '<h3 class="font-bold text-gray-800 mb-3">💡 Recommendations</h3>';
+                    html += '<div class="space-y-3 mb-6">';
+                    for (var r = 0; r < analysis.recommendations.length; r++) {
+                        var rec = analysis.recommendations[r];
+                        var priority = (rec.priority || 'medium').toLowerCase();
+                        html += '<div class="recommendation-card priority-' + priority + '">';
+                        html += '<div class="flex items-start justify-between mb-2">';
+                        html += '<span class="font-bold text-gray-800">' + utils.escapeHtml(rec.title || 'Recommendation ' + (r + 1)) + '</span>';
+                        html += '<span class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">' + utils.escapeHtml(rec.category || 'General') + '</span>';
+                        html += '</div>';
+                        html += '<p class="text-gray-600 text-sm">' + utils.escapeHtml(rec.description || '') + '</p>';
+                        if (rec.expectedImpact) {
+                            html += '<p class="text-sm text-green-600 mt-2">📈 ' + utils.escapeHtml(rec.expectedImpact) + '</p>';
+                        }
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // CTA
+                if (analysis.fiverCTA) {
+                    html += '<div class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-4 mb-6">';
+                    html += '<h4 class="font-bold text-green-700 mb-2">🎯 Client Call-to-Action</h4>';
+                    html += '<p class="text-gray-700">' + utils.escapeHtml(analysis.fiverCTA) + '</p>';
+                    html += '</div>';
+                }
+
+                // Save/Edit Actions
+                html += '<div class="flex flex-wrap gap-4 mt-6 pt-6 border-t border-gray-200">';
+                html += '<button onclick="app.saveReportAsDraft()" class="flex-1 px-6 py-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center gap-2">';
+                html += '<span>💾</span> Save as Draft';
+                html += '</button>';
+                html += '<button onclick="app.goToReportEditor()" class="flex-1 px-6 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all flex items-center justify-center gap-2">';
+                html += '<span>✏️</span> Edit & Send to Client';
+                html += '</button>';
+                html += '</div>';
+
+                html += '</div>';
+            }
+
+            // Existing Reports Table
+            html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 fade-in">';
+            html += '<h2 class="text-2xl font-bold text-gray-800 mb-6">📋 All Reports</h2>';
+
+            if (state.campaignReports === null) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="spinner spinner-dark mx-auto mb-4"></div>';
+                html += '<p class="text-gray-600">Loading reports...</p>';
+                html += '</div>';
+            } else if (state.campaignReports.length === 0) {
+                html += '<div class="text-center py-12">';
+                html += '<div class="text-6xl mb-4">📊</div>';
+                html += '<p class="text-gray-500 text-lg">No reports yet. Create your first one above!</p>';
+                html += '</div>';
+            } else {
+                html += '<div class="overflow-x-auto">';
+                html += '<table class="w-full">';
+                html += '<thead class="bg-gray-50">';
+                html += '<tr>';
+                html += '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Campaign</th>';
+                html += '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Status</th>';
+                html += '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-600 hidden md:table-cell">Client</th>';
+                html += '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-600 hidden lg:table-cell">Created</th>';
+                html += '<th class="px-4 py-3 text-right text-sm font-semibold text-gray-600">Actions</th>';
+                html += '</tr>';
+                html += '</thead>';
+                html += '<tbody class="divide-y divide-gray-100">';
+
+                for (var i = 0; i < state.campaignReports.length; i++) {
+                    var report = state.campaignReports[i];
+                    var statusClass = 'status-' + report.status;
+                    var statusIcon = report.status === 'draft' ? '📝' : report.status === 'ready' ? '✅' : report.status === 'sent' ? '📤' : '👁️';
+
+                    html += '<tr class="hover:bg-gray-50">';
+                    html += '<td class="px-4 py-4">';
+                    html += '<p class="font-semibold text-gray-800">' + utils.escapeHtml(report.campaignName || 'Untitled Report') + '</p>';
+                    html += '<p class="text-sm text-gray-500">' + (report.images ? report.images.length : 0) + ' images</p>';
+                    html += '</td>';
+                    html += '<td class="px-4 py-4">';
+                    html += '<span class="status-badge ' + statusClass + '">' + statusIcon + ' ' + utils.escapeHtml(report.status) + '</span>';
+                    html += '</td>';
+                    html += '<td class="px-4 py-4 hidden md:table-cell">';
+                    if (report.clientInfo) {
+                        html += '<span class="text-gray-700">' + utils.escapeHtml(report.clientInfo.email) + '</span>';
+                    } else {
+                        html += '<span class="text-gray-400">Not assigned</span>';
+                    }
+                    html += '</td>';
+                    html += '<td class="px-4 py-4 hidden lg:table-cell text-gray-500">';
+                    html += report.createdAt ? new Date(report.createdAt).toLocaleDateString() : 'N/A';
+                    html += '</td>';
+                    html += '<td class="px-4 py-4 text-right">';
+                    html += '<div class="flex justify-end gap-2">';
+                    html += '<button onclick="app.editReport(\'' + report.id + '\')" class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit">✏️</button>';
+                    if (report.status === 'draft' || report.status === 'ready') {
+                        html += '<button onclick="app.openSendModal(\'' + report.id + '\')" class="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg" title="Send to Client">📤</button>';
+                    }
+                    html += '<button onclick="app.deleteReport(\'' + report.id + '\')" class="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete">🗑️</button>';
+                    html += '</div>';
+                    html += '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table></div>';
+            }
+
+            html += '</div>';
+
+            html += '</div></div>';
+
+            // Send to Client Modal
+            if (state.sendModalReportId) {
+                html += '<div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onclick="app.closeSendModal()">';
+                html += '<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onclick="event.stopPropagation()">';
+                html += '<h3 class="text-xl font-bold text-gray-800 mb-4">📤 Send Report to Client</h3>';
+                html += '<p class="text-gray-600 mb-4">Select which client should receive this report:</p>';
+
+                html += '<select id="send-client-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none mb-6">';
+                html += '<option value="">-- Select a client --</option>';
+                if (state.adminUsers) {
+                    for (var u = 0; u < state.adminUsers.length; u++) {
+                        var user = state.adminUsers[u];
+                        html += '<option value="' + user.uid + '">' + utils.escapeHtml(user.email || user.uid) + '</option>';
+                    }
+                }
+                html += '</select>';
+
+                html += '<div class="flex gap-3">';
+                html += '<button onclick="app.closeSendModal()" class="flex-1 px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200">Cancel</button>';
+                html += '<button onclick="app.sendReportToClient()" class="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-700">Send Report</button>';
+                html += '</div>';
+                html += '</div></div>';
+            }
+
+            return html;
+        }
+
+        /* ------------------------------------------
+           4.6.15 Report Editor View
+           ------------------------------------------ */
+        function renderReportEditor() {
+            var html = '';
+            var report = state.editingReport || {};
+            var content = report.editedContent || {};
+
+            html += '<div class="min-h-screen mobile-full-screen py-6 px-4">';
+            html += '<div class="max-w-4xl mx-auto">';
+
+            // Header
+            html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 fade-in">';
+            html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">✏️ Edit Report</h1>';
+            html += '<button onclick="app.goToAdminReports()" class="btn-secondary w-full sm:w-auto">← Back to Reports</button>';
+            html += '</div>';
+
+            if (state.success) {
+                html += '<div class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg fade-in">' + utils.escapeHtml(state.success) + '</div>';
+            }
+            if (state.error) {
+                html += '<div class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg fade-in">' + utils.escapeHtml(state.error) + '</div>';
+            }
+
+            html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 fade-in">';
+
+            // Campaign Name
+            html += '<div class="mb-6">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Report Title</label>';
+            html += '<input type="text" id="edit-title" value="' + utils.escapeHtml(content.title || report.campaignName || '') + '" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-lg" />';
+            html += '</div>';
+
+            // Summary
+            html += '<div class="mb-6">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Executive Summary</label>';
+            html += '<textarea id="edit-summary" rows="3" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none resize-none">' + utils.escapeHtml(content.summary || '') + '</textarea>';
+            html += '</div>';
+
+            // Recommendations (editable list)
+            html += '<div class="mb-6">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Recommendations</label>';
+            html += '<div id="recommendations-list" class="space-y-3">';
+            var recs = content.recommendations || [];
+            for (var i = 0; i < recs.length; i++) {
+                html += '<div class="flex gap-2 items-start">';
+                html += '<input type="text" class="rec-input flex-1 px-3 py-2 border border-gray-200 rounded-lg" value="' + utils.escapeHtml(recs[i].title || recs[i]) + '" data-index="' + i + '" />';
+                html += '<button onclick="app.removeRecommendation(' + i + ')" class="p-2 text-red-500 hover:bg-red-50 rounded-lg">×</button>';
+                html += '</div>';
+            }
+            html += '</div>';
+            html += '<button onclick="app.addRecommendation()" class="mt-3 text-purple-600 font-semibold hover:underline">+ Add Recommendation</button>';
+            html += '</div>';
+
+            // Call to Action
+            html += '<div class="mb-6">';
+            html += '<label class="block text-gray-700 font-semibold mb-2">Call to Action (Fiverr CTA)</label>';
+            html += '<textarea id="edit-cta" rows="2" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none resize-none">' + utils.escapeHtml(content.callToAction || '') + '</textarea>';
+            html += '</div>';
+
+            // Images Preview
+            if (report.images && report.images.length > 0) {
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">Report Images</label>';
+                html += '<div class="grid grid-cols-3 md:grid-cols-4 gap-2">';
+                for (var j = 0; j < report.images.length; j++) {
+                    html += '<img src="' + utils.escapeHtml(report.images[j].url || report.images[j].preview) + '" class="rounded-lg aspect-video object-cover" />';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Actions
+            html += '<div class="flex flex-wrap gap-4 pt-6 border-t border-gray-200">';
+            html += '<button onclick="app.saveReportChanges()" class="flex-1 px-6 py-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all" ' + (state.reportLoading ? 'disabled' : '') + '>💾 Save Changes</button>';
+            html += '<button onclick="app.openSendModal(\'' + (report.id || '') + '\')" class="flex-1 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all">📤 Send to Client</button>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div></div>';
+
+            return html;
+        }
+
+        /* ------------------------------------------
+           4.6.16 Client Reports View
+           ------------------------------------------ */
+        function renderClientReports() {
+            var html = '';
+
+            html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
+            html += '<div class="max-w-4xl mx-auto">';
+
+            // Header
+            html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 fade-in">';
+            html += '<div>';
+            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">📊 My Campaign Reports</h1>';
+            html += '<p class="text-white/80">View your performance reports and recommendations</p>';
+            html += '</div>';
+            html += '<button onclick="app.goToDashboard()" class="btn-secondary w-full sm:w-auto">← Back to Dashboard</button>';
+            html += '</div>';
+
+            // Reports List
+            if (state.clientReports === null) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-12 text-center fade-in">';
+                html += '<div class="spinner spinner-dark mx-auto mb-4"></div>';
+                html += '<p class="text-gray-600">Loading your reports...</p>';
+                html += '</div>';
+            } else if (state.clientReports.length === 0) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-12 text-center fade-in">';
+                html += '<div class="text-6xl mb-4">📭</div>';
+                html += '<h3 class="text-xl font-bold text-gray-800 mb-2">No Reports Yet</h3>';
+                html += '<p class="text-gray-500">When your campaign reports are ready, they\'ll appear here.</p>';
+                html += '</div>';
+            } else {
+                html += '<div class="grid gap-6 fade-in">';
+                for (var i = 0; i < state.clientReports.length; i++) {
+                    var report = state.clientReports[i];
+                    var isNew = report.status === 'sent';
+
+                    html += '<div class="client-report-card' + (isNew ? ' has-new' : '') + ' cursor-pointer" onclick="app.viewReport(\'' + report.id + '\')">';
+                    html += '<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">';
+                    html += '<div class="flex-1">';
+                    html += '<div class="flex items-center gap-3 mb-2">';
+                    html += '<span class="text-3xl">📊</span>';
+                    html += '<h3 class="text-xl font-bold text-gray-800">' + utils.escapeHtml(report.campaignName || 'Campaign Report') + '</h3>';
+                    if (isNew) {
+                        html += '<span class="notification-dot"></span>';
+                    }
+                    html += '</div>';
+                    html += '<p class="text-gray-500">Delivered: ' + (report.sentAt ? new Date(report.sentAt).toLocaleDateString() : 'N/A') + '</p>';
+                    html += '</div>';
+                    html += '<div class="flex items-center gap-3">';
+                    html += '<button class="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold rounded-xl hover:from-purple-600 hover:to-indigo-700 transition-all">View Report →</button>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+
+            html += '</div></div>';
+
+            return html;
+        }
+
+        /* ------------------------------------------
+           4.6.17 View Report (Client View)
+           ------------------------------------------ */
+        function renderViewReport() {
+            var html = '';
+            var report = state.currentReport || {};
+            var content = report.editedContent || {};
+
+            html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
+            html += '<div class="max-w-4xl mx-auto">';
+
+            // Header
+            html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 fade-in">';
+            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white">' + utils.escapeHtml(content.title || report.campaignName || 'Campaign Report') + '</h1>';
+            html += '<button onclick="app.goToClientReports()" class="btn-secondary w-full sm:w-auto">← Back to Reports</button>';
+            html += '</div>';
+
+            if (!report.id) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-12 text-center">';
+                html += '<div class="spinner spinner-dark mx-auto mb-4"></div>';
+                html += '<p class="text-gray-600">Loading report...</p>';
+                html += '</div>';
+            } else {
+                // Report Content
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 fade-in">';
+
+                // Summary
+                if (content.summary) {
+                    html += '<div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-6 mb-8">';
+                    html += '<h3 class="font-bold text-gray-800 mb-2">Executive Summary</h3>';
+                    html += '<p class="text-gray-700 text-lg">' + utils.escapeHtml(content.summary) + '</p>';
+                    html += '</div>';
+                }
+
+                // Images
+                if (report.images && report.images.length > 0) {
+                    html += '<div class="mb-8">';
+                    html += '<h3 class="font-bold text-gray-800 mb-4">📸 Campaign Screenshots</h3>';
+                    html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+                    for (var i = 0; i < report.images.length; i++) {
+                        html += '<img src="' + utils.escapeHtml(report.images[i].url) + '" class="rounded-xl shadow-lg w-full" alt="Screenshot ' + (i + 1) + '" />';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Metrics
+                if (content.metrics && Object.keys(content.metrics).length > 0) {
+                    html += '<div class="mb-8">';
+                    html += '<h3 class="font-bold text-gray-800 mb-4">📈 Key Metrics</h3>';
+                    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">';
+                    var metricLabels = {
+                        impressions: 'Impressions',
+                        clicks: 'Clicks',
+                        ctr: 'CTR',
+                        avgCpc: 'Avg CPC',
+                        cost: 'Cost',
+                        conversions: 'Conversions',
+                        conversionRate: 'Conv Rate',
+                        costPerConversion: 'Cost/Conv'
+                    };
+                    for (var key in metricLabels) {
+                        if (content.metrics[key] !== null && content.metrics[key] !== undefined) {
+                            html += '<div class="metric-card">';
+                            html += '<div class="metric-value">' + utils.escapeHtml(String(content.metrics[key])) + '</div>';
+                            html += '<div class="metric-label">' + metricLabels[key] + '</div>';
+                            html += '</div>';
+                        }
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Recommendations
+                if (content.recommendations && content.recommendations.length > 0) {
+                    html += '<div class="mb-8">';
+                    html += '<h3 class="font-bold text-gray-800 mb-4">💡 Recommendations</h3>';
+                    html += '<div class="space-y-4">';
+                    for (var r = 0; r < content.recommendations.length; r++) {
+                        var rec = content.recommendations[r];
+                        var title = typeof rec === 'string' ? rec : rec.title;
+                        var desc = typeof rec === 'object' ? rec.description : '';
+                        var priority = typeof rec === 'object' ? (rec.priority || 'medium').toLowerCase() : 'medium';
+
+                        html += '<div class="recommendation-card priority-' + priority + '">';
+                        html += '<div class="flex items-start gap-3">';
+                        html += '<span class="text-2xl">💡</span>';
+                        html += '<div>';
+                        html += '<p class="font-bold text-gray-800">' + utils.escapeHtml(title) + '</p>';
+                        if (desc) {
+                            html += '<p class="text-gray-600 mt-1">' + utils.escapeHtml(desc) + '</p>';
+                        }
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Call to Action
+                if (content.callToAction) {
+                    html += '<div class="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-6 text-white">';
+                    html += '<h3 class="font-bold text-xl mb-2">🚀 Ready to Optimize?</h3>';
+                    html += '<p class="text-white/90 mb-4">' + utils.escapeHtml(content.callToAction) + '</p>';
+                    html += '</div>';
+                }
+
+                // Report Date
+                html += '<div class="mt-8 pt-6 border-t border-gray-200 text-center text-gray-500">';
+                html += '<p>Report generated: ' + (report.createdAt ? new Date(report.createdAt).toLocaleDateString() : 'N/A') + '</p>';
+                html += '</div>';
+
+                html += '</div>';
+            }
+
+            html += '</div></div>';
+
+            return html;
+        }
+
         /* ==========================================
            4.7 MAIN RENDER FUNCTION
            ========================================== */
@@ -4618,6 +6011,18 @@
                     break;
                 case 'placement':
                     html = renderPlacement();
+                    break;
+                case 'admin-reports':
+                    html = renderAdminReports();
+                    break;
+                case 'report-editor':
+                    html = renderReportEditor();
+                    break;
+                case 'client-reports':
+                    html = renderClientReports();
+                    break;
+                case 'view-report':
+                    html = renderViewReport();
                     break;
                 default:
                     html = '<div class="view-container view-centered"><div class="spinner"></div></div>';
