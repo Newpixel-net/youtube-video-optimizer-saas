@@ -47,6 +47,106 @@ Firebase Admin SDK relies on environment variables (`GCLOUD_PROJECT`, `FIREBASE_
 
 ---
 
+## Security Audit - 2025-11-29
+
+### Security Fixes Applied
+
+The following security vulnerabilities were identified and fixed:
+
+#### CRITICAL (Fixed)
+1. **setupAdmin privilege escalation** - Any user could become admin
+2. **Legacy functions without authentication** - 7 functions callable without login
+3. **Firestore analyses collection open** - Anyone could read/write all data
+4. **deleteAnalysis no ownership check** - Anyone could delete any record
+
+#### HIGH (Fixed)
+1. **adminSetCustomLimits input validation** - Could inject arbitrary fields
+2. **Error message information disclosure** - Stack traces exposed to users
+3. **Console.log with sensitive data** - Request data logged in plain text
+4. **No rate limiting** - No burst protection on expensive operations
+
+#### MEDIUM (Fixed/Documented)
+1. **getHistory limit not bounded** - Could request unlimited records
+2. **Firebase API key needs restriction** - See checklist below
+3. **Storage thumbnails publicly readable** - Expected behavior, documented
+
+---
+
+## Production Security Checklist
+
+### Firebase API Key Restriction (IMPORTANT)
+
+The Firebase API key in the frontend (`AIzaSyAGczY5ZEIJdTq25BpQdia3lv2I556wOZo`) is public by design, but should be restricted in Google Cloud Console:
+
+1. Go to [Google Cloud Console > APIs & Services > Credentials](https://console.cloud.google.com/apis/credentials)
+2. Click on the API key used by the web app
+3. Under "Application restrictions":
+   - Select "HTTP referrers (websites)"
+   - Add your production domains:
+     - `https://ytseo-6d1b0.web.app/*`
+     - `https://ytseo-6d1b0.firebaseapp.com/*`
+     - `https://yourdomain.com/*` (if using custom domain)
+4. Under "API restrictions":
+   - Select "Restrict key"
+   - Enable only: Firebase Auth API, Cloud Firestore API, Firebase Installations API, Identity Toolkit API
+5. Click "Save"
+
+### Additional Production Recommendations
+
+- [ ] **Enable Firebase App Check** - Verify requests come from your app
+  - https://firebase.google.com/docs/app-check
+  - Protects against API abuse from scripts/bots
+
+- [ ] **Set up Cloud Armor** - DDoS protection for Cloud Functions
+  - https://cloud.google.com/armor/docs
+
+- [ ] **Configure billing alerts** - Prevent unexpected charges
+  - Set up budget alerts at $10, $50, $100 thresholds
+  - https://console.cloud.google.com/billing
+
+- [ ] **Enable audit logging** - Track admin actions
+  - https://console.cloud.google.com/logs
+
+- [ ] **Rotate API keys periodically**
+  - OpenAI API key
+  - YouTube API key
+  - RunPod API key
+
+- [ ] **Review Firestore rules** before major releases
+  - Run `firebase emulators:exec --only firestore "npm test"`
+
+### CORS Configuration
+
+All Cloud Functions use `functions.https.onCall()` which automatically handles CORS:
+- Only accepts requests from Firebase client SDKs
+- Validates the Firebase app origin
+- No manual CORS configuration needed
+
+If you add `functions.https.onRequest()` functions in the future, you'll need to handle CORS manually using the `cors` npm package.
+
+### Storage Security Notes
+
+Thumbnail images in `/thumbnails/{userId}/` are intentionally public for display purposes. This is expected behavior and is secure because:
+
+1. **No enumeration possible** - Firebase Storage doesn't support listing files; you must know the exact path
+2. **Unpredictable filenames** - Files use pattern `{timestamp}_{randomSeed}.png` (e.g., `1732892400000_847293847.png`)
+3. **User ID required** - Must know the target user's UID to access their folder
+4. **Write protection** - Only authenticated users can write to their own folder
+
+If you need fully private thumbnails:
+
+1. Update `storage.rules`:
+```javascript
+match /thumbnails/{userId}/{fileName} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+  allow write: if request.auth != null && request.auth.uid == userId;
+}
+```
+
+2. Use Firebase Storage signed URLs or download URLs with tokens instead of direct public URLs.
+
+---
+
 ## Template for Future Issues
 
 ### Issue #X: [Title]
