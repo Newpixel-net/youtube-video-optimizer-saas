@@ -113,9 +113,9 @@ async function getUser(uid) {
     const defaultPlan = 'free';
     const defaultLimits = {
       warpOptimizer: { dailyLimit: 3 },
-      titleGenerator: { dailyLimit: 3 },
-      descriptionGenerator: { dailyLimit: 3 },
-      tagGenerator: { dailyLimit: 3 }
+      competitorAnalysis: { dailyLimit: 3 },
+      trendPredictor: { dailyLimit: 3 },
+      thumbnailGenerator: { dailyLimit: 3 }
     };
 
     // Use serverTimestamp for Firestore storage
@@ -142,21 +142,21 @@ async function getUser(uid) {
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
-        titleGenerator: {
+        competitorAnalysis: {
           usedToday: 0,
-          limit: defaultLimits.titleGenerator.dailyLimit,
+          limit: defaultLimits.competitorAnalysis.dailyLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
-        descriptionGenerator: {
+        trendPredictor: {
           usedToday: 0,
-          limit: defaultLimits.descriptionGenerator.dailyLimit,
+          limit: defaultLimits.trendPredictor.dailyLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
-        tagGenerator: {
+        thumbnailGenerator: {
           usedToday: 0,
-          limit: defaultLimits.tagGenerator.dailyLimit,
+          limit: defaultLimits.thumbnailGenerator.dailyLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         }
@@ -359,21 +359,21 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
-        titleGenerator: {
+        competitorAnalysis: {
           usedToday: 0,
-          limit: planLimits.titleGenerator.dailyLimit,
+          limit: planLimits.competitorAnalysis.dailyLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
-        descriptionGenerator: {
+        trendPredictor: {
           usedToday: 0,
-          limit: planLimits.descriptionGenerator.dailyLimit,
+          limit: planLimits.trendPredictor.dailyLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
-        tagGenerator: {
+        thumbnailGenerator: {
           usedToday: 0,
-          limit: planLimits.tagGenerator.dailyLimit,
+          limit: planLimits.thumbnailGenerator.dailyLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         }
@@ -381,7 +381,7 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       notes: '',
       customLimits: {}
     });
-    
+
     await logUsage(user.uid, 'user_created', { email: user.email });
     console.log(`User created: ${user.email}`);
   } catch (error) {
@@ -1014,22 +1014,24 @@ exports.optimizeVideo = functions.https.onCall(async (data, context) => {
   }
 });
 
+// Title generator - uses warpOptimizer quota (included in Warp Optimizer tool)
 exports.generateTitles = functions.https.onCall(async (data, context) => {
   try {
     const uid = await verifyAuth(context);
     checkRateLimit(uid, 'generateTitles', 10);
-    const usageCheck = await checkUsageLimit(uid, 'titleGenerator');
+    // Uses warpOptimizer quota since this is part of the optimization suite
+    const usageCheck = await checkUsageLimit(uid, 'warpOptimizer');
     const { videoUrl } = data;
     if (!videoUrl) throw new functions.https.HttpsError('invalid-argument', 'Video URL required');
-    
+
     const videoId = extractVideoId(videoUrl);
     const metadata = await getVideoMetadata(videoId);
     const transcript = await getVideoTranscript(videoId);
     const titles = await generateTitlesInternal(metadata, transcript);
-    
-    await incrementUsage(uid, 'titleGenerator');
+
+    await incrementUsage(uid, 'warpOptimizer');
     await logUsage(uid, 'title_generator_used', { videoId });
-    
+
     return { success: true, videoData: metadata, titles, usageRemaining: usageCheck.remaining };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
@@ -1037,21 +1039,24 @@ exports.generateTitles = functions.https.onCall(async (data, context) => {
   }
 });
 
+// Description generator - uses warpOptimizer quota (included in Warp Optimizer tool)
 exports.generateDescription = functions.https.onCall(async (data, context) => {
   try {
     const uid = await verifyAuth(context);
-    const usageCheck = await checkUsageLimit(uid, 'descriptionGenerator');
+    checkRateLimit(uid, 'generateDescription', 10);
+    // Uses warpOptimizer quota since this is part of the optimization suite
+    const usageCheck = await checkUsageLimit(uid, 'warpOptimizer');
     const { videoUrl } = data;
     if (!videoUrl) throw new functions.https.HttpsError('invalid-argument', 'Video URL required');
-    
+
     const videoId = extractVideoId(videoUrl);
     const metadata = await getVideoMetadata(videoId);
     const transcript = await getVideoTranscript(videoId);
     const description = await generateDescriptionInternal(metadata, transcript);
-    
-    await incrementUsage(uid, 'descriptionGenerator');
+
+    await incrementUsage(uid, 'warpOptimizer');
     await logUsage(uid, 'description_generator_used', { videoId });
-    
+
     return { success: true, videoData: metadata, description, usageRemaining: usageCheck.remaining };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
@@ -1059,21 +1064,24 @@ exports.generateDescription = functions.https.onCall(async (data, context) => {
   }
 });
 
+// Tag generator - uses warpOptimizer quota (included in Warp Optimizer tool)
 exports.generateTags = functions.https.onCall(async (data, context) => {
   try {
     const uid = await verifyAuth(context);
-    const usageCheck = await checkUsageLimit(uid, 'tagGenerator');
+    checkRateLimit(uid, 'generateTags', 10);
+    // Uses warpOptimizer quota since this is part of the optimization suite
+    const usageCheck = await checkUsageLimit(uid, 'warpOptimizer');
     const { videoUrl } = data;
     if (!videoUrl) throw new functions.https.HttpsError('invalid-argument', 'Video URL required');
-    
+
     const videoId = extractVideoId(videoUrl);
     const metadata = await getVideoMetadata(videoId);
     const transcript = await getVideoTranscript(videoId);
     const tags = await generateTagsInternal(metadata, transcript);
-    
-    await incrementUsage(uid, 'tagGenerator');
+
+    await incrementUsage(uid, 'warpOptimizer');
     await logUsage(uid, 'tag_generator_used', { videoId });
-    
+
     return { success: true, videoData: metadata, tags, usageRemaining: usageCheck.remaining };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
@@ -1110,9 +1118,9 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
         subscription: { plan: 'free', status: 'active' },
         usage: {
           warpOptimizer: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
-          titleGenerator: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
-          descriptionGenerator: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
-          tagGenerator: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() }
+          competitorAnalysis: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
+          trendPredictor: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
+          thumbnailGenerator: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() }
         }
       };
       await userRef.set(userData);
@@ -1125,7 +1133,7 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
       if (userData.subscription?.startDate?.toDate) userData.subscription.startDate = userData.subscription.startDate.toDate().toISOString();
 
       // Convert usage timestamps
-      ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'].forEach(tool => {
+      ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator'].forEach(tool => {
         if (userData.usage?.[tool]?.lastResetAt?.toDate) {
           userData.usage[tool].lastResetAt = userData.usage[tool].lastResetAt.toDate().toISOString();
         }
@@ -1133,7 +1141,7 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
     }
 
     // Build quotaInfo with bonus uses included
-    const tools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+    const tools = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator'];
     const quotaInfo = {};
     const resetIntervalMs = 24 * 60 * 60 * 1000; // 24 hours in ms
     const now = Date.now();
@@ -1279,12 +1287,12 @@ exports.adminUpdateUserPlan = functions.https.onCall(async (data, context) => {
       'usage.warpOptimizer.limit': planLimits.warpOptimizer.dailyLimit,
       'usage.warpOptimizer.usedToday': 0,
       'usage.warpOptimizer.cooldownUntil': null,
-      'usage.titleGenerator.limit': planLimits.titleGenerator.dailyLimit,
-      'usage.titleGenerator.usedToday': 0,
-      'usage.descriptionGenerator.limit': planLimits.descriptionGenerator.dailyLimit,
-      'usage.descriptionGenerator.usedToday': 0,
-      'usage.tagGenerator.limit': planLimits.tagGenerator.dailyLimit,
-      'usage.tagGenerator.usedToday': 0
+      'usage.competitorAnalysis.limit': planLimits.competitorAnalysis.dailyLimit,
+      'usage.competitorAnalysis.usedToday': 0,
+      'usage.trendPredictor.limit': planLimits.trendPredictor.dailyLimit,
+      'usage.trendPredictor.usedToday': 0,
+      'usage.thumbnailGenerator.limit': planLimits.thumbnailGenerator.dailyLimit,
+      'usage.thumbnailGenerator.usedToday': 0
     });
 
     await logUsage(userId, 'plan_changed_by_admin', { plan: targetPlan, changedBy: context.auth.uid });
@@ -1310,7 +1318,7 @@ exports.adminSetCustomLimits = functions.https.onCall(async (data, context) => {
   }
 
   // Validate tool is one of the allowed values to prevent field injection
-  const validTools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+  const validTools = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator'];
   if (!validTools.includes(tool)) {
     throw new functions.https.HttpsError(
       'invalid-argument',
@@ -1437,7 +1445,7 @@ exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
     if (!tool) throw new functions.https.HttpsError('invalid-argument', 'Tool name required');
     if (!bonusAmount || bonusAmount < 1) throw new functions.https.HttpsError('invalid-argument', 'Bonus amount must be at least 1');
 
-    const validTools = ['warpOptimizer', 'titleGenerator', 'descriptionGenerator', 'tagGenerator'];
+    const validTools = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator'];
     if (!validTools.includes(tool)) {
       throw new functions.https.HttpsError('invalid-argument', 'Invalid tool: ' + tool);
     }
@@ -1489,9 +1497,9 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
         price: 0,
         limits: {
           warpOptimizer: { dailyLimit: 3, cooldownHours: 0 },
-          titleGenerator: { dailyLimit: 3, cooldownHours: 0 },
-          descriptionGenerator: { dailyLimit: 3, cooldownHours: 0 },
-          tagGenerator: { dailyLimit: 3, cooldownHours: 0 }
+          competitorAnalysis: { dailyLimit: 3, cooldownHours: 0 },
+          trendPredictor: { dailyLimit: 3, cooldownHours: 0 },
+          thumbnailGenerator: { dailyLimit: 3, cooldownHours: 0 }
         }
       },
       lite: {
@@ -1499,9 +1507,9 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
         price: 9.99,
         limits: {
           warpOptimizer: { dailyLimit: 5, cooldownHours: 0 },
-          titleGenerator: { dailyLimit: 5, cooldownHours: 0 },
-          descriptionGenerator: { dailyLimit: 5, cooldownHours: 0 },
-          tagGenerator: { dailyLimit: 5, cooldownHours: 0 }
+          competitorAnalysis: { dailyLimit: 5, cooldownHours: 0 },
+          trendPredictor: { dailyLimit: 5, cooldownHours: 0 },
+          thumbnailGenerator: { dailyLimit: 5, cooldownHours: 0 }
         }
       },
       pro: {
@@ -1509,9 +1517,9 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
         price: 19.99,
         limits: {
           warpOptimizer: { dailyLimit: 10, cooldownHours: 0 },
-          titleGenerator: { dailyLimit: 10, cooldownHours: 0 },
-          descriptionGenerator: { dailyLimit: 10, cooldownHours: 0 },
-          tagGenerator: { dailyLimit: 10, cooldownHours: 0 }
+          competitorAnalysis: { dailyLimit: 10, cooldownHours: 0 },
+          trendPredictor: { dailyLimit: 10, cooldownHours: 0 },
+          thumbnailGenerator: { dailyLimit: 10, cooldownHours: 0 }
         }
       },
       enterprise: {
@@ -1519,9 +1527,9 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
         price: 49.99,
         limits: {
           warpOptimizer: { dailyLimit: 50, cooldownHours: 0 },
-          titleGenerator: { dailyLimit: 50, cooldownHours: 0 },
-          descriptionGenerator: { dailyLimit: 50, cooldownHours: 0 },
-          tagGenerator: { dailyLimit: 50, cooldownHours: 0 }
+          competitorAnalysis: { dailyLimit: 50, cooldownHours: 0 },
+          trendPredictor: { dailyLimit: 50, cooldownHours: 0 },
+          thumbnailGenerator: { dailyLimit: 50, cooldownHours: 0 }
         }
       }
     };
@@ -2134,9 +2142,9 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
       const planDoc = await db.collection('subscriptionPlans').doc(defaultPlan).get();
       const planLimits = planDoc.exists ? planDoc.data().limits : {
         warpOptimizer: { dailyLimit: 5 },
-        titleGenerator: { dailyLimit: 10 },
-        descriptionGenerator: { dailyLimit: 10 },
-        tagGenerator: { dailyLimit: 10 }
+        competitorAnalysis: { dailyLimit: 5 },
+        trendPredictor: { dailyLimit: 5 },
+        thumbnailGenerator: { dailyLimit: 5 }
       };
 
       await db.collection('users').doc(userId).set({
@@ -2163,24 +2171,24 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
             lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
             cooldownUntil: null
           },
-          titleGenerator: {
+          competitorAnalysis: {
             usedToday: 0,
             usedTotal: 0,
-            limit: planLimits.titleGenerator.dailyLimit,
+            limit: planLimits.competitorAnalysis.dailyLimit,
             lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
             cooldownUntil: null
           },
-          descriptionGenerator: {
+          trendPredictor: {
             usedToday: 0,
             usedTotal: 0,
-            limit: planLimits.descriptionGenerator.dailyLimit,
+            limit: planLimits.trendPredictor.dailyLimit,
             lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
             cooldownUntil: null
           },
-          tagGenerator: {
+          thumbnailGenerator: {
             usedToday: 0,
             usedTotal: 0,
-            limit: planLimits.tagGenerator.dailyLimit,
+            limit: planLimits.thumbnailGenerator.dailyLimit,
             lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
             cooldownUntil: null
           }
@@ -2204,13 +2212,13 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
 
     if (!userData.usage || !userData.usage.warpOptimizer) {
       needsUpdate = true;
-      
+
       const planDoc = await db.collection('subscriptionPlans').doc(userData.subscription?.plan || 'free').get();
       const planLimits = planDoc.exists ? planDoc.data().limits : {
         warpOptimizer: { dailyLimit: 5 },
-        titleGenerator: { dailyLimit: 10 },
-        descriptionGenerator: { dailyLimit: 10 },
-        tagGenerator: { dailyLimit: 10 }
+        competitorAnalysis: { dailyLimit: 5 },
+        trendPredictor: { dailyLimit: 5 },
+        thumbnailGenerator: { dailyLimit: 5 }
       };
 
       updates.usage = {
@@ -2221,24 +2229,24 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
-        titleGenerator: {
+        competitorAnalysis: {
           usedToday: 0,
           usedTotal: 0,
-          limit: planLimits.titleGenerator.dailyLimit,
+          limit: planLimits.competitorAnalysis.dailyLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
-        descriptionGenerator: {
+        trendPredictor: {
           usedToday: 0,
           usedTotal: 0,
-          limit: planLimits.descriptionGenerator.dailyLimit,
+          limit: planLimits.trendPredictor.dailyLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         },
-        tagGenerator: {
+        thumbnailGenerator: {
           usedToday: 0,
           usedTotal: 0,
-          limit: planLimits.tagGenerator.dailyLimit,
+          limit: planLimits.thumbnailGenerator.dailyLimit,
           lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
           cooldownUntil: null
         }
@@ -2277,7 +2285,8 @@ exports.fixUserProfile = functions.https.onCall(async (data, context) => {
 
 exports.analyzeCompetitor = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  await checkUsageLimit(uid, 'warpOptimizer');
+  checkRateLimit(uid, 'analyzeCompetitor', 10);
+  await checkUsageLimit(uid, 'competitorAnalysis');
 
   const { videoUrl } = data;
   if (!videoUrl) {
@@ -2364,7 +2373,7 @@ Provide your analysis in this EXACT JSON format:
       };
     }
 
-    await incrementUsage(uid, 'warpOptimizer');
+    await incrementUsage(uid, 'competitorAnalysis');
     await logUsage(uid, 'competitor_analysis', { videoId, competitorChannel: snippet.channelTitle });
 
     return {
@@ -2398,7 +2407,8 @@ Provide your analysis in this EXACT JSON format:
 
 exports.predictTrends = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  await checkUsageLimit(uid, 'warpOptimizer');
+  checkRateLimit(uid, 'predictTrends', 10);
+  await checkUsageLimit(uid, 'trendPredictor');
 
   const { niche, country = 'US' } = data;
   if (!niche) {
@@ -2492,7 +2502,7 @@ Analyze patterns and predict what will trend next. Provide in this EXACT JSON fo
       };
     }
 
-    await incrementUsage(uid, 'warpOptimizer');
+    await incrementUsage(uid, 'trendPredictor');
     await logUsage(uid, 'trend_prediction', { niche, country });
 
     return {
@@ -2518,7 +2528,7 @@ Analyze patterns and predict what will trend next. Provide in this EXACT JSON fo
 exports.generateThumbnail = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'generateThumbnail', 3); // Lower limit for expensive AI operation
-  await checkUsageLimit(uid, 'warpOptimizer');
+  await checkUsageLimit(uid, 'thumbnailGenerator');
 
   const { title, style = 'youtube_thumbnail', customPrompt } = data;
   if (!title) {
@@ -2663,7 +2673,7 @@ Provide ONLY the image generation prompt, no explanations. Make it detailed and 
     const encodedFileName = encodeURIComponent(fileName);
     const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
 
-    await incrementUsage(uid, 'warpOptimizer');
+    await incrementUsage(uid, 'thumbnailGenerator');
     await logUsage(uid, 'thumbnail_generation', { title, jobId, fileName });
 
     return {
