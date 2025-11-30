@@ -593,17 +593,47 @@ function formatTimestamp(seconds) {
 
 // YouTube Category IDs: 10 = Music, 20 = Gaming, 22 = People & Blogs, 24 = Entertainment,
 // 25 = News & Politics, 26 = Howto & Style, 27 = Education, 28 = Science & Technology
+// Complete YouTube category mapping - Official YouTube Data API v3 categories
 const YOUTUBE_CATEGORIES = {
+  '1': 'film_animation',
+  '2': 'autos_vehicles',
   '10': 'music',
+  '15': 'pets_animals',
+  '17': 'sports',           // CRITICAL: Sports category (WTT, Olympics, etc.)
+  '18': 'short_movies',
+  '19': 'travel_events',
   '20': 'gaming',
+  '21': 'videoblogging',
   '22': 'vlog',
   '23': 'comedy',
   '24': 'entertainment',
   '25': 'news',
   '26': 'howto',
   '27': 'education',
-  '28': 'tech'
+  '28': 'tech',
+  '29': 'nonprofits_activism',
+  '30': 'movies',
+  '31': 'anime_animation',
+  '32': 'action_adventure',
+  '33': 'classics',
+  '34': 'comedy_film',
+  '35': 'documentary',
+  '36': 'drama',
+  '37': 'family',
+  '38': 'foreign',
+  '39': 'horror',
+  '40': 'scifi_fantasy',
+  '41': 'thriller',
+  '42': 'shorts',
+  '43': 'shows',
+  '44': 'trailers'
 };
+
+// Non-music categories - used to prevent false music detection
+const NON_MUSIC_CATEGORIES = new Set([
+  '1', '2', '15', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28',
+  '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44'
+]);
 
 function detectContentType(metadata) {
   const title = (metadata.title || '').toLowerCase();
@@ -612,56 +642,269 @@ function detectContentType(metadata) {
   const tags = (metadata.tags || []).map(t => t.toLowerCase());
   const categoryId = metadata.categoryId || '';
 
-  // 1. Check for auto-generated YouTube music channels ("Artist - Topic")
-  if (channelTitle.endsWith(' - topic') || channelTitle.includes('- topic')) {
+  // ============================================================
+  // PRIORITY 1: Definitive high-confidence detection sources
+  // These should NEVER be overridden by keyword guessing
+  // ============================================================
+
+  // 1a. Auto-generated YouTube music channels ("Artist - Topic") - 100% music
+  if (channelTitle.endsWith(' - topic') || channelTitle.includes(' - topic')) {
     return { type: 'music', subtype: 'song', confidence: 'high', source: 'topic_channel' };
   }
 
-  // 2. Check YouTube category ID
-  if (categoryId === '10') {
-    // Music category - determine subtype
-    const subtype = detectMusicSubtype(title, description, tags);
-    return { type: 'music', subtype, confidence: 'high', source: 'category' };
-  }
-
-  // 3. Music keywords detection
-  const musicKeywords = ['official audio', 'official video', 'music video', 'official music',
-    'lyric video', 'lyrics', 'ft.', 'feat.', 'prod.', 'remix', 'cover', 'acoustic version',
-    'official visualizer', 'audio', 'full album', 'ep', 'single', '(official)', '[official]'];
-  const musicGenres = ['hip hop', 'rap', 'rock', 'pop', 'jazz', 'classical', 'electronic',
-    'edm', 'r&b', 'rnb', 'country', 'metal', 'punk', 'indie', 'soul', 'funk', 'reggae',
-    'house', 'techno', 'trap', 'drill', 'dubstep', 'dnb', 'drum and bass'];
-
-  if (musicKeywords.some(kw => title.includes(kw) || description.includes(kw)) ||
-      musicGenres.some(genre => tags.includes(genre))) {
-    const subtype = detectMusicSubtype(title, description, tags);
-    return { type: 'music', subtype, confidence: 'medium', source: 'keywords' };
-  }
-
-  // 4. Check for other content types
+  // 1b. YouTube's official categoryId - HIGH CONFIDENCE
+  // This takes precedence over ALL keyword-based detection
   if (categoryId && YOUTUBE_CATEGORIES[categoryId]) {
-    return { type: YOUTUBE_CATEGORIES[categoryId], subtype: 'general', confidence: 'high', source: 'category' };
+    const categoryType = YOUTUBE_CATEGORIES[categoryId];
+
+    // If it's music category (10), determine subtype
+    if (categoryId === '10') {
+      const subtype = detectMusicSubtype(title, description, tags);
+      return { type: 'music', subtype, confidence: 'high', source: 'category' };
+    }
+
+    // For all other categories, return the mapped type
+    // This prevents sports videos, gaming videos, etc. from being misclassified as music
+    const subtype = detectSubtypeForCategory(categoryType, title, description, tags);
+    return { type: categoryType, subtype, confidence: 'high', source: 'category' };
   }
 
-  // 5. Keyword-based detection for other types
-  if (title.includes('tutorial') || title.includes('how to') || title.includes('guide')) {
+  // ============================================================
+  // PRIORITY 2: Keyword-based detection (only when no categoryId)
+  // Used as fallback when YouTube doesn't provide category data
+  // ============================================================
+
+  // 2a. Strong music indicators (requires multiple signals for confidence)
+  const musicResult = detectMusicByKeywords(title, description, tags, channelTitle);
+  if (musicResult) {
+    return musicResult;
+  }
+
+  // 2b. Other content type keywords
+  const keywordResult = detectContentByKeywords(title, description, tags);
+  if (keywordResult) {
+    return keywordResult;
+  }
+
+  // ============================================================
+  // PRIORITY 3: Default fallback
+  // ============================================================
+  return { type: 'general', subtype: 'unknown', confidence: 'low', source: 'default' };
+}
+
+/**
+ * Strict music detection by keywords - requires multiple indicators to avoid false positives
+ * Only used when categoryId is not available
+ */
+function detectMusicByKeywords(title, description, tags, channelTitle) {
+  // TIER 1: Very strong music indicators (single match = high confidence)
+  // These are ONLY used in actual music content
+  const tier1Keywords = [
+    'official music video',
+    'official lyric video',
+    'official audio',
+    'official visualizer',
+    'lyric video',
+    '(lyrics)',
+    '[lyrics]',
+    'full album stream',
+    'album stream'
+  ];
+
+  if (tier1Keywords.some(kw => title.includes(kw))) {
+    const subtype = detectMusicSubtype(title, description, tags);
+    return { type: 'music', subtype, confidence: 'high', source: 'keywords_tier1' };
+  }
+
+  // TIER 2: Strong music indicators in TITLE only (not description - too broad)
+  const tier2TitleKeywords = [
+    'music video',
+    'prod. by',
+    'prod by',
+    'produced by',
+    '(prod.',
+    '[prod.',
+    'feat.',
+    'ft.',
+    '(remix)',
+    '[remix]',
+    'official remix',
+    '(acoustic)',
+    '[acoustic]',
+    'acoustic version',
+    'unplugged'
+  ];
+
+  // Count tier 2 matches in title
+  const tier2TitleMatches = tier2TitleKeywords.filter(kw => title.includes(kw)).length;
+
+  // TIER 3: Music genre tags (exact match only)
+  const musicGenreTags = [
+    'hip hop', 'hiphop', 'rap', 'trap', 'drill',
+    'rock', 'metal', 'punk', 'alternative', 'grunge',
+    'pop music', 'pop song',
+    'jazz', 'blues', 'soul', 'r&b', 'rnb', 'funk', 'gospel',
+    'classical music', 'orchestra', 'symphony',
+    'electronic music', 'edm', 'house music', 'techno', 'trance', 'dubstep', 'dnb', 'drum and bass',
+    'country music', 'folk music', 'bluegrass',
+    'reggae', 'dancehall', 'ska',
+    'latin music', 'salsa', 'bachata', 'reggaeton',
+    'k-pop', 'kpop', 'j-pop', 'jpop',
+    'indie music', 'indie rock', 'indie pop'
+  ];
+
+  const genreTagMatches = musicGenreTags.filter(genre => tags.includes(genre)).length;
+
+  // TIER 4: Music-related channel indicators
+  const musicChannelIndicators = [
+    'records', 'music', 'official', 'vevo', 'entertainment'
+  ];
+  const channelMusicScore = musicChannelIndicators.filter(ind => channelTitle.includes(ind)).length;
+
+  // TIER 5: Additional title patterns that suggest music
+  const musicTitlePatterns = [
+    /\s-\s.*\(official\)/i,           // "Artist - Song (Official)"
+    /\s-\s.*\[official\]/i,           // "Artist - Song [Official]"
+    /\sft\.\s/i,                       // " ft. " with spaces
+    /\sfeat\.\s/i,                     // " feat. " with spaces
+    /\(feat\./i,                       // "(feat."
+    /\[feat\./i,                       // "[feat."
+    /^\s*[\w\s]+\s-\s[\w\s]+$/,       // Simple "Artist - Song" pattern
+  ];
+
+  const patternMatches = musicTitlePatterns.filter(pattern => pattern.test(title)).length;
+
+  // Calculate confidence score
+  // Need multiple indicators to classify as music without categoryId
+  const totalScore = (tier2TitleMatches * 2) + (genreTagMatches * 2) + channelMusicScore + patternMatches;
+
+  // Require score >= 3 for medium confidence music detection
+  // This prevents single generic keyword matches from triggering music classification
+  if (totalScore >= 3) {
+    const subtype = detectMusicSubtype(title, description, tags);
+    return { type: 'music', subtype, confidence: 'medium', source: 'keywords_combined' };
+  }
+
+  // Even with lower score, if there are tier 2 title matches AND genre tags, it's likely music
+  if (tier2TitleMatches >= 1 && genreTagMatches >= 1) {
+    const subtype = detectMusicSubtype(title, description, tags);
+    return { type: 'music', subtype, confidence: 'medium', source: 'keywords_combined' };
+  }
+
+  return null; // Not confidently music
+}
+
+/**
+ * Detect other content types by keywords (non-music)
+ */
+function detectContentByKeywords(title, description, tags) {
+  // Sports detection
+  const sportsKeywords = ['match', 'game highlights', 'championship', 'tournament', 'vs', 'versus',
+    'final', 'semifinal', 'quarterfinal', 'world cup', 'olympics', 'league', 'season', 'playoff',
+    'behind the scenes', 'training', 'practice', 'warmup'];
+  const sportsTerms = ['football', 'soccer', 'basketball', 'tennis', 'table tennis', 'cricket',
+    'baseball', 'hockey', 'golf', 'boxing', 'mma', 'ufc', 'wrestling', 'volleyball', 'rugby',
+    'f1', 'formula 1', 'nascar', 'athletics', 'swimming', 'gymnastics', 'skating', 'skiing'];
+
+  if (sportsKeywords.some(kw => title.includes(kw)) &&
+      sportsTerms.some(term => title.includes(term) || tags.some(t => t.includes(term)))) {
+    return { type: 'sports', subtype: 'event', confidence: 'medium', source: 'keywords' };
+  }
+
+  // Tutorial/How-to detection
+  if (title.includes('tutorial') || title.includes('how to ') || title.includes('guide to') ||
+      title.includes('step by step') || title.includes('learn to') || title.includes('beginner')) {
     return { type: 'tutorial', subtype: 'educational', confidence: 'medium', source: 'keywords' };
   }
-  if (title.includes('review') || title.includes('unboxing')) {
+
+  // Review/Unboxing detection
+  if (title.includes('review') || title.includes('unboxing') || title.includes('hands on') ||
+      title.includes('first look') || title.includes('comparison')) {
     return { type: 'review', subtype: 'product', confidence: 'medium', source: 'keywords' };
   }
-  if (title.includes('gameplay') || title.includes('playthrough') || title.includes('let\'s play')) {
+
+  // Gaming detection
+  if (title.includes('gameplay') || title.includes('playthrough') || title.includes('let\'s play') ||
+      title.includes('walkthrough') || title.includes('speedrun') || title.includes('gaming')) {
     return { type: 'gaming', subtype: 'gameplay', confidence: 'medium', source: 'keywords' };
   }
-  if (title.includes('vlog') || title.includes('day in my life') || title.includes('grwm')) {
+
+  // Vlog detection
+  if (title.includes('vlog') || title.includes('day in my life') || title.includes('grwm') ||
+      title.includes('get ready with me') || title.includes('daily vlog') || title.includes('weekly vlog')) {
     return { type: 'vlog', subtype: 'lifestyle', confidence: 'medium', source: 'keywords' };
   }
-  if (title.includes('podcast') || title.includes('interview') || title.includes('conversation')) {
+
+  // Podcast/Interview detection
+  if (title.includes('podcast') || title.includes('interview with') || title.includes('conversation with') ||
+      title.includes('episode') && (title.includes('ep.') || title.includes('ep ') || /ep\s*\d+/i.test(title))) {
     return { type: 'podcast', subtype: 'talk', confidence: 'medium', source: 'keywords' };
   }
 
-  // Default
-  return { type: 'general', subtype: 'unknown', confidence: 'low', source: 'default' };
+  // News detection
+  if (title.includes('breaking') || title.includes('news') || title.includes('update') ||
+      title.includes('announcement') || title.includes('press conference')) {
+    return { type: 'news', subtype: 'current_events', confidence: 'medium', source: 'keywords' };
+  }
+
+  // Documentary detection
+  if (title.includes('documentary') || title.includes('the story of') || title.includes('history of') ||
+      title.includes('investigation') || title.includes('explained')) {
+    return { type: 'documentary', subtype: 'informational', confidence: 'medium', source: 'keywords' };
+  }
+
+  return null;
+}
+
+/**
+ * Determine subtype for non-music categories based on title/description
+ */
+function detectSubtypeForCategory(categoryType, title, description, tags) {
+  switch (categoryType) {
+    case 'sports':
+      if (title.includes('highlight')) return 'highlights';
+      if (title.includes('behind the scenes') || title.includes('bts')) return 'behind_the_scenes';
+      if (title.includes('interview')) return 'interview';
+      if (title.includes('training') || title.includes('practice')) return 'training';
+      if (title.includes('final') || title.includes('championship')) return 'championship';
+      return 'event';
+
+    case 'gaming':
+      if (title.includes('review')) return 'review';
+      if (title.includes('walkthrough') || title.includes('playthrough')) return 'walkthrough';
+      if (title.includes('speedrun')) return 'speedrun';
+      if (title.includes('let\'s play')) return 'lets_play';
+      if (title.includes('stream') || title.includes('live')) return 'stream';
+      return 'gameplay';
+
+    case 'news':
+      if (title.includes('breaking')) return 'breaking';
+      if (title.includes('analysis')) return 'analysis';
+      if (title.includes('opinion')) return 'opinion';
+      return 'report';
+
+    case 'education':
+    case 'howto':
+      if (title.includes('course') || title.includes('class')) return 'course';
+      if (title.includes('tutorial')) return 'tutorial';
+      if (title.includes('explained')) return 'explainer';
+      return 'educational';
+
+    case 'entertainment':
+      if (title.includes('trailer')) return 'trailer';
+      if (title.includes('clip')) return 'clip';
+      if (title.includes('scene')) return 'scene';
+      return 'general';
+
+    case 'travel_events':
+      if (title.includes('tour')) return 'tour';
+      if (title.includes('travel')) return 'travel';
+      if (title.includes('event')) return 'event';
+      return 'general';
+
+    default:
+      return 'general';
+  }
 }
 
 function detectMusicSubtype(title, description, tags) {
@@ -682,6 +925,9 @@ function detectMusicSubtype(title, description, tags) {
 function getContentTypeContext(contentType) {
   const { type, subtype } = contentType;
 
+  // ============================================================
+  // MUSIC CONTENT
+  // ============================================================
   if (type === 'music') {
     return {
       titleInstructions: `
@@ -725,27 +971,383 @@ Focus on: artist discovery, genre, mood, similar artists, music platform names.`
     };
   }
 
+  // ============================================================
+  // SPORTS CONTENT
+  // ============================================================
+  if (type === 'sports') {
+    const sportSubtypeContext = {
+      highlights: 'match/game highlights',
+      behind_the_scenes: 'behind-the-scenes content',
+      interview: 'athlete/coach interview',
+      training: 'training/practice session',
+      championship: 'championship/final match',
+      event: 'sports event'
+    };
+    const contextDesc = sportSubtypeContext[subtype] || 'sports content';
+
+    return {
+      titleInstructions: `
+SPORTS CONTENT DETECTED - This is ${contextDesc}.
+Create SPORTS-appropriate titles:
+- Include the sport name, event/competition name, teams/athletes involved
+- Use sports terminology: "Highlights", "Match", "Championship", "Final", "vs", etc.
+- Highlight key moments: "Amazing Rally", "Championship Point", "Gold Medal", etc.
+- Include dates/seasons if relevant (e.g., "2024 Finals")
+- DO NOT use music or entertainment terminology`,
+
+      descriptionInstructions: `
+SPORTS CONTENT DETECTED - This is ${contextDesc}.
+Create a SPORTS description:
+
+Include:
+1. 🏆 Event/Competition info (tournament name, round, date)
+2. 👥 Teams/Athletes involved with relevant stats or rankings
+3. 📍 Venue/Location information
+4. ⏱️ Timestamps for key moments (goals, points, highlights)
+5. 📊 Match/game results or scores (if applicable)
+6. 🔗 Links to official sports channels, league websites
+7. Sports-related hashtags (#[Sport] #[Tournament] #[Team/Athlete])
+
+DO NOT include:
+- Music-related content (genres, artists, streaming platforms)
+- Motivational self-help content
+- Unrelated entertainment content`,
+
+      tagsInstructions: `
+SPORTS CONTENT DETECTED - Generate SPORTS-specific tags:
+
+1. Primary (5-8): Sport name, event/tournament name, athlete/team names
+2. Secondary (8-12): League name, season/year, venue, competition round
+3. Long-tail (10-15): "[Athlete] highlights 2024", "[Tournament] finals", "[Sport] best moments"
+4. Trending (5-10): Current tournament names, trending athlete names, sports events
+
+DO NOT include music, entertainment, or motivational tags.
+Focus on: sport discovery, event coverage, athlete/team names, competition names.`
+    };
+  }
+
+  // ============================================================
+  // GAMING CONTENT
+  // ============================================================
   if (type === 'gaming') {
     return {
-      titleInstructions: `GAMING CONTENT - Include game name, type of content (gameplay, review, guide), and gaming-specific hooks.`,
-      descriptionInstructions: `GAMING CONTENT - Include game info, platform, gameplay timestamps, and gaming community links.`,
-      tagsInstructions: `GAMING CONTENT - Focus on game name, platform, game genre, gaming terms, esports if relevant.`
+      titleInstructions: `
+GAMING CONTENT DETECTED - This is ${subtype} content.
+Create GAMING-appropriate titles:
+- Include the game name prominently
+- Specify content type: Gameplay, Walkthrough, Review, Let's Play, etc.
+- Use gaming hooks: "Epic Win", "Insane Play", "World Record", "Boss Fight", etc.
+- Include relevant details: difficulty level, character/class, game mode`,
+
+      descriptionInstructions: `
+GAMING CONTENT DETECTED - Create a GAMING description:
+
+Include:
+1. 🎮 Game info (name, platform, genre)
+2. 📋 Content type (gameplay, walkthrough, review, etc.)
+3. ⏱️ Timestamps for key moments, boss fights, achievements
+4. 💻 PC specs or console info if relevant
+5. 🔗 Links to game store, streamer socials, Discord
+6. Gaming hashtags (#[GameName] #Gaming #[Platform])
+
+DO NOT include music or unrelated content.`,
+
+      tagsInstructions: `
+GAMING CONTENT - Generate GAMING tags:
+
+1. Primary (5-8): Game name, platform, game genre, content type
+2. Secondary (8-12): Game modes, characters, related games
+3. Long-tail (10-15): "[Game] gameplay 2024", "[Game] walkthrough", "[Game] review"
+4. Trending (5-10): Current gaming trends, popular games, esports terms`
     };
   }
 
+  // ============================================================
+  // EDUCATIONAL/TUTORIAL CONTENT
+  // ============================================================
   if (type === 'tutorial' || type === 'howto' || type === 'education') {
     return {
-      titleInstructions: `EDUCATIONAL/TUTORIAL CONTENT - Focus on the problem being solved, include "How to", step counts, or results promises.`,
-      descriptionInstructions: `EDUCATIONAL CONTENT - Include clear problem statement, numbered steps, resources, and practical takeaways.`,
-      tagsInstructions: `EDUCATIONAL CONTENT - Focus on topic keywords, skill levels, related topics, and problem-solution phrases.`
+      titleInstructions: `
+EDUCATIONAL/TUTORIAL CONTENT DETECTED.
+Create EDUCATIONAL titles:
+- Focus on the problem being solved or skill being taught
+- Use "How to", step counts, or clear outcome promises
+- Include skill level if relevant (Beginner, Advanced, etc.)
+- Be specific about what viewers will learn`,
+
+      descriptionInstructions: `
+EDUCATIONAL CONTENT - Create an EDUCATIONAL description:
+
+Include:
+1. 📚 Clear problem statement or learning objective
+2. 📝 Numbered steps or chapter timestamps
+3. 🛠️ Tools, resources, or materials needed
+4. 💡 Key takeaways and practical tips
+5. 🔗 Links to resources, downloads, related tutorials
+6. Educational hashtags (#Tutorial #HowTo #[Topic])`,
+
+      tagsInstructions: `
+EDUCATIONAL CONTENT - Generate EDUCATIONAL tags:
+
+1. Primary (5-8): Topic name, skill type, "tutorial", "how to"
+2. Secondary (8-12): Related topics, tools mentioned, skill level
+3. Long-tail (10-15): "[Topic] tutorial for beginners", "how to [action]", "learn [skill]"
+4. Trending (5-10): Current trends in the topic area`
     };
   }
 
-  // Default for general content
+  // ============================================================
+  // NEWS CONTENT
+  // ============================================================
+  if (type === 'news') {
+    return {
+      titleInstructions: `
+NEWS CONTENT DETECTED.
+Create NEWS-appropriate titles:
+- Be factual and informative
+- Include key facts: who, what, when, where
+- Use news terminology: "Breaking", "Update", "Report", etc.
+- Avoid sensationalism while maintaining engagement`,
+
+      descriptionInstructions: `
+NEWS CONTENT - Create a NEWS description:
+
+Include:
+1. 📰 Summary of the news story
+2. 📅 Date and relevant timeline
+3. 👥 Key people/organizations involved
+4. 🔗 Links to sources and related coverage
+5. News-related hashtags (#News #Breaking #[Topic])`,
+
+      tagsInstructions: `
+NEWS CONTENT - Generate NEWS tags:
+
+1. Primary (5-8): Topic, key figures, location
+2. Secondary (8-12): Related events, organizations
+3. Long-tail (10-15): "[Topic] news 2024", "[Event] update"
+4. Trending (5-10): Current news trends, breaking topics`
+    };
+  }
+
+  // ============================================================
+  // VLOG/LIFESTYLE CONTENT
+  // ============================================================
+  if (type === 'vlog' || type === 'videoblogging') {
+    return {
+      titleInstructions: `
+VLOG/LIFESTYLE CONTENT DETECTED.
+Create VLOG-appropriate titles:
+- Be personal and relatable
+- Include context: location, activity, occasion
+- Use vlog hooks: "Day in My Life", "GRWM", "Come With Me", etc.
+- Keep it authentic to the creator's style`,
+
+      descriptionInstructions: `
+VLOG CONTENT - Create a VLOG description:
+
+Include:
+1. 📍 Location and context
+2. 📋 Brief summary of what happens
+3. ⏱️ Timestamps for different segments
+4. 🔗 Links to creator's socials, products mentioned
+5. Vlog hashtags (#Vlog #DayInMyLife #[Location])`,
+
+      tagsInstructions: `
+VLOG CONTENT - Generate VLOG tags:
+
+1. Primary (5-8): Content type, location, activity
+2. Secondary (8-12): Lifestyle topics, brands mentioned
+3. Long-tail (10-15): "[Activity] vlog", "day in my life [location]"
+4. Trending (5-10): Current lifestyle trends`
+    };
+  }
+
+  // ============================================================
+  // ENTERTAINMENT CONTENT
+  // ============================================================
+  if (type === 'entertainment' || type === 'comedy') {
+    return {
+      titleInstructions: `
+ENTERTAINMENT CONTENT DETECTED.
+Create ENTERTAINMENT-appropriate titles:
+- Be engaging and attention-grabbing
+- Match the tone of the content (funny, dramatic, etc.)
+- Include key performers or show names if relevant`,
+
+      descriptionInstructions: `
+ENTERTAINMENT CONTENT - Create an ENTERTAINMENT description:
+
+Include:
+1. 🎬 Content summary
+2. 👥 Performers/creators involved
+3. ⏱️ Timestamps for key moments
+4. 🔗 Links to related content, creator socials
+5. Entertainment hashtags (#Entertainment #Comedy #[Show])`,
+
+      tagsInstructions: `
+ENTERTAINMENT CONTENT - Generate ENTERTAINMENT tags:
+
+1. Primary (5-8): Content type, performers, show name
+2. Secondary (8-12): Genre, related content
+3. Long-tail (10-15): "[Performer] funny moments", "[Show] clips"
+4. Trending (5-10): Current entertainment trends`
+    };
+  }
+
+  // ============================================================
+  // TRAVEL/EVENTS CONTENT
+  // ============================================================
+  if (type === 'travel_events') {
+    return {
+      titleInstructions: `
+TRAVEL/EVENTS CONTENT DETECTED.
+Create TRAVEL-appropriate titles:
+- Include destination/event name prominently
+- Use travel hooks: "Travel Guide", "Hidden Gems", "Must Visit", etc.
+- Be specific about location and experience`,
+
+      descriptionInstructions: `
+TRAVEL CONTENT - Create a TRAVEL description:
+
+Include:
+1. 📍 Destination/event details
+2. 🗓️ Travel dates, event schedule
+3. 💰 Budget tips, costs mentioned
+4. ⏱️ Timestamps for different locations/activities
+5. 🔗 Links to booking sites, travel resources
+6. Travel hashtags (#Travel #[Destination] #[Event])`,
+
+      tagsInstructions: `
+TRAVEL CONTENT - Generate TRAVEL tags:
+
+1. Primary (5-8): Destination, event name, travel type
+2. Secondary (8-12): Activities, attractions, local terms
+3. Long-tail (10-15): "[Destination] travel guide", "[Event] vlog"
+4. Trending (5-10): Current travel trends, popular destinations`
+    };
+  }
+
+  // ============================================================
+  // DOCUMENTARY CONTENT
+  // ============================================================
+  if (type === 'documentary' || type === 'film_animation') {
+    return {
+      titleInstructions: `
+DOCUMENTARY/FILM CONTENT DETECTED.
+Create appropriate titles:
+- Be informative and intriguing
+- Include the subject matter clearly
+- Use documentary terms if relevant: "The Story of", "Inside", "Exploring", etc.`,
+
+      descriptionInstructions: `
+DOCUMENTARY CONTENT - Create a description:
+
+Include:
+1. 📽️ Subject/topic overview
+2. 🎬 Production details if relevant
+3. ⏱️ Chapter timestamps
+4. 🔗 Links to related documentaries, sources
+5. Relevant hashtags (#Documentary #[Topic])`,
+
+      tagsInstructions: `
+DOCUMENTARY CONTENT - Generate tags:
+
+1. Primary (5-8): Subject matter, documentary type
+2. Secondary (8-12): Related topics, people featured
+3. Long-tail (10-15): "[Subject] documentary", "the story of [topic]"
+4. Trending (5-10): Current documentary trends`
+    };
+  }
+
+  // ============================================================
+  // REVIEW/PRODUCT CONTENT
+  // ============================================================
+  if (type === 'review') {
+    return {
+      titleInstructions: `
+REVIEW CONTENT DETECTED.
+Create REVIEW-appropriate titles:
+- Include product/item name clearly
+- Use review hooks: "Honest Review", "Worth It?", "Unboxing", etc.
+- Be specific about what's being reviewed`,
+
+      descriptionInstructions: `
+REVIEW CONTENT - Create a REVIEW description:
+
+Include:
+1. 📦 Product/item details (name, specs, price)
+2. ✅ Pros and cons summary
+3. ⭐ Rating or verdict
+4. ⏱️ Timestamps for different aspects
+5. 🔗 Links to purchase, affiliate links (disclosed)
+6. Review hashtags (#Review #Unboxing #[Product])`,
+
+      tagsInstructions: `
+REVIEW CONTENT - Generate REVIEW tags:
+
+1. Primary (5-8): Product name, brand, category
+2. Secondary (8-12): Specs, features, alternatives
+3. Long-tail (10-15): "[Product] review 2024", "[Brand] unboxing"
+4. Trending (5-10): Current product trends`
+    };
+  }
+
+  // ============================================================
+  // PODCAST/INTERVIEW CONTENT
+  // ============================================================
+  if (type === 'podcast') {
+    return {
+      titleInstructions: `
+PODCAST/INTERVIEW CONTENT DETECTED.
+Create PODCAST-appropriate titles:
+- Include podcast name and episode info
+- Feature guest name prominently if applicable
+- Highlight the main topic or most interesting point`,
+
+      descriptionInstructions: `
+PODCAST CONTENT - Create a PODCAST description:
+
+Include:
+1. 🎙️ Podcast name and episode number
+2. 👤 Guest introduction and credentials
+3. 📋 Topics discussed
+4. ⏱️ Timestamps for different topics
+5. 🔗 Links to podcast platforms, guest socials
+6. Podcast hashtags (#Podcast #[PodcastName] #[Topic])`,
+
+      tagsInstructions: `
+PODCAST CONTENT - Generate PODCAST tags:
+
+1. Primary (5-8): Podcast name, guest name, main topic
+2. Secondary (8-12): Topics discussed, related podcasts
+3. Long-tail (10-15): "[Guest] interview", "[Topic] podcast"
+4. Trending (5-10): Current podcast trends, trending topics`
+    };
+  }
+
+  // ============================================================
+  // DEFAULT - GENERAL CONTENT
+  // ============================================================
   return {
-    titleInstructions: `Create engaging titles appropriate for the video's actual content and subject matter.`,
-    descriptionInstructions: `Create a description that accurately represents the video content with relevant sections.`,
-    tagsInstructions: `Create tags relevant to the actual video content and subject matter.`
+    titleInstructions: `
+Analyze the video content carefully and create titles appropriate for its actual subject matter.
+- Match the tone and style to the content
+- Be specific about what the video contains
+- Avoid generic or mismatched terminology`,
+
+    descriptionInstructions: `
+Create a description that accurately represents the video content:
+- Summarize the main content/topic
+- Include relevant timestamps
+- Add appropriate links and hashtags
+- Match the description style to the content type`,
+
+    tagsInstructions: `
+Create tags relevant to the actual video content:
+- Focus on the specific topic/subject
+- Include relevant terminology for that niche
+- Add trending tags related to the content
+- Avoid generic or mismatched tags`
   };
 }
 
