@@ -6190,7 +6190,7 @@ exports.testImagenApi = functions.https.onCall(async (data, context) => {
     try {
       console.log('Testing Imagen API with simple generation...');
       const testResponse = await ai.models.generateImages({
-        model: 'imagen-3.0-generate-001',
+        model: 'imagen-4.0-generate-001',
         prompt: 'A simple red circle on white background',
         config: {
           numberOfImages: 1,
@@ -6323,12 +6323,12 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const validAspectRatio = aspectRatioMap[aspectRatio] || '1:1';
 
   // Map model selection to Imagen models
-  // banana1 = imagen-3.0, banana2 = imagen-4.0 (when available), auto = latest
-  // NOTE: Use imagen-3.0-generate-001 (GA version) - 002 may not be available yet
+  // banana1 = imagen-4.0 (standard), banana2 = imagen-4.0-ultra (highest quality), auto = standard
+  // NOTE: Imagen 3 is NOT available via API - use Imagen 4 models
   const modelMap = {
-    'banana1': 'imagen-3.0-generate-001',
-    'banana2': 'imagen-3.0-generate-001', // Update when Imagen 4 is available
-    'auto': 'imagen-3.0-generate-001'
+    'banana1': 'imagen-4.0-generate-001',
+    'banana2': 'imagen-4.0-ultra-generate-001',
+    'auto': 'imagen-4.0-generate-001'
   };
   const imagenModel = modelMap[model] || modelMap['auto'];
 
@@ -6484,7 +6484,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     // Model not found or not available
     if (errorMsg.includes('not found') || errorMsg.includes('404') || (errorMsg.includes('model') && errorMsg.includes('available'))) {
       throw new functions.https.HttpsError('failed-precondition',
-        'Imagen 3 model not accessible. This usually means: (1) Your API key is from Google Cloud Console instead of Google AI Studio, OR (2) Imagen is not available in your region. Get a new key from: aistudio.google.com/apikey');
+        'Imagen model not accessible. Please ensure your API key is from Google AI Studio (aistudio.google.com/apikey) and has billing enabled.');
     }
 
     // API not enabled or permission issues
