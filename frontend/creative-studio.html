@@ -834,6 +834,64 @@
             color: white;
         }
 
+        .toast-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+
+        .toast-info {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+        }
+
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-retry-btn {
+            padding: 0.375rem 0.75rem;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .toast-retry-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .toast-dismiss-btn {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            border-radius: 50%;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .toast-dismiss-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+        }
+
         /* ------------------------------------------
            2.15 SCROLLBAR
            ------------------------------------------ */
@@ -1060,6 +1118,22 @@
         .prompt-textarea:focus {
             outline: none;
             border-color: #8b5cf6;
+        }
+
+        .prompt-textarea.has-unfilled-vars {
+            border-color: #f59e0b;
+            animation: pulseWarning 0.5s ease 3;
+        }
+
+        @keyframes pulseWarning {
+            0%, 100% {
+                border-color: #f59e0b;
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+            }
+            50% {
+                border-color: #f59e0b;
+                box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.3);
+            }
         }
 
         .prompt-actions {
@@ -1709,6 +1783,63 @@
             color: white;
         }
 
+        /* Prompt Health Indicator */
+        .prompt-health {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .prompt-health-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 1rem;
+            font-size: 0.7rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .prompt-health-indicator.empty {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .prompt-health-indicator.short {
+            background: rgba(255, 193, 7, 0.15);
+            color: #ffc107;
+        }
+
+        .prompt-health-indicator.good {
+            background: rgba(76, 175, 80, 0.15);
+            color: #4caf50;
+        }
+
+        .prompt-health-indicator.long {
+            background: rgba(255, 152, 0, 0.15);
+            color: #ff9800;
+        }
+
+        .prompt-health-indicator.limit {
+            background: rgba(244, 67, 54, 0.15);
+            color: #f44336;
+        }
+
+        .prompt-char-count {
+            color: rgba(255, 255, 255, 0.4);
+            transition: color 0.3s ease;
+        }
+
+        .prompt-char-count.warning {
+            color: #ff9800;
+        }
+
+        .prompt-char-count.danger {
+            color: #f44336;
+        }
+
         /* Dropdown menu for prompt chips */
         .prompt-dropdown-menu {
             position: absolute;
@@ -1891,6 +2022,100 @@
         .generate-btn-sparkle {
             display: inline-flex;
             font-size: 1.25rem;
+        }
+
+        /* Cost Breakdown Component */
+        .cost-breakdown {
+            margin-top: 1rem;
+            padding: 0.875rem;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+        }
+
+        .cost-breakdown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 0.625rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 0.625rem;
+        }
+
+        .cost-breakdown-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
+        .cost-breakdown-total {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fbbf24;
+            transition: all 0.3s ease;
+        }
+
+        .cost-breakdown-total.insufficient {
+            color: #f87171;
+        }
+
+        .cost-breakdown-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.375rem;
+        }
+
+        .cost-breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+        }
+
+        .cost-detail-label {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .cost-detail-value {
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+        }
+
+        .cost-breakdown-balance {
+            margin-top: 0.75rem;
+            padding-top: 0.625rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .balance-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .balance-value {
+            font-weight: 600;
+            color: white;
+        }
+
+        .balance-value.insufficient {
+            color: #f87171;
+        }
+
+        .balance-warning {
+            font-size: 0.7rem;
+            color: #f87171;
+            margin-top: 0.375rem;
+            text-align: right;
+        }
+
+        .rollover-info {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+            text-align: right;
+            margin-top: 0.25rem;
         }
 
         /* Selected template indicator */
@@ -2369,6 +2594,240 @@
         .prompt-expand-btn:hover {
             background: rgba(139, 92, 246, 0.3);
             color: white;
+        }
+
+        /* ==========================================
+           CONFIRMATION DIALOG
+           ========================================== */
+        .confirm-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 2500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            animation: fadeIn 0.15s ease;
+        }
+
+        .confirm-dialog {
+            background: linear-gradient(180deg, rgba(35, 35, 55, 0.98) 0%, rgba(25, 25, 45, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 420px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: modalSlideIn 0.2s ease;
+        }
+
+        .confirm-dialog-header {
+            padding: 1.25rem 1.5rem 0.75rem;
+        }
+
+        .confirm-dialog-icon {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 193, 7, 0.15);
+            border-radius: 0.75rem;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .confirm-dialog-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.5rem;
+        }
+
+        .confirm-dialog-message {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.5;
+        }
+
+        .confirm-dialog-preview {
+            margin: 1rem 1.5rem;
+            padding: 0.875rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .confirm-dialog-preview-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 0.5rem;
+        }
+
+        .confirm-dialog-footer {
+            display: flex;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem 1.25rem;
+        }
+
+        .confirm-dialog-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .confirm-dialog-btn-cancel {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .confirm-dialog-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .confirm-dialog-btn-replace {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            color: white;
+        }
+
+        .confirm-dialog-btn-replace:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .confirm-dialog-btn-append {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid rgba(76, 175, 80, 0.4);
+            color: #4caf50;
+        }
+
+        .confirm-dialog-btn-append:hover {
+            background: rgba(76, 175, 80, 0.3);
+        }
+
+        /* ==========================================
+           DRAFT NOTIFICATION BANNER
+           ========================================== */
+        .draft-notification {
+            position: fixed;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.95) 0%, rgba(109, 40, 217, 0.95) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.75rem;
+            padding: 0.875rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 10px 40px rgba(139, 92, 246, 0.4);
+            animation: slideDown 0.3s ease;
+            max-width: 90%;
+            width: auto;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .draft-notification-icon {
+            font-size: 1.25rem;
+        }
+
+        .draft-notification-content {
+            flex: 1;
+        }
+
+        .draft-notification-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.125rem;
+        }
+
+        .draft-notification-subtitle {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .draft-notification-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .draft-notification-btn {
+            padding: 0.5rem 0.875rem;
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .draft-notification-btn-restore {
+            background: white;
+            border: none;
+            color: #7c3aed;
+        }
+
+        .draft-notification-btn-restore:hover {
+            transform: scale(1.02);
+        }
+
+        .draft-notification-btn-dismiss {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .draft-notification-btn-dismiss:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        @media (max-width: 640px) {
+            .draft-notification {
+                flex-direction: column;
+                text-align: center;
+                gap: 0.75rem;
+            }
+
+            .draft-notification-actions {
+                width: 100%;
+            }
+
+            .draft-notification-btn {
+                flex: 1;
+            }
         }
 
         /* ==========================================
@@ -3235,7 +3694,14 @@
             selectedImageDetail: null,
 
             // Model Dropdown state
-            modelDropdownOpen: false
+            modelDropdownOpen: false,
+
+            // Template Confirmation Dialog state
+            confirmDialogOpen: false,
+            pendingTemplate: null,
+
+            // Draft notification state
+            showDraftNotification: false
         };
 
         /* ==========================================
@@ -3830,6 +4296,83 @@
                 var div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;
+            },
+
+            // Draft storage key
+            DRAFT_KEY: 'creative_studio_draft',
+
+            // Save draft to localStorage
+            saveDraft: function() {
+                try {
+                    var draft = {
+                        prompt: state.prompt,
+                        selectedModel: state.selectedModel,
+                        quantity: state.quantity,
+                        aspectRatio: state.aspectRatio,
+                        quality: state.quality,
+                        selectedTemplate: state.selectedTemplate ? { id: state.selectedTemplate.id, name: state.selectedTemplate.name } : null,
+                        savedAt: new Date().toISOString()
+                    };
+                    localStorage.setItem(utils.DRAFT_KEY, JSON.stringify(draft));
+                } catch (e) {
+                    console.warn('Could not save draft:', e);
+                }
+            },
+
+            // Load draft from localStorage
+            loadDraft: function() {
+                try {
+                    var draftStr = localStorage.getItem(utils.DRAFT_KEY);
+                    if (draftStr) {
+                        return JSON.parse(draftStr);
+                    }
+                } catch (e) {
+                    console.warn('Could not load draft:', e);
+                }
+                return null;
+            },
+
+            // Clear draft from localStorage
+            clearDraft: function() {
+                try {
+                    localStorage.removeItem(utils.DRAFT_KEY);
+                } catch (e) {
+                    console.warn('Could not clear draft:', e);
+                }
+            },
+
+            // Check if draft exists and is recent (within 24 hours)
+            hasDraft: function() {
+                var draft = utils.loadDraft();
+                if (!draft || !draft.savedAt) return false;
+
+                // Check if prompt has content
+                if (!draft.prompt || draft.prompt.trim().length === 0) return false;
+
+                // Check if draft is within 24 hours
+                var savedTime = new Date(draft.savedAt).getTime();
+                var now = Date.now();
+                var hoursDiff = (now - savedTime) / (1000 * 60 * 60);
+                return hoursDiff < 24;
+            },
+
+            // Format draft time for display
+            formatDraftTime: function(dateStr) {
+                if (!dateStr) return 'recently';
+                try {
+                    var date = new Date(dateStr);
+                    var now = new Date();
+                    var diffMs = now - date;
+                    var diffMins = Math.floor(diffMs / 60000);
+                    var diffHours = Math.floor(diffMs / 3600000);
+
+                    if (diffMins < 1) return 'just now';
+                    if (diffMins < 60) return diffMins + ' minute' + (diffMins > 1 ? 's' : '') + ' ago';
+                    if (diffHours < 24) return diffHours + ' hour' + (diffHours > 1 ? 's' : '') + ' ago';
+                    return date.toLocaleDateString();
+                } catch (e) {
+                    return 'recently';
+                }
             }
         };
 
@@ -3931,22 +4474,64 @@
 
             // Select Template
             selectTemplate: function(templateId) {
-                // Find template and populate prompt
+                // Find template
+                var foundTemplate = null;
                 for (var i = 0; i < templateCategories.length; i++) {
                     var category = templateCategories[i];
                     for (var j = 0; j < category.templates.length; j++) {
                         var template = category.templates[j];
                         if (template.id === templateId) {
-                            state.selectedTemplate = template;
-                            state.prompt = template.prompt;
-                            // Update the textarea
-                            var textarea = document.getElementById('prompt-textarea');
-                            if (textarea) textarea.value = template.prompt;
-                            render();
-                            return;
+                            foundTemplate = template;
+                            break;
                         }
                     }
+                    if (foundTemplate) break;
                 }
+
+                if (!foundTemplate) return;
+
+                // Check if user has existing prompt that would be replaced
+                var hasExistingPrompt = state.prompt.trim().length > 10;
+                var isNotSameTemplate = !state.selectedTemplate || state.selectedTemplate.id !== templateId;
+
+                if (hasExistingPrompt && isNotSameTemplate) {
+                    // Show confirmation dialog
+                    state.pendingTemplate = foundTemplate;
+                    state.confirmDialogOpen = true;
+                    render();
+                } else {
+                    // Apply template directly
+                    app.applyTemplate(foundTemplate, 'replace');
+                }
+            },
+
+            // Apply template (called directly or after confirmation)
+            applyTemplate: function(template, mode) {
+                state.selectedTemplate = template;
+
+                if (mode === 'replace') {
+                    state.prompt = template.prompt;
+                } else if (mode === 'append') {
+                    state.prompt = state.prompt.trim() + '\n\n' + template.prompt;
+                }
+
+                // Update the textarea
+                var textarea = document.getElementById('prompt-textarea');
+                if (textarea) textarea.value = state.prompt;
+
+                // Close dialog if open
+                state.confirmDialogOpen = false;
+                state.pendingTemplate = null;
+
+                render();
+                showToast('Template applied: ' + template.name, 'success');
+            },
+
+            // Cancel template selection
+            cancelTemplateConfirm: function() {
+                state.confirmDialogOpen = false;
+                state.pendingTemplate = null;
+                render();
             },
 
             // Enhance Prompt (placeholder for AI enhancement)
@@ -4032,6 +4617,44 @@
                 state.sceneMode = null;
                 var textarea = document.getElementById('prompt-textarea');
                 if (textarea) textarea.value = '';
+                utils.clearDraft(); // Also clear saved draft
+                render();
+            },
+
+            // Restore draft from localStorage
+            restoreDraft: function() {
+                var draft = utils.loadDraft();
+                if (draft) {
+                    state.prompt = draft.prompt || '';
+                    state.selectedModel = draft.selectedModel || 'auto';
+                    state.quantity = draft.quantity || 1;
+                    state.aspectRatio = draft.aspectRatio || '1:1';
+                    state.quality = draft.quality || 'hd';
+
+                    // Restore template reference if exists
+                    if (draft.selectedTemplate && draft.selectedTemplate.id) {
+                        // Find the template in categories
+                        for (var i = 0; i < templateCategories.length; i++) {
+                            var category = templateCategories[i];
+                            for (var j = 0; j < category.templates.length; j++) {
+                                if (category.templates[j].id === draft.selectedTemplate.id) {
+                                    state.selectedTemplate = category.templates[j];
+                                    break;
+                                }
+                            }
+                            if (state.selectedTemplate) break;
+                        }
+                    }
+
+                    render();
+                    showToast('Draft restored from ' + utils.formatDraftTime(draft.savedAt), 'info');
+                }
+            },
+
+            // Dismiss draft notification (just clear the draft, don't restore)
+            dismissDraft: function() {
+                utils.clearDraft();
+                state.showDraftNotification = false;
                 render();
             },
 
@@ -4267,10 +4890,38 @@
                 // TODO: Show premium upgrade modal with plans
             },
 
+            // Get unfilled template variables from prompt
+            getUnfilledVariables: function(prompt) {
+                if (!prompt) return [];
+                var regex = /\{\{([^}]+)\}\}/g;
+                var matches = [];
+                var match;
+                while ((match = regex.exec(prompt)) !== null) {
+                    matches.push(match[1].trim());
+                }
+                return matches;
+            },
+
             // Generate Image using Gemini/Imagen API
             generateImage: function() {
                 if (!state.prompt.trim()) {
                     showToast('Please enter a prompt', 'error');
+                    return;
+                }
+
+                // Check for unfilled template variables
+                var unfilledVars = app.getUnfilledVariables(state.prompt);
+                if (unfilledVars.length > 0) {
+                    var varNames = unfilledVars.map(function(v) { return '"' + v + '"'; }).join(', ');
+                    showToast('Please fill in template variables: ' + varNames, 'warning');
+                    // Highlight the prompt textarea
+                    var textarea = document.getElementById('prompt-textarea');
+                    if (textarea) {
+                        textarea.classList.add('has-unfilled-vars');
+                        setTimeout(function() {
+                            textarea.classList.remove('has-unfilled-vars');
+                        }, 3000);
+                    }
                     return;
                 }
 
@@ -4328,14 +4979,55 @@
                     state.generationProgress = 0;
                     console.error('Generation error:', error);
 
-                    // Show user-friendly error message
-                    var errorMsg = error.message || 'Failed to generate image. Please try again.';
-                    if (error.code === 'resource-exhausted') {
-                        errorMsg = 'Not enough tokens or service busy. Please try again.';
-                    } else if (error.code === 'invalid-argument') {
-                        errorMsg = error.message || 'Invalid prompt. Please try a different prompt.';
+                    // Parse error and show user-friendly message with appropriate actions
+                    var errorCode = error.code || '';
+                    var errorMessage = error.message || '';
+                    var userMsg = 'Generation failed. Please try again.';
+                    var canRetry = true;
+                    var suggestion = '';
+
+                    if (errorCode === 'resource-exhausted') {
+                        userMsg = 'Service is busy right now.';
+                        suggestion = 'Try again in a few moments.';
+                    } else if (errorCode === 'invalid-argument') {
+                        userMsg = 'Your prompt contains invalid content.';
+                        suggestion = 'Try simplifying or rephrasing your prompt.';
+                        canRetry = false;
+                    } else if (errorCode === 'permission-denied') {
+                        userMsg = 'Access denied.';
+                        suggestion = 'Please check your account status.';
+                        canRetry = false;
+                    } else if (errorCode === 'unauthenticated') {
+                        userMsg = 'Session expired.';
+                        suggestion = 'Please refresh the page and sign in again.';
+                        canRetry = false;
+                    } else if (errorMessage.includes('timeout') || errorMessage.includes('DEADLINE')) {
+                        userMsg = 'Request timed out.';
+                        suggestion = 'The server is slow. Try again.';
+                    } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+                        userMsg = 'Network connection issue.';
+                        suggestion = 'Check your internet connection.';
+                    } else if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
+                        userMsg = 'Usage limit reached.';
+                        suggestion = 'Please upgrade your plan or wait.';
+                        canRetry = false;
+                    } else if (errorMessage.includes('content') || errorMessage.includes('policy')) {
+                        userMsg = 'Content policy violation.';
+                        suggestion = 'Your prompt may contain restricted content.';
+                        canRetry = false;
                     }
-                    showToast(errorMsg, 'error');
+
+                    var fullMsg = userMsg + (suggestion ? ' ' + suggestion : '');
+
+                    if (canRetry) {
+                        showToast(fullMsg, 'error', {
+                            retry: function() { app.generateImage(); },
+                            retryText: 'Retry'
+                        });
+                    } else {
+                        showToast(fullMsg, 'error');
+                    }
+
                     render();
                 });
             },
@@ -4498,15 +5190,54 @@
             }
         };
 
-        // Toast notification helper
-        function showToast(message, type) {
+        // Toast notification helper with optional action button
+        function showToast(message, type, options) {
+            options = options || {};
             var toast = document.createElement('div');
             toast.className = 'toast toast-' + (type || 'success');
-            toast.textContent = message;
+
+            // Create content wrapper
+            var content = document.createElement('div');
+            content.className = 'toast-content';
+            content.textContent = message;
+            toast.appendChild(content);
+
+            // Add retry button if provided
+            if (options.retry) {
+                var retryBtn = document.createElement('button');
+                retryBtn.className = 'toast-retry-btn';
+                retryBtn.textContent = options.retryText || 'Retry';
+                retryBtn.onclick = function() {
+                    toast.remove();
+                    if (typeof options.retry === 'function') {
+                        options.retry();
+                    }
+                };
+                toast.appendChild(retryBtn);
+            }
+
+            // Add dismiss button for longer toasts
+            if (options.dismissible || type === 'error') {
+                var dismissBtn = document.createElement('button');
+                dismissBtn.className = 'toast-dismiss-btn';
+                dismissBtn.innerHTML = '×';
+                dismissBtn.onclick = function() {
+                    toast.remove();
+                };
+                toast.appendChild(dismissBtn);
+            }
+
             document.body.appendChild(toast);
+
+            // Error toasts stay longer (5s), others 3s
+            var duration = options.duration || (type === 'error' ? 5000 : 3000);
             setTimeout(function() {
-                toast.remove();
-            }, 3000);
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, duration);
+
+            return toast;
         }
 
         /* ==========================================
@@ -4582,6 +5313,12 @@
 
             // Image Detail Modal
             html += renderImageDetailModal();
+
+            // Template Confirmation Dialog
+            html += renderConfirmDialog();
+
+            // Draft Notification Banner
+            html += renderDraftNotification();
 
             return html;
         }
@@ -4811,13 +5548,50 @@
                 html += '</div>';
             }
 
-            // Smart Action Buttons
+            // Smart Action Buttons with Prompt Health Indicator
             html += '<div class="smart-prompt-actions">';
             html += '<button class="smart-action-btn" onclick="app.enhancePrompt()" title="Enhance with AI">✨</button>';
             html += '<button class="smart-action-btn" onclick="app.randomPrompt()" title="Random prompt">🎲</button>';
             html += '<button class="smart-action-btn" onclick="app.clearPrompt()" title="Clear prompt">🗑️</button>';
             html += '<span style="flex: 1;"></span>';
-            html += '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">' + state.prompt.length + '/2000</span>';
+            html += '<div class="prompt-health">';
+            // Prompt health indicator
+            var promptLen = state.prompt.length;
+            var healthClass = 'empty';
+            var healthText = 'Enter a prompt';
+            var healthIcon = '○';
+            if (promptLen > 0 && promptLen < 20) {
+                healthClass = 'short';
+                healthText = 'Too short';
+                healthIcon = '◔';
+            } else if (promptLen >= 20 && promptLen < 50) {
+                healthClass = 'short';
+                healthText = 'Add more detail';
+                healthIcon = '◑';
+            } else if (promptLen >= 50 && promptLen <= 500) {
+                healthClass = 'good';
+                healthText = 'Good prompt';
+                healthIcon = '●';
+            } else if (promptLen > 500 && promptLen <= 1500) {
+                healthClass = 'good';
+                healthText = 'Detailed';
+                healthIcon = '●';
+            } else if (promptLen > 1500 && promptLen < 1900) {
+                healthClass = 'long';
+                healthText = 'Very long';
+                healthIcon = '◕';
+            } else if (promptLen >= 1900) {
+                healthClass = 'limit';
+                healthText = 'Near limit';
+                healthIcon = '⚠';
+            }
+            html += '<span class="prompt-health-indicator ' + healthClass + '">' + healthIcon + ' ' + healthText + '</span>';
+            // Character count
+            var countClass = 'prompt-char-count';
+            if (promptLen > 1800) countClass += ' danger';
+            else if (promptLen > 1500) countClass += ' warning';
+            html += '<span class="' + countClass + '">' + promptLen + '/2000</span>';
+            html += '</div>';
             html += '</div>';
 
             html += '</div>'; // smart-prompt-container
@@ -4885,16 +5659,65 @@
             }
             html += '</button>';
 
-            // Token Balance & Cost Display
-            html += '<div class="token-balance-display" style="margin-top: 0.75rem;">';
-            html += '<div style="display: flex; justify-content: space-between; align-items: center;">';
-            html += '<span style="color: rgba(255,255,255,0.6);">Cost: <strong style="color: #fbbf24;">🪙 ' + cost + '</strong></span>';
-            html += '<span style="color: rgba(255,255,255,0.6);">Balance: <strong style="color: white;">🪙 ' + state.tokens.balance + '</strong></span>';
+            // Enhanced Cost Breakdown Display
+            html += '<div class="cost-breakdown">';
+
+            // Calculate cost components
+            var baseCost = tokenConfig.costs[state.quality] || 2;
+            var templateBonus = state.selectedTemplate ? Math.max(0, (state.selectedTemplate.cost || 2) - 2) : 0;
+            var quantity = state.quantity;
+            var totalCost = cost;
+            var costPerImage = quantity > 1 ? Math.ceil(totalCost / quantity) : totalCost;
+            var hasEnoughTokens = state.tokens.balance >= totalCost;
+
+            // Cost breakdown header
+            html += '<div class="cost-breakdown-header">';
+            html += '<span class="cost-breakdown-label">Total Cost</span>';
+            html += '<span class="cost-breakdown-total' + (hasEnoughTokens ? '' : ' insufficient') + '">🪙 ' + totalCost + '</span>';
             html += '</div>';
+
+            // Cost details (expandable)
+            html += '<div class="cost-breakdown-details">';
+
+            // Base quality cost
+            html += '<div class="cost-breakdown-row">';
+            html += '<span class="cost-detail-label">' + state.quality.charAt(0).toUpperCase() + state.quality.slice(1) + ' quality</span>';
+            html += '<span class="cost-detail-value">🪙 ' + baseCost + '</span>';
+            html += '</div>';
+
+            // Template bonus (if any)
+            if (templateBonus > 0) {
+                html += '<div class="cost-breakdown-row">';
+                html += '<span class="cost-detail-label">Template bonus</span>';
+                html += '<span class="cost-detail-value">+🪙 ' + templateBonus + '</span>';
+                html += '</div>';
+            }
+
+            // Quantity multiplier
+            if (quantity > 1) {
+                html += '<div class="cost-breakdown-row">';
+                html += '<span class="cost-detail-label">× ' + quantity + ' images</span>';
+                html += '<span class="cost-detail-value">🪙 ' + costPerImage + ' each</span>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // cost-breakdown-details
+
+            // Balance display
+            html += '<div class="cost-breakdown-balance">';
+            html += '<div class="balance-row">';
+            html += '<span>Your balance</span>';
+            html += '<span class="balance-value' + (hasEnoughTokens ? '' : ' insufficient') + '">🪙 ' + state.tokens.balance + '</span>';
+            html += '</div>';
+            if (!hasEnoughTokens) {
+                html += '<div class="balance-warning">⚠️ Insufficient tokens</div>';
+            }
             if (state.tokens.rollover > 0) {
-                html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.4); text-align: right; margin-top: 0.25rem;">+' + state.tokens.rollover + ' rollover available</div>';
+                html += '<div class="rollover-info">+' + state.tokens.rollover + ' rollover available</div>';
             }
             html += '</div>';
+
+            html += '</div>'; // cost-breakdown
 
             html += '</div>'; // generate-section
 
@@ -5283,6 +6106,68 @@
             }
         }
 
+        // Render Template Confirmation Dialog
+        function renderConfirmDialog() {
+            if (!state.confirmDialogOpen || !state.pendingTemplate) return '';
+
+            var template = state.pendingTemplate;
+            var currentPrompt = state.prompt.trim();
+            var previewText = currentPrompt.length > 100 ? currentPrompt.substring(0, 100) + '...' : currentPrompt;
+
+            var html = '<div class="confirm-dialog-overlay" onclick="app.cancelTemplateConfirm()">';
+            html += '<div class="confirm-dialog" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="confirm-dialog-header">';
+            html += '<div class="confirm-dialog-icon">⚠️</div>';
+            html += '<div class="confirm-dialog-title">Replace current prompt?</div>';
+            html += '<div class="confirm-dialog-message">You have an existing prompt that will be replaced by the "' + utils.escapeHtml(template.name) + '" template.</div>';
+            html += '</div>';
+
+            // Current prompt preview
+            html += '<div class="confirm-dialog-preview">';
+            html += '<div class="confirm-dialog-preview-label">Current prompt</div>';
+            html += utils.escapeHtml(previewText);
+            html += '</div>';
+
+            // Footer with buttons
+            html += '<div class="confirm-dialog-footer">';
+            html += '<button class="confirm-dialog-btn confirm-dialog-btn-cancel" onclick="app.cancelTemplateConfirm()">Cancel</button>';
+            html += '<button class="confirm-dialog-btn confirm-dialog-btn-append" onclick="app.applyTemplate(state.pendingTemplate, \'append\')">Append</button>';
+            html += '<button class="confirm-dialog-btn confirm-dialog-btn-replace" onclick="app.applyTemplate(state.pendingTemplate, \'replace\')">Replace</button>';
+            html += '</div>';
+
+            html += '</div>'; // dialog
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Render Draft Notification Banner
+        function renderDraftNotification() {
+            if (!state.showDraftNotification) return '';
+
+            var draft = utils.loadDraft();
+            if (!draft) return '';
+
+            var timeAgo = utils.formatDraftTime(draft.savedAt);
+            var promptPreview = draft.prompt.length > 50 ? draft.prompt.substring(0, 50) + '...' : draft.prompt;
+
+            var html = '<div class="draft-notification">';
+            html += '<span class="draft-notification-icon">📝</span>';
+            html += '<div class="draft-notification-content">';
+            html += '<div class="draft-notification-title">Unsaved draft found</div>';
+            html += '<div class="draft-notification-subtitle">Saved ' + timeAgo + ': "' + utils.escapeHtml(promptPreview) + '"</div>';
+            html += '</div>';
+            html += '<div class="draft-notification-actions">';
+            html += '<button class="draft-notification-btn draft-notification-btn-dismiss" onclick="app.dismissDraft()">Dismiss</button>';
+            html += '<button class="draft-notification-btn draft-notification-btn-restore" onclick="app.restoreDraft(); state.showDraftNotification = false; render();">Restore</button>';
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
         // Render Floating Generate Button (for mobile/tablet when scrolled)
         function renderFloatingGenerateButton() {
             var cost = app.calculateCost();
@@ -5504,6 +6389,19 @@
             render();
             checkAccess();
 
+            // Check for saved draft on load
+            if (utils.hasDraft()) {
+                state.showDraftNotification = true;
+                render();
+            }
+
+            // Auto-save draft every 5 seconds when prompt has content
+            setInterval(function() {
+                if (state.prompt && state.prompt.trim().length > 0) {
+                    utils.saveDraft();
+                }
+            }, 5000);
+
             // Scroll listener for floating button visibility
             window.addEventListener('scroll', function() {
                 app.updateFloatingButtonVisibility();
@@ -5523,6 +6421,12 @@
                     if (state.floatingSettingsOpen) {
                         state.floatingSettingsOpen = false;
                         render();
+                    }
+                    if (state.confirmDialogOpen) {
+                        app.cancelTemplateConfirm();
+                    }
+                    if (state.imageDetailModalOpen) {
+                        app.closeImageDetail();
                     }
                 }
             });
