@@ -3719,6 +3719,44 @@
                 showToast(msg, 'success');
             },
 
+            // ========================================
+            // DIAGNOSTIC: Test API Configuration
+            // Call from console: app.runDiagnostic()
+            // ========================================
+            runDiagnostic: function() {
+                console.log('Running Imagen API diagnostic...');
+                showToast('Running API diagnostic...', 'info');
+
+                var testImagenApi = functions.httpsCallable('testImagenApi');
+                testImagenApi({})
+                    .then(function(result) {
+                        console.log('=== IMAGEN API DIAGNOSTIC RESULTS ===');
+                        console.log(JSON.stringify(result.data, null, 2));
+
+                        if (result.data.imageGenerated) {
+                            showToast('API Test PASSED! Imagen is working.', 'success');
+                        } else {
+                            showToast('API Test FAILED. Check browser console for details.', 'error');
+                            console.error('Errors:', result.data.errors);
+                        }
+
+                        // Show summary in console
+                        console.log('Summary:', result.data.summary);
+                        if (result.data.errors && result.data.errors.length > 0) {
+                            console.error('=== ERRORS ===');
+                            result.data.errors.forEach(function(err) {
+                                console.error('- ' + err);
+                            });
+                        }
+
+                        return result.data;
+                    })
+                    .catch(function(error) {
+                        console.error('Diagnostic failed:', error);
+                        showToast('Diagnostic failed: ' + error.message, 'error');
+                    });
+            },
+
             // History Actions
             downloadImage: function(imageUrl) {
                 window.open(imageUrl, '_blank');
