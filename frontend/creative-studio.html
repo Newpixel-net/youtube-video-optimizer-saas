@@ -3058,6 +3058,445 @@
         }
 
         /* ==========================================
+           STYLE REFERENCE MODAL
+           ========================================== */
+        .style-ref-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+            padding: 1rem;
+        }
+
+        .style-ref-modal {
+            background: linear-gradient(180deg, rgba(35, 35, 55, 0.98) 0%, rgba(25, 25, 45, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1.25rem;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            animation: fadeIn 0.2s ease;
+        }
+
+        .style-ref-modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .style-ref-modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .style-ref-modal-close {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .style-ref-modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .style-ref-modal-body {
+            padding: 1.5rem;
+        }
+
+        .style-ref-upload-zone {
+            border: 2px dashed rgba(139, 92, 246, 0.4);
+            border-radius: 1rem;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(139, 92, 246, 0.05);
+        }
+
+        .style-ref-upload-zone:hover {
+            border-color: rgba(139, 92, 246, 0.7);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .style-ref-upload-zone.dragover {
+            border-color: #8b5cf6;
+            background: rgba(139, 92, 246, 0.15);
+            transform: scale(1.01);
+        }
+
+        .style-ref-upload-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.8;
+        }
+
+        .style-ref-upload-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.5rem;
+        }
+
+        .style-ref-upload-hint {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .style-ref-preview {
+            position: relative;
+            border-radius: 1rem;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .style-ref-preview img {
+            width: 100%;
+            height: auto;
+            max-height: 300px;
+            object-fit: contain;
+            display: block;
+        }
+
+        .style-ref-preview-actions {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .style-ref-preview-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .style-ref-preview-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+            transform: scale(1.05);
+        }
+
+        .style-ref-preview-btn.remove:hover {
+            background: rgba(239, 68, 68, 0.8);
+        }
+
+        .style-ref-url-section {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .style-ref-url-label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .style-ref-url-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.625rem;
+            color: white;
+            font-size: 0.9rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .style-ref-url-input:focus {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+        }
+
+        .style-ref-url-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .style-ref-modal-footer {
+            padding: 1.25rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        .style-ref-btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.625rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .style-ref-btn-cancel {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .style-ref-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .style-ref-btn-apply {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            color: white;
+        }
+
+        .style-ref-btn-apply:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .style-ref-btn-apply:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Style reference indicator in sidebar */
+        .style-ref-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.625rem;
+            margin-top: 0.75rem;
+        }
+
+        .style-ref-indicator-thumb {
+            width: 48px;
+            height: 48px;
+            border-radius: 0.5rem;
+            object-fit: cover;
+        }
+
+        .style-ref-indicator-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .style-ref-indicator-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .style-ref-indicator-name {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .style-ref-indicator-remove {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .style-ref-indicator-remove:hover {
+            background: rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        /* ==========================================
+           PREMIUM FEATURE MODAL
+           ========================================== */
+        .premium-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+            padding: 1rem;
+        }
+
+        .premium-modal {
+            background: linear-gradient(180deg, rgba(35, 35, 55, 0.98) 0%, rgba(25, 25, 45, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1.25rem;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            animation: fadeIn 0.2s ease;
+            overflow: hidden;
+        }
+
+        .premium-modal-header {
+            padding: 2rem 1.5rem 1rem;
+            background: linear-gradient(180deg, rgba(139, 92, 246, 0.15) 0%, transparent 100%);
+        }
+
+        .premium-modal-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1rem;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            border-radius: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+
+        .premium-modal-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.5rem;
+        }
+
+        .premium-modal-subtitle {
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .premium-modal-body {
+            padding: 1.5rem;
+        }
+
+        .premium-modal-features {
+            text-align: left;
+            margin-bottom: 1.5rem;
+        }
+
+        .premium-modal-feature {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .premium-modal-feature:last-child {
+            border-bottom: none;
+        }
+
+        .premium-modal-feature-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .premium-modal-feature-text {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .premium-modal-footer {
+            padding: 0 1.5rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .premium-modal-btn-upgrade {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            border: none;
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .premium-modal-btn-upgrade:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+        }
+
+        .premium-modal-btn-close {
+            width: 100%;
+            padding: 0.75rem;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .premium-modal-btn-close:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        /* Hidden file input */
+        .hidden-file-input {
+            display: none;
+        }
+
+        /* ==========================================
            DRAFT NOTIFICATION BANNER
            ========================================== */
         .draft-notification {
@@ -3972,8 +4411,11 @@
 
             // References (for advanced features)
             styleReference: null,
+            styleReferenceModalOpen: false,
             characterReference: null, // premium
             uploadedImage: null, // premium
+            premiumModalOpen: false,
+            premiumModalFeature: null,
 
             // Template state
             selectedTemplateCategory: 'all', // all | photorealism | creative | etc
@@ -5340,16 +5782,222 @@
             // REFERENCE HANDLERS
             // ========================================
 
-            // Open style reference picker
+            // Open style reference modal
             openStyleReference: function() {
-                showToast('Style reference feature coming soon!', 'info');
-                // TODO: Implement style reference upload/selection modal
+                state.styleReferenceModalOpen = true;
+                render();
+            },
+
+            // Close style reference modal
+            closeStyleReference: function() {
+                state.styleReferenceModalOpen = false;
+                render();
+            },
+
+            // Handle style reference file selection
+            handleStyleRefFile: function(file) {
+                if (!file) return;
+
+                // Validate file type
+                if (!file.type.startsWith('image/')) {
+                    showToast('Please select an image file', 'error');
+                    return;
+                }
+
+                // Validate file size (max 10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    showToast('Image must be less than 10MB', 'error');
+                    return;
+                }
+
+                // Create preview URL
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    state.styleReference = {
+                        type: 'file',
+                        dataUrl: e.target.result,
+                        name: file.name,
+                        file: file
+                    };
+                    render();
+                };
+                reader.readAsDataURL(file);
+            },
+
+            // Handle style reference URL input
+            handleStyleRefUrl: function(url) {
+                if (!url || !url.trim()) return;
+
+                // Basic URL validation
+                if (!url.match(/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i)) {
+                    showToast('Please enter a valid image URL', 'error');
+                    return;
+                }
+
+                state.styleReference = {
+                    type: 'url',
+                    url: url.trim(),
+                    name: 'Image from URL'
+                };
+                render();
+            },
+
+            // Remove style reference
+            removeStyleReference: function() {
+                state.styleReference = null;
+                render();
+            },
+
+            // Apply style reference and close modal
+            applyStyleReference: function() {
+                if (state.styleReference) {
+                    showToast('Style reference applied!', 'success');
+                }
+                state.styleReferenceModalOpen = false;
+                render();
+            },
+
+            // Trigger file input click
+            triggerStyleRefUpload: function() {
+                var input = document.getElementById('style-ref-file-input');
+                if (input) input.click();
             },
 
             // Show premium modal for locked features
             showPremiumModal: function(featureName) {
-                showToast(featureName + ' is a premium feature. Upgrade to access!', 'info');
-                // TODO: Show premium upgrade modal with plans
+                state.premiumModalOpen = true;
+                state.premiumModalFeature = featureName;
+                render();
+            },
+
+            // Close premium modal
+            closePremiumModal: function() {
+                state.premiumModalOpen = false;
+                state.premiumModalFeature = null;
+                render();
+            },
+
+            // Upgrade action (redirect to pricing)
+            upgradeToPremium: function() {
+                window.location.href = 'https://ytseo.siteuo.com/pricing';
+            },
+
+            // ========================================
+            // GENERATION PROGRESS UPDATES (No Flash)
+            // ========================================
+
+            // Update only the generation progress elements without full re-render
+            updateGenerationProgress: function() {
+                var stageLabels = {
+                    'queued': 'Queued',
+                    'processing': 'Processing',
+                    'generating': 'Generating',
+                    'finalizing': 'Finalizing'
+                };
+                var stageLabel = stageLabels[state.generationStage] || 'Preparing';
+
+                // Update stage label
+                var labelEl = document.getElementById('gen-stage-label');
+                if (labelEl) labelEl.textContent = stageLabel + '...';
+
+                // Update percentage
+                var percentEl = document.getElementById('gen-stage-percent');
+                if (percentEl) percentEl.textContent = state.generationProgress + '%';
+
+                // Update progress bar fill
+                var fillEl = document.getElementById('gen-progress-fill');
+                if (fillEl) fillEl.style.width = state.generationProgress + '%';
+
+                // Update stage step indicators
+                var stages = ['queued', 'processing', 'generating', 'finalizing'];
+                var currentStageIndex = stages.indexOf(state.generationStage);
+
+                for (var si = 0; si < stages.length; si++) {
+                    var stepEl = document.getElementById('gen-step-' + si);
+                    if (stepEl) {
+                        stepEl.classList.remove('completed', 'active');
+                        if (si < currentStageIndex) stepEl.classList.add('completed');
+                        if (si === currentStageIndex) stepEl.classList.add('active');
+                    }
+                }
+            },
+
+            // Update the generate section (button/progress swap) without full page re-render
+            updateGenerateSection: function() {
+                var section = document.querySelector('.generate-section');
+                if (!section) {
+                    // Fallback to full render if section not found
+                    render();
+                    return;
+                }
+
+                var cost = app.calculateCost();
+                var canGenerate = state.prompt.trim().length > 0 && state.tokens.balance >= cost && !state.generating;
+                var html = '';
+
+                if (state.generating) {
+                    // Generation in progress - show progress UI
+                    html += '<div class="generation-progress-container">';
+
+                    var stageLabels = {
+                        'queued': 'Queued',
+                        'processing': 'Processing',
+                        'generating': 'Generating',
+                        'finalizing': 'Finalizing'
+                    };
+                    var stageLabel = stageLabels[state.generationStage] || 'Preparing';
+
+                    html += '<div class="generation-stage">';
+                    html += '<span class="generation-stage-icon animate-pulse">✨</span>';
+                    html += '<span id="gen-stage-label" class="generation-stage-label">' + stageLabel + '...</span>';
+                    html += '<span id="gen-stage-percent" class="generation-stage-percent">' + state.generationProgress + '%</span>';
+                    html += '</div>';
+
+                    html += '<div class="generation-progress-bar">';
+                    html += '<div id="gen-progress-fill" class="generation-progress-fill" style="width: ' + state.generationProgress + '%;"></div>';
+                    html += '</div>';
+
+                    html += '<div class="generation-stages">';
+                    var stages = ['queued', 'processing', 'generating', 'finalizing'];
+                    var stageIcons = { queued: '📋', processing: '⚙️', generating: '🎨', finalizing: '✅' };
+                    var currentStageIndex = stages.indexOf(state.generationStage);
+
+                    for (var si = 0; si < stages.length; si++) {
+                        var stageClass = 'generation-stage-step';
+                        if (si < currentStageIndex) stageClass += ' completed';
+                        if (si === currentStageIndex) stageClass += ' active';
+                        html += '<div id="gen-step-' + si + '" class="' + stageClass + '">' + stageIcons[stages[si]] + '</div>';
+                    }
+                    html += '</div>';
+
+                    html += '</div>';
+                } else {
+                    // Normal generate button
+                    html += '<button class="generate-btn-enhanced" onclick="app.generateImage()"' + (canGenerate ? '' : ' disabled') + '>';
+                    html += '<span class="generate-btn-sparkle">✨</span>';
+                    html += '<span>Generate</span>';
+                    html += '</button>';
+                }
+
+                // Keep cost breakdown - just update the section before it
+                var costBreakdown = section.querySelector('.cost-breakdown');
+                if (costBreakdown) {
+                    // Insert new content before cost breakdown
+                    var tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = html;
+
+                    // Remove old progress container or button
+                    var oldProgress = section.querySelector('.generation-progress-container');
+                    var oldButton = section.querySelector('.generate-btn-enhanced');
+                    if (oldProgress) oldProgress.remove();
+                    if (oldButton) oldButton.remove();
+
+                    // Insert new content at the beginning
+                    section.insertBefore(tempDiv.firstChild, costBreakdown);
+                } else {
+                    // Fallback - update entire section
+                    section.innerHTML = html;
+                }
             },
 
             // Get unfilled template variables from prompt
@@ -5438,7 +6086,8 @@
                 state.generating = true;
                 state.generationStage = 'queued';
                 state.generationProgress = 5;
-                render();
+                // Use targeted update instead of full render to prevent page flash
+                app.updateGenerateSection();
 
                 // Progress simulation for better UX
                 var progressInterval = setInterval(function() {
@@ -5461,7 +6110,8 @@
                         var increment = state.generationProgress < 30 ? 3 :
                                         state.generationProgress < 60 ? 2 : 1;
                         state.generationProgress = Math.min(90, state.generationProgress + increment);
-                        render();
+                        // Use targeted update instead of full render to prevent page flash
+                        app.updateGenerationProgress();
                     }
                 }, 500);
 
@@ -5869,6 +6519,12 @@
             // Variable Input Popup
             html += renderVariableInputPopup();
 
+            // Style Reference Modal
+            html += renderStyleReferenceModal();
+
+            // Premium Feature Modal
+            html += renderPremiumModal();
+
             // Draft Notification Banner
             html += renderDraftNotification();
 
@@ -6060,10 +6716,24 @@
             html += '</button>';
 
             html += '</div>';
+
+            // Style reference indicator (if applied)
+            if (state.styleReference) {
+                var imgSrc = state.styleReference.type === 'file' ? state.styleReference.dataUrl : state.styleReference.url;
+                html += '<div class="style-ref-indicator">';
+                html += '<img class="style-ref-indicator-thumb" src="' + imgSrc + '" alt="Style reference">';
+                html += '<div class="style-ref-indicator-info">';
+                html += '<div class="style-ref-indicator-label">Style Reference</div>';
+                html += '<div class="style-ref-indicator-name">' + utils.escapeHtml(state.styleReference.name) + '</div>';
+                html += '</div>';
+                html += '<button class="style-ref-indicator-remove" onclick="app.removeStyleReference()" title="Remove">×</button>';
+                html += '</div>';
+            }
+
             html += '</div>';
 
             // Smart Prompt Builder Section
-            html += '<div class="sidebar-section" style="flex: 1;">';
+            html += '<div class="sidebar-section">';
 
             // Selected Template Badge (if any)
             if (state.selectedTemplate) {
@@ -6808,6 +7478,141 @@
             return html;
         }
 
+        // Render Style Reference Modal
+        function renderStyleReferenceModal() {
+            if (!state.styleReferenceModalOpen) return '';
+
+            var html = '<div class="style-ref-modal-overlay" onclick="app.closeStyleReference()">';
+            html += '<div class="style-ref-modal" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="style-ref-modal-header">';
+            html += '<div class="style-ref-modal-title"><span>🎨</span> Style Reference</div>';
+            html += '<button class="style-ref-modal-close" onclick="app.closeStyleReference()">×</button>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="style-ref-modal-body">';
+
+            // Hidden file input
+            html += '<input type="file" id="style-ref-file-input" class="hidden-file-input" accept="image/*" onchange="app.handleStyleRefFile(this.files[0])">';
+
+            if (state.styleReference) {
+                // Show preview
+                var imgSrc = state.styleReference.type === 'file' ? state.styleReference.dataUrl : state.styleReference.url;
+                html += '<div class="style-ref-preview">';
+                html += '<img src="' + imgSrc + '" alt="Style reference preview">';
+                html += '<div class="style-ref-preview-actions">';
+                html += '<button class="style-ref-preview-btn" onclick="app.triggerStyleRefUpload()" title="Change image">🔄</button>';
+                html += '<button class="style-ref-preview-btn remove" onclick="app.removeStyleReference()" title="Remove">🗑️</button>';
+                html += '</div>';
+                html += '</div>';
+            } else {
+                // Show upload zone
+                html += '<div class="style-ref-upload-zone" onclick="app.triggerStyleRefUpload()" ';
+                html += 'ondragover="event.preventDefault(); this.classList.add(\'dragover\')" ';
+                html += 'ondragleave="this.classList.remove(\'dragover\')" ';
+                html += 'ondrop="event.preventDefault(); this.classList.remove(\'dragover\'); app.handleStyleRefFile(event.dataTransfer.files[0])">';
+                html += '<div class="style-ref-upload-icon">📤</div>';
+                html += '<div class="style-ref-upload-title">Drop an image here or click to upload</div>';
+                html += '<div class="style-ref-upload-hint">PNG, JPG, GIF or WebP • Max 10MB</div>';
+                html += '</div>';
+
+                // URL input section
+                html += '<div class="style-ref-url-section">';
+                html += '<label class="style-ref-url-label">Or paste an image URL</label>';
+                html += '<input type="text" class="style-ref-url-input" placeholder="https://example.com/image.jpg" ';
+                html += 'onkeydown="if(event.key===\'Enter\') app.handleStyleRefUrl(this.value)">';
+                html += '</div>';
+            }
+
+            html += '</div>'; // body
+
+            // Footer
+            html += '<div class="style-ref-modal-footer">';
+            html += '<button class="style-ref-btn style-ref-btn-cancel" onclick="app.closeStyleReference()">Cancel</button>';
+            html += '<button class="style-ref-btn style-ref-btn-apply" onclick="app.applyStyleReference()"' + (state.styleReference ? '' : ' disabled') + '>Apply</button>';
+            html += '</div>';
+
+            html += '</div>'; // modal
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Render Premium Feature Modal
+        function renderPremiumModal() {
+            if (!state.premiumModalOpen) return '';
+
+            var featureName = state.premiumModalFeature || 'Premium Feature';
+
+            // Feature-specific content
+            var featureInfo = {
+                'Character Reference': {
+                    icon: '👤',
+                    description: 'Generate images with consistent character faces',
+                    features: [
+                        { icon: '🎭', text: 'Maintain consistent faces across generations' },
+                        { icon: '📸', text: 'Upload reference photos of people' },
+                        { icon: '🎨', text: 'Perfect for character-based content' }
+                    ]
+                },
+                'Image Upload': {
+                    icon: '📤',
+                    description: 'Use your own images as generation input',
+                    features: [
+                        { icon: '🖼️', text: 'Upload any image as a starting point' },
+                        { icon: '✨', text: 'Transform and enhance your photos' },
+                        { icon: '🔄', text: 'Create variations of existing images' }
+                    ]
+                }
+            };
+
+            var info = featureInfo[featureName] || {
+                icon: '⭐',
+                description: 'Unlock advanced features',
+                features: [
+                    { icon: '✨', text: 'Access premium generation models' },
+                    { icon: '🚀', text: 'Faster generation times' },
+                    { icon: '💎', text: 'More tokens per month' }
+                ]
+            };
+
+            var html = '<div class="premium-modal-overlay" onclick="app.closePremiumModal()">';
+            html += '<div class="premium-modal" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="premium-modal-header">';
+            html += '<div class="premium-modal-icon">' + info.icon + '</div>';
+            html += '<div class="premium-modal-title">' + utils.escapeHtml(featureName) + '</div>';
+            html += '<div class="premium-modal-subtitle">' + info.description + '</div>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="premium-modal-body">';
+            html += '<div class="premium-modal-features">';
+            for (var i = 0; i < info.features.length; i++) {
+                var feature = info.features[i];
+                html += '<div class="premium-modal-feature">';
+                html += '<div class="premium-modal-feature-icon">' + feature.icon + '</div>';
+                html += '<div class="premium-modal-feature-text">' + feature.text + '</div>';
+                html += '</div>';
+            }
+            html += '</div>';
+            html += '</div>';
+
+            // Footer
+            html += '<div class="premium-modal-footer">';
+            html += '<button class="premium-modal-btn-upgrade" onclick="app.upgradeToPremium()">Upgrade to Pro</button>';
+            html += '<button class="premium-modal-btn-close" onclick="app.closePremiumModal()">Maybe Later</button>';
+            html += '</div>';
+
+            html += '</div>'; // modal
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
         // Render Draft Notification Banner
         function renderDraftNotification() {
             if (!state.showDraftNotification) return '';
@@ -7077,7 +7882,7 @@
                 app.updateFloatingButtonVisibility();
             });
 
-            // ESC key to close modals
+            // ESC key to close modals and dropdowns
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
                     if (state.promptModalOpen) {
@@ -7092,6 +7897,31 @@
                     }
                     if (state.imageDetailModalOpen) {
                         app.closeImageDetail();
+                    }
+                    if (state.styleReferenceModalOpen) {
+                        app.closeStyleReference();
+                    }
+                    if (state.premiumModalOpen) {
+                        app.closePremiumModal();
+                    }
+                    if (state.variableInputOpen) {
+                        app.cancelVariableInput();
+                    }
+                    if (state.modelDropdownOpen) {
+                        state.modelDropdownOpen = false;
+                        render();
+                    }
+                }
+            });
+
+            // Click outside to close dropdowns
+            document.addEventListener('click', function(e) {
+                // Close model dropdown if clicking outside
+                if (state.modelDropdownOpen) {
+                    var dropdownWrapper = document.querySelector('.model-dropdown-wrapper');
+                    if (dropdownWrapper && !dropdownWrapper.contains(e.target)) {
+                        state.modelDropdownOpen = false;
+                        render();
                     }
                 }
             });
