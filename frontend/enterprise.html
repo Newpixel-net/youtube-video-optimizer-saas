@@ -1,0 +1,1676 @@
+<!-- ================================================================
+     YOUTUBE VIDEO OPTIMIZER - ENTERPRISE SUITE
+     ================================================================
+
+     Structure:
+     - SECTION 1: External Dependencies (CDN)
+     - SECTION 2: Styles (CSS)
+     - SECTION 3: HTML Views
+     - SECTION 4: Scripts (JavaScript)
+
+     Features: Bulk Optimizer, Placement Finder, Viral Predictor,
+               Monetization Analyzer, Script Writer Pro
+
+     Last Updated: 2024
+     ================================================================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Enterprise Suite - YouTube Video Optimizer</title>
+
+    <!-- ============================================
+         SECTION 1: EXTERNAL DEPENDENCIES
+         ============================================ -->
+
+    <!-- 1.1 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 1.2 Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+
+    <!-- ============================================
+         SECTION 2: STYLES
+         ============================================ -->
+    <style>
+        /* ------------------------------------------
+           2.1 BASE & RESET
+           ------------------------------------------ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 16px;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 1rem;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        #app-root {
+            width: 100%;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+        }
+
+        /* Base typography scale */
+        h1 { font-size: 2.5rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }
+        h2 { font-size: 2rem; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em; }
+        h3 { font-size: 1.5rem; line-height: 1.3; font-weight: 600; }
+        h4 { font-size: 1.25rem; line-height: 1.4; font-weight: 600; }
+        p, span, label { font-size: 1rem; line-height: 1.6; }
+
+        /* ------------------------------------------
+           2.2 ANIMATIONS
+           ------------------------------------------ */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            width: 40px;
+            height: 40px;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-5px) rotate(2deg); }
+            75% { transform: translateY(5px) rotate(-2deg); }
+        }
+
+        /* ------------------------------------------
+           2.3 BUTTONS
+           ------------------------------------------ */
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* ------------------------------------------
+           2.4 ENTERPRISE PAGE STYLES - Gold 3D Graphics
+           ------------------------------------------ */
+
+        /* Enterprise Page Background */
+        .enterprise-bg {
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .enterprise-bg::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at center, rgba(255, 215, 0, 0.03) 0%, transparent 50%);
+            animation: enterpriseGlow 15s ease-in-out infinite;
+        }
+
+        @keyframes enterpriseGlow {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(5%, 5%) scale(1.1); }
+        }
+
+        /* Gold 3D Text Effect */
+        .gold-text {
+            background: linear-gradient(180deg, #f5d742 0%, #d4a726 25%, #b8860b 50%, #d4a726 75%, #f5d742 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 2px 10px rgba(212, 167, 38, 0.3);
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .gold-text-3d {
+            background: linear-gradient(180deg, #ffd700 0%, #ffec8b 20%, #daa520 40%, #b8860b 60%, #cd853f 80%, #daa520 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative;
+            text-shadow:
+                0 1px 0 rgba(255, 215, 0, 0.4),
+                0 2px 0 rgba(218, 165, 32, 0.3),
+                0 3px 0 rgba(184, 134, 11, 0.2),
+                0 4px 0 rgba(139, 90, 43, 0.1),
+                0 5px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Gold Gradient Border */
+        .gold-border {
+            border: 2px solid transparent;
+            background: linear-gradient(#1a1a2e, #1a1a2e) padding-box,
+                        linear-gradient(135deg, #ffd700, #b8860b, #ffd700) border-box;
+        }
+
+        /* Gold Glow Effect */
+        .gold-glow {
+            box-shadow:
+                0 0 20px rgba(255, 215, 0, 0.15),
+                0 0 40px rgba(255, 215, 0, 0.1),
+                0 0 60px rgba(255, 215, 0, 0.05),
+                inset 0 0 60px rgba(255, 215, 0, 0.02);
+        }
+
+        /* Enterprise Card Styles */
+        .enterprise-card {
+            background: linear-gradient(145deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.9) 100%);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 24px;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .enterprise-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #ffd700, #b8860b, #ffd700, #b8860b, #ffd700);
+            background-size: 200% 100%;
+            animation: goldShimmer 3s ease-in-out infinite;
+        }
+
+        .enterprise-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at center, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .enterprise-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(255, 215, 0, 0.5);
+            box-shadow:
+                0 25px 50px rgba(0, 0, 0, 0.4),
+                0 0 40px rgba(255, 215, 0, 0.15);
+        }
+
+        .enterprise-card:hover::after {
+            opacity: 1;
+        }
+
+        @keyframes goldShimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Enterprise Tool Icon */
+        .enterprise-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(145deg, #ffd700 0%, #b8860b 50%, #8b6914 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            box-shadow:
+                0 10px 30px rgba(255, 215, 0, 0.3),
+                inset 0 2px 4px rgba(255, 255, 255, 0.4),
+                inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .enterprise-icon::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            right: 2px;
+            height: 40%;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%);
+            border-radius: 18px 18px 50% 50%;
+        }
+
+        /* Locked Feature Overlay */
+        .enterprise-locked {
+            position: relative;
+        }
+
+        .enterprise-locked::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 24px;
+            z-index: 10;
+            backdrop-filter: blur(2px);
+        }
+
+        .enterprise-locked-badge {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 11;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 2px solid rgba(255, 215, 0, 0.5);
+            border-radius: 16px;
+            padding: 1.5rem 2rem;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .lock-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upgrade-btn {
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #ffd700 0%, #b8860b 100%);
+            color: #1a1a2e;
+            font-weight: 700;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+        }
+
+        .upgrade-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.4);
+        }
+
+        /* Enterprise Hero Section */
+        .enterprise-hero {
+            text-align: center;
+            padding: 3rem 1rem;
+            position: relative;
+        }
+
+        .enterprise-hero-icon {
+            font-size: 5rem;
+            margin-bottom: 1.5rem;
+            animation: float 3s ease-in-out infinite;
+            filter: drop-shadow(0 10px 30px rgba(255, 215, 0, 0.4));
+        }
+
+        .enterprise-crown {
+            display: inline-block;
+            animation: crownFloat 4s ease-in-out infinite;
+        }
+
+        @keyframes crownFloat {
+            0%, 100% { transform: translateY(0) rotate(-5deg); }
+            50% { transform: translateY(-15px) rotate(5deg); }
+        }
+
+        /* Enterprise Stats Bar */
+        .enterprise-stats {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 2rem 0;
+        }
+
+        .enterprise-stat {
+            background: linear-gradient(145deg, rgba(255, 215, 0, 0.1) 0%, rgba(184, 134, 11, 0.1) 100%);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 16px;
+            padding: 1rem 2rem;
+            text-align: center;
+        }
+
+        .enterprise-stat-value {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #ffd700;
+        }
+
+        .enterprise-stat-label {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 0.25rem;
+        }
+
+        /* Enterprise Tabs */
+        .enterprise-tabs {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(255, 215, 0, 0.05);
+            padding: 0.5rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 215, 0, 0.1);
+            margin-bottom: 2rem;
+            overflow-x: auto;
+        }
+
+        .enterprise-tab {
+            flex: 1;
+            min-width: 120px;
+            padding: 0.875rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .enterprise-tab:hover {
+            color: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .enterprise-tab.active {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(184, 134, 11, 0.2) 100%);
+            color: #ffd700;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+
+        /* PRO Badge */
+        .pro-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.75rem;
+            background: linear-gradient(135deg, #ffd700 0%, #b8860b 100%);
+            color: #1a1a2e;
+            font-size: 0.7rem;
+            font-weight: 800;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
+        }
+
+        /* Bulk Input Toggle */
+        .input-toggle {
+            display: flex;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 0.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .input-toggle-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .input-toggle-btn.active {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+        }
+
+        /* Viral Score Meter */
+        .viral-meter {
+            background: linear-gradient(90deg, #22c55e 0%, #eab308 50%, #ef4444 100%);
+            height: 12px;
+            border-radius: 6px;
+            position: relative;
+            margin: 1rem 0;
+        }
+
+        .viral-meter-indicator {
+            position: absolute;
+            top: -8px;
+            width: 28px;
+            height: 28px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 700;
+            transform: translateX(-50%);
+            transition: left 1s ease;
+        }
+
+        /* Script Writer Styles */
+        .script-section {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .script-section-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: white;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .script-content {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.8;
+            font-size: 0.95rem;
+        }
+
+        /* Monetization Gauge */
+        .monetization-ring {
+            position: relative;
+            width: 180px;
+            height: 180px;
+        }
+
+        .monetization-ring svg {
+            transform: rotate(-90deg);
+        }
+
+        .monetization-ring-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 12;
+        }
+
+        .monetization-ring-fill {
+            fill: none;
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1.5s ease;
+        }
+
+        .monetization-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .monetization-amount {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #22c55e;
+        }
+
+        .monetization-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+        }
+
+        /* Upload Zone */
+        .upload-zone {
+            border: 3px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .upload-zone:hover {
+            border-color: rgba(255, 215, 0, 0.5);
+            background: rgba(255, 215, 0, 0.05);
+        }
+
+        /* Loading Animation */
+        .loading-emoji {
+            font-size: 4rem;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .progress-bar-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            height: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 1rem;
+            background: linear-gradient(90deg, #ffd700 0%, #b8860b 100%);
+            transition: width 0.5s ease-out;
+        }
+
+        /* Initializing View */
+        .init-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .init-card {
+            background: rgba(26, 26, 46, 0.9);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 24px;
+            padding: 3rem;
+            text-align: center;
+            max-width: 400px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ============================================
+         SECTION 3: HTML VIEWS
+         ============================================ -->
+    <div id="app-root"></div>
+
+    <!-- ============================================
+         SECTION 4: SCRIPTS
+         ============================================ -->
+    <script>
+    (function() {
+        'use strict';
+
+        /* ==========================================
+           4.1 FIREBASE CONFIGURATION
+           ========================================== */
+
+        // Check Firebase loaded
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase SDK not loaded');
+            document.getElementById('app-root').innerHTML =
+                '<div class="init-container"><div class="init-card">' +
+                '<h2 class="text-xl font-bold text-red-500 mb-2">Error</h2>' +
+                '<p class="text-white/60">Failed to load Firebase. Please refresh the page.</p></div></div>';
+            return;
+        }
+
+        // Firebase project configuration
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyAGczY5ZEIJdTq25BpQdia3lv2I556wOZo",
+            authDomain: "ytseo-6d1b0.firebaseapp.com",
+            projectId: "ytseo-6d1b0",
+            storageBucket: "ytseo-6d1b0.firebasestorage.app",
+            messagingSenderId: "382790048044",
+            appId: "1:382790048044:web:cd427679ff72108c1f3489"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(FIREBASE_CONFIG);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const functions = firebase.functions();
+
+        /* ==========================================
+           4.2 APPLICATION STATE
+           ========================================== */
+
+        const state = {
+            // Current view: initializing | enterprise | login-required
+            currentView: 'initializing',
+
+            // User data
+            user: null,
+            profile: null,
+
+            // UI state
+            loading: false,
+            error: null,
+
+            // Loading progress
+            loadingProgress: 0,
+
+            // Enterprise Tab
+            enterpriseTab: 'bulk-optimizer',
+
+            // Bulk Video Optimizer
+            bulkInputMode: 'paste',
+            bulkVideoUrls: [],
+            bulkResults: null,
+            bulkProgress: 0,
+            bulkCurrentVideo: 0,
+
+            // Placement Finder
+            placementResults: null,
+            placementLoading: false,
+
+            // Viral Score Predictor
+            viralResults: null,
+            viralLoading: false,
+
+            // Monetization Analyzer
+            monetizationResults: null,
+            monetizationLoading: false,
+
+            // Script Writer Pro
+            scriptResults: null,
+            scriptLoading: false,
+
+            // Copy success message
+            copySuccess: null
+        };
+
+        /* ==========================================
+           4.3 UTILITY FUNCTIONS
+           ========================================== */
+
+        const utils = {
+            escapeHtml: function(text) {
+                if (!text) return '';
+                var div = document.createElement('div');
+                div.appendChild(document.createTextNode(text));
+                return div.innerHTML;
+            }
+        };
+
+        /* ==========================================
+           4.4 APP CONTROLLER
+           ========================================== */
+
+        const app = {
+            // Navigation
+            goToDashboard: function() {
+                window.location.href = 'https://ytseo.siteuo.com/video-optimizer';
+            },
+
+            setEnterpriseTab: function(tab) {
+                state.enterpriseTab = tab;
+                state.error = null;
+                render();
+            },
+
+            // Check if user has PRO/Enterprise access
+            hasEnterpriseAccess: function() {
+                var plan = (state.profile && state.profile.subscription && state.profile.subscription.plan) || 'free';
+                return plan === 'pro' || plan === 'enterprise';
+            },
+
+            // Bulk Video Optimizer Functions
+            setBulkInputMode: function(mode) {
+                state.bulkInputMode = mode;
+                render();
+            },
+
+            parseBulkUrls: function() {
+                var textarea = document.getElementById('bulk-urls-input');
+                if (!textarea) return;
+                var text = textarea.value.trim();
+                var urls = text.split(/[\n,]/).map(function(u) { return u.trim(); }).filter(function(u) {
+                    return u.match(/youtube\.com|youtu\.be/);
+                });
+                state.bulkVideoUrls = urls;
+                render();
+            },
+
+            handleBulkCsvUpload: function(event) {
+                var file = event.target.files[0];
+                if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var text = e.target.result;
+                    var urls = text.split(/[\n,]/).map(function(u) { return u.trim(); }).filter(function(u) {
+                        return u.match(/youtube\.com|youtu\.be/);
+                    });
+                    state.bulkVideoUrls = urls;
+                    render();
+                };
+                reader.readAsText(file);
+            },
+
+            clearBulkUrls: function() {
+                state.bulkVideoUrls = [];
+                state.bulkResults = null;
+                state.bulkProgress = 0;
+                render();
+            },
+
+            runBulkOptimization: function() {
+                if (!state.bulkVideoUrls || state.bulkVideoUrls.length === 0) {
+                    state.error = { message: 'Please add video URLs first' };
+                    render();
+                    return;
+                }
+
+                state.loading = true;
+                state.bulkProgress = 0;
+                state.bulkCurrentVideo = 0;
+                render();
+
+                functions.httpsCallable('bulkOptimize')({ videoUrls: state.bulkVideoUrls })
+                    .then(function(result) {
+                        state.bulkResults = result.data.results;
+                        state.loading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.loading = false;
+                        state.error = { message: 'Bulk optimization failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            // Placement Finder Functions
+            findPlacements: function(e) {
+                e.preventDefault();
+                var channelUrl = document.getElementById('placement-channel-url').value.trim();
+
+                if (!channelUrl) {
+                    state.error = { message: 'Please enter a channel URL' };
+                    render();
+                    return;
+                }
+
+                state.loading = true;
+                state.loadingProgress = 0;
+                state.error = null;
+                render();
+
+                functions.httpsCallable('findPlacements')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        state.placementResults = result.data;
+                        state.loading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.loading = false;
+                        state.error = { message: 'Placement search failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            copyAllPlacements: function() {
+                if (!state.placementResults || !state.placementResults.placements) return;
+
+                var text = state.placementResults.placements.map(function(p) {
+                    return p.channelUrl;
+                }).join('\n');
+
+                navigator.clipboard.writeText(text).then(function() {
+                    state.copySuccess = 'Placement URLs copied!';
+                    render();
+                    setTimeout(function() { state.copySuccess = null; render(); }, 3000);
+                });
+            },
+
+            goToPlacement: function() {
+                state.placementResults = null;
+                state.error = null;
+                render();
+            },
+
+            // Viral Score Predictor
+            predictViralScore: function(e) {
+                e.preventDefault();
+                var input = document.getElementById('viral-input').value.trim();
+                var category = document.getElementById('viral-category').value;
+
+                if (!input) {
+                    state.error = { message: 'Please enter a video URL or topic' };
+                    render();
+                    return;
+                }
+
+                state.viralLoading = true;
+                state.error = null;
+                render();
+
+                functions.httpsCallable('predictViralScore')({ input: input, category: category })
+                    .then(function(result) {
+                        state.viralResults = result.data;
+                        state.viralLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.viralLoading = false;
+                        state.error = { message: 'Viral prediction failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            resetViralPredictor: function() {
+                state.viralResults = null;
+                state.viralLoading = false;
+                state.error = null;
+                render();
+            },
+
+            // Monetization Analyzer
+            analyzeMonetization: function(e) {
+                e.preventDefault();
+                var channelUrl = document.getElementById('monetization-channel').value.trim();
+
+                if (!channelUrl) {
+                    state.error = { message: 'Please enter a channel URL' };
+                    render();
+                    return;
+                }
+
+                state.monetizationLoading = true;
+                state.error = null;
+                render();
+
+                functions.httpsCallable('analyzeMonetization')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        state.monetizationResults = result.data;
+                        state.monetizationLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.monetizationLoading = false;
+                        state.error = { message: 'Monetization analysis failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            resetMonetization: function() {
+                state.monetizationResults = null;
+                state.monetizationLoading = false;
+                state.error = null;
+                render();
+            },
+
+            // Script Writer Pro
+            generateScript: function(e) {
+                e.preventDefault();
+                var topic = document.getElementById('script-topic').value.trim();
+                var scriptType = document.getElementById('script-type').value;
+                var duration = document.getElementById('script-duration').value;
+                var notes = document.getElementById('script-notes').value.trim();
+
+                if (!topic) {
+                    state.error = { message: 'Please enter a video topic' };
+                    render();
+                    return;
+                }
+
+                state.scriptLoading = true;
+                state.error = null;
+                render();
+
+                functions.httpsCallable('generateScript')({
+                    topic: topic,
+                    scriptType: scriptType,
+                    duration: parseInt(duration),
+                    notes: notes
+                })
+                    .then(function(result) {
+                        state.scriptResults = result.data;
+                        state.scriptLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        state.scriptLoading = false;
+                        state.error = { message: 'Script generation failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            copyScript: function() {
+                if (!state.scriptResults) return;
+
+                var script = '';
+                if (state.scriptResults.title) {
+                    script += state.scriptResults.title + '\n\n';
+                }
+
+                var sections = state.scriptResults.sections || [];
+                sections.forEach(function(section) {
+                    script += '[ ' + section.title + ' ]\n';
+                    if (section.duration) script += '(' + section.duration + ')\n';
+                    script += section.content + '\n\n';
+                });
+
+                navigator.clipboard.writeText(script).then(function() {
+                    state.copySuccess = 'Script copied to clipboard!';
+                    render();
+                    setTimeout(function() { state.copySuccess = null; render(); }, 3000);
+                });
+            },
+
+            resetScriptWriter: function() {
+                state.scriptResults = null;
+                state.scriptLoading = false;
+                state.error = null;
+                render();
+            }
+        };
+
+        // Make app globally accessible
+        window.app = app;
+
+        /* ==========================================
+           4.5 RENDER FUNCTIONS
+           ========================================== */
+
+        function render() {
+            var html = '';
+
+            switch (state.currentView) {
+                case 'initializing':
+                    html = renderInitializing();
+                    break;
+                case 'login-required':
+                    html = renderLoginRequired();
+                    break;
+                case 'enterprise':
+                    html = renderEnterprise();
+                    break;
+                default:
+                    html = renderEnterprise();
+            }
+
+            document.getElementById('app-root').innerHTML = html;
+        }
+
+        function renderInitializing() {
+            var html = '';
+            html += '<div class="init-container">';
+            html += '<div class="init-card">';
+            html += '<div class="enterprise-crown text-6xl mb-4">👑</div>';
+            html += '<h1 class="text-2xl font-bold gold-text-3d mb-4">Enterprise Suite</h1>';
+            html += '<div class="spinner mx-auto mb-4" style="border-top-color: #ffd700;"></div>';
+            html += '<p class="text-white/60">Loading...</p>';
+            html += '</div></div>';
+            return html;
+        }
+
+        function renderLoginRequired() {
+            var html = '';
+            html += '<div class="init-container">';
+            html += '<div class="init-card">';
+            html += '<div class="text-6xl mb-4">🔒</div>';
+            html += '<h1 class="text-2xl font-bold text-white mb-4">Login Required</h1>';
+            html += '<p class="text-white/60 mb-6">Please log in to access the Enterprise Suite.</p>';
+            html += '<button onclick="app.goToDashboard()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 font-bold rounded-xl hover:from-amber-600 hover:to-yellow-600 transition-all">';
+            html += 'Go to Login';
+            html += '</button>';
+            html += '</div></div>';
+            return html;
+        }
+
+        function renderEnterprise() {
+            var html = '';
+            var plan = (state.profile && state.profile.subscription && state.profile.subscription.plan) || 'free';
+            var hasAccess = plan === 'pro' || plan === 'enterprise';
+            var tab = state.enterpriseTab || 'bulk-optimizer';
+
+            html += '<div class="min-h-screen enterprise-bg py-8 px-4">';
+            html += '<div class="max-w-6xl mx-auto relative">';
+
+            // Navigation
+            html += '<div class="flex flex-wrap gap-3 mb-6">';
+            html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
+            html += '</div>';
+
+            // Hero Section with Gold 3D Graphics
+            html += '<div class="enterprise-hero fade-in">';
+            html += '<div class="enterprise-crown text-7xl mb-4">👑</div>';
+            html += '<h1 class="text-4xl lg:text-5xl font-bold gold-text-3d mb-4">Enterprise Suite</h1>';
+            html += '<p class="text-white/80 text-xl max-w-2xl mx-auto mb-6">Premium AI tools for serious YouTube creators and agencies</p>';
+
+            // Stats Bar
+            html += '<div class="enterprise-stats">';
+            html += '<div class="enterprise-stat"><div class="enterprise-stat-value">5</div><div class="enterprise-stat-label">Pro Tools</div></div>';
+            html += '<div class="enterprise-stat"><div class="enterprise-stat-value">∞</div><div class="enterprise-stat-label">Videos</div></div>';
+            html += '<div class="enterprise-stat"><div class="enterprise-stat-value">AI</div><div class="enterprise-stat-label">Powered</div></div>';
+            html += '</div>';
+
+            if (!hasAccess) {
+                html += '<div class="mt-6 inline-block px-6 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 font-bold rounded-xl">';
+                html += '🔒 Upgrade to PRO to unlock all features';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Error message
+            if (state.error) {
+                html += '<div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400">';
+                html += utils.escapeHtml(state.error.message || state.error);
+                html += '</div>';
+            }
+
+            // Copy success message
+            if (state.copySuccess) {
+                html += '<div class="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded-xl text-green-400">';
+                html += utils.escapeHtml(state.copySuccess);
+                html += '</div>';
+            }
+
+            // Enterprise Tabs
+            html += '<div class="enterprise-tabs">';
+            var tabs = [
+                { id: 'bulk-optimizer', label: '🎯 Bulk Optimizer', icon: '🎯' },
+                { id: 'placement-finder', label: '🎬 Placements', icon: '🎬' },
+                { id: 'viral-predictor', label: '🔮 Viral Score', icon: '🔮' },
+                { id: 'monetization', label: '💰 Monetization', icon: '💰' },
+                { id: 'script-writer', label: '📝 Script Writer', icon: '📝' }
+            ];
+            for (var t = 0; t < tabs.length; t++) {
+                var isActive = tab === tabs[t].id;
+                html += '<button onclick="app.setEnterpriseTab(\'' + tabs[t].id + '\')" class="enterprise-tab' + (isActive ? ' active' : '') + '">' + tabs[t].label + '</button>';
+            }
+            html += '</div>';
+
+            // Tab Content
+            html += '<div class="fade-in">';
+
+            // Bulk Video Optimizer Tab
+            if (tab === 'bulk-optimizer') {
+                html += renderBulkOptimizerTab(hasAccess);
+            }
+
+            // Placement Finder Tab
+            if (tab === 'placement-finder') {
+                html += renderPlacementFinderTab(hasAccess);
+            }
+
+            // Viral Score Predictor Tab
+            if (tab === 'viral-predictor') {
+                html += renderViralPredictorTab(hasAccess);
+            }
+
+            // Monetization Analyzer Tab
+            if (tab === 'monetization') {
+                html += renderMonetizationTab(hasAccess);
+            }
+
+            // Script Writer Pro Tab
+            if (tab === 'script-writer') {
+                html += renderScriptWriterTab(hasAccess);
+            }
+
+            html += '</div>';
+
+            html += '</div></div>';
+            return html;
+        }
+
+        // Bulk Video Optimizer Tab Content
+        function renderBulkOptimizerTab(hasAccess) {
+            var html = '';
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn" onclick="app.goToDashboard()">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">🎯</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Bulk Video Optimizer</h2>';
+            html += '<p class="text-white/60">Optimize multiple videos at once with AI</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Input Mode Toggle
+            html += '<div class="input-toggle">';
+            html += '<button onclick="app.setBulkInputMode(\'paste\')" class="input-toggle-btn' + (state.bulkInputMode === 'paste' ? ' active' : '') + '">📝 Paste Links</button>';
+            html += '<button onclick="app.setBulkInputMode(\'csv\')" class="input-toggle-btn' + (state.bulkInputMode === 'csv' ? ' active' : '') + '">📄 Upload CSV</button>';
+            html += '</div>';
+
+            if (state.bulkInputMode === 'paste') {
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white/80 font-medium mb-2">Paste YouTube Video URLs (one per line)</label>';
+                html += '<textarea id="bulk-urls-input" onkeyup="app.parseBulkUrls()" rows="6" placeholder="https://youtube.com/watch?v=abc123&#10;https://youtube.com/watch?v=def456&#10;https://youtu.be/ghi789" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none"></textarea>';
+                html += '</div>';
+            } else {
+                html += '<div class="mb-6">';
+                html += '<div class="upload-zone" onclick="document.getElementById(\'bulk-csv-input\').click()">';
+                html += '<input type="file" id="bulk-csv-input" accept=".csv,.txt" style="display:none" onchange="app.handleBulkCsvUpload(event)" />';
+                html += '<div class="text-4xl mb-3">📄</div>';
+                html += '<p class="text-white font-medium">Drop CSV file here or click to browse</p>';
+                html += '<p class="text-white/50 text-sm mt-2">CSV should have YouTube URLs in first column</p>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Video URLs List
+            if (state.bulkVideoUrls && state.bulkVideoUrls.length > 0) {
+                html += '<div class="mb-6 p-4 bg-white/5 rounded-xl">';
+                html += '<div class="flex items-center justify-between mb-3">';
+                html += '<span class="text-white font-medium">' + state.bulkVideoUrls.length + ' videos detected</span>';
+                html += '<button onclick="app.clearBulkUrls()" class="text-red-400 hover:text-red-300 text-sm">Clear All</button>';
+                html += '</div>';
+                html += '<div class="max-h-40 overflow-y-auto space-y-1">';
+                for (var u = 0; u < Math.min(state.bulkVideoUrls.length, 10); u++) {
+                    html += '<div class="text-white/60 text-sm truncate">• ' + utils.escapeHtml(state.bulkVideoUrls[u]) + '</div>';
+                }
+                if (state.bulkVideoUrls.length > 10) {
+                    html += '<div class="text-white/40 text-sm">... and ' + (state.bulkVideoUrls.length - 10) + ' more</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+
+                html += '<button onclick="app.runBulkOptimization()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 font-bold rounded-xl hover:from-amber-600 hover:to-yellow-600 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '🚀 Optimize ' + state.bulkVideoUrls.length + ' Videos';
+                html += '</button>';
+            }
+
+            // Loading
+            if (state.loading && state.enterpriseTab === 'bulk-optimizer') {
+                html += '<div class="mt-6 text-center py-8">';
+                html += '<div class="loading-emoji text-5xl mb-4">🎯</div>';
+                html += '<p class="text-white font-medium">Optimizing videos...</p>';
+                html += '</div>';
+            }
+
+            // Progress / Results
+            if (state.bulkResults) {
+                html += '<div class="mt-6 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">';
+                html += '<div class="flex items-center gap-3 text-green-400">';
+                html += '<span class="text-2xl">✓</span>';
+                html += '<div>';
+                html += '<p class="font-semibold">Optimization Complete!</p>';
+                html += '<p class="text-sm opacity-70">' + state.bulkResults.length + ' videos optimized successfully</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Placement Finder Tab Content
+        function renderPlacementFinderTab(hasAccess) {
+            var html = '';
+            var results = state.placementResults;
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn" onclick="app.goToDashboard()">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">🎬</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Placement Finder</h2>';
+            html += '<p class="text-white/60">Find YouTube channels for Google Ads placements</p>';
+            html += '</div>';
+            html += '</div>';
+
+            if (!results && !state.loading) {
+                html += '<form onsubmit="app.findPlacements(event)">';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white/80 font-medium mb-2">Your YouTube Channel URL</label>';
+                html += '<input type="text" id="placement-channel-url" placeholder="https://youtube.com/@yourchannel" class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none" required />';
+                html += '</div>';
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-purple-500 to-violet-600 text-white font-bold rounded-xl hover:from-purple-600 hover:to-violet-700 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '🔍 Find Placement Channels';
+                html += '</button>';
+                html += '</form>';
+            }
+
+            // Loading State
+            if (state.loading && state.enterpriseTab === 'placement-finder') {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji text-5xl mb-4">🎬</div>';
+                html += '<p class="text-white font-medium">Finding placement channels...</p>';
+                html += '<div class="progress-bar-container w-48 mx-auto mt-4"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
+                html += '</div>';
+            }
+
+            // Results
+            if (results && results.placements) {
+                html += '<div class="mb-4 flex items-center justify-between">';
+                html += '<span class="text-green-400 font-semibold">✓ ' + results.placements.length + ' channels found</span>';
+                html += '<button onclick="app.copyAllPlacements()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium">📋 Copy All</button>';
+                html += '</div>';
+                html += '<div class="max-h-64 overflow-y-auto space-y-2">';
+                for (var p = 0; p < Math.min(results.placements.length, 15); p++) {
+                    var pl = results.placements[p];
+                    html += '<div class="flex items-center justify-between p-3 bg-white/5 rounded-lg">';
+                    html += '<div class="flex items-center gap-3">';
+                    if (pl.thumbnail) {
+                        html += '<img src="' + utils.escapeHtml(pl.thumbnail) + '" class="w-10 h-10 rounded-full" />';
+                    }
+                    html += '<div>';
+                    html += '<p class="text-white font-medium">' + utils.escapeHtml(pl.channelName) + '</p>';
+                    html += '<p class="text-white/50 text-sm">' + utils.escapeHtml(pl.subscribersFormatted) + '</p>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '<a href="' + utils.escapeHtml(pl.channelUrl) + '" target="_blank" class="text-purple-400 hover:text-purple-300">🔗</a>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '<button onclick="app.goToPlacement()" class="mt-4 w-full py-3 border border-white/20 text-white rounded-xl hover:bg-white/5">🔍 New Search</button>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Viral Score Predictor Tab Content
+        function renderViralPredictorTab(hasAccess) {
+            var html = '';
+            var results = state.viralResults;
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn" onclick="app.goToDashboard()">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">🔮</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Viral Score Predictor</h2>';
+            html += '<p class="text-white/60">Predict viral potential & get recommendations to go viral</p>';
+            html += '</div>';
+            html += '</div>';
+
+            if (!results && !state.viralLoading) {
+                html += '<form onsubmit="app.predictViralScore(event)">';
+                html += '<div class="mb-4">';
+                html += '<label class="block text-white/80 font-medium mb-2">Video URL or Topic</label>';
+                html += '<input type="text" id="viral-input" placeholder="Paste video URL or describe your video topic" class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none" required />';
+                html += '</div>';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white/80 font-medium mb-2">Category (Optional)</label>';
+                html += '<select id="viral-category" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:border-amber-500 focus:outline-none">';
+                html += '<option value="">Auto-detect</option>';
+                html += '<option value="gaming">Gaming</option>';
+                html += '<option value="education">Education</option>';
+                html += '<option value="entertainment">Entertainment</option>';
+                html += '<option value="music">Music</option>';
+                html += '<option value="tech">Tech</option>';
+                html += '<option value="lifestyle">Lifestyle</option>';
+                html += '</select>';
+                html += '</div>';
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white font-bold rounded-xl hover:from-fuchsia-600 hover:to-purple-700 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '🔮 Predict Viral Potential';
+                html += '</button>';
+                html += '</form>';
+            }
+
+            // Loading
+            if (state.viralLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji text-5xl mb-4">🔮</div>';
+                html += '<p class="text-white font-medium">Analyzing viral potential...</p>';
+                html += '</div>';
+            }
+
+            // Results
+            if (results) {
+                var viralScore = results.viralScore || 0;
+                var viralColor = viralScore >= 80 ? '#22c55e' : viralScore >= 50 ? '#eab308' : '#ef4444';
+
+                html += '<div class="text-center mb-6">';
+                html += '<div class="text-6xl font-bold mb-2" style="color: ' + viralColor + '">' + viralScore + '%</div>';
+                html += '<p class="text-white/70 text-lg">Viral Potential Score</p>';
+                html += '<div class="viral-meter mt-4"><div class="viral-meter-indicator" style="left: ' + viralScore + '%">🔥</div></div>';
+                html += '</div>';
+
+                // Viral Tips
+                if (results.tips && results.tips.length > 0) {
+                    html += '<div class="mb-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🚀 How to Make It Viral:</h3>';
+                    html += '<div class="space-y-3">';
+                    for (var vt = 0; vt < results.tips.length; vt++) {
+                        var tip = results.tips[vt];
+                        html += '<div class="p-4 bg-white/5 rounded-xl border border-white/10">';
+                        html += '<div class="flex items-start gap-3">';
+                        html += '<span class="text-2xl">' + (tip.icon || '💡') + '</span>';
+                        html += '<div>';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(tip.title) + '</p>';
+                        html += '<p class="text-white/60 text-sm mt-1">' + utils.escapeHtml(tip.description) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Trending Elements to Include
+                if (results.trendingElements && results.trendingElements.length > 0) {
+                    html += '<div class="mb-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-3">📈 Trending Elements to Include:</h3>';
+                    html += '<div class="flex flex-wrap gap-2">';
+                    for (var te = 0; te < results.trendingElements.length; te++) {
+                        html += '<span class="px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-purple-300 text-sm">' + utils.escapeHtml(results.trendingElements[te]) + '</span>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '<button onclick="app.resetViralPredictor()" class="mt-4 w-full py-3 border border-white/20 text-white rounded-xl hover:bg-white/5">🔮 New Prediction</button>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Monetization Analyzer Tab Content
+        function renderMonetizationTab(hasAccess) {
+            var html = '';
+            var results = state.monetizationResults;
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn" onclick="app.goToDashboard()">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">💰</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Monetization Analyzer</h2>';
+            html += '<p class="text-white/60">Estimate earnings & discover monetization opportunities</p>';
+            html += '</div>';
+            html += '</div>';
+
+            if (!results && !state.monetizationLoading) {
+                html += '<form onsubmit="app.analyzeMonetization(event)">';
+                html += '<div class="mb-4">';
+                html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL</label>';
+                html += '<input type="text" id="monetization-channel" placeholder="https://youtube.com/@channel" class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none" required />';
+                html += '</div>';
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '💰 Analyze Monetization';
+                html += '</button>';
+                html += '</form>';
+            }
+
+            // Loading
+            if (state.monetizationLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji text-5xl mb-4">💰</div>';
+                html += '<p class="text-white font-medium">Analyzing monetization potential...</p>';
+                html += '</div>';
+            }
+
+            // Results
+            if (results) {
+                // Revenue Gauge
+                html += '<div class="flex justify-center mb-6">';
+                html += '<div class="monetization-ring">';
+                var circumference = 2 * Math.PI * 70;
+                var offset = circumference - (results.revenueScore / 100) * circumference;
+                html += '<svg width="180" height="180">';
+                html += '<circle class="monetization-ring-bg" cx="90" cy="90" r="70"/>';
+                html += '<circle class="monetization-ring-fill" cx="90" cy="90" r="70" stroke="#22c55e" stroke-dasharray="' + circumference + '" stroke-dashoffset="' + offset + '"/>';
+                html += '</svg>';
+                html += '<div class="monetization-value">';
+                html += '<div class="monetization-amount">$' + (results.estimatedMonthly || '0') + '</div>';
+                html += '<div class="monetization-label">Est. Monthly</div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Revenue Breakdown
+                html += '<div class="grid grid-cols-2 gap-4 mb-6">';
+                var revenueCards = [
+                    { label: 'AdSense', value: '$' + (results.adsense || '0'), icon: '📺' },
+                    { label: 'Sponsors', value: '$' + (results.sponsors || '0'), icon: '🤝' },
+                    { label: 'Memberships', value: '$' + (results.memberships || '0'), icon: '⭐' },
+                    { label: 'Super Chats', value: '$' + (results.superChats || '0'), icon: '💬' }
+                ];
+                for (var rc = 0; rc < revenueCards.length; rc++) {
+                    html += '<div class="p-4 bg-white/5 rounded-xl text-center">';
+                    html += '<div class="text-2xl mb-1">' + revenueCards[rc].icon + '</div>';
+                    html += '<div class="text-xl font-bold text-green-400">' + revenueCards[rc].value + '</div>';
+                    html += '<div class="text-white/50 text-sm">' + revenueCards[rc].label + '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                // Opportunities
+                if (results.opportunities && results.opportunities.length > 0) {
+                    html += '<div class="mb-4">';
+                    html += '<h3 class="text-lg font-bold text-white mb-3">💡 Monetization Opportunities:</h3>';
+                    html += '<div class="space-y-2">';
+                    for (var mo = 0; mo < results.opportunities.length; mo++) {
+                        html += '<div class="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">';
+                        html += '<span class="text-green-400">$</span>';
+                        html += '<p class="text-white/80">' + utils.escapeHtml(results.opportunities[mo]) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '<button onclick="app.resetMonetization()" class="mt-4 w-full py-3 border border-white/20 text-white rounded-xl hover:bg-white/5">💰 New Analysis</button>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Script Writer Pro Tab Content
+        function renderScriptWriterTab(hasAccess) {
+            var html = '';
+            var results = state.scriptResults;
+
+            html += '<div class="enterprise-card' + (!hasAccess ? ' enterprise-locked' : '') + '">';
+
+            if (!hasAccess) {
+                html += '<div class="enterprise-locked-badge">';
+                html += '<div class="lock-icon">🔒</div>';
+                html += '<p class="text-white font-semibold mb-2">PRO Feature</p>';
+                html += '<button class="upgrade-btn" onclick="app.goToDashboard()">Upgrade to PRO</button>';
+                html += '</div>';
+            }
+
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<div class="enterprise-icon">📝</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Script Writer Pro</h2>';
+            html += '<p class="text-white/60">AI-powered video scripts with hooks, structure & CTAs</p>';
+            html += '</div>';
+            html += '</div>';
+
+            if (!results && !state.scriptLoading) {
+                html += '<form onsubmit="app.generateScript(event)">';
+                html += '<div class="mb-4">';
+                html += '<label class="block text-white/80 font-medium mb-2">Video Topic</label>';
+                html += '<input type="text" id="script-topic" placeholder="e.g., How to start a YouTube channel in 2024" class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none" required />';
+                html += '</div>';
+                html += '<div class="grid grid-cols-2 gap-4 mb-4">';
+                html += '<div>';
+                html += '<label class="block text-white/80 font-medium mb-2">Script Type</label>';
+                html += '<select id="script-type" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:border-amber-500 focus:outline-none">';
+                html += '<option value="tutorial">Tutorial</option>';
+                html += '<option value="review">Product Review</option>';
+                html += '<option value="vlog">Vlog</option>';
+                html += '<option value="listicle">Top 10/Listicle</option>';
+                html += '<option value="explainer">Explainer</option>';
+                html += '<option value="story">Story/Documentary</option>';
+                html += '</select>';
+                html += '</div>';
+                html += '<div>';
+                html += '<label class="block text-white/80 font-medium mb-2">Duration (min)</label>';
+                html += '<select id="script-duration" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:border-amber-500 focus:outline-none">';
+                html += '<option value="3">Short (3 min)</option>';
+                html += '<option value="5">Medium (5 min)</option>';
+                html += '<option value="10" selected>Standard (10 min)</option>';
+                html += '<option value="15">Long (15 min)</option>';
+                html += '<option value="20">Extended (20+ min)</option>';
+                html += '</select>';
+                html += '</div>';
+                html += '</div>';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white/80 font-medium mb-2">Additional Notes (Optional)</label>';
+                html += '<textarea id="script-notes" rows="2" placeholder="Any specific points to cover, tone preferences, etc." class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-amber-500 focus:outline-none"></textarea>';
+                html += '</div>';
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all" ' + (!hasAccess ? 'disabled' : '') + '>';
+                html += '📝 Generate Script';
+                html += '</button>';
+                html += '</form>';
+            }
+
+            // Loading
+            if (state.scriptLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji text-5xl mb-4">📝</div>';
+                html += '<p class="text-white font-medium">Writing your script...</p>';
+                html += '<p class="text-white/50 text-sm mt-2">This may take a minute for longer scripts</p>';
+                html += '</div>';
+            }
+
+            // Results
+            if (results) {
+                html += '<div class="mb-4 flex items-center justify-between">';
+                html += '<span class="text-white font-medium">' + utils.escapeHtml(results.title || 'Your Script') + '</span>';
+                html += '<button onclick="app.copyScript()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium">📋 Copy Script</button>';
+                html += '</div>';
+
+                // Script Sections
+                var sections = results.sections || [];
+                for (var ss = 0; ss < sections.length; ss++) {
+                    var section = sections[ss];
+                    html += '<div class="script-section">';
+                    html += '<div class="script-section-header">';
+                    html += '<span class="text-xl">' + (section.icon || '📍') + '</span>';
+                    html += '<span>' + utils.escapeHtml(section.title) + '</span>';
+                    if (section.duration) {
+                        html += '<span class="ml-auto text-white/40 text-sm">' + section.duration + '</span>';
+                    }
+                    html += '</div>';
+                    html += '<div class="script-content">' + utils.escapeHtml(section.content).replace(/\n/g, '<br>') + '</div>';
+                    html += '</div>';
+                }
+
+                html += '<button onclick="app.resetScriptWriter()" class="mt-4 w-full py-3 border border-white/20 text-white rounded-xl hover:bg-white/5">📝 New Script</button>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        /* ==========================================
+           4.6 AUTH STATE LISTENER
+           ========================================== */
+
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                state.user = user;
+                // Load user profile
+                db.collection('users').doc(user.uid).get()
+                    .then(function(doc) {
+                        if (doc.exists) {
+                            state.profile = doc.data();
+                        } else {
+                            state.profile = { subscription: { plan: 'free' } };
+                        }
+                        state.currentView = 'enterprise';
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading profile:', error);
+                        state.profile = { subscription: { plan: 'free' } };
+                        state.currentView = 'enterprise';
+                        render();
+                    });
+            } else {
+                state.user = null;
+                state.profile = null;
+                state.currentView = 'login-required';
+                render();
+            }
+        });
+
+        // Initial render
+        render();
+
+    })();
+    </script>
+</body>
+</html>

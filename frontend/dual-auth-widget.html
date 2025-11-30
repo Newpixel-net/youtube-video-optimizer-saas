@@ -2673,18 +2673,9 @@
                 render();
             },
 
-            // Enterprise Page Navigation
-            goToEnterprise: function(tab) {
-                state.currentView = 'enterprise';
-                state.error = null;
-                if (tab) state.enterpriseTab = tab;
-                render();
-            },
-
-            setEnterpriseTab: function(tab) {
-                state.enterpriseTab = tab;
-                state.error = null;
-                render();
+            // Enterprise Page Navigation - Redirects to external Enterprise Suite page
+            goToEnterprise: function() {
+                window.location.href = 'https://ytseo.siteuo.com/enterprise-suite';
             },
 
             // Channel Audit Pro (Main Dashboard)
@@ -5266,9 +5257,9 @@
 
             html += '</div>';
 
-            // Enterprise Suite Banner
+            // Enterprise Suite Banner - Links to external Enterprise Suite page
             html += '<div class="mt-8 fade-in">';
-            html += '<div class="relative bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-600 rounded-2xl shadow-2xl p-8 mobile-padding cursor-pointer hover:shadow-[0_20px_60px_rgba(255,215,0,0.3)] transition-all hover:scale-[1.02] overflow-hidden" onclick="app.goToEnterprise()">';
+            html += '<a href="https://ytseo.siteuo.com/enterprise-suite" class="block relative bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-600 rounded-2xl shadow-2xl p-8 mobile-padding cursor-pointer hover:shadow-[0_20px_60px_rgba(255,215,0,0.3)] transition-all hover:scale-[1.02] overflow-hidden no-underline">';
             html += '<div class="absolute inset-0 bg-[url(\'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjEpIiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=\')] opacity-30"></div>';
             html += '<div class="relative flex flex-col md:flex-row items-center gap-6">';
             html += '<div class="text-6xl md:text-7xl animate-bounce">👑</div>';
@@ -5281,7 +5272,7 @@
             html += '</div>';
             html += '<div class="text-white text-4xl hidden md:block">→</div>';
             html += '</div>';
-            html += '</div></div>';
+            html += '</a></div>';
 
             // Admin Section (only for admins)
             if (state.isAdmin) {
@@ -8425,9 +8416,7 @@
                 case 'channel-audit':
                     html = renderChannelAudit();
                     break;
-                case 'enterprise':
-                    html = renderEnterprise();
-                    break;
+                // Enterprise Suite now lives at external URL: https://ytseo.siteuo.com/enterprise-suite
                 default:
                     html = '<div class="view-container view-centered"><div class="spinner"></div></div>';
             }
