@@ -1648,14 +1648,19 @@
             state.promptsLoading = true;
             render();
 
+            // Simple query without composite index requirement
             db.collection('promptTemplates')
-                .orderBy('category')
-                .orderBy('name')
                 .get()
                 .then(function(snapshot) {
                     state.prompts = [];
                     snapshot.forEach(function(doc) {
                         state.prompts.push({ id: doc.id, ...doc.data() });
+                    });
+                    // Sort in JavaScript: by category, then by name
+                    state.prompts.sort(function(a, b) {
+                        var catCompare = (a.category || '').localeCompare(b.category || '');
+                        if (catCompare !== 0) return catCompare;
+                        return (a.name || '').localeCompare(b.name || '');
                     });
                     state.promptsLoading = false;
                     render();
