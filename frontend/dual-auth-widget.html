@@ -1334,6 +1334,65 @@
                 gap: 1rem !important;
             }
 
+            /* Mobile wide container - expands content to near full width */
+            .mobile-wide-container {
+                max-width: 100% !important;
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+
+            .mobile-wide-container .bg-white {
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
+
+            /* Dashboard cards side-by-side on mobile */
+            .dashboard-cards-grid {
+                display: grid !important;
+                grid-template-columns: 1fr 1fr !important;
+                gap: 0.75rem !important;
+            }
+
+            .dashboard-cards-grid .dashboard-card {
+                padding: 0.875rem !important;
+            }
+
+            .dashboard-cards-grid .dashboard-card-icon {
+                width: 2.5rem !important;
+                height: 2.5rem !important;
+                font-size: 1.5rem !important;
+            }
+
+            .dashboard-cards-grid .dashboard-card-title {
+                font-size: 0.875rem !important;
+                line-height: 1.2 !important;
+            }
+
+            .dashboard-cards-grid .dashboard-card-subtitle {
+                display: none !important;
+            }
+
+            .dashboard-cards-grid .dashboard-card-arrow {
+                font-size: 1.25rem !important;
+            }
+
+            /* Optimization results mobile layout */
+            .optimization-scores-mobile {
+                flex-direction: row !important;
+                flex-wrap: wrap !important;
+                justify-content: center !important;
+                gap: 1rem !important;
+            }
+
+            .optimization-scores-mobile .score-gauge {
+                transform: scale(0.85);
+            }
+
+            .optimization-scores-mobile .improvement-badge {
+                width: 100% !important;
+                margin-top: 0.5rem !important;
+            }
+
             /* Improve touch targets for Apple HIG compliance */
             button, .google-btn, input, select, .tab-btn {
                 min-height: 50px;
@@ -4421,43 +4480,45 @@
                 html += '</div>';
             }
 
-            // My Campaign Reports Card (for clients) - positioned above AI Tools
-            html += '<div class="mb-8 fade-in">';
-            html += '<div class="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl shadow-xl p-8 mobile-padding cursor-pointer hover:from-emerald-600 hover:to-teal-700 transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" onclick="app.goToClientReports()">';
+            // My Campaign Reports & Enterprise Suite Cards - Side by Side
+            html += '<div class="grid grid-cols-2 gap-4 lg:gap-6 mb-8 fade-in dashboard-cards-grid">';
+
+            // My Campaign Reports Card
+            html += '<div class="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer hover:from-emerald-600 hover:to-teal-700 transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" onclick="app.goToClientReports()">';
             if (state.unreadCount > 0) {
-                html += '<div class="absolute top-4 right-4 flex items-center gap-2">';
+                html += '<div class="absolute top-2 right-2 lg:top-4 lg:right-4 flex items-center gap-1 lg:gap-2">';
                 html += '<span class="notification-dot"></span>';
-                html += '<span class="bg-white/20 text-white text-sm font-bold px-3 py-1 rounded-full">' + state.unreadCount + ' New</span>';
+                html += '<span class="bg-white/20 text-white text-xs lg:text-sm font-bold px-2 lg:px-3 py-0.5 lg:py-1 rounded-full">' + state.unreadCount + '</span>';
                 html += '</div>';
             }
-            html += '<div class="flex items-center gap-5">';
-            html += '<div class="text-5xl">📊</div>';
-            html += '<div class="flex-1">';
-            html += '<h3 class="text-2xl font-bold text-white mb-1">My Campaign Reports</h3>';
-            html += '<p class="text-white/80">View your Google Ads performance reports</p>';
+            html += '<div class="flex items-center gap-3 lg:gap-5">';
+            html += '<div class="dashboard-card-icon w-12 h-12 lg:w-16 lg:h-16 bg-white/20 rounded-xl flex items-center justify-center text-2xl lg:text-4xl">📊</div>';
+            html += '<div class="flex-1 min-w-0">';
+            html += '<h3 class="dashboard-card-title text-base lg:text-2xl font-bold text-white mb-0.5 lg:mb-1">My Campaign Reports</h3>';
+            html += '<p class="dashboard-card-subtitle text-white/80 text-xs lg:text-base truncate">View your Google Ads performance reports</p>';
             html += '</div>';
-            html += '<div class="text-white text-3xl">→</div>';
-            html += '</div></div></div>';
+            html += '<div class="dashboard-card-arrow text-white text-xl lg:text-3xl hidden sm:block">→</div>';
+            html += '</div></div>';
 
-            // Enterprise Suite Banner (PRO & Enterprise only)
-            html += '<div class="mb-8 fade-in">';
+            // Enterprise Suite Card
             html += '<a href="https://ytseo.siteuo.com/enterprise-suite" class="block">';
-            html += '<div class="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 rounded-2xl shadow-xl p-6 lg:p-8 cursor-pointer hover:from-amber-600 hover:via-yellow-600 hover:to-amber-600 transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden border-2 border-yellow-300">';
+            html += '<div class="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer hover:from-amber-600 hover:via-yellow-600 hover:to-amber-600 transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden border-2 border-yellow-300 h-full">';
             html += '<div class="absolute inset-0 bg-[url(\'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxjaXJjbGUgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjEpIiBjeD0iMjAiIGN5PSIyMCIgcj0iMiIvPjwvZz48L3N2Zz4=\')] opacity-30"></div>';
-            html += '<div class="relative flex items-center gap-5">';
-            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-yellow-200 to-amber-300 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl">👑</div>';
-            html += '<div class="flex-1">';
-            html += '<div class="flex items-center gap-2 mb-1">';
-            html += '<h3 class="text-2xl lg:text-3xl font-bold text-gray-900">Enterprise Suite</h3>';
-            html += '<span class="bg-gray-900 text-yellow-400 text-xs font-bold px-2 py-1 rounded-full">PRO</span>';
+            html += '<div class="relative flex items-center gap-3 lg:gap-5">';
+            html += '<div class="dashboard-card-icon w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-yellow-200 to-amber-300 rounded-xl flex items-center justify-center text-2xl lg:text-4xl shadow-lg">👑</div>';
+            html += '<div class="flex-1 min-w-0">';
+            html += '<div class="flex items-center gap-1 lg:gap-2 mb-0.5 lg:mb-1">';
+            html += '<h3 class="dashboard-card-title text-base lg:text-2xl font-bold text-gray-900">Enterprise Suite</h3>';
+            html += '<span class="bg-gray-900 text-yellow-400 text-[10px] lg:text-xs font-bold px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full">PRO</span>';
             html += '</div>';
-            html += '<p class="text-gray-800/80 text-sm lg:text-base">Bulk Optimizer, Placement Finder, Viral Predictor, Monetization & Script Writer</p>';
+            html += '<p class="dashboard-card-subtitle text-gray-800/80 text-xs lg:text-base truncate">Bulk Optimizer, Placement Finder, Viral Predictor, Monetization & Script Writer</p>';
             html += '</div>';
-            html += '<div class="text-gray-900 text-3xl lg:text-4xl font-bold">→</div>';
+            html += '<div class="dashboard-card-arrow text-gray-900 text-xl lg:text-3xl font-bold hidden sm:block">→</div>';
             html += '</div>';
             html += '</div>';
             html += '</a>';
-            html += '</div>';
+
+            html += '</div>'; // End grid
 
             // Main Tools Section Title
             html += '<h2 class="text-2xl lg:text-3xl font-bold text-white mb-6 fade-in">🛠️ AI Tools</h2>';
@@ -4767,62 +4828,63 @@
             const tab = state.resultsTab || 'titles';
             var html = '';
 
-            // Container
-            html += '<div class="min-h-screen mobile-full-screen py-6 px-4">';
+            // Container - mobile-wide-container for expanded width on mobile
+            html += '<div class="min-h-screen mobile-full-screen py-6 px-4 mobile-wide-container">';
             html += '<div class="max-w-4xl mx-auto">';
 
             // Header with navigation
             html += '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 fade-in">';
-            html += '<h1 class="text-3xl mobile-text-xl font-bold text-white">✨ Optimization Results</h1>';
+            html += '<h1 class="text-2xl sm:text-3xl font-bold text-white">✨ Optimization Results</h1>';
             html += '<div class="flex gap-2 w-full sm:w-auto">';
-            html += '<button onclick="app.goToDashboard()" class="flex-1 sm:flex-none btn-secondary">← Dashboard</button>';
-            html += '<button onclick="app.goToOptimizer()" class="flex-1 sm:flex-none btn-secondary">🔄 New</button>';
+            html += '<button onclick="app.goToDashboard()" class="flex-1 sm:flex-none btn-secondary text-sm sm:text-base">← Dashboard</button>';
+            html += '<button onclick="app.goToOptimizer()" class="flex-1 sm:flex-none btn-secondary text-sm sm:text-base">🔄 New</button>';
             html += '</div></div>';
 
-            // SEO Score Card (Before/After)
-            html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding mb-6 fade-in">';
-            html += '<div class="flex flex-col md:flex-row items-center justify-around gap-6">';
+            // SEO Score Card (Before/After) - improved mobile layout
+            html += '<div class="bg-white rounded-2xl shadow-xl p-4 sm:p-6 mb-6 fade-in">';
 
             // Before Score (estimated based on video metadata)
             var beforeScore = Math.min(45, Math.round((r.videoInfo?.viewCount || 0) / 100000 * 10) + 25);
             var afterScore = r.seoAnalysis?.score || 85;
             var improvement = afterScore - beforeScore;
 
-            // Before
+            // Scores container - horizontal on all screens with responsive sizing
+            html += '<div class="flex flex-row items-center justify-center gap-2 sm:gap-6 md:gap-8 flex-wrap">';
+
+            // Before Score
             html += '<div class="text-center">';
-            html += '<p class="text-sm font-medium text-gray-500 mb-3">Current SEO</p>';
+            html += '<p class="text-xs sm:text-sm font-medium text-gray-500 mb-2">Current SEO</p>';
             html += '<div class="score-gauge">';
-            html += '<svg class="score-circle" width="140" height="140" viewBox="0 0 140 140">';
+            html += '<svg class="score-circle w-24 h-24 sm:w-32 sm:h-32 md:w-[140px] md:h-[140px]" viewBox="0 0 140 140">';
             html += '<circle class="score-circle-bg" cx="70" cy="70" r="58"></circle>';
             var beforeDash = (beforeScore / 100) * 364;
             html += '<circle class="score-circle-fill" cx="70" cy="70" r="58" stroke="#ef4444" stroke-dasharray="' + beforeDash + ' 364"></circle>';
             html += '</svg>';
-            html += '<div class="score-value text-red-500">' + beforeScore + '</div>';
+            html += '<div class="score-value text-red-500 text-2xl sm:text-3xl md:text-4xl">' + beforeScore + '</div>';
             html += '</div>';
             html += '</div>';
 
-            // Arrow
-            html += '<div class="text-5xl text-gray-300 hidden md:block">→</div>';
-            html += '<div class="text-3xl text-gray-300 md:hidden">↓</div>';
+            // Arrow - always horizontal
+            html += '<div class="text-2xl sm:text-4xl md:text-5xl text-gray-300">→</div>';
 
-            // After
+            // After Score
             html += '<div class="text-center">';
-            html += '<p class="text-sm font-medium text-gray-500 mb-3">After Optimization</p>';
+            html += '<p class="text-xs sm:text-sm font-medium text-gray-500 mb-2">After Optimization</p>';
             html += '<div class="score-gauge">';
-            html += '<svg class="score-circle" width="140" height="140" viewBox="0 0 140 140">';
+            html += '<svg class="score-circle w-24 h-24 sm:w-32 sm:h-32 md:w-[140px] md:h-[140px]" viewBox="0 0 140 140">';
             html += '<circle class="score-circle-bg" cx="70" cy="70" r="58"></circle>';
             var afterDash = (afterScore / 100) * 364;
             var afterColor = afterScore >= 80 ? '#22c55e' : afterScore >= 60 ? '#eab308' : '#ef4444';
             html += '<circle class="score-circle-fill" cx="70" cy="70" r="58" stroke="' + afterColor + '" stroke-dasharray="' + afterDash + ' 364"></circle>';
             html += '</svg>';
-            html += '<div class="score-value" style="color:' + afterColor + '">' + afterScore + '</div>';
+            html += '<div class="score-value text-2xl sm:text-3xl md:text-4xl" style="color:' + afterColor + '">' + afterScore + '</div>';
             html += '</div>';
             html += '</div>';
 
-            // Improvement badge
-            html += '<div class="text-center bg-gradient-to-br from-green-50 to-emerald-100 px-8 py-5 rounded-2xl border border-green-200">';
-            html += '<p class="text-4xl font-bold text-green-600">+' + improvement + '%</p>';
-            html += '<p class="text-sm font-medium text-green-700 mt-1">SEO Improvement</p>';
+            // Improvement badge - inline on larger screens, below on mobile
+            html += '<div class="text-center bg-gradient-to-br from-green-50 to-emerald-100 px-4 sm:px-8 py-3 sm:py-5 rounded-2xl border border-green-200 w-full sm:w-auto mt-4 sm:mt-0">';
+            html += '<p class="text-2xl sm:text-3xl md:text-4xl font-bold text-green-600">+' + improvement + '%</p>';
+            html += '<p class="text-xs sm:text-sm font-medium text-green-700 mt-1">SEO Improvement</p>';
             html += '</div>';
 
             html += '</div></div>';
@@ -4840,8 +4902,8 @@
                 html += '</div></div></div>';
             }
 
-            // Main Content Card with Tabs
-            html += '<div class="bg-white rounded-2xl shadow-xl p-6 mobile-padding fade-in">';
+            // Main Content Card with Tabs - reduced padding on mobile
+            html += '<div class="bg-white rounded-2xl shadow-xl p-3 sm:p-6 fade-in">';
 
             // Tabs
             html += '<div class="tabs-container">';
