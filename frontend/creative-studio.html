@@ -1599,6 +1599,348 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
+        /* ==========================================
+           SMART PROMPT BUILDER UI
+           ========================================== */
+        .smart-prompt-container {
+            background: rgba(255, 255, 255, 0.04);
+            border: 2px solid rgba(99, 102, 241, 0.4);
+            border-radius: 1rem;
+            padding: 1rem;
+            position: relative;
+        }
+
+        .smart-prompt-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.75rem;
+        }
+
+        .smart-prompt-text {
+            font-size: 0.95rem;
+            line-height: 1.7;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 0.75rem;
+        }
+
+        .smart-prompt-editable {
+            min-height: 80px;
+            outline: none;
+            word-wrap: break-word;
+        }
+
+        /* Inline dropdown chip in prompt */
+        .prompt-dropdown-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.6rem;
+            background: rgba(99, 102, 241, 0.3);
+            border: 1px solid rgba(99, 102, 241, 0.5);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .prompt-dropdown-chip:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        .prompt-dropdown-chip::after {
+            content: '▾';
+            font-size: 0.65rem;
+            margin-left: 0.15rem;
+            opacity: 0.7;
+        }
+
+        /* Image reference chip */
+        .prompt-image-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.2rem 0.5rem;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            border-radius: 0.375rem;
+            color: #10b981;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .prompt-image-chip:hover {
+            background: rgba(16, 185, 129, 0.3);
+        }
+
+        /* Prompt action icons row */
+        .smart-prompt-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .smart-action-btn {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 1rem;
+        }
+
+        .smart-action-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        /* Dropdown menu for prompt chips */
+        .prompt-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            left: 0;
+            background: rgba(30, 30, 60, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            min-width: 200px;
+            z-index: 100;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .prompt-dropdown-option {
+            display: block;
+            width: 100%;
+            padding: 0.6rem 0.875rem;
+            background: transparent;
+            border: none;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.875rem;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .prompt-dropdown-option:hover {
+            background: rgba(99, 102, 241, 0.3);
+            color: white;
+        }
+
+        .prompt-dropdown-option.active {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+        }
+
+        .prompt-dropdown-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 0.35rem 0;
+        }
+
+        .prompt-dropdown-section {
+            padding: 0.35rem 0.875rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Scene quick selector */
+        .scene-quick-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .scene-option {
+            padding: 0.4rem 0.8rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 9999px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .scene-option:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .scene-option.active {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border-color: transparent;
+            color: white;
+        }
+
+        .scene-option.all-random {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: #fbbf24;
+        }
+
+        .scene-option.all-random:hover,
+        .scene-option.all-random.active {
+            background: rgba(245, 158, 11, 0.3);
+        }
+
+        .scene-option.custom {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.3);
+            color: #10b981;
+        }
+
+        .scene-option.custom:hover,
+        .scene-option.custom.active {
+            background: rgba(16, 185, 129, 0.3);
+        }
+
+        /* Quantity +/- selector */
+        .quantity-selector {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 0.75rem;
+        }
+
+        .quantity-control {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 1.25rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quantity-control:hover:not(:disabled) {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        .quantity-control:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .quantity-value {
+            min-width: 40px;
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        /* Enhanced Generate Button */
+        .generate-btn-enhanced {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+            border: none;
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .generate-btn-enhanced:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(59, 130, 246, 0.4);
+        }
+
+        .generate-btn-enhanced:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .generate-btn-sparkle {
+            display: inline-flex;
+            font-size: 1.25rem;
+        }
+
+        /* Selected template indicator */
+        .selected-template-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(236, 72, 153, 0.2) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .selected-template-badge-icon {
+            font-size: 1.1rem;
+        }
+
+        .selected-template-badge-name {
+            flex: 1;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .selected-template-badge-cost {
+            font-size: 0.75rem;
+            color: #fbbf24;
+        }
+
+        .selected-template-badge-remove {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 50%;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .selected-template-badge-remove:hover {
+            background: rgba(239, 68, 68, 0.5);
+            color: white;
+        }
+
         /* Category Filter Pills (for templates) */
         .category-filter-row {
             display: flex;
@@ -1853,6 +2195,8 @@
             // Template state
             selectedTemplateCategory: 'all', // all | photorealism | creative | etc
             selectedTemplate: null,
+            selectedScene: null, // For product photography scene selection
+            sceneMode: null, // 'all' for random, 'custom' for manual input
 
             // Token state
             tokens: {
@@ -2541,6 +2885,86 @@
                 showToast('Prompt enhancement coming soon!', 'info');
             },
 
+            // Clear selected template
+            clearTemplate: function() {
+                state.selectedTemplate = null;
+                state.selectedScene = null;
+                state.sceneMode = null;
+                render();
+            },
+
+            // Increment quantity
+            incrementQuantity: function() {
+                if (state.quantity < 4) {
+                    state.quantity++;
+                    render();
+                }
+            },
+
+            // Decrement quantity
+            decrementQuantity: function() {
+                if (state.quantity > 1) {
+                    state.quantity--;
+                    render();
+                }
+            },
+
+            // Set scene mode (for product photography)
+            setSceneMode: function(mode) {
+                state.sceneMode = mode;
+                if (mode === 'all') {
+                    state.selectedScene = 'Random';
+                } else if (mode === 'custom') {
+                    state.selectedScene = 'Custom';
+                }
+                render();
+            },
+
+            // Select a specific scene
+            selectScene: function(scene) {
+                state.sceneMode = null;
+                state.selectedScene = scene;
+                // Update the prompt to include the scene
+                if (state.selectedTemplate && state.selectedTemplate.id === 'product-studio') {
+                    state.prompt = 'Create a professional product photo with ' + scene + ' background';
+                    var textarea = document.getElementById('prompt-textarea');
+                    if (textarea) textarea.value = state.prompt;
+                }
+                render();
+            },
+
+            // Random prompt generator
+            randomPrompt: function() {
+                var randomPrompts = [
+                    'A majestic dragon soaring over a misty mountain range at sunrise',
+                    'A cozy coffee shop interior with warm lighting and vintage decor',
+                    'An astronaut floating in space with Earth in the background',
+                    'A futuristic cityscape with flying cars and neon lights',
+                    'A serene Japanese garden with cherry blossoms and a koi pond',
+                    'A mystical forest with glowing mushrooms and fireflies',
+                    'A steampunk airship flying through cloudy skies',
+                    'A cute robot watering plants in a sunny greenhouse',
+                    'A vintage car parked on a scenic coastal road at sunset',
+                    'A magical library with floating books and spiral staircases'
+                ];
+                var randomIndex = Math.floor(Math.random() * randomPrompts.length);
+                state.prompt = randomPrompts[randomIndex];
+                var textarea = document.getElementById('prompt-textarea');
+                if (textarea) textarea.value = state.prompt;
+                render();
+            },
+
+            // Clear prompt
+            clearPrompt: function() {
+                state.prompt = '';
+                state.selectedTemplate = null;
+                state.selectedScene = null;
+                state.sceneMode = null;
+                var textarea = document.getElementById('prompt-textarea');
+                if (textarea) textarea.value = '';
+                render();
+            },
+
             // Generate Image using Gemini/Imagen API
             generateImage: function() {
                 if (!state.prompt.trim()) {
@@ -2937,39 +3361,67 @@
             html += '</div>';
             html += '</div>';
 
-            // Prompt Section
+            // Smart Prompt Builder Section
             html += '<div class="sidebar-section" style="flex: 1;">';
-            html += '<div class="sidebar-section-header">';
-            html += '<span class="sidebar-section-title">Prompt</span>';
-            html += '</div>';
-            html += '<div class="prompt-container">';
-            html += '<textarea id="prompt-textarea" class="prompt-textarea" placeholder="Describe what you want to create..." oninput="app.updatePrompt(this.value)">' + utils.escapeHtml(state.prompt) + '</textarea>';
-            html += '<div class="prompt-actions">';
-            html += '<div style="display: flex; gap: 0.35rem;">';
-            html += '<button class="prompt-action-btn" onclick="app.enhancePrompt()" title="Enhance with AI">✨</button>';
-            html += '<button class="prompt-action-btn" title="Random prompt">🎲</button>';
-            html += '<button class="prompt-action-btn" title="Clear">🗑️</button>';
-            html += '</div>';
-            html += '<span class="prompt-char-count">' + state.prompt.length + '/2000</span>';
-            html += '</div>';
-            html += '</div>';
-            html += '</div>';
 
-            // Settings Row
-            html += '<div class="sidebar-section">';
-            html += '<div class="settings-row">';
-
-            // Quantity
-            html += '<div class="settings-group">';
-            html += '<label class="settings-label">Quantity</label>';
-            html += '<div class="quantity-btns">';
-            for (var q = 1; q <= 4; q++) {
-                var isActive = state.quantity === q;
-                html += '<button class="quantity-btn' + (isActive ? ' active' : '') + '" onclick="app.setQuantity(' + q + ')">' + q + '</button>';
+            // Selected Template Badge (if any)
+            if (state.selectedTemplate) {
+                html += '<div class="selected-template-badge">';
+                html += '<span class="selected-template-badge-icon">✨</span>';
+                html += '<span class="selected-template-badge-name">' + utils.escapeHtml(state.selectedTemplate.name) + '</span>';
+                html += '<span class="selected-template-badge-cost">🪙 ' + (state.selectedTemplate.tokenCost || 2) + '</span>';
+                html += '<button class="selected-template-badge-remove" onclick="app.clearTemplate()" title="Remove template">✕</button>';
+                html += '</div>';
             }
+
+            // Smart Prompt Container
+            html += '<div class="smart-prompt-container">';
+            html += '<div class="smart-prompt-label">PROMPT</div>';
+
+            // Editable prompt area with textarea
+            html += '<textarea id="prompt-textarea" class="prompt-textarea smart-prompt-editable" placeholder="Describe what you want to create... or select a template below" oninput="app.updatePrompt(this.value)">' + utils.escapeHtml(state.prompt) + '</textarea>';
+
+            // Scene Quick Selector (for product photography template)
+            if (state.selectedTemplate && state.selectedTemplate.id === 'product-studio') {
+                html += '<div class="scene-quick-selector">';
+                var scenes = ['Studio gradient', 'Street display', 'Floating', 'Lifestyle', 'Nature'];
+                var selectedScene = state.selectedScene || 'Studio gradient';
+                html += '<button class="scene-option all-random' + (state.sceneMode === 'all' ? ' active' : '') + '" onclick="app.setSceneMode(\'all\')">🔀 All</button>';
+                html += '<button class="scene-option custom' + (state.sceneMode === 'custom' ? ' active' : '') + '" onclick="app.setSceneMode(\'custom\')">✏️ Custom</button>';
+                for (var si = 0; si < scenes.length; si++) {
+                    var scene = scenes[si];
+                    var isSceneActive = selectedScene === scene && state.sceneMode !== 'all' && state.sceneMode !== 'custom';
+                    html += '<button class="scene-option' + (isSceneActive ? ' active' : '') + '" onclick="app.selectScene(\'' + scene + '\')">' + scene + '</button>';
+                }
+                html += '</div>';
+            }
+
+            // Smart Action Buttons
+            html += '<div class="smart-prompt-actions">';
+            html += '<button class="smart-action-btn" onclick="app.enhancePrompt()" title="Enhance with AI">✨</button>';
+            html += '<button class="smart-action-btn" onclick="app.randomPrompt()" title="Random prompt">🎲</button>';
+            html += '<button class="smart-action-btn" onclick="app.clearPrompt()" title="Clear prompt">🗑️</button>';
+            html += '<span style="flex: 1;"></span>';
+            html += '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">' + state.prompt.length + '/2000</span>';
+            html += '</div>';
+
+            html += '</div>'; // smart-prompt-container
+            html += '</div>'; // sidebar-section
+
+            // Settings Section (Quantity, Aspect Ratio, Quality)
+            html += '<div class="sidebar-section">';
+
+            // Quantity with +/- buttons
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<label class="settings-label" style="margin-bottom: 0;">Quantity</label>';
+            html += '<div class="quantity-selector">';
+            html += '<button class="quantity-control" onclick="app.decrementQuantity()"' + (state.quantity <= 1 ? ' disabled' : '') + '>−</button>';
+            html += '<span class="quantity-value">' + state.quantity + '</span>';
+            html += '<button class="quantity-control" onclick="app.incrementQuantity()"' + (state.quantity >= 4 ? ' disabled' : '') + '>+</button>';
             html += '</div>';
             html += '</div>';
 
+            html += '<div class="settings-row">';
             // Aspect Ratio
             html += '<div class="settings-group">';
             html += '<label class="settings-label">Aspect Ratio</label>';
@@ -2983,17 +3435,14 @@
             html += '</select>';
             html += '</div>';
 
-            html += '</div>'; // settings-row
-
-            // Quality Row
-            html += '<div class="settings-row" style="margin-top: 0.75rem;">';
+            // Quality
             html += '<div class="settings-group">';
             html += '<label class="settings-label">Quality</label>';
             html += '<select class="settings-select" onchange="app.setQuality(this.value)">';
             var qualities = [
-                { key: 'basic', name: 'Basic (1 token)', cost: 1 },
-                { key: 'hd', name: 'HD (2 tokens)', cost: 2 },
-                { key: 'ultra', name: 'Ultra (4 tokens)', cost: 4 }
+                { key: 'basic', name: 'Basic (1🪙)', cost: 1 },
+                { key: 'hd', name: 'HD (2🪙)', cost: 2 },
+                { key: 'ultra', name: 'Ultra (4🪙)', cost: 4 }
             ];
             for (var qi = 0; qi < qualities.length; qi++) {
                 var qual = qualities[qi];
@@ -3002,30 +3451,33 @@
             }
             html += '</select>';
             html += '</div>';
-            html += '</div>';
+            html += '</div>'; // settings-row
 
             html += '</div>'; // sidebar-section
 
-            // Generate Button Section
+            // Enhanced Generate Button Section
             html += '<div class="generate-section">';
             var cost = app.calculateCost();
-            var canGenerate = state.tokens.balance >= cost && !state.generating;
-            html += '<button class="generate-btn" onclick="app.generateImage()"' + (canGenerate ? '' : ' disabled') + '>';
+            var canGenerate = state.prompt.trim().length > 0 && state.tokens.balance >= cost && !state.generating;
+
+            html += '<button class="generate-btn-enhanced" onclick="app.generateImage()"' + (canGenerate ? '' : ' disabled') + '>';
             if (state.generating) {
                 html += '<span class="animate-spin">⏳</span>';
                 html += '<span>Generating... ' + state.generationProgress + '%</span>';
             } else {
+                html += '<span class="generate-btn-sparkle">✨</span>';
                 html += '<span>Generate</span>';
-                html += '<span class="token-cost">🪙 ' + cost + '</span>';
             }
             html += '</button>';
 
-            // Token Balance Display
-            html += '<div class="token-balance-display">';
-            html += '<span>Balance:</span>';
-            html += '<span class="balance">🪙 ' + state.tokens.balance + '</span>';
+            // Token Balance & Cost Display
+            html += '<div class="token-balance-display" style="margin-top: 0.75rem;">';
+            html += '<div style="display: flex; justify-content: space-between; align-items: center;">';
+            html += '<span style="color: rgba(255,255,255,0.6);">Cost: <strong style="color: #fbbf24;">🪙 ' + cost + '</strong></span>';
+            html += '<span style="color: rgba(255,255,255,0.6);">Balance: <strong style="color: white;">🪙 ' + state.tokens.balance + '</strong></span>';
+            html += '</div>';
             if (state.tokens.rollover > 0) {
-                html += '<span class="rollover">(+' + state.tokens.rollover + ' rollover)</span>';
+                html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.4); text-align: right; margin-top: 0.25rem;">+' + state.tokens.rollover + ' rollover available</div>';
             }
             html += '</div>';
 

@@ -1,14 +1,13 @@
 <!-- ================================================================
-     YOUTUBE VIDEO OPTIMIZER - ADMIN PLAN MANAGEMENT
+     YOUTUBE VIDEO OPTIMIZER - ADMIN DASHBOARD
      ================================================================
 
-     Purpose: Admin-only page to manage subscription plan limits
+     Purpose: Admin-only dashboard for managing the platform
 
-     Features:
-     - View all subscription plans
-     - Edit daily limits for each tool per plan
-     - Sync updated limits to existing users
-     - Real-time feedback on changes
+     Tabs:
+     - Plans: Manage subscription plan limits
+     - API Tokens: Manage API keys and usage
+     - Prompts Management: CRUD for prompt templates
 
      Access: Admin users only
 
@@ -21,7 +20,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>Plan Management - Admin Panel</title>
+    <title>Admin Dashboard - YouTube Video Optimizer</title>
 
     <!-- External Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -50,12 +49,12 @@
             font-size: 16px;
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
+            color: white;
         }
 
         #app-root {
             width: 100%;
             min-height: 100vh;
-            padding: 2rem;
         }
 
         @keyframes fadeIn {
@@ -79,6 +78,124 @@
             height: 24px;
             animation: spin 0.6s linear infinite;
             display: inline-block;
+        }
+
+        /* Main Layout */
+        .admin-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        .admin-header {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header-title {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-subtitle {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.95rem;
+        }
+
+        /* Main Tabs */
+        .main-tabs {
+            display: flex;
+            gap: 0.25rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.75rem;
+            padding: 0.35rem;
+            width: fit-content;
+        }
+
+        .main-tab {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .main-tab:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .main-tab.active {
+            background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+            color: #1a1a2e;
+        }
+
+        .main-tab-icon {
+            font-size: 1.1rem;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Cards */
+        .card {
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 1.25rem;
+            padding: 1.75rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(255, 215, 0, 0.3);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
         /* Plan Cards */
@@ -129,6 +246,45 @@
             -moz-appearance: textfield;
         }
 
+        .textarea-field {
+            width: 100%;
+            min-height: 120px;
+            padding: 0.875rem 1rem;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.625rem;
+            color: white;
+            font-size: 0.9rem;
+            font-family: inherit;
+            line-height: 1.5;
+            resize: vertical;
+            transition: all 0.2s ease;
+        }
+
+        .textarea-field:focus {
+            outline: none;
+            border-color: #ffd700;
+            background: rgba(255, 215, 0, 0.06);
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
         /* Buttons */
         .btn-primary {
             padding: 0.75rem 1.5rem;
@@ -140,6 +296,9 @@
             cursor: pointer;
             transition: all 0.2s ease;
             box-shadow: 0 4px 12px rgba(255, 215, 0, 0.25);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
         .btn-primary:hover:not(:disabled) {
@@ -162,6 +321,9 @@
             border: 1.5px solid rgba(255, 255, 255, 0.2);
             cursor: pointer;
             transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
         .btn-secondary:hover:not(:disabled) {
@@ -174,7 +336,7 @@
             cursor: not-allowed;
         }
 
-        .btn-sync {
+        .btn-success {
             padding: 0.625rem 1.25rem;
             background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
             color: white;
@@ -186,14 +348,49 @@
             transition: all 0.2s ease;
         }
 
-        .btn-sync:hover:not(:disabled) {
+        .btn-success:hover:not(:disabled) {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
         }
 
-        .btn-sync:disabled {
+        .btn-success:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+        }
+
+        .btn-danger {
+            padding: 0.5rem 1rem;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            font-weight: 600;
+            font-size: 0.8rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-icon:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
         }
 
         /* Toast Notifications */
@@ -216,6 +413,11 @@
 
         .toast-error {
             background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .toast-info {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
             color: white;
         }
 
@@ -274,15 +476,309 @@
             border: 1.5px solid rgba(255, 255, 255, 0.15);
             border-radius: 1.25rem;
             padding: 2rem;
-            max-width: 450px;
+            max-width: 600px;
             width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 0.5rem;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Prompt Template Table */
+        .prompt-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .prompt-table th {
+            text-align: left;
+            padding: 0.875rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .prompt-table td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.9rem;
+        }
+
+        .prompt-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .prompt-preview {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.8rem;
+        }
+
+        .category-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.75rem;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #a78bfa;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .status-badge.inactive {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        /* API Token Cards */
+        .api-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+
+        .api-card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .api-icon {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(236, 72, 153, 0.2) 100%);
+            border-radius: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .api-info h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.25rem;
+        }
+
+        .api-info p {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .api-key-display {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .api-key-value {
+            flex: 1;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .api-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .api-stat {
             text-align: center;
         }
 
+        .api-stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .api-stat-label {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Category Filter Pills */
+        .category-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .category-filter {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 9999px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .category-filter:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .category-filter.active {
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            border-color: transparent;
+            color: white;
+        }
+
+        /* Search Box */
+        .search-box {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.875rem 1rem 0.875rem 3rem;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 0.95rem;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #ffd700;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Grid Layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
         /* Responsive */
+        @media (max-width: 1200px) {
+            .grid-4 {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            .grid-3 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .grid-4 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
         @media (max-width: 768px) {
-            #app-root {
+            .admin-container {
                 padding: 1rem;
+            }
+
+            .main-tabs {
+                width: 100%;
+                overflow-x: auto;
+                flex-wrap: nowrap;
+            }
+
+            .main-tab {
+                flex: 0 0 auto;
+                padding: 0.6rem 1rem;
+                font-size: 0.85rem;
             }
 
             .tool-row {
@@ -293,6 +789,103 @@
                 width: 100%;
                 margin-bottom: 0.5rem;
             }
+
+            .grid-3, .grid-4 {
+                grid-template-columns: 1fr;
+            }
+
+            .api-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .prompt-table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+
+        /* Select dropdown */
+        .select-field {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.625rem;
+            color: white;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        .select-field:focus {
+            outline: none;
+            border-color: #ffd700;
+        }
+
+        .select-field option {
+            background: #1a1a2e;
+            color: white;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .info-box p {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin: 0;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 1rem;
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state p {
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Action Buttons Row */
+        .actions-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .actions-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .actions-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
     </style>
 </head>
@@ -315,18 +908,53 @@
         const functions = firebase.functions();
         const db = firebase.firestore();
 
+        // Prompt Categories Configuration
+        const promptCategoriesConfig = [
+            { key: 'photorealism', name: 'Photorealism & Aesthetics', icon: '📸' },
+            { key: 'creative', name: 'Creative Experiments', icon: '🎨' },
+            { key: 'education', name: 'Education & Knowledge', icon: '📚' },
+            { key: 'ecommerce', name: 'E-commerce & Virtual Studio', icon: '🛒' },
+            { key: 'workplace', name: 'Workplace & Productivity', icon: '💼' },
+            { key: 'photoediting', name: 'Photo Editing & Restoration', icon: '✨' },
+            { key: 'interior', name: 'Interior Design', icon: '🏠' },
+            { key: 'social', name: 'Social Media & Marketing', icon: '📱' },
+            { key: 'daily', name: 'Daily Life & Translation', icon: '🌍' },
+            { key: 'avatars', name: 'Social Networking & Avatars', icon: '👤' },
+            { key: 'new', name: 'New Additions', icon: '🆕' }
+        ];
+
         // Application State
         const state = {
             currentView: 'loading',
+            activeTab: 'plans', // plans | api | prompts
             user: null,
             isAdmin: false,
+
+            // Plans state
             plans: [],
             editedPlans: {},
             loading: false,
             saving: {},
             syncing: {},
+
+            // API Tokens state
+            apiKeys: {
+                gemini: { key: '***hidden***', status: 'active', usage: 1250, limit: 10000 },
+                openai: { key: '***hidden***', status: 'active', usage: 890, limit: 5000 },
+                youtube: { key: '***hidden***', status: 'active', usage: 2340, limit: 50000 }
+            },
+
+            // Prompts state
+            prompts: [],
+            promptsLoading: false,
+            promptFilter: 'all',
+            promptSearch: '',
+            editingPrompt: null,
+
+            // UI state
             toast: null,
-            confirmModal: null
+            confirmModal: null,
+            promptModal: null
         };
 
         // Tool configuration with icons and colors
@@ -347,12 +975,17 @@
         }
 
         function showToast(message, type) {
-            state.toast = { message: message, type: type };
+            state.toast = { message: message, type: type || 'success' };
             render();
             setTimeout(function() {
                 state.toast = null;
                 render();
             }, 4000);
+        }
+
+        function truncateText(text, maxLength) {
+            if (!text || text.length <= maxLength) return text;
+            return text.substring(0, maxLength) + '...';
         }
 
         // Main Render
@@ -363,21 +996,24 @@
             // Toast notification
             if (state.toast) {
                 html += '<div class="toast toast-' + state.toast.type + '">';
-                html += (state.toast.type === 'success' ? '✓ ' : '⚠ ') + escapeHtml(state.toast.message);
+                html += (state.toast.type === 'success' ? '✓ ' : state.toast.type === 'error' ? '⚠ ' : 'ℹ ') + escapeHtml(state.toast.message);
                 html += '</div>';
             }
 
-            // Confirm modal
+            // Modals
             if (state.confirmModal) {
                 html += renderConfirmModal();
+            }
+            if (state.promptModal) {
+                html += renderPromptModal();
             }
 
             if (state.currentView === 'loading') {
                 html += renderLoading();
             } else if (state.currentView === 'unauthorized') {
                 html += renderUnauthorized();
-            } else if (state.currentView === 'plans') {
-                html += renderPlansView();
+            } else if (state.currentView === 'dashboard') {
+                html += renderDashboard();
             }
 
             root.innerHTML = html;
@@ -387,13 +1023,13 @@
             return '<div class="flex items-center justify-center min-h-screen">' +
                 '<div class="text-center">' +
                 '<div class="spinner mx-auto mb-4"></div>' +
-                '<p class="text-white/70">Loading admin panel...</p>' +
+                '<p class="text-white/70">Loading admin dashboard...</p>' +
                 '</div></div>';
         }
 
         function renderUnauthorized() {
             return '<div class="flex items-center justify-center min-h-screen">' +
-                '<div class="text-center plan-card max-w-md">' +
+                '<div class="text-center card max-w-md">' +
                 '<div class="text-6xl mb-4">🔒</div>' +
                 '<h2 class="text-2xl font-bold text-white mb-2">Access Denied</h2>' +
                 '<p class="text-white/60 mb-6">You need admin privileges to access this page.</p>' +
@@ -404,7 +1040,7 @@
         function renderConfirmModal() {
             var modal = state.confirmModal;
             return '<div class="modal-overlay" onclick="closeConfirmModal()">' +
-                '<div class="modal-content fade-in" onclick="event.stopPropagation()">' +
+                '<div class="modal-content fade-in" onclick="event.stopPropagation()" style="max-width: 450px; text-align: center;">' +
                 '<div class="text-5xl mb-4">' + modal.icon + '</div>' +
                 '<h3 class="text-xl font-bold text-white mb-2">' + escapeHtml(modal.title) + '</h3>' +
                 '<p class="text-white/70 mb-6">' + escapeHtml(modal.message) + '</p>' +
@@ -414,25 +1050,143 @@
                 '</div></div></div>';
         }
 
-        function renderPlansView() {
-            var html = '<div class="max-w-7xl mx-auto fade-in">';
+        function renderPromptModal() {
+            var prompt = state.editingPrompt || {};
+            var isNew = !prompt.id;
+            var title = isNew ? 'Add New Prompt Template' : 'Edit Prompt Template';
+
+            var html = '<div class="modal-overlay" onclick="closePromptModal()">';
+            html += '<div class="modal-content fade-in" onclick="event.stopPropagation()">';
 
             // Header
-            html += '<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">';
+            html += '<div class="modal-header">';
+            html += '<h3 class="modal-title">' + title + '</h3>';
+            html += '<button onclick="closePromptModal()" class="modal-close">✕</button>';
+            html += '</div>';
+
+            // Form
+            html += '<form onsubmit="savePrompt(event)">';
+
+            // Name & Category Row
+            html += '<div class="form-row">';
+            html += '<div class="form-group">';
+            html += '<label class="form-label">Template Name *</label>';
+            html += '<input type="text" id="prompt-name" class="input-field" value="' + escapeHtml(prompt.name || '') + '" placeholder="e.g., Business Portrait" required />';
+            html += '</div>';
+            html += '<div class="form-group">';
+            html += '<label class="form-label">Category *</label>';
+            html += '<select id="prompt-category" class="select-field" required>';
+            for (var i = 0; i < promptCategoriesConfig.length; i++) {
+                var cat = promptCategoriesConfig[i];
+                var selected = prompt.category === cat.key ? ' selected' : '';
+                html += '<option value="' + cat.key + '"' + selected + '>' + cat.icon + ' ' + cat.name + '</option>';
+            }
+            html += '</select>';
+            html += '</div>';
+            html += '</div>';
+
+            // Description
+            html += '<div class="form-group">';
+            html += '<label class="form-label">Short Description *</label>';
+            html += '<input type="text" id="prompt-description" class="input-field" value="' + escapeHtml(prompt.description || '') + '" placeholder="Brief description for users" required />';
+            html += '</div>';
+
+            // User-Facing Prompt (what users see)
+            html += '<div class="form-group">';
+            html += '<label class="form-label">User-Facing Prompt</label>';
+            html += '<textarea id="prompt-user" class="textarea-field" placeholder="Simple prompt users see, e.g., Create a {{subject}} in {{style}} style...">' + escapeHtml(prompt.userPrompt || '') + '</textarea>';
+            html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.35rem;">Use {{variable}} for user inputs. Leave empty to use simplified version.</p>';
+            html += '</div>';
+
+            // Professional Prompt (backend)
+            html += '<div class="form-group">';
+            html += '<label class="form-label">Professional Prompt (Backend) *</label>';
+            html += '<textarea id="prompt-professional" class="textarea-field" style="min-height: 200px;" placeholder="Full professional prompt sent to the API..." required>' + escapeHtml(prompt.professionalPrompt || '') + '</textarea>';
+            html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.35rem;">This detailed prompt is sent to Gemini API. Include all technical details, lighting, camera settings, etc.</p>';
+            html += '</div>';
+
+            // Token Cost & Status Row
+            html += '<div class="form-row">';
+            html += '<div class="form-group">';
+            html += '<label class="form-label">Token Cost</label>';
+            html += '<input type="number" id="prompt-cost" class="input-field" value="' + (prompt.tokenCost || 2) + '" min="1" max="10" />';
+            html += '</div>';
+            html += '<div class="form-group">';
+            html += '<label class="form-label">Status</label>';
+            html += '<select id="prompt-status" class="select-field">';
+            html += '<option value="active"' + (prompt.isActive !== false ? ' selected' : '') + '>Active</option>';
+            html += '<option value="inactive"' + (prompt.isActive === false ? ' selected' : '') + '>Inactive</option>';
+            html += '</select>';
+            html += '</div>';
+            html += '</div>';
+
+            // Actions
+            html += '<div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">';
+            html += '<button type="button" onclick="closePromptModal()" class="btn-secondary">Cancel</button>';
+            html += '<button type="submit" class="btn-primary">' + (isNew ? '➕ Create Template' : '💾 Save Changes') + '</button>';
+            html += '</div>';
+
+            html += '</form>';
+            html += '</div></div>';
+            return html;
+        }
+
+        // Dashboard View
+        function renderDashboard() {
+            var html = '<div class="admin-container fade-in">';
+
+            // Header
+            html += '<div class="admin-header">';
+            html += '<div class="header-top">';
             html += '<div>';
-            html += '<h1 class="text-3xl font-bold text-white mb-1">Plan Management</h1>';
-            html += '<p class="text-white/60">Configure usage limits for each subscription plan</p>';
+            html += '<h1 class="header-title">Admin Dashboard</h1>';
+            html += '<p class="header-subtitle">Manage plans, API tokens, and prompt templates</p>';
             html += '</div>';
             html += '<div class="flex gap-3">';
-            html += '<button onclick="loadPlans()" class="btn-secondary" ' + (state.loading ? 'disabled' : '') + '>';
-            html += state.loading ? '<span class="spinner mr-2"></span> Loading...' : '↻ Refresh';
+            html += '<button onclick="refreshData()" class="btn-secondary"' + (state.loading ? ' disabled' : '') + '>';
+            html += state.loading ? '<span class="spinner" style="width:16px;height:16px"></span>' : '↻ Refresh';
             html += '</button>';
             html += '<button onclick="goToDashboard()" class="btn-secondary">← Dashboard</button>';
             html += '</div>';
             html += '</div>';
 
-            // Plans grid
-            html += '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">';
+            // Main Tabs
+            html += '<div class="main-tabs">';
+            html += '<button class="main-tab' + (state.activeTab === 'plans' ? ' active' : '') + '" onclick="setActiveTab(\'plans\')">';
+            html += '<span class="main-tab-icon">📋</span>';
+            html += '<span>Plans</span>';
+            html += '</button>';
+            html += '<button class="main-tab' + (state.activeTab === 'api' ? ' active' : '') + '" onclick="setActiveTab(\'api\')">';
+            html += '<span class="main-tab-icon">🔑</span>';
+            html += '<span>API Tokens</span>';
+            html += '</button>';
+            html += '<button class="main-tab' + (state.activeTab === 'prompts' ? ' active' : '') + '" onclick="setActiveTab(\'prompts\')">';
+            html += '<span class="main-tab-icon">✨</span>';
+            html += '<span>Prompts Management</span>';
+            html += '</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Tab Content
+            html += '<div class="tab-content' + (state.activeTab === 'plans' ? ' active' : '') + '">';
+            html += renderPlansTab();
+            html += '</div>';
+
+            html += '<div class="tab-content' + (state.activeTab === 'api' ? ' active' : '') + '">';
+            html += renderApiTab();
+            html += '</div>';
+
+            html += '<div class="tab-content' + (state.activeTab === 'prompts' ? ' active' : '') + '">';
+            html += renderPromptsTab();
+            html += '</div>';
+
+            html += '</div>';
+            return html;
+        }
+
+        // Plans Tab
+        function renderPlansTab() {
+            var html = '<div class="grid-2">';
 
             for (var i = 0; i < state.plans.length; i++) {
                 var plan = state.plans[i];
@@ -442,17 +1196,16 @@
             html += '</div>';
 
             // Info section
-            html += '<div class="mt-8 p-6 plan-card">';
-            html += '<h3 class="text-lg font-bold text-white mb-3">💡 How It Works</h3>';
-            html += '<ul class="text-white/70 space-y-2 text-sm">';
-            html += '<li>• <strong class="text-white">Daily Limit:</strong> Maximum uses per day for each tool (0-1000)</li>';
-            html += '<li>• <strong class="text-white">Save Changes:</strong> Updates the plan configuration in the database</li>';
-            html += '<li>• <strong class="text-white">Sync Users:</strong> Applies new limits to all existing users on that plan</li>';
-            html += '<li>• <strong class="text-white">New Users:</strong> Will automatically get the updated limits when they sign up</li>';
+            html += '<div class="card" style="margin-top: 1.5rem;">';
+            html += '<h3 class="card-title">💡 How It Works</h3>';
+            html += '<ul style="color: rgba(255,255,255,0.7); font-size: 0.9rem; list-style: disc; padding-left: 1.5rem; margin-top: 0.75rem;">';
+            html += '<li style="margin-bottom: 0.5rem;"><strong style="color:white">Daily Limit:</strong> Maximum uses per day for each tool (0-1000)</li>';
+            html += '<li style="margin-bottom: 0.5rem;"><strong style="color:white">Save Changes:</strong> Updates the plan configuration in the database</li>';
+            html += '<li style="margin-bottom: 0.5rem;"><strong style="color:white">Sync Users:</strong> Applies new limits to all existing users on that plan</li>';
+            html += '<li><strong style="color:white">New Users:</strong> Will automatically get the updated limits when they sign up</li>';
             html += '</ul>';
             html += '</div>';
 
-            html += '</div>';
             return html;
         }
 
@@ -465,23 +1218,26 @@
             var html = '<div class="plan-card ' + planId + '">';
 
             // Header
-            html += '<div class="flex justify-between items-center mb-5">';
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">';
             html += '<div>';
-            html += '<h2 class="text-xl font-bold text-white">' + escapeHtml(plan.name || planId) + '</h2>';
-            html += '<p class="text-white/50 text-sm">$' + (plan.price || 0).toFixed(2) + '/week</p>';
+            html += '<h2 style="font-size: 1.25rem; font-weight: 700; color: white;">' + escapeHtml(plan.name || planId) + '</h2>';
+            html += '<p style="color: rgba(255,255,255,0.5); font-size: 0.85rem;">$' + (plan.price || 0).toFixed(2) + '/week</p>';
             html += '</div>';
             if (plan.badge) {
-                html += '<span class="px-3 py-1 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded-full">' + escapeHtml(plan.badge) + '</span>';
+                html += '<span style="padding: 0.35rem 0.75rem; background: rgba(255,215,0,0.2); color: #ffd700; font-size: 0.7rem; font-weight: 700; border-radius: 9999px;">' + escapeHtml(plan.badge) + '</span>';
             }
             html += '</div>';
 
             // Tools
-            html += '<div class="mb-5">';
+            html += '<div style="margin-bottom: 1.25rem;">';
             var tools = Object.keys(toolConfig);
             for (var i = 0; i < tools.length; i++) {
                 var tool = tools[i];
                 var config = toolConfig[tool];
-                var limit = getEditedLimit(planId, tool) || plan.limits?.[tool]?.dailyLimit || 0;
+                var limit = getEditedLimit(planId, tool);
+                if (limit === null) {
+                    limit = plan.limits && plan.limits[tool] ? plan.limits[tool].dailyLimit : 0;
+                }
 
                 html += '<div class="tool-row">';
                 html += '<div class="tool-icon ' + config.bg + '">' + config.icon + '</div>';
@@ -491,31 +1247,31 @@
                 html += 'min="0" max="1000" ';
                 html += 'onchange="updateLimit(\'' + planId + '\', \'' + tool + '\', this.value)" ';
                 html += 'placeholder="0" />';
-                html += '<span class="text-white/40 text-sm">/day</span>';
+                html += '<span style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">/day</span>';
                 html += '</div>';
             }
             html += '</div>';
 
             // Actions
-            html += '<div class="flex flex-wrap gap-3">';
+            html += '<div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">';
 
             // Save button
-            html += '<button onclick="savePlanLimits(\'' + planId + '\')" class="btn-primary flex-1" ';
+            html += '<button onclick="savePlanLimits(\'' + planId + '\')" class="btn-primary" style="flex: 1;" ';
             html += (isSaving || !hasChanges) ? 'disabled' : '';
             html += '>';
             if (isSaving) {
-                html += '<span class="spinner mr-2" style="width:16px;height:16px;border-width:2px"></span> Saving...';
+                html += '<span class="spinner" style="width:16px;height:16px;border-width:2px"></span> Saving...';
             } else {
                 html += '💾 Save Changes';
             }
             html += '</button>';
 
             // Sync button
-            html += '<button onclick="confirmSyncUsers(\'' + planId + '\')" class="btn-sync" ';
+            html += '<button onclick="confirmSyncUsers(\'' + planId + '\')" class="btn-success" ';
             html += isSyncing ? 'disabled' : '';
             html += '>';
             if (isSyncing) {
-                html += '<span class="spinner mr-2" style="width:14px;height:14px;border-width:2px"></span> Syncing...';
+                html += '<span class="spinner" style="width:14px;height:14px;border-width:2px"></span> Syncing...';
             } else {
                 html += '🔄 Sync Users';
             }
@@ -527,7 +1283,261 @@
             return html;
         }
 
-        // Data Functions
+        // API Tokens Tab
+        function renderApiTab() {
+            var html = '';
+
+            // Info box
+            html += '<div class="info-box">';
+            html += '<p>🔐 <strong>API keys are managed via Firebase Functions Config.</strong> To update, use: <code style="background: rgba(0,0,0,0.3); padding: 0.15rem 0.4rem; border-radius: 0.25rem;">firebase functions:config:set gemini.key="YOUR_KEY"</code></p>';
+            html += '</div>';
+
+            html += '<div class="grid-3">';
+
+            // Gemini API Card
+            html += '<div class="api-card">';
+            html += '<div class="api-card-header">';
+            html += '<div class="api-icon">🤖</div>';
+            html += '<div class="api-info">';
+            html += '<h3>Gemini / Imagen API</h3>';
+            html += '<p>Image generation</p>';
+            html += '</div>';
+            html += '</div>';
+            html += '<div class="api-key-display">';
+            html += '<span class="api-key-value">gemini.key = ••••••••••••</span>';
+            html += '<button class="btn-icon" title="Copy command">📋</button>';
+            html += '</div>';
+            html += '<div class="api-stats">';
+            html += '<div class="api-stat">';
+            html += '<div class="api-stat-value">1,250</div>';
+            html += '<div class="api-stat-label">This Month</div>';
+            html += '</div>';
+            html += '<div class="api-stat">';
+            html += '<div class="api-stat-value">10,000</div>';
+            html += '<div class="api-stat-label">Monthly Limit</div>';
+            html += '</div>';
+            html += '<div class="api-stat">';
+            html += '<div class="api-stat-value" style="color: #22c55e;">Active</div>';
+            html += '<div class="api-stat-label">Status</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // OpenAI API Card
+            html += '<div class="api-card">';
+            html += '<div class="api-card-header">';
+            html += '<div class="api-icon">🧠</div>';
+            html += '<div class="api-info">';
+            html += '<h3>OpenAI API</h3>';
+            html += '<p>Text optimization</p>';
+            html += '</div>';
+            html += '</div>';
+            html += '<div class="api-key-display">';
+            html += '<span class="api-key-value">openai.key = ••••••••••••</span>';
+            html += '<button class="btn-icon" title="Copy command">📋</button>';
+            html += '</div>';
+            html += '<div class="api-stats">';
+            html += '<div class="api-stat">';
+            html += '<div class="api-stat-value">890</div>';
+            html += '<div class="api-stat-label">This Month</div>';
+            html += '</div>';
+            html += '<div class="api-stat">';
+            html += '<div class="api-stat-value">5,000</div>';
+            html += '<div class="api-stat-label">Monthly Limit</div>';
+            html += '</div>';
+            html += '<div class="api-stat">';
+            html += '<div class="api-stat-value" style="color: #22c55e;">Active</div>';
+            html += '<div class="api-stat-label">Status</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // YouTube API Card
+            html += '<div class="api-card">';
+            html += '<div class="api-card-header">';
+            html += '<div class="api-icon">▶️</div>';
+            html += '<div class="api-info">';
+            html += '<h3>YouTube Data API</h3>';
+            html += '<p>Video & channel data</p>';
+            html += '</div>';
+            html += '</div>';
+            html += '<div class="api-key-display">';
+            html += '<span class="api-key-value">youtube.key = ••••••••••••</span>';
+            html += '<button class="btn-icon" title="Copy command">📋</button>';
+            html += '</div>';
+            html += '<div class="api-stats">';
+            html += '<div class="api-stat">';
+            html += '<div class="api-stat-value">2,340</div>';
+            html += '<div class="api-stat-label">This Month</div>';
+            html += '</div>';
+            html += '<div class="api-stat">';
+            html += '<div class="api-stat-value">50,000</div>';
+            html += '<div class="api-stat-label">Monthly Limit</div>';
+            html += '</div>';
+            html += '<div class="api-stat">';
+            html += '<div class="api-stat-value" style="color: #22c55e;">Active</div>';
+            html += '<div class="api-stat-label">Status</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>';
+
+            // Usage Info
+            html += '<div class="card" style="margin-top: 1.5rem;">';
+            html += '<h3 class="card-title">📊 API Usage Notes</h3>';
+            html += '<ul style="color: rgba(255,255,255,0.7); font-size: 0.9rem; list-style: disc; padding-left: 1.5rem; margin-top: 0.75rem;">';
+            html += '<li style="margin-bottom: 0.5rem;">Usage statistics update in real-time from Cloud Functions logs</li>';
+            html += '<li style="margin-bottom: 0.5rem;">Monthly limits reset on the 1st of each month</li>';
+            html += '<li style="margin-bottom: 0.5rem;">You can monitor detailed usage in the Firebase Console</li>';
+            html += '<li>Rate limiting is enforced per-user to prevent abuse</li>';
+            html += '</ul>';
+            html += '</div>';
+
+            return html;
+        }
+
+        // Prompts Management Tab
+        function renderPromptsTab() {
+            var html = '';
+
+            // Actions Row
+            html += '<div class="actions-row">';
+            html += '<div class="actions-left">';
+            html += '<button onclick="openPromptModal()" class="btn-primary">➕ Add New Prompt</button>';
+            html += '<button onclick="seedPrompts()" class="btn-secondary" title="Import professional prompts from template">📥 Seed Defaults</button>';
+            html += '</div>';
+            html += '<div class="actions-right">';
+            html += '<span style="color: rgba(255,255,255,0.5); font-size: 0.85rem;">' + state.prompts.length + ' templates</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Search Box
+            html += '<div class="search-box">';
+            html += '<span class="search-icon">🔍</span>';
+            html += '<input type="text" class="search-input" placeholder="Search prompts..." value="' + escapeHtml(state.promptSearch) + '" oninput="searchPrompts(this.value)" />';
+            html += '</div>';
+
+            // Category Filters
+            html += '<div class="category-filters">';
+            html += '<button class="category-filter' + (state.promptFilter === 'all' ? ' active' : '') + '" onclick="filterPrompts(\'all\')">All Categories</button>';
+            for (var i = 0; i < promptCategoriesConfig.length; i++) {
+                var cat = promptCategoriesConfig[i];
+                var count = getPromptCountByCategory(cat.key);
+                html += '<button class="category-filter' + (state.promptFilter === cat.key ? ' active' : '') + '" onclick="filterPrompts(\'' + cat.key + '\')">';
+                html += cat.icon + ' ' + cat.name + ' <span style="opacity: 0.6;">(' + count + ')</span>';
+                html += '</button>';
+            }
+            html += '</div>';
+
+            // Prompts Table
+            if (state.promptsLoading) {
+                html += '<div style="text-align: center; padding: 3rem;">';
+                html += '<div class="spinner" style="margin: 0 auto 1rem;"></div>';
+                html += '<p style="color: rgba(255,255,255,0.6);">Loading prompts...</p>';
+                html += '</div>';
+            } else if (getFilteredPrompts().length === 0) {
+                html += '<div class="empty-state">';
+                html += '<div class="empty-state-icon">✨</div>';
+                html += '<h3>No prompts yet</h3>';
+                html += '<p>Create your first prompt template or seed the defaults.</p>';
+                html += '<button onclick="seedPrompts()" class="btn-primary" style="margin-top: 0.5rem;">📥 Seed Default Prompts</button>';
+                html += '</div>';
+            } else {
+                html += '<div class="card" style="padding: 0; overflow: hidden;">';
+                html += '<table class="prompt-table">';
+                html += '<thead>';
+                html += '<tr>';
+                html += '<th style="width: 25%;">Template Name</th>';
+                html += '<th style="width: 15%;">Category</th>';
+                html += '<th style="width: 35%;">Professional Prompt Preview</th>';
+                html += '<th style="width: 8%;">Cost</th>';
+                html += '<th style="width: 8%;">Status</th>';
+                html += '<th style="width: 9%;">Actions</th>';
+                html += '</tr>';
+                html += '</thead>';
+                html += '<tbody>';
+
+                var filteredPrompts = getFilteredPrompts();
+                for (var i = 0; i < filteredPrompts.length; i++) {
+                    var prompt = filteredPrompts[i];
+                    var catConfig = promptCategoriesConfig.find(function(c) { return c.key === prompt.category; });
+
+                    html += '<tr>';
+                    html += '<td>';
+                    html += '<div style="font-weight: 600; color: white;">' + escapeHtml(prompt.name) + '</div>';
+                    html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">' + escapeHtml(prompt.description) + '</div>';
+                    html += '</td>';
+                    html += '<td>';
+                    if (catConfig) {
+                        html += '<span class="category-badge">' + catConfig.icon + ' ' + catConfig.name + '</span>';
+                    }
+                    html += '</td>';
+                    html += '<td class="prompt-preview">' + escapeHtml(truncateText(prompt.professionalPrompt, 80)) + '</td>';
+                    html += '<td style="text-align: center;">🪙 ' + (prompt.tokenCost || 2) + '</td>';
+                    html += '<td>';
+                    html += '<span class="status-badge ' + (prompt.isActive !== false ? 'active' : 'inactive') + '">';
+                    html += prompt.isActive !== false ? '✓ Active' : '✗ Inactive';
+                    html += '</span>';
+                    html += '</td>';
+                    html += '<td>';
+                    html += '<div style="display: flex; gap: 0.35rem;">';
+                    html += '<button class="btn-icon" onclick="editPrompt(\'' + prompt.id + '\')" title="Edit">✏️</button>';
+                    html += '<button class="btn-icon" onclick="confirmDeletePrompt(\'' + prompt.id + '\', \'' + escapeHtml(prompt.name) + '\')" title="Delete" style="color: #ef4444;">🗑️</button>';
+                    html += '</div>';
+                    html += '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody>';
+                html += '</table>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        // Get prompt count by category
+        function getPromptCountByCategory(category) {
+            return state.prompts.filter(function(p) { return p.category === category; }).length;
+        }
+
+        // Get filtered prompts
+        function getFilteredPrompts() {
+            var filtered = state.prompts;
+
+            // Filter by category
+            if (state.promptFilter !== 'all') {
+                filtered = filtered.filter(function(p) { return p.category === state.promptFilter; });
+            }
+
+            // Filter by search
+            if (state.promptSearch) {
+                var search = state.promptSearch.toLowerCase();
+                filtered = filtered.filter(function(p) {
+                    return (p.name && p.name.toLowerCase().indexOf(search) !== -1) ||
+                           (p.description && p.description.toLowerCase().indexOf(search) !== -1) ||
+                           (p.professionalPrompt && p.professionalPrompt.toLowerCase().indexOf(search) !== -1);
+                });
+            }
+
+            return filtered;
+        }
+
+        // Tab Navigation
+        function setActiveTab(tab) {
+            state.activeTab = tab;
+            render();
+
+            // Load data if needed
+            if (tab === 'plans' && state.plans.length === 0) {
+                loadPlans();
+            } else if (tab === 'prompts' && state.prompts.length === 0) {
+                loadPrompts();
+            }
+        }
+
+        // Data Functions - Plans
         function getEditedLimit(planId, tool) {
             if (state.editedPlans[planId] && state.editedPlans[planId][tool] !== undefined) {
                 return state.editedPlans[planId][tool];
@@ -565,16 +1575,15 @@
             var edited = state.editedPlans[planId];
             if (!edited) return;
 
-            // Build limits object with all tools
             var plan = state.plans.find(function(p) { return p.id === planId; });
             var limits = {};
 
             Object.keys(toolConfig).forEach(function(tool) {
                 var newLimit = edited[tool];
-                var currentLimit = plan?.limits?.[tool]?.dailyLimit || 0;
+                var currentLimit = plan && plan.limits && plan.limits[tool] ? plan.limits[tool].dailyLimit : 0;
                 limits[tool] = {
                     dailyLimit: newLimit !== undefined ? newLimit : currentLimit,
-                    cooldownHours: plan?.limits?.[tool]?.cooldownHours || 0
+                    cooldownHours: plan && plan.limits && plan.limits[tool] ? plan.limits[tool].cooldownHours : 0
                 };
             });
 
@@ -588,7 +1597,7 @@
                 .then(function(result) {
                     state.saving[planId] = false;
                     delete state.editedPlans[planId];
-                    loadPlans(); // Reload to get fresh data
+                    loadPlans();
                     showToast('Plan "' + planId + '" limits updated successfully!', 'success');
                 })
                 .catch(function(error) {
@@ -634,6 +1643,157 @@
                 });
         }
 
+        // Data Functions - Prompts
+        function loadPrompts() {
+            state.promptsLoading = true;
+            render();
+
+            db.collection('promptTemplates')
+                .orderBy('category')
+                .orderBy('name')
+                .get()
+                .then(function(snapshot) {
+                    state.prompts = [];
+                    snapshot.forEach(function(doc) {
+                        state.prompts.push({ id: doc.id, ...doc.data() });
+                    });
+                    state.promptsLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading prompts:', error);
+                    state.promptsLoading = false;
+                    showToast('Failed to load prompts', 'error');
+                });
+        }
+
+        function filterPrompts(category) {
+            state.promptFilter = category;
+            render();
+        }
+
+        function searchPrompts(query) {
+            state.promptSearch = query;
+            render();
+        }
+
+        function openPromptModal(prompt) {
+            state.editingPrompt = prompt || {};
+            state.promptModal = true;
+            render();
+        }
+
+        function closePromptModal() {
+            state.editingPrompt = null;
+            state.promptModal = false;
+            render();
+        }
+
+        function editPrompt(promptId) {
+            var prompt = state.prompts.find(function(p) { return p.id === promptId; });
+            if (prompt) {
+                openPromptModal(prompt);
+            }
+        }
+
+        function savePrompt(event) {
+            event.preventDefault();
+
+            var promptData = {
+                name: document.getElementById('prompt-name').value.trim(),
+                category: document.getElementById('prompt-category').value,
+                description: document.getElementById('prompt-description').value.trim(),
+                userPrompt: document.getElementById('prompt-user').value.trim(),
+                professionalPrompt: document.getElementById('prompt-professional').value.trim(),
+                tokenCost: parseInt(document.getElementById('prompt-cost').value) || 2,
+                isActive: document.getElementById('prompt-status').value === 'active',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            var isNew = !state.editingPrompt.id;
+            var docRef;
+
+            if (isNew) {
+                promptData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                docRef = db.collection('promptTemplates').doc();
+            } else {
+                docRef = db.collection('promptTemplates').doc(state.editingPrompt.id);
+            }
+
+            docRef.set(promptData, { merge: true })
+                .then(function() {
+                    closePromptModal();
+                    loadPrompts();
+                    showToast(isNew ? 'Prompt template created!' : 'Prompt template updated!', 'success');
+                })
+                .catch(function(error) {
+                    console.error('Error saving prompt:', error);
+                    showToast('Failed to save prompt', 'error');
+                });
+        }
+
+        function confirmDeletePrompt(promptId, promptName) {
+            state.confirmModal = {
+                icon: '🗑️',
+                title: 'Delete Prompt',
+                message: 'Are you sure you want to delete "' + promptName + '"? This cannot be undone.',
+                confirmText: 'Delete',
+                confirmAction: 'deletePrompt(\'' + promptId + '\')'
+            };
+            render();
+        }
+
+        function deletePrompt(promptId) {
+            closeConfirmModal();
+
+            db.collection('promptTemplates').doc(promptId).delete()
+                .then(function() {
+                    loadPrompts();
+                    showToast('Prompt deleted', 'success');
+                })
+                .catch(function(error) {
+                    console.error('Error deleting prompt:', error);
+                    showToast('Failed to delete prompt', 'error');
+                });
+        }
+
+        // Seed default prompts from template
+        function seedPrompts() {
+            state.confirmModal = {
+                icon: '📥',
+                title: 'Seed Default Prompts',
+                message: 'This will import 31 professional prompt templates. Existing prompts with the same ID will be updated. Continue?',
+                confirmText: 'Import Prompts',
+                confirmAction: 'doSeedPrompts()'
+            };
+            render();
+        }
+
+        function doSeedPrompts() {
+            closeConfirmModal();
+            showToast('Seeding prompts... This may take a moment.', 'info');
+
+            var seedCreativePrompts = functions.httpsCallable('seedCreativePrompts');
+            seedCreativePrompts({})
+                .then(function(result) {
+                    loadPrompts();
+                    showToast('Successfully seeded ' + (result.data.count || 31) + ' prompt templates!', 'success');
+                })
+                .catch(function(error) {
+                    console.error('Error seeding prompts:', error);
+                    showToast('Failed to seed prompts: ' + error.message, 'error');
+                });
+        }
+
+        // Refresh Data
+        function refreshData() {
+            if (state.activeTab === 'plans') {
+                loadPlans();
+            } else if (state.activeTab === 'prompts') {
+                loadPrompts();
+            }
+        }
+
         // Navigation
         function goToDashboard() {
             window.location.href = 'https://ytseo.siteuo.com/video-optimizer';
@@ -650,13 +1810,13 @@
 
                 state.user = user;
 
-                // Check if user is admin
                 db.collection('adminUsers').doc(user.uid).get()
                     .then(function(doc) {
                         if (doc.exists) {
                             state.isAdmin = true;
-                            state.currentView = 'plans';
+                            state.currentView = 'dashboard';
                             loadPlans();
+                            loadPrompts();
                         } else {
                             state.currentView = 'unauthorized';
                             render();
