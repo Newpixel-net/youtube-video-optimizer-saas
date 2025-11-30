@@ -916,6 +916,13 @@
             --aurora-accent: #eab308;
         }
 
+        .aurora-creative {
+            --aurora-primary: #8b5cf6;
+            --aurora-secondary: #a855f7;
+            --aurora-tertiary: #ec4899;
+            --aurora-accent: #d946ef;
+        }
+
         /* Aurora shimmer for subtle movement */
         @keyframes auroraShimmer {
             0% {
@@ -2584,7 +2591,7 @@
                 el.classList.remove('aurora-morning', 'aurora-afternoon', 'aurora-evening', 'aurora-night');
 
                 // Only add time class if element doesn't have a specific theme
-                if (!el.classList.contains('aurora-emerald') && !el.classList.contains('aurora-gold')) {
+                if (!el.classList.contains('aurora-emerald') && !el.classList.contains('aurora-gold') && !el.classList.contains('aurora-creative')) {
                     el.classList.add(timeClass);
                 }
             });
@@ -5388,6 +5395,34 @@
             html += '</a>';
 
             html += '</div>'; // End grid
+
+            // Creative Studio Banner - Full Width
+            html += '<a href="https://ytseo.siteuo.com/creative-studio" class="block mb-8 fade-in">';
+            html += '<div class="living-aurora aurora-creative rounded-2xl shadow-xl p-6 lg:p-8 cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.01] relative overflow-hidden border border-purple-400/30">';
+            // Aurora orbs layer
+            html += '<div class="aurora-orbs">';
+            html += '<div class="aurora-orb aurora-orb-1"></div>';
+            html += '<div class="aurora-orb aurora-orb-2"></div>';
+            html += '<div class="aurora-orb aurora-orb-3"></div>';
+            html += '<div class="aurora-orb aurora-orb-4"></div>';
+            html += '</div>';
+            // Glass overlay for readability
+            html += '<div class="aurora-glass"></div>';
+            // Shimmer effect
+            html += '<div class="aurora-shimmer"></div>';
+            html += '<div class="aurora-content flex flex-col lg:flex-row items-center gap-4 lg:gap-6">';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-400/90 to-pink-500/90 backdrop-blur-sm rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-lg">🎨</div>';
+            html += '<div class="flex-1 text-center lg:text-left">';
+            html += '<div class="flex items-center justify-center lg:justify-start gap-2 lg:gap-3 mb-1">';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-white drop-shadow-sm">Creative Studio</h3>';
+            html += '<span class="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] lg:text-xs font-bold px-2 py-0.5 lg:py-1 rounded-full">NEW</span>';
+            html += '</div>';
+            html += '<p class="text-white/90 text-sm lg:text-base drop-shadow-sm">AI Image Creation, Motion, Upscaler, Canvas Editor & more - Bring your ideas to life</p>';
+            html += '</div>';
+            html += '<div class="text-white text-2xl lg:text-3xl font-bold drop-shadow-sm">→</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</a>';
 
             // Main Tools Section Title
             html += '<h2 class="text-2xl lg:text-3xl font-bold text-white mb-6 fade-in">🛠️ AI Tools</h2>';

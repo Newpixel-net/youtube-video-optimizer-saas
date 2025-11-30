@@ -1,0 +1,1271 @@
+<!-- ================================================================
+     YOUTUBE VIDEO OPTIMIZER - CREATIVE STUDIO
+     ================================================================
+
+     Structure:
+     - SECTION 1: External Dependencies (CDN)
+     - SECTION 2: Styles (CSS)
+     - SECTION 3: HTML Container
+     - SECTION 4: Scripts (JavaScript)
+
+     Tools: Realtime Canvas, Realtime Gen, Motion, Image Creation,
+            Upscaler, Canvas Editor
+
+     Access: All authenticated users (with usage limits)
+
+     Main Dashboard URL: https://ytseo.siteuo.com/video-optimizer
+
+     Last Updated: 2024
+     ================================================================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Creative Studio - YouTube Video Optimizer</title>
+
+    <!-- ============================================
+         SECTION 1: EXTERNAL DEPENDENCIES
+         ============================================ -->
+
+    <!-- 1.1 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 1.2 Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+
+    <!-- ============================================
+         SECTION 2: STYLES
+         ============================================ -->
+    <style>
+        /* ------------------------------------------
+           2.1 BASE & RESET
+           ------------------------------------------ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 16px;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            background: #0a0a0f;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 1rem;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: white;
+        }
+
+        #app-root {
+            width: 100%;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+        }
+
+        /* ------------------------------------------
+           2.2 ANIMATIONS
+           ------------------------------------------ */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes auroraMove {
+            0% { transform: translateX(-20%) rotate(0deg); }
+            50% { transform: translateX(20%) rotate(5deg); }
+            100% { transform: translateX(-20%) rotate(0deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        .animate-pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        /* ------------------------------------------
+           2.3 HERO SECTION WITH AURORA
+           ------------------------------------------ */
+        .hero-section {
+            position: relative;
+            padding: 3rem 1.5rem 2rem;
+            overflow: hidden;
+            border-radius: 0 0 2rem 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .hero-aurora {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg,
+                #1a0a2e 0%,
+                #2d1b4e 20%,
+                #1e3a5f 40%,
+                #0d4f6e 60%,
+                #2d1b4e 80%,
+                #1a0a2e 100%);
+            background-size: 400% 400%;
+            animation: gradientFlow 15s ease infinite;
+        }
+
+        .hero-aurora::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at center,
+                rgba(139, 92, 246, 0.3) 0%,
+                rgba(236, 72, 153, 0.2) 25%,
+                rgba(59, 130, 246, 0.2) 50%,
+                transparent 70%);
+            animation: auroraMove 20s ease-in-out infinite;
+        }
+
+        .hero-aurora::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: -25%;
+            width: 150%;
+            height: 150%;
+            background: radial-gradient(ellipse at center,
+                rgba(236, 72, 153, 0.25) 0%,
+                rgba(139, 92, 246, 0.15) 30%,
+                transparent 60%);
+            animation: auroraMove 25s ease-in-out infinite reverse;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+        }
+
+        .hero-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 2rem;
+        }
+
+        /* ------------------------------------------
+           2.4 TOOL NAVIGATION TABS
+           ------------------------------------------ */
+        .tool-nav {
+            display: flex;
+            justify-content: center;
+            gap: 0.25rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 9999px;
+            padding: 0.5rem;
+            max-width: fit-content;
+            margin: 0 auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tool-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.75rem 1.25rem;
+            border-radius: 9999px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: rgba(255, 255, 255, 0.6);
+            background: transparent;
+            border: none;
+            min-width: 90px;
+        }
+
+        .tool-nav-item:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .tool-nav-item.active {
+            color: white;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .tool-nav-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .tool-nav-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .tool-nav-name {
+            font-size: 0.7rem;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        /* Mobile tool nav */
+        @media (max-width: 900px) {
+            .tool-nav {
+                max-width: 100%;
+                overflow-x: auto;
+                justify-content: flex-start;
+                border-radius: 1rem;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }
+            .tool-nav::-webkit-scrollbar {
+                display: none;
+            }
+            .tool-nav-item {
+                min-width: 80px;
+                padding: 0.6rem 1rem;
+            }
+        }
+
+        /* ------------------------------------------
+           2.5 SECTION HEADERS
+           ------------------------------------------ */
+        .section-header {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+        }
+
+        .section-header .gradient-text {
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ------------------------------------------
+           2.6 FEATURED CARDS
+           ------------------------------------------ */
+        .featured-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .featured-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .featured-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .featured-card {
+            position: relative;
+            border-radius: 1rem;
+            overflow: hidden;
+            aspect-ratio: 16/10;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #1a1a2e;
+        }
+
+        .featured-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .featured-card-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .featured-card-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 1rem;
+        }
+
+        .featured-card-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: #ec4899;
+            color: white;
+            font-size: 0.65rem;
+            font-weight: 700;
+            border-radius: 0.25rem;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            width: fit-content;
+        }
+
+        .featured-card-badge.green {
+            background: #22c55e;
+        }
+
+        .featured-card-badge.blue {
+            background: #3b82f6;
+        }
+
+        .featured-card-badge.purple {
+            background: #8b5cf6;
+        }
+
+        .featured-card-title {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .featured-card-subtitle {
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+            text-transform: uppercase;
+        }
+
+        /* ------------------------------------------
+           2.7 FILTER TABS
+           ------------------------------------------ */
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .filter-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .filter-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .filter-btn.active {
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .filter-btn.active-green {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        }
+
+        .filter-btn-icon {
+            font-size: 1rem;
+        }
+
+        .filter-divider {
+            width: 1px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.2);
+            margin: 0 0.5rem;
+        }
+
+        /* Category pills */
+        .category-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .category-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: transparent;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .category-pill:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .category-pill.active {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: #8b5cf6;
+            color: white;
+        }
+
+        /* ------------------------------------------
+           2.8 MASONRY GALLERY
+           ------------------------------------------ */
+        .gallery-grid {
+            column-count: 4;
+            column-gap: 1rem;
+        }
+
+        @media (max-width: 1280px) {
+            .gallery-grid {
+                column-count: 3;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .gallery-grid {
+                column-count: 2;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .gallery-grid {
+                column-count: 2;
+                column-gap: 0.5rem;
+            }
+        }
+
+        .gallery-item {
+            break-inside: avoid;
+            margin-bottom: 1rem;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .gallery-item:hover {
+            transform: scale(1.02);
+        }
+
+        .gallery-item:hover .gallery-item-overlay {
+            opacity: 1;
+        }
+
+        .gallery-item-image {
+            width: 100%;
+            display: block;
+            background: #1a1a2e;
+        }
+
+        .gallery-item-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            display: flex;
+            align-items: flex-end;
+            padding: 1rem;
+        }
+
+        .gallery-item-info {
+            color: white;
+        }
+
+        .gallery-item-prompt {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* ------------------------------------------
+           2.9 EMPTY STATE
+           ------------------------------------------ */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 1.5rem;
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: white;
+        }
+
+        .empty-state-text {
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 400px;
+            margin: 0 auto 1.5rem;
+        }
+
+        /* ------------------------------------------
+           2.10 BUTTONS
+           ------------------------------------------ */
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.75rem;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            color: white;
+            font-weight: 600;
+            border-radius: 9999px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(139, 92, 246, 0.4);
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-weight: 600;
+            border-radius: 9999px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* ------------------------------------------
+           2.11 TOOL CONTENT PANELS
+           ------------------------------------------ */
+        .tool-panel {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tool-panel.active {
+            display: block;
+        }
+
+        .tool-placeholder {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(145deg, rgba(139, 92, 246, 0.1) 0%, rgba(236, 72, 153, 0.05) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .tool-placeholder-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .tool-placeholder-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tool-placeholder-text {
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        /* ------------------------------------------
+           2.12 BACK BUTTON & HEADER
+           ------------------------------------------ */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 20;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: white;
+            font-weight: 500;
+            font-size: 0.9rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* ------------------------------------------
+           2.13 LOADING STATES
+           ------------------------------------------ */
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #8b5cf6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg,
+                rgba(255,255,255,0.05) 25%,
+                rgba(255,255,255,0.1) 50%,
+                rgba(255,255,255,0.05) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 0.5rem;
+        }
+
+        /* ------------------------------------------
+           2.14 TOAST NOTIFICATIONS
+           ------------------------------------------ */
+        .toast {
+            position: fixed;
+            top: 1.5rem;
+            right: 1.5rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .toast-success {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+        }
+
+        .toast-error {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        /* ------------------------------------------
+           2.15 SCROLLBAR
+           ------------------------------------------ */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <!-- ============================================
+         SECTION 3: HTML CONTAINER
+         ============================================ -->
+    <div id="app-root"></div>
+
+    <!-- ============================================
+         SECTION 4: SCRIPTS
+         ============================================ -->
+    <script>
+        /* ==========================================
+           4.1 FIREBASE CONFIGURATION
+           ========================================== */
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyAGczY5ZEIJdTq25BpQdia3lv2I556wOZo",
+            authDomain: "ytseo-6d1b0.firebaseapp.com",
+            projectId: "ytseo-6d1b0",
+            storageBucket: "ytseo-6d1b0.firebasestorage.app",
+            messagingSenderId: "382790048044",
+            appId: "1:382790048044:web:cd427679ff72108c1f3489"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(FIREBASE_CONFIG);
+        const auth = firebase.auth();
+        const functions = firebase.functions();
+        const db = firebase.firestore();
+
+        /* ==========================================
+           4.2 APPLICATION STATE
+           ========================================== */
+        const state = {
+            // View state
+            currentView: 'loading', // loading | studio
+
+            // User data
+            user: null,
+            profile: null,
+
+            // Active tool
+            activeTool: 'imageCreation', // realtimeCanvas | realtimeGen | motion | imageCreation | upscaler | canvasEditor
+
+            // Gallery filters
+            galleryFilter: 'all', // all | upscaler | motion
+            galleryCategory: 'all', // all | animals | fashion | food | landscapes | scifi
+            gallerySortBy: 'trending', // trending | newest | popular
+
+            // Gallery data
+            galleryItems: [],
+            galleryLoading: false,
+
+            // UI state
+            loading: false,
+            error: null,
+            success: null
+        };
+
+        /* ==========================================
+           4.3 TOOL CONFIGURATION
+           ========================================== */
+        const toolsConfig = [
+            {
+                key: 'realtimeCanvas',
+                name: 'Realtime Canvas',
+                icon: 'canvas',
+                description: 'Draw and watch AI transform your sketches in real-time'
+            },
+            {
+                key: 'realtimeGen',
+                name: 'Realtime Gen',
+                icon: 'realtime',
+                description: 'Generate images instantly as you type your prompts'
+            },
+            {
+                key: 'motion',
+                name: 'Motion',
+                icon: 'motion',
+                description: 'Bring your images to life with AI-powered animation'
+            },
+            {
+                key: 'imageCreation',
+                name: 'Image Creation',
+                icon: 'image',
+                description: 'Create stunning images from text descriptions'
+            },
+            {
+                key: 'upscaler',
+                name: 'Upscaler',
+                icon: 'upscaler',
+                description: 'Enhance and upscale your images with AI'
+            },
+            {
+                key: 'canvasEditor',
+                name: 'Canvas Editor',
+                icon: 'editor',
+                description: 'Edit and refine your images with powerful AI tools'
+            }
+        ];
+
+        const categoriesConfig = [
+            { key: 'all', name: 'All', icon: '##' },
+            { key: 'animals', name: 'Animals', icon: '##' },
+            { key: 'fashion', name: 'Fashion', icon: '##' },
+            { key: 'food', name: 'Food', icon: '##' },
+            { key: 'landscapes', name: 'Landscapes', icon: '##' },
+            { key: 'scifi', name: 'Sci-Fi', icon: '##' }
+        ];
+
+        /* ==========================================
+           4.4 FEATURED CONTENT
+           ========================================== */
+        const featuredCards = [
+            {
+                id: 1,
+                badge: 'How to Use',
+                badgeColor: 'pink',
+                title: 'STYLE',
+                subtitle: 'REFERENCE',
+                image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=400&h=250&fit=crop',
+                description: 'Learn how to use style reference to create consistent looks'
+            },
+            {
+                id: 2,
+                badge: 'Creating',
+                badgeColor: 'green',
+                title: 'STYLE',
+                subtitle: 'REFERENCE',
+                image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=250&fit=crop',
+                description: 'Create stunning style references for your projects'
+            },
+            {
+                id: 3,
+                badge: 'Using',
+                badgeColor: 'blue',
+                title: 'CONTENT',
+                subtitle: 'REFERENCE',
+                image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=250&fit=crop',
+                description: 'Master content reference for precise control'
+            },
+            {
+                id: 4,
+                badge: 'Enhancing',
+                badgeColor: 'purple',
+                title: 'IMAGES WITH',
+                subtitle: 'UPSCALER',
+                image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&h=250&fit=crop',
+                description: 'Enhance your images to stunning quality'
+            }
+        ];
+
+        /* ==========================================
+           4.5 PLACEHOLDER GALLERY IMAGES
+           ========================================== */
+        const placeholderGallery = [
+            { id: 1, image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=400&h=500&fit=crop', prompt: 'Abstract golden art portrait' },
+            { id: 2, image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=350&fit=crop', prompt: 'Luxury fashion handbag' },
+            { id: 3, image: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=400&h=600&fit=crop', prompt: 'High fashion model in colorful dress' },
+            { id: 4, image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=400&fit=crop', prompt: 'Abstract 3D fluid art' },
+            { id: 5, image: 'https://images.unsplash.com/photo-1567653418876-5bb0e566e1c2?w=400&h=450&fit=crop', prompt: 'Portrait with golden makeup' },
+            { id: 6, image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=350&fit=crop', prompt: 'Gourmet food photography' },
+            { id: 7, image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=500&fit=crop', prompt: 'Majestic mountain landscape' },
+            { id: 8, image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&h=400&fit=crop', prompt: 'Futuristic sci-fi cityscape' }
+        ];
+
+        /* ==========================================
+           4.6 UTILITY FUNCTIONS
+           ========================================== */
+        const utils = {
+            escapeHtml: function(text) {
+                if (!text) return '';
+                var div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        };
+
+        /* ==========================================
+           4.7 APPLICATION CONTROLLER
+           ========================================== */
+        const app = {
+            // Navigation
+            goToDashboard: function() {
+                window.location.href = 'https://ytseo.siteuo.com/video-optimizer';
+            },
+
+            // Set active tool
+            setActiveTool: function(toolKey) {
+                state.activeTool = toolKey;
+                render();
+            },
+
+            // Gallery filters
+            setGalleryFilter: function(filter) {
+                state.galleryFilter = filter;
+                render();
+            },
+
+            setGalleryCategory: function(category) {
+                state.galleryCategory = category;
+                render();
+            },
+
+            setGallerySortBy: function(sortBy) {
+                state.gallerySortBy = sortBy;
+                render();
+            },
+
+            // Tool actions (placeholders for now)
+            openTool: function(toolKey) {
+                state.activeTool = toolKey;
+                // In the future, this will open the tool interface
+                render();
+            }
+        };
+
+        /* ==========================================
+           4.8 RENDER FUNCTIONS
+           ========================================== */
+
+        // Main render dispatcher
+        function render() {
+            var root = document.getElementById('app-root');
+
+            if (state.currentView === 'loading') {
+                root.innerHTML = renderLoading();
+            } else {
+                root.innerHTML = renderStudio();
+            }
+        }
+
+        // Loading view
+        function renderLoading() {
+            return '<div class="min-h-screen flex items-center justify-center">' +
+                '<div class="text-center">' +
+                '<div class="loading-spinner mx-auto mb-4"></div>' +
+                '<p class="text-white/60">Loading Creative Studio...</p>' +
+                '</div></div>';
+        }
+
+        // Main studio view
+        function renderStudio() {
+            var html = '';
+
+            // Hero section with aurora background
+            html += '<div class="hero-section">';
+            html += '<div class="hero-aurora"></div>';
+
+            // Top bar with back button
+            html += '<div class="top-bar">';
+            html += '<button onclick="app.goToDashboard()" class="back-btn">';
+            html += '<span>←</span> Dashboard';
+            html += '</button>';
+            html += '<div></div>'; // Spacer for flex
+            html += '</div>';
+
+            // Hero content
+            html += '<div class="hero-content" style="padding-top: 2rem;">';
+            html += '<h1 class="hero-title">Bring your ideas to life</h1>';
+            html += '<p class="hero-subtitle">One platform, infinite possibilities</p>';
+
+            // Tool navigation
+            html += renderToolNav();
+
+            html += '</div>'; // hero-content
+            html += '</div>'; // hero-section
+
+            // Main content
+            html += '<div class="px-4 md:px-6 lg:px-8 max-w-7xl mx-auto">';
+
+            // Tool panels (show different content based on active tool)
+            html += renderToolPanels();
+
+            // Featured section
+            html += renderFeaturedSection();
+
+            // Community Gallery section
+            html += renderGallerySection();
+
+            html += '</div>'; // main content container
+
+            return html;
+        }
+
+        // Tool navigation tabs
+        function renderToolNav() {
+            var html = '<div class="tool-nav">';
+
+            for (var i = 0; i < toolsConfig.length; i++) {
+                var tool = toolsConfig[i];
+                var isActive = state.activeTool === tool.key;
+
+                html += '<button class="tool-nav-item' + (isActive ? ' active' : '') + '" onclick="app.setActiveTool(\'' + tool.key + '\')">';
+                html += '<div class="tool-nav-icon">' + getToolIcon(tool.icon) + '</div>';
+                html += '<div class="tool-nav-name">' + tool.name + '</div>';
+                html += '</button>';
+            }
+
+            // More button
+            html += '<button class="tool-nav-item">';
+            html += '<div class="tool-nav-icon">' + getToolIcon('more') + '</div>';
+            html += '<div class="tool-nav-name">More</div>';
+            html += '</button>';
+
+            html += '</div>';
+            return html;
+        }
+
+        // Get SVG icon for tool
+        function getToolIcon(iconName) {
+            var icons = {
+                'canvas': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>',
+                'realtime': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
+                'motion': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>',
+                'image': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>',
+                'upscaler': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>',
+                'editor': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+                'more': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>'
+            };
+            return icons[iconName] || icons['image'];
+        }
+
+        // Tool panels - show placeholder or tool interface
+        function renderToolPanels() {
+            var html = '';
+            var activeTool = toolsConfig.find(function(t) { return t.key === state.activeTool; });
+
+            if (activeTool) {
+                html += '<div class="tool-placeholder fade-in">';
+                html += '<div class="tool-placeholder-icon">' + getToolEmoji(activeTool.key) + '</div>';
+                html += '<h2 class="tool-placeholder-title">' + activeTool.name + '</h2>';
+                html += '<p class="tool-placeholder-text">' + activeTool.description + '</p>';
+                html += '<button class="btn-primary mt-6" onclick="app.openTool(\'' + activeTool.key + '\')">';
+                html += '<span>Start Creating</span>';
+                html += '<span>→</span>';
+                html += '</button>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        function getToolEmoji(toolKey) {
+            var emojis = {
+                'realtimeCanvas': '##',
+                'realtimeGen': '##',
+                'motion': '##',
+                'imageCreation': '##',
+                'upscaler': '##',
+                'canvasEditor': '##'
+            };
+            return emojis[toolKey] || '##';
+        }
+
+        // Featured section
+        function renderFeaturedSection() {
+            var html = '<div class="mb-8 fade-in">';
+            html += '<h2 class="section-header"><span class="gradient-text">Featured</span></h2>';
+
+            html += '<div class="featured-grid">';
+
+            for (var i = 0; i < featuredCards.length; i++) {
+                var card = featuredCards[i];
+                var badgeClass = card.badgeColor === 'green' ? 'green' :
+                                 card.badgeColor === 'blue' ? 'blue' :
+                                 card.badgeColor === 'purple' ? 'purple' : '';
+
+                html += '<div class="featured-card">';
+                html += '<img src="' + card.image + '" alt="' + utils.escapeHtml(card.title) + '" class="featured-card-image" loading="lazy" />';
+                html += '<div class="featured-card-overlay">';
+                html += '<span class="featured-card-badge ' + badgeClass + '">' + utils.escapeHtml(card.badge) + '</span>';
+                html += '<div class="featured-card-title">' + utils.escapeHtml(card.title) + '</div>';
+                html += '<div class="featured-card-subtitle">' + utils.escapeHtml(card.subtitle) + '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // featured-grid
+            html += '</div>'; // section
+            return html;
+        }
+
+        // Community gallery section
+        function renderGallerySection() {
+            var html = '<div class="mb-8 fade-in">';
+            html += '<h2 class="section-header"><span class="gradient-text">Community</span> Creations</h2>';
+
+            // Filter row
+            html += '<div class="filter-row">';
+
+            // Sort/type filters
+            html += '<div class="filter-group">';
+            html += '<button class="filter-btn active-green" onclick="app.setGallerySortBy(\'trending\')">';
+            html += '<span>##</span> Trending <span>▼</span>';
+            html += '</button>';
+
+            var typeFilters = [
+                { key: 'all', name: 'All', icon: '##' },
+                { key: 'upscaler', name: 'Upscaler', icon: '##' },
+                { key: 'motion', name: 'Motion', icon: '##' }
+            ];
+
+            for (var i = 0; i < typeFilters.length; i++) {
+                var filter = typeFilters[i];
+                var isActive = state.galleryFilter === filter.key;
+                html += '<button class="filter-btn' + (isActive ? ' active' : '') + '" onclick="app.setGalleryFilter(\'' + filter.key + '\')">';
+                html += '<span>' + filter.icon + '</span> ' + filter.name;
+                html += '</button>';
+            }
+            html += '</div>';
+
+            html += '<div class="filter-divider"></div>';
+
+            // Category pills
+            html += '<div class="category-pills">';
+            for (var i = 0; i < categoriesConfig.length; i++) {
+                var cat = categoriesConfig[i];
+                var isActive = state.galleryCategory === cat.key;
+                html += '<button class="category-pill' + (isActive ? ' active' : '') + '" onclick="app.setGalleryCategory(\'' + cat.key + '\')">';
+                html += '<span>' + cat.icon + '</span> ' + cat.name;
+                html += '</button>';
+            }
+            html += '</div>';
+
+            html += '</div>'; // filter-row
+
+            // Gallery grid
+            html += '<div class="gallery-grid">';
+
+            for (var i = 0; i < placeholderGallery.length; i++) {
+                var item = placeholderGallery[i];
+                html += '<div class="gallery-item">';
+                html += '<img src="' + item.image + '" alt="' + utils.escapeHtml(item.prompt) + '" class="gallery-item-image" loading="lazy" />';
+                html += '<div class="gallery-item-overlay">';
+                html += '<div class="gallery-item-info">';
+                html += '<p class="gallery-item-prompt">' + utils.escapeHtml(item.prompt) + '</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // gallery-grid
+            html += '</div>'; // section
+            return html;
+        }
+
+        /* ==========================================
+           4.9 AUTHENTICATION & INITIALIZATION
+           ========================================== */
+
+        // Check user access
+        function checkAccess() {
+            auth.onAuthStateChanged(function(user) {
+                if (!user) {
+                    // Not logged in - redirect to dashboard
+                    window.location.href = 'https://ytseo.siteuo.com/video-optimizer';
+                    return;
+                }
+
+                state.user = user;
+
+                // Get user profile
+                db.collection('users').doc(user.uid).get()
+                    .then(function(doc) {
+                        if (doc.exists) {
+                            state.profile = doc.data();
+                        }
+                        state.currentView = 'studio';
+                        render();
+                    })
+                    .catch(function(e) {
+                        console.error('Error fetching profile:', e);
+                        state.currentView = 'studio';
+                        render();
+                    });
+            });
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            render();
+            checkAccess();
+        });
+    </script>
+</body>
+</html>
