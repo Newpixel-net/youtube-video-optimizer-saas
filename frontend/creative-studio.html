@@ -1895,6 +1895,180 @@
             color: #f44336;
         }
 
+        /* Template Variable Chips Bar */
+        .template-vars-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+            padding: 0.75rem;
+            margin-top: 0.5rem;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px dashed rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+        }
+
+        .template-vars-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+            margin-right: 0.25rem;
+        }
+
+        .template-var-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.4rem 0.75rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 9999px;
+            color: #c4b5fd;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .template-var-chip:hover {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(99, 102, 241, 0.4) 100%);
+            border-color: rgba(139, 92, 246, 0.6);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .template-var-chip-icon {
+            font-size: 0.7rem;
+        }
+
+        .template-var-chip-name {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.75rem;
+        }
+
+        /* Variable Input Popup */
+        .variable-input-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .variable-input-popup {
+            background: linear-gradient(180deg, rgba(35, 35, 55, 0.98) 0%, rgba(25, 25, 45, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 380px;
+            padding: 1.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .variable-input-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .variable-input-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .variable-input-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .variable-input-subtitle {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        }
+
+        .variable-input-field {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s ease;
+            margin-bottom: 1rem;
+        }
+
+        .variable-input-field:focus {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+        }
+
+        .variable-input-field::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .variable-input-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+        }
+
+        .variable-input-btn {
+            padding: 0.6rem 1.25rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .variable-input-btn-cancel {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .variable-input-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .variable-input-btn-apply {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            color: white;
+        }
+
+        .variable-input-btn-apply:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .variable-input-btn-apply:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         /* Dropdown menu for prompt chips */
         .prompt-dropdown-menu {
             position: absolute;
@@ -3858,7 +4032,12 @@
             pendingTemplate: null,
 
             // Draft notification state
-            showDraftNotification: false
+            showDraftNotification: false,
+
+            // Variable input state
+            variableInputOpen: false,
+            variableInputName: null,
+            variableInputValue: ''
         };
 
         /* ==========================================
@@ -5150,6 +5329,48 @@
                 return matches;
             },
 
+            // Show variable input popup
+            showVariableInput: function(varName) {
+                state.variableInputOpen = true;
+                state.variableInputName = varName;
+                state.variableInputValue = '';
+                render();
+                // Focus the input after render
+                setTimeout(function() {
+                    var input = document.getElementById('variable-input-field');
+                    if (input) input.focus();
+                }, 100);
+            },
+
+            // Apply variable value to prompt
+            applyVariableInput: function() {
+                if (state.variableInputName && state.variableInputValue) {
+                    var searchPattern = '{{' + state.variableInputName + '}}';
+                    state.prompt = state.prompt.replace(searchPattern, state.variableInputValue);
+                    // Update textarea
+                    var textarea = document.getElementById('prompt-textarea');
+                    if (textarea) textarea.value = state.prompt;
+                }
+                // Close popup
+                state.variableInputOpen = false;
+                state.variableInputName = null;
+                state.variableInputValue = '';
+                render();
+            },
+
+            // Cancel variable input
+            cancelVariableInput: function() {
+                state.variableInputOpen = false;
+                state.variableInputName = null;
+                state.variableInputValue = '';
+                render();
+            },
+
+            // Update variable input value (without re-render)
+            updateVariableInputValue: function(value) {
+                state.variableInputValue = value;
+            },
+
             // Generate Image using Gemini/Imagen API
             generateImage: function() {
                 if (!state.prompt.trim()) {
@@ -5606,6 +5827,9 @@
             // Template Confirmation Dialog
             html += renderConfirmDialog();
 
+            // Variable Input Popup
+            html += renderVariableInputPopup();
+
             // Draft Notification Banner
             html += renderDraftNotification();
 
@@ -5821,6 +6045,21 @@
 
             // Editable prompt area with textarea
             html += '<textarea id="prompt-textarea" class="prompt-textarea smart-prompt-editable" placeholder="Describe what you want to create... or select a template below" oninput="app.updatePrompt(this.value)">' + utils.escapeHtml(state.prompt) + '</textarea>';
+
+            // Template Variable Chips (if prompt contains variables)
+            var templateVars = app.getUnfilledVariables(state.prompt);
+            if (templateVars.length > 0) {
+                html += '<div class="template-vars-bar">';
+                html += '<span class="template-vars-label">Fill in:</span>';
+                for (var vi = 0; vi < templateVars.length; vi++) {
+                    var varName = templateVars[vi];
+                    html += '<button class="template-var-chip" onclick="app.showVariableInput(\'' + utils.escapeHtml(varName) + '\')">';
+                    html += '<span class="template-var-chip-icon">✏️</span>';
+                    html += '<span class="template-var-chip-name">{{' + utils.escapeHtml(varName) + '}}</span>';
+                    html += '</button>';
+                }
+                html += '</div>';
+            }
 
             // Scene Quick Selector (for product photography template)
             if (state.selectedTemplate && state.selectedTemplate.id === 'product-studio') {
@@ -6487,6 +6726,44 @@
             html += '</div>';
 
             html += '</div>'; // dialog
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Render Variable Input Popup
+        function renderVariableInputPopup() {
+            if (!state.variableInputOpen || !state.variableInputName) return '';
+
+            var varName = state.variableInputName;
+            var escapedVarName = utils.escapeHtml(varName);
+
+            var html = '<div class="variable-input-overlay" onclick="app.cancelVariableInput()">';
+            html += '<div class="variable-input-popup" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="variable-input-header">';
+            html += '<div class="variable-input-icon">✏️</div>';
+            html += '<div>';
+            html += '<div class="variable-input-title">Fill in variable</div>';
+            html += '<div class="variable-input-subtitle">{{' + escapedVarName + '}}</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Input field
+            html += '<input type="text" id="variable-input-field" class="variable-input-field" ';
+            html += 'placeholder="Enter value for ' + escapedVarName + '..." ';
+            html += 'value="' + utils.escapeHtml(state.variableInputValue) + '" ';
+            html += 'oninput="app.updateVariableInputValue(this.value)" ';
+            html += 'onkeydown="if(event.key===\'Enter\' && this.value.trim()) app.applyVariableInput(); else if(event.key===\'Escape\') app.cancelVariableInput();">';
+
+            // Actions
+            html += '<div class="variable-input-actions">';
+            html += '<button class="variable-input-btn variable-input-btn-cancel" onclick="app.cancelVariableInput()">Cancel</button>';
+            html += '<button class="variable-input-btn variable-input-btn-apply" onclick="app.applyVariableInput()" ' + (state.variableInputValue.trim() ? '' : 'disabled') + '>Apply</button>';
+            html += '</div>';
+
+            html += '</div>'; // popup
             html += '</div>'; // overlay
 
             return html;
