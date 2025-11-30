@@ -51,7 +51,43 @@ firebase emulators:start
 
 **IMPORTANT**: After working on a feature branch, list all modified files here so you know which files to download when updating the main branch.
 
-### Current Branch: `claude/fix-recurring-issue-01Mc4jyJeGSeB1N8Gqk1qhVH`
+### Current Branch: `claude/review-dashboard-changes-01DJjJFKA1cSJ1JYpopozKoR`
+
+**Files Modified:**
+- `frontend/enterprise.html` - **NEW FILE** - Standalone Enterprise Suite page with:
+  - Bulk Video Optimizer (CSV/paste links processing)
+  - Placement Finder (moved from main dashboard)
+  - Viral Score Predictor
+  - Monetization Analyzer
+  - Script Writer Pro
+  - Gold premium styling, feature locking for Free/Lite users
+- `frontend/dual-auth-widget.html` - Multiple updates:
+  - Added golden Enterprise Suite banner linking to external URL
+  - Added Channel Audit Pro tool (replaces Placement Finder)
+  - Added `goToChannelAudit()`, `runChannelAudit()`, `renderChannelAudit()` functions
+  - Updated tools array and bonus history mappings
+- `functions/index.js` - Added 4 new Enterprise Suite cloud functions:
+  - `auditChannel` - Channel Audit Pro (comprehensive channel analysis with SEO scores)
+  - `predictViralScore` - Viral Score Predictor (AI-powered viral potential analysis)
+  - `analyzeMonetization` - Monetization Analyzer (channel earnings estimation)
+  - `generateScript` - Script Writer Pro (AI-powered video script generation)
+- `WORKFLOW.md` - Updated with current branch files
+
+**New Firestore Collections (created automatically by functions):**
+- `channelAuditHistory` - Stores channel audit results
+- `viralPredictorHistory` - Stores viral score predictions
+- `monetizationHistory` - Stores monetization analysis results
+- `scriptWriterHistory` - Stores generated scripts
+
+**New Usage Types (add to admin panel if needed):**
+- `channelAudit` - Channel Audit Pro usage tracking
+- `viralPredictor` - Viral Score Predictor usage tracking
+- `monetizationAnalyzer` - Monetization Analyzer usage tracking
+- `scriptWriter` - Script Writer Pro usage tracking
+
+---
+
+### Previous Branch: `claude/fix-recurring-issue-01Mc4jyJeGSeB1N8Gqk1qhVH`
 
 **Files Modified:**
 - `frontend/dual-auth-widget.html` - Multiple updates:
