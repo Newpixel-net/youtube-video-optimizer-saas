@@ -310,8 +310,56 @@
         }
 
         .locked-icon {
-            font-size: 5rem;
-            margin-bottom: 1.5rem;
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Upgrade Modal Popup */
+        .upgrade-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+
+        .upgrade-modal {
+            background: linear-gradient(145deg, #1e1e3f 0%, #0f0f23 100%);
+            border: 2px solid rgba(255, 215, 0, 0.4);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(255, 215, 0, 0.1);
+        }
+
+        .upgrade-modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 2rem;
+            height: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upgrade-modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
         }
 
         /* ------------------------------------------
@@ -569,6 +617,8 @@
             user: null,
             profile: null,
             userPlan: null, // free | lite | pro | enterprise
+            hasPremiumAccess: false, // true if pro or enterprise
+            showUpgradeModal: false, // show upgrade popup
 
             // UI state
             loading: false,
@@ -736,6 +786,7 @@
             },
 
             runBulkOptimization: function() {
+                if (!requirePremiumAccess()) return;
                 if (state.bulkVideos.length === 0) return;
 
                 state.bulkProcessing = true;
@@ -792,6 +843,8 @@
             // ==========================================
             findPlacements: function(e) {
                 e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
                 var channelUrl = document.getElementById('placement-channel-url').value.trim();
 
                 if (!channelUrl) {
@@ -899,6 +952,7 @@
             // ==========================================
             predictViralScore: function(e) {
                 e.preventDefault();
+                if (!requirePremiumAccess()) return;
 
                 var title = document.getElementById('viral-title').value.trim();
                 var description = document.getElementById('viral-description').value.trim();
@@ -951,6 +1005,7 @@
             // ==========================================
             analyzeMonetization: function(e) {
                 e.preventDefault();
+                if (!requirePremiumAccess()) return;
 
                 var channelUrl = document.getElementById('monetization-channel').value.trim();
 
@@ -1002,6 +1057,7 @@
 
             generateScript: function(e) {
                 e.preventDefault();
+                if (!requirePremiumAccess()) return;
 
                 var topic = document.getElementById('script-topic').value.trim();
                 var duration = document.getElementById('script-duration').value;
@@ -1075,10 +1131,9 @@
 
             if (state.currentView === 'loading') {
                 root.innerHTML = renderLoading();
-            } else if (state.currentView === 'locked') {
-                root.innerHTML = renderLocked();
             } else {
-                root.innerHTML = renderTools();
+                // Always show tools, add upgrade modal on top if needed
+                root.innerHTML = renderTools() + renderUpgradeModal();
             }
         }
 
@@ -1092,22 +1147,24 @@
             return html;
         }
 
-        // Locked view for non-premium users
-        function renderLocked() {
-            var html = '<div class="locked-overlay">';
-            html += '<div class="locked-card fade-in">';
+        // Upgrade modal popup for non-premium users
+        function renderUpgradeModal() {
+            if (!state.showUpgradeModal) return '';
+
+            var html = '<div class="upgrade-modal-overlay" onclick="closeUpgradeModal()">';
+            html += '<div class="upgrade-modal fade-in" onclick="event.stopPropagation()">';
+            html += '<button class="upgrade-modal-close" onclick="closeUpgradeModal()">×</button>';
             html += '<div class="locked-icon">🔒</div>';
-            html += '<h2 class="text-3xl font-bold gold-text mb-4">Enterprise Suite</h2>';
-            html += '<p class="text-white/70 text-lg mb-6">This premium feature is available for <strong class="text-yellow-400">PRO</strong> and <strong class="text-yellow-400">Enterprise</strong> subscribers only.</p>';
-            html += '<div class="space-y-3 mb-8 text-left">';
-            html += '<div class="flex items-center gap-3 text-white/60"><span class="text-xl">🎯</span> Bulk Video Optimizer</div>';
-            html += '<div class="flex items-center gap-3 text-white/60"><span class="text-xl">🎬</span> Placement Finder</div>';
-            html += '<div class="flex items-center gap-3 text-white/60"><span class="text-xl">🔮</span> Viral Score Predictor</div>';
-            html += '<div class="flex items-center gap-3 text-white/60"><span class="text-xl">💰</span> Monetization Analyzer</div>';
-            html += '<div class="flex items-center gap-3 text-white/60"><span class="text-xl">📝</span> Script Writer Pro</div>';
+            html += '<h2 class="text-2xl font-bold gold-text mb-3">Premium Feature</h2>';
+            html += '<p class="text-white/70 text-base mb-5">This feature is available for <strong class="text-yellow-400">PRO</strong> and <strong class="text-yellow-400">Enterprise</strong> subscribers.</p>';
+            html += '<div class="space-y-2 mb-6 text-left text-sm">';
+            html += '<div class="flex items-center gap-2 text-white/60"><span>✨</span> Unlimited access to all tools</div>';
+            html += '<div class="flex items-center gap-2 text-white/60"><span>🚀</span> Bulk processing capabilities</div>';
+            html += '<div class="flex items-center gap-2 text-white/60"><span>📊</span> Advanced analytics & reports</div>';
+            html += '<div class="flex items-center gap-2 text-white/60"><span>💬</span> Priority support</div>';
             html += '</div>';
             html += '<button onclick="app.goToDashboard()" class="btn-primary w-full mb-3">Upgrade to PRO</button>';
-            html += '<button onclick="app.goToDashboard()" class="btn-secondary w-full">← Back to Dashboard</button>';
+            html += '<button onclick="closeUpgradeModal()" class="btn-secondary w-full">Maybe Later</button>';
             html += '</div></div>';
             return html;
         }
@@ -1872,23 +1929,38 @@
                             state.profile = doc.data();
                             state.userPlan = doc.data().plan || 'free';
 
-                            // Check if user has access (pro or enterprise)
-                            if (state.userPlan === 'pro' || state.userPlan === 'enterprise') {
-                                state.currentView = 'tools';
-                            } else {
-                                state.currentView = 'locked';
-                            }
+                            // Check if user has premium access (pro or enterprise)
+                            state.hasPremiumAccess = (state.userPlan === 'pro' || state.userPlan === 'enterprise');
                         } else {
-                            state.currentView = 'locked';
+                            state.hasPremiumAccess = false;
                         }
+                        // Always show tools view - modal will appear when they try to use features
+                        state.currentView = 'tools';
                         render();
                     })
                     .catch(function(e) {
                         console.error('Error fetching profile:', e);
-                        state.currentView = 'locked';
+                        state.hasPremiumAccess = false;
+                        state.currentView = 'tools';
                         render();
                     });
             });
+        }
+
+        // Check if user can use premium features, show modal if not
+        function requirePremiumAccess() {
+            if (!state.hasPremiumAccess) {
+                state.showUpgradeModal = true;
+                render();
+                return false;
+            }
+            return true;
+        }
+
+        // Close upgrade modal
+        function closeUpgradeModal() {
+            state.showUpgradeModal = false;
+            render();
         }
 
         // Initialize app
