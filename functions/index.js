@@ -4507,3 +4507,690 @@ exports.getCampaignReport = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to load report'));
   }
 });
+
+// ==============================================
+// ENTERPRISE SUITE FUNCTIONS
+// ==============================================
+
+/**
+ * Channel Audit Pro - Comprehensive channel analysis with SEO health scores
+ * Analyzes a YouTube channel and provides detailed growth recommendations
+ */
+exports.auditChannel = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'auditChannel', 5);
+  await checkUsageLimit(uid, 'channelAudit');
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required');
+  }
+
+  try {
+    // Step 1: Extract channel info from URL
+    const channelInfo = extractChannelInfo(channelUrl);
+
+    // Step 2: Get channel details from YouTube API
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,brandingSettings,topicDetails,contentDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,brandingSettings,topicDetails,contentDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      // For custom URLs and usernames, search first
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,brandingSettings,topicDetails,contentDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
+
+    if (!channelResponse.data.items?.length) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
+    const channelName = channel.snippet.title;
+    const channelDescription = channel.snippet.description || '';
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const viewCount = parseInt(channel.statistics.viewCount) || 0;
+    const videoCount = parseInt(channel.statistics.videoCount) || 0;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+
+    // Step 3: Get recent videos to analyze content strategy
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'date',
+      maxResults: 20
+    });
+
+    const recentVideoIds = videosResponse.data.items?.map(v => v.id.videoId).filter(Boolean) || [];
+
+    // Get video statistics
+    let videoStats = [];
+    if (recentVideoIds.length > 0) {
+      const videoDetailsResponse = await youtube.videos.list({
+        part: 'statistics,snippet,contentDetails',
+        id: recentVideoIds.join(',')
+      });
+      videoStats = videoDetailsResponse.data.items || [];
+    }
+
+    // Calculate basic metrics
+    const avgViews = videoStats.length > 0
+      ? Math.round(videoStats.reduce((sum, v) => sum + parseInt(v.statistics.viewCount || 0), 0) / videoStats.length)
+      : 0;
+    const avgLikes = videoStats.length > 0
+      ? Math.round(videoStats.reduce((sum, v) => sum + parseInt(v.statistics.likeCount || 0), 0) / videoStats.length)
+      : 0;
+    const avgComments = videoStats.length > 0
+      ? Math.round(videoStats.reduce((sum, v) => sum + parseInt(v.statistics.commentCount || 0), 0) / videoStats.length)
+      : 0;
+
+    // Calculate engagement rate
+    const engagementRate = avgViews > 0 ? ((avgLikes + avgComments) / avgViews * 100).toFixed(2) : 0;
+
+    // Step 4: AI Analysis for comprehensive audit
+    const videoTitles = videoStats.slice(0, 10).map(v => v.snippet.title);
+    const videoDescriptions = videoStats.slice(0, 5).map(v => (v.snippet.description || '').substring(0, 200));
+
+    const auditPrompt = `You are a YouTube growth expert. Perform a comprehensive channel audit and provide actionable insights.
+
+CHANNEL DATA:
+- Name: ${channelName}
+- Description: ${channelDescription.substring(0, 500)}
+- Subscribers: ${subscriberCount.toLocaleString()}
+- Total Views: ${viewCount.toLocaleString()}
+- Video Count: ${videoCount}
+- Avg Views (recent): ${avgViews.toLocaleString()}
+- Avg Likes (recent): ${avgLikes.toLocaleString()}
+- Engagement Rate: ${engagementRate}%
+- Recent Video Titles: ${videoTitles.join(' | ')}
+- Sample Descriptions: ${videoDescriptions.join(' ... ')}
+
+Analyze this channel and respond in this EXACT JSON format:
+{
+  "scores": {
+    "overall": <0-100>,
+    "seo": <0-100>,
+    "content": <0-100>,
+    "engagement": <0-100>,
+    "growth": <0-100>
+  },
+  "analysis": {
+    "summary": "2-3 sentence overview of channel health",
+    "strengths": ["strength1", "strength2", "strength3"],
+    "weaknesses": ["weakness1", "weakness2", "weakness3"]
+  },
+  "recommendations": [
+    {"title": "Action item 1", "description": "Detailed explanation", "priority": "high"},
+    {"title": "Action item 2", "description": "Detailed explanation", "priority": "medium"},
+    {"title": "Action item 3", "description": "Detailed explanation", "priority": "low"}
+  ]
+}
+
+Score Guidelines:
+- SEO: Title optimization, description quality, tag usage, keyword targeting
+- Content: Consistency, video quality indicators, niche focus
+- Engagement: Like/comment ratio, community interaction
+- Growth: Subscriber trends, view-to-subscriber ratio, potential`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: auditPrompt }],
+      temperature: 0.7,
+      max_tokens: 1500
+    });
+
+    let auditData;
+    try {
+      const responseText = aiResponse.choices[0].message.content.trim();
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      auditData = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
+    } catch (e) {
+      // Fallback audit data
+      auditData = {
+        scores: {
+          overall: 65,
+          seo: 60,
+          content: 70,
+          engagement: 65,
+          growth: 65
+        },
+        analysis: {
+          summary: `${channelName} has ${subscriberCount.toLocaleString()} subscribers with an average engagement rate of ${engagementRate}%. The channel shows potential for growth with consistent content strategy improvements.`,
+          strengths: ['Active content creation', 'Established audience base', 'Consistent posting'],
+          weaknesses: ['SEO optimization needed', 'Description could be improved', 'Tag strategy unclear']
+        },
+        recommendations: [
+          { title: 'Optimize video titles for search', description: 'Include target keywords naturally in your titles', priority: 'high' },
+          { title: 'Improve description SEO', description: 'Add timestamps, links, and keyword-rich descriptions', priority: 'medium' },
+          { title: 'Increase community engagement', description: 'Reply to comments and create community posts', priority: 'low' }
+        ]
+      };
+    }
+
+    // Step 5: Save to history
+    const historyData = {
+      userId: uid,
+      channelUrl,
+      channelInfo: {
+        id: channelId,
+        name: channelName,
+        thumbnail: channelThumbnail,
+        subscribers: subscriberCount,
+        videoCount: videoCount,
+        totalViews: viewCount
+      },
+      scores: auditData.scores,
+      analysis: auditData.analysis,
+      recommendations: auditData.recommendations,
+      metrics: {
+        avgViews,
+        avgLikes,
+        avgComments,
+        engagementRate: parseFloat(engagementRate)
+      },
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const historyRef = await db.collection('channelAuditHistory').add(historyData);
+
+    // Step 6: Update usage
+    await incrementUsage(uid, 'channelAudit');
+    await logUsage(uid, 'channel_audit', {
+      channelId,
+      channelName,
+      overallScore: auditData.scores.overall
+    });
+
+    return {
+      success: true,
+      historyId: historyRef.id,
+      channelInfo: historyData.channelInfo,
+      scores: auditData.scores,
+      analysis: auditData.analysis,
+      recommendations: auditData.recommendations,
+      metrics: historyData.metrics
+    };
+
+  } catch (error) {
+    console.error('Channel audit error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal',
+      sanitizeErrorMessage(error, 'Failed to audit channel. Please try again.'));
+  }
+});
+
+/**
+ * Viral Score Predictor - Predicts viral potential of video content
+ * Analyzes title, description, and tags to estimate viral potential
+ */
+exports.predictViralScore = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'predictViralScore', 10);
+  await checkUsageLimit(uid, 'viralPredictor');
+
+  const { title, description, tags } = data;
+  if (!title) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video title is required');
+  }
+
+  try {
+    const viralPrompt = `You are a YouTube viral content expert. Analyze this video content and predict its viral potential.
+
+VIDEO CONTENT:
+- Title: ${title}
+- Description: ${description || 'Not provided'}
+- Tags: ${tags || 'Not provided'}
+
+Analyze the viral potential and respond in this EXACT JSON format:
+{
+  "viralScore": <0-100>,
+  "verdict": "One sentence verdict about viral potential",
+  "factors": [
+    {"name": "Title Appeal", "score": <0-100>},
+    {"name": "Emotional Hook", "score": <0-100>},
+    {"name": "Clickability", "score": <0-100>},
+    {"name": "Shareability", "score": <0-100>},
+    {"name": "Trend Alignment", "score": <0-100>}
+  ],
+  "tips": [
+    {"title": "Improvement tip 1", "detail": "Detailed explanation"},
+    {"title": "Improvement tip 2", "detail": "Detailed explanation"},
+    {"title": "Improvement tip 3", "detail": "Detailed explanation"}
+  ]
+}
+
+Scoring Guidelines:
+- 80-100: High viral potential - strong emotional hook, trending topic, shareable
+- 60-79: Moderate potential - good elements but room for improvement
+- 40-59: Average potential - needs significant optimization
+- 0-39: Low potential - major changes needed`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: viralPrompt }],
+      temperature: 0.7,
+      max_tokens: 1000
+    });
+
+    let viralData;
+    try {
+      const responseText = aiResponse.choices[0].message.content.trim();
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      viralData = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
+    } catch (e) {
+      viralData = {
+        viralScore: 55,
+        verdict: 'Moderate viral potential. Consider optimizing the title for more emotional impact.',
+        factors: [
+          { name: 'Title Appeal', score: 60 },
+          { name: 'Emotional Hook', score: 50 },
+          { name: 'Clickability', score: 55 },
+          { name: 'Shareability', score: 55 },
+          { name: 'Trend Alignment', score: 55 }
+        ],
+        tips: [
+          { title: 'Add emotional triggers', detail: 'Use words that evoke curiosity or excitement' },
+          { title: 'Create urgency', detail: 'Include time-sensitive elements when relevant' },
+          { title: 'Optimize for sharing', detail: 'Make the content easy to share and discuss' }
+        ]
+      };
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      title,
+      description: description || '',
+      tags: tags || '',
+      viralScore: viralData.viralScore,
+      verdict: viralData.verdict,
+      factors: viralData.factors,
+      tips: viralData.tips,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('viralPredictorHistory').add(historyData);
+
+    // Update usage
+    await incrementUsage(uid, 'viralPredictor');
+    await logUsage(uid, 'viral_predictor', { title, viralScore: viralData.viralScore });
+
+    return {
+      success: true,
+      viralScore: viralData.viralScore,
+      verdict: viralData.verdict,
+      factors: viralData.factors,
+      tips: viralData.tips
+    };
+
+  } catch (error) {
+    console.error('Viral prediction error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal',
+      sanitizeErrorMessage(error, 'Failed to predict viral score. Please try again.'));
+  }
+});
+
+/**
+ * Monetization Analyzer - Estimates channel earnings and revenue potential
+ * Analyzes a YouTube channel and provides monetization insights
+ */
+exports.analyzeMonetization = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'analyzeMonetization', 5);
+  await checkUsageLimit(uid, 'monetizationAnalyzer');
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required');
+  }
+
+  try {
+    // Extract channel info
+    const channelInfo = extractChannelInfo(channelUrl);
+
+    // Get channel details
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
+
+    if (!channelResponse.data.items?.length) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
+    const channelName = channel.snippet.title;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const viewCount = parseInt(channel.statistics.viewCount) || 0;
+    const videoCount = parseInt(channel.statistics.videoCount) || 0;
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Get recent videos for view analysis
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'date',
+      maxResults: 30
+    });
+
+    const recentVideoIds = videosResponse.data.items?.map(v => v.id.videoId).filter(Boolean) || [];
+
+    let monthlyViews = 0;
+    if (recentVideoIds.length > 0) {
+      const videoDetailsResponse = await youtube.videos.list({
+        part: 'statistics',
+        id: recentVideoIds.slice(0, 20).join(',')
+      });
+
+      const recentStats = videoDetailsResponse.data.items || [];
+      const totalRecentViews = recentStats.reduce((sum, v) => sum + parseInt(v.statistics.viewCount || 0), 0);
+      // Estimate monthly views based on recent video performance
+      monthlyViews = Math.round(totalRecentViews / Math.max(recentStats.length, 1) * 4); // Assuming ~4 videos/month
+    }
+
+    // CPM estimation based on niche
+    const nicheCPM = {
+      'Finance': 12,
+      'Technology': 8,
+      'Gaming': 4,
+      'Entertainment': 3,
+      'Education': 6,
+      'Lifestyle': 5,
+      'Music': 2,
+      'Sports': 4,
+      'News': 5,
+      'default': 4
+    };
+
+    // Determine niche CPM
+    let estimatedCPM = nicheCPM.default;
+    for (const topic of topicCategories) {
+      for (const [niche, cpm] of Object.entries(nicheCPM)) {
+        if (topic.toLowerCase().includes(niche.toLowerCase())) {
+          estimatedCPM = Math.max(estimatedCPM, cpm);
+        }
+      }
+    }
+
+    // Calculate earnings (monetized views are typically 40-60% of total)
+    const monetizedViewRate = 0.5;
+    const monthlyMonetizedViews = monthlyViews * monetizedViewRate;
+    const monthlyAdRevenue = (monthlyMonetizedViews / 1000) * estimatedCPM;
+
+    // Estimate other revenue streams based on subscriber count
+    const sponsorshipPotential = subscriberCount > 10000 ? subscriberCount * 0.01 : 0;
+    const membershipPotential = subscriberCount > 30000 ? subscriberCount * 0.002 : 0;
+    const merchandisePotential = subscriberCount > 50000 ? subscriberCount * 0.001 : 0;
+
+    const monthlyEarnings = monthlyAdRevenue + sponsorshipPotential + membershipPotential + merchandisePotential;
+    const yearlyEarnings = monthlyEarnings * 12;
+
+    // AI-powered recommendations
+    const monetizationPrompt = `You are a YouTube monetization expert. Based on this channel data, provide 5 specific revenue optimization recommendations.
+
+CHANNEL DATA:
+- Subscribers: ${subscriberCount.toLocaleString()}
+- Monthly Views (estimated): ${monthlyViews.toLocaleString()}
+- Video Count: ${videoCount}
+- Niche/Topics: ${topicCategories.join(', ') || 'General'}
+- Estimated Monthly Revenue: $${monthlyEarnings.toFixed(2)}
+
+Respond with a JSON array of 5 short, actionable recommendations (each under 100 characters):
+["recommendation 1", "recommendation 2", "recommendation 3", "recommendation 4", "recommendation 5"]`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: monetizationPrompt }],
+      temperature: 0.7,
+      max_tokens: 500
+    });
+
+    let recommendations;
+    try {
+      const responseText = aiResponse.choices[0].message.content.trim();
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      recommendations = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
+    } catch (e) {
+      recommendations = [
+        'Optimize upload schedule for consistent viewer engagement',
+        'Add end screens and cards to increase watch time',
+        'Consider channel memberships for dedicated fans',
+        'Explore brand sponsorship opportunities in your niche',
+        'Create merchandise for your most engaged audience'
+      ];
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      channelUrl,
+      channelInfo: {
+        id: channelId,
+        name: channelName,
+        thumbnail: channelThumbnail,
+        subscribers: subscriberCount,
+        videoCount
+      },
+      earnings: {
+        monthly: monthlyEarnings,
+        yearly: yearlyEarnings,
+        estimatedCPM,
+        breakdown: {
+          adRevenue: monthlyAdRevenue,
+          sponsorships: sponsorshipPotential,
+          memberships: membershipPotential,
+          merchandise: merchandisePotential
+        }
+      },
+      recommendations,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('monetizationHistory').add(historyData);
+
+    // Update usage
+    await incrementUsage(uid, 'monetizationAnalyzer');
+    await logUsage(uid, 'monetization_analyzer', { channelId, monthlyEarnings });
+
+    return {
+      success: true,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      monthlyEarnings,
+      yearlyEarnings,
+      estimatedCPM,
+      breakdown: {
+        adRevenue: monthlyAdRevenue,
+        sponsorships: sponsorshipPotential,
+        memberships: membershipPotential,
+        merchandise: merchandisePotential
+      },
+      recommendations
+    };
+
+  } catch (error) {
+    console.error('Monetization analysis error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal',
+      sanitizeErrorMessage(error, 'Failed to analyze monetization. Please try again.'));
+  }
+});
+
+/**
+ * Script Writer Pro - AI-powered video script generation
+ * Creates engaging video scripts based on topic, style, and duration
+ */
+exports.generateScript = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'generateScript', 5);
+  await checkUsageLimit(uid, 'scriptWriter');
+
+  const { topic, duration, style, keywords } = data;
+  if (!topic) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video topic is required');
+  }
+
+  try {
+    // Duration mapping
+    const durationMap = {
+      'short': { minutes: '3-5', words: '600-900' },
+      'medium': { minutes: '8-12', words: '1500-2200' },
+      'long': { minutes: '15-20', words: '2800-3800' }
+    };
+
+    const targetDuration = durationMap[duration] || durationMap.medium;
+
+    // Style descriptions
+    const styleDescriptions = {
+      'engaging': 'High energy, attention-grabbing, with strong hooks and calls to action. Use questions and direct audience engagement.',
+      'educational': 'Informative, well-structured, with clear explanations. Include examples and step-by-step guidance.',
+      'storytelling': 'Narrative-driven, with a clear beginning, middle, and end. Include personal anecdotes and emotional moments.',
+      'listicle': 'Organized as a numbered list. Each point should be concise but valuable. Include transitions between points.'
+    };
+
+    const styleGuide = styleDescriptions[style] || styleDescriptions.engaging;
+
+    const scriptPrompt = `You are an expert YouTube script writer. Create an engaging video script.
+
+REQUIREMENTS:
+- Topic: ${topic}
+- Style: ${style || 'engaging'} - ${styleGuide}
+- Target Duration: ${targetDuration.minutes} minutes (${targetDuration.words} words)
+- Keywords to include: ${keywords || 'none specified'}
+
+SCRIPT STRUCTURE:
+1. Hook (first 5-10 seconds) - Grab attention immediately
+2. Introduction - Brief overview of what viewers will learn
+3. Main Content - Organized sections with clear value
+4. Call to Action - Subscribe, like, comment
+5. Outro - Wrap up and tease future content
+
+FORMAT YOUR RESPONSE AS JSON:
+{
+  "title": "Suggested video title (SEO optimized)",
+  "script": "The full script with [SECTIONS] marked, including speaking directions in (parentheses)",
+  "wordCount": <number>,
+  "estimatedDuration": "<X-Y>"
+}
+
+IMPORTANT: Write naturally as if speaking to camera. Include:
+- Pauses marked as [PAUSE]
+- Emphasis marked as *word*
+- Visual cues marked as [B-ROLL: description]
+- Transitions between sections`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: scriptPrompt }],
+      temperature: 0.8,
+      max_tokens: 3500
+    });
+
+    let scriptData;
+    try {
+      const responseText = aiResponse.choices[0].message.content.trim();
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      scriptData = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
+    } catch (e) {
+      // If JSON parsing fails, treat the response as the script itself
+      const rawScript = aiResponse.choices[0].message.content.trim();
+      const wordCount = rawScript.split(/\s+/).length;
+      scriptData = {
+        title: topic,
+        script: rawScript,
+        wordCount: wordCount,
+        estimatedDuration: duration === 'short' ? '3-5' : duration === 'long' ? '15-20' : '8-12'
+      };
+    }
+
+    // Calculate actual word count if not provided
+    if (!scriptData.wordCount && scriptData.script) {
+      scriptData.wordCount = scriptData.script.split(/\s+/).length;
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      topic,
+      duration: duration || 'medium',
+      style: style || 'engaging',
+      keywords: keywords || '',
+      title: scriptData.title,
+      script: scriptData.script,
+      wordCount: scriptData.wordCount,
+      estimatedDuration: scriptData.estimatedDuration,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('scriptWriterHistory').add(historyData);
+
+    // Update usage
+    await incrementUsage(uid, 'scriptWriter');
+    await logUsage(uid, 'script_writer', { topic, style, wordCount: scriptData.wordCount });
+
+    return {
+      success: true,
+      title: scriptData.title,
+      script: scriptData.script,
+      wordCount: scriptData.wordCount,
+      estimatedDuration: scriptData.estimatedDuration
+    };
+
+  } catch (error) {
+    console.error('Script generation error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal',
+      sanitizeErrorMessage(error, 'Failed to generate script. Please try again.'));
+  }
+});

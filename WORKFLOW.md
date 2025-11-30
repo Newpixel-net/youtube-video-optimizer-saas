@@ -66,13 +66,24 @@ firebase emulators:start
   - Added Channel Audit Pro tool (replaces Placement Finder)
   - Added `goToChannelAudit()`, `runChannelAudit()`, `renderChannelAudit()` functions
   - Updated tools array and bonus history mappings
+- `functions/index.js` - Added 4 new Enterprise Suite cloud functions:
+  - `auditChannel` - Channel Audit Pro (comprehensive channel analysis with SEO scores)
+  - `predictViralScore` - Viral Score Predictor (AI-powered viral potential analysis)
+  - `analyzeMonetization` - Monetization Analyzer (channel earnings estimation)
+  - `generateScript` - Script Writer Pro (AI-powered video script generation)
 - `WORKFLOW.md` - Updated with current branch files
 
-**Cloud Functions Needed (to be created in functions/index.js):**
-- `auditChannel` - Channel Audit Pro
-- `predictViralScore` - Viral Score Predictor
-- `analyzeMonetization` - Monetization Analyzer
-- `generateScript` - Script Writer Pro
+**New Firestore Collections (created automatically by functions):**
+- `channelAuditHistory` - Stores channel audit results
+- `viralPredictorHistory` - Stores viral score predictions
+- `monetizationHistory` - Stores monetization analysis results
+- `scriptWriterHistory` - Stores generated scripts
+
+**New Usage Types (add to admin panel if needed):**
+- `channelAudit` - Channel Audit Pro usage tracking
+- `viralPredictor` - Viral Score Predictor usage tracking
+- `monetizationAnalyzer` - Monetization Analyzer usage tracking
+- `scriptWriter` - Script Writer Pro usage tracking
 
 ---
 
