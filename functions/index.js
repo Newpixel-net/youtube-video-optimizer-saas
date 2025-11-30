@@ -6143,7 +6143,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'generateImage', 10);
 
-  const { prompt, model, quantity, aspectRatio, quality, templateId } = data;
+  const { prompt, model, quantity, aspectRatio, quality, templateId, templateVariables } = data;
 
   if (!prompt || prompt.trim().length === 0) {
     throw new functions.https.HttpsError('invalid-argument', 'Prompt is required');
@@ -6152,6 +6152,45 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   // Validate prompt length (Imagen has limits)
   if (prompt.length > 2000) {
     throw new functions.https.HttpsError('invalid-argument', 'Prompt too long. Maximum 2000 characters.');
+  }
+
+  // Determine the final prompt to use
+  let finalPrompt = prompt;
+
+  // If a template is selected, fetch the professional prompt from Firestore
+  if (templateId) {
+    try {
+      const templateDoc = await db.collection('promptTemplates').doc(templateId).get();
+      if (templateDoc.exists) {
+        const templateData = templateDoc.data();
+        if (templateData.professionalPrompt) {
+          // Use the professional prompt
+          finalPrompt = templateData.professionalPrompt;
+
+          // Replace any {{variables}} in the professional prompt with user values
+          if (templateVariables && typeof templateVariables === 'object') {
+            Object.keys(templateVariables).forEach(key => {
+              const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
+              finalPrompt = finalPrompt.replace(placeholder, templateVariables[key] || '');
+            });
+          }
+
+          // If user prompt contains additional context, append it
+          const userPromptTrimmed = prompt.trim();
+          if (userPromptTrimmed && !templateData.userPrompt?.includes(userPromptTrimmed)) {
+            // Check if user added custom details beyond the template
+            const templateUserPrompt = templateData.userPrompt || '';
+            if (userPromptTrimmed.length > templateUserPrompt.length + 20) {
+              finalPrompt += ' Additional context: ' + userPromptTrimmed;
+            }
+          }
+
+          console.log(`Using professional prompt for template: ${templateId}`);
+        }
+      }
+    } catch (templateError) {
+      console.warn('Could not fetch template, using original prompt:', templateError.message);
+    }
   }
 
   // Calculate token cost
@@ -6201,10 +6240,11 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
 
     // Call Imagen API to generate images
     console.log(`Generating ${imageCount} image(s) with ${imagenModel}, aspect: ${validAspectRatio}`);
+    console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
 
     const response = await ai.models.generateImages({
       model: imagenModel,
-      prompt: prompt,
+      prompt: finalPrompt, // Use the professional prompt when template is selected
       config: {
         numberOfImages: imageCount,
         aspectRatio: validAspectRatio,
@@ -6628,5 +6668,438 @@ exports.likeGalleryItem = functions.https.onCall(async (data, context) => {
   } catch (error) {
     console.error('Like gallery error:', error);
     throw new functions.https.HttpsError('internal', 'Failed to like item');
+  }
+});
+
+// ==========================================
+// SEED CREATIVE PROMPTS - Admin only
+// Seeds 31 professional prompts from Newimagemoduls.md
+// ==========================================
+exports.seedCreativePrompts = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  // Professional prompts organized by category
+  const professionalPrompts = [
+    // PHOTOREALISM & AESTHETICS (6 prompts)
+    {
+      id: 'business-photo',
+      name: 'Professional Business Photo',
+      category: 'photorealism',
+      description: 'LinkedIn headshots and corporate portraits',
+      tokenCost: 2,
+      userPrompt: 'Create a professional business portrait of {{subject}}',
+      professionalPrompt: 'Create a highly realistic professional headshot portrait suitable for LinkedIn or corporate use. The subject should be photographed from the chest up, with perfect lighting that eliminates harsh shadows. Use a neutral, slightly blurred office or studio background. The subject should have a confident, approachable expression with natural skin tones and textures. Professional attire appropriate for a business setting. Shot with the equivalent of an 85mm lens at f/2.8 for pleasing bokeh. Color grading should be clean and professional with accurate skin tones.',
+      isActive: true
+    },
+    {
+      id: 'film-style',
+      name: 'Vintage Film Photography',
+      category: 'photorealism',
+      description: 'Cinematic shots with authentic film grain and classic camera aesthetics',
+      tokenCost: 2,
+      userPrompt: 'Create a {{film_era}} style photograph of {{subject}}',
+      professionalPrompt: 'Generate an image with authentic vintage film photography aesthetics. Include natural film grain characteristic of high ISO film stock, slightly lifted blacks, and the distinctive color rendering of classic film emulsions like Kodak Portra 400 or Fuji Pro 400H. The image should have subtle light leaks at the edges, gentle vignetting, and the organic imperfections that make film photography distinctive. Composition should follow classic photography rules with attention to golden ratio and leading lines. Lighting should appear natural and uncontrived.',
+      isActive: true
+    },
+    {
+      id: 'mirror-selfie',
+      name: '2000s Mirror Selfie',
+      category: 'photorealism',
+      description: 'Authentic early smartphone era mirror selfie aesthetic',
+      tokenCost: 2,
+      userPrompt: 'Create a 2000s-style mirror selfie of {{subject}} in {{setting}}',
+      professionalPrompt: 'Generate an authentic early 2000s mirror selfie photograph. The image should capture the distinctive aesthetic of early smartphone cameras: slightly grainy image quality, visible mirror reflection, casual pose with phone visible in hand. Include period-appropriate elements like bathroom or bedroom setting with early 2000s decor. The flash should create that characteristic bright spot on the mirror. Color palette should reflect the era with slightly oversaturated or washed-out tones typical of early digital cameras.',
+      isActive: true
+    },
+    {
+      id: '90s-portrait',
+      name: '90s Yearbook Portrait',
+      category: 'photorealism',
+      description: 'Classic 90s school photo aesthetic with laser backgrounds',
+      tokenCost: 2,
+      userPrompt: 'Create a 90s yearbook photo of {{subject}}',
+      professionalPrompt: 'Create a nostalgic 1990s school yearbook portrait with the iconic laser background or abstract geometric patterns in teal, purple, and pink gradients. The subject should be posed in the classic yearbook style with head slightly tilted, soft studio lighting, and that distinctive early 90s look. Include the characteristic softness and color palette of 90s portrait photography. Hair and styling should reflect the era appropriately.',
+      isActive: true
+    },
+    {
+      id: 'vs-fashion',
+      name: 'High Fashion Editorial',
+      category: 'photorealism',
+      description: 'Victoria\'s Secret / high fashion runway aesthetic',
+      tokenCost: 3,
+      userPrompt: 'Create a high fashion editorial photo of {{subject}} in {{style}}',
+      professionalPrompt: 'Generate a stunning high fashion editorial photograph worthy of Vogue or Elle magazine. Professional studio lighting with dramatic rim lights and soft fill. The composition should be dynamic and editorial in nature. Flawless skin with natural texture visible, professional makeup artistry evident. Background should be clean studio or artistically relevant setting. Color grading should be rich and magazine-quality. Capture movement and energy in the pose.',
+      isActive: true
+    },
+    {
+      id: 'crowd-composition',
+      name: 'Crowd Composite Photo',
+      category: 'photorealism',
+      description: 'Same person appearing multiple times in one image',
+      tokenCost: 3,
+      userPrompt: 'Create a crowd scene where {{subject}} appears {{count}} times in different poses',
+      professionalPrompt: 'Create a seamless composite photograph showing the same person appearing multiple times within a single image, each in a different position and pose. Ensure consistent lighting across all instances, matching shadows and highlights. Each appearance should have natural variation in pose, expression, and potentially clothing. The background environment should be coherent and realistic. Pay attention to scale consistency based on position in the scene.',
+      isActive: true
+    },
+
+    // CREATIVE EXPERIMENTS (8 prompts)
+    {
+      id: 'wheres-waldo',
+      name: 'Where\'s Waldo Scene',
+      category: 'creative',
+      description: 'Detailed crowded scene with hidden subject to find',
+      tokenCost: 3,
+      userPrompt: 'Create a Where\'s Waldo style scene with {{subject}} hidden among {{setting}}',
+      professionalPrompt: 'Generate a highly detailed, densely packed illustration in the iconic Where\'s Waldo (Where\'s Wally) style. Create a busy, chaotic scene filled with hundreds of tiny characters engaged in various activities. Include the target subject cleverly hidden among the crowd, wearing distinctive clothing. The scene should be colorful, whimsical, and filled with visual gags, sight jokes, and interesting details that reward careful observation. Use a bird\'s eye or slightly elevated perspective to show maximum activity.',
+      isActive: true
+    },
+    {
+      id: 'aging-effect',
+      name: 'Age Progression',
+      category: 'creative',
+      description: 'Show how a person would look at different ages',
+      tokenCost: 3,
+      userPrompt: 'Show {{subject}} at age {{age}}',
+      professionalPrompt: 'Create a photorealistic age progression image showing how the subject would appear at the specified age. Consider natural aging processes: changes in skin elasticity, hair color and density, facial fat distribution, and bone structure changes. Maintain the subject\'s core identifying features while applying age-appropriate modifications. For older ages, include natural wrinkles, age spots, and changes in skin texture. For younger ages, smooth features and adjust proportions appropriately.',
+      isActive: true
+    },
+    {
+      id: 'recursive-image',
+      name: 'Droste Effect',
+      category: 'creative',
+      description: 'Recursive image within image effect',
+      tokenCost: 3,
+      userPrompt: 'Create a recursive image of {{subject}} holding a picture of themselves',
+      professionalPrompt: 'Generate a Droste effect / recursive image where the subject holds or displays a picture of themselves holding the same picture, creating an infinite recursive loop. The recursion should be visible for at least 4-5 iterations, each getting progressively smaller while maintaining detail. The lighting and perspective should be consistent across all recursive levels. The effect should feel natural and seamlessly integrated.',
+      isActive: true
+    },
+    {
+      id: 'glitch-art',
+      name: 'Digital Glitch Art',
+      category: 'creative',
+      description: 'Artistic digital corruption and databending effects',
+      tokenCost: 2,
+      userPrompt: 'Create glitch art of {{subject}} with {{intensity}} distortion',
+      professionalPrompt: 'Create a striking digital glitch art image with artistic data corruption effects. Include horizontal scan line displacement, RGB channel separation, pixel sorting regions, and compression artifact aesthetics. The glitch effects should be visually interesting and intentional-looking rather than randomly destructive. Balance between recognizable subject matter and abstract corruption. Use the glitch elements to create visual rhythm and draw attention to key areas.',
+      isActive: true
+    },
+    {
+      id: 'miniature-world',
+      name: 'Tilt-Shift Miniature',
+      category: 'creative',
+      description: 'Real scenes that look like tiny models',
+      tokenCost: 2,
+      userPrompt: 'Create a tilt-shift miniature effect of {{scene}}',
+      professionalPrompt: 'Generate an image with convincing tilt-shift miniature/fake miniature effect that makes a real-world scene appear to be a tiny scale model or diorama. Apply selective focus with a very narrow depth of field band. Increase color saturation and contrast slightly to enhance the toy-like appearance. The viewing angle should ideally be from above. Subjects in the scene should have the slightly static quality of miniature figures.',
+      isActive: true
+    },
+    {
+      id: 'impossible-geometry',
+      name: 'Impossible Architecture',
+      category: 'creative',
+      description: 'Escher-style impossible geometric structures',
+      tokenCost: 3,
+      userPrompt: 'Create an impossible {{structure}} in the style of {{artist}}',
+      professionalPrompt: 'Create a visually convincing impossible object or architecture inspired by M.C. Escher\'s impossible constructions. The structure should appear physically plausible at first glance but contain geometric paradoxes upon closer inspection - such as impossible staircases, paradoxical perspectives, or gravity-defying architecture. Use clean lines and professional architectural rendering style. The lighting should be consistent even when the geometry is not.',
+      isActive: true
+    },
+    {
+      id: 'style-fusion',
+      name: 'Art Style Fusion',
+      category: 'creative',
+      description: 'Combine two distinct art styles into one image',
+      tokenCost: 3,
+      userPrompt: 'Create {{subject}} combining {{style1}} and {{style2}} art styles',
+      professionalPrompt: 'Generate an artwork that seamlessly blends two distinct artistic styles into a cohesive composition. The fusion should feel intentional and harmonious rather than jarring. Find common elements between the styles that can serve as bridges. The subject matter should be rendered in a way that honors both influences equally. Consider how color palettes, brushwork techniques, and compositional approaches from each style can complement each other.',
+      isActive: true
+    },
+    {
+      id: 'coordinates-art',
+      name: 'Geographic Coordinates Art',
+      category: 'creative',
+      description: 'Artistic interpretation of a location\'s coordinates',
+      tokenCost: 3,
+      userPrompt: 'Create an artistic interpretation of coordinates {{lat}}, {{long}}',
+      professionalPrompt: 'Create an artistic visualization inspired by geographic coordinates. Generate an abstract or representational artwork that captures the essence, culture, landscape, or spirit of the location at these coordinates. Consider the geography, climate, local culture, and notable features of the region. The piece should evoke a sense of place while maintaining artistic interpretation and creativity.',
+      isActive: true
+    },
+
+    // EDUCATION & KNOWLEDGE (1 prompt)
+    {
+      id: 'infographic-edu',
+      name: 'Educational Infographic',
+      category: 'education',
+      description: 'Clear visual explanations of complex topics',
+      tokenCost: 3,
+      userPrompt: 'Create an educational infographic about {{topic}}',
+      professionalPrompt: 'Design a clear, professional educational infographic that explains a complex topic in an accessible visual format. Use a clean, organized layout with clear visual hierarchy. Include icons, diagrams, and illustrations that aid understanding. Use a cohesive color scheme with good contrast for readability. Break information into digestible chunks with clear headings. Include relevant statistics or data visualized in charts or graphs where appropriate.',
+      isActive: true
+    },
+
+    // E-COMMERCE & VIRTUAL STUDIO (2 prompts)
+    {
+      id: 'virtual-tryon',
+      name: 'Virtual Try-On',
+      category: 'ecommerce',
+      description: 'See how clothes or accessories would look when worn',
+      tokenCost: 3,
+      userPrompt: 'Show {{person}} wearing {{item}} in a try-on visualization',
+      professionalPrompt: 'Create a photorealistic virtual try-on visualization showing the specified clothing item or accessory on the subject. The garment should conform naturally to the body shape with realistic fabric draping, wrinkles, and shadows. Lighting should match between the subject and the garment. Show the item from an angle that best displays its features. Include natural fabric texture and material properties.',
+      isActive: true
+    },
+    {
+      id: 'product-studio',
+      name: 'Product Photography',
+      category: 'ecommerce',
+      description: 'Professional e-commerce product shots',
+      tokenCost: 2,
+      userPrompt: 'Create a professional product photo of {{product}} on {{background}}',
+      professionalPrompt: 'Identify the main product in the uploaded photo. Isolate it from its original background and place it in a professional e-commerce photography setting. Use a clean studio gradient background with soft shadows. Apply professional product photography lighting: main light at 45 degrees, fill light for shadow detail, and rim light for separation. Ensure the product is sharp, well-exposed, and presented at its most appealing angle. Clean up any imperfections while maintaining realistic appearance.',
+      isActive: true
+    },
+
+    // WORKPLACE & PRODUCTIVITY (3 prompts)
+    {
+      id: 'flowchart',
+      name: 'Process Flowchart',
+      category: 'workplace',
+      description: 'Professional flowcharts and process diagrams',
+      tokenCost: 2,
+      userPrompt: 'Create a flowchart showing {{process}}',
+      professionalPrompt: 'Generate a clean, professional flowchart that visually maps out the specified process or workflow. Use standard flowchart symbols: ovals for start/end, rectangles for processes, diamonds for decisions, parallelograms for I/O. Maintain consistent spacing and alignment. Use a limited, professional color palette to indicate different types of steps or departments. Include clear labels and directional arrows. The layout should follow top-to-bottom or left-to-right flow.',
+      isActive: true
+    },
+    {
+      id: 'ui-sketch',
+      name: 'UI Wireframe Sketch',
+      category: 'workplace',
+      description: 'Hand-drawn style app wireframes and mockups',
+      tokenCost: 2,
+      userPrompt: 'Create a hand-drawn UI sketch for {{app_type}} showing {{screens}}',
+      professionalPrompt: 'Generate a hand-drawn style UI wireframe sketch that looks like it was created with markers on paper or whiteboard. Include rough but recognizable UI elements: navigation bars, buttons, text placeholders, image areas. Use a sketchy, slightly imperfect line quality that suggests rapid ideation. Add annotations and arrows pointing to key features. Include multiple screen states or flow if relevant. The style should be professional yet approachable.',
+      isActive: true
+    },
+    {
+      id: 'magazine-layout',
+      name: 'Magazine Page Layout',
+      category: 'workplace',
+      description: 'Professional magazine spread designs',
+      tokenCost: 3,
+      userPrompt: 'Design a magazine spread about {{topic}} in {{magazine}} style',
+      professionalPrompt: 'Create a professional magazine page layout or spread design. Include sophisticated typography with hierarchy between headlines, subheads, body copy, and captions. Integrate photography or illustrations with dynamic cropping and placement. Use pull quotes, sidebars, or info boxes as design elements. The layout should have visual rhythm with balanced white space. Follow contemporary editorial design principles with attention to grid systems and alignment.',
+      isActive: true
+    },
+
+    // PHOTO EDITING & RESTORATION (2 prompts)
+    {
+      id: 'outpainting',
+      name: 'Image Outpainting',
+      category: 'photoediting',
+      description: 'Extend images beyond their original borders',
+      tokenCost: 2,
+      userPrompt: 'Expand this image to the {{direction}} while maintaining style',
+      professionalPrompt: 'Extend the provided image beyond its original borders in the specified direction(s). The generated content must seamlessly blend with the original: match the lighting direction and quality, continue any visible patterns or textures naturally, maintain consistent perspective and scale. The extension should feel like it was always part of the original photograph. Pay special attention to edge blending and tonal consistency.',
+      isActive: true
+    },
+    {
+      id: 'crowd-removal',
+      name: 'Crowd/Object Removal',
+      category: 'photoediting',
+      description: 'Remove unwanted people or objects from photos',
+      tokenCost: 2,
+      userPrompt: 'Remove crowds/people from this {{location}} photo',
+      professionalPrompt: 'Intelligently remove crowds, tourists, or unwanted people from the photograph while reconstructing the background naturally. Fill the removed areas with contextually appropriate content that matches the surrounding architecture, landscape, or environment. Maintain consistent lighting, shadows, and perspective. The result should look like the scene was photographed empty, with no artifacts or obvious manipulation.',
+      isActive: true
+    },
+
+    // INTERIOR DESIGN (1 prompt)
+    {
+      id: 'floor-plan-3d',
+      name: 'Floor Plan to 3D',
+      category: 'interior',
+      description: 'Transform 2D floor plans into 3D visualizations',
+      tokenCost: 3,
+      userPrompt: 'Convert this floor plan into a 3D {{style}} interior visualization',
+      professionalPrompt: 'Transform the 2D floor plan into a photorealistic 3D interior visualization. Interpret the room dimensions and layout from the plan. Add appropriate furniture placement based on room functions. Apply the specified interior design style with matching materials, colors, and decor. Include realistic lighting from windows and artificial sources. Render with architectural visualization quality including accurate materials and atmospheric effects.',
+      isActive: true
+    },
+
+    // SOCIAL MEDIA & MARKETING (2 prompts)
+    {
+      id: 'viral-thumbnail',
+      name: 'Viral YouTube Thumbnail',
+      category: 'social',
+      description: 'Eye-catching thumbnails optimized for clicks',
+      tokenCost: 2,
+      userPrompt: 'Create a viral thumbnail for a video about {{topic}}',
+      professionalPrompt: 'Design an attention-grabbing YouTube thumbnail optimized for maximum click-through rate. Include a human face with exaggerated, expressive emotion (shock, excitement, curiosity). Use bold, contrasting colors that pop against YouTube\'s interface. Leave strategic space for large, readable text overlay. Create visual contrast and focal points that draw the eye. The composition should be readable even at small sizes.',
+      isActive: true
+    },
+    {
+      id: 'event-poster',
+      name: 'Event Promotional Poster',
+      category: 'social',
+      description: 'Professional event and concert posters',
+      tokenCost: 2,
+      userPrompt: 'Design an event poster for {{event}} in {{style}} aesthetic',
+      professionalPrompt: 'Create a compelling event promotional poster with strong visual impact. Establish clear visual hierarchy: event name prominent, date/time/location clearly readable, supporting imagery that sets the tone. Use typography that matches the event\'s personality. Include appropriate imagery or graphics that convey the event type and atmosphere. Consider print requirements: bleed areas, safe zones for text, and scalability.',
+      isActive: true
+    },
+
+    // DAILY LIFE & TRANSLATION (2 prompts)
+    {
+      id: 'menu-translation',
+      name: 'Visual Menu Translation',
+      category: 'daily',
+      description: 'Translate and visualize foreign language menus',
+      tokenCost: 2,
+      userPrompt: 'Translate this {{language}} menu to {{target_language}} with food images',
+      professionalPrompt: 'Analyze the menu image and create a visual translation guide. Identify each menu item, translate the name and description accurately, and generate an appetizing photograph of what each dish looks like. Present in a clean, organized format that shows: original text, translation, and representative food image side by side. Include any relevant dietary information or common allergens if identifiable.',
+      isActive: true
+    },
+    {
+      id: 'comic-localization',
+      name: 'Comic/Manga Localization',
+      category: 'daily',
+      description: 'Translate comics while preserving art style',
+      tokenCost: 3,
+      userPrompt: 'Translate this comic to {{language}} while keeping the original art style',
+      professionalPrompt: 'Localize the comic panel(s) by replacing text with accurate translations while perfectly preserving the original art style. Match the original font style, weight, and character as closely as possible. Adjust text bubble sizes if necessary while maintaining composition. Ensure translated text fits naturally within speech bubbles and text areas. Preserve all visual elements, effects, and sound effects with appropriate localized equivalents.',
+      isActive: true
+    },
+
+    // SOCIAL NETWORKING & AVATARS (2 prompts)
+    {
+      id: '3d-avatar',
+      name: '3D Character Avatar',
+      category: 'avatars',
+      description: 'Custom 3D avatars for social media and gaming',
+      tokenCost: 3,
+      userPrompt: 'Create a 3D avatar based on {{description}} in {{style}} style',
+      professionalPrompt: 'Generate a stylized 3D character avatar suitable for social media profiles or gaming. The design should capture the specified characteristics while maintaining appealing stylization. Use clean topology and pleasant proportions. Include customizable elements like hairstyle, accessories, and expression. Render with soft, flattering lighting. The style should be modern and professional while maintaining personality.',
+      isActive: true
+    },
+    {
+      id: 'pet-meme',
+      name: 'Pet Meme Generator',
+      category: 'avatars',
+      description: 'Transform pet photos into shareable memes',
+      tokenCost: 2,
+      userPrompt: 'Turn this pet into a meme with {{expression}} expression',
+      professionalPrompt: 'Transform the pet photograph into a meme-worthy image. Enhance or adjust the pet\'s expression to match the desired emotion while keeping it recognizable. Position the image to leave appropriate space for text captions above and/or below. Adjust lighting and color for maximum visual impact. The result should be shareable and engaging while maintaining the pet\'s recognizable features.',
+      isActive: true
+    },
+
+    // NEW ADDITIONS (4 prompts)
+    {
+      id: 'memory-palace',
+      name: 'Memory Palace Visualization',
+      category: 'new',
+      description: 'Visual memory aids using the method of loci',
+      tokenCost: 3,
+      userPrompt: 'Create a memory palace to remember {{items}} using {{location}}',
+      professionalPrompt: 'Create a visual memory palace illustration using the method of loci technique. Design a clearly navigable physical space (room, building, path) with distinct locations. Place memorable, exaggerated visual representations of each item to remember at specific points along the route. The items should be interacting with their locations in bizarre, memorable ways. Include visual pathway markers to guide the mental journey through the space.',
+      isActive: true
+    },
+    {
+      id: 'googly-eyes',
+      name: 'Googly Eyes Addition',
+      category: 'new',
+      description: 'Add fun googly eyes to any subject',
+      tokenCost: 1,
+      userPrompt: 'Add googly eyes to {{subject}}',
+      professionalPrompt: 'Add photorealistic googly eyes to the subject in a humorous way. The googly eyes should be properly scaled and positioned to replace or enhance existing eyes. Each eye should be pointing in a slightly different direction for comedic effect. Include appropriate shadows and reflections to integrate the googly eyes naturally into the image while maintaining their obviously silly appearance.',
+      isActive: true
+    },
+    {
+      id: 'data-infographic',
+      name: 'Data Visualization Infographic',
+      category: 'new',
+      description: 'Transform data into beautiful visual stories',
+      tokenCost: 3,
+      userPrompt: 'Create a data visualization infographic for {{data}} in {{style}} style',
+      professionalPrompt: 'Design a compelling data visualization infographic that tells a story with numbers. Choose appropriate chart types for the data: bar, line, pie, area, scatter, or custom graphics. Use a cohesive color scheme that aids comprehension. Include clear labels, legends, and scale indicators. Create visual hierarchy that guides the viewer through the key insights. Add contextual annotations to highlight important data points.',
+      isActive: true
+    },
+    {
+      id: 'weather-card',
+      name: 'Stylized Weather Card',
+      category: 'new',
+      description: 'Beautiful weather forecast visualizations',
+      tokenCost: 2,
+      userPrompt: 'Create a stylish weather card for {{location}} showing {{conditions}}',
+      professionalPrompt: 'Design a beautiful, stylized weather card or widget visualization. Include location name, current temperature, weather condition icon, and relevant metrics (humidity, wind, UV index). Use atmospheric illustration that reflects the weather conditions: sunny scenes should feel warm and bright, rainy scenes should feel moody and wet. Apply a cohesive design language with attention to typography and iconography.',
+      isActive: true
+    }
+  ];
+
+  try {
+    const batch = db.batch();
+    let count = 0;
+
+    for (const prompt of professionalPrompts) {
+      const docRef = db.collection('promptTemplates').doc(prompt.id);
+      batch.set(docRef, {
+        ...prompt,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      count++;
+    }
+
+    await batch.commit();
+
+    console.log(`Seeded ${count} prompt templates`);
+
+    return {
+      success: true,
+      count: count,
+      message: `Successfully seeded ${count} prompt templates`
+    };
+
+  } catch (error) {
+    console.error('Seed prompts error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to seed prompts: ' + error.message);
+  }
+});
+
+// Get prompt templates (public, for Creative Studio)
+exports.getPromptTemplates = functions.https.onCall(async (data, context) => {
+  const { category, activeOnly } = data || {};
+
+  try {
+    let query = db.collection('promptTemplates');
+
+    if (category && category !== 'all') {
+      query = query.where('category', '==', category);
+    }
+
+    if (activeOnly !== false) {
+      query = query.where('isActive', '==', true);
+    }
+
+    const snapshot = await query.orderBy('category').orderBy('name').get();
+    const templates = [];
+
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      templates.push({
+        id: doc.id,
+        name: data.name,
+        category: data.category,
+        description: data.description,
+        tokenCost: data.tokenCost,
+        userPrompt: data.userPrompt,
+        // Note: professionalPrompt is sent to client but only used on backend for generation
+        professionalPrompt: data.professionalPrompt,
+        isActive: data.isActive
+      });
+    });
+
+    return { success: true, templates };
+
+  } catch (error) {
+    console.error('Get templates error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get templates');
   }
 });
