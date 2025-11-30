@@ -834,6 +834,64 @@
             color: white;
         }
 
+        .toast-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+
+        .toast-info {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+        }
+
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-retry-btn {
+            padding: 0.375rem 0.75rem;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .toast-retry-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .toast-dismiss-btn {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            border-radius: 50%;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .toast-dismiss-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+        }
+
         /* ------------------------------------------
            2.15 SCROLLBAR
            ------------------------------------------ */
@@ -1060,6 +1118,22 @@
         .prompt-textarea:focus {
             outline: none;
             border-color: #8b5cf6;
+        }
+
+        .prompt-textarea.has-unfilled-vars {
+            border-color: #f59e0b;
+            animation: pulseWarning 0.5s ease 3;
+        }
+
+        @keyframes pulseWarning {
+            0%, 100% {
+                border-color: #f59e0b;
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+            }
+            50% {
+                border-color: #f59e0b;
+                box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.3);
+            }
         }
 
         .prompt-actions {
@@ -1384,6 +1458,27 @@
             color: #a78bfa;
         }
 
+        /* History Stats */
+        .history-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .history-count {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .history-showing {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
         /* History Grid */
         .history-grid {
             display: grid;
@@ -1449,6 +1544,40 @@
 
         .history-action-btn:hover {
             background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Load More Button */
+        .load-more-container {
+            display: flex;
+            justify-content: center;
+            padding: 1.5rem 0;
+            margin-top: 1rem;
+        }
+
+        .load-more-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 2rem;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .load-more-btn:hover {
+            background: rgba(139, 92, 246, 0.25);
+            border-color: rgba(139, 92, 246, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .load-more-count {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
         }
 
         /* Community Gallery (Enhanced) */
@@ -1709,6 +1838,237 @@
             color: white;
         }
 
+        /* Prompt Health Indicator */
+        .prompt-health {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .prompt-health-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 1rem;
+            font-size: 0.7rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .prompt-health-indicator.empty {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .prompt-health-indicator.short {
+            background: rgba(255, 193, 7, 0.15);
+            color: #ffc107;
+        }
+
+        .prompt-health-indicator.good {
+            background: rgba(76, 175, 80, 0.15);
+            color: #4caf50;
+        }
+
+        .prompt-health-indicator.long {
+            background: rgba(255, 152, 0, 0.15);
+            color: #ff9800;
+        }
+
+        .prompt-health-indicator.limit {
+            background: rgba(244, 67, 54, 0.15);
+            color: #f44336;
+        }
+
+        .prompt-char-count {
+            color: rgba(255, 255, 255, 0.4);
+            transition: color 0.3s ease;
+        }
+
+        .prompt-char-count.warning {
+            color: #ff9800;
+        }
+
+        .prompt-char-count.danger {
+            color: #f44336;
+        }
+
+        /* Template Variable Chips Bar */
+        .template-vars-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+            padding: 0.75rem;
+            margin-top: 0.5rem;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px dashed rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+        }
+
+        .template-vars-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+            margin-right: 0.25rem;
+        }
+
+        .template-var-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.4rem 0.75rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 9999px;
+            color: #c4b5fd;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .template-var-chip:hover {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(99, 102, 241, 0.4) 100%);
+            border-color: rgba(139, 92, 246, 0.6);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .template-var-chip-icon {
+            font-size: 0.7rem;
+        }
+
+        .template-var-chip-name {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.75rem;
+        }
+
+        /* Variable Input Popup */
+        .variable-input-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .variable-input-popup {
+            background: linear-gradient(180deg, rgba(35, 35, 55, 0.98) 0%, rgba(25, 25, 45, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 380px;
+            padding: 1.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .variable-input-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .variable-input-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .variable-input-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .variable-input-subtitle {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        }
+
+        .variable-input-field {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s ease;
+            margin-bottom: 1rem;
+        }
+
+        .variable-input-field:focus {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+        }
+
+        .variable-input-field::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .variable-input-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+        }
+
+        .variable-input-btn {
+            padding: 0.6rem 1.25rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .variable-input-btn-cancel {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .variable-input-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .variable-input-btn-apply {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            color: white;
+        }
+
+        .variable-input-btn-apply:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .variable-input-btn-apply:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         /* Dropdown menu for prompt chips */
         .prompt-dropdown-menu {
             position: absolute;
@@ -1891,6 +2251,200 @@
         .generate-btn-sparkle {
             display: inline-flex;
             font-size: 1.25rem;
+        }
+
+        /* Generation Progress UI */
+        .generation-progress-container {
+            padding: 1rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(236, 72, 153, 0.15) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+        }
+
+        .generation-stage {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .generation-stage-icon {
+            font-size: 1.25rem;
+        }
+
+        .generation-stage-label {
+            flex: 1;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .generation-stage-percent {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 600;
+        }
+
+        .generation-progress-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+
+        .generation-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .generation-stages {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+
+        .generation-stage-step {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            opacity: 0.4;
+            transition: all 0.3s ease;
+        }
+
+        .generation-stage-step.completed {
+            opacity: 0.7;
+            background: rgba(76, 175, 80, 0.15);
+        }
+
+        .generation-stage-step.active {
+            opacity: 1;
+            background: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+            animation: stagePulse 1.5s ease infinite;
+        }
+
+        @keyframes stagePulse {
+            0%, 100% {
+                box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+            }
+        }
+
+        @keyframes animate-pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .animate-pulse {
+            animation: animate-pulse 1.5s ease infinite;
+        }
+
+        /* Cost Breakdown Component */
+        .cost-breakdown {
+            margin-top: 1rem;
+            padding: 0.875rem;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+        }
+
+        .cost-breakdown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 0.625rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 0.625rem;
+        }
+
+        .cost-breakdown-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
+        .cost-breakdown-total {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fbbf24;
+            transition: all 0.3s ease;
+        }
+
+        .cost-breakdown-total.insufficient {
+            color: #f87171;
+        }
+
+        .cost-breakdown-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.375rem;
+        }
+
+        .cost-breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+        }
+
+        .cost-detail-label {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .cost-detail-value {
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+        }
+
+        .cost-breakdown-balance {
+            margin-top: 0.75rem;
+            padding-top: 0.625rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .balance-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .balance-value {
+            font-weight: 600;
+            color: white;
+        }
+
+        .balance-value.insufficient {
+            color: #f87171;
+        }
+
+        .balance-warning {
+            font-size: 0.7rem;
+            color: #f87171;
+            margin-top: 0.375rem;
+            text-align: right;
+        }
+
+        .rollover-info {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+            text-align: right;
+            margin-top: 0.25rem;
         }
 
         /* Selected template indicator */
@@ -2372,6 +2926,240 @@
         }
 
         /* ==========================================
+           CONFIRMATION DIALOG
+           ========================================== */
+        .confirm-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 2500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            animation: fadeIn 0.15s ease;
+        }
+
+        .confirm-dialog {
+            background: linear-gradient(180deg, rgba(35, 35, 55, 0.98) 0%, rgba(25, 25, 45, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 420px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: modalSlideIn 0.2s ease;
+        }
+
+        .confirm-dialog-header {
+            padding: 1.25rem 1.5rem 0.75rem;
+        }
+
+        .confirm-dialog-icon {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 193, 7, 0.15);
+            border-radius: 0.75rem;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .confirm-dialog-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.5rem;
+        }
+
+        .confirm-dialog-message {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.5;
+        }
+
+        .confirm-dialog-preview {
+            margin: 1rem 1.5rem;
+            padding: 0.875rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .confirm-dialog-preview-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 0.5rem;
+        }
+
+        .confirm-dialog-footer {
+            display: flex;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem 1.25rem;
+        }
+
+        .confirm-dialog-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .confirm-dialog-btn-cancel {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .confirm-dialog-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .confirm-dialog-btn-replace {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            color: white;
+        }
+
+        .confirm-dialog-btn-replace:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .confirm-dialog-btn-append {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid rgba(76, 175, 80, 0.4);
+            color: #4caf50;
+        }
+
+        .confirm-dialog-btn-append:hover {
+            background: rgba(76, 175, 80, 0.3);
+        }
+
+        /* ==========================================
+           DRAFT NOTIFICATION BANNER
+           ========================================== */
+        .draft-notification {
+            position: fixed;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.95) 0%, rgba(109, 40, 217, 0.95) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.75rem;
+            padding: 0.875rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 10px 40px rgba(139, 92, 246, 0.4);
+            animation: slideDown 0.3s ease;
+            max-width: 90%;
+            width: auto;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .draft-notification-icon {
+            font-size: 1.25rem;
+        }
+
+        .draft-notification-content {
+            flex: 1;
+        }
+
+        .draft-notification-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.125rem;
+        }
+
+        .draft-notification-subtitle {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .draft-notification-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .draft-notification-btn {
+            padding: 0.5rem 0.875rem;
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .draft-notification-btn-restore {
+            background: white;
+            border: none;
+            color: #7c3aed;
+        }
+
+        .draft-notification-btn-restore:hover {
+            transform: scale(1.02);
+        }
+
+        .draft-notification-btn-dismiss {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .draft-notification-btn-dismiss:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        @media (max-width: 640px) {
+            .draft-notification {
+                flex-direction: column;
+                text-align: center;
+                gap: 0.75rem;
+            }
+
+            .draft-notification-actions {
+                width: 100%;
+            }
+
+            .draft-notification-btn {
+                flex: 1;
+            }
+        }
+
+        /* ==========================================
            FLOATING GENERATE BUTTON
            ========================================== */
         .floating-generate-container {
@@ -2624,6 +3412,508 @@
                 width: 100%;
             }
         }
+
+        /* ==========================================
+           IMAGE DETAIL MODAL
+           ========================================== */
+        .image-detail-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.92);
+            backdrop-filter: blur(10px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .image-detail-modal {
+            background: linear-gradient(180deg, rgba(30, 30, 50, 0.98) 0%, rgba(20, 20, 40, 0.98) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 1.25rem;
+            width: 100%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 80px rgba(139, 92, 246, 0.2);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        .image-detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .image-detail-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .image-detail-close {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .image-detail-close:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .image-detail-body {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        @media (max-width: 768px) {
+            .image-detail-body {
+                flex-direction: column;
+            }
+        }
+
+        .image-detail-preview {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            min-height: 300px;
+        }
+
+        .image-detail-preview img {
+            max-width: 100%;
+            max-height: 60vh;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .image-detail-info {
+            width: 300px;
+            padding: 1.5rem;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+        }
+
+        @media (max-width: 768px) {
+            .image-detail-info {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                max-height: 40vh;
+            }
+        }
+
+        .image-detail-section {
+            margin-bottom: 1.25rem;
+        }
+
+        .image-detail-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .image-detail-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.4rem;
+        }
+
+        .image-detail-value {
+            font-size: 0.9rem;
+            color: white;
+            line-height: 1.5;
+        }
+
+        .image-detail-prompt {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.6;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .image-detail-meta-row {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .image-detail-meta-item {
+            flex: 1;
+        }
+
+        .image-detail-actions {
+            display: flex;
+            gap: 0.5rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .image-detail-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.625rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .image-detail-btn-primary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            color: white;
+        }
+
+        .image-detail-btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .image-detail-btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .image-detail-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .image-detail-btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+        }
+
+        .image-detail-btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        /* ==========================================
+           MODEL SELECTOR DROPDOWN
+           ========================================== */
+        .model-dropdown-container {
+            position: relative;
+        }
+
+        .model-dropdown-trigger {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.625rem;
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .model-dropdown-trigger:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(139, 92, 246, 0.4);
+        }
+
+        .model-dropdown-trigger-content {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+        }
+
+        .model-dropdown-trigger-icon {
+            font-size: 1.1rem;
+        }
+
+        .model-dropdown-trigger-name {
+            font-weight: 500;
+        }
+
+        .model-dropdown-trigger-arrow {
+            font-size: 0.75rem;
+            opacity: 0.6;
+            transition: transform 0.2s ease;
+        }
+
+        .model-dropdown-trigger.open .model-dropdown-trigger-arrow {
+            transform: rotate(180deg);
+        }
+
+        .model-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            left: 0;
+            right: 0;
+            background: rgba(25, 25, 45, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            z-index: 100;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+            display: none;
+            animation: dropdownIn 0.2s ease;
+        }
+
+        .model-dropdown-menu.open {
+            display: block;
+        }
+
+        @keyframes dropdownIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .model-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+            padding: 0.75rem;
+            background: transparent;
+            border: none;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.875rem;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .model-dropdown-item:hover:not(:disabled) {
+            background: rgba(139, 92, 246, 0.2);
+            color: white;
+        }
+
+        .model-dropdown-item.active {
+            background: rgba(139, 92, 246, 0.25);
+            color: white;
+        }
+
+        .model-dropdown-item:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .model-dropdown-item-icon {
+            font-size: 1.25rem;
+            width: 28px;
+            text-align: center;
+        }
+
+        .model-dropdown-item-content {
+            flex: 1;
+        }
+
+        .model-dropdown-item-name {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .model-dropdown-item-desc {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 0.15rem;
+        }
+
+        .model-badge {
+            font-size: 0.6rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.25rem;
+        }
+
+        .model-badge-suggested {
+            background: rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+        }
+
+        .model-badge-trending {
+            background: rgba(249, 115, 22, 0.3);
+            color: #fb923c;
+        }
+
+        .model-badge-new {
+            background: rgba(34, 197, 94, 0.3);
+            color: #4ade80;
+        }
+
+        .model-badge-coming {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .model-badge-premium {
+            background: rgba(251, 191, 36, 0.3);
+            color: #fbbf24;
+        }
+
+        .model-dropdown-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 0.5rem 0;
+        }
+
+        /* ==========================================
+           REFERENCES SECTION IMPROVED
+           ========================================== */
+        .references-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .references-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .references-add-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.65rem;
+            background: rgba(139, 92, 246, 0.2);
+            border: none;
+            border-radius: 0.375rem;
+            color: #a78bfa;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .references-add-btn:hover {
+            background: rgba(139, 92, 246, 0.3);
+            color: white;
+        }
+
+        .reference-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 0.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-height: 80px;
+        }
+
+        .reference-card:hover:not(.locked) {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(139, 92, 246, 0.4);
+        }
+
+        .reference-card.locked {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .reference-card.has-content {
+            border-style: solid;
+            border-color: rgba(139, 92, 246, 0.4);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .reference-card-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.35rem;
+            opacity: 0.7;
+        }
+
+        .reference-card-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
+        .reference-card-premium {
+            position: absolute;
+            top: 0.35rem;
+            right: 0.35rem;
+            font-size: 0.65rem;
+            padding: 0.1rem 0.3rem;
+            background: rgba(251, 191, 36, 0.3);
+            color: #fbbf24;
+            border-radius: 0.25rem;
+            font-weight: 600;
+        }
+
+        .reference-card-preview {
+            width: 100%;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 0.5rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .reference-card-remove {
+            position: absolute;
+            top: -0.35rem;
+            right: -0.35rem;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ef4444;
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -2701,6 +3991,7 @@
             // History (user's creations)
             history: [],
             historyLoading: false,
+            historyDisplayCount: 12, // Start with 12, load more on demand
 
             // Gallery filters
             galleryFilter: 'all', // all | upscaler | motion
@@ -2714,6 +4005,7 @@
             // Generation state
             generating: false,
             generationProgress: 0,
+            generationStage: 'idle', // idle, queued, processing, generating, finalizing, complete, error
 
             // UI state
             loading: false,
@@ -2726,7 +4018,26 @@
 
             // Floating Generate Button state
             floatingSettingsOpen: false,
-            showFloatingButton: false
+            showFloatingButton: false,
+
+            // Image Detail Modal state
+            imageDetailModalOpen: false,
+            selectedImageDetail: null,
+
+            // Model Dropdown state
+            modelDropdownOpen: false,
+
+            // Template Confirmation Dialog state
+            confirmDialogOpen: false,
+            pendingTemplate: null,
+
+            // Draft notification state
+            showDraftNotification: false,
+
+            // Variable input state
+            variableInputOpen: false,
+            variableInputName: null,
+            variableInputValue: ''
         };
 
         /* ==========================================
@@ -2778,6 +4089,59 @@
             { key: 'food', name: 'Food', icon: '##' },
             { key: 'landscapes', name: 'Landscapes', icon: '##' },
             { key: 'scifi', name: 'Sci-Fi', icon: '##' }
+        ];
+
+        // Model options for dropdown
+        const modelsConfig = [
+            {
+                key: 'auto',
+                name: 'Auto',
+                icon: '⚡',
+                description: 'Fast models with standard quality',
+                badge: 'suggested',
+                available: true
+            },
+            {
+                key: 'banana1',
+                name: 'Nano Banana',
+                icon: '🍌',
+                description: 'The only 4K with image references',
+                badge: 'trending',
+                available: true
+            },
+            {
+                key: 'banana2',
+                name: 'Nano Banana Ultra',
+                icon: '🍌',
+                description: 'Highest quality, best details',
+                badge: 'new',
+                available: true
+            },
+            { divider: true },
+            {
+                key: 'flux',
+                name: 'Flux',
+                icon: '△',
+                description: 'Most loved by the AI community',
+                badge: 'coming',
+                available: false
+            },
+            {
+                key: 'gpt',
+                name: 'GPT',
+                icon: '◎',
+                description: 'OpenAI technology from ChatGPT',
+                badge: 'coming',
+                available: false
+            },
+            {
+                key: 'runway',
+                name: 'Runway',
+                icon: '◈',
+                description: 'Professional video & image AI',
+                badge: 'coming',
+                available: false
+            }
         ];
 
         /* ==========================================
@@ -3268,6 +4632,136 @@
                 var div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;
+            },
+
+            // Draft storage key
+            DRAFT_KEY: 'creative_studio_draft',
+
+            // Save draft to localStorage
+            saveDraft: function() {
+                try {
+                    var draft = {
+                        prompt: state.prompt,
+                        selectedModel: state.selectedModel,
+                        quantity: state.quantity,
+                        aspectRatio: state.aspectRatio,
+                        quality: state.quality,
+                        selectedTemplate: state.selectedTemplate ? { id: state.selectedTemplate.id, name: state.selectedTemplate.name } : null,
+                        savedAt: new Date().toISOString()
+                    };
+                    localStorage.setItem(utils.DRAFT_KEY, JSON.stringify(draft));
+                } catch (e) {
+                    console.warn('Could not save draft:', e);
+                }
+            },
+
+            // Load draft from localStorage
+            loadDraft: function() {
+                try {
+                    var draftStr = localStorage.getItem(utils.DRAFT_KEY);
+                    if (draftStr) {
+                        return JSON.parse(draftStr);
+                    }
+                } catch (e) {
+                    console.warn('Could not load draft:', e);
+                }
+                return null;
+            },
+
+            // Clear draft from localStorage
+            clearDraft: function() {
+                try {
+                    localStorage.removeItem(utils.DRAFT_KEY);
+                } catch (e) {
+                    console.warn('Could not clear draft:', e);
+                }
+            },
+
+            // Check if draft exists and is recent (within 24 hours)
+            hasDraft: function() {
+                var draft = utils.loadDraft();
+                if (!draft || !draft.savedAt) return false;
+
+                // Check if prompt has content
+                if (!draft.prompt || draft.prompt.trim().length === 0) return false;
+
+                // Check if draft is within 24 hours
+                var savedTime = new Date(draft.savedAt).getTime();
+                var now = Date.now();
+                var hoursDiff = (now - savedTime) / (1000 * 60 * 60);
+                return hoursDiff < 24;
+            },
+
+            // Format draft time for display
+            formatDraftTime: function(dateStr) {
+                if (!dateStr) return 'recently';
+                try {
+                    var date = new Date(dateStr);
+                    var now = new Date();
+                    var diffMs = now - date;
+                    var diffMins = Math.floor(diffMs / 60000);
+                    var diffHours = Math.floor(diffMs / 3600000);
+
+                    if (diffMins < 1) return 'just now';
+                    if (diffMins < 60) return diffMins + ' minute' + (diffMins > 1 ? 's' : '') + ' ago';
+                    if (diffHours < 24) return diffHours + ' hour' + (diffHours > 1 ? 's' : '') + ' ago';
+                    return date.toLocaleDateString();
+                } catch (e) {
+                    return 'recently';
+                }
+            },
+
+            // Modal management utilities
+            lockBodyScroll: function() {
+                document.body.style.overflow = 'hidden';
+                document.body.style.paddingRight = '15px'; // Prevent layout shift from scrollbar removal
+            },
+
+            unlockBodyScroll: function() {
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            },
+
+            // Focus trap for modals - returns a cleanup function
+            setupFocusTrap: function(modalSelector) {
+                var modal = document.querySelector(modalSelector);
+                if (!modal) return function() {};
+
+                var focusableElements = modal.querySelectorAll(
+                    'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+                );
+                var firstFocusable = focusableElements[0];
+                var lastFocusable = focusableElements[focusableElements.length - 1];
+
+                function handleKeyDown(e) {
+                    if (e.key !== 'Tab') return;
+
+                    if (e.shiftKey) {
+                        // Shift + Tab
+                        if (document.activeElement === firstFocusable) {
+                            e.preventDefault();
+                            lastFocusable.focus();
+                        }
+                    } else {
+                        // Tab
+                        if (document.activeElement === lastFocusable) {
+                            e.preventDefault();
+                            firstFocusable.focus();
+                        }
+                    }
+                }
+
+                modal.addEventListener('keydown', handleKeyDown);
+
+                // Focus first element
+                if (firstFocusable) {
+                    firstFocusable.focus();
+                }
+
+                // Return cleanup function
+                return function() {
+                    modal.removeEventListener('keydown', handleKeyDown);
+                };
             }
         };
 
@@ -3309,6 +4803,10 @@
                 state.toolInterfaceOpen = true;
                 state.mainTab = 'templates'; // Start on templates tab
                 render();
+                // Update floating button visibility after opening
+                setTimeout(function() {
+                    app.updateFloatingButtonVisibility();
+                }, 50);
             },
 
             // Close Tool Interface
@@ -3321,6 +4819,10 @@
             setMainTab: function(tab) {
                 state.mainTab = tab;
                 render();
+                // Update floating button visibility after tab change
+                setTimeout(function() {
+                    app.updateFloatingButtonVisibility();
+                }, 50);
             },
 
             // Model Selection
@@ -3361,22 +4863,64 @@
 
             // Select Template
             selectTemplate: function(templateId) {
-                // Find template and populate prompt
+                // Find template
+                var foundTemplate = null;
                 for (var i = 0; i < templateCategories.length; i++) {
                     var category = templateCategories[i];
                     for (var j = 0; j < category.templates.length; j++) {
                         var template = category.templates[j];
                         if (template.id === templateId) {
-                            state.selectedTemplate = template;
-                            state.prompt = template.prompt;
-                            // Update the textarea
-                            var textarea = document.getElementById('prompt-textarea');
-                            if (textarea) textarea.value = template.prompt;
-                            render();
-                            return;
+                            foundTemplate = template;
+                            break;
                         }
                     }
+                    if (foundTemplate) break;
                 }
+
+                if (!foundTemplate) return;
+
+                // Check if user has existing prompt that would be replaced
+                var hasExistingPrompt = state.prompt.trim().length > 10;
+                var isNotSameTemplate = !state.selectedTemplate || state.selectedTemplate.id !== templateId;
+
+                if (hasExistingPrompt && isNotSameTemplate) {
+                    // Show confirmation dialog
+                    state.pendingTemplate = foundTemplate;
+                    state.confirmDialogOpen = true;
+                    render();
+                } else {
+                    // Apply template directly
+                    app.applyTemplate(foundTemplate, 'replace');
+                }
+            },
+
+            // Apply template (called directly or after confirmation)
+            applyTemplate: function(template, mode) {
+                state.selectedTemplate = template;
+
+                if (mode === 'replace') {
+                    state.prompt = template.prompt;
+                } else if (mode === 'append') {
+                    state.prompt = state.prompt.trim() + '\n\n' + template.prompt;
+                }
+
+                // Update the textarea
+                var textarea = document.getElementById('prompt-textarea');
+                if (textarea) textarea.value = state.prompt;
+
+                // Close dialog if open
+                state.confirmDialogOpen = false;
+                state.pendingTemplate = null;
+
+                render();
+                showToast('Template applied: ' + template.name, 'success');
+            },
+
+            // Cancel template selection
+            cancelTemplateConfirm: function() {
+                state.confirmDialogOpen = false;
+                state.pendingTemplate = null;
+                render();
             },
 
             // Enhance Prompt (placeholder for AI enhancement)
@@ -3462,6 +5006,44 @@
                 state.sceneMode = null;
                 var textarea = document.getElementById('prompt-textarea');
                 if (textarea) textarea.value = '';
+                utils.clearDraft(); // Also clear saved draft
+                render();
+            },
+
+            // Restore draft from localStorage
+            restoreDraft: function() {
+                var draft = utils.loadDraft();
+                if (draft) {
+                    state.prompt = draft.prompt || '';
+                    state.selectedModel = draft.selectedModel || 'auto';
+                    state.quantity = draft.quantity || 1;
+                    state.aspectRatio = draft.aspectRatio || '1:1';
+                    state.quality = draft.quality || 'hd';
+
+                    // Restore template reference if exists
+                    if (draft.selectedTemplate && draft.selectedTemplate.id) {
+                        // Find the template in categories
+                        for (var i = 0; i < templateCategories.length; i++) {
+                            var category = templateCategories[i];
+                            for (var j = 0; j < category.templates.length; j++) {
+                                if (category.templates[j].id === draft.selectedTemplate.id) {
+                                    state.selectedTemplate = category.templates[j];
+                                    break;
+                                }
+                            }
+                            if (state.selectedTemplate) break;
+                        }
+                    }
+
+                    render();
+                    showToast('Draft restored from ' + utils.formatDraftTime(draft.savedAt), 'info');
+                }
+            },
+
+            // Dismiss draft notification (just clear the draft, don't restore)
+            dismissDraft: function() {
+                utils.clearDraft();
+                state.showDraftNotification = false;
                 render();
             },
 
@@ -3473,8 +5055,9 @@
             openPromptModal: function() {
                 state.promptModalText = state.prompt;
                 state.promptModalOpen = true;
+                utils.lockBodyScroll();
                 render();
-                // Focus the modal textarea after render
+                // Focus the modal textarea and setup focus trap after render
                 setTimeout(function() {
                     var modalTextarea = document.getElementById('prompt-modal-textarea');
                     if (modalTextarea) {
@@ -3482,6 +5065,8 @@
                         // Move cursor to end
                         modalTextarea.setSelectionRange(modalTextarea.value.length, modalTextarea.value.length);
                     }
+                    // Setup focus trap
+                    state._promptModalFocusTrapCleanup = utils.setupFocusTrap('.prompt-modal');
                 }, 100);
             },
 
@@ -3491,6 +5076,12 @@
                 if (event && event.target && !event.target.classList.contains('prompt-modal-overlay')) {
                     return;
                 }
+                // Cleanup focus trap
+                if (state._promptModalFocusTrapCleanup) {
+                    state._promptModalFocusTrapCleanup();
+                    state._promptModalFocusTrapCleanup = null;
+                }
+                utils.unlockBodyScroll();
                 state.promptModalOpen = false;
                 state.promptModalText = '';
                 render();
@@ -3498,6 +5089,12 @@
 
             // Apply prompt modal changes
             applyPromptModal: function() {
+                // Cleanup focus trap
+                if (state._promptModalFocusTrapCleanup) {
+                    state._promptModalFocusTrapCleanup();
+                    state._promptModalFocusTrapCleanup = null;
+                }
+                utils.unlockBodyScroll();
                 state.prompt = state.promptModalText;
                 state.promptModalOpen = false;
                 state.promptModalText = '';
@@ -3573,16 +5170,27 @@
                     return;
                 }
 
-                // Check if we're on the templates tab and scrolled down
-                var sidebar = document.querySelector('.tool-sidebar');
-                if (!sidebar || !state.toolInterfaceOpen) {
+                // Must have tool interface open
+                if (!state.toolInterfaceOpen) {
                     state.showFloatingButton = false;
                     return;
                 }
 
-                var sidebarRect = sidebar.getBoundingClientRect();
-                // Show floating button when sidebar is mostly out of view
-                state.showFloatingButton = sidebarRect.bottom < 200;
+                // Always show floating button when on Templates or Community tabs
+                // because the main generate button is not visible in these views
+                if (state.mainTab === 'templates' || state.mainTab === 'community') {
+                    state.showFloatingButton = true;
+                } else {
+                    // For Generator tab, check if sidebar is scrolled out of view
+                    var sidebar = document.querySelector('.tool-sidebar');
+                    if (!sidebar) {
+                        state.showFloatingButton = false;
+                    } else {
+                        var sidebarRect = sidebar.getBoundingClientRect();
+                        // Show floating button when sidebar is mostly out of view
+                        state.showFloatingButton = sidebarRect.bottom < 200;
+                    }
+                }
 
                 // Update the container visibility directly without full re-render
                 var container = document.getElementById('floating-generate-container');
@@ -3597,10 +5205,192 @@
                 }
             },
 
+            // ========================================
+            // IMAGE DETAIL MODAL HANDLERS
+            // ========================================
+
+            // Open image detail modal
+            openImageDetail: function(index) {
+                if (state.history[index]) {
+                    state.selectedImageDetail = state.history[index];
+                    state.imageDetailModalOpen = true;
+                    utils.lockBodyScroll();
+                    render();
+                    // Setup focus trap after render
+                    setTimeout(function() {
+                        state._imageDetailFocusTrapCleanup = utils.setupFocusTrap('.image-detail-modal');
+                    }, 100);
+                }
+            },
+
+            // Close image detail modal
+            closeImageDetail: function(event) {
+                if (event && event.target && !event.target.classList.contains('image-detail-modal-overlay')) {
+                    return;
+                }
+                // Cleanup focus trap
+                if (state._imageDetailFocusTrapCleanup) {
+                    state._imageDetailFocusTrapCleanup();
+                    state._imageDetailFocusTrapCleanup = null;
+                }
+                utils.unlockBodyScroll();
+                state.imageDetailModalOpen = false;
+                state.selectedImageDetail = null;
+                render();
+            },
+
+            // Use prompt from detail modal
+            usePromptFromDetail: function() {
+                if (state.selectedImageDetail && state.selectedImageDetail.prompt) {
+                    // Cleanup focus trap
+                    if (state._imageDetailFocusTrapCleanup) {
+                        state._imageDetailFocusTrapCleanup();
+                        state._imageDetailFocusTrapCleanup = null;
+                    }
+                    utils.unlockBodyScroll();
+                    state.prompt = state.selectedImageDetail.prompt;
+                    var textarea = document.getElementById('prompt-textarea');
+                    if (textarea) textarea.value = state.prompt;
+                    state.imageDetailModalOpen = false;
+                    state.selectedImageDetail = null;
+                    render();
+                    showToast('Prompt loaded! Click Generate to create.', 'success');
+                }
+            },
+
+            // Delete from history and close modal
+            deleteFromHistoryAndClose: function(imageId) {
+                // Cleanup focus trap
+                if (state._imageDetailFocusTrapCleanup) {
+                    state._imageDetailFocusTrapCleanup();
+                    state._imageDetailFocusTrapCleanup = null;
+                }
+                utils.unlockBodyScroll();
+                // TODO: Implement actual deletion via Cloud Function
+                state.history = state.history.filter(function(item) { return item.id !== imageId; });
+                state.imageDetailModalOpen = false;
+                state.selectedImageDetail = null;
+                render();
+                showToast('Image removed from history', 'success');
+            },
+
+            // ========================================
+            // MODEL DROPDOWN HANDLERS
+            // ========================================
+
+            // Toggle model dropdown
+            toggleModelDropdown: function() {
+                state.modelDropdownOpen = !state.modelDropdownOpen;
+                render();
+            },
+
+            // Close model dropdown
+            closeModelDropdown: function() {
+                state.modelDropdownOpen = false;
+            },
+
+            // Select model from dropdown
+            selectModel: function(modelKey) {
+                var model = modelsConfig.find(function(m) { return m.key === modelKey; });
+                if (model && model.available) {
+                    state.selectedModel = modelKey;
+                    state.modelDropdownOpen = false;
+                    render();
+                } else if (model && !model.available) {
+                    showToast(model.name + ' coming soon!', 'info');
+                }
+            },
+
+            // ========================================
+            // REFERENCE HANDLERS
+            // ========================================
+
+            // Open style reference picker
+            openStyleReference: function() {
+                showToast('Style reference feature coming soon!', 'info');
+                // TODO: Implement style reference upload/selection modal
+            },
+
+            // Show premium modal for locked features
+            showPremiumModal: function(featureName) {
+                showToast(featureName + ' is a premium feature. Upgrade to access!', 'info');
+                // TODO: Show premium upgrade modal with plans
+            },
+
+            // Get unfilled template variables from prompt
+            getUnfilledVariables: function(prompt) {
+                if (!prompt) return [];
+                var regex = /\{\{([^}]+)\}\}/g;
+                var matches = [];
+                var match;
+                while ((match = regex.exec(prompt)) !== null) {
+                    matches.push(match[1].trim());
+                }
+                return matches;
+            },
+
+            // Show variable input popup
+            showVariableInput: function(varName) {
+                state.variableInputOpen = true;
+                state.variableInputName = varName;
+                state.variableInputValue = '';
+                render();
+                // Focus the input after render
+                setTimeout(function() {
+                    var input = document.getElementById('variable-input-field');
+                    if (input) input.focus();
+                }, 100);
+            },
+
+            // Apply variable value to prompt
+            applyVariableInput: function() {
+                if (state.variableInputName && state.variableInputValue) {
+                    var searchPattern = '{{' + state.variableInputName + '}}';
+                    state.prompt = state.prompt.replace(searchPattern, state.variableInputValue);
+                    // Update textarea
+                    var textarea = document.getElementById('prompt-textarea');
+                    if (textarea) textarea.value = state.prompt;
+                }
+                // Close popup
+                state.variableInputOpen = false;
+                state.variableInputName = null;
+                state.variableInputValue = '';
+                render();
+            },
+
+            // Cancel variable input
+            cancelVariableInput: function() {
+                state.variableInputOpen = false;
+                state.variableInputName = null;
+                state.variableInputValue = '';
+                render();
+            },
+
+            // Update variable input value (without re-render)
+            updateVariableInputValue: function(value) {
+                state.variableInputValue = value;
+            },
+
             // Generate Image using Gemini/Imagen API
             generateImage: function() {
                 if (!state.prompt.trim()) {
                     showToast('Please enter a prompt', 'error');
+                    return;
+                }
+
+                // Check for unfilled template variables
+                var unfilledVars = app.getUnfilledVariables(state.prompt);
+                if (unfilledVars.length > 0) {
+                    var varNames = unfilledVars.map(function(v) { return '"' + v + '"'; }).join(', ');
+                    showToast('Please fill in template variables: ' + varNames, 'warning');
+                    // Highlight the prompt textarea
+                    var textarea = document.getElementById('prompt-textarea');
+                    if (textarea) {
+                        textarea.classList.add('has-unfilled-vars');
+                        setTimeout(function() {
+                            textarea.classList.remove('has-unfilled-vars');
+                        }, 3000);
+                    }
                     return;
                 }
 
@@ -3611,8 +5401,34 @@
                 }
 
                 state.generating = true;
-                state.generationProgress = 10;
+                state.generationStage = 'queued';
+                state.generationProgress = 5;
                 render();
+
+                // Progress simulation for better UX
+                var progressInterval = setInterval(function() {
+                    if (!state.generating) {
+                        clearInterval(progressInterval);
+                        return;
+                    }
+
+                    // Simulate progress through stages
+                    if (state.generationStage === 'queued' && state.generationProgress >= 15) {
+                        state.generationStage = 'processing';
+                    } else if (state.generationStage === 'processing' && state.generationProgress >= 40) {
+                        state.generationStage = 'generating';
+                    } else if (state.generationStage === 'generating' && state.generationProgress >= 80) {
+                        state.generationStage = 'finalizing';
+                    }
+
+                    // Slow down progress as it gets higher (asymptotic approach)
+                    if (state.generationProgress < 90) {
+                        var increment = state.generationProgress < 30 ? 3 :
+                                        state.generationProgress < 60 ? 2 : 1;
+                        state.generationProgress = Math.min(90, state.generationProgress + increment);
+                        render();
+                    }
+                }, 500);
 
                 // Call the Cloud Function
                 var generateCreativeImage = functions.httpsCallable('generateCreativeImage');
@@ -3626,8 +5442,10 @@
                     templateId: state.selectedTemplate ? state.selectedTemplate.id : null
                 })
                 .then(function(result) {
-                    state.generating = false;
+                    clearInterval(progressInterval);
+                    state.generationStage = 'complete';
                     state.generationProgress = 100;
+                    state.generating = false;
 
                     if (result.data.success) {
                         // Update token balance
@@ -3654,18 +5472,61 @@
                     render();
                 })
                 .catch(function(error) {
+                    clearInterval(progressInterval);
                     state.generating = false;
                     state.generationProgress = 0;
+                    state.generationStage = 'error';
                     console.error('Generation error:', error);
 
-                    // Show user-friendly error message
-                    var errorMsg = error.message || 'Failed to generate image. Please try again.';
-                    if (error.code === 'resource-exhausted') {
-                        errorMsg = 'Not enough tokens or service busy. Please try again.';
-                    } else if (error.code === 'invalid-argument') {
-                        errorMsg = error.message || 'Invalid prompt. Please try a different prompt.';
+                    // Parse error and show user-friendly message with appropriate actions
+                    var errorCode = error.code || '';
+                    var errorMessage = error.message || '';
+                    var userMsg = 'Generation failed. Please try again.';
+                    var canRetry = true;
+                    var suggestion = '';
+
+                    if (errorCode === 'resource-exhausted') {
+                        userMsg = 'Service is busy right now.';
+                        suggestion = 'Try again in a few moments.';
+                    } else if (errorCode === 'invalid-argument') {
+                        userMsg = 'Your prompt contains invalid content.';
+                        suggestion = 'Try simplifying or rephrasing your prompt.';
+                        canRetry = false;
+                    } else if (errorCode === 'permission-denied') {
+                        userMsg = 'Access denied.';
+                        suggestion = 'Please check your account status.';
+                        canRetry = false;
+                    } else if (errorCode === 'unauthenticated') {
+                        userMsg = 'Session expired.';
+                        suggestion = 'Please refresh the page and sign in again.';
+                        canRetry = false;
+                    } else if (errorMessage.includes('timeout') || errorMessage.includes('DEADLINE')) {
+                        userMsg = 'Request timed out.';
+                        suggestion = 'The server is slow. Try again.';
+                    } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+                        userMsg = 'Network connection issue.';
+                        suggestion = 'Check your internet connection.';
+                    } else if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
+                        userMsg = 'Usage limit reached.';
+                        suggestion = 'Please upgrade your plan or wait.';
+                        canRetry = false;
+                    } else if (errorMessage.includes('content') || errorMessage.includes('policy')) {
+                        userMsg = 'Content policy violation.';
+                        suggestion = 'Your prompt may contain restricted content.';
+                        canRetry = false;
                     }
-                    showToast(errorMsg, 'error');
+
+                    var fullMsg = userMsg + (suggestion ? ' ' + suggestion : '');
+
+                    if (canRetry) {
+                        showToast(fullMsg, 'error', {
+                            retry: function() { app.generateImage(); },
+                            retryText: 'Retry'
+                        });
+                    } else {
+                        showToast(fullMsg, 'error');
+                    }
+
                     render();
                 });
             },
@@ -3767,6 +5628,17 @@
                 showToast('Image removed from history', 'success');
             },
 
+            // Load more history items
+            loadMoreHistory: function() {
+                state.historyDisplayCount += 12;
+                render();
+            },
+
+            // Reset history pagination (e.g., when new item is added)
+            resetHistoryPagination: function() {
+                state.historyDisplayCount = 12;
+            },
+
             // Load User Tokens (via Cloud Function for rollover handling)
             loadTokens: function() {
                 if (!state.user) return;
@@ -3828,15 +5700,54 @@
             }
         };
 
-        // Toast notification helper
-        function showToast(message, type) {
+        // Toast notification helper with optional action button
+        function showToast(message, type, options) {
+            options = options || {};
             var toast = document.createElement('div');
             toast.className = 'toast toast-' + (type || 'success');
-            toast.textContent = message;
+
+            // Create content wrapper
+            var content = document.createElement('div');
+            content.className = 'toast-content';
+            content.textContent = message;
+            toast.appendChild(content);
+
+            // Add retry button if provided
+            if (options.retry) {
+                var retryBtn = document.createElement('button');
+                retryBtn.className = 'toast-retry-btn';
+                retryBtn.textContent = options.retryText || 'Retry';
+                retryBtn.onclick = function() {
+                    toast.remove();
+                    if (typeof options.retry === 'function') {
+                        options.retry();
+                    }
+                };
+                toast.appendChild(retryBtn);
+            }
+
+            // Add dismiss button for longer toasts
+            if (options.dismissible || type === 'error') {
+                var dismissBtn = document.createElement('button');
+                dismissBtn.className = 'toast-dismiss-btn';
+                dismissBtn.innerHTML = '×';
+                dismissBtn.onclick = function() {
+                    toast.remove();
+                };
+                toast.appendChild(dismissBtn);
+            }
+
             document.body.appendChild(toast);
+
+            // Error toasts stay longer (5s), others 3s
+            var duration = options.duration || (type === 'error' ? 5000 : 3000);
             setTimeout(function() {
-                toast.remove();
-            }, 3000);
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, duration);
+
+            return toast;
         }
 
         /* ==========================================
@@ -3909,6 +5820,18 @@
 
             // Floating Generate Button (for mobile/tablet)
             html += renderFloatingGenerateButton();
+
+            // Image Detail Modal
+            html += renderImageDetailModal();
+
+            // Template Confirmation Dialog
+            html += renderConfirmDialog();
+
+            // Variable Input Popup
+            html += renderVariableInputPopup();
+
+            // Draft Notification Banner
+            html += renderDraftNotification();
 
             return html;
         }
@@ -3997,43 +5920,106 @@
         function renderToolSidebar(tool) {
             var html = '<div class="tool-sidebar">';
 
-            // Model Selector
+            // Model Selector with Dropdown
             html += '<div class="sidebar-section">';
             html += '<div class="sidebar-section-header">';
             html += '<span class="sidebar-section-title">Model</span>';
             html += '</div>';
-            html += '<div class="model-selector">';
-            var models = [
-                { key: 'banana1', name: 'NB 1' },
-                { key: 'banana2', name: 'NB 2' },
-                { key: 'auto', name: 'Auto' }
-            ];
-            for (var i = 0; i < models.length; i++) {
-                var m = models[i];
-                var isActive = state.selectedModel === m.key;
-                html += '<button class="model-btn' + (isActive ? ' active' : '') + '" onclick="app.setModel(\'' + m.key + '\')">' + m.name + '</button>';
-            }
-            html += '</div>';
-            html += '</div>';
+            html += '<div class="model-dropdown-wrapper">';
 
-            // References Section
-            html += '<div class="sidebar-section">';
+            // Find current selected model
+            var currentModel = null;
+            for (var mi = 0; mi < modelsConfig.length; mi++) {
+                if (!modelsConfig[mi].divider && modelsConfig[mi].key === state.selectedModel) {
+                    currentModel = modelsConfig[mi];
+                    break;
+                }
+            }
+            if (!currentModel) currentModel = modelsConfig[0];
+
+            // Model dropdown trigger button
+            html += '<button class="model-dropdown-trigger" onclick="app.toggleModelDropdown()">';
+            html += '<span class="model-dropdown-trigger-icon">' + currentModel.icon + '</span>';
+            html += '<span class="model-dropdown-trigger-name">' + currentModel.name + '</span>';
+            if (currentModel.badge && currentModel.badge !== 'coming') {
+                html += '<span class="model-badge ' + currentModel.badge + '">' + currentModel.badge + '</span>';
+            }
+            html += '<span class="model-dropdown-arrow">' + (state.modelDropdownOpen ? '▲' : '▼') + '</span>';
+            html += '</button>';
+
+            // Dropdown menu
+            if (state.modelDropdownOpen) {
+                html += '<div class="model-dropdown-menu">';
+                for (var mj = 0; mj < modelsConfig.length; mj++) {
+                    var model = modelsConfig[mj];
+                    if (model.divider) {
+                        html += '<div class="model-dropdown-divider"></div>';
+                        continue;
+                    }
+                    var isSelected = state.selectedModel === model.key;
+                    var itemClass = 'model-dropdown-item';
+                    if (isSelected) itemClass += ' selected';
+                    if (!model.available) itemClass += ' disabled';
+
+                    html += '<div class="' + itemClass + '" onclick="' + (model.available ? 'app.selectModel(\'' + model.key + '\')' : '') + '">';
+                    html += '<span class="model-dropdown-item-icon">' + model.icon + '</span>';
+                    html += '<div class="model-dropdown-item-info">';
+                    html += '<span class="model-dropdown-item-name">' + model.name + '</span>';
+                    html += '<span class="model-dropdown-item-desc">' + model.description + '</span>';
+                    html += '</div>';
+                    if (model.badge) {
+                        var badgeText = model.badge === 'coming' ? 'Coming Soon' : model.badge;
+                        html += '<span class="model-badge ' + model.badge + '">' + badgeText + '</span>';
+                    }
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+
+            html += '</div>'; // model-dropdown-wrapper
+            html += '</div>'; // sidebar-section
+
+            // References Section with Premium Locks
+            html += '<div class="sidebar-section references-section">';
             html += '<div class="sidebar-section-header">';
             html += '<span class="sidebar-section-title">References</span>';
+            html += '<span class="references-hint">Add images to guide your creation</span>';
             html += '</div>';
             html += '<div class="reference-grid">';
-            html += '<button class="reference-btn" title="Style Reference">';
+
+            // Style Reference (Free)
+            html += '<button class="reference-btn" onclick="app.openStyleReference()" title="Add a style reference image">';
+            html += '<div class="reference-btn-content">';
             html += '<span class="reference-btn-icon">🎨</span>';
-            html += '<span>Style</span>';
+            html += '<span class="reference-btn-label">Style</span>';
+            html += '</div>';
+            html += '<span class="reference-btn-hint">Set the visual style</span>';
             html += '</button>';
-            html += '<button class="reference-btn premium" title="Character Reference (Premium)">';
+
+            // Character Reference (Premium)
+            html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Character Reference\')" title="Character Reference - Premium Feature">';
+            html += '<div class="premium-lock-overlay">';
+            html += '<span class="premium-lock-icon">🔒</span>';
+            html += '</div>';
+            html += '<div class="reference-btn-content">';
             html += '<span class="reference-btn-icon">👤</span>';
-            html += '<span>Character</span>';
+            html += '<span class="reference-btn-label">Character</span>';
+            html += '</div>';
+            html += '<span class="reference-btn-hint">Consistent faces</span>';
             html += '</button>';
-            html += '<button class="reference-btn premium" title="Upload Image (Premium)">';
+
+            // Upload Reference (Premium)
+            html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Image Upload\')" title="Upload Image - Premium Feature">';
+            html += '<div class="premium-lock-overlay">';
+            html += '<span class="premium-lock-icon">🔒</span>';
+            html += '</div>';
+            html += '<div class="reference-btn-content">';
             html += '<span class="reference-btn-icon">📤</span>';
-            html += '<span>Upload</span>';
+            html += '<span class="reference-btn-label">Upload</span>';
+            html += '</div>';
+            html += '<span class="reference-btn-hint">Use your images</span>';
             html += '</button>';
+
             html += '</div>';
             html += '</div>';
 
@@ -4060,6 +6046,21 @@
             // Editable prompt area with textarea
             html += '<textarea id="prompt-textarea" class="prompt-textarea smart-prompt-editable" placeholder="Describe what you want to create... or select a template below" oninput="app.updatePrompt(this.value)">' + utils.escapeHtml(state.prompt) + '</textarea>';
 
+            // Template Variable Chips (if prompt contains variables)
+            var templateVars = app.getUnfilledVariables(state.prompt);
+            if (templateVars.length > 0) {
+                html += '<div class="template-vars-bar">';
+                html += '<span class="template-vars-label">Fill in:</span>';
+                for (var vi = 0; vi < templateVars.length; vi++) {
+                    var varName = templateVars[vi];
+                    html += '<button class="template-var-chip" onclick="app.showVariableInput(\'' + utils.escapeHtml(varName) + '\')">';
+                    html += '<span class="template-var-chip-icon">✏️</span>';
+                    html += '<span class="template-var-chip-name">{{' + utils.escapeHtml(varName) + '}}</span>';
+                    html += '</button>';
+                }
+                html += '</div>';
+            }
+
             // Scene Quick Selector (for product photography template)
             if (state.selectedTemplate && state.selectedTemplate.id === 'product-studio') {
                 html += '<div class="scene-quick-selector">';
@@ -4075,13 +6076,50 @@
                 html += '</div>';
             }
 
-            // Smart Action Buttons
+            // Smart Action Buttons with Prompt Health Indicator
             html += '<div class="smart-prompt-actions">';
             html += '<button class="smart-action-btn" onclick="app.enhancePrompt()" title="Enhance with AI">✨</button>';
             html += '<button class="smart-action-btn" onclick="app.randomPrompt()" title="Random prompt">🎲</button>';
             html += '<button class="smart-action-btn" onclick="app.clearPrompt()" title="Clear prompt">🗑️</button>';
             html += '<span style="flex: 1;"></span>';
-            html += '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">' + state.prompt.length + '/2000</span>';
+            html += '<div class="prompt-health">';
+            // Prompt health indicator
+            var promptLen = state.prompt.length;
+            var healthClass = 'empty';
+            var healthText = 'Enter a prompt';
+            var healthIcon = '○';
+            if (promptLen > 0 && promptLen < 20) {
+                healthClass = 'short';
+                healthText = 'Too short';
+                healthIcon = '◔';
+            } else if (promptLen >= 20 && promptLen < 50) {
+                healthClass = 'short';
+                healthText = 'Add more detail';
+                healthIcon = '◑';
+            } else if (promptLen >= 50 && promptLen <= 500) {
+                healthClass = 'good';
+                healthText = 'Good prompt';
+                healthIcon = '●';
+            } else if (promptLen > 500 && promptLen <= 1500) {
+                healthClass = 'good';
+                healthText = 'Detailed';
+                healthIcon = '●';
+            } else if (promptLen > 1500 && promptLen < 1900) {
+                healthClass = 'long';
+                healthText = 'Very long';
+                healthIcon = '◕';
+            } else if (promptLen >= 1900) {
+                healthClass = 'limit';
+                healthText = 'Near limit';
+                healthIcon = '⚠';
+            }
+            html += '<span class="prompt-health-indicator ' + healthClass + '">' + healthIcon + ' ' + healthText + '</span>';
+            // Character count
+            var countClass = 'prompt-char-count';
+            if (promptLen > 1800) countClass += ' danger';
+            else if (promptLen > 1500) countClass += ' warning';
+            html += '<span class="' + countClass + '">' + promptLen + '/2000</span>';
+            html += '</div>';
             html += '</div>';
 
             html += '</div>'; // smart-prompt-container
@@ -4139,26 +6177,112 @@
             var cost = app.calculateCost();
             var canGenerate = state.prompt.trim().length > 0 && state.tokens.balance >= cost && !state.generating;
 
-            html += '<button class="generate-btn-enhanced" onclick="app.generateImage()"' + (canGenerate ? '' : ' disabled') + '>';
             if (state.generating) {
-                html += '<span class="animate-spin">⏳</span>';
-                html += '<span>Generating... ' + state.generationProgress + '%</span>';
+                // Generation in progress - show progress UI
+                html += '<div class="generation-progress-container">';
+
+                // Stage indicator
+                var stageLabels = {
+                    'queued': 'Queued',
+                    'processing': 'Processing',
+                    'generating': 'Generating',
+                    'finalizing': 'Finalizing'
+                };
+                var stageLabel = stageLabels[state.generationStage] || 'Preparing';
+
+                html += '<div class="generation-stage">';
+                html += '<span class="generation-stage-icon animate-pulse">✨</span>';
+                html += '<span class="generation-stage-label">' + stageLabel + '...</span>';
+                html += '<span class="generation-stage-percent">' + state.generationProgress + '%</span>';
+                html += '</div>';
+
+                // Progress bar
+                html += '<div class="generation-progress-bar">';
+                html += '<div class="generation-progress-fill" style="width: ' + state.generationProgress + '%;"></div>';
+                html += '</div>';
+
+                // Stage steps
+                html += '<div class="generation-stages">';
+                var stages = ['queued', 'processing', 'generating', 'finalizing'];
+                var stageIcons = { queued: '📋', processing: '⚙️', generating: '🎨', finalizing: '✅' };
+                var currentStageIndex = stages.indexOf(state.generationStage);
+
+                for (var si = 0; si < stages.length; si++) {
+                    var stageClass = 'generation-stage-step';
+                    if (si < currentStageIndex) stageClass += ' completed';
+                    if (si === currentStageIndex) stageClass += ' active';
+                    html += '<div class="' + stageClass + '">' + stageIcons[stages[si]] + '</div>';
+                }
+                html += '</div>';
+
+                html += '</div>'; // generation-progress-container
             } else {
+                // Normal generate button
+                html += '<button class="generate-btn-enhanced" onclick="app.generateImage()"' + (canGenerate ? '' : ' disabled') + '>';
                 html += '<span class="generate-btn-sparkle">✨</span>';
                 html += '<span>Generate</span>';
+                html += '</button>';
             }
-            html += '</button>';
 
-            // Token Balance & Cost Display
-            html += '<div class="token-balance-display" style="margin-top: 0.75rem;">';
-            html += '<div style="display: flex; justify-content: space-between; align-items: center;">';
-            html += '<span style="color: rgba(255,255,255,0.6);">Cost: <strong style="color: #fbbf24;">🪙 ' + cost + '</strong></span>';
-            html += '<span style="color: rgba(255,255,255,0.6);">Balance: <strong style="color: white;">🪙 ' + state.tokens.balance + '</strong></span>';
+            // Enhanced Cost Breakdown Display
+            html += '<div class="cost-breakdown">';
+
+            // Calculate cost components
+            var baseCost = tokenConfig.costs[state.quality] || 2;
+            var templateBonus = state.selectedTemplate ? Math.max(0, (state.selectedTemplate.cost || 2) - 2) : 0;
+            var quantity = state.quantity;
+            var totalCost = cost;
+            var costPerImage = quantity > 1 ? Math.ceil(totalCost / quantity) : totalCost;
+            var hasEnoughTokens = state.tokens.balance >= totalCost;
+
+            // Cost breakdown header
+            html += '<div class="cost-breakdown-header">';
+            html += '<span class="cost-breakdown-label">Total Cost</span>';
+            html += '<span class="cost-breakdown-total' + (hasEnoughTokens ? '' : ' insufficient') + '">🪙 ' + totalCost + '</span>';
             html += '</div>';
+
+            // Cost details (expandable)
+            html += '<div class="cost-breakdown-details">';
+
+            // Base quality cost
+            html += '<div class="cost-breakdown-row">';
+            html += '<span class="cost-detail-label">' + state.quality.charAt(0).toUpperCase() + state.quality.slice(1) + ' quality</span>';
+            html += '<span class="cost-detail-value">🪙 ' + baseCost + '</span>';
+            html += '</div>';
+
+            // Template bonus (if any)
+            if (templateBonus > 0) {
+                html += '<div class="cost-breakdown-row">';
+                html += '<span class="cost-detail-label">Template bonus</span>';
+                html += '<span class="cost-detail-value">+🪙 ' + templateBonus + '</span>';
+                html += '</div>';
+            }
+
+            // Quantity multiplier
+            if (quantity > 1) {
+                html += '<div class="cost-breakdown-row">';
+                html += '<span class="cost-detail-label">× ' + quantity + ' images</span>';
+                html += '<span class="cost-detail-value">🪙 ' + costPerImage + ' each</span>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // cost-breakdown-details
+
+            // Balance display
+            html += '<div class="cost-breakdown-balance">';
+            html += '<div class="balance-row">';
+            html += '<span>Your balance</span>';
+            html += '<span class="balance-value' + (hasEnoughTokens ? '' : ' insufficient') + '">🪙 ' + state.tokens.balance + '</span>';
+            html += '</div>';
+            if (!hasEnoughTokens) {
+                html += '<div class="balance-warning">⚠️ Insufficient tokens</div>';
+            }
             if (state.tokens.rollover > 0) {
-                html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.4); text-align: right; margin-top: 0.25rem;">+' + state.tokens.rollover + ' rollover available</div>';
+                html += '<div class="rollover-info">+' + state.tokens.rollover + ' rollover available</div>';
             }
             html += '</div>';
+
+            html += '</div>'; // cost-breakdown
 
             html += '</div>'; // generate-section
 
@@ -4232,22 +6356,45 @@
                 return html;
             }
 
+            // Determine how many items to show
+            var itemsToShow = Math.min(state.historyDisplayCount, state.history.length);
+            var hasMore = state.history.length > state.historyDisplayCount;
+
+            // History stats
+            html += '<div class="history-stats">';
+            html += '<span class="history-count">' + state.history.length + ' creations</span>';
+            if (hasMore) {
+                html += '<span class="history-showing">Showing ' + itemsToShow + ' of ' + state.history.length + '</span>';
+            }
+            html += '</div>';
+
             html += '<div class="history-grid">';
-            for (var i = 0; i < state.history.length; i++) {
+            for (var i = 0; i < itemsToShow; i++) {
                 var item = state.history[i];
-                html += '<div class="history-item">';
+                html += '<div class="history-item" onclick="app.openImageDetail(' + i + ')" style="cursor: pointer;">';
                 html += '<img src="' + item.imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" />';
                 html += '<div class="history-item-overlay">';
-                html += '<div class="history-item-actions">';
-                html += '<button class="history-action-btn" onclick="app.downloadImage(\'' + item.imageUrl + '\')" title="Download">⬇️</button>';
-                html += '<button class="history-action-btn" onclick="app.usePrompt(\'' + utils.escapeHtml(item.prompt) + '\')" title="Reuse Prompt">🔄</button>';
-                html += '<button class="history-action-btn" onclick="app.shareToGallery(\'' + item.id + '\', false)" title="Share">📤</button>';
-                html += '<button class="history-action-btn" onclick="app.deleteFromHistory(\'' + item.id + '\')" title="Delete">🗑️</button>';
+                html += '<div class="history-item-actions" onclick="event.stopPropagation()">';
+                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.downloadImage(\'' + item.imageUrl + '\')" title="Download">⬇️</button>';
+                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.usePrompt(\'' + utils.escapeHtml(item.prompt).replace(/'/g, "\\'") + '\')" title="Reuse Prompt">🔄</button>';
+                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.shareToGallery(\'' + item.id + '\', false)" title="Share">📤</button>';
+                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.deleteFromHistory(\'' + item.id + '\')" title="Delete">🗑️</button>';
                 html += '</div>';
                 html += '</div>';
                 html += '</div>';
             }
             html += '</div>';
+
+            // Load More button
+            if (hasMore) {
+                var remaining = state.history.length - state.historyDisplayCount;
+                html += '<div class="load-more-container">';
+                html += '<button class="load-more-btn" onclick="app.loadMoreHistory()">';
+                html += '<span>Load More</span>';
+                html += '<span class="load-more-count">(' + remaining + ' more)</span>';
+                html += '</button>';
+                html += '</div>';
+            }
 
             return html;
         }
@@ -4436,6 +6583,215 @@
                 }
             }
             return matches;
+        }
+
+        // Render Image Detail Modal
+        function renderImageDetailModal() {
+            if (!state.imageDetailModalOpen || !state.selectedImageDetail) return '';
+
+            var item = state.selectedImageDetail;
+            var html = '<div class="image-detail-modal-overlay" onclick="app.closeImageDetail(event)">';
+            html += '<div class="image-detail-modal" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="image-detail-header">';
+            html += '<div class="image-detail-title">🖼️ Image Details</div>';
+            html += '<button class="image-detail-close" onclick="app.closeImageDetail()">✕</button>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="image-detail-body">';
+
+            // Image preview
+            html += '<div class="image-detail-preview">';
+            html += '<img src="' + item.imageUrl + '" alt="Generated image" />';
+            html += '</div>';
+
+            // Info panel
+            html += '<div class="image-detail-info">';
+
+            // Prompt section
+            html += '<div class="image-detail-section">';
+            html += '<div class="image-detail-label">Prompt</div>';
+            html += '<div class="image-detail-prompt">' + utils.escapeHtml(item.prompt || 'No prompt available') + '</div>';
+            html += '</div>';
+
+            // Model and Quality row
+            html += '<div class="image-detail-meta-row">';
+            html += '<div class="image-detail-meta-item">';
+            html += '<div class="image-detail-label">Model</div>';
+            html += '<div class="image-detail-value">' + getModelDisplayName(item.model) + '</div>';
+            html += '</div>';
+            html += '<div class="image-detail-meta-item">';
+            html += '<div class="image-detail-label">Quality</div>';
+            html += '<div class="image-detail-value">' + (item.quality || 'HD').toUpperCase() + '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Aspect Ratio and Date row
+            html += '<div class="image-detail-meta-row">';
+            html += '<div class="image-detail-meta-item">';
+            html += '<div class="image-detail-label">Aspect Ratio</div>';
+            html += '<div class="image-detail-value">' + (item.aspectRatio || '1:1') + '</div>';
+            html += '</div>';
+            html += '<div class="image-detail-meta-item">';
+            html += '<div class="image-detail-label">Created</div>';
+            html += '<div class="image-detail-value">' + formatDate(item.createdAt) + '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Cost
+            if (item.tokenCost) {
+                html += '<div class="image-detail-section">';
+                html += '<div class="image-detail-label">Token Cost</div>';
+                html += '<div class="image-detail-value">🪙 ' + item.tokenCost + '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // info
+            html += '</div>'; // body
+
+            // Actions
+            html += '<div class="image-detail-actions">';
+            html += '<button class="image-detail-btn image-detail-btn-primary" onclick="app.downloadImage(\'' + item.imageUrl + '\')">';
+            html += '⬇️ Download';
+            html += '</button>';
+            html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.usePromptFromDetail()">';
+            html += '🔄 Reuse Prompt';
+            html += '</button>';
+            html += '<button class="image-detail-btn image-detail-btn-danger" onclick="app.deleteFromHistoryAndClose(\'' + item.id + '\')">';
+            html += '🗑️ Delete';
+            html += '</button>';
+            html += '</div>';
+
+            html += '</div>'; // modal
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Helper function to get model display name
+        function getModelDisplayName(modelKey) {
+            if (!modelKey) return 'Auto';
+            var modelNames = {
+                'auto': 'Auto',
+                'banana1': 'Nano Banana',
+                'banana2': 'Nano Banana Ultra',
+                'imagen-4.0-generate-001': 'Nano Banana',
+                'imagen-4.0-ultra-generate-001': 'Nano Banana Ultra'
+            };
+            return modelNames[modelKey] || modelKey;
+        }
+
+        // Helper function to format date
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Unknown';
+            try {
+                var date = new Date(dateStr);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            } catch (e) {
+                return 'Unknown';
+            }
+        }
+
+        // Render Template Confirmation Dialog
+        function renderConfirmDialog() {
+            if (!state.confirmDialogOpen || !state.pendingTemplate) return '';
+
+            var template = state.pendingTemplate;
+            var currentPrompt = state.prompt.trim();
+            var previewText = currentPrompt.length > 100 ? currentPrompt.substring(0, 100) + '...' : currentPrompt;
+
+            var html = '<div class="confirm-dialog-overlay" onclick="app.cancelTemplateConfirm()">';
+            html += '<div class="confirm-dialog" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="confirm-dialog-header">';
+            html += '<div class="confirm-dialog-icon">⚠️</div>';
+            html += '<div class="confirm-dialog-title">Replace current prompt?</div>';
+            html += '<div class="confirm-dialog-message">You have an existing prompt that will be replaced by the "' + utils.escapeHtml(template.name) + '" template.</div>';
+            html += '</div>';
+
+            // Current prompt preview
+            html += '<div class="confirm-dialog-preview">';
+            html += '<div class="confirm-dialog-preview-label">Current prompt</div>';
+            html += utils.escapeHtml(previewText);
+            html += '</div>';
+
+            // Footer with buttons
+            html += '<div class="confirm-dialog-footer">';
+            html += '<button class="confirm-dialog-btn confirm-dialog-btn-cancel" onclick="app.cancelTemplateConfirm()">Cancel</button>';
+            html += '<button class="confirm-dialog-btn confirm-dialog-btn-append" onclick="app.applyTemplate(state.pendingTemplate, \'append\')">Append</button>';
+            html += '<button class="confirm-dialog-btn confirm-dialog-btn-replace" onclick="app.applyTemplate(state.pendingTemplate, \'replace\')">Replace</button>';
+            html += '</div>';
+
+            html += '</div>'; // dialog
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Render Variable Input Popup
+        function renderVariableInputPopup() {
+            if (!state.variableInputOpen || !state.variableInputName) return '';
+
+            var varName = state.variableInputName;
+            var escapedVarName = utils.escapeHtml(varName);
+
+            var html = '<div class="variable-input-overlay" onclick="app.cancelVariableInput()">';
+            html += '<div class="variable-input-popup" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="variable-input-header">';
+            html += '<div class="variable-input-icon">✏️</div>';
+            html += '<div>';
+            html += '<div class="variable-input-title">Fill in variable</div>';
+            html += '<div class="variable-input-subtitle">{{' + escapedVarName + '}}</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Input field
+            html += '<input type="text" id="variable-input-field" class="variable-input-field" ';
+            html += 'placeholder="Enter value for ' + escapedVarName + '..." ';
+            html += 'value="' + utils.escapeHtml(state.variableInputValue) + '" ';
+            html += 'oninput="app.updateVariableInputValue(this.value)" ';
+            html += 'onkeydown="if(event.key===\'Enter\' && this.value.trim()) app.applyVariableInput(); else if(event.key===\'Escape\') app.cancelVariableInput();">';
+
+            // Actions
+            html += '<div class="variable-input-actions">';
+            html += '<button class="variable-input-btn variable-input-btn-cancel" onclick="app.cancelVariableInput()">Cancel</button>';
+            html += '<button class="variable-input-btn variable-input-btn-apply" onclick="app.applyVariableInput()" ' + (state.variableInputValue.trim() ? '' : 'disabled') + '>Apply</button>';
+            html += '</div>';
+
+            html += '</div>'; // popup
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Render Draft Notification Banner
+        function renderDraftNotification() {
+            if (!state.showDraftNotification) return '';
+
+            var draft = utils.loadDraft();
+            if (!draft) return '';
+
+            var timeAgo = utils.formatDraftTime(draft.savedAt);
+            var promptPreview = draft.prompt.length > 50 ? draft.prompt.substring(0, 50) + '...' : draft.prompt;
+
+            var html = '<div class="draft-notification">';
+            html += '<span class="draft-notification-icon">📝</span>';
+            html += '<div class="draft-notification-content">';
+            html += '<div class="draft-notification-title">Unsaved draft found</div>';
+            html += '<div class="draft-notification-subtitle">Saved ' + timeAgo + ': "' + utils.escapeHtml(promptPreview) + '"</div>';
+            html += '</div>';
+            html += '<div class="draft-notification-actions">';
+            html += '<button class="draft-notification-btn draft-notification-btn-dismiss" onclick="app.dismissDraft()">Dismiss</button>';
+            html += '<button class="draft-notification-btn draft-notification-btn-restore" onclick="app.restoreDraft(); state.showDraftNotification = false; render();">Restore</button>';
+            html += '</div>';
+            html += '</div>';
+
+            return html;
         }
 
         // Render Floating Generate Button (for mobile/tablet when scrolled)
@@ -4659,6 +7015,19 @@
             render();
             checkAccess();
 
+            // Check for saved draft on load
+            if (utils.hasDraft()) {
+                state.showDraftNotification = true;
+                render();
+            }
+
+            // Auto-save draft every 5 seconds when prompt has content
+            setInterval(function() {
+                if (state.prompt && state.prompt.trim().length > 0) {
+                    utils.saveDraft();
+                }
+            }, 5000);
+
             // Scroll listener for floating button visibility
             window.addEventListener('scroll', function() {
                 app.updateFloatingButtonVisibility();
@@ -4678,6 +7047,12 @@
                     if (state.floatingSettingsOpen) {
                         state.floatingSettingsOpen = false;
                         render();
+                    }
+                    if (state.confirmDialogOpen) {
+                        app.cancelTemplateConfirm();
+                    }
+                    if (state.imageDetailModalOpen) {
+                        app.closeImageDetail();
                     }
                 }
             });
