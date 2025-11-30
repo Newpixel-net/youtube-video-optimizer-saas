@@ -151,8 +151,15 @@
 
         @media (min-width: 1024px) {
             .hero-section {
-                margin: 0 1rem 2rem 1rem;
-                padding: 3rem 3rem 2rem;
+                margin: 0 0.5rem 2rem 0.5rem;
+                padding: 3rem 2rem 2rem;
+            }
+        }
+
+        @media (min-width: 1440px) {
+            .hero-section {
+                margin: 0 0.5rem 2rem 0.5rem;
+                padding: 3rem 2.5rem 2rem;
             }
         }
 
@@ -853,22 +860,24 @@
            ------------------------------------------ */
         .content-wide {
             width: 100%;
-            max-width: 98%;
+            max-width: 100%;
             margin-left: auto;
             margin-right: auto;
-            padding-left: 1.5rem;
-            padding-right: 1.5rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
         }
 
         @media (min-width: 1920px) {
             .content-wide {
-                max-width: 1850px;
+                max-width: 100%;
+                padding-left: 1.25rem;
+                padding-right: 1.25rem;
             }
         }
 
         @media (max-width: 1440px) {
             .content-wide {
-                max-width: 98%;
+                max-width: 100%;
             }
         }
 
@@ -1630,8 +1639,8 @@
         /* Large screens - wider sidebar */
         @media (min-width: 1440px) {
             .tool-sidebar {
-                width: 360px;
-                min-width: 360px;
+                width: 380px;
+                min-width: 380px;
             }
 
             .tool-interface {
@@ -1640,6 +1649,22 @@
 
             .template-grid {
                 grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            }
+        }
+
+        /* Extra large screens - even wider */
+        @media (min-width: 1800px) {
+            .tool-sidebar {
+                width: 420px;
+                min-width: 420px;
+            }
+
+            .tool-interface {
+                gap: 2.5rem;
+            }
+
+            .template-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             }
         }
 
