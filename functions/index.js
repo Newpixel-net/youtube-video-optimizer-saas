@@ -6352,29 +6352,56 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
       message: error.message,
       code: error.code,
       status: error.status,
-      details: error.details
+      statusCode: error.statusCode,
+      details: error.details,
+      name: error.name,
+      stack: error.stack?.substring(0, 500)
     }));
 
+    const errorMsg = error.message || '';
+    const errorStr = JSON.stringify(error).toLowerCase();
+
     // Handle specific Gemini API errors
-    if (error.message?.includes('API key') || error.message?.includes('API_KEY')) {
+    if (errorMsg.includes('API key') || errorMsg.includes('API_KEY') || errorMsg.includes('invalid key')) {
       throw new functions.https.HttpsError('failed-precondition',
         'Image generation service configuration error. Please contact support.');
     }
-    if (error.message?.includes('not found') || error.message?.includes('404')) {
+
+    // Model not found or not available
+    if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('model') && errorMsg.includes('available')) {
       throw new functions.https.HttpsError('failed-precondition',
-        'Imagen API not available. Please ensure the API is enabled in Google Cloud Console.');
+        'Imagen 3 model not available. Please ensure the Generative Language API is enabled in Google Cloud Console.');
     }
-    if (error.message?.includes('permission') || error.message?.includes('403')) {
+
+    // API not enabled or permission issues
+    if (errorMsg.includes('permission') || errorMsg.includes('403') || errorMsg.includes('denied') ||
+        errorMsg.includes('enable') || errorMsg.includes('PERMISSION_DENIED')) {
       throw new functions.https.HttpsError('permission-denied',
-        'API access denied. Please check your Google Cloud project permissions.');
+        'Imagen API access denied. Please enable the "Generative Language API" in Google Cloud Console and ensure billing is enabled.');
     }
-    if (error.message?.includes('quota') || error.message?.includes('rate') || error.message?.includes('429')) {
+
+    // Rate limiting or quota
+    if (errorMsg.includes('quota') || errorMsg.includes('rate') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
       throw new functions.https.HttpsError('resource-exhausted',
         'Service temporarily busy. Please try again in a moment.');
     }
-    if (error.message?.includes('safety') || error.message?.includes('blocked')) {
+
+    // Safety filtering
+    if (errorMsg.includes('safety') || errorMsg.includes('blocked') || errorMsg.includes('SAFETY')) {
       throw new functions.https.HttpsError('invalid-argument',
         'Your prompt was blocked for safety reasons. Please try a different prompt.');
+    }
+
+    // Invalid request format
+    if (errorMsg.includes('invalid') || errorMsg.includes('INVALID_ARGUMENT')) {
+      throw new functions.https.HttpsError('invalid-argument',
+        'Invalid image generation request. Please check your prompt and settings.');
+    }
+
+    // Billing not enabled
+    if (errorMsg.includes('billing') || errorStr.includes('billing')) {
+      throw new functions.https.HttpsError('failed-precondition',
+        'Billing is not enabled for this Google Cloud project. Image generation requires an active billing account.');
     }
 
     if (error instanceof functions.https.HttpsError) throw error;
