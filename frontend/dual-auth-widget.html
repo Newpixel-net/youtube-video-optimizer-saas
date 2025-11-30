@@ -1751,6 +1751,11 @@
             thumbnailStatus: null,    // Thumbnail job status
             thumbnailImage: null,     // Generated thumbnail URL
 
+            // Channel Audit Pro state
+            channelAuditResults: null,  // Channel audit results
+            channelAuditLoading: false, // Loading state for channel audit
+            channelAuditHistory: null,  // Channel audit history
+
             // Thumbnail from optimizer context
             lastOptimization: null,   // Last optimization results for thumbnail context
             thumbnailStyle: 'professional', // professional | dramatic | minimal | bold
@@ -2174,6 +2179,55 @@
                 state.placementResults = null;
                 state.placementLoading = false;
                 render();
+            },
+
+            goToChannelAudit: function() {
+                state.currentView = 'channelAudit';
+                state.error = null;
+                state.channelAuditResults = null;
+                state.channelAuditLoading = false;
+                render();
+            },
+
+            runChannelAudit: function(e) {
+                e.preventDefault();
+                var channelUrl = document.getElementById('audit-channel-url').value.trim();
+
+                if (!channelUrl) {
+                    state.error = { message: 'Please enter a YouTube channel URL' };
+                    render();
+                    return;
+                }
+
+                state.channelAuditLoading = true;
+                state.loading = true;
+                state.error = null;
+                state.loadingSteps = [
+                    { name: 'Fetching channel data', icon: '📺' },
+                    { name: 'Analyzing content strategy', icon: '📊' },
+                    { name: 'Evaluating SEO health', icon: '🔍' },
+                    { name: 'Checking engagement metrics', icon: '💬' },
+                    { name: 'Identifying growth opportunities', icon: '📈' },
+                    { name: 'Generating recommendations', icon: '✨' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('auditChannel')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.channelAuditResults = result.data;
+                        state.channelAuditLoading = false;
+                        state.loading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.channelAuditLoading = false;
+                        state.loading = false;
+                        state.error = { message: 'Failed to audit channel: ' + e.message };
+                        render();
+                    });
             },
 
             viewPlacementHistory: function(id) {
@@ -4179,7 +4233,7 @@
                 { name: 'Competitor Analysis', key: 'competitorAnalysis', emoji: '🎯', color: 'from-red-500 to-orange-600' },
                 { name: 'Trend Predictor', key: 'trendPredictor', emoji: '📈', color: 'from-cyan-500 to-blue-600' },
                 { name: 'AI Thumbnails', key: 'thumbnailGenerator', emoji: '🎨', color: 'from-pink-500 to-rose-600' },
-                { name: 'Placement Finder', key: 'placementFinder', emoji: '🎬', color: 'from-purple-500 to-violet-600' }
+                { name: 'Channel Audit Pro', key: 'channelAudit', emoji: '🔍', color: 'from-emerald-500 to-teal-600' }
             ];
 
             // Helper function to generate card HTML
@@ -4385,6 +4439,26 @@
             html += '<div class="text-white text-3xl">→</div>';
             html += '</div></div></div>';
 
+            // Enterprise Suite Banner (PRO & Enterprise only)
+            html += '<div class="mb-8 fade-in">';
+            html += '<a href="https://ytseo.siteuo.com/enterprise-suite" class="block">';
+            html += '<div class="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 rounded-2xl shadow-xl p-6 lg:p-8 cursor-pointer hover:from-amber-600 hover:via-yellow-600 hover:to-amber-600 transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden border-2 border-yellow-300">';
+            html += '<div class="absolute inset-0 bg-[url(\'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxjaXJjbGUgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjEpIiBjeD0iMjAiIGN5PSIyMCIgcj0iMiIvPjwvZz48L3N2Zz4=\')] opacity-30"></div>';
+            html += '<div class="relative flex items-center gap-5">';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-yellow-200 to-amber-300 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl">👑</div>';
+            html += '<div class="flex-1">';
+            html += '<div class="flex items-center gap-2 mb-1">';
+            html += '<h3 class="text-2xl lg:text-3xl font-bold text-gray-900">Enterprise Suite</h3>';
+            html += '<span class="bg-gray-900 text-yellow-400 text-xs font-bold px-2 py-1 rounded-full">PRO</span>';
+            html += '</div>';
+            html += '<p class="text-gray-800/80 text-sm lg:text-base">Bulk Optimizer, Placement Finder, Viral Predictor, Monetization & Script Writer</p>';
+            html += '</div>';
+            html += '<div class="text-gray-900 text-3xl lg:text-4xl font-bold">→</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</a>';
+            html += '</div>';
+
             // Main Tools Section Title
             html += '<h2 class="text-2xl lg:text-3xl font-bold text-white mb-6 fade-in">🛠️ AI Tools</h2>';
 
@@ -4430,14 +4504,14 @@
             html += '<span>Generate</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
-            // Placement Finder Card (NEW)
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToPlacement()">';
+            // Channel Audit Pro Card (NEW - replaces Placement Finder)
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToChannelAudit()">';
             html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
-            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-500 to-violet-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🎬</div>';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Placement Finder</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Find YouTube channels for Google Ads placements</p>';
-            html += '<div class="flex items-center text-purple-600 font-bold group">';
-            html += '<span>Find Channels</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🔍</div>';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Channel Audit Pro</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Complete channel analysis with growth recommendations</p>';
+            html += '<div class="flex items-center text-emerald-600 font-bold group">';
+            html += '<span>Audit Channel</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
             // History Card
@@ -4513,14 +4587,14 @@
                         competitorAnalysis: 'Competitor Analysis',
                         trendPredictor: 'Trend Predictor',
                         thumbnailGenerator: 'AI Thumbnails',
-                        placementFinder: 'Placement Finder'
+                        channelAudit: 'Channel Audit Pro'
                     };
                     var toolEmojis = {
                         warpOptimizer: '🚀',
                         competitorAnalysis: '🎯',
                         trendPredictor: '📈',
                         thumbnailGenerator: '🎨',
-                        placementFinder: '🎬'
+                        channelAudit: '🔍'
                     };
                     for (var h = 0; h < state.bonusHistory.length; h++) {
                         var bonus = state.bonusHistory[h];
@@ -5943,6 +6017,199 @@
         }
 
         /* ------------------------------------------
+           4.6.13 Channel Audit Pro View
+           ------------------------------------------ */
+        function renderChannelAudit() {
+            var html = '';
+            var results = state.channelAuditResults;
+
+            html += '<div class="min-h-screen mobile-full-screen py-8 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+
+            // Navigation buttons
+            html += '<div class="flex flex-wrap gap-3 mb-6">';
+            html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
+            html += '</div>';
+
+            // Header
+            html += '<div class="text-center mb-8 fade-in">';
+            html += '<div class="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-4 shadow-xl">🔍</div>';
+            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">Channel Audit Pro</h1>';
+            html += '<p class="text-white/80 text-lg">Complete channel analysis with growth recommendations</p>';
+            html += '</div>';
+
+            // Error Message
+            if (state.error) {
+                html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message) + '</div>';
+            }
+
+            // Loading Section
+            if (state.loading && !results) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding mb-6 fade-in">';
+                html += '<div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">';
+                html += '<div class="flex items-center gap-4"><div class="loading-emoji">🔍</div><div><h3 class="text-xl font-bold text-gray-800">Analyzing Channel</h3><p class="text-gray-500">Performing comprehensive audit...</p></div></div>';
+                html += '<div class="progress-percentage">' + Math.round(state.loadingProgress) + '%</div>';
+                html += '</div>';
+                html += '<div class="progress-bar-container mb-6"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">';
+                for (var li = 0; li < state.loadingSteps.length; li++) {
+                    var lstep = state.loadingSteps[li];
+                    var lstepClass = li < state.loadingStep ? 'completed' : li === state.loadingStep ? 'active' : 'pending';
+                    html += '<div class="loading-step ' + lstepClass + '">';
+                    html += '<div class="step-icon ' + lstepClass + '">' + (lstepClass === 'completed' ? '✓' : lstep.icon) + '</div>';
+                    html += '<span class="text-sm font-medium">' + lstep.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div></div>';
+            }
+
+            // Input Form (show when no results)
+            if (!results && !state.loading) {
+                html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding fade-in">';
+                html += '<div class="max-w-xl mx-auto">';
+
+                html += '<div class="text-center mb-6">';
+                html += '<p class="text-gray-600 text-lg">Enter a YouTube channel URL to get a complete analysis with SEO health score, content strategy insights, and growth recommendations.</p>';
+                html += '</div>';
+
+                html += '<form onsubmit="app.runChannelAudit(event)">';
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-2">YouTube Channel URL</label>';
+                html += '<input type="text" id="audit-channel-url" placeholder="https://youtube.com/@channel" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-lg" required />';
+                html += '<p class="text-sm text-gray-500 mt-2">Supports: youtube.com/@handle, youtube.com/channel/..., youtube.com/c/...</p>';
+                html += '</div>';
+
+                html += '<button type="submit" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl text-lg">';
+                html += '🔍 Start Channel Audit';
+                html += '</button>';
+                html += '</form>';
+
+                // What You'll Get Section
+                html += '<div class="mt-8 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 rounded-xl">';
+                html += '<h4 class="font-semibold text-gray-800 mb-3">📊 What You\'ll Get:</h4>';
+                html += '<ul class="text-sm text-gray-600 space-y-2">';
+                html += '<li>• <strong>SEO Health Score</strong> - Overall channel optimization rating</li>';
+                html += '<li>• <strong>Content Strategy Analysis</strong> - Upload frequency, video lengths, topics</li>';
+                html += '<li>• <strong>Engagement Metrics</strong> - Views, likes, comments analysis</li>';
+                html += '<li>• <strong>Growth Opportunities</strong> - Actionable recommendations</li>';
+                html += '<li>• <strong>Competitor Insights</strong> - How you compare in your niche</li>';
+                html += '</ul>';
+                html += '</div>';
+
+                html += '</div></div>';
+            }
+
+            // Results Section
+            if (results) {
+                var channelInfo = results.channelInfo || {};
+                var scores = results.scores || {};
+                var analysis = results.analysis || {};
+                var recommendations = results.recommendations || [];
+
+                // Channel Info Card
+                html += '<div class="bg-white/10 backdrop-blur rounded-2xl p-5 mb-6 fade-in">';
+                html += '<div class="flex flex-wrap items-center gap-4">';
+                if (channelInfo.thumbnail) {
+                    html += '<img src="' + utils.escapeHtml(channelInfo.thumbnail) + '" class="w-16 h-16 object-cover rounded-full" />';
+                }
+                html += '<div class="flex-1 min-w-[200px]">';
+                html += '<p class="text-white font-bold text-lg">' + utils.escapeHtml(channelInfo.name || 'Channel') + '</p>';
+                html += '<p class="text-white/70">' + utils.formatNumber(channelInfo.subscribers || 0) + ' subscribers • ' + utils.formatNumber(channelInfo.videoCount || 0) + ' videos</p>';
+                html += '</div>';
+                var overallScore = scores.overall || 0;
+                var scoreColor = overallScore >= 80 ? 'bg-green-500' : overallScore >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+                html += '<div class="' + scoreColor + ' text-white px-6 py-3 rounded-full font-bold text-2xl">';
+                html += overallScore + '<span class="text-sm">/100</span>';
+                html += '</div>';
+                html += '</div></div>';
+
+                // Score Breakdown
+                html += '<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">';
+                var scoreCategories = [
+                    { key: 'seo', name: 'SEO Health', icon: '🔍' },
+                    { key: 'content', name: 'Content Strategy', icon: '📝' },
+                    { key: 'engagement', name: 'Engagement', icon: '💬' },
+                    { key: 'growth', name: 'Growth Potential', icon: '📈' }
+                ];
+                for (var i = 0; i < scoreCategories.length; i++) {
+                    var cat = scoreCategories[i];
+                    var catScore = scores[cat.key] || 0;
+                    var catColor = catScore >= 80 ? 'text-green-400 border-green-400' : catScore >= 60 ? 'text-yellow-400 border-yellow-400' : 'text-red-400 border-red-400';
+                    html += '<div class="bg-white rounded-2xl p-5 text-center shadow-lg">';
+                    html += '<div class="text-3xl mb-2">' + cat.icon + '</div>';
+                    html += '<div class="text-3xl font-bold ' + catColor + ' mb-1">' + catScore + '</div>';
+                    html += '<div class="text-gray-600 text-sm font-medium">' + cat.name + '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                // Analysis Details
+                if (analysis.summary) {
+                    html += '<div class="bg-white rounded-2xl shadow-xl p-6 mb-6 fade-in">';
+                    html += '<h3 class="text-xl font-bold text-gray-800 mb-4">📊 Analysis Summary</h3>';
+                    html += '<p class="text-gray-600">' + utils.escapeHtml(analysis.summary) + '</p>';
+                    html += '</div>';
+                }
+
+                // Strengths & Weaknesses
+                html += '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">';
+
+                if (analysis.strengths && analysis.strengths.length > 0) {
+                    html += '<div class="bg-white rounded-2xl shadow-xl p-6 fade-in">';
+                    html += '<h3 class="text-xl font-bold text-green-600 mb-4">✅ Strengths</h3>';
+                    html += '<ul class="space-y-2">';
+                    for (var s = 0; s < analysis.strengths.length; s++) {
+                        html += '<li class="flex items-start gap-2 text-gray-600"><span class="text-green-500">•</span>' + utils.escapeHtml(analysis.strengths[s]) + '</li>';
+                    }
+                    html += '</ul></div>';
+                }
+
+                if (analysis.weaknesses && analysis.weaknesses.length > 0) {
+                    html += '<div class="bg-white rounded-2xl shadow-xl p-6 fade-in">';
+                    html += '<h3 class="text-xl font-bold text-red-600 mb-4">⚠️ Areas to Improve</h3>';
+                    html += '<ul class="space-y-2">';
+                    for (var w = 0; w < analysis.weaknesses.length; w++) {
+                        html += '<li class="flex items-start gap-2 text-gray-600"><span class="text-red-500">•</span>' + utils.escapeHtml(analysis.weaknesses[w]) + '</li>';
+                    }
+                    html += '</ul></div>';
+                }
+
+                html += '</div>';
+
+                // Recommendations
+                if (recommendations.length > 0) {
+                    html += '<div class="bg-white rounded-2xl shadow-xl p-6 fade-in">';
+                    html += '<h3 class="text-xl font-bold text-gray-800 mb-4">💡 Growth Recommendations</h3>';
+                    html += '<div class="space-y-4">';
+                    for (var r = 0; r < recommendations.length; r++) {
+                        var rec = recommendations[r];
+                        var priorityColor = rec.priority === 'high' ? 'bg-red-100 text-red-700' : rec.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700';
+                        html += '<div class="p-4 bg-gray-50 rounded-xl">';
+                        html += '<div class="flex items-center gap-3 mb-2">';
+                        html += '<span class="px-2 py-1 text-xs font-bold rounded-full ' + priorityColor + '">' + (rec.priority || 'tip').toUpperCase() + '</span>';
+                        html += '<span class="font-bold text-gray-800">' + utils.escapeHtml(rec.title || rec) + '</span>';
+                        html += '</div>';
+                        if (rec.description) {
+                            html += '<p class="text-gray-600 text-sm">' + utils.escapeHtml(rec.description) + '</p>';
+                        }
+                        html += '</div>';
+                    }
+                    html += '</div></div>';
+                }
+
+                // New Audit Button
+                html += '<div class="mt-6 text-center">';
+                html += '<button onclick="app.goToChannelAudit()" class="btn-primary bg-gradient-to-r from-emerald-500 to-teal-600">';
+                html += '🔍 Audit Another Channel';
+                html += '</button>';
+                html += '</div>';
+            }
+
+            html += '</div></div>';
+            return html;
+        }
+
+        /* ------------------------------------------
            4.6.14 Admin Reports View (Campaign Reports Manager)
            ------------------------------------------ */
         function renderAdminReports() {
@@ -6845,6 +7112,9 @@
                     break;
                 case 'placement':
                     html = renderPlacement();
+                    break;
+                case 'channelAudit':
+                    html = renderChannelAudit();
                     break;
                 case 'admin-reports':
                     html = renderAdminReports();
