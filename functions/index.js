@@ -6308,13 +6308,27 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
 
   } catch (error) {
     console.error('Generate image error:', error);
+    console.error('Error details:', JSON.stringify({
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      details: error.details
+    }));
 
     // Handle specific Gemini API errors
-    if (error.message?.includes('API key')) {
+    if (error.message?.includes('API key') || error.message?.includes('API_KEY')) {
       throw new functions.https.HttpsError('failed-precondition',
         'Image generation service configuration error. Please contact support.');
     }
-    if (error.message?.includes('quota') || error.message?.includes('rate')) {
+    if (error.message?.includes('not found') || error.message?.includes('404')) {
+      throw new functions.https.HttpsError('failed-precondition',
+        'Imagen API not available. Please ensure the API is enabled in Google Cloud Console.');
+    }
+    if (error.message?.includes('permission') || error.message?.includes('403')) {
+      throw new functions.https.HttpsError('permission-denied',
+        'API access denied. Please check your Google Cloud project permissions.');
+    }
+    if (error.message?.includes('quota') || error.message?.includes('rate') || error.message?.includes('429')) {
       throw new functions.https.HttpsError('resource-exhausted',
         'Service temporarily busy. Please try again in a moment.');
     }
