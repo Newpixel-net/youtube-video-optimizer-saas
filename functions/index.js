@@ -3841,7 +3841,7 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
 
   try {
     // Fetch from all history collections in parallel
-    const [optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap, placementSnap] = await Promise.all([
+    const [optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap, placementSnap, channelAuditSnap] = await Promise.all([
       db.collection('optimizations')
         .where('userId', '==', uid)
         .orderBy('createdAt', 'desc')
@@ -3863,6 +3863,11 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
         .limit(safeLimit)
         .get(),
       db.collection('placementFinderHistory')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get(),
+      db.collection('channelAuditHistory')
         .where('userId', '==', uid)
         .orderBy('createdAt', 'desc')
         .limit(safeLimit)
@@ -3924,7 +3929,8 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       ...formatHistory(competitorSnap, 'competitor'),
       ...formatHistory(trendSnap, 'trend'),
       ...formatHistory(thumbnailSnap, 'thumbnail'),
-      ...formatHistory(placementSnap, 'placement')
+      ...formatHistory(placementSnap, 'placement'),
+      ...formatHistory(channelAuditSnap, 'channelAudit')
     ];
 
     // Sort by timestamp descending
@@ -3938,14 +3944,16 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
         competitor: formatHistory(competitorSnap, 'competitor'),
         trends: formatHistory(trendSnap, 'trend'),
         thumbnails: formatHistory(thumbnailSnap, 'thumbnail'),
-        placements: formatHistory(placementSnap, 'placement')
+        placements: formatHistory(placementSnap, 'placement'),
+        channelAudit: formatHistory(channelAuditSnap, 'channelAudit')
       },
       counts: {
         optimizations: optimizationsSnap.size,
         competitor: competitorSnap.size,
         trends: trendSnap.size,
         thumbnails: thumbnailSnap.size,
-        placements: placementSnap.size
+        placements: placementSnap.size,
+        channelAudit: channelAuditSnap.size
       }
     };
   } catch (error) {
@@ -4452,6 +4460,32 @@ exports.deletePlacementFinder = functions.https.onCall(async (data, context) => 
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
     console.error('Delete placement finder error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to delete.');
+  }
+});
+
+/**
+ * Delete Channel Audit History Item
+ */
+exports.deleteChannelAudit = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  const { id } = data || {};
+  if (!id) {
+    throw new functions.https.HttpsError('invalid-argument', 'History ID is required');
+  }
+
+  try {
+    const doc = await db.collection('channelAuditHistory').doc(id).get();
+    if (!doc.exists || doc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized to delete this item');
+    }
+
+    await db.collection('channelAuditHistory').doc(id).delete();
+    return { success: true, message: 'Channel audit deleted successfully' };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Delete channel audit error:', error);
     throw new functions.https.HttpsError('internal', 'Failed to delete.');
   }
 });
