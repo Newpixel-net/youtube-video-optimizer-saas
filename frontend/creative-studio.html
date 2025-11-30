@@ -2624,6 +2624,508 @@
                 width: 100%;
             }
         }
+
+        /* ==========================================
+           IMAGE DETAIL MODAL
+           ========================================== */
+        .image-detail-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.92);
+            backdrop-filter: blur(10px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .image-detail-modal {
+            background: linear-gradient(180deg, rgba(30, 30, 50, 0.98) 0%, rgba(20, 20, 40, 0.98) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 1.25rem;
+            width: 100%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 80px rgba(139, 92, 246, 0.2);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        .image-detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .image-detail-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .image-detail-close {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .image-detail-close:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .image-detail-body {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        @media (max-width: 768px) {
+            .image-detail-body {
+                flex-direction: column;
+            }
+        }
+
+        .image-detail-preview {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            min-height: 300px;
+        }
+
+        .image-detail-preview img {
+            max-width: 100%;
+            max-height: 60vh;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .image-detail-info {
+            width: 300px;
+            padding: 1.5rem;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+        }
+
+        @media (max-width: 768px) {
+            .image-detail-info {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                max-height: 40vh;
+            }
+        }
+
+        .image-detail-section {
+            margin-bottom: 1.25rem;
+        }
+
+        .image-detail-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .image-detail-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.4rem;
+        }
+
+        .image-detail-value {
+            font-size: 0.9rem;
+            color: white;
+            line-height: 1.5;
+        }
+
+        .image-detail-prompt {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.6;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .image-detail-meta-row {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .image-detail-meta-item {
+            flex: 1;
+        }
+
+        .image-detail-actions {
+            display: flex;
+            gap: 0.5rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .image-detail-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.625rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .image-detail-btn-primary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            color: white;
+        }
+
+        .image-detail-btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .image-detail-btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .image-detail-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .image-detail-btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+        }
+
+        .image-detail-btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        /* ==========================================
+           MODEL SELECTOR DROPDOWN
+           ========================================== */
+        .model-dropdown-container {
+            position: relative;
+        }
+
+        .model-dropdown-trigger {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.625rem;
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .model-dropdown-trigger:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(139, 92, 246, 0.4);
+        }
+
+        .model-dropdown-trigger-content {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+        }
+
+        .model-dropdown-trigger-icon {
+            font-size: 1.1rem;
+        }
+
+        .model-dropdown-trigger-name {
+            font-weight: 500;
+        }
+
+        .model-dropdown-trigger-arrow {
+            font-size: 0.75rem;
+            opacity: 0.6;
+            transition: transform 0.2s ease;
+        }
+
+        .model-dropdown-trigger.open .model-dropdown-trigger-arrow {
+            transform: rotate(180deg);
+        }
+
+        .model-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            left: 0;
+            right: 0;
+            background: rgba(25, 25, 45, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            z-index: 100;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+            display: none;
+            animation: dropdownIn 0.2s ease;
+        }
+
+        .model-dropdown-menu.open {
+            display: block;
+        }
+
+        @keyframes dropdownIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .model-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+            padding: 0.75rem;
+            background: transparent;
+            border: none;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.875rem;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .model-dropdown-item:hover:not(:disabled) {
+            background: rgba(139, 92, 246, 0.2);
+            color: white;
+        }
+
+        .model-dropdown-item.active {
+            background: rgba(139, 92, 246, 0.25);
+            color: white;
+        }
+
+        .model-dropdown-item:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .model-dropdown-item-icon {
+            font-size: 1.25rem;
+            width: 28px;
+            text-align: center;
+        }
+
+        .model-dropdown-item-content {
+            flex: 1;
+        }
+
+        .model-dropdown-item-name {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .model-dropdown-item-desc {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 0.15rem;
+        }
+
+        .model-badge {
+            font-size: 0.6rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.25rem;
+        }
+
+        .model-badge-suggested {
+            background: rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+        }
+
+        .model-badge-trending {
+            background: rgba(249, 115, 22, 0.3);
+            color: #fb923c;
+        }
+
+        .model-badge-new {
+            background: rgba(34, 197, 94, 0.3);
+            color: #4ade80;
+        }
+
+        .model-badge-coming {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .model-badge-premium {
+            background: rgba(251, 191, 36, 0.3);
+            color: #fbbf24;
+        }
+
+        .model-dropdown-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 0.5rem 0;
+        }
+
+        /* ==========================================
+           REFERENCES SECTION IMPROVED
+           ========================================== */
+        .references-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .references-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .references-add-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.65rem;
+            background: rgba(139, 92, 246, 0.2);
+            border: none;
+            border-radius: 0.375rem;
+            color: #a78bfa;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .references-add-btn:hover {
+            background: rgba(139, 92, 246, 0.3);
+            color: white;
+        }
+
+        .reference-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 0.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-height: 80px;
+        }
+
+        .reference-card:hover:not(.locked) {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(139, 92, 246, 0.4);
+        }
+
+        .reference-card.locked {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .reference-card.has-content {
+            border-style: solid;
+            border-color: rgba(139, 92, 246, 0.4);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .reference-card-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.35rem;
+            opacity: 0.7;
+        }
+
+        .reference-card-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
+        .reference-card-premium {
+            position: absolute;
+            top: 0.35rem;
+            right: 0.35rem;
+            font-size: 0.65rem;
+            padding: 0.1rem 0.3rem;
+            background: rgba(251, 191, 36, 0.3);
+            color: #fbbf24;
+            border-radius: 0.25rem;
+            font-weight: 600;
+        }
+
+        .reference-card-preview {
+            width: 100%;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 0.5rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .reference-card-remove {
+            position: absolute;
+            top: -0.35rem;
+            right: -0.35rem;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ef4444;
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -2726,7 +3228,14 @@
 
             // Floating Generate Button state
             floatingSettingsOpen: false,
-            showFloatingButton: false
+            showFloatingButton: false,
+
+            // Image Detail Modal state
+            imageDetailModalOpen: false,
+            selectedImageDetail: null,
+
+            // Model Dropdown state
+            modelDropdownOpen: false
         };
 
         /* ==========================================
@@ -2778,6 +3287,59 @@
             { key: 'food', name: 'Food', icon: '##' },
             { key: 'landscapes', name: 'Landscapes', icon: '##' },
             { key: 'scifi', name: 'Sci-Fi', icon: '##' }
+        ];
+
+        // Model options for dropdown
+        const modelsConfig = [
+            {
+                key: 'auto',
+                name: 'Auto',
+                icon: '⚡',
+                description: 'Fast models with standard quality',
+                badge: 'suggested',
+                available: true
+            },
+            {
+                key: 'banana1',
+                name: 'Nano Banana',
+                icon: '🍌',
+                description: 'The only 4K with image references',
+                badge: 'trending',
+                available: true
+            },
+            {
+                key: 'banana2',
+                name: 'Nano Banana Ultra',
+                icon: '🍌',
+                description: 'Highest quality, best details',
+                badge: 'new',
+                available: true
+            },
+            { divider: true },
+            {
+                key: 'flux',
+                name: 'Flux',
+                icon: '△',
+                description: 'Most loved by the AI community',
+                badge: 'coming',
+                available: false
+            },
+            {
+                key: 'gpt',
+                name: 'GPT',
+                icon: '◎',
+                description: 'OpenAI technology from ChatGPT',
+                badge: 'coming',
+                available: false
+            },
+            {
+                key: 'runway',
+                name: 'Runway',
+                icon: '◈',
+                description: 'Professional video & image AI',
+                badge: 'coming',
+                available: false
+            }
         ];
 
         /* ==========================================
@@ -3309,6 +3871,10 @@
                 state.toolInterfaceOpen = true;
                 state.mainTab = 'templates'; // Start on templates tab
                 render();
+                // Update floating button visibility after opening
+                setTimeout(function() {
+                    app.updateFloatingButtonVisibility();
+                }, 50);
             },
 
             // Close Tool Interface
@@ -3321,6 +3887,10 @@
             setMainTab: function(tab) {
                 state.mainTab = tab;
                 render();
+                // Update floating button visibility after tab change
+                setTimeout(function() {
+                    app.updateFloatingButtonVisibility();
+                }, 50);
             },
 
             // Model Selection
@@ -3573,16 +4143,27 @@
                     return;
                 }
 
-                // Check if we're on the templates tab and scrolled down
-                var sidebar = document.querySelector('.tool-sidebar');
-                if (!sidebar || !state.toolInterfaceOpen) {
+                // Must have tool interface open
+                if (!state.toolInterfaceOpen) {
                     state.showFloatingButton = false;
                     return;
                 }
 
-                var sidebarRect = sidebar.getBoundingClientRect();
-                // Show floating button when sidebar is mostly out of view
-                state.showFloatingButton = sidebarRect.bottom < 200;
+                // Always show floating button when on Templates or Community tabs
+                // because the main generate button is not visible in these views
+                if (state.mainTab === 'templates' || state.mainTab === 'community') {
+                    state.showFloatingButton = true;
+                } else {
+                    // For Generator tab, check if sidebar is scrolled out of view
+                    var sidebar = document.querySelector('.tool-sidebar');
+                    if (!sidebar) {
+                        state.showFloatingButton = false;
+                    } else {
+                        var sidebarRect = sidebar.getBoundingClientRect();
+                        // Show floating button when sidebar is mostly out of view
+                        state.showFloatingButton = sidebarRect.bottom < 200;
+                    }
+                }
 
                 // Update the container visibility directly without full re-render
                 var container = document.getElementById('floating-generate-container');
@@ -3595,6 +4176,95 @@
                         state.floatingSettingsOpen = false;
                     }
                 }
+            },
+
+            // ========================================
+            // IMAGE DETAIL MODAL HANDLERS
+            // ========================================
+
+            // Open image detail modal
+            openImageDetail: function(index) {
+                if (state.history[index]) {
+                    state.selectedImageDetail = state.history[index];
+                    state.imageDetailModalOpen = true;
+                    render();
+                }
+            },
+
+            // Close image detail modal
+            closeImageDetail: function(event) {
+                if (event && event.target && !event.target.classList.contains('image-detail-modal-overlay')) {
+                    return;
+                }
+                state.imageDetailModalOpen = false;
+                state.selectedImageDetail = null;
+                render();
+            },
+
+            // Use prompt from detail modal
+            usePromptFromDetail: function() {
+                if (state.selectedImageDetail && state.selectedImageDetail.prompt) {
+                    state.prompt = state.selectedImageDetail.prompt;
+                    var textarea = document.getElementById('prompt-textarea');
+                    if (textarea) textarea.value = state.prompt;
+                    state.imageDetailModalOpen = false;
+                    state.selectedImageDetail = null;
+                    render();
+                    showToast('Prompt loaded! Click Generate to create.', 'success');
+                }
+            },
+
+            // Delete from history and close modal
+            deleteFromHistoryAndClose: function(imageId) {
+                // TODO: Implement actual deletion via Cloud Function
+                state.history = state.history.filter(function(item) { return item.id !== imageId; });
+                state.imageDetailModalOpen = false;
+                state.selectedImageDetail = null;
+                render();
+                showToast('Image removed from history', 'success');
+            },
+
+            // ========================================
+            // MODEL DROPDOWN HANDLERS
+            // ========================================
+
+            // Toggle model dropdown
+            toggleModelDropdown: function() {
+                state.modelDropdownOpen = !state.modelDropdownOpen;
+                render();
+            },
+
+            // Close model dropdown
+            closeModelDropdown: function() {
+                state.modelDropdownOpen = false;
+            },
+
+            // Select model from dropdown
+            selectModel: function(modelKey) {
+                var model = modelsConfig.find(function(m) { return m.key === modelKey; });
+                if (model && model.available) {
+                    state.selectedModel = modelKey;
+                    state.modelDropdownOpen = false;
+                    render();
+                } else if (model && !model.available) {
+                    showToast(model.name + ' coming soon!', 'info');
+                }
+            },
+
+            // ========================================
+            // REFERENCE HANDLERS
+            // ========================================
+
+            // Open style reference picker
+            openStyleReference: function() {
+                showToast('Style reference feature coming soon!', 'info');
+                // TODO: Implement style reference upload/selection modal
+            },
+
+            // Show premium modal for locked features
+            showPremiumModal: function(featureName) {
+                showToast(featureName + ' is a premium feature. Upgrade to access!', 'info');
+                // TODO: Show premium upgrade modal with plans
             },
 
             // Generate Image using Gemini/Imagen API
@@ -3910,6 +4580,9 @@
             // Floating Generate Button (for mobile/tablet)
             html += renderFloatingGenerateButton();
 
+            // Image Detail Modal
+            html += renderImageDetailModal();
+
             return html;
         }
 
@@ -3997,43 +4670,106 @@
         function renderToolSidebar(tool) {
             var html = '<div class="tool-sidebar">';
 
-            // Model Selector
+            // Model Selector with Dropdown
             html += '<div class="sidebar-section">';
             html += '<div class="sidebar-section-header">';
             html += '<span class="sidebar-section-title">Model</span>';
             html += '</div>';
-            html += '<div class="model-selector">';
-            var models = [
-                { key: 'banana1', name: 'NB 1' },
-                { key: 'banana2', name: 'NB 2' },
-                { key: 'auto', name: 'Auto' }
-            ];
-            for (var i = 0; i < models.length; i++) {
-                var m = models[i];
-                var isActive = state.selectedModel === m.key;
-                html += '<button class="model-btn' + (isActive ? ' active' : '') + '" onclick="app.setModel(\'' + m.key + '\')">' + m.name + '</button>';
-            }
-            html += '</div>';
-            html += '</div>';
+            html += '<div class="model-dropdown-wrapper">';
 
-            // References Section
-            html += '<div class="sidebar-section">';
+            // Find current selected model
+            var currentModel = null;
+            for (var mi = 0; mi < modelsConfig.length; mi++) {
+                if (!modelsConfig[mi].divider && modelsConfig[mi].key === state.selectedModel) {
+                    currentModel = modelsConfig[mi];
+                    break;
+                }
+            }
+            if (!currentModel) currentModel = modelsConfig[0];
+
+            // Model dropdown trigger button
+            html += '<button class="model-dropdown-trigger" onclick="app.toggleModelDropdown()">';
+            html += '<span class="model-dropdown-trigger-icon">' + currentModel.icon + '</span>';
+            html += '<span class="model-dropdown-trigger-name">' + currentModel.name + '</span>';
+            if (currentModel.badge && currentModel.badge !== 'coming') {
+                html += '<span class="model-badge ' + currentModel.badge + '">' + currentModel.badge + '</span>';
+            }
+            html += '<span class="model-dropdown-arrow">' + (state.modelDropdownOpen ? '▲' : '▼') + '</span>';
+            html += '</button>';
+
+            // Dropdown menu
+            if (state.modelDropdownOpen) {
+                html += '<div class="model-dropdown-menu">';
+                for (var mj = 0; mj < modelsConfig.length; mj++) {
+                    var model = modelsConfig[mj];
+                    if (model.divider) {
+                        html += '<div class="model-dropdown-divider"></div>';
+                        continue;
+                    }
+                    var isSelected = state.selectedModel === model.key;
+                    var itemClass = 'model-dropdown-item';
+                    if (isSelected) itemClass += ' selected';
+                    if (!model.available) itemClass += ' disabled';
+
+                    html += '<div class="' + itemClass + '" onclick="' + (model.available ? 'app.selectModel(\'' + model.key + '\')' : '') + '">';
+                    html += '<span class="model-dropdown-item-icon">' + model.icon + '</span>';
+                    html += '<div class="model-dropdown-item-info">';
+                    html += '<span class="model-dropdown-item-name">' + model.name + '</span>';
+                    html += '<span class="model-dropdown-item-desc">' + model.description + '</span>';
+                    html += '</div>';
+                    if (model.badge) {
+                        var badgeText = model.badge === 'coming' ? 'Coming Soon' : model.badge;
+                        html += '<span class="model-badge ' + model.badge + '">' + badgeText + '</span>';
+                    }
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+
+            html += '</div>'; // model-dropdown-wrapper
+            html += '</div>'; // sidebar-section
+
+            // References Section with Premium Locks
+            html += '<div class="sidebar-section references-section">';
             html += '<div class="sidebar-section-header">';
             html += '<span class="sidebar-section-title">References</span>';
+            html += '<span class="references-hint">Add images to guide your creation</span>';
             html += '</div>';
             html += '<div class="reference-grid">';
-            html += '<button class="reference-btn" title="Style Reference">';
+
+            // Style Reference (Free)
+            html += '<button class="reference-btn" onclick="app.openStyleReference()" title="Add a style reference image">';
+            html += '<div class="reference-btn-content">';
             html += '<span class="reference-btn-icon">🎨</span>';
-            html += '<span>Style</span>';
+            html += '<span class="reference-btn-label">Style</span>';
+            html += '</div>';
+            html += '<span class="reference-btn-hint">Set the visual style</span>';
             html += '</button>';
-            html += '<button class="reference-btn premium" title="Character Reference (Premium)">';
+
+            // Character Reference (Premium)
+            html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Character Reference\')" title="Character Reference - Premium Feature">';
+            html += '<div class="premium-lock-overlay">';
+            html += '<span class="premium-lock-icon">🔒</span>';
+            html += '</div>';
+            html += '<div class="reference-btn-content">';
             html += '<span class="reference-btn-icon">👤</span>';
-            html += '<span>Character</span>';
+            html += '<span class="reference-btn-label">Character</span>';
+            html += '</div>';
+            html += '<span class="reference-btn-hint">Consistent faces</span>';
             html += '</button>';
-            html += '<button class="reference-btn premium" title="Upload Image (Premium)">';
+
+            // Upload Reference (Premium)
+            html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Image Upload\')" title="Upload Image - Premium Feature">';
+            html += '<div class="premium-lock-overlay">';
+            html += '<span class="premium-lock-icon">🔒</span>';
+            html += '</div>';
+            html += '<div class="reference-btn-content">';
             html += '<span class="reference-btn-icon">📤</span>';
-            html += '<span>Upload</span>';
+            html += '<span class="reference-btn-label">Upload</span>';
+            html += '</div>';
+            html += '<span class="reference-btn-hint">Use your images</span>';
             html += '</button>';
+
             html += '</div>';
             html += '</div>';
 
@@ -4235,14 +4971,14 @@
             html += '<div class="history-grid">';
             for (var i = 0; i < state.history.length; i++) {
                 var item = state.history[i];
-                html += '<div class="history-item">';
+                html += '<div class="history-item" onclick="app.openImageDetail(' + i + ')" style="cursor: pointer;">';
                 html += '<img src="' + item.imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" />';
                 html += '<div class="history-item-overlay">';
-                html += '<div class="history-item-actions">';
-                html += '<button class="history-action-btn" onclick="app.downloadImage(\'' + item.imageUrl + '\')" title="Download">⬇️</button>';
-                html += '<button class="history-action-btn" onclick="app.usePrompt(\'' + utils.escapeHtml(item.prompt) + '\')" title="Reuse Prompt">🔄</button>';
-                html += '<button class="history-action-btn" onclick="app.shareToGallery(\'' + item.id + '\', false)" title="Share">📤</button>';
-                html += '<button class="history-action-btn" onclick="app.deleteFromHistory(\'' + item.id + '\')" title="Delete">🗑️</button>';
+                html += '<div class="history-item-actions" onclick="event.stopPropagation()">';
+                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.downloadImage(\'' + item.imageUrl + '\')" title="Download">⬇️</button>';
+                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.usePrompt(\'' + utils.escapeHtml(item.prompt).replace(/'/g, "\\'") + '\')" title="Reuse Prompt">🔄</button>';
+                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.shareToGallery(\'' + item.id + '\', false)" title="Share">📤</button>';
+                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.deleteFromHistory(\'' + item.id + '\')" title="Delete">🗑️</button>';
                 html += '</div>';
                 html += '</div>';
                 html += '</div>';
@@ -4436,6 +5172,115 @@
                 }
             }
             return matches;
+        }
+
+        // Render Image Detail Modal
+        function renderImageDetailModal() {
+            if (!state.imageDetailModalOpen || !state.selectedImageDetail) return '';
+
+            var item = state.selectedImageDetail;
+            var html = '<div class="image-detail-modal-overlay" onclick="app.closeImageDetail(event)">';
+            html += '<div class="image-detail-modal" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="image-detail-header">';
+            html += '<div class="image-detail-title">🖼️ Image Details</div>';
+            html += '<button class="image-detail-close" onclick="app.closeImageDetail()">✕</button>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="image-detail-body">';
+
+            // Image preview
+            html += '<div class="image-detail-preview">';
+            html += '<img src="' + item.imageUrl + '" alt="Generated image" />';
+            html += '</div>';
+
+            // Info panel
+            html += '<div class="image-detail-info">';
+
+            // Prompt section
+            html += '<div class="image-detail-section">';
+            html += '<div class="image-detail-label">Prompt</div>';
+            html += '<div class="image-detail-prompt">' + utils.escapeHtml(item.prompt || 'No prompt available') + '</div>';
+            html += '</div>';
+
+            // Model and Quality row
+            html += '<div class="image-detail-meta-row">';
+            html += '<div class="image-detail-meta-item">';
+            html += '<div class="image-detail-label">Model</div>';
+            html += '<div class="image-detail-value">' + getModelDisplayName(item.model) + '</div>';
+            html += '</div>';
+            html += '<div class="image-detail-meta-item">';
+            html += '<div class="image-detail-label">Quality</div>';
+            html += '<div class="image-detail-value">' + (item.quality || 'HD').toUpperCase() + '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Aspect Ratio and Date row
+            html += '<div class="image-detail-meta-row">';
+            html += '<div class="image-detail-meta-item">';
+            html += '<div class="image-detail-label">Aspect Ratio</div>';
+            html += '<div class="image-detail-value">' + (item.aspectRatio || '1:1') + '</div>';
+            html += '</div>';
+            html += '<div class="image-detail-meta-item">';
+            html += '<div class="image-detail-label">Created</div>';
+            html += '<div class="image-detail-value">' + formatDate(item.createdAt) + '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Cost
+            if (item.tokenCost) {
+                html += '<div class="image-detail-section">';
+                html += '<div class="image-detail-label">Token Cost</div>';
+                html += '<div class="image-detail-value">🪙 ' + item.tokenCost + '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // info
+            html += '</div>'; // body
+
+            // Actions
+            html += '<div class="image-detail-actions">';
+            html += '<button class="image-detail-btn image-detail-btn-primary" onclick="app.downloadImage(\'' + item.imageUrl + '\')">';
+            html += '⬇️ Download';
+            html += '</button>';
+            html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.usePromptFromDetail()">';
+            html += '🔄 Reuse Prompt';
+            html += '</button>';
+            html += '<button class="image-detail-btn image-detail-btn-danger" onclick="app.deleteFromHistoryAndClose(\'' + item.id + '\')">';
+            html += '🗑️ Delete';
+            html += '</button>';
+            html += '</div>';
+
+            html += '</div>'; // modal
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Helper function to get model display name
+        function getModelDisplayName(modelKey) {
+            if (!modelKey) return 'Auto';
+            var modelNames = {
+                'auto': 'Auto',
+                'banana1': 'Nano Banana',
+                'banana2': 'Nano Banana Ultra',
+                'imagen-4.0-generate-001': 'Nano Banana',
+                'imagen-4.0-ultra-generate-001': 'Nano Banana Ultra'
+            };
+            return modelNames[modelKey] || modelKey;
+        }
+
+        // Helper function to format date
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Unknown';
+            try {
+                var date = new Date(dateStr);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            } catch (e) {
+                return 'Unknown';
+            }
         }
 
         // Render Floating Generate Button (for mobile/tablet when scrolled)
