@@ -174,5 +174,44 @@ service cloud.firestore {
       // Only Cloud Functions can create/delete notifications
       allow create, delete: if false;
     }
+
+    // ============================================
+    // PROMPT TEMPLATES (Creative Studio)
+    // ============================================
+
+    match /promptTemplates/{templateId} {
+      // All authenticated users can read active prompts (for Creative Studio)
+      allow read: if isAuthenticated();
+
+      // Only admins can create/update/delete prompt templates
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ============================================
+    // CREATIVE TOKENS
+    // ============================================
+
+    match /creativeTokens/{userId} {
+      // Users can read their own token balance
+      allow read: if isOwner(userId);
+
+      // Only Cloud Functions can modify token balances
+      allow write: if false;
+    }
+
+    // ============================================
+    // CREATIVE HISTORY
+    // ============================================
+
+    match /creativeHistory/{historyId} {
+      // Users can read their own creative history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
   }
 }
