@@ -2019,6 +2019,25 @@
             display: none !important;
         }
 
+        /* Feature Info Collapsible Section */
+        .feature-info-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+        }
+
+        .expanded .feature-info-content {
+            max-height: 500px;
+            padding-top: 0;
+        }
+
+        @media (min-width: 768px) {
+            .feature-info-content {
+                max-height: none;
+                overflow: visible;
+            }
+        }
+
         /* Glass morphism effect */
         .glass {
             background: rgba(255, 255, 255, 0.1);
@@ -5406,7 +5425,30 @@
 
             // Card
             html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding fade-in">';
-            html += '<h2 class="text-3xl mobile-text-xl font-bold text-gray-800 mb-6">🚀 Video Optimizer</h2>';
+            html += '<h2 class="text-3xl mobile-text-xl font-bold text-gray-800 mb-4">🚀 Video Optimizer</h2>';
+
+            // Feature Description Section - Collapsible on mobile
+            html += '<div class="mb-6">';
+            html += '<div class="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-xl overflow-hidden border border-blue-100">';
+
+            // Mobile: Collapsible header
+            html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+            html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">💡</span> What can this tool do?</span>';
+            html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+            html += '</button>';
+
+            // Content area
+            html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+            html += '<p class="text-gray-700 mb-3 leading-relaxed">Transform your video\'s discoverability with AI-powered SEO optimization. Our advanced algorithms analyze your content and generate optimized metadata to help you rank higher and get more views.</p>';
+            html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
+            html += '<div class="flex items-start gap-2"><span class="text-green-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO-Optimized Titles</strong> – 5 click-worthy title suggestions</span></div>';
+            html += '<div class="flex items-start gap-2"><span class="text-green-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Rich Descriptions</strong> – Keyword-rich, engaging descriptions</span></div>';
+            html += '<div class="flex items-start gap-2"><span class="text-green-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Strategic Tags</strong> – High-ranking keyword tags</span></div>';
+            html += '<div class="flex items-start gap-2"><span class="text-green-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO Score</strong> – Before & after optimization rating</span></div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
 
             // Error message (supports both string and object format)
             if (state.error) {
@@ -6140,6 +6182,29 @@
             if (!state.competitorResults) {
                 html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding max-w-2xl mx-auto fade-in">';
 
+                // Feature Description Section - Collapsible on mobile
+                html += '<div class="mb-6">';
+                html += '<div class="bg-gradient-to-r from-red-50 via-orange-50 to-amber-50 rounded-xl overflow-hidden border border-red-100">';
+
+                // Mobile: Collapsible header
+                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+                html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">🎯</span> How does this help?</span>';
+                html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+                html += '</button>';
+
+                // Content area
+                html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+                html += '<p class="text-gray-700 mb-3 leading-relaxed">Reverse-engineer the success of any YouTube video. Our AI analyzes competitor content to reveal their SEO strategies, strengths, and weaknesses – giving you the blueprint to outperform them.</p>';
+                html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
+                html += '<div class="flex items-start gap-2"><span class="text-red-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO Breakdown</strong> – Competitor\'s optimization score</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-red-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Strengths Analysis</strong> – What they\'re doing right</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-red-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Weaknesses Found</strong> – Gaps you can exploit</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-red-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Better Titles</strong> – Outrank them with superior titles</span></div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
                 if (state.error) {
                     html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message) + '</div>';
                 }
@@ -6274,6 +6339,29 @@
 
             if (!state.trendResults) {
                 html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding max-w-2xl mx-auto fade-in">';
+
+                // Feature Description Section - Collapsible on mobile
+                html += '<div class="mb-6">';
+                html += '<div class="bg-gradient-to-r from-cyan-50 via-blue-50 to-indigo-50 rounded-xl overflow-hidden border border-cyan-100">';
+
+                // Mobile: Collapsible header
+                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+                html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">🔮</span> What will you discover?</span>';
+                html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+                html += '</button>';
+
+                // Content area
+                html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+                html += '<p class="text-gray-700 mb-3 leading-relaxed">Stay ahead of the curve with AI-powered trend forecasting. Discover what\'s hot right now and predict future viral topics in your niche before your competitors catch on.</p>';
+                html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
+                html += '<div class="flex items-start gap-2"><span class="text-cyan-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Current Trends</strong> – What\'s trending now in your niche</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-cyan-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Future Predictions</strong> – Topics about to explode</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-cyan-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Video Ideas</strong> – Ready-to-use content concepts</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-cyan-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Trending Hashtags</strong> – Boost your discoverability</span></div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
 
                 if (state.error) {
                     html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message) + '</div>';
@@ -6451,6 +6539,29 @@
             }
 
             if (!state.thumbnailImage) {
+                // Feature Description Section - Collapsible on mobile
+                html += '<div class="mb-6">';
+                html += '<div class="bg-gradient-to-r from-pink-50 via-rose-50 to-fuchsia-50 rounded-xl overflow-hidden border border-pink-100">';
+
+                // Mobile: Collapsible header
+                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+                html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">🎨</span> What makes great thumbnails?</span>';
+                html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+                html += '</button>';
+
+                // Content area
+                html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+                html += '<p class="text-gray-700 mb-3 leading-relaxed">Create scroll-stopping thumbnails with our AI image generator. Get professional-quality visuals that match your video\'s content and maximize click-through rates.</p>';
+                html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
+                html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>AI-Generated Art</strong> – Unique visuals tailored to your title</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Multiple Styles</strong> – Professional, dramatic, minimal, bold</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Optimized Format</strong> – Perfect 16:9 YouTube dimensions</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Instant Download</strong> – High-resolution image ready to use</span></div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
                 html += '<form onsubmit="app.generateThumbnail(event)">';
 
                 // Title Input (pre-filled if from optimizer)
@@ -6832,8 +6943,27 @@
                 html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding fade-in">';
                 html += '<div class="max-w-xl mx-auto">';
 
-                html += '<div class="text-center mb-6">';
-                html += '<p class="text-gray-600 text-lg">Enter a YouTube channel URL to get a complete analysis with SEO health score, content strategy insights, and growth recommendations.</p>';
+                // Feature Description Section - Collapsible on mobile
+                html += '<div class="mb-6">';
+                html += '<div class="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 rounded-xl overflow-hidden border border-emerald-100">';
+
+                // Mobile: Collapsible header
+                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+                html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">📊</span> What will you learn?</span>';
+                html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+                html += '</button>';
+
+                // Content area
+                html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+                html += '<p class="text-gray-700 mb-3 leading-relaxed">Get a complete health check for any YouTube channel. Our AI analyzes every aspect of channel performance and provides actionable recommendations for growth.</p>';
+                html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
+                html += '<div class="flex items-start gap-2"><span class="text-emerald-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO Health Score</strong> – Overall optimization rating</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-emerald-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Content Strategy</strong> – Upload frequency & topics</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-emerald-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Engagement Analysis</strong> – Views, likes & comments</span></div>';
+                html += '<div class="flex items-start gap-2"><span class="text-emerald-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Growth Roadmap</strong> – Personalized recommendations</span></div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
                 html += '</div>';
 
                 html += '<form onsubmit="app.runChannelAudit(event)">';
@@ -6847,18 +6977,6 @@
                 html += '🔍 Start Channel Audit';
                 html += '</button>';
                 html += '</form>';
-
-                // What You'll Get Section
-                html += '<div class="mt-8 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 rounded-xl">';
-                html += '<h4 class="font-semibold text-gray-800 mb-3">📊 What You\'ll Get:</h4>';
-                html += '<ul class="text-sm text-gray-600 space-y-2">';
-                html += '<li>• <strong>SEO Health Score</strong> - Overall channel optimization rating</li>';
-                html += '<li>• <strong>Content Strategy Analysis</strong> - Upload frequency, video lengths, topics</li>';
-                html += '<li>• <strong>Engagement Metrics</strong> - Views, likes, comments analysis</li>';
-                html += '<li>• <strong>Growth Opportunities</strong> - Actionable recommendations</li>';
-                html += '<li>• <strong>Competitor Insights</strong> - How you compare in your niche</li>';
-                html += '</ul>';
-                html += '</div>';
 
                 html += '</div></div>';
             }
