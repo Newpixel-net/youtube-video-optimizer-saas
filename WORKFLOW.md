@@ -51,7 +51,32 @@ firebase emulators:start
 
 **IMPORTANT**: After working on a feature branch, list all modified files here so you know which files to download when updating the main branch.
 
-### Current Branch: `claude/fix-recurring-issue-01Mc4jyJeGSeB1N8Gqk1qhVH`
+### Current Branch: `claude/review-dashboard-changes-01DJjJFKA1cSJ1JYpopozKoR`
+
+**Files Modified:**
+- `frontend/enterprise.html` - **NEW FILE** - Standalone Enterprise Suite page with:
+  - Bulk Video Optimizer (CSV/paste links processing)
+  - Placement Finder (moved from main dashboard)
+  - Viral Score Predictor
+  - Monetization Analyzer
+  - Script Writer Pro
+  - Gold premium styling, feature locking for Free/Lite users
+- `frontend/dual-auth-widget.html` - Multiple updates:
+  - Added golden Enterprise Suite banner linking to external URL
+  - Added Channel Audit Pro tool (replaces Placement Finder)
+  - Added `goToChannelAudit()`, `runChannelAudit()`, `renderChannelAudit()` functions
+  - Updated tools array and bonus history mappings
+- `WORKFLOW.md` - Updated with current branch files
+
+**Cloud Functions Needed (to be created in functions/index.js):**
+- `auditChannel` - Channel Audit Pro
+- `predictViralScore` - Viral Score Predictor
+- `analyzeMonetization` - Monetization Analyzer
+- `generateScript` - Script Writer Pro
+
+---
+
+### Previous Branch: `claude/fix-recurring-issue-01Mc4jyJeGSeB1N8Gqk1qhVH`
 
 **Files Modified:**
 - `frontend/dual-auth-widget.html` - Multiple updates:
