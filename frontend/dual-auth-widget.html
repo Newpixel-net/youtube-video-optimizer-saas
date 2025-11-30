@@ -258,6 +258,28 @@
             50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.8), 0 0 30px rgba(34, 197, 94, 0.4); }
         }
 
+        /* New notification attention animation - triggered when new notifications arrive */
+        @keyframes notificationBounce {
+            0%, 100% { transform: scale(1); }
+            10% { transform: scale(1.3); }
+            20% { transform: scale(1); }
+            30% { transform: scale(1.2); }
+            40% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            60% { transform: scale(1); }
+        }
+
+        @keyframes notificationFlash {
+            0%, 100% { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+            25% { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
+            50% { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+            75% { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
+        }
+
+        .notification-badge.notification-new {
+            animation: notificationBounce 1s ease-in-out, notificationFlash 1s ease-in-out 3;
+        }
+
         .notification-badge {
             position: absolute;
             top: -6px;
@@ -328,6 +350,34 @@
             position: fixed;
             inset: 0;
             z-index: 999;
+        }
+
+        /* ------------------------------------------
+           2.2.6 SCROLLABLE TABS (Mobile-friendly)
+           ------------------------------------------ */
+        .history-tabs-container {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge */
+        }
+
+        .history-tabs-container::-webkit-scrollbar {
+            display: none; /* Chrome/Safari */
+        }
+
+        .history-tab-btn {
+            min-width: max-content;
+        }
+
+        /* Scrollbar hide utility */
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
         }
 
         /* Global Header */
@@ -2390,6 +2440,10 @@
         firebase.initializeApp(FIREBASE_CONFIG);
         const auth = firebase.auth();
         const functions = firebase.functions();
+        const db = firebase.firestore();
+
+        // Real-time notification listener unsubscribe function
+        let notificationUnsubscribe = null;
 
         /* ==========================================
            4.2 APPLICATION STATE
@@ -2761,6 +2815,67 @@
            4.4 AUTH & API FUNCTIONS
            ========================================== */
 
+        // Start real-time notification listener
+        function startNotificationListener(userId) {
+            // Stop any existing listener
+            stopNotificationListener();
+
+            // Listen for unread notifications in real-time
+            notificationUnsubscribe = db.collection('userNotifications')
+                .where('userId', '==', userId)
+                .where('isRead', '==', false)
+                .orderBy('createdAt', 'desc')
+                .limit(20)
+                .onSnapshot(function(snapshot) {
+                    var previousCount = state.unreadCount;
+                    var notifications = [];
+
+                    snapshot.forEach(function(doc) {
+                        var data = doc.data();
+                        notifications.push({
+                            id: doc.id,
+                            type: data.type,
+                            reportId: data.reportId,
+                            title: data.title,
+                            message: data.message,
+                            isRead: data.isRead,
+                            createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : null
+                        });
+                    });
+
+                    state.notifications = notifications;
+                    state.unreadCount = notifications.length;
+
+                    // If new notifications arrived, trigger attention animation
+                    if (notifications.length > previousCount && previousCount >= 0) {
+                        triggerNotificationAttention();
+                    }
+
+                    render();
+                }, function(error) {
+                    console.error('Notification listener error:', error);
+                });
+        }
+
+        // Stop real-time notification listener
+        function stopNotificationListener() {
+            if (notificationUnsubscribe) {
+                notificationUnsubscribe();
+                notificationUnsubscribe = null;
+            }
+        }
+
+        // Trigger attention animation for new notifications
+        function triggerNotificationAttention() {
+            var badge = document.querySelector('.notification-badge');
+            if (badge) {
+                badge.classList.add('notification-new');
+                setTimeout(function() {
+                    badge.classList.remove('notification-new');
+                }, 3000);
+            }
+        }
+
         // Auth state listener
         auth.onAuthStateChanged(async function(user) {
             var wasInitializing = state.initializing;
@@ -2777,6 +2892,8 @@
                     state.isAdmin = state.profile.isAdmin === true;
                     // Start countdown timer if on dashboard
                     startCountdownTimer();
+                    // Start real-time notification listener
+                    startNotificationListener(user.uid);
                     // Redirect to dashboard if coming from initializing, login, or register
                     if (wasInitializing || state.currentView === 'login' || state.currentView === 'register' || state.currentView === 'initializing') {
                         state.currentView = 'dashboard';
@@ -2788,9 +2905,13 @@
                     render();
                 }
             } else {
+                // Stop notification listener on logout
+                stopNotificationListener();
                 state.user = null;
                 state.profile = null;
                 state.isAdmin = false;
+                state.notifications = [];
+                state.unreadCount = 0;
                 if (state.currentView !== 'register' && state.currentView !== 'forgot-password') {
                     state.currentView = 'login';
                 }
@@ -2879,6 +3000,7 @@
                 state.trendHistory = null;
                 state.thumbnailHistory = null;
                 state.placementHistory = null;
+                state.channelAuditHistory = null;
                 state.historyCounts = null;
                 render();
 
@@ -2892,6 +3014,7 @@
                         state.trendHistory = data.history.trends || [];
                         state.thumbnailHistory = data.history.thumbnails || [];
                         state.placementHistory = data.history.placements || [];
+                        state.channelAuditHistory = data.history.channelAudit || [];
                         state.historyCounts = data.counts || {};
                         state.loading = false;
                         render();
@@ -3005,6 +3128,26 @@
                         maxAllowed: 50
                     };
                     state.currentView = 'placement';
+                    render();
+                }
+            },
+
+            viewChannelAuditHistory: function(id) {
+                // Find the item from history
+                var item = (state.allHistory || []).find(function(h) { return h.id === id && h.type === 'channelAudit'; });
+                if (!item && state.channelAuditHistory) {
+                    item = state.channelAuditHistory.find(function(h) { return h.id === id; });
+                }
+                if (item) {
+                    state.channelAuditResults = {
+                        historyId: item.id,
+                        channelInfo: item.channelInfo,
+                        scores: item.scores,
+                        analysis: item.analysis,
+                        recommendations: item.recommendations,
+                        metrics: item.metrics
+                    };
+                    state.currentView = 'channelAudit';
                     render();
                 }
             },
@@ -3520,6 +3663,7 @@
                     case 'trend': functionName = 'deleteTrendPrediction'; break;
                     case 'thumbnail': functionName = 'deleteThumbnail'; break;
                     case 'placement': functionName = 'deletePlacementFinder'; break;
+                    case 'channelAudit': functionName = 'deleteChannelAudit'; break;
                     default: return;
                 }
 
@@ -3549,6 +3693,10 @@
                             case 'placement':
                                 if (state.placementHistory) state.placementHistory.splice(index, 1);
                                 if (state.historyCounts) state.historyCounts.placements--;
+                                break;
+                            case 'channelAudit':
+                                if (state.channelAuditHistory) state.channelAuditHistory.splice(index, 1);
+                                if (state.historyCounts) state.historyCounts.channelAudit--;
                                 break;
                         }
                         // Also remove from allHistory
@@ -5778,17 +5926,18 @@
                 html += '</div>';
             }
             else {
-                // Tab Navigation
+                // Tab Navigation - Horizontally scrollable for mobile
                 html += '<div class="bg-white rounded-xl shadow-lg mb-6 fade-in overflow-hidden">';
-                html += '<div class="flex flex-wrap border-b border-gray-200">';
+                html += '<div class="history-tabs-container flex flex-nowrap overflow-x-auto border-b border-gray-200 scrollbar-hide">';
 
                 var tabs = [
-                    { id: 'all', label: 'All', icon: '📋', count: (counts.optimizations || 0) + (counts.competitor || 0) + (counts.trends || 0) + (counts.thumbnails || 0) + (counts.placements || 0) },
+                    { id: 'all', label: 'All', icon: '📋', count: (counts.optimizations || 0) + (counts.competitor || 0) + (counts.trends || 0) + (counts.thumbnails || 0) + (counts.placements || 0) + (counts.channelAudit || 0) },
                     { id: 'optimization', label: 'Video', icon: '🎬', count: counts.optimizations || 0 },
                     { id: 'competitor', label: 'Competitor', icon: '🔍', count: counts.competitor || 0 },
                     { id: 'trend', label: 'Trends', icon: '📈', count: counts.trends || 0 },
                     { id: 'thumbnail', label: 'Thumbnails', icon: '🎨', count: counts.thumbnails || 0 },
-                    { id: 'placement', label: 'Placements', icon: '📍', count: counts.placements || 0 }
+                    { id: 'placement', label: 'Placements', icon: '📍', count: counts.placements || 0 },
+                    { id: 'channelAudit', label: 'Audit', icon: '🔬', count: counts.channelAudit || 0 }
                 ];
 
                 for (var t = 0; t < tabs.length; t++) {
@@ -5797,7 +5946,7 @@
                     var tabClass = isActive
                         ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50'
                         : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50';
-                    html += '<button onclick="app.setHistoryTab(\'' + tab.id + '\')" class="flex-1 min-w-0 px-3 py-3 text-sm font-medium ' + tabClass + ' transition-colors">';
+                    html += '<button onclick="app.setHistoryTab(\'' + tab.id + '\')" class="history-tab-btn flex-shrink-0 whitespace-nowrap px-4 py-3 text-sm font-medium ' + tabClass + ' transition-colors">';
                     html += '<span class="hidden sm:inline">' + tab.icon + ' </span>' + tab.label;
                     if (tab.count > 0) {
                         html += ' <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full ' + (isActive ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700') + '">' + tab.count + '</span>';
@@ -5822,6 +5971,8 @@
                     items = state.thumbnailHistory || [];
                 } else if (state.historyTab === 'placement') {
                     items = state.placementHistory || [];
+                } else if (state.historyTab === 'channelAudit') {
+                    items = state.channelAuditHistory || [];
                 }
 
                 // Empty state for current tab
@@ -5876,6 +6027,11 @@
                                 typeBadge = 'Placement Finder';
                                 typeColor = 'bg-violet-100 text-violet-800';
                                 break;
+                            case 'channelAudit':
+                                typeIcon = '🔬';
+                                typeBadge = 'Channel Audit';
+                                typeColor = 'bg-teal-100 text-teal-800';
+                                break;
                         }
 
                         // Info section
@@ -5913,6 +6069,11 @@
                             case 'placement':
                                 title = (item.channelInfo && item.channelInfo.name) ? item.channelInfo.name : 'Placement Search';
                                 subtitle = '<strong>Channels Found:</strong> ' + (item.totalFound || 0) + ' | <strong>Niche:</strong> ' + ((item.analysis && item.analysis.niche) || 'N/A');
+                                break;
+                            case 'channelAudit':
+                                title = (item.channelInfo && item.channelInfo.name) ? item.channelInfo.name : 'Channel Audit';
+                                var overallScore = (item.scores && item.scores.overall) || 0;
+                                subtitle = '<strong>Overall Score:</strong> ' + overallScore + '/100 | <strong>Subscribers:</strong> ' + utils.formatNumber((item.channelInfo && item.channelInfo.subscribers) || 0);
                                 break;
                         }
 
@@ -5952,6 +6113,9 @@
                                 break;
                             case 'placement':
                                 html += '<button onclick="app.viewPlacementHistory(\'' + item.id + '\')" class="px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 whitespace-nowrap text-sm">👁️ View</button>';
+                                break;
+                            case 'channelAudit':
+                                html += '<button onclick="app.viewChannelAuditHistory(\'' + item.id + '\')" class="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 whitespace-nowrap text-sm">👁️ View</button>';
                                 break;
                         }
 
