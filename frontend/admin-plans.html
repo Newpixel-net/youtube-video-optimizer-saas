@@ -1,0 +1,680 @@
+<!-- ================================================================
+     YOUTUBE VIDEO OPTIMIZER - ADMIN PLAN MANAGEMENT
+     ================================================================
+
+     Purpose: Admin-only page to manage subscription plan limits
+
+     Features:
+     - View all subscription plans
+     - Edit daily limits for each tool per plan
+     - Sync updated limits to existing users
+     - Real-time feedback on changes
+
+     Access: Admin users only
+
+     Last Updated: 2024
+     ================================================================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Plan Management - Admin Panel</title>
+
+    <!-- External Dependencies -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            min-height: 100vh;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Arial, sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        #app-root {
+            width: 100%;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border-top-color: #ffd700;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.6s linear infinite;
+            display: inline-block;
+        }
+
+        /* Plan Cards */
+        .plan-card {
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 1.25rem;
+            padding: 1.75rem;
+            transition: all 0.3s ease;
+        }
+
+        .plan-card:hover {
+            border-color: rgba(255, 215, 0, 0.3);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .plan-card.free { border-top: 4px solid #6b7280; }
+        .plan-card.lite { border-top: 4px solid #3b82f6; }
+        .plan-card.pro { border-top: 4px solid #8b5cf6; }
+        .plan-card.enterprise { border-top: 4px solid #ffd700; }
+
+        /* Form Inputs */
+        .input-field {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.625rem;
+            color: white;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #ffd700;
+            background: rgba(255, 215, 0, 0.06);
+            box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.1);
+        }
+
+        .input-field::-webkit-inner-spin-button,
+        .input-field::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .input-field[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+            color: #1a1a2e;
+            font-weight: 600;
+            border-radius: 0.625rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.25);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.35);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            font-weight: 600;
+            border-radius: 0.625rem;
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-sync {
+            padding: 0.625rem 1.25rem;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            font-weight: 600;
+            font-size: 0.875rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-sync:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        }
+
+        .btn-sync:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            top: 1.5rem;
+            right: 1.5rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+            max-width: 400px;
+        }
+
+        .toast-success {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+        }
+
+        .toast-error {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        /* Tool Row */
+        .tool-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.875rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.625rem;
+            margin-bottom: 0.625rem;
+        }
+
+        .tool-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .tool-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .tool-name {
+            flex: 1;
+            color: rgba(255, 255, 255, 0.85);
+            font-weight: 500;
+            min-width: 140px;
+        }
+
+        .tool-input {
+            width: 80px;
+        }
+
+        /* Confirm Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background: linear-gradient(145deg, #1e1e3f 0%, #0f0f23 100%);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1.25rem;
+            padding: 2rem;
+            max-width: 450px;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            #app-root {
+                padding: 1rem;
+            }
+
+            .tool-row {
+                flex-wrap: wrap;
+            }
+
+            .tool-name {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app-root"></div>
+
+    <script>
+        // Firebase Configuration
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyAGczY5ZEIJdTq25BpQdia3lv2I556wOZo",
+            authDomain: "ytseo-6d1b0.firebaseapp.com",
+            projectId: "ytseo-6d1b0",
+            storageBucket: "ytseo-6d1b0.firebasestorage.app",
+            messagingSenderId: "382790048044",
+            appId: "1:382790048044:web:cd427679ff72108c1f3489"
+        };
+
+        firebase.initializeApp(FIREBASE_CONFIG);
+        const auth = firebase.auth();
+        const functions = firebase.functions();
+        const db = firebase.firestore();
+
+        // Application State
+        const state = {
+            currentView: 'loading',
+            user: null,
+            isAdmin: false,
+            plans: [],
+            editedPlans: {},
+            loading: false,
+            saving: {},
+            syncing: {},
+            toast: null,
+            confirmModal: null
+        };
+
+        // Tool configuration with icons and colors
+        const toolConfig = {
+            warpOptimizer: { name: 'Warp Optimizer', icon: '🚀', bg: 'bg-blue-500/20' },
+            competitorAnalysis: { name: 'Competitor Analysis', icon: '🎯', bg: 'bg-orange-500/20' },
+            trendPredictor: { name: 'Trend Predictor', icon: '📈', bg: 'bg-pink-500/20' },
+            thumbnailGenerator: { name: 'AI Thumbnails', icon: '🎨', bg: 'bg-purple-500/20' },
+            channelAudit: { name: 'Channel Audit', icon: '🔍', bg: 'bg-teal-500/20' }
+        };
+
+        // Utility Functions
+        function escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(message, type) {
+            state.toast = { message: message, type: type };
+            render();
+            setTimeout(function() {
+                state.toast = null;
+                render();
+            }, 4000);
+        }
+
+        // Main Render
+        function render() {
+            var root = document.getElementById('app-root');
+            var html = '';
+
+            // Toast notification
+            if (state.toast) {
+                html += '<div class="toast toast-' + state.toast.type + '">';
+                html += (state.toast.type === 'success' ? '✓ ' : '⚠ ') + escapeHtml(state.toast.message);
+                html += '</div>';
+            }
+
+            // Confirm modal
+            if (state.confirmModal) {
+                html += renderConfirmModal();
+            }
+
+            if (state.currentView === 'loading') {
+                html += renderLoading();
+            } else if (state.currentView === 'unauthorized') {
+                html += renderUnauthorized();
+            } else if (state.currentView === 'plans') {
+                html += renderPlansView();
+            }
+
+            root.innerHTML = html;
+        }
+
+        function renderLoading() {
+            return '<div class="flex items-center justify-center min-h-screen">' +
+                '<div class="text-center">' +
+                '<div class="spinner mx-auto mb-4"></div>' +
+                '<p class="text-white/70">Loading admin panel...</p>' +
+                '</div></div>';
+        }
+
+        function renderUnauthorized() {
+            return '<div class="flex items-center justify-center min-h-screen">' +
+                '<div class="text-center plan-card max-w-md">' +
+                '<div class="text-6xl mb-4">🔒</div>' +
+                '<h2 class="text-2xl font-bold text-white mb-2">Access Denied</h2>' +
+                '<p class="text-white/60 mb-6">You need admin privileges to access this page.</p>' +
+                '<button onclick="goToDashboard()" class="btn-secondary">← Back to Dashboard</button>' +
+                '</div></div>';
+        }
+
+        function renderConfirmModal() {
+            var modal = state.confirmModal;
+            return '<div class="modal-overlay" onclick="closeConfirmModal()">' +
+                '<div class="modal-content fade-in" onclick="event.stopPropagation()">' +
+                '<div class="text-5xl mb-4">' + modal.icon + '</div>' +
+                '<h3 class="text-xl font-bold text-white mb-2">' + escapeHtml(modal.title) + '</h3>' +
+                '<p class="text-white/70 mb-6">' + escapeHtml(modal.message) + '</p>' +
+                '<div class="flex gap-3 justify-center">' +
+                '<button onclick="closeConfirmModal()" class="btn-secondary">Cancel</button>' +
+                '<button onclick="' + modal.confirmAction + '" class="btn-primary">' + escapeHtml(modal.confirmText) + '</button>' +
+                '</div></div></div>';
+        }
+
+        function renderPlansView() {
+            var html = '<div class="max-w-7xl mx-auto fade-in">';
+
+            // Header
+            html += '<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">';
+            html += '<div>';
+            html += '<h1 class="text-3xl font-bold text-white mb-1">Plan Management</h1>';
+            html += '<p class="text-white/60">Configure usage limits for each subscription plan</p>';
+            html += '</div>';
+            html += '<div class="flex gap-3">';
+            html += '<button onclick="loadPlans()" class="btn-secondary" ' + (state.loading ? 'disabled' : '') + '>';
+            html += state.loading ? '<span class="spinner mr-2"></span> Loading...' : '↻ Refresh';
+            html += '</button>';
+            html += '<button onclick="goToDashboard()" class="btn-secondary">← Dashboard</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Plans grid
+            html += '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">';
+
+            for (var i = 0; i < state.plans.length; i++) {
+                var plan = state.plans[i];
+                html += renderPlanCard(plan);
+            }
+
+            html += '</div>';
+
+            // Info section
+            html += '<div class="mt-8 p-6 plan-card">';
+            html += '<h3 class="text-lg font-bold text-white mb-3">💡 How It Works</h3>';
+            html += '<ul class="text-white/70 space-y-2 text-sm">';
+            html += '<li>• <strong class="text-white">Daily Limit:</strong> Maximum uses per day for each tool (0-1000)</li>';
+            html += '<li>• <strong class="text-white">Save Changes:</strong> Updates the plan configuration in the database</li>';
+            html += '<li>• <strong class="text-white">Sync Users:</strong> Applies new limits to all existing users on that plan</li>';
+            html += '<li>• <strong class="text-white">New Users:</strong> Will automatically get the updated limits when they sign up</li>';
+            html += '</ul>';
+            html += '</div>';
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderPlanCard(plan) {
+            var planId = plan.id;
+            var isSaving = state.saving[planId];
+            var isSyncing = state.syncing[planId];
+            var hasChanges = state.editedPlans[planId] !== undefined;
+
+            var html = '<div class="plan-card ' + planId + '">';
+
+            // Header
+            html += '<div class="flex justify-between items-center mb-5">';
+            html += '<div>';
+            html += '<h2 class="text-xl font-bold text-white">' + escapeHtml(plan.name || planId) + '</h2>';
+            html += '<p class="text-white/50 text-sm">$' + (plan.price || 0).toFixed(2) + '/week</p>';
+            html += '</div>';
+            if (plan.badge) {
+                html += '<span class="px-3 py-1 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded-full">' + escapeHtml(plan.badge) + '</span>';
+            }
+            html += '</div>';
+
+            // Tools
+            html += '<div class="mb-5">';
+            var tools = Object.keys(toolConfig);
+            for (var i = 0; i < tools.length; i++) {
+                var tool = tools[i];
+                var config = toolConfig[tool];
+                var limit = getEditedLimit(planId, tool) || plan.limits?.[tool]?.dailyLimit || 0;
+
+                html += '<div class="tool-row">';
+                html += '<div class="tool-icon ' + config.bg + '">' + config.icon + '</div>';
+                html += '<span class="tool-name">' + config.name + '</span>';
+                html += '<input type="number" class="input-field tool-input" ';
+                html += 'value="' + limit + '" ';
+                html += 'min="0" max="1000" ';
+                html += 'onchange="updateLimit(\'' + planId + '\', \'' + tool + '\', this.value)" ';
+                html += 'placeholder="0" />';
+                html += '<span class="text-white/40 text-sm">/day</span>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Actions
+            html += '<div class="flex flex-wrap gap-3">';
+
+            // Save button
+            html += '<button onclick="savePlanLimits(\'' + planId + '\')" class="btn-primary flex-1" ';
+            html += (isSaving || !hasChanges) ? 'disabled' : '';
+            html += '>';
+            if (isSaving) {
+                html += '<span class="spinner mr-2" style="width:16px;height:16px;border-width:2px"></span> Saving...';
+            } else {
+                html += '💾 Save Changes';
+            }
+            html += '</button>';
+
+            // Sync button
+            html += '<button onclick="confirmSyncUsers(\'' + planId + '\')" class="btn-sync" ';
+            html += isSyncing ? 'disabled' : '';
+            html += '>';
+            if (isSyncing) {
+                html += '<span class="spinner mr-2" style="width:14px;height:14px;border-width:2px"></span> Syncing...';
+            } else {
+                html += '🔄 Sync Users';
+            }
+            html += '</button>';
+
+            html += '</div>';
+
+            html += '</div>';
+            return html;
+        }
+
+        // Data Functions
+        function getEditedLimit(planId, tool) {
+            if (state.editedPlans[planId] && state.editedPlans[planId][tool] !== undefined) {
+                return state.editedPlans[planId][tool];
+            }
+            return null;
+        }
+
+        function updateLimit(planId, tool, value) {
+            if (!state.editedPlans[planId]) {
+                state.editedPlans[planId] = {};
+            }
+            state.editedPlans[planId][tool] = parseInt(value) || 0;
+            render();
+        }
+
+        function loadPlans() {
+            state.loading = true;
+            render();
+
+            functions.httpsCallable('adminGetPlanSettings')()
+                .then(function(result) {
+                    state.plans = result.data.plans || [];
+                    state.editedPlans = {};
+                    state.loading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading plans:', error);
+                    state.loading = false;
+                    showToast('Failed to load plans: ' + error.message, 'error');
+                });
+        }
+
+        function savePlanLimits(planId) {
+            var edited = state.editedPlans[planId];
+            if (!edited) return;
+
+            // Build limits object with all tools
+            var plan = state.plans.find(function(p) { return p.id === planId; });
+            var limits = {};
+
+            Object.keys(toolConfig).forEach(function(tool) {
+                var newLimit = edited[tool];
+                var currentLimit = plan?.limits?.[tool]?.dailyLimit || 0;
+                limits[tool] = {
+                    dailyLimit: newLimit !== undefined ? newLimit : currentLimit,
+                    cooldownHours: plan?.limits?.[tool]?.cooldownHours || 0
+                };
+            });
+
+            state.saving[planId] = true;
+            render();
+
+            functions.httpsCallable('adminUpdatePlanLimits')({
+                planId: planId,
+                limits: limits
+            })
+                .then(function(result) {
+                    state.saving[planId] = false;
+                    delete state.editedPlans[planId];
+                    loadPlans(); // Reload to get fresh data
+                    showToast('Plan "' + planId + '" limits updated successfully!', 'success');
+                })
+                .catch(function(error) {
+                    console.error('Error saving plan:', error);
+                    state.saving[planId] = false;
+                    render();
+                    showToast('Failed to save: ' + error.message, 'error');
+                });
+        }
+
+        function confirmSyncUsers(planId) {
+            state.confirmModal = {
+                icon: '🔄',
+                title: 'Sync Users',
+                message: 'This will update the limits for all existing users on the "' + planId + '" plan. Continue?',
+                confirmText: 'Sync Users',
+                confirmAction: 'syncUsers(\'' + planId + '\')'
+            };
+            render();
+        }
+
+        function closeConfirmModal() {
+            state.confirmModal = null;
+            render();
+        }
+
+        function syncUsers(planId) {
+            closeConfirmModal();
+            state.syncing[planId] = true;
+            render();
+
+            functions.httpsCallable('adminSyncExistingUsers')({ planId: planId })
+                .then(function(result) {
+                    state.syncing[planId] = false;
+                    render();
+                    showToast(result.data.message, 'success');
+                })
+                .catch(function(error) {
+                    console.error('Error syncing users:', error);
+                    state.syncing[planId] = false;
+                    render();
+                    showToast('Failed to sync: ' + error.message, 'error');
+                });
+        }
+
+        // Navigation
+        function goToDashboard() {
+            window.location.href = 'https://ytseo.siteuo.com/video-optimizer';
+        }
+
+        // Authentication
+        function checkAuth() {
+            auth.onAuthStateChanged(function(user) {
+                if (!user) {
+                    state.currentView = 'unauthorized';
+                    render();
+                    return;
+                }
+
+                state.user = user;
+
+                // Check if user is admin
+                db.collection('adminUsers').doc(user.uid).get()
+                    .then(function(doc) {
+                        if (doc.exists) {
+                            state.isAdmin = true;
+                            state.currentView = 'plans';
+                            loadPlans();
+                        } else {
+                            state.currentView = 'unauthorized';
+                            render();
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Error checking admin status:', error);
+                        state.currentView = 'unauthorized';
+                        render();
+                    });
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            render();
+            checkAuth();
+        });
+    </script>
+</body>
+</html>

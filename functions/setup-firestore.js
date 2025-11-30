@@ -143,7 +143,7 @@ const subscriptionPlans = [
   {
     id: 'enterprise',
     name: 'Enterprise Plan',
-    description: 'Unlimited everything',
+    description: 'Premium access with high limits',
     pricing: {
       weekly: 49.99,
       monthly: 149.99,
@@ -151,27 +151,32 @@ const subscriptionPlans = [
     },
     limits: {
       warpOptimizer: {
-        dailyLimit: 999999,
+        dailyLimit: 35,
         cooldownHours: 0
       },
       competitorAnalysis: {
-        dailyLimit: 999999,
+        dailyLimit: 35,
         cooldownHours: 0
       },
       trendPredictor: {
-        dailyLimit: 999999,
+        dailyLimit: 35,
         cooldownHours: 0
       },
       thumbnailGenerator: {
-        dailyLimit: 999999,
+        dailyLimit: 35,
+        cooldownHours: 0
+      },
+      channelAudit: {
+        dailyLimit: 35,
         cooldownHours: 0
       }
     },
     features: [
-      'Unlimited optimizations',
-      'Unlimited competitor analyses',
-      'Unlimited trend predictions',
-      'Unlimited AI thumbnails',
+      '35 optimizations per day',
+      '35 competitor analyses per day',
+      '35 trend predictions per day',
+      '35 AI thumbnails per day',
+      '35 channel audits per day',
       'No cooldown',
       'Unlimited history',
       'Dedicated support',

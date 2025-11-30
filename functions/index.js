@@ -1549,7 +1549,8 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
           warpOptimizer: { dailyLimit: 3, cooldownHours: 0 },
           competitorAnalysis: { dailyLimit: 3, cooldownHours: 0 },
           trendPredictor: { dailyLimit: 3, cooldownHours: 0 },
-          thumbnailGenerator: { dailyLimit: 3, cooldownHours: 0 }
+          thumbnailGenerator: { dailyLimit: 3, cooldownHours: 0 },
+          channelAudit: { dailyLimit: 2, cooldownHours: 0 }
         }
       },
       lite: {
@@ -1559,7 +1560,8 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
           warpOptimizer: { dailyLimit: 5, cooldownHours: 0 },
           competitorAnalysis: { dailyLimit: 5, cooldownHours: 0 },
           trendPredictor: { dailyLimit: 5, cooldownHours: 0 },
-          thumbnailGenerator: { dailyLimit: 5, cooldownHours: 0 }
+          thumbnailGenerator: { dailyLimit: 5, cooldownHours: 0 },
+          channelAudit: { dailyLimit: 5, cooldownHours: 0 }
         }
       },
       pro: {
@@ -1569,17 +1571,19 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
           warpOptimizer: { dailyLimit: 10, cooldownHours: 0 },
           competitorAnalysis: { dailyLimit: 10, cooldownHours: 0 },
           trendPredictor: { dailyLimit: 10, cooldownHours: 0 },
-          thumbnailGenerator: { dailyLimit: 10, cooldownHours: 0 }
+          thumbnailGenerator: { dailyLimit: 10, cooldownHours: 0 },
+          channelAudit: { dailyLimit: 10, cooldownHours: 0 }
         }
       },
       enterprise: {
         name: 'Enterprise',
         price: 49.99,
         limits: {
-          warpOptimizer: { dailyLimit: 50, cooldownHours: 0 },
-          competitorAnalysis: { dailyLimit: 50, cooldownHours: 0 },
-          trendPredictor: { dailyLimit: 50, cooldownHours: 0 },
-          thumbnailGenerator: { dailyLimit: 50, cooldownHours: 0 }
+          warpOptimizer: { dailyLimit: 35, cooldownHours: 0 },
+          competitorAnalysis: { dailyLimit: 35, cooldownHours: 0 },
+          trendPredictor: { dailyLimit: 35, cooldownHours: 0 },
+          thumbnailGenerator: { dailyLimit: 35, cooldownHours: 0 },
+          channelAudit: { dailyLimit: 35, cooldownHours: 0 }
         }
       }
     };
@@ -1602,6 +1606,174 @@ exports.adminInitPlans = functions.https.onCall(async (data, context) => {
     console.error('adminInitPlans error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to initialize plans. Please try again.'));
+  }
+});
+
+// Get all plan settings for admin panel
+exports.adminGetPlanSettings = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const plansSnapshot = await db.collection('subscriptionPlans').orderBy('sortOrder').get();
+    const plans = [];
+
+    plansSnapshot.forEach(doc => {
+      plans.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    return {
+      success: true,
+      plans: plans
+    };
+  } catch (error) {
+    console.error('adminGetPlanSettings error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get plan settings.'));
+  }
+});
+
+// Update limits for a specific plan
+exports.adminUpdatePlanLimits = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const { planId, limits } = data || {};
+
+    if (!planId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Plan ID is required');
+    }
+
+    if (!limits || typeof limits !== 'object') {
+      throw new functions.https.HttpsError('invalid-argument', 'Limits object is required');
+    }
+
+    // Validate the plan exists
+    const planRef = db.collection('subscriptionPlans').doc(planId);
+    const planDoc = await planRef.get();
+
+    if (!planDoc.exists) {
+      throw new functions.https.HttpsError('not-found', `Plan "${planId}" not found`);
+    }
+
+    // Validate and sanitize limits
+    const validTools = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator', 'channelAudit'];
+    const sanitizedLimits = {};
+
+    for (const [tool, config] of Object.entries(limits)) {
+      if (!validTools.includes(tool)) continue;
+
+      const dailyLimit = parseInt(config.dailyLimit);
+      const cooldownHours = parseInt(config.cooldownHours || 0);
+
+      if (isNaN(dailyLimit) || dailyLimit < 0 || dailyLimit > 1000) {
+        throw new functions.https.HttpsError('invalid-argument', `Invalid daily limit for ${tool}. Must be 0-1000.`);
+      }
+
+      if (isNaN(cooldownHours) || cooldownHours < 0 || cooldownHours > 720) {
+        throw new functions.https.HttpsError('invalid-argument', `Invalid cooldown for ${tool}. Must be 0-720 hours.`);
+      }
+
+      sanitizedLimits[tool] = {
+        dailyLimit: dailyLimit,
+        cooldownHours: cooldownHours
+      };
+    }
+
+    // Update the plan
+    await planRef.update({
+      limits: sanitizedLimits,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      message: `Plan "${planId}" limits updated successfully`,
+      planId: planId,
+      limits: sanitizedLimits
+    };
+  } catch (error) {
+    console.error('adminUpdatePlanLimits error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update plan limits.'));
+  }
+});
+
+// Sync new plan limits to all existing users on that plan
+exports.adminSyncExistingUsers = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const { planId } = data || {};
+
+    if (!planId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Plan ID is required');
+    }
+
+    // Get the plan limits
+    const planDoc = await db.collection('subscriptionPlans').doc(planId).get();
+    if (!planDoc.exists) {
+      throw new functions.https.HttpsError('not-found', `Plan "${planId}" not found`);
+    }
+
+    const planLimits = planDoc.data()?.limits || {};
+
+    // Find all users on this plan
+    const usersSnapshot = await db.collection('users')
+      .where('subscription.plan', '==', planId)
+      .get();
+
+    if (usersSnapshot.empty) {
+      return {
+        success: true,
+        message: `No users found on plan "${planId}"`,
+        usersUpdated: 0
+      };
+    }
+
+    // Update users in batches (Firestore limit is 500 per batch)
+    const batchSize = 500;
+    let usersUpdated = 0;
+    let batch = db.batch();
+    let batchCount = 0;
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userRef = db.collection('users').doc(userDoc.id);
+      const updateData = {};
+
+      // Update each tool's limit from the plan
+      for (const [tool, config] of Object.entries(planLimits)) {
+        updateData[`usage.${tool}.limit`] = config.dailyLimit;
+      }
+
+      batch.update(userRef, updateData);
+      batchCount++;
+      usersUpdated++;
+
+      // Commit batch if it reaches the limit
+      if (batchCount >= batchSize) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+      }
+    }
+
+    // Commit any remaining updates
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+
+    return {
+      success: true,
+      message: `Successfully synced limits to ${usersUpdated} users on plan "${planId}"`,
+      usersUpdated: usersUpdated
+    };
+  } catch (error) {
+    console.error('adminSyncExistingUsers error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to sync users.'));
   }
 });
 

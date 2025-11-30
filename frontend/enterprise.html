@@ -1927,7 +1927,8 @@
                     .then(function(doc) {
                         if (doc.exists) {
                             state.profile = doc.data();
-                            state.userPlan = doc.data().plan || 'free';
+                            // Get plan from subscription.plan (correct path in user document)
+                            state.userPlan = doc.data().subscription?.plan || doc.data().plan || 'free';
 
                             // Check if user has premium access (pro or enterprise)
                             state.hasPremiumAccess = (state.userPlan === 'pro' || state.userPlan === 'enterprise');
