@@ -143,10 +143,25 @@
            ------------------------------------------ */
         .hero-section {
             position: relative;
-            padding: 3rem 1.5rem 2rem;
+            padding: 3rem 2rem 2rem;
             overflow: hidden;
-            border-radius: 0 0 2rem 2rem;
-            margin-bottom: 2rem;
+            border-radius: 0 0 1.5rem 1.5rem;
+            margin: 0 0.5rem 1.5rem 0.5rem;
+        }
+
+        @media (min-width: 1024px) {
+            .hero-section {
+                margin: 0 1rem 2rem 1rem;
+                padding: 3rem 3rem 2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero-section {
+                margin: 0;
+                border-radius: 0 0 1rem 1rem;
+                padding: 2rem 1rem 1.5rem;
+            }
         }
 
         .hero-aurora {
@@ -838,20 +853,26 @@
            ------------------------------------------ */
         .content-wide {
             width: 100%;
-            max-width: 90%;
+            max-width: 98%;
             margin-left: auto;
             margin-right: auto;
-            padding-left: 1rem;
-            padding-right: 1rem;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
         }
 
-        @media (max-width: 1024px) {
+        @media (min-width: 1920px) {
             .content-wide {
-                max-width: 95%;
+                max-width: 1850px;
             }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 1440px) {
+            .content-wide {
+                max-width: 98%;
+            }
+        }
+
+        @media (max-width: 1024px) {
             .content-wide {
                 max-width: 100%;
                 padding-left: 1rem;
@@ -859,10 +880,18 @@
             }
         }
 
-        @media (max-width: 480px) {
+        @media (max-width: 768px) {
             .content-wide {
+                max-width: 100%;
                 padding-left: 0.75rem;
                 padding-right: 0.75rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .content-wide {
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
             }
         }
 
@@ -1597,24 +1626,94 @@
         }
 
         /* Responsive Tool Interface */
+
+        /* Large screens - wider sidebar */
+        @media (min-width: 1440px) {
+            .tool-sidebar {
+                width: 360px;
+                min-width: 360px;
+            }
+
+            .tool-interface {
+                gap: 2rem;
+            }
+
+            .template-grid {
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            }
+        }
+
+        /* Medium-large screens */
+        @media (max-width: 1280px) {
+            .tool-sidebar {
+                width: 300px;
+                min-width: 300px;
+            }
+        }
+
         @media (max-width: 1024px) {
             .tool-interface {
                 flex-direction: column;
+                gap: 1rem;
             }
 
             .tool-sidebar {
                 width: 100%;
                 min-width: unset;
+                max-width: 100%;
             }
 
             .template-grid {
-                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            }
+
+            .history-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .tool-interface {
+                min-height: auto;
+            }
+
+            .tool-sidebar {
+                padding: 1rem;
+            }
+
+            .main-tabs {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .main-tab {
+                flex: 0 0 auto;
+                padding: 0.75rem 1rem;
+                font-size: 0.85rem;
+            }
+
+            .template-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 0.75rem;
+            }
+
+            .category-filter-row {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                flex-wrap: nowrap;
+                padding-bottom: 0.75rem;
+            }
+
+            .category-filter-pill {
+                flex: 0 0 auto;
+                white-space: nowrap;
             }
         }
 
         @media (max-width: 640px) {
             .tool-sidebar {
-                padding: 1rem;
+                padding: 0.875rem;
             }
 
             .reference-grid {
@@ -1631,11 +1730,41 @@
             }
 
             .template-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 0.5rem;
             }
 
             .history-grid {
                 grid-template-columns: repeat(2, 1fr);
+                gap: 0.5rem;
+            }
+
+            .template-card {
+                padding: 0.75rem;
+            }
+
+            .template-card-title {
+                font-size: 0.8rem;
+            }
+
+            .template-card-desc {
+                font-size: 0.7rem;
+                -webkit-line-clamp: 1;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .template-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .quantity-btns {
+                flex-wrap: wrap;
+            }
+
+            .quantity-btn {
+                width: 40px;
+                height: 40px;
             }
         }
     </style>
@@ -2389,7 +2518,7 @@
                 showToast('Prompt enhancement coming soon!', 'info');
             },
 
-            // Generate Image (placeholder - ready for NanoBanana API)
+            // Generate Image using Gemini/Imagen API
             generateImage: function() {
                 if (!state.prompt.trim()) {
                     showToast('Please enter a prompt', 'error');
@@ -2403,24 +2532,63 @@
                 }
 
                 state.generating = true;
-                state.generationProgress = 0;
+                state.generationProgress = 10;
                 render();
 
-                // Simulate generation (replace with actual API call)
-                var progress = 0;
-                var interval = setInterval(function() {
-                    progress += 10;
-                    state.generationProgress = progress;
-                    render();
-                    if (progress >= 100) {
-                        clearInterval(interval);
-                        state.generating = false;
-                        // Deduct tokens
-                        state.tokens.balance -= cost;
-                        showToast('Image generated successfully!', 'success');
-                        render();
+                // Call the Cloud Function
+                var generateCreativeImage = functions.httpsCallable('generateCreativeImage');
+
+                generateCreativeImage({
+                    prompt: state.prompt,
+                    model: state.selectedModel,
+                    quantity: state.quantity,
+                    aspectRatio: state.aspectRatio,
+                    quality: state.quality,
+                    templateId: state.selectedTemplate ? state.selectedTemplate.id : null
+                })
+                .then(function(result) {
+                    state.generating = false;
+                    state.generationProgress = 100;
+
+                    if (result.data.success) {
+                        // Update token balance
+                        state.tokens.balance = result.data.remainingBalance;
+
+                        // Add to history
+                        var newHistoryItem = {
+                            id: result.data.historyId,
+                            prompt: state.prompt,
+                            images: result.data.images,
+                            imageUrl: result.data.images[0]?.url,
+                            createdAt: new Date().toISOString()
+                        };
+                        state.history.unshift(newHistoryItem);
+
+                        showToast('Image generated successfully! (' + result.data.tokenCost + ' tokens used)', 'success');
+
+                        // Clear prompt after successful generation
+                        state.prompt = '';
+                        state.selectedTemplate = null;
+                    } else {
+                        showToast('Generation failed. Please try again.', 'error');
                     }
-                }, 300);
+                    render();
+                })
+                .catch(function(error) {
+                    state.generating = false;
+                    state.generationProgress = 0;
+                    console.error('Generation error:', error);
+
+                    // Show user-friendly error message
+                    var errorMsg = error.message || 'Failed to generate image. Please try again.';
+                    if (error.code === 'resource-exhausted') {
+                        errorMsg = 'Not enough tokens or service busy. Please try again.';
+                    } else if (error.code === 'invalid-argument') {
+                        errorMsg = error.message || 'Invalid prompt. Please try a different prompt.';
+                    }
+                    showToast(errorMsg, 'error');
+                    render();
+                });
             },
 
             // Calculate Token Cost
@@ -2482,25 +2650,39 @@
                 showToast('Image removed from history', 'success');
             },
 
-            // Load User Tokens
+            // Load User Tokens (via Cloud Function for rollover handling)
             loadTokens: function() {
                 if (!state.user) return;
 
-                db.collection('creativeTokens').doc(state.user.uid).get()
-                    .then(function(doc) {
-                        if (doc.exists) {
-                            var data = doc.data();
+                var getCreativeTokens = functions.httpsCallable('getCreativeTokens');
+                getCreativeTokens({})
+                    .then(function(result) {
+                        if (result.data) {
                             state.tokens = {
-                                balance: data.balance || 50,
-                                rollover: data.rollover || 0,
-                                plan: data.plan || 'free',
-                                lastRefresh: data.lastRefresh
+                                balance: result.data.balance || 50,
+                                rollover: result.data.rollover || 0,
+                                plan: result.data.plan || 'free',
+                                lastRefresh: result.data.lastRefresh
                             };
                             render();
                         }
                     })
                     .catch(function(e) {
                         console.error('Error loading tokens:', e);
+                        // Fallback to direct Firestore read
+                        db.collection('creativeTokens').doc(state.user.uid).get()
+                            .then(function(doc) {
+                                if (doc.exists) {
+                                    var data = doc.data();
+                                    state.tokens = {
+                                        balance: data.balance || 50,
+                                        rollover: data.rollover || 0,
+                                        plan: data.plan || 'free',
+                                        lastRefresh: data.lastRefresh
+                                    };
+                                    render();
+                                }
+                            });
                     });
             },
 
