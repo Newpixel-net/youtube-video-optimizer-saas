@@ -1458,6 +1458,27 @@
             color: #a78bfa;
         }
 
+        /* History Stats */
+        .history-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .history-count {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .history-showing {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
         /* History Grid */
         .history-grid {
             display: grid;
@@ -1523,6 +1544,40 @@
 
         .history-action-btn:hover {
             background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Load More Button */
+        .load-more-container {
+            display: flex;
+            justify-content: center;
+            padding: 1.5rem 0;
+            margin-top: 1rem;
+        }
+
+        .load-more-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 2rem;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .load-more-btn:hover {
+            background: rgba(139, 92, 246, 0.25);
+            border-color: rgba(139, 92, 246, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .load-more-count {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
         }
 
         /* Community Gallery (Enhanced) */
@@ -2022,6 +2077,106 @@
         .generate-btn-sparkle {
             display: inline-flex;
             font-size: 1.25rem;
+        }
+
+        /* Generation Progress UI */
+        .generation-progress-container {
+            padding: 1rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(236, 72, 153, 0.15) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+        }
+
+        .generation-stage {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .generation-stage-icon {
+            font-size: 1.25rem;
+        }
+
+        .generation-stage-label {
+            flex: 1;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .generation-stage-percent {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 600;
+        }
+
+        .generation-progress-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+
+        .generation-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .generation-stages {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+
+        .generation-stage-step {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            opacity: 0.4;
+            transition: all 0.3s ease;
+        }
+
+        .generation-stage-step.completed {
+            opacity: 0.7;
+            background: rgba(76, 175, 80, 0.15);
+        }
+
+        .generation-stage-step.active {
+            opacity: 1;
+            background: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+            animation: stagePulse 1.5s ease infinite;
+        }
+
+        @keyframes stagePulse {
+            0%, 100% {
+                box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+            }
+        }
+
+        @keyframes animate-pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .animate-pulse {
+            animation: animate-pulse 1.5s ease infinite;
         }
 
         /* Cost Breakdown Component */
@@ -3662,6 +3817,7 @@
             // History (user's creations)
             history: [],
             historyLoading: false,
+            historyDisplayCount: 12, // Start with 12, load more on demand
 
             // Gallery filters
             galleryFilter: 'all', // all | upscaler | motion
@@ -3675,6 +3831,7 @@
             // Generation state
             generating: false,
             generationProgress: 0,
+            generationStage: 'idle', // idle, queued, processing, generating, finalizing, complete, error
 
             // UI state
             loading: false,
@@ -4373,6 +4530,59 @@
                 } catch (e) {
                     return 'recently';
                 }
+            },
+
+            // Modal management utilities
+            lockBodyScroll: function() {
+                document.body.style.overflow = 'hidden';
+                document.body.style.paddingRight = '15px'; // Prevent layout shift from scrollbar removal
+            },
+
+            unlockBodyScroll: function() {
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            },
+
+            // Focus trap for modals - returns a cleanup function
+            setupFocusTrap: function(modalSelector) {
+                var modal = document.querySelector(modalSelector);
+                if (!modal) return function() {};
+
+                var focusableElements = modal.querySelectorAll(
+                    'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+                );
+                var firstFocusable = focusableElements[0];
+                var lastFocusable = focusableElements[focusableElements.length - 1];
+
+                function handleKeyDown(e) {
+                    if (e.key !== 'Tab') return;
+
+                    if (e.shiftKey) {
+                        // Shift + Tab
+                        if (document.activeElement === firstFocusable) {
+                            e.preventDefault();
+                            lastFocusable.focus();
+                        }
+                    } else {
+                        // Tab
+                        if (document.activeElement === lastFocusable) {
+                            e.preventDefault();
+                            firstFocusable.focus();
+                        }
+                    }
+                }
+
+                modal.addEventListener('keydown', handleKeyDown);
+
+                // Focus first element
+                if (firstFocusable) {
+                    firstFocusable.focus();
+                }
+
+                // Return cleanup function
+                return function() {
+                    modal.removeEventListener('keydown', handleKeyDown);
+                };
             }
         };
 
@@ -4666,8 +4876,9 @@
             openPromptModal: function() {
                 state.promptModalText = state.prompt;
                 state.promptModalOpen = true;
+                utils.lockBodyScroll();
                 render();
-                // Focus the modal textarea after render
+                // Focus the modal textarea and setup focus trap after render
                 setTimeout(function() {
                     var modalTextarea = document.getElementById('prompt-modal-textarea');
                     if (modalTextarea) {
@@ -4675,6 +4886,8 @@
                         // Move cursor to end
                         modalTextarea.setSelectionRange(modalTextarea.value.length, modalTextarea.value.length);
                     }
+                    // Setup focus trap
+                    state._promptModalFocusTrapCleanup = utils.setupFocusTrap('.prompt-modal');
                 }, 100);
             },
 
@@ -4684,6 +4897,12 @@
                 if (event && event.target && !event.target.classList.contains('prompt-modal-overlay')) {
                     return;
                 }
+                // Cleanup focus trap
+                if (state._promptModalFocusTrapCleanup) {
+                    state._promptModalFocusTrapCleanup();
+                    state._promptModalFocusTrapCleanup = null;
+                }
+                utils.unlockBodyScroll();
                 state.promptModalOpen = false;
                 state.promptModalText = '';
                 render();
@@ -4691,6 +4910,12 @@
 
             // Apply prompt modal changes
             applyPromptModal: function() {
+                // Cleanup focus trap
+                if (state._promptModalFocusTrapCleanup) {
+                    state._promptModalFocusTrapCleanup();
+                    state._promptModalFocusTrapCleanup = null;
+                }
+                utils.unlockBodyScroll();
                 state.prompt = state.promptModalText;
                 state.promptModalOpen = false;
                 state.promptModalText = '';
@@ -4810,7 +5035,12 @@
                 if (state.history[index]) {
                     state.selectedImageDetail = state.history[index];
                     state.imageDetailModalOpen = true;
+                    utils.lockBodyScroll();
                     render();
+                    // Setup focus trap after render
+                    setTimeout(function() {
+                        state._imageDetailFocusTrapCleanup = utils.setupFocusTrap('.image-detail-modal');
+                    }, 100);
                 }
             },
 
@@ -4819,6 +5049,12 @@
                 if (event && event.target && !event.target.classList.contains('image-detail-modal-overlay')) {
                     return;
                 }
+                // Cleanup focus trap
+                if (state._imageDetailFocusTrapCleanup) {
+                    state._imageDetailFocusTrapCleanup();
+                    state._imageDetailFocusTrapCleanup = null;
+                }
+                utils.unlockBodyScroll();
                 state.imageDetailModalOpen = false;
                 state.selectedImageDetail = null;
                 render();
@@ -4827,6 +5063,12 @@
             // Use prompt from detail modal
             usePromptFromDetail: function() {
                 if (state.selectedImageDetail && state.selectedImageDetail.prompt) {
+                    // Cleanup focus trap
+                    if (state._imageDetailFocusTrapCleanup) {
+                        state._imageDetailFocusTrapCleanup();
+                        state._imageDetailFocusTrapCleanup = null;
+                    }
+                    utils.unlockBodyScroll();
                     state.prompt = state.selectedImageDetail.prompt;
                     var textarea = document.getElementById('prompt-textarea');
                     if (textarea) textarea.value = state.prompt;
@@ -4839,6 +5081,12 @@
 
             // Delete from history and close modal
             deleteFromHistoryAndClose: function(imageId) {
+                // Cleanup focus trap
+                if (state._imageDetailFocusTrapCleanup) {
+                    state._imageDetailFocusTrapCleanup();
+                    state._imageDetailFocusTrapCleanup = null;
+                }
+                utils.unlockBodyScroll();
                 // TODO: Implement actual deletion via Cloud Function
                 state.history = state.history.filter(function(item) { return item.id !== imageId; });
                 state.imageDetailModalOpen = false;
@@ -4932,8 +5180,34 @@
                 }
 
                 state.generating = true;
-                state.generationProgress = 10;
+                state.generationStage = 'queued';
+                state.generationProgress = 5;
                 render();
+
+                // Progress simulation for better UX
+                var progressInterval = setInterval(function() {
+                    if (!state.generating) {
+                        clearInterval(progressInterval);
+                        return;
+                    }
+
+                    // Simulate progress through stages
+                    if (state.generationStage === 'queued' && state.generationProgress >= 15) {
+                        state.generationStage = 'processing';
+                    } else if (state.generationStage === 'processing' && state.generationProgress >= 40) {
+                        state.generationStage = 'generating';
+                    } else if (state.generationStage === 'generating' && state.generationProgress >= 80) {
+                        state.generationStage = 'finalizing';
+                    }
+
+                    // Slow down progress as it gets higher (asymptotic approach)
+                    if (state.generationProgress < 90) {
+                        var increment = state.generationProgress < 30 ? 3 :
+                                        state.generationProgress < 60 ? 2 : 1;
+                        state.generationProgress = Math.min(90, state.generationProgress + increment);
+                        render();
+                    }
+                }, 500);
 
                 // Call the Cloud Function
                 var generateCreativeImage = functions.httpsCallable('generateCreativeImage');
@@ -4947,8 +5221,10 @@
                     templateId: state.selectedTemplate ? state.selectedTemplate.id : null
                 })
                 .then(function(result) {
-                    state.generating = false;
+                    clearInterval(progressInterval);
+                    state.generationStage = 'complete';
                     state.generationProgress = 100;
+                    state.generating = false;
 
                     if (result.data.success) {
                         // Update token balance
@@ -4975,8 +5251,10 @@
                     render();
                 })
                 .catch(function(error) {
+                    clearInterval(progressInterval);
                     state.generating = false;
                     state.generationProgress = 0;
+                    state.generationStage = 'error';
                     console.error('Generation error:', error);
 
                     // Parse error and show user-friendly message with appropriate actions
@@ -5127,6 +5405,17 @@
             deleteFromHistory: function(imageId) {
                 // TODO: Implement deletion
                 showToast('Image removed from history', 'success');
+            },
+
+            // Load more history items
+            loadMoreHistory: function() {
+                state.historyDisplayCount += 12;
+                render();
+            },
+
+            // Reset history pagination (e.g., when new item is added)
+            resetHistoryPagination: function() {
+                state.historyDisplayCount = 12;
             },
 
             // Load User Tokens (via Cloud Function for rollover handling)
@@ -5649,15 +5938,52 @@
             var cost = app.calculateCost();
             var canGenerate = state.prompt.trim().length > 0 && state.tokens.balance >= cost && !state.generating;
 
-            html += '<button class="generate-btn-enhanced" onclick="app.generateImage()"' + (canGenerate ? '' : ' disabled') + '>';
             if (state.generating) {
-                html += '<span class="animate-spin">⏳</span>';
-                html += '<span>Generating... ' + state.generationProgress + '%</span>';
+                // Generation in progress - show progress UI
+                html += '<div class="generation-progress-container">';
+
+                // Stage indicator
+                var stageLabels = {
+                    'queued': 'Queued',
+                    'processing': 'Processing',
+                    'generating': 'Generating',
+                    'finalizing': 'Finalizing'
+                };
+                var stageLabel = stageLabels[state.generationStage] || 'Preparing';
+
+                html += '<div class="generation-stage">';
+                html += '<span class="generation-stage-icon animate-pulse">✨</span>';
+                html += '<span class="generation-stage-label">' + stageLabel + '...</span>';
+                html += '<span class="generation-stage-percent">' + state.generationProgress + '%</span>';
+                html += '</div>';
+
+                // Progress bar
+                html += '<div class="generation-progress-bar">';
+                html += '<div class="generation-progress-fill" style="width: ' + state.generationProgress + '%;"></div>';
+                html += '</div>';
+
+                // Stage steps
+                html += '<div class="generation-stages">';
+                var stages = ['queued', 'processing', 'generating', 'finalizing'];
+                var stageIcons = { queued: '📋', processing: '⚙️', generating: '🎨', finalizing: '✅' };
+                var currentStageIndex = stages.indexOf(state.generationStage);
+
+                for (var si = 0; si < stages.length; si++) {
+                    var stageClass = 'generation-stage-step';
+                    if (si < currentStageIndex) stageClass += ' completed';
+                    if (si === currentStageIndex) stageClass += ' active';
+                    html += '<div class="' + stageClass + '">' + stageIcons[stages[si]] + '</div>';
+                }
+                html += '</div>';
+
+                html += '</div>'; // generation-progress-container
             } else {
+                // Normal generate button
+                html += '<button class="generate-btn-enhanced" onclick="app.generateImage()"' + (canGenerate ? '' : ' disabled') + '>';
                 html += '<span class="generate-btn-sparkle">✨</span>';
                 html += '<span>Generate</span>';
+                html += '</button>';
             }
-            html += '</button>';
 
             // Enhanced Cost Breakdown Display
             html += '<div class="cost-breakdown">';
@@ -5791,8 +6117,20 @@
                 return html;
             }
 
+            // Determine how many items to show
+            var itemsToShow = Math.min(state.historyDisplayCount, state.history.length);
+            var hasMore = state.history.length > state.historyDisplayCount;
+
+            // History stats
+            html += '<div class="history-stats">';
+            html += '<span class="history-count">' + state.history.length + ' creations</span>';
+            if (hasMore) {
+                html += '<span class="history-showing">Showing ' + itemsToShow + ' of ' + state.history.length + '</span>';
+            }
+            html += '</div>';
+
             html += '<div class="history-grid">';
-            for (var i = 0; i < state.history.length; i++) {
+            for (var i = 0; i < itemsToShow; i++) {
                 var item = state.history[i];
                 html += '<div class="history-item" onclick="app.openImageDetail(' + i + ')" style="cursor: pointer;">';
                 html += '<img src="' + item.imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" />';
@@ -5807,6 +6145,17 @@
                 html += '</div>';
             }
             html += '</div>';
+
+            // Load More button
+            if (hasMore) {
+                var remaining = state.history.length - state.historyDisplayCount;
+                html += '<div class="load-more-container">';
+                html += '<button class="load-more-btn" onclick="app.loadMoreHistory()">';
+                html += '<span>Load More</span>';
+                html += '<span class="load-more-count">(' + remaining + ' more)</span>';
+                html += '</button>';
+                html += '</div>';
+            }
 
             return html;
         }
