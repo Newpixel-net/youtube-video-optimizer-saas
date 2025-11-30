@@ -969,6 +969,7 @@
             min-height: 600px;
             margin-bottom: 2rem;
             animation: fadeIn 0.3s ease;
+            align-items: flex-start;
         }
 
         /* Left Sidebar */
@@ -4768,6 +4769,10 @@
         /* ==========================================
            4.7 APPLICATION CONTROLLER
            ========================================== */
+
+        // Debounce timer for prompt updates
+        var promptUpdateTimer = null;
+
         const app = {
             // Navigation
             goToDashboard: function() {
@@ -4849,10 +4854,40 @@
                 render();
             },
 
-            // Prompt Update
+            // Prompt Update with debounced re-render for variable chips
             updatePrompt: function(text) {
                 state.prompt = text;
-                // Don't re-render for every keystroke
+
+                // Debounced re-render to update variable chips (300ms delay)
+                if (promptUpdateTimer) {
+                    clearTimeout(promptUpdateTimer);
+                }
+                promptUpdateTimer = setTimeout(function() {
+                    // Only update the template vars bar, not full re-render
+                    var varsBar = document.querySelector('.template-vars-bar');
+                    var templateVars = app.getUnfilledVariables(state.prompt);
+
+                    if (templateVars.length > 0) {
+                        var html = '<span class="template-vars-label">Fill in:</span>';
+                        for (var vi = 0; vi < templateVars.length; vi++) {
+                            var varName = templateVars[vi];
+                            html += '<button class="template-var-chip" onclick="app.showVariableInput(\'' + utils.escapeHtml(varName) + '\')">';
+                            html += '<span class="template-var-chip-icon">✏️</span>';
+                            html += '<span class="template-var-chip-name">{{' + utils.escapeHtml(varName) + '}}</span>';
+                            html += '</button>';
+                        }
+
+                        if (varsBar) {
+                            varsBar.innerHTML = html;
+                        } else {
+                            // Need to insert the bar - do a minimal render of just the prompt area
+                            render();
+                        }
+                    } else if (varsBar) {
+                        // Remove vars bar if no variables
+                        varsBar.remove();
+                    }
+                }, 300);
             },
 
             // Template Category Filter
@@ -5807,11 +5842,15 @@
             // Tool panels (show different content based on active tool)
             html += renderToolPanels();
 
-            // Featured section
-            html += renderFeaturedSection();
+            // Only show Featured and Gallery sections when interface is NOT open
+            // (when user is on the landing/placeholder view)
+            if (!state.toolInterfaceOpen) {
+                // Featured section
+                html += renderFeaturedSection();
 
-            // Community Gallery section
-            html += renderGallerySection();
+                // Community Gallery section
+                html += renderGallerySection();
+            }
 
             html += '</div>'; // main content container
 
@@ -5949,7 +5988,7 @@
 
             // Dropdown menu
             if (state.modelDropdownOpen) {
-                html += '<div class="model-dropdown-menu">';
+                html += '<div class="model-dropdown-menu open">';
                 for (var mj = 0; mj < modelsConfig.length; mj++) {
                     var model = modelsConfig[mj];
                     if (model.divider) {
