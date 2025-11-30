@@ -6002,3 +6002,518 @@ IMPORTANT: Write naturally as if speaking to camera. Include:
       sanitizeErrorMessage(error, 'Failed to generate script. Please try again.'));
   }
 });
+
+// ==============================================
+// CREATIVE STUDIO - IMAGE GENERATION (NanoBanana API)
+// ==============================================
+
+/**
+ * Token costs:
+ * - Basic: 1 token per image
+ * - HD: 2 tokens per image
+ * - Ultra: 4 tokens per image
+ * - Templates: vary by template (2-3 tokens)
+ * - Upscale: 2 tokens
+ * - Motion: 3 tokens
+ *
+ * Token rollover: Unused tokens roll over to next month (max 500)
+ */
+
+// Helper: Get monthly token allocation by plan
+function getMonthlyAllocation(plan) {
+  const allocations = {
+    free: 50,
+    lite: 200,
+    pro: 500,
+    business: 1500
+  };
+  return allocations[plan] || 50;
+}
+
+// Get user's creative tokens balance
+exports.getCreativeTokens = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  try {
+    const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+
+    if (!tokenDoc.exists) {
+      // Initialize new user with free tier tokens
+      const initialTokens = {
+        balance: 50,
+        rollover: 0,
+        plan: 'free',
+        monthlyAllocation: 50,
+        lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      await db.collection('creativeTokens').doc(uid).set(initialTokens);
+      return initialTokens;
+    }
+
+    const tokenData = tokenDoc.data();
+
+    // Check if monthly refresh is needed
+    const now = new Date();
+    const lastRefresh = tokenData.lastRefresh?.toDate() || new Date(0);
+    const monthsSinceRefresh = (now.getFullYear() - lastRefresh.getFullYear()) * 12 +
+                               (now.getMonth() - lastRefresh.getMonth());
+
+    if (monthsSinceRefresh >= 1) {
+      // Calculate rollover (max 500 tokens)
+      const rollover = Math.min(tokenData.balance, 500);
+      const monthlyAllocation = getMonthlyAllocation(tokenData.plan);
+
+      const updatedTokens = {
+        balance: monthlyAllocation + rollover,
+        rollover: rollover,
+        lastRefresh: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      await db.collection('creativeTokens').doc(uid).update(updatedTokens);
+
+      return {
+        ...tokenData,
+        ...updatedTokens,
+        balance: monthlyAllocation + rollover
+      };
+    }
+
+    return tokenData;
+
+  } catch (error) {
+    console.error('Get creative tokens error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get token balance');
+  }
+});
+
+// Deduct creative tokens
+exports.deductCreativeTokens = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { amount, reason } = data;
+
+  if (!amount || amount <= 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid token amount');
+  }
+
+  try {
+    const tokenRef = db.collection('creativeTokens').doc(uid);
+
+    return await db.runTransaction(async (transaction) => {
+      const tokenDoc = await transaction.get(tokenRef);
+
+      if (!tokenDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Token balance not found');
+      }
+
+      const currentBalance = tokenDoc.data().balance || 0;
+
+      if (currentBalance < amount) {
+        throw new functions.https.HttpsError('resource-exhausted', 'Insufficient tokens');
+      }
+
+      const newBalance = currentBalance - amount;
+      transaction.update(tokenRef, {
+        balance: newBalance,
+        lastUsed: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Log token usage
+      transaction.set(db.collection('creativeTokenUsage').doc(), {
+        userId: uid,
+        amount: amount,
+        reason: reason || 'generation',
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return { success: true, newBalance };
+    });
+
+  } catch (error) {
+    console.error('Deduct tokens error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to deduct tokens');
+  }
+});
+
+// Generate creative image (NanoBanana API integration)
+// Structure ready - add NanoBanana API details when available
+exports.generateCreativeImage = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'generateImage', 10);
+
+  const { prompt, model, quantity, aspectRatio, quality, templateId } = data;
+
+  if (!prompt || prompt.trim().length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Prompt is required');
+  }
+
+  // Calculate token cost
+  const qualityCosts = { basic: 1, hd: 2, ultra: 4 };
+  const baseCost = qualityCosts[quality] || 2;
+  const totalCost = baseCost * (quantity || 1);
+
+  try {
+    // Verify token balance
+    const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+    const balance = tokenDoc.exists ? tokenDoc.data().balance : 0;
+
+    if (balance < totalCost) {
+      throw new functions.https.HttpsError('resource-exhausted',
+        `Insufficient tokens. Need ${totalCost}, have ${balance}`);
+    }
+
+    // =========================================
+    // TODO: Add NanoBanana API call here
+    // =========================================
+    // const nanoBananaResponse = await axios.post('NANOBANANA_API_URL', {
+    //   prompt: prompt,
+    //   model: model || 'auto',
+    //   n: quantity || 1,
+    //   aspect_ratio: aspectRatio || '1:1',
+    //   quality: quality || 'hd'
+    // }, {
+    //   headers: {
+    //     'Authorization': `Bearer ${functions.config().nanobanana?.key}`,
+    //     'Content-Type': 'application/json'
+    //   }
+    // });
+    // const generatedImages = nanoBananaResponse.data.images;
+    // =========================================
+
+    // Placeholder response (replace with actual API response)
+    const generatedImages = [
+      {
+        url: 'https://via.placeholder.com/1024x1024/8b5cf6/ffffff?text=Generated+Image',
+        seed: Math.floor(Math.random() * 1000000)
+      }
+    ];
+
+    // Deduct tokens
+    await db.collection('creativeTokens').doc(uid).update({
+      balance: admin.firestore.FieldValue.increment(-totalCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      prompt: prompt,
+      model: model || 'auto',
+      quantity: quantity || 1,
+      aspectRatio: aspectRatio || '1:1',
+      quality: quality || 'hd',
+      templateId: templateId || null,
+      images: generatedImages,
+      tokenCost: totalCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const historyRef = await db.collection('creativeHistory').add(historyData);
+
+    // Log usage
+    await logUsage(uid, 'creative_image', { prompt: prompt.substring(0, 100), quality, quantity });
+
+    return {
+      success: true,
+      historyId: historyRef.id,
+      images: generatedImages,
+      tokenCost: totalCost,
+      remainingBalance: balance - totalCost
+    };
+
+  } catch (error) {
+    console.error('Generate image error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal',
+      sanitizeErrorMessage(error, 'Failed to generate image. Please try again.'));
+  }
+});
+
+// Get user's creative history
+exports.getCreativeHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { limit: queryLimit, offset } = data;
+
+  try {
+    let query = db.collection('creativeHistory')
+      .where('userId', '==', uid)
+      .orderBy('createdAt', 'desc')
+      .limit(queryLimit || 50);
+
+    if (offset) {
+      const lastDoc = await db.collection('creativeHistory').doc(offset).get();
+      if (lastDoc.exists) {
+        query = query.startAfter(lastDoc);
+      }
+    }
+
+    const snapshot = await query.get();
+    const history = [];
+
+    snapshot.forEach(doc => {
+      history.push({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate()?.toISOString()
+      });
+    });
+
+    return { success: true, history };
+
+  } catch (error) {
+    console.error('Get history error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get history');
+  }
+});
+
+// Share image to community gallery
+exports.shareToGallery = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { historyId, makePrivate, promptPrice } = data;
+
+  if (!historyId) {
+    throw new functions.https.HttpsError('invalid-argument', 'History ID is required');
+  }
+
+  try {
+    // Get the history item
+    const historyDoc = await db.collection('creativeHistory').doc(historyId).get();
+
+    if (!historyDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Image not found');
+    }
+
+    const historyData = historyDoc.data();
+
+    if (historyData.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not your image');
+    }
+
+    // Check if user can make prompt private (needs paid subscription)
+    let canMakePrivate = false;
+    if (makePrivate) {
+      const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+      const plan = tokenDoc.exists ? tokenDoc.data().plan : 'free';
+      canMakePrivate = ['lite', 'pro', 'business'].includes(plan);
+
+      if (!canMakePrivate) {
+        throw new functions.https.HttpsError('permission-denied',
+          'Only paid subscribers can make prompts private');
+      }
+    }
+
+    // Get user profile for display name
+    const userDoc = await db.collection('users').doc(uid).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+
+    // Create gallery entry
+    const galleryData = {
+      userId: uid,
+      userName: userData.displayName || 'Anonymous',
+      userAvatar: (userData.displayName || 'A').substring(0, 2).toUpperCase(),
+      historyId: historyId,
+      imageUrl: historyData.images?.[0]?.url || '',
+      prompt: historyData.prompt,
+      isPrivate: makePrivate && canMakePrivate,
+      promptPrice: (makePrivate && canMakePrivate) ? (promptPrice || 5) : 0,
+      tool: 'imageCreation',
+      likes: 0,
+      views: 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const galleryRef = await db.collection('creativeGallery').add(galleryData);
+
+    // Update history to mark as shared
+    await db.collection('creativeHistory').doc(historyId).update({
+      sharedToGallery: true,
+      galleryId: galleryRef.id
+    });
+
+    return {
+      success: true,
+      galleryId: galleryRef.id,
+      isPrivate: galleryData.isPrivate
+    };
+
+  } catch (error) {
+    console.error('Share to gallery error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to share to gallery');
+  }
+});
+
+// Purchase private prompt from another user
+exports.purchasePrompt = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { galleryId } = data;
+
+  if (!galleryId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Gallery ID is required');
+  }
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      // Get gallery item
+      const galleryRef = db.collection('creativeGallery').doc(galleryId);
+      const galleryDoc = await transaction.get(galleryRef);
+
+      if (!galleryDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Gallery item not found');
+      }
+
+      const galleryData = galleryDoc.data();
+
+      if (!galleryData.isPrivate) {
+        // Prompt is free, just return it
+        return { success: true, prompt: galleryData.prompt, cost: 0 };
+      }
+
+      if (galleryData.userId === uid) {
+        // User owns this prompt
+        return { success: true, prompt: galleryData.prompt, cost: 0 };
+      }
+
+      const price = galleryData.promptPrice || 5;
+
+      // Check buyer's balance
+      const buyerTokenRef = db.collection('creativeTokens').doc(uid);
+      const buyerTokenDoc = await transaction.get(buyerTokenRef);
+      const buyerBalance = buyerTokenDoc.exists ? buyerTokenDoc.data().balance : 0;
+
+      if (buyerBalance < price) {
+        throw new functions.https.HttpsError('resource-exhausted',
+          `Insufficient tokens. Need ${price}, have ${buyerBalance}`);
+      }
+
+      // Check if already purchased
+      const purchaseQuery = await db.collection('promptPurchases')
+        .where('buyerId', '==', uid)
+        .where('galleryId', '==', galleryId)
+        .limit(1)
+        .get();
+
+      if (!purchaseQuery.empty) {
+        // Already purchased, return prompt
+        return { success: true, prompt: galleryData.prompt, cost: 0, alreadyPurchased: true };
+      }
+
+      // Deduct from buyer
+      transaction.update(buyerTokenRef, {
+        balance: admin.firestore.FieldValue.increment(-price)
+      });
+
+      // Add to seller (creator)
+      const sellerTokenRef = db.collection('creativeTokens').doc(galleryData.userId);
+      transaction.update(sellerTokenRef, {
+        balance: admin.firestore.FieldValue.increment(price),
+        earnings: admin.firestore.FieldValue.increment(price)
+      });
+
+      // Record purchase
+      const purchaseRef = db.collection('promptPurchases').doc();
+      transaction.set(purchaseRef, {
+        buyerId: uid,
+        sellerId: galleryData.userId,
+        galleryId: galleryId,
+        price: price,
+        purchasedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return {
+        success: true,
+        prompt: galleryData.prompt,
+        cost: price
+      };
+    });
+
+  } catch (error) {
+    console.error('Purchase prompt error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to purchase prompt');
+  }
+});
+
+// Get community gallery
+exports.getCommunityGallery = functions.https.onCall(async (data, context) => {
+  // This can be called without authentication for browsing
+  const { sortBy, filter, category, limit: queryLimit, offset } = data || {};
+
+  try {
+    let query = db.collection('creativeGallery')
+      .orderBy(sortBy === 'newest' ? 'createdAt' : 'likes', 'desc')
+      .limit(queryLimit || 50);
+
+    if (filter && filter !== 'all') {
+      query = query.where('tool', '==', filter);
+    }
+
+    const snapshot = await query.get();
+    const items = [];
+
+    snapshot.forEach(doc => {
+      const docData = doc.data();
+      items.push({
+        id: doc.id,
+        imageUrl: docData.imageUrl,
+        prompt: docData.isPrivate ? '[Private Prompt]' : docData.prompt,
+        isPrivate: docData.isPrivate,
+        promptPrice: docData.promptPrice || 0,
+        user: {
+          name: docData.userName,
+          avatar: docData.userAvatar
+        },
+        likes: docData.likes || 0,
+        tool: docData.tool,
+        createdAt: docData.createdAt?.toDate()?.toISOString()
+      });
+    });
+
+    return { success: true, items };
+
+  } catch (error) {
+    console.error('Get gallery error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get gallery');
+  }
+});
+
+// Like a gallery item
+exports.likeGalleryItem = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { galleryId } = data;
+
+  if (!galleryId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Gallery ID is required');
+  }
+
+  try {
+    // Check if already liked
+    const likeId = `${uid}_${galleryId}`;
+    const likeDoc = await db.collection('galleryLikes').doc(likeId).get();
+
+    if (likeDoc.exists) {
+      // Unlike
+      await db.collection('galleryLikes').doc(likeId).delete();
+      await db.collection('creativeGallery').doc(galleryId).update({
+        likes: admin.firestore.FieldValue.increment(-1)
+      });
+      return { success: true, liked: false };
+    } else {
+      // Like
+      await db.collection('galleryLikes').doc(likeId).set({
+        userId: uid,
+        galleryId: galleryId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      await db.collection('creativeGallery').doc(galleryId).update({
+        likes: admin.firestore.FieldValue.increment(1)
+      });
+      return { success: true, liked: true };
+    }
+
+  } catch (error) {
+    console.error('Like gallery error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to like item');
+  }
+});

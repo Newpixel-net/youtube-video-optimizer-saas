@@ -865,6 +865,779 @@
                 padding-right: 0.75rem;
             }
         }
+
+        /* ------------------------------------------
+           2.17 TOOL INTERFACE (PHASE 2)
+           ------------------------------------------ */
+        .tool-interface {
+            display: flex;
+            gap: 1.5rem;
+            min-height: 600px;
+            margin-bottom: 2rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* Left Sidebar */
+        .tool-sidebar {
+            width: 320px;
+            min-width: 320px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .sidebar-section {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.75rem;
+            padding: 1rem;
+        }
+
+        .sidebar-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .sidebar-section-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sidebar-section-badge {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.4rem;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border-radius: 0.25rem;
+            font-weight: 700;
+        }
+
+        /* Model Selector */
+        .model-selector {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .model-btn {
+            flex: 1;
+            padding: 0.6rem 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .model-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .model-btn.active {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border-color: #8b5cf6;
+            color: white;
+        }
+
+        /* Reference Buttons */
+        .reference-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+
+        .reference-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.75rem 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .reference-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .reference-btn.premium {
+            position: relative;
+        }
+
+        .reference-btn.premium::after {
+            content: '★';
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 0.6rem;
+            color: #f59e0b;
+        }
+
+        .reference-btn-icon {
+            font-size: 1.25rem;
+        }
+
+        /* Prompt Textarea */
+        .prompt-container {
+            position: relative;
+        }
+
+        .prompt-textarea {
+            width: 100%;
+            min-height: 100px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            padding: 0.875rem;
+            padding-bottom: 2.5rem;
+            color: white;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            resize: none;
+            font-family: inherit;
+        }
+
+        .prompt-textarea::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .prompt-textarea:focus {
+            outline: none;
+            border-color: #8b5cf6;
+        }
+
+        .prompt-actions {
+            position: absolute;
+            bottom: 0.5rem;
+            left: 0.5rem;
+            right: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .prompt-action-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.85rem;
+        }
+
+        .prompt-action-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .prompt-char-count {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Settings Row */
+        .settings-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .settings-group {
+            flex: 1;
+        }
+
+        .settings-label {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.35rem;
+            display: block;
+        }
+
+        .settings-select {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .settings-select:focus {
+            outline: none;
+            border-color: #8b5cf6;
+        }
+
+        /* Quantity Buttons */
+        .quantity-btns {
+            display: flex;
+            gap: 0.35rem;
+        }
+
+        .quantity-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quantity-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .quantity-btn.active {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border-color: #8b5cf6;
+            color: white;
+        }
+
+        /* Generate Button */
+        .generate-section {
+            margin-top: auto;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .generate-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            border: none;
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px rgba(139, 92, 246, 0.5);
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .generate-btn .token-cost {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.25rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .token-balance-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            padding: 0.6rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .token-balance-display .balance {
+            font-weight: 700;
+            color: #22c55e;
+        }
+
+        .token-balance-display .rollover {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Main Area */
+        .tool-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            overflow: hidden;
+        }
+
+        /* Main Area Tabs */
+        .main-tabs {
+            display: flex;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .main-tab {
+            flex: 1;
+            padding: 1rem;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .main-tab:hover {
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .main-tab.active {
+            color: white;
+            background: rgba(139, 92, 246, 0.1);
+            border-bottom: 2px solid #8b5cf6;
+        }
+
+        .main-tab-count {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 9999px;
+        }
+
+        .main-tab.active .main-tab-count {
+            background: #8b5cf6;
+        }
+
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        /* Template Grid */
+        .template-categories {
+            margin-bottom: 1.5rem;
+        }
+
+        .template-category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .template-category-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(236, 72, 153, 0.2) 100%);
+            border-radius: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .template-category-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .template-category-count {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-left: auto;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .template-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .template-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .template-card-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.35rem;
+        }
+
+        .template-card-desc {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .template-card-cost {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+            padding: 0.2rem 0.5rem;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            color: #a78bfa;
+        }
+
+        /* History Grid */
+        .history-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+
+        .history-item {
+            position: relative;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            aspect-ratio: 1;
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .history-item:hover {
+            transform: scale(1.02);
+        }
+
+        .history-item-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .history-item-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 0.75rem;
+        }
+
+        .history-item:hover .history-item-overlay {
+            opacity: 1;
+        }
+
+        .history-item-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .history-action-btn {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .history-action-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Community Gallery (Enhanced) */
+        .community-item {
+            position: relative;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.03);
+            break-inside: avoid;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .community-item:hover {
+            transform: scale(1.02);
+        }
+
+        .community-item-image {
+            width: 100%;
+            display: block;
+        }
+
+        .community-item-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 1rem;
+        }
+
+        .community-item:hover .community-item-overlay {
+            opacity: 1;
+        }
+
+        .community-item-prompt {
+            font-size: 0.8rem;
+            color: white;
+            margin-bottom: 0.5rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .community-item-prompt.locked {
+            filter: blur(4px);
+            user-select: none;
+        }
+
+        .community-item-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .community-item-user {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .community-item-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 700;
+        }
+
+        .community-item-actions {
+            display: flex;
+            gap: 0.35rem;
+        }
+
+        .community-action-btn {
+            padding: 0.35rem 0.6rem;
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .community-action-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .community-action-btn.buy-prompt {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .community-action-btn.buy-prompt:hover {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        }
+
+        .private-badge {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 0.25rem;
+            font-size: 0.65rem;
+            color: #f59e0b;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        /* Close Tool Button */
+        .close-tool-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 9999px;
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            z-index: 50;
+        }
+
+        .close-tool-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Category Filter Pills (for templates) */
+        .category-filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .category-filter-pill {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 9999px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .category-filter-pill:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .category-filter-pill.active {
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            border-color: transparent;
+            color: white;
+        }
+
+        /* Responsive Tool Interface */
+        @media (max-width: 1024px) {
+            .tool-interface {
+                flex-direction: column;
+            }
+
+            .tool-sidebar {
+                width: 100%;
+                min-width: unset;
+            }
+
+            .template-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .tool-sidebar {
+                padding: 1rem;
+            }
+
+            .reference-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .settings-row {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .settings-group {
+                width: 100%;
+            }
+
+            .template-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .history-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
     </style>
 </head>
 <body>
@@ -909,6 +1682,38 @@
             // Active tool
             activeTool: 'imageCreation', // realtimeCanvas | realtimeGen | motion | imageCreation | upscaler | canvasEditor
 
+            // Tool Interface State (Phase 2)
+            toolInterfaceOpen: false, // true when user clicks "Start Creating"
+            mainTab: 'templates', // history | templates | community
+
+            // Generation Settings
+            selectedModel: 'auto', // banana1 | banana2 | auto
+            prompt: '',
+            quantity: 1, // 1-4 images
+            aspectRatio: '1:1', // 1:1 | 16:9 | 9:16 | 4:3
+            quality: 'hd', // basic | hd | ultra
+
+            // References (for advanced features)
+            styleReference: null,
+            characterReference: null, // premium
+            uploadedImage: null, // premium
+
+            // Template state
+            selectedTemplateCategory: 'all', // all | photorealism | creative | etc
+            selectedTemplate: null,
+
+            // Token state
+            tokens: {
+                balance: 50,  // current balance
+                rollover: 0,  // rolled over from last month
+                plan: 'free', // free | lite | pro | business
+                lastRefresh: null
+            },
+
+            // History (user's creations)
+            history: [],
+            historyLoading: false,
+
             // Gallery filters
             galleryFilter: 'all', // all | upscaler | motion
             galleryCategory: 'all', // all | animals | fashion | food | landscapes | scifi
@@ -917,6 +1722,10 @@
             // Gallery data
             galleryItems: [],
             galleryLoading: false,
+
+            // Generation state
+            generating: false,
+            generationProgress: 0,
 
             // UI state
             loading: false,
@@ -1032,6 +1841,429 @@
         ];
 
         /* ==========================================
+           4.5.1 TEMPLATE LIBRARY DATA
+           From Newimagemoduls.md - Organized by Category
+           ========================================== */
+        const templateCategories = [
+            {
+                key: 'photorealism',
+                name: 'Photorealism & Aesthetics',
+                icon: '📸',
+                templates: [
+                    {
+                        id: 'business-photo',
+                        name: 'Business Photo',
+                        description: 'Professional LinkedIn headshots and business portraits',
+                        cost: 2,
+                        prompt: 'Create a detailed {{business}} scene with professional elements for corporate use...'
+                    },
+                    {
+                        id: 'film-style',
+                        name: 'Film Style',
+                        description: 'Cinematic shots with film grain and classic camera aesthetics',
+                        cost: 2,
+                        prompt: 'Generate an image in {{film style}} aesthetic, captured on vintage film camera...'
+                    },
+                    {
+                        id: 'mirror-selfie',
+                        name: 'Mirror Selfie',
+                        description: 'Authentic mirror selfie style portraits',
+                        cost: 2,
+                        prompt: 'Create a realistic mirror selfie of {{subject}} in a {{setting}}...'
+                    },
+                    {
+                        id: 'pet-store',
+                        name: 'Pet Store Scene',
+                        description: 'Detailed pet store scenes with vocabulary labels',
+                        cost: 2,
+                        prompt: 'Create a detailed {{pet store}} scene with English vocabulary labels for all objects...'
+                    },
+                    {
+                        id: 'aesthetic-portrait',
+                        name: 'Aesthetic Portrait',
+                        description: 'Stylized portraits with artistic lighting and mood',
+                        cost: 2,
+                        prompt: 'Create an aesthetic portrait with {{mood}} lighting and {{style}} composition...'
+                    },
+                    {
+                        id: 'product-lifestyle',
+                        name: 'Product Lifestyle',
+                        description: 'Products in lifestyle settings for marketing',
+                        cost: 2,
+                        prompt: 'Generate a lifestyle product shot of {{product}} in {{environment}}...'
+                    }
+                ]
+            },
+            {
+                key: 'creative',
+                name: 'Creative Experiments',
+                icon: '🎨',
+                templates: [
+                    {
+                        id: 'aging-effect',
+                        name: 'Aging Effect',
+                        description: 'Show how a person might look at different ages',
+                        cost: 3,
+                        prompt: 'Transform {{subject}} to show how they would look at age {{age}}...'
+                    },
+                    {
+                        id: 'recursive-image',
+                        name: 'Recursive Image',
+                        description: 'Images within images, Droste effect',
+                        cost: 3,
+                        prompt: 'Create a recursive image where {{subject}} holds a picture of themselves holding a picture...'
+                    },
+                    {
+                        id: 'coordinates-art',
+                        name: 'Coordinates Art',
+                        description: 'Art based on geographic coordinates',
+                        cost: 3,
+                        prompt: 'Generate an artistic interpretation of location {{coordinates}}...'
+                    },
+                    {
+                        id: 'style-fusion',
+                        name: 'Style Fusion',
+                        description: 'Combine multiple art styles into one',
+                        cost: 3,
+                        prompt: 'Fuse {{style1}} and {{style2}} art styles to create {{subject}}...'
+                    },
+                    {
+                        id: 'dream-sequence',
+                        name: 'Dream Sequence',
+                        description: 'Surreal dreamlike imagery',
+                        cost: 3,
+                        prompt: 'Create a surreal dream sequence featuring {{elements}} in {{setting}}...'
+                    },
+                    {
+                        id: 'glitch-art',
+                        name: 'Glitch Art',
+                        description: 'Digital glitch and databending effects',
+                        cost: 2,
+                        prompt: 'Apply glitch art effects to {{subject}} with {{intensity}} distortion...'
+                    },
+                    {
+                        id: 'miniature-world',
+                        name: 'Miniature World',
+                        description: 'Tilt-shift miniature effect',
+                        cost: 2,
+                        prompt: 'Create a tilt-shift miniature world of {{scene}}...'
+                    },
+                    {
+                        id: 'impossible-geometry',
+                        name: 'Impossible Geometry',
+                        description: 'Escher-style impossible structures',
+                        cost: 3,
+                        prompt: 'Generate an impossible geometric structure inspired by {{style}}...'
+                    }
+                ]
+            },
+            {
+                key: 'education',
+                name: 'Education & Knowledge',
+                icon: '📚',
+                templates: [
+                    {
+                        id: 'infographic-edu',
+                        name: 'Educational Infographic',
+                        description: 'Visual explanations of complex topics',
+                        cost: 3,
+                        prompt: 'Create an educational infographic explaining {{topic}} with clear visual hierarchy...'
+                    }
+                ]
+            },
+            {
+                key: 'ecommerce',
+                name: 'E-commerce & Virtual Studio',
+                icon: '🛒',
+                templates: [
+                    {
+                        id: 'virtual-tryon',
+                        name: 'Virtual Try-On',
+                        description: 'See how clothes or accessories look on you',
+                        cost: 3,
+                        prompt: 'Show {{person}} wearing {{item}} in a realistic try-on visualization...'
+                    },
+                    {
+                        id: 'product-studio',
+                        name: 'Product Studio Shot',
+                        description: 'Professional product photography on white/colored backgrounds',
+                        cost: 2,
+                        prompt: 'Create a professional studio shot of {{product}} on {{background}} background...'
+                    }
+                ]
+            },
+            {
+                key: 'workplace',
+                name: 'Workplace & Productivity',
+                icon: '💼',
+                templates: [
+                    {
+                        id: 'flowchart',
+                        name: 'Flowchart Generator',
+                        description: 'Visual flowcharts and process diagrams',
+                        cost: 2,
+                        prompt: 'Generate a clear flowchart showing {{process}} with proper symbols and connections...'
+                    },
+                    {
+                        id: 'ui-sketch',
+                        name: 'UI Sketch',
+                        description: 'Hand-drawn style UI wireframes',
+                        cost: 2,
+                        prompt: 'Create a hand-drawn UI sketch for {{app type}} showing {{screens}}...'
+                    },
+                    {
+                        id: 'magazine-layout',
+                        name: 'Magazine Layout',
+                        description: 'Professional magazine page designs',
+                        cost: 3,
+                        prompt: 'Design a magazine spread for {{topic}} in {{style}} magazine style...'
+                    }
+                ]
+            },
+            {
+                key: 'photoediting',
+                name: 'Photo Editing & Restoration',
+                icon: '✨',
+                templates: [
+                    {
+                        id: 'outpainting',
+                        name: 'Outpainting Expand',
+                        description: 'Extend images beyond their original borders',
+                        cost: 2,
+                        prompt: 'Expand this image by {{direction}} maintaining style consistency...'
+                    },
+                    {
+                        id: 'crowd-removal',
+                        name: 'Crowd Removal',
+                        description: 'Remove people from tourist photos',
+                        cost: 2,
+                        prompt: 'Remove crowds from {{scene}} while preserving the background...'
+                    }
+                ]
+            },
+            {
+                key: 'interior',
+                name: 'Interior Design',
+                icon: '🏠',
+                templates: [
+                    {
+                        id: 'floor-plan-3d',
+                        name: 'Floor Plan to 3D',
+                        description: 'Convert 2D floor plans into 3D renders',
+                        cost: 3,
+                        prompt: 'Transform this floor plan into a 3D rendered visualization with {{style}} interior...'
+                    }
+                ]
+            },
+            {
+                key: 'social',
+                name: 'Social Media & Marketing',
+                icon: '📱',
+                templates: [
+                    {
+                        id: 'viral-thumbnail',
+                        name: 'Viral Thumbnail',
+                        description: 'Eye-catching YouTube/social media thumbnails',
+                        cost: 2,
+                        prompt: 'Create a viral thumbnail for {{topic}} with expressive face and bold text space...'
+                    },
+                    {
+                        id: 'event-poster',
+                        name: 'Event Poster',
+                        description: 'Professional event and concert posters',
+                        cost: 2,
+                        prompt: 'Design an event poster for {{event}} in {{style}} aesthetic...'
+                    }
+                ]
+            },
+            {
+                key: 'daily',
+                name: 'Daily Life & Translation',
+                icon: '🌍',
+                templates: [
+                    {
+                        id: 'menu-translation',
+                        name: 'Menu Translation',
+                        description: 'Translate and visualize foreign menus',
+                        cost: 2,
+                        prompt: 'Translate and visualize this {{language}} menu into {{target language}} with food images...'
+                    },
+                    {
+                        id: 'comic-localization',
+                        name: 'Comic Localization',
+                        description: 'Translate comics while preserving art style',
+                        cost: 3,
+                        prompt: 'Localize this comic to {{language}} while maintaining the original art style...'
+                    }
+                ]
+            },
+            {
+                key: 'avatars',
+                name: 'Social Networking & Avatars',
+                icon: '👤',
+                templates: [
+                    {
+                        id: '3d-avatar',
+                        name: '3D Avatar',
+                        description: 'Create personalized 3D avatars',
+                        cost: 3,
+                        prompt: 'Generate a 3D avatar based on {{description}} in {{style}} style...'
+                    },
+                    {
+                        id: 'pet-meme',
+                        name: 'Pet Meme Generator',
+                        description: 'Turn your pet photos into memes',
+                        cost: 2,
+                        prompt: 'Transform {{pet}} into a meme with {{expression}} and space for caption...'
+                    }
+                ]
+            },
+            {
+                key: 'new',
+                name: 'New Additions',
+                icon: '🆕',
+                templates: [
+                    {
+                        id: 'memory-palace',
+                        name: 'Memory Palace',
+                        description: 'Visual memory aids and mnemonics',
+                        cost: 3,
+                        prompt: 'Create a memory palace visualization for memorizing {{items}}...'
+                    },
+                    {
+                        id: 'googly-eyes',
+                        name: 'Googly Eyes',
+                        description: 'Add fun googly eyes to any image',
+                        cost: 1,
+                        prompt: 'Add googly eyes to {{subject}} in a humorous way...'
+                    },
+                    {
+                        id: 'data-infographic',
+                        name: 'Data Infographic',
+                        description: 'Turn data into beautiful visualizations',
+                        cost: 3,
+                        prompt: 'Create a data visualization infographic for {{data}} in {{style}}...'
+                    },
+                    {
+                        id: 'weather-card',
+                        name: 'Weather Card',
+                        description: 'Beautiful weather forecast cards',
+                        cost: 2,
+                        prompt: 'Generate a stylish weather card for {{location}} showing {{conditions}}...'
+                    }
+                ]
+            }
+        ];
+
+        /* ==========================================
+           4.5.2 COMMUNITY GALLERY DATA (Enhanced)
+           ========================================== */
+        const communityGalleryData = [
+            {
+                id: 1,
+                image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=400&h=500&fit=crop',
+                prompt: 'Abstract golden art portrait with geometric shapes and warm lighting',
+                user: { name: 'ArtMaster', avatar: 'AM' },
+                isPrivate: false,
+                promptPrice: 0,
+                likes: 234,
+                tool: 'imageCreation'
+            },
+            {
+                id: 2,
+                image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=350&fit=crop',
+                prompt: 'Luxury fashion handbag floating in ethereal light',
+                user: { name: 'DesignPro', avatar: 'DP' },
+                isPrivate: true,
+                promptPrice: 5,
+                likes: 189,
+                tool: 'imageCreation'
+            },
+            {
+                id: 3,
+                image: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=400&h=600&fit=crop',
+                prompt: 'High fashion model in colorful avant-garde dress, editorial style',
+                user: { name: 'FashionAI', avatar: 'FA' },
+                isPrivate: true,
+                promptPrice: 8,
+                likes: 456,
+                tool: 'imageCreation'
+            },
+            {
+                id: 4,
+                image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=400&fit=crop',
+                prompt: 'Abstract 3D fluid art with iridescent colors',
+                user: { name: 'FluidArt', avatar: 'FL' },
+                isPrivate: false,
+                promptPrice: 0,
+                likes: 312,
+                tool: 'imageCreation'
+            },
+            {
+                id: 5,
+                image: 'https://images.unsplash.com/photo-1567653418876-5bb0e566e1c2?w=400&h=450&fit=crop',
+                prompt: 'Portrait with golden metallic makeup and dramatic lighting',
+                user: { name: 'GlamShot', avatar: 'GS' },
+                isPrivate: true,
+                promptPrice: 6,
+                likes: 278,
+                tool: 'imageCreation'
+            },
+            {
+                id: 6,
+                image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=350&fit=crop',
+                prompt: 'Gourmet food photography, michelin star presentation',
+                user: { name: 'FoodieAI', avatar: 'FO' },
+                isPrivate: false,
+                promptPrice: 0,
+                likes: 167,
+                tool: 'imageCreation'
+            },
+            {
+                id: 7,
+                image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=500&fit=crop',
+                prompt: 'Majestic mountain landscape at golden hour with mist',
+                user: { name: 'NaturePix', avatar: 'NP' },
+                isPrivate: false,
+                promptPrice: 0,
+                likes: 523,
+                tool: 'imageCreation'
+            },
+            {
+                id: 8,
+                image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&h=400&fit=crop',
+                prompt: 'Futuristic sci-fi cityscape with neon lights and flying vehicles',
+                user: { name: 'SciFiDreams', avatar: 'SF' },
+                isPrivate: true,
+                promptPrice: 10,
+                likes: 891,
+                tool: 'imageCreation'
+            }
+        ];
+
+        /* ==========================================
+           4.5.3 TOKEN SYSTEM CONFIGURATION
+           ========================================== */
+        const tokenConfig = {
+            plans: {
+                free: { monthly: 50, name: 'Free', color: '#6b7280' },
+                lite: { monthly: 200, name: 'Lite', color: '#3b82f6' },
+                pro: { monthly: 500, name: 'Pro', color: '#8b5cf6' },
+                business: { monthly: 1500, name: 'Business', color: '#f59e0b' }
+            },
+            costs: {
+                basic: 1,
+                hd: 2,
+                ultra: 4,
+                template: 2,  // base cost, varies by template
+                upscale: 2,
+                motion: 3
+            },
+            rollover: true,  // tokens roll over to next month
+            maxRollover: 500 // max tokens that can roll over
+        };
+
+        /* ==========================================
            4.6 UTILITY FUNCTIONS
            ========================================== */
         const utils = {
@@ -1055,6 +2287,7 @@
             // Set active tool
             setActiveTool: function(toolKey) {
                 state.activeTool = toolKey;
+                state.toolInterfaceOpen = false; // Close interface when switching tools
                 render();
             },
 
@@ -1074,13 +2307,238 @@
                 render();
             },
 
-            // Tool actions (placeholders for now)
+            // Open Tool Interface (Phase 2)
             openTool: function(toolKey) {
                 state.activeTool = toolKey;
-                // In the future, this will open the tool interface
+                state.toolInterfaceOpen = true;
+                state.mainTab = 'templates'; // Start on templates tab
                 render();
+            },
+
+            // Close Tool Interface
+            closeTool: function() {
+                state.toolInterfaceOpen = false;
+                render();
+            },
+
+            // Main Area Tab Switching
+            setMainTab: function(tab) {
+                state.mainTab = tab;
+                render();
+            },
+
+            // Model Selection
+            setModel: function(model) {
+                state.selectedModel = model;
+                render();
+            },
+
+            // Quantity Selection
+            setQuantity: function(qty) {
+                state.quantity = qty;
+                render();
+            },
+
+            // Aspect Ratio Selection
+            setAspectRatio: function(ratio) {
+                state.aspectRatio = ratio;
+                render();
+            },
+
+            // Quality Selection
+            setQuality: function(quality) {
+                state.quality = quality;
+                render();
+            },
+
+            // Prompt Update
+            updatePrompt: function(text) {
+                state.prompt = text;
+                // Don't re-render for every keystroke
+            },
+
+            // Template Category Filter
+            setTemplateCategory: function(category) {
+                state.selectedTemplateCategory = category;
+                render();
+            },
+
+            // Select Template
+            selectTemplate: function(templateId) {
+                // Find template and populate prompt
+                for (var i = 0; i < templateCategories.length; i++) {
+                    var category = templateCategories[i];
+                    for (var j = 0; j < category.templates.length; j++) {
+                        var template = category.templates[j];
+                        if (template.id === templateId) {
+                            state.selectedTemplate = template;
+                            state.prompt = template.prompt;
+                            // Update the textarea
+                            var textarea = document.getElementById('prompt-textarea');
+                            if (textarea) textarea.value = template.prompt;
+                            render();
+                            return;
+                        }
+                    }
+                }
+            },
+
+            // Enhance Prompt (placeholder for AI enhancement)
+            enhancePrompt: function() {
+                // TODO: Call AI to enhance prompt
+                showToast('Prompt enhancement coming soon!', 'info');
+            },
+
+            // Generate Image (placeholder - ready for NanoBanana API)
+            generateImage: function() {
+                if (!state.prompt.trim()) {
+                    showToast('Please enter a prompt', 'error');
+                    return;
+                }
+
+                var cost = app.calculateCost();
+                if (state.tokens.balance < cost) {
+                    showToast('Not enough tokens. Please upgrade your plan.', 'error');
+                    return;
+                }
+
+                state.generating = true;
+                state.generationProgress = 0;
+                render();
+
+                // Simulate generation (replace with actual API call)
+                var progress = 0;
+                var interval = setInterval(function() {
+                    progress += 10;
+                    state.generationProgress = progress;
+                    render();
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        state.generating = false;
+                        // Deduct tokens
+                        state.tokens.balance -= cost;
+                        showToast('Image generated successfully!', 'success');
+                        render();
+                    }
+                }, 300);
+            },
+
+            // Calculate Token Cost
+            calculateCost: function() {
+                var baseCost = tokenConfig.costs[state.quality] || 2;
+                var quantityMultiplier = state.quantity;
+                var templateBonus = state.selectedTemplate ? (state.selectedTemplate.cost - 2) : 0;
+                return (baseCost + templateBonus) * quantityMultiplier;
+            },
+
+            // Community Gallery Actions
+            likeImage: function(imageId) {
+                showToast('Like feature coming soon!', 'info');
+            },
+
+            // Purchase Private Prompt
+            purchasePrompt: function(imageId, price) {
+                if (state.tokens.balance < price) {
+                    showToast('Not enough tokens to purchase this prompt.', 'error');
+                    return;
+                }
+                // TODO: Implement actual purchase via Cloud Function
+                showToast('Prompt purchased for ' + price + ' tokens!', 'success');
+                state.tokens.balance -= price;
+                render();
+            },
+
+            // Copy Prompt (for free prompts)
+            copyPrompt: function(prompt) {
+                navigator.clipboard.writeText(prompt).then(function() {
+                    showToast('Prompt copied to clipboard!', 'success');
+                }).catch(function() {
+                    showToast('Failed to copy prompt', 'error');
+                });
+            },
+
+            // Use Prompt from Community
+            usePrompt: function(prompt) {
+                state.prompt = prompt;
+                var textarea = document.getElementById('prompt-textarea');
+                if (textarea) textarea.value = prompt;
+                showToast('Prompt loaded! Click Generate to create.', 'success');
+            },
+
+            // Share to Gallery
+            shareToGallery: function(imageId, makePrivate) {
+                // TODO: Implement sharing via Cloud Function
+                var msg = makePrivate ? 'Shared as private (prompt protected)' : 'Shared to community gallery!';
+                showToast(msg, 'success');
+            },
+
+            // History Actions
+            downloadImage: function(imageUrl) {
+                window.open(imageUrl, '_blank');
+            },
+
+            deleteFromHistory: function(imageId) {
+                // TODO: Implement deletion
+                showToast('Image removed from history', 'success');
+            },
+
+            // Load User Tokens
+            loadTokens: function() {
+                if (!state.user) return;
+
+                db.collection('creativeTokens').doc(state.user.uid).get()
+                    .then(function(doc) {
+                        if (doc.exists) {
+                            var data = doc.data();
+                            state.tokens = {
+                                balance: data.balance || 50,
+                                rollover: data.rollover || 0,
+                                plan: data.plan || 'free',
+                                lastRefresh: data.lastRefresh
+                            };
+                            render();
+                        }
+                    })
+                    .catch(function(e) {
+                        console.error('Error loading tokens:', e);
+                    });
+            },
+
+            // Load User History
+            loadHistory: function() {
+                if (!state.user) return;
+                state.historyLoading = true;
+
+                db.collection('creativeHistory')
+                    .where('userId', '==', state.user.uid)
+                    .orderBy('createdAt', 'desc')
+                    .limit(50)
+                    .get()
+                    .then(function(snapshot) {
+                        state.history = [];
+                        snapshot.forEach(function(doc) {
+                            state.history.push({ id: doc.id, ...doc.data() });
+                        });
+                        state.historyLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        console.error('Error loading history:', e);
+                        state.historyLoading = false;
+                    });
             }
         };
+
+        // Toast notification helper
+        function showToast(message, type) {
+            var toast = document.createElement('div');
+            toast.className = 'toast toast-' + (type || 'success');
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(function() {
+                toast.remove();
+            }, 3000);
+        }
 
         /* ==========================================
            4.8 RENDER FUNCTIONS
@@ -1194,6 +2652,13 @@
             var html = '';
             var activeTool = toolsConfig.find(function(t) { return t.key === state.activeTool; });
 
+            // If tool interface is open, render full interface
+            if (state.toolInterfaceOpen && activeTool) {
+                html += renderToolInterface(activeTool);
+                return html;
+            }
+
+            // Otherwise show placeholder
             if (activeTool) {
                 html += '<div class="tool-placeholder fade-in">';
                 html += '<div class="tool-placeholder-icon">' + getToolEmoji(activeTool.key) + '</div>';
@@ -1205,6 +2670,364 @@
                 html += '</button>';
                 html += '</div>';
             }
+
+            return html;
+        }
+
+        // Render full tool interface (Phase 2)
+        function renderToolInterface(tool) {
+            var html = '<div class="tool-interface">';
+
+            // Left Sidebar
+            html += renderToolSidebar(tool);
+
+            // Main Area
+            html += renderToolMainArea();
+
+            html += '</div>';
+            return html;
+        }
+
+        // Render Tool Sidebar
+        function renderToolSidebar(tool) {
+            var html = '<div class="tool-sidebar">';
+
+            // Model Selector
+            html += '<div class="sidebar-section">';
+            html += '<div class="sidebar-section-header">';
+            html += '<span class="sidebar-section-title">Model</span>';
+            html += '</div>';
+            html += '<div class="model-selector">';
+            var models = [
+                { key: 'banana1', name: 'NB 1' },
+                { key: 'banana2', name: 'NB 2' },
+                { key: 'auto', name: 'Auto' }
+            ];
+            for (var i = 0; i < models.length; i++) {
+                var m = models[i];
+                var isActive = state.selectedModel === m.key;
+                html += '<button class="model-btn' + (isActive ? ' active' : '') + '" onclick="app.setModel(\'' + m.key + '\')">' + m.name + '</button>';
+            }
+            html += '</div>';
+            html += '</div>';
+
+            // References Section
+            html += '<div class="sidebar-section">';
+            html += '<div class="sidebar-section-header">';
+            html += '<span class="sidebar-section-title">References</span>';
+            html += '</div>';
+            html += '<div class="reference-grid">';
+            html += '<button class="reference-btn" title="Style Reference">';
+            html += '<span class="reference-btn-icon">🎨</span>';
+            html += '<span>Style</span>';
+            html += '</button>';
+            html += '<button class="reference-btn premium" title="Character Reference (Premium)">';
+            html += '<span class="reference-btn-icon">👤</span>';
+            html += '<span>Character</span>';
+            html += '</button>';
+            html += '<button class="reference-btn premium" title="Upload Image (Premium)">';
+            html += '<span class="reference-btn-icon">📤</span>';
+            html += '<span>Upload</span>';
+            html += '</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Prompt Section
+            html += '<div class="sidebar-section" style="flex: 1;">';
+            html += '<div class="sidebar-section-header">';
+            html += '<span class="sidebar-section-title">Prompt</span>';
+            html += '</div>';
+            html += '<div class="prompt-container">';
+            html += '<textarea id="prompt-textarea" class="prompt-textarea" placeholder="Describe what you want to create..." oninput="app.updatePrompt(this.value)">' + utils.escapeHtml(state.prompt) + '</textarea>';
+            html += '<div class="prompt-actions">';
+            html += '<div style="display: flex; gap: 0.35rem;">';
+            html += '<button class="prompt-action-btn" onclick="app.enhancePrompt()" title="Enhance with AI">✨</button>';
+            html += '<button class="prompt-action-btn" title="Random prompt">🎲</button>';
+            html += '<button class="prompt-action-btn" title="Clear">🗑️</button>';
+            html += '</div>';
+            html += '<span class="prompt-char-count">' + state.prompt.length + '/2000</span>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Settings Row
+            html += '<div class="sidebar-section">';
+            html += '<div class="settings-row">';
+
+            // Quantity
+            html += '<div class="settings-group">';
+            html += '<label class="settings-label">Quantity</label>';
+            html += '<div class="quantity-btns">';
+            for (var q = 1; q <= 4; q++) {
+                var isActive = state.quantity === q;
+                html += '<button class="quantity-btn' + (isActive ? ' active' : '') + '" onclick="app.setQuantity(' + q + ')">' + q + '</button>';
+            }
+            html += '</div>';
+            html += '</div>';
+
+            // Aspect Ratio
+            html += '<div class="settings-group">';
+            html += '<label class="settings-label">Aspect Ratio</label>';
+            html += '<select class="settings-select" onchange="app.setAspectRatio(this.value)">';
+            var ratios = ['1:1', '16:9', '9:16', '4:3', '3:4'];
+            for (var r = 0; r < ratios.length; r++) {
+                var ratio = ratios[r];
+                var selected = state.aspectRatio === ratio ? ' selected' : '';
+                html += '<option value="' + ratio + '"' + selected + '>' + ratio + '</option>';
+            }
+            html += '</select>';
+            html += '</div>';
+
+            html += '</div>'; // settings-row
+
+            // Quality Row
+            html += '<div class="settings-row" style="margin-top: 0.75rem;">';
+            html += '<div class="settings-group">';
+            html += '<label class="settings-label">Quality</label>';
+            html += '<select class="settings-select" onchange="app.setQuality(this.value)">';
+            var qualities = [
+                { key: 'basic', name: 'Basic (1 token)', cost: 1 },
+                { key: 'hd', name: 'HD (2 tokens)', cost: 2 },
+                { key: 'ultra', name: 'Ultra (4 tokens)', cost: 4 }
+            ];
+            for (var qi = 0; qi < qualities.length; qi++) {
+                var qual = qualities[qi];
+                var selected = state.quality === qual.key ? ' selected' : '';
+                html += '<option value="' + qual.key + '"' + selected + '>' + qual.name + '</option>';
+            }
+            html += '</select>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>'; // sidebar-section
+
+            // Generate Button Section
+            html += '<div class="generate-section">';
+            var cost = app.calculateCost();
+            var canGenerate = state.tokens.balance >= cost && !state.generating;
+            html += '<button class="generate-btn" onclick="app.generateImage()"' + (canGenerate ? '' : ' disabled') + '>';
+            if (state.generating) {
+                html += '<span class="animate-spin">⏳</span>';
+                html += '<span>Generating... ' + state.generationProgress + '%</span>';
+            } else {
+                html += '<span>Generate</span>';
+                html += '<span class="token-cost">🪙 ' + cost + '</span>';
+            }
+            html += '</button>';
+
+            // Token Balance Display
+            html += '<div class="token-balance-display">';
+            html += '<span>Balance:</span>';
+            html += '<span class="balance">🪙 ' + state.tokens.balance + '</span>';
+            if (state.tokens.rollover > 0) {
+                html += '<span class="rollover">(+' + state.tokens.rollover + ' rollover)</span>';
+            }
+            html += '</div>';
+
+            html += '</div>'; // generate-section
+
+            html += '</div>'; // tool-sidebar
+            return html;
+        }
+
+        // Render Tool Main Area (History, Templates, Community tabs)
+        function renderToolMainArea() {
+            var html = '<div class="tool-main">';
+
+            // Tab Bar
+            html += '<div class="main-tabs">';
+            var tabs = [
+                { key: 'history', name: 'History', count: state.history.length },
+                { key: 'templates', name: 'Templates', count: getTotalTemplateCount() },
+                { key: 'community', name: 'Community', count: communityGalleryData.length }
+            ];
+            for (var t = 0; t < tabs.length; t++) {
+                var tab = tabs[t];
+                var isActive = state.mainTab === tab.key;
+                html += '<button class="main-tab' + (isActive ? ' active' : '') + '" onclick="app.setMainTab(\'' + tab.key + '\')">';
+                html += '<span>' + tab.name + '</span>';
+                html += '<span class="main-tab-count">' + tab.count + '</span>';
+                html += '</button>';
+            }
+            html += '</div>';
+
+            // Tab Content
+            html += '<div class="main-content">';
+            if (state.mainTab === 'history') {
+                html += renderHistoryTab();
+            } else if (state.mainTab === 'templates') {
+                html += renderTemplatesTab();
+            } else if (state.mainTab === 'community') {
+                html += renderCommunityTab();
+            }
+            html += '</div>';
+
+            html += '</div>'; // tool-main
+            return html;
+        }
+
+        // Get total template count
+        function getTotalTemplateCount() {
+            var count = 0;
+            for (var i = 0; i < templateCategories.length; i++) {
+                count += templateCategories[i].templates.length;
+            }
+            return count;
+        }
+
+        // Render History Tab
+        function renderHistoryTab() {
+            var html = '';
+
+            if (state.historyLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-spinner mx-auto"></div>';
+                html += '<p class="text-white/60 mt-4">Loading your creations...</p>';
+                html += '</div>';
+                return html;
+            }
+
+            if (state.history.length === 0) {
+                html += '<div class="empty-state">';
+                html += '<div class="empty-state-icon">🖼️</div>';
+                html += '<h3 class="empty-state-title">No creations yet</h3>';
+                html += '<p class="empty-state-text">Your generated images will appear here. Start by selecting a template or writing a prompt!</p>';
+                html += '</div>';
+                return html;
+            }
+
+            html += '<div class="history-grid">';
+            for (var i = 0; i < state.history.length; i++) {
+                var item = state.history[i];
+                html += '<div class="history-item">';
+                html += '<img src="' + item.imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" />';
+                html += '<div class="history-item-overlay">';
+                html += '<div class="history-item-actions">';
+                html += '<button class="history-action-btn" onclick="app.downloadImage(\'' + item.imageUrl + '\')" title="Download">⬇️</button>';
+                html += '<button class="history-action-btn" onclick="app.usePrompt(\'' + utils.escapeHtml(item.prompt) + '\')" title="Reuse Prompt">🔄</button>';
+                html += '<button class="history-action-btn" onclick="app.shareToGallery(\'' + item.id + '\', false)" title="Share">📤</button>';
+                html += '<button class="history-action-btn" onclick="app.deleteFromHistory(\'' + item.id + '\')" title="Delete">🗑️</button>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            return html;
+        }
+
+        // Render Templates Tab
+        function renderTemplatesTab() {
+            var html = '';
+
+            // Category Filter Pills
+            html += '<div class="category-filter-row">';
+            html += '<button class="category-filter-pill' + (state.selectedTemplateCategory === 'all' ? ' active' : '') + '" onclick="app.setTemplateCategory(\'all\')">All Templates</button>';
+            for (var c = 0; c < templateCategories.length; c++) {
+                var cat = templateCategories[c];
+                var isActive = state.selectedTemplateCategory === cat.key;
+                html += '<button class="category-filter-pill' + (isActive ? ' active' : '') + '" onclick="app.setTemplateCategory(\'' + cat.key + '\')">';
+                html += cat.icon + ' ' + cat.name;
+                html += '</button>';
+            }
+            html += '</div>';
+
+            // Template Categories
+            var categoriesToShow = state.selectedTemplateCategory === 'all'
+                ? templateCategories
+                : templateCategories.filter(function(c) { return c.key === state.selectedTemplateCategory; });
+
+            for (var i = 0; i < categoriesToShow.length; i++) {
+                var category = categoriesToShow[i];
+
+                html += '<div class="template-categories">';
+                html += '<div class="template-category-header">';
+                html += '<div class="template-category-icon">' + category.icon + '</div>';
+                html += '<h3 class="template-category-title">' + category.name + '</h3>';
+                html += '<span class="template-category-count">' + category.templates.length + ' templates</span>';
+                html += '</div>';
+
+                html += '<div class="template-grid">';
+                for (var j = 0; j < category.templates.length; j++) {
+                    var template = category.templates[j];
+                    var isSelected = state.selectedTemplate && state.selectedTemplate.id === template.id;
+
+                    html += '<div class="template-card' + (isSelected ? ' active' : '') + '" onclick="app.selectTemplate(\'' + template.id + '\')">';
+                    html += '<div class="template-card-title">' + utils.escapeHtml(template.name) + '</div>';
+                    html += '<div class="template-card-desc">' + utils.escapeHtml(template.description) + '</div>';
+                    html += '<div class="template-card-cost">🪙 ' + template.cost + ' tokens</div>';
+                    html += '</div>';
+                }
+                html += '</div>'; // template-grid
+                html += '</div>'; // template-categories
+            }
+
+            return html;
+        }
+
+        // Render Community Tab
+        function renderCommunityTab() {
+            var html = '';
+
+            // Info banner about privacy
+            html += '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">';
+            html += '<p style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin: 0;">';
+            html += '🔒 <strong>Premium Feature:</strong> Paid subscribers can make their prompts private. To use a private prompt, pay the creator with tokens.';
+            html += '</p>';
+            html += '</div>';
+
+            // Community Gallery Grid (Masonry)
+            html += '<div class="gallery-grid">';
+
+            for (var i = 0; i < communityGalleryData.length; i++) {
+                var item = communityGalleryData[i];
+
+                html += '<div class="community-item">';
+                html += '<img src="' + item.image + '" alt="Community creation" class="community-item-image" loading="lazy" />';
+
+                // Private badge
+                if (item.isPrivate) {
+                    html += '<div class="private-badge">🔒 ' + item.promptPrice + ' tokens</div>';
+                }
+
+                html += '<div class="community-item-overlay">';
+
+                // Prompt (blurred if private)
+                html += '<p class="community-item-prompt' + (item.isPrivate ? ' locked' : '') + '">' + utils.escapeHtml(item.prompt) + '</p>';
+
+                html += '<div class="community-item-footer">';
+
+                // User info
+                html += '<div class="community-item-user">';
+                html += '<div class="community-item-avatar">' + item.user.avatar + '</div>';
+                html += '<span>' + utils.escapeHtml(item.user.name) + '</span>';
+                html += '</div>';
+
+                // Actions
+                html += '<div class="community-item-actions">';
+                html += '<button class="community-action-btn" onclick="app.likeImage(' + item.id + ')" title="Like">';
+                html += '❤️ ' + item.likes;
+                html += '</button>';
+
+                if (item.isPrivate) {
+                    // Buy prompt button
+                    html += '<button class="community-action-btn buy-prompt" onclick="app.purchasePrompt(' + item.id + ', ' + item.promptPrice + ')" title="Buy Prompt">';
+                    html += '🪙 Buy';
+                    html += '</button>';
+                } else {
+                    // Copy/Use prompt button
+                    html += '<button class="community-action-btn" onclick="app.usePrompt(\'' + utils.escapeHtml(item.prompt).replace(/'/g, "\\'") + '\')" title="Use Prompt">';
+                    html += '📋 Use';
+                    html += '</button>';
+                }
+
+                html += '</div>'; // actions
+                html += '</div>'; // footer
+                html += '</div>'; // overlay
+                html += '</div>'; // community-item
+            }
+
+            html += '</div>'; // gallery-grid
 
             return html;
         }
@@ -1336,6 +3159,10 @@
                         }
                         state.currentView = 'studio';
                         render();
+
+                        // Load creative tokens and history
+                        app.loadTokens();
+                        app.loadHistory();
                     })
                     .catch(function(e) {
                         console.error('Error fetching profile:', e);
