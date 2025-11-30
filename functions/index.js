@@ -6137,6 +6137,119 @@ exports.deductCreativeTokens = functions.https.onCall(async (data, context) => {
   }
 });
 
+// =====================================================
+// DIAGNOSTIC: Test Imagen API Configuration
+// This helps debug API key and model availability issues
+// =====================================================
+exports.testImagenApi = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  // Check if user is admin for full diagnostics
+  const userDoc = await db.collection('adminUsers').doc(uid).get();
+  const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+
+  const results = {
+    timestamp: new Date().toISOString(),
+    apiKeyConfigured: false,
+    apiKeyPrefix: null,
+    modelTest: null,
+    simpleGenerationTest: null,
+    errors: []
+  };
+
+  try {
+    // Check if API key is configured
+    const geminiApiKey = functions.config().gemini?.key;
+    results.apiKeyConfigured = !!geminiApiKey;
+
+    if (!geminiApiKey) {
+      results.errors.push('Gemini API key is not configured in Firebase. Run: firebase functions:config:set gemini.key="YOUR_API_KEY"');
+      return results;
+    }
+
+    // Show API key prefix for debugging (safe - only first 8 chars)
+    results.apiKeyPrefix = geminiApiKey.substring(0, 8) + '...';
+
+    // Initialize the SDK
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+    // Test 1: Try to list models (if available)
+    try {
+      // The SDK might not have listModels, so we'll catch any error
+      if (ai.models && typeof ai.models.list === 'function') {
+        const modelsList = await ai.models.list();
+        results.availableModels = modelsList.models?.map(m => m.name) || [];
+      } else {
+        results.modelTest = 'listModels not available in this SDK version';
+      }
+    } catch (listError) {
+      results.modelTest = `listModels failed: ${listError.message}`;
+    }
+
+    // Test 2: Try a simple image generation with minimal settings
+    try {
+      console.log('Testing Imagen API with simple generation...');
+      const testResponse = await ai.models.generateImages({
+        model: 'imagen-3.0-generate-001',
+        prompt: 'A simple red circle on white background',
+        config: {
+          numberOfImages: 1,
+          aspectRatio: '1:1'
+        }
+      });
+
+      if (testResponse.generatedImages && testResponse.generatedImages.length > 0) {
+        results.simpleGenerationTest = 'SUCCESS - Imagen API is working!';
+        results.imageGenerated = true;
+      } else if (testResponse.generatedImages?.length === 0) {
+        results.simpleGenerationTest = 'No images returned - might be safety filtered';
+        results.imageGenerated = false;
+      } else {
+        results.simpleGenerationTest = 'Unexpected response format';
+        results.rawResponse = JSON.stringify(testResponse).substring(0, 500);
+      }
+    } catch (genError) {
+      results.simpleGenerationTest = 'FAILED';
+      results.generationError = {
+        message: genError.message,
+        code: genError.code,
+        status: genError.status,
+        details: genError.details
+      };
+
+      // Parse specific error types
+      const errMsg = genError.message?.toLowerCase() || '';
+      if (errMsg.includes('api key')) {
+        results.errors.push('API Key Error: Your API key is invalid or not authorized for Imagen. Get a key from https://aistudio.google.com/apikey');
+      } else if (errMsg.includes('not found') || errMsg.includes('404')) {
+        results.errors.push('Model Not Found: The imagen-3.0-generate-001 model is not accessible. This could mean: (1) Your API key does not have Imagen access, (2) Imagen is not available in your region, or (3) You need to accept terms at https://aistudio.google.com');
+      } else if (errMsg.includes('permission') || errMsg.includes('403') || errMsg.includes('denied')) {
+        results.errors.push('Permission Denied: Your API key does not have permission to use Imagen. Make sure you created the key at https://aistudio.google.com/apikey and that billing is enabled.');
+      } else if (errMsg.includes('billing')) {
+        results.errors.push('Billing Required: Imagen requires billing to be enabled. Go to https://aistudio.google.com and set up billing.');
+      } else if (errMsg.includes('quota') || errMsg.includes('rate')) {
+        results.errors.push('Rate Limited: You have hit the API rate limit. Wait a moment and try again.');
+      } else {
+        results.errors.push(`Unknown Error: ${genError.message}`);
+      }
+    }
+
+    // Summary
+    if (results.imageGenerated) {
+      results.summary = 'All tests passed! Imagen API is working correctly.';
+    } else {
+      results.summary = 'Imagen API test failed. Check the errors array for details.';
+    }
+
+    return results;
+
+  } catch (error) {
+    console.error('Diagnostic error:', error);
+    results.errors.push(`Diagnostic failed: ${error.message}`);
+    return results;
+  }
+});
+
 // Generate creative image using Google Gemini/Imagen API (NanoBanana)
 // Documentation: https://ai.google.dev/gemini-api/docs/imagen
 exports.generateCreativeImage = functions.https.onCall(async (data, context) => {
@@ -6211,10 +6324,11 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
 
   // Map model selection to Imagen models
   // banana1 = imagen-3.0, banana2 = imagen-4.0 (when available), auto = latest
+  // NOTE: Use imagen-3.0-generate-001 (GA version) - 002 may not be available yet
   const modelMap = {
-    'banana1': 'imagen-3.0-generate-002',
-    'banana2': 'imagen-3.0-generate-002', // Update when Imagen 4 is available
-    'auto': 'imagen-3.0-generate-002'
+    'banana1': 'imagen-3.0-generate-001',
+    'banana2': 'imagen-3.0-generate-001', // Update when Imagen 4 is available
+    'auto': 'imagen-3.0-generate-001'
   };
   const imagenModel = modelMap[model] || modelMap['auto'];
 
@@ -6361,23 +6475,23 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     const errorMsg = error.message || '';
     const errorStr = JSON.stringify(error).toLowerCase();
 
-    // Handle specific Gemini API errors
-    if (errorMsg.includes('API key') || errorMsg.includes('API_KEY') || errorMsg.includes('invalid key')) {
+    // Handle specific Gemini API errors with clear instructions
+    if (errorMsg.includes('API key') || errorMsg.includes('API_KEY') || errorMsg.includes('invalid key') || errorMsg.includes('Invalid API key')) {
       throw new functions.https.HttpsError('failed-precondition',
-        'Image generation service configuration error. Please contact support.');
+        'Invalid API Key. Please ensure you are using an API key from Google AI Studio (aistudio.google.com/apikey), NOT from Google Cloud Console.');
     }
 
     // Model not found or not available
-    if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('model') && errorMsg.includes('available')) {
+    if (errorMsg.includes('not found') || errorMsg.includes('404') || (errorMsg.includes('model') && errorMsg.includes('available'))) {
       throw new functions.https.HttpsError('failed-precondition',
-        'Imagen 3 model not available. Please ensure the Generative Language API is enabled in Google Cloud Console.');
+        'Imagen 3 model not accessible. This usually means: (1) Your API key is from Google Cloud Console instead of Google AI Studio, OR (2) Imagen is not available in your region. Get a new key from: aistudio.google.com/apikey');
     }
 
     // API not enabled or permission issues
     if (errorMsg.includes('permission') || errorMsg.includes('403') || errorMsg.includes('denied') ||
         errorMsg.includes('enable') || errorMsg.includes('PERMISSION_DENIED')) {
       throw new functions.https.HttpsError('permission-denied',
-        'Imagen API access denied. Please enable the "Generative Language API" in Google Cloud Console and ensure billing is enabled.');
+        'API access denied. Imagen requires an API key from Google AI Studio with billing enabled. Go to aistudio.google.com/apikey to create the correct key type.');
     }
 
     // Rate limiting or quota
