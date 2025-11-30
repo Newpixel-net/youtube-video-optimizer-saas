@@ -20,6 +20,7 @@ const admin = require('firebase-admin');
 const { OpenAI } = require('openai');
 const { google } = require('googleapis');
 const axios = require('axios');
+const { GoogleGenAI } = require('@google/genai');
 
 // Explicit initialization with project ID and storage bucket
 admin.initializeApp({
@@ -6136,8 +6137,8 @@ exports.deductCreativeTokens = functions.https.onCall(async (data, context) => {
   }
 });
 
-// Generate creative image (NanoBanana API integration)
-// Structure ready - add NanoBanana API details when available
+// Generate creative image using Google Gemini/Imagen API (NanoBanana)
+// Documentation: https://ai.google.dev/gemini-api/docs/imagen
 exports.generateCreativeImage = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'generateImage', 10);
@@ -6148,10 +6149,35 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError('invalid-argument', 'Prompt is required');
   }
 
+  // Validate prompt length (Imagen has limits)
+  if (prompt.length > 2000) {
+    throw new functions.https.HttpsError('invalid-argument', 'Prompt too long. Maximum 2000 characters.');
+  }
+
   // Calculate token cost
   const qualityCosts = { basic: 1, hd: 2, ultra: 4 };
   const baseCost = qualityCosts[quality] || 2;
-  const totalCost = baseCost * (quantity || 1);
+  const imageCount = Math.min(Math.max(quantity || 1, 1), 4); // 1-4 images
+  const totalCost = baseCost * imageCount;
+
+  // Map aspect ratios to Imagen supported values
+  const aspectRatioMap = {
+    '1:1': '1:1',
+    '16:9': '16:9',
+    '9:16': '9:16',
+    '4:3': '4:3',
+    '3:4': '3:4'
+  };
+  const validAspectRatio = aspectRatioMap[aspectRatio] || '1:1';
+
+  // Map model selection to Imagen models
+  // banana1 = imagen-3.0, banana2 = imagen-4.0 (when available), auto = latest
+  const modelMap = {
+    'banana1': 'imagen-3.0-generate-002',
+    'banana2': 'imagen-3.0-generate-002', // Update when Imagen 4 is available
+    'auto': 'imagen-3.0-generate-002'
+  };
+  const imagenModel = modelMap[model] || modelMap['auto'];
 
   try {
     // Verify token balance
@@ -6163,35 +6189,88 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
         `Insufficient tokens. Need ${totalCost}, have ${balance}`);
     }
 
-    // =========================================
-    // TODO: Add NanoBanana API call here
-    // =========================================
-    // const nanoBananaResponse = await axios.post('NANOBANANA_API_URL', {
-    //   prompt: prompt,
-    //   model: model || 'auto',
-    //   n: quantity || 1,
-    //   aspect_ratio: aspectRatio || '1:1',
-    //   quality: quality || 'hd'
-    // }, {
-    //   headers: {
-    //     'Authorization': `Bearer ${functions.config().nanobanana?.key}`,
-    //     'Content-Type': 'application/json'
-    //   }
-    // });
-    // const generatedImages = nanoBananaResponse.data.images;
-    // =========================================
+    // Initialize Google GenAI with API key from Firebase config
+    const geminiApiKey = functions.config().gemini?.key;
+    if (!geminiApiKey) {
+      console.error('Gemini API key not configured');
+      throw new functions.https.HttpsError('failed-precondition',
+        'Image generation service not configured. Please contact support.');
+    }
 
-    // Placeholder response (replace with actual API response)
-    const generatedImages = [
-      {
-        url: 'https://via.placeholder.com/1024x1024/8b5cf6/ffffff?text=Generated+Image',
-        seed: Math.floor(Math.random() * 1000000)
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+    // Call Imagen API to generate images
+    console.log(`Generating ${imageCount} image(s) with ${imagenModel}, aspect: ${validAspectRatio}`);
+
+    const response = await ai.models.generateImages({
+      model: imagenModel,
+      prompt: prompt,
+      config: {
+        numberOfImages: imageCount,
+        aspectRatio: validAspectRatio,
+        // Safety settings
+        includeRaiReason: true,
+        personGeneration: 'allow_adult' // Allow generating people
       }
-    ];
+    });
 
-    // Deduct tokens
+    // Process generated images
+    const generatedImages = [];
+    const storage = admin.storage().bucket();
+    const timestamp = Date.now();
+
+    if (response.generatedImages && response.generatedImages.length > 0) {
+      for (let i = 0; i < response.generatedImages.length; i++) {
+        const genImage = response.generatedImages[i];
+
+        // Check if image was blocked by safety filters
+        if (genImage.raiFilteredReason) {
+          console.warn(`Image ${i + 1} filtered: ${genImage.raiFilteredReason}`);
+          continue;
+        }
+
+        const imageBytes = genImage.image?.imageBytes;
+        if (!imageBytes) continue;
+
+        // Upload base64 image to Firebase Storage
+        const fileName = `creative-studio/${uid}/${timestamp}-${i + 1}.png`;
+        const file = storage.file(fileName);
+
+        const buffer = Buffer.from(imageBytes, 'base64');
+        await file.save(buffer, {
+          metadata: {
+            contentType: 'image/png',
+            metadata: {
+              userId: uid,
+              prompt: prompt.substring(0, 200),
+              model: imagenModel,
+              aspectRatio: validAspectRatio
+            }
+          }
+        });
+
+        // Make file publicly accessible
+        await file.makePublic();
+        const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+        generatedImages.push({
+          url: publicUrl,
+          fileName: fileName,
+          seed: Math.floor(Math.random() * 1000000)
+        });
+      }
+    }
+
+    // Check if any images were generated
+    if (generatedImages.length === 0) {
+      throw new functions.https.HttpsError('internal',
+        'No images generated. The prompt may have been filtered for safety. Try a different prompt.');
+    }
+
+    // Deduct tokens (only charge for successfully generated images)
+    const actualCost = baseCost * generatedImages.length;
     await db.collection('creativeTokens').doc(uid).update({
-      balance: admin.firestore.FieldValue.increment(-totalCost),
+      balance: admin.firestore.FieldValue.increment(-actualCost),
       lastUsed: admin.firestore.FieldValue.serverTimestamp()
     });
 
@@ -6199,31 +6278,51 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     const historyData = {
       userId: uid,
       prompt: prompt,
-      model: model || 'auto',
-      quantity: quantity || 1,
-      aspectRatio: aspectRatio || '1:1',
+      model: imagenModel,
+      quantity: generatedImages.length,
+      aspectRatio: validAspectRatio,
       quality: quality || 'hd',
       templateId: templateId || null,
       images: generatedImages,
-      tokenCost: totalCost,
+      tokenCost: actualCost,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     };
 
     const historyRef = await db.collection('creativeHistory').add(historyData);
 
     // Log usage
-    await logUsage(uid, 'creative_image', { prompt: prompt.substring(0, 100), quality, quantity });
+    await logUsage(uid, 'creative_image', {
+      prompt: prompt.substring(0, 100),
+      quality,
+      quantity: generatedImages.length,
+      model: imagenModel
+    });
 
     return {
       success: true,
       historyId: historyRef.id,
       images: generatedImages,
-      tokenCost: totalCost,
-      remainingBalance: balance - totalCost
+      tokenCost: actualCost,
+      remainingBalance: balance - actualCost
     };
 
   } catch (error) {
     console.error('Generate image error:', error);
+
+    // Handle specific Gemini API errors
+    if (error.message?.includes('API key')) {
+      throw new functions.https.HttpsError('failed-precondition',
+        'Image generation service configuration error. Please contact support.');
+    }
+    if (error.message?.includes('quota') || error.message?.includes('rate')) {
+      throw new functions.https.HttpsError('resource-exhausted',
+        'Service temporarily busy. Please try again in a moment.');
+    }
+    if (error.message?.includes('safety') || error.message?.includes('blocked')) {
+      throw new functions.https.HttpsError('invalid-argument',
+        'Your prompt was blocked for safety reasons. Please try a different prompt.');
+    }
+
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal',
       sanitizeErrorMessage(error, 'Failed to generate image. Please try again.'));
