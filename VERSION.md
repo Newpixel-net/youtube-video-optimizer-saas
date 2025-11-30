@@ -1,9 +1,9 @@
 # YouTube Video Optimizer SaaS - Version Documentation
 
-## Current Version: 1.0.0
+## Current Version: 1.0.1
 
 **Release Date:** November 30, 2025
-**Code Name:** Foundation
+**Code Name:** Foundation+
 **Status:** Production Ready
 
 ---
@@ -12,12 +12,74 @@
 
 | Component | Version |
 |-----------|---------|
-| Platform Version | 1.0.0 |
+| Platform Version | 1.0.1 |
 | Firebase SDK | 10.7.0 |
 | Firebase Admin | 12.0.0 |
 | Firebase Functions | 5.0.0 |
 | Node.js | 20.x |
 | OpenAI SDK | 4.x |
+
+---
+
+## Deployment Instructions
+
+### Frontend Deployment (Website Builder)
+The frontend HTML files are deployed manually through the website builder:
+1. Update files in `frontend/` directory
+2. Upload to website builder at https://ytseo.siteuo.com/
+3. Files to deploy:
+   - `dual-auth-widget.html` → Main application
+   - `admin-plans.html` → Admin dashboard
+   - `creative-studio.html` → Creative Studio
+   - `enterprise.html` → Enterprise features
+
+### Firebase Functions Deployment (Terminal)
+Deploy Cloud Functions from your desktop terminal:
+
+```bash
+# Navigate to project directory
+cd youtube-video-optimizer-saas
+
+# Login to Firebase (if not already)
+firebase login
+
+# Deploy only functions
+firebase deploy --only functions
+
+# Deploy Firestore rules (if changed)
+firebase deploy --only firestore:rules
+
+# Deploy Storage rules (if changed)
+firebase deploy --only storage:rules
+
+# Deploy everything
+firebase deploy
+```
+
+### Post-Deployment Checklist
+- [ ] Verify frontend pages load correctly
+- [ ] Test subscription access for different plans
+- [ ] Check Creative Studio premium features work
+- [ ] Verify admin panel functionality
+- [ ] Test tool quota limits
+
+---
+
+## Version 1.0.1 - Premium Access Fix
+
+### Changes
+- Fixed Creative Studio subscription sync with main platform
+- PRO/Enterprise users can now access Character Reference and Image Upload features
+- Added subscription check on Creative Studio initialization
+- Added new reference modals and handlers
+
+### Files Modified
+- `frontend/creative-studio.html` - Premium feature unlock logic
+- `frontend/dual-auth-widget.html` - Version bump
+- `frontend/admin-plans.html` - Version bump
+- `frontend/enterprise.html` - Version bump
+- `CHANGELOG.md` - Update log
+- `VERSION.md` - This file
 
 ---
 

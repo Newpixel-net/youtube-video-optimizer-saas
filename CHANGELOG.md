@@ -16,6 +16,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2025-11-30
+
+### Fixed
+- **Creative Studio Premium Access**: Fixed subscription sync between main platform and Creative Studio
+  - PRO and Enterprise users can now access Character Reference and Image Upload features
+  - Added `hasPremiumAccess` state property that checks user's subscription plan
+  - Premium features automatically unlock based on subscription tier
+
+### Added
+- **Character Reference Feature** (PRO/Enterprise): Upload face reference images for consistent character generation
+  - New modal with drag-and-drop upload
+  - Preview and change functionality
+  - Applied reference indicator in sidebar
+
+- **Image Upload Feature** (PRO/Enterprise): Use your own images as generation input
+  - Full upload modal with drag-and-drop support
+  - Image preview and management
+  - Applied upload indicator in sidebar
+
+### Changed
+- Creative Studio now reads user subscription from Firebase profile
+- Token plan is now synced with subscription plan
+- References section conditionally renders locked/unlocked buttons based on subscription
+
+### Technical
+- Added `characterReferenceModalOpen` and `imageUploadModalOpen` state properties
+- Added render functions: `renderCharacterReferenceModal()` and `renderImageUploadModal()`
+- Added handler functions for file upload and reference management
+- Added ESC key support for new modals
+- Console logging added for subscription debugging
+
+---
+
 ## [1.0.0] - 2025-11-30
 
 ### Foundation Release
