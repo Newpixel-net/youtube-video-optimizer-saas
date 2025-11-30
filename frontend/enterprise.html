@@ -589,6 +589,11 @@
          ============================================ -->
     <script>
         /* ==========================================
+           4.0 PLATFORM VERSION
+           ========================================== */
+        const PLATFORM_VERSION = '1.0.0';
+
+        /* ==========================================
            4.1 FIREBASE CONFIGURATION
            ========================================== */
         const FIREBASE_CONFIG = {
@@ -1190,7 +1195,7 @@
             html += '<div class="w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl flex items-center justify-center text-4xl shadow-xl animate-glow">👑</div>';
             html += '<div>';
             html += '<h1 class="text-3xl md:text-4xl font-bold gold-text">Enterprise Suite</h1>';
-            html += '<p class="text-white/60">Premium tools for power users</p>';
+            html += '<p class="text-white/60">Premium tools for power users <span style="opacity:0.5;">v' + PLATFORM_VERSION + '</span></p>';
             html += '</div>';
             html += '</div>';
             html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';

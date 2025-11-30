@@ -2433,6 +2433,9 @@
             return;
         }
 
+        // Platform Version
+        const PLATFORM_VERSION = '1.0.0';
+
         // Firebase project configuration
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyAGczY5ZEIJdTq25BpQdia3lv2I556wOZo",
@@ -5521,6 +5524,11 @@
             }
 
             html += '</div></div>';
+
+            // Version Footer
+            html += '<div class="text-center py-6 mt-8">';
+            html += '<p class="text-white/40 text-sm">YouTube Video Optimizer v' + PLATFORM_VERSION + '</p>';
+            html += '</div>';
 
             // Bonus History Modal
             if (state.showBonusHistory) {

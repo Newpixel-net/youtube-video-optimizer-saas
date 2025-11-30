@@ -4367,6 +4367,11 @@
          ============================================ -->
     <script>
         /* ==========================================
+           4.0 PLATFORM VERSION
+           ========================================== */
+        const PLATFORM_VERSION = '1.0.0';
+
+        /* ==========================================
            4.1 FIREBASE CONFIGURATION
            ========================================== */
         const FIREBASE_CONFIG = {
@@ -6478,7 +6483,7 @@
             // Hero content
             html += '<div class="hero-content" style="padding-top: 2rem;">';
             html += '<h1 class="hero-title">Bring your ideas to life</h1>';
-            html += '<p class="hero-subtitle">One platform, infinite possibilities</p>';
+            html += '<p class="hero-subtitle">One platform, infinite possibilities <span style="opacity:0.4;font-size:0.75em;">v' + PLATFORM_VERSION + '</span></p>';
 
             // Tool navigation
             html += renderToolNav();
