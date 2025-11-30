@@ -60,7 +60,7 @@
         }
 
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #0f1419;
             min-height: 100vh;
             min-height: -webkit-fill-available;
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -68,12 +68,15 @@
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
         }
 
         #app-root {
             width: 100%;
             min-height: 100vh;
             min-height: -webkit-fill-available;
+            position: relative;
+            z-index: 1;
         }
 
         /* Base typography scale */
@@ -2062,10 +2065,287 @@
                 max-width: 32rem;
             }
         }
+
+        /* ------------------------------------------
+           2.13 VELVET AURORA - Main Page Background
+           ------------------------------------------
+           A sophisticated animated background inspired by
+           premium art galleries at dusk - warm ambient
+           lighting mixing with cool shadows.
+        */
+
+        /* Base container - fixed behind all content */
+        .velvet-aurora {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: linear-gradient(
+                145deg,
+                #0f1419 0%,
+                #121820 30%,
+                #0d1117 60%,
+                #101418 100%
+            );
+            overflow: hidden;
+        }
+
+        /* Grain texture overlay - editorial premium feel */
+        .velvet-aurora::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23grain)'/%3E%3C/svg%3E");
+            opacity: 0.035;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Orbs container */
+        .velvet-orbs {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        /* Base orb styling */
+        .velvet-orb {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            will-change: transform, opacity;
+        }
+
+        /* Warm coral/dusty rose - top-left region (closer/brighter) */
+        .velvet-orb-coral {
+            width: 60vmax;
+            height: 60vmax;
+            top: -15%;
+            left: -10%;
+            background: radial-gradient(
+                circle at center,
+                rgba(205, 127, 130, 0.35) 0%,
+                rgba(185, 110, 115, 0.2) 30%,
+                rgba(165, 95, 100, 0.1) 50%,
+                transparent 70%
+            );
+            filter: blur(70px);
+            animation: velvetDrift1 90s ease-in-out infinite;
+        }
+
+        /* Soft amber/gold - accent glow (mid-depth) */
+        .velvet-orb-amber {
+            width: 45vmax;
+            height: 45vmax;
+            top: 10%;
+            left: 25%;
+            background: radial-gradient(
+                circle at center,
+                rgba(217, 175, 120, 0.25) 0%,
+                rgba(200, 160, 100, 0.15) 35%,
+                rgba(180, 140, 80, 0.08) 55%,
+                transparent 70%
+            );
+            filter: blur(80px);
+            animation: velvetDrift2 75s ease-in-out infinite;
+            animation-delay: -20s;
+        }
+
+        /* Muted lavender - center blend (mid-depth) */
+        .velvet-orb-lavender {
+            width: 55vmax;
+            height: 55vmax;
+            top: 30%;
+            left: 35%;
+            background: radial-gradient(
+                circle at center,
+                rgba(160, 140, 180, 0.2) 0%,
+                rgba(145, 125, 165, 0.12) 40%,
+                rgba(130, 110, 150, 0.06) 60%,
+                transparent 70%
+            );
+            filter: blur(75px);
+            animation: velvetDrift3 80s ease-in-out infinite;
+            animation-delay: -35s;
+        }
+
+        /* Deep teal/cyan - bottom-right region (closer/brighter) */
+        .velvet-orb-teal {
+            width: 65vmax;
+            height: 65vmax;
+            bottom: -20%;
+            right: -15%;
+            background: radial-gradient(
+                circle at center,
+                rgba(80, 160, 170, 0.3) 0%,
+                rgba(65, 140, 150, 0.18) 35%,
+                rgba(50, 120, 130, 0.08) 55%,
+                transparent 70%
+            );
+            filter: blur(65px);
+            animation: velvetDrift4 85s ease-in-out infinite;
+            animation-delay: -10s;
+        }
+
+        /* Secondary amber - subtle accent (further/dimmer) */
+        .velvet-orb-amber-soft {
+            width: 35vmax;
+            height: 35vmax;
+            bottom: 20%;
+            left: 5%;
+            background: radial-gradient(
+                circle at center,
+                rgba(200, 160, 110, 0.12) 0%,
+                rgba(180, 145, 95, 0.06) 45%,
+                transparent 70%
+            );
+            filter: blur(85px);
+            animation: velvetDrift5 100s ease-in-out infinite;
+            animation-delay: -50s;
+        }
+
+        /* Secondary teal - distant accent (further/dimmer) */
+        .velvet-orb-teal-soft {
+            width: 40vmax;
+            height: 40vmax;
+            top: 5%;
+            right: 10%;
+            background: radial-gradient(
+                circle at center,
+                rgba(70, 145, 155, 0.15) 0%,
+                rgba(55, 125, 135, 0.08) 40%,
+                transparent 65%
+            );
+            filter: blur(80px);
+            animation: velvetDrift6 95s ease-in-out infinite;
+            animation-delay: -65s;
+        }
+
+        /* Ultra-slow drift animations - feels alive but never distracts */
+        @keyframes velvetDrift1 {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.9;
+            }
+            25% {
+                transform: translate(8%, 5%) scale(1.05);
+                opacity: 1;
+            }
+            50% {
+                transform: translate(3%, 12%) scale(0.95);
+                opacity: 0.85;
+            }
+            75% {
+                transform: translate(-5%, 7%) scale(1.02);
+                opacity: 0.95;
+            }
+        }
+
+        @keyframes velvetDrift2 {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.8;
+            }
+            20% {
+                transform: translate(-10%, 8%) scale(0.92);
+                opacity: 0.9;
+            }
+            45% {
+                transform: translate(5%, 15%) scale(1.08);
+                opacity: 0.75;
+            }
+            70% {
+                transform: translate(12%, -5%) scale(0.98);
+                opacity: 0.85;
+            }
+        }
+
+        @keyframes velvetDrift3 {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.7;
+            }
+            33% {
+                transform: translate(-8%, -10%) scale(1.1);
+                opacity: 0.85;
+            }
+            66% {
+                transform: translate(10%, 5%) scale(0.9);
+                opacity: 0.75;
+            }
+        }
+
+        @keyframes velvetDrift4 {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.85;
+            }
+            30% {
+                transform: translate(-12%, -8%) scale(1.06);
+                opacity: 0.95;
+            }
+            60% {
+                transform: translate(-5%, 6%) scale(0.94);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes velvetDrift5 {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.6;
+            }
+            40% {
+                transform: translate(15%, -10%) scale(1.15);
+                opacity: 0.75;
+            }
+            80% {
+                transform: translate(-8%, 12%) scale(0.88);
+                opacity: 0.65;
+            }
+        }
+
+        @keyframes velvetDrift6 {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.65;
+            }
+            35% {
+                transform: translate(-6%, 14%) scale(0.9);
+                opacity: 0.8;
+            }
+            70% {
+                transform: translate(8%, -8%) scale(1.12);
+                opacity: 0.55;
+            }
+        }
+
+        /* Accessibility: Respect reduced motion preference */
+        @media (prefers-reduced-motion: reduce) {
+            .velvet-orb {
+                animation: none;
+            }
+        }
     </style>
 </head>
 
 <body>
+    <!-- ============================================
+         VELVET AURORA - Animated Background
+         ============================================ -->
+    <div class="velvet-aurora" aria-hidden="true">
+        <div class="velvet-orbs">
+            <!-- Closer/brighter orbs -->
+            <div class="velvet-orb velvet-orb-coral"></div>
+            <div class="velvet-orb velvet-orb-teal"></div>
+            <!-- Mid-depth orbs -->
+            <div class="velvet-orb velvet-orb-amber"></div>
+            <div class="velvet-orb velvet-orb-lavender"></div>
+            <!-- Further/dimmer orbs -->
+            <div class="velvet-orb velvet-orb-amber-soft"></div>
+            <div class="velvet-orb velvet-orb-teal-soft"></div>
+        </div>
+    </div>
+
     <!-- ============================================
          SECTION 3: HTML VIEWS
          ============================================
