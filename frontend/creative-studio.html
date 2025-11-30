@@ -2132,6 +2132,498 @@
                 height: 40px;
             }
         }
+
+        /* ==========================================
+           PROMPT EDITOR MODAL
+           ========================================== */
+        .prompt-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .prompt-modal {
+            background: linear-gradient(180deg, rgba(30, 30, 50, 0.98) 0%, rgba(20, 20, 40, 0.98) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 1.25rem;
+            width: 100%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 80px rgba(139, 92, 246, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.05);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .prompt-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .prompt-modal-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .prompt-modal-close {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .prompt-modal-close:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .prompt-modal-body {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .prompt-modal-textarea {
+            width: 100%;
+            min-height: 280px;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 1rem;
+            line-height: 1.7;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .prompt-modal-textarea:focus {
+            outline: none;
+            border-color: rgba(139, 92, 246, 0.5);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+        }
+
+        .prompt-modal-textarea::placeholder {
+            color: rgba(255, 255, 255, 0.35);
+        }
+
+        .prompt-modal-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .prompt-modal-actions-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .prompt-modal-char-count {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .prompt-modal-char-count.warning {
+            color: #f59e0b;
+        }
+
+        .prompt-modal-char-count.error {
+            color: #ef4444;
+        }
+
+        /* Template variable chips in modal */
+        .prompt-modal-variables {
+            margin-top: 1rem;
+        }
+
+        .prompt-modal-variables-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.5rem;
+        }
+
+        .prompt-modal-variables-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .variable-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.4rem 0.75rem;
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 0.5rem;
+            color: #a78bfa;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .variable-chip-icon {
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+
+        .prompt-modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .prompt-modal-btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.625rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .prompt-modal-btn-cancel {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .prompt-modal-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .prompt-modal-btn-apply {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            color: white;
+        }
+
+        .prompt-modal-btn-apply:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        /* Expand button in prompt header */
+        .prompt-expand-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .prompt-expand-btn:hover {
+            background: rgba(139, 92, 246, 0.3);
+            color: white;
+        }
+
+        /* ==========================================
+           FLOATING GENERATE BUTTON
+           ========================================== */
+        .floating-generate-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 1500;
+            display: none;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.75rem;
+            animation: floatIn 0.3s ease;
+        }
+
+        .floating-generate-container.visible {
+            display: flex;
+        }
+
+        @keyframes floatIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* Settings popover */
+        .floating-settings-popover {
+            background: linear-gradient(180deg, rgba(30, 30, 50, 0.98) 0%, rgba(20, 20, 40, 0.98) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 1rem;
+            padding: 1rem;
+            min-width: 220px;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+            display: none;
+            animation: popoverIn 0.2s ease;
+        }
+
+        .floating-settings-popover.visible {
+            display: block;
+        }
+
+        @keyframes popoverIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .floating-settings-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .floating-settings-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .floating-settings-close {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            border-radius: 0.25rem;
+        }
+
+        .floating-settings-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .floating-settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.625rem;
+        }
+
+        .floating-settings-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .floating-settings-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .floating-settings-select {
+            padding: 0.4rem 0.6rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .floating-quantity-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .floating-quantity-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .floating-quantity-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .floating-quantity-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .floating-quantity-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+            min-width: 20px;
+            text-align: center;
+        }
+
+        /* Main floating button */
+        .floating-generate-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            border-radius: 1rem;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .floating-generate-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(139, 92, 246, 0.5);
+        }
+
+        .floating-generate-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .floating-generate-btn .sparkle {
+            font-size: 1.1rem;
+        }
+
+        .floating-btn-cost {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .floating-settings-toggle {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(30, 30, 50, 0.95);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: absolute;
+            top: -48px;
+            right: 0;
+        }
+
+        .floating-settings-toggle:hover {
+            background: rgba(139, 92, 246, 0.2);
+            color: white;
+        }
+
+        .floating-settings-toggle.active {
+            background: rgba(139, 92, 246, 0.3);
+            border-color: rgba(139, 92, 246, 0.5);
+            color: white;
+        }
+
+        /* Hide floating button on larger screens */
+        @media (min-width: 1025px) {
+            .floating-generate-container {
+                display: none !important;
+            }
+        }
+
+        /* Mobile adjustments for floating button */
+        @media (max-width: 480px) {
+            .floating-generate-container {
+                bottom: 1rem;
+                right: 1rem;
+                left: 1rem;
+            }
+
+            .floating-generate-btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .floating-settings-popover {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -2226,7 +2718,15 @@
             // UI state
             loading: false,
             error: null,
-            success: null
+            success: null,
+
+            // Prompt Modal state
+            promptModalOpen: false,
+            promptModalText: '',
+
+            // Floating Generate Button state
+            floatingSettingsOpen: false,
+            showFloatingButton: false
         };
 
         /* ==========================================
@@ -2965,6 +3465,138 @@
                 render();
             },
 
+            // ========================================
+            // PROMPT MODAL HANDLERS
+            // ========================================
+
+            // Open prompt modal
+            openPromptModal: function() {
+                state.promptModalText = state.prompt;
+                state.promptModalOpen = true;
+                render();
+                // Focus the modal textarea after render
+                setTimeout(function() {
+                    var modalTextarea = document.getElementById('prompt-modal-textarea');
+                    if (modalTextarea) {
+                        modalTextarea.focus();
+                        // Move cursor to end
+                        modalTextarea.setSelectionRange(modalTextarea.value.length, modalTextarea.value.length);
+                    }
+                }, 100);
+            },
+
+            // Close prompt modal
+            closePromptModal: function(event) {
+                // If called from overlay click, only close if clicking the overlay itself
+                if (event && event.target && !event.target.classList.contains('prompt-modal-overlay')) {
+                    return;
+                }
+                state.promptModalOpen = false;
+                state.promptModalText = '';
+                render();
+            },
+
+            // Apply prompt modal changes
+            applyPromptModal: function() {
+                state.prompt = state.promptModalText;
+                state.promptModalOpen = false;
+                state.promptModalText = '';
+                // Update the main textarea
+                var textarea = document.getElementById('prompt-textarea');
+                if (textarea) textarea.value = state.prompt;
+                render();
+                showToast('Prompt updated!', 'success');
+            },
+
+            // Update prompt modal text (without re-render)
+            updatePromptModalText: function(text) {
+                state.promptModalText = text;
+                // Update character count without full re-render
+                var charCountEl = document.querySelector('.prompt-modal-char-count');
+                if (charCountEl) {
+                    var charCount = text.length;
+                    var charClass = charCount > 1900 ? 'error' : (charCount > 1500 ? 'warning' : '');
+                    charCountEl.textContent = charCount + '/2000';
+                    charCountEl.className = 'prompt-modal-char-count ' + charClass;
+                }
+            },
+
+            // Enhance prompt in modal
+            enhancePromptInModal: function() {
+                showToast('Prompt enhancement coming soon!', 'info');
+            },
+
+            // Random prompt in modal
+            randomPromptInModal: function() {
+                var randomPrompts = [
+                    'A majestic dragon soaring over a misty mountain range at sunrise',
+                    'A cozy coffee shop interior with warm lighting and vintage decor',
+                    'An astronaut floating in space with Earth in the background',
+                    'A futuristic cityscape with flying cars and neon lights',
+                    'A serene Japanese garden with cherry blossoms and a koi pond',
+                    'A mystical forest with glowing mushrooms and fireflies',
+                    'A steampunk airship flying through cloudy skies',
+                    'A cute robot watering plants in a sunny greenhouse',
+                    'A vintage car parked on a scenic coastal road at sunset',
+                    'A magical library with floating books and spiral staircases'
+                ];
+                var randomIndex = Math.floor(Math.random() * randomPrompts.length);
+                state.promptModalText = randomPrompts[randomIndex];
+                var modalTextarea = document.getElementById('prompt-modal-textarea');
+                if (modalTextarea) modalTextarea.value = state.promptModalText;
+                app.updatePromptModalText(state.promptModalText);
+            },
+
+            // Clear prompt in modal
+            clearPromptInModal: function() {
+                state.promptModalText = '';
+                var modalTextarea = document.getElementById('prompt-modal-textarea');
+                if (modalTextarea) modalTextarea.value = '';
+                app.updatePromptModalText('');
+            },
+
+            // ========================================
+            // FLOATING GENERATE BUTTON HANDLERS
+            // ========================================
+
+            // Toggle floating settings popover
+            toggleFloatingSettings: function() {
+                state.floatingSettingsOpen = !state.floatingSettingsOpen;
+                render();
+            },
+
+            // Update floating button visibility based on scroll
+            updateFloatingButtonVisibility: function() {
+                // Only show on screens <= 1024px
+                if (window.innerWidth > 1024) {
+                    state.showFloatingButton = false;
+                    return;
+                }
+
+                // Check if we're on the templates tab and scrolled down
+                var sidebar = document.querySelector('.tool-sidebar');
+                if (!sidebar || !state.toolInterfaceOpen) {
+                    state.showFloatingButton = false;
+                    return;
+                }
+
+                var sidebarRect = sidebar.getBoundingClientRect();
+                // Show floating button when sidebar is mostly out of view
+                state.showFloatingButton = sidebarRect.bottom < 200;
+
+                // Update the container visibility directly without full re-render
+                var container = document.getElementById('floating-generate-container');
+                if (container) {
+                    if (state.showFloatingButton) {
+                        container.classList.add('visible');
+                    } else {
+                        container.classList.remove('visible');
+                        // Also close settings when hiding
+                        state.floatingSettingsOpen = false;
+                    }
+                }
+            },
+
             // Generate Image using Gemini/Imagen API
             generateImage: function() {
                 if (!state.prompt.trim()) {
@@ -3234,6 +3866,12 @@
 
             html += '</div>'; // main content container
 
+            // Prompt Editor Modal
+            html += renderPromptModal();
+
+            // Floating Generate Button (for mobile/tablet)
+            html += renderFloatingGenerateButton();
+
             return html;
         }
 
@@ -3376,7 +4014,10 @@
 
             // Smart Prompt Container
             html += '<div class="smart-prompt-container">';
-            html += '<div class="smart-prompt-label">PROMPT</div>';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div class="smart-prompt-label" style="margin-bottom: 0;">PROMPT</div>';
+            html += '<button class="prompt-expand-btn" onclick="app.openPromptModal()" title="Expand editor">⤢</button>';
+            html += '</div>';
 
             // Editable prompt area with textarea
             html += '<textarea id="prompt-textarea" class="prompt-textarea smart-prompt-editable" placeholder="Describe what you want to create... or select a template below" oninput="app.updatePrompt(this.value)">' + utils.escapeHtml(state.prompt) + '</textarea>';
@@ -3689,6 +4330,152 @@
             return html;
         }
 
+        // Render Prompt Editor Modal
+        function renderPromptModal() {
+            if (!state.promptModalOpen) return '';
+
+            var html = '<div class="prompt-modal-overlay" onclick="app.closePromptModal(event)">';
+            html += '<div class="prompt-modal" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="prompt-modal-header">';
+            html += '<div class="prompt-modal-title">✏️ Edit Prompt</div>';
+            html += '<button class="prompt-modal-close" onclick="app.closePromptModal()">✕</button>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="prompt-modal-body">';
+            html += '<textarea id="prompt-modal-textarea" class="prompt-modal-textarea" placeholder="Describe what you want to create in detail..." oninput="app.updatePromptModalText(this.value)">' + utils.escapeHtml(state.promptModalText) + '</textarea>';
+
+            // Extract and display template variables
+            var variables = extractTemplateVariables(state.promptModalText);
+            if (variables.length > 0) {
+                html += '<div class="prompt-modal-variables">';
+                html += '<div class="prompt-modal-variables-label">Template Variables</div>';
+                html += '<div class="prompt-modal-variables-row">';
+                for (var i = 0; i < variables.length; i++) {
+                    html += '<span class="variable-chip"><span class="variable-chip-icon">{{</span>' + utils.escapeHtml(variables[i]) + '<span class="variable-chip-icon">}}</span></span>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Actions row
+            html += '<div class="prompt-modal-info">';
+            html += '<div class="prompt-modal-actions-row">';
+            html += '<button class="smart-action-btn" onclick="app.enhancePromptInModal()" title="Enhance with AI">✨</button>';
+            html += '<button class="smart-action-btn" onclick="app.randomPromptInModal()" title="Random prompt">🎲</button>';
+            html += '<button class="smart-action-btn" onclick="app.clearPromptInModal()" title="Clear prompt">🗑️</button>';
+            html += '</div>';
+
+            var charCount = state.promptModalText.length;
+            var charClass = charCount > 1900 ? 'error' : (charCount > 1500 ? 'warning' : '');
+            html += '<span class="prompt-modal-char-count ' + charClass + '">' + charCount + '/2000</span>';
+            html += '</div>';
+
+            html += '</div>'; // body
+
+            // Footer
+            html += '<div class="prompt-modal-footer">';
+            html += '<button class="prompt-modal-btn prompt-modal-btn-cancel" onclick="app.closePromptModal()">Cancel</button>';
+            html += '<button class="prompt-modal-btn prompt-modal-btn-apply" onclick="app.applyPromptModal()">✓ Apply Changes</button>';
+            html += '</div>';
+
+            html += '</div>'; // modal
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Helper function to extract {{variables}} from text
+        function extractTemplateVariables(text) {
+            var regex = /\{\{([^}]+)\}\}/g;
+            var matches = [];
+            var match;
+            while ((match = regex.exec(text)) !== null) {
+                if (matches.indexOf(match[1]) === -1) {
+                    matches.push(match[1]);
+                }
+            }
+            return matches;
+        }
+
+        // Render Floating Generate Button (for mobile/tablet when scrolled)
+        function renderFloatingGenerateButton() {
+            var cost = app.calculateCost();
+            var canGenerate = state.prompt.trim().length > 0 && state.tokens.balance >= cost && !state.generating;
+
+            var html = '<div class="floating-generate-container' + (state.showFloatingButton ? ' visible' : '') + '" id="floating-generate-container">';
+
+            // Settings popover
+            html += '<div class="floating-settings-popover' + (state.floatingSettingsOpen ? ' visible' : '') + '">';
+            html += '<div class="floating-settings-header">';
+            html += '<span class="floating-settings-title">⚙️ Settings</span>';
+            html += '<button class="floating-settings-close" onclick="app.toggleFloatingSettings()">✕</button>';
+            html += '</div>';
+
+            // Aspect Ratio
+            html += '<div class="floating-settings-row">';
+            html += '<span class="floating-settings-label">Aspect Ratio</span>';
+            html += '<select class="floating-settings-select" onchange="app.setAspectRatio(this.value)">';
+            var ratios = ['1:1', '16:9', '9:16', '4:3', '3:4'];
+            for (var r = 0; r < ratios.length; r++) {
+                var ratio = ratios[r];
+                var selected = state.aspectRatio === ratio ? ' selected' : '';
+                html += '<option value="' + ratio + '"' + selected + '>' + ratio + '</option>';
+            }
+            html += '</select>';
+            html += '</div>';
+
+            // Quality
+            html += '<div class="floating-settings-row">';
+            html += '<span class="floating-settings-label">Quality</span>';
+            html += '<select class="floating-settings-select" onchange="app.setQuality(this.value)">';
+            var qualities = [
+                { key: 'basic', name: 'Basic (1🪙)' },
+                { key: 'hd', name: 'HD (2🪙)' },
+                { key: 'ultra', name: 'Ultra (4🪙)' }
+            ];
+            for (var qi = 0; qi < qualities.length; qi++) {
+                var qual = qualities[qi];
+                var selected = state.quality === qual.key ? ' selected' : '';
+                html += '<option value="' + qual.key + '"' + selected + '>' + qual.name + '</option>';
+            }
+            html += '</select>';
+            html += '</div>';
+
+            // Quantity
+            html += '<div class="floating-settings-row">';
+            html += '<span class="floating-settings-label">Quantity</span>';
+            html += '<div class="floating-quantity-control">';
+            html += '<button class="floating-quantity-btn" onclick="app.decrementQuantity()"' + (state.quantity <= 1 ? ' disabled' : '') + '>−</button>';
+            html += '<span class="floating-quantity-value">' + state.quantity + '</span>';
+            html += '<button class="floating-quantity-btn" onclick="app.incrementQuantity()"' + (state.quantity >= 4 ? ' disabled' : '') + '>+</button>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>'; // popover
+
+            // Settings toggle button
+            html += '<button class="floating-settings-toggle' + (state.floatingSettingsOpen ? ' active' : '') + '" onclick="app.toggleFloatingSettings()" title="Settings">⚙️</button>';
+
+            // Main generate button
+            html += '<button class="floating-generate-btn" onclick="app.generateImage()"' + (canGenerate ? '' : ' disabled') + '>';
+            if (state.generating) {
+                html += '<span class="animate-spin">⏳</span>';
+                html += '<span>Generating...</span>';
+            } else {
+                html += '<span class="sparkle">✨</span>';
+                html += '<span>Generate</span>';
+                html += '<span class="floating-btn-cost">🪙 ' + cost + '</span>';
+            }
+            html += '</button>';
+
+            html += '</div>'; // container
+
+            return html;
+        }
+
         function getToolEmoji(toolKey) {
             var emojis = {
                 'realtimeCanvas': '##',
@@ -3833,6 +4620,29 @@
         document.addEventListener('DOMContentLoaded', function() {
             render();
             checkAccess();
+
+            // Scroll listener for floating button visibility
+            window.addEventListener('scroll', function() {
+                app.updateFloatingButtonVisibility();
+            }, { passive: true });
+
+            // Resize listener for floating button visibility
+            window.addEventListener('resize', function() {
+                app.updateFloatingButtonVisibility();
+            });
+
+            // ESC key to close modals
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    if (state.promptModalOpen) {
+                        app.closePromptModal();
+                    }
+                    if (state.floatingSettingsOpen) {
+                        state.floatingSettingsOpen = false;
+                        render();
+                    }
+                }
+            });
         });
     </script>
 </body>
