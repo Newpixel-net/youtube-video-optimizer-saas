@@ -255,6 +255,44 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
+        /* Featured/Center tool item (Image Creation) */
+        .tool-nav-item.featured {
+            position: relative;
+            min-width: 110px;
+            padding: 1.25rem 1.5rem;
+            margin: -1.5rem 0.5rem -0.5rem;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
+            z-index: 10;
+        }
+
+        .tool-nav-item.featured:hover {
+            background: rgba(255, 255, 255, 0.18);
+            box-shadow: 0 12px 40px rgba(139, 92, 246, 0.4);
+        }
+
+        .tool-nav-item.featured.active {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 12px 40px rgba(139, 92, 246, 0.5);
+        }
+
+        .tool-nav-item.featured .tool-nav-icon {
+            font-size: 1.75rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .tool-nav-item.featured .tool-nav-icon svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        .tool-nav-item.featured .tool-nav-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
         .tool-nav-icon {
             font-size: 1.5rem;
             margin-bottom: 0.25rem;
@@ -287,6 +325,18 @@
             .tool-nav-item {
                 min-width: 80px;
                 padding: 0.6rem 1rem;
+            }
+            .tool-nav-item.featured {
+                min-width: 95px;
+                padding: 1rem 1.25rem;
+                margin: -1rem 0.35rem -0.25rem;
+            }
+            .tool-nav-item.featured .tool-nav-icon svg {
+                width: 28px;
+                height: 28px;
+            }
+            .tool-nav-item.featured .tool-nav-name {
+                font-size: 0.75rem;
             }
         }
 
@@ -782,6 +832,39 @@
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.3);
         }
+
+        /* ------------------------------------------
+           2.16 WIDE CONTENT CONTAINER
+           ------------------------------------------ */
+        .content-wide {
+            width: 100%;
+            max-width: 90%;
+            margin-left: auto;
+            margin-right: auto;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+
+        @media (max-width: 1024px) {
+            .content-wide {
+                max-width: 95%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .content-wide {
+                max-width: 100%;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .content-wide {
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1051,7 +1134,7 @@
             html += '</div>'; // hero-section
 
             // Main content
-            html += '<div class="px-4 md:px-6 lg:px-8 max-w-7xl mx-auto">';
+            html += '<div class="content-wide">';
 
             // Tool panels (show different content based on active tool)
             html += renderToolPanels();
@@ -1074,8 +1157,9 @@
             for (var i = 0; i < toolsConfig.length; i++) {
                 var tool = toolsConfig[i];
                 var isActive = state.activeTool === tool.key;
+                var isFeatured = tool.key === 'imageCreation';
 
-                html += '<button class="tool-nav-item' + (isActive ? ' active' : '') + '" onclick="app.setActiveTool(\'' + tool.key + '\')">';
+                html += '<button class="tool-nav-item' + (isActive ? ' active' : '') + (isFeatured ? ' featured' : '') + '" onclick="app.setActiveTool(\'' + tool.key + '\')">';
                 html += '<div class="tool-nav-icon">' + getToolIcon(tool.icon) + '</div>';
                 html += '<div class="tool-nav-name">' + tool.name + '</div>';
                 html += '</button>';
