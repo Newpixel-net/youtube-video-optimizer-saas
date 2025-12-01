@@ -7162,9 +7162,9 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                 }
               });
 
-              // Use Firebase Storage URL format (no CORS issues)
-              const encodedFileName = encodeURIComponent(fileName);
-              const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.name}/o/${encodedFileName}?alt=media`;
+              // Make file publicly accessible [RESTORED-FIX-2025-12-01]
+              await file.makePublic();
+              const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
 
               generatedImages.push({
                 url: publicUrl,
@@ -7293,13 +7293,14 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                     }
                   });
 
-                  // Use Firebase Storage URL format (no CORS issues)
-                  const encodedFileName = encodeURIComponent(fileName);
-                  const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.name}/o/${encodedFileName}?alt=media`;
+                  // Make file publicly accessible [RESTORED-FIX-2025-12-01]
+                  await file.makePublic();
+                  const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
 
                   generatedImages.push({
                     url: publicUrl,
-                    fileName: fileName
+                    fileName: fileName,
+                    seed: Math.floor(Math.random() * 1000000)
                   });
 
                   console.log(`Gemini image ${imgIdx + 1} saved: ${fileName}`);
@@ -7441,9 +7442,9 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
             }
           });
 
-          // Use Firebase Storage URL format (no CORS issues)
-          const encodedFileName = encodeURIComponent(fileName);
-          const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.name}/o/${encodedFileName}?alt=media`;
+          // Make file publicly accessible [RESTORED-FIX-2025-12-01]
+          await file.makePublic();
+          const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
 
           generatedImages.push({
             url: publicUrl,

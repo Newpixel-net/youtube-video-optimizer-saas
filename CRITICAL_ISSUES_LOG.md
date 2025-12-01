@@ -322,6 +322,69 @@ Never remove working functionality! Imagen 4 was working perfectly. Add new opti
 
 ---
 
+## Issue #4: Image Files Not Accessible After Generation (CORS/Public Access)
+
+**Date**: 2025-12-01
+
+**Symptom**:
+- Images generate successfully (API works) but cannot be displayed/accessed
+- CORS errors when trying to load images from `firebasestorage.googleapis.com`
+- 403 Forbidden errors on image URLs
+
+**What DID NOT fix it**:
+- Changing storage security rules (they already allowed `read: if true`)
+- Changing URL format to Firebase Storage format
+- Creating cors.json file (it must be applied with gsutil)
+
+**Root Cause**:
+Commit `f7dcf49` ("fix: Use Firebase Storage URL format to avoid CORS issues") **removed** the `file.makePublic()` call and changed the URL format. This actually **introduced** issues instead of fixing them.
+
+**WORKING CODE (before)**:
+```javascript
+// Make file publicly accessible
+await file.makePublic();
+const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+```
+
+**BROKEN CODE (after)**:
+```javascript
+// Use Firebase Storage URL format (no CORS issues)
+const encodedFileName = encodeURIComponent(fileName);
+const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.name}/o/${encodedFileName}?alt=media`;
+```
+
+**The ACTUAL fix**:
+Restore `file.makePublic()` and use Google Cloud Storage URLs in all three generation paths:
+- DALL-E image generation (line ~7165)
+- Gemini image generation (line ~7296)
+- Imagen image generation (line ~7445)
+
+```javascript
+// Make file publicly accessible [RESTORED-FIX-2025-12-01]
+await file.makePublic();
+const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+```
+
+**Why this happens**:
+- `file.makePublic()` sets the object's ACL to allow public reads via Google Cloud Storage URLs
+- Firebase Storage URLs (`firebasestorage.googleapis.com`) rely on Firebase security rules + CORS config
+- The Google Cloud Storage URL (`storage.googleapis.com`) with `makePublic()` bypasses CORS issues entirely
+
+**Key Lesson**:
+Don't "fix" something that's working! The original `makePublic()` + GCS URL approach was correct. The attempted "fix" broke it.
+
+**Alternative fix** (if you don't want makePublic):
+Apply CORS configuration to the bucket:
+```bash
+gsutil cors set cors.json gs://ytseo-6d1b0.firebasestorage.app
+```
+
+**File location**: `functions/index.js` (lines ~7165, ~7296, ~7445)
+
+**Time wasted**: ~2 hours
+
+---
+
 ## Template for Future Issues
 
 ### Issue #X: [Title]
