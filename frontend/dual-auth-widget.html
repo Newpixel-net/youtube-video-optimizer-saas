@@ -743,6 +743,8 @@
             position: relative;
             overflow: hidden;
             isolation: isolate;
+            /* PERFORMANCE: Isolate rendering from rest of page */
+            contain: layout style paint;
         }
 
         /* Aurora gradient background layer - OPTIMIZED */
@@ -821,44 +823,29 @@
         }
 
         .aurora-orb-1 {
-            width: 60%;
-            height: 60%;
-            top: -20%;
-            left: -10%;
+            width: 80%;
+            height: 80%;
+            top: -25%;
+            left: -15%;
             /* Softer gradient to simulate blur without GPU cost */
-            background: radial-gradient(circle, var(--aurora-primary) 0%, transparent 50%);
+            background: radial-gradient(circle, var(--aurora-primary) 0%, var(--aurora-tertiary) 30%, transparent 55%);
             animation: orbFloat1 20s ease-in-out infinite; /* Slower = less GPU work */
         }
 
         .aurora-orb-2 {
-            width: 50%;
-            height: 50%;
-            bottom: -15%;
-            right: -15%;
-            background: radial-gradient(circle, var(--aurora-secondary) 0%, transparent 50%);
+            width: 70%;
+            height: 70%;
+            bottom: -20%;
+            right: -20%;
+            background: radial-gradient(circle, var(--aurora-secondary) 0%, var(--aurora-accent) 30%, transparent 55%);
             animation: orbFloat2 18s ease-in-out infinite;
             animation-delay: -3s;
         }
 
-        .aurora-orb-3 {
-            width: 40%;
-            height: 40%;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: radial-gradient(circle, var(--aurora-tertiary) 0%, transparent 50%);
-            animation: orbFloat3 22s ease-in-out infinite;
-            animation-delay: -5s;
-        }
-
+        /* PERFORMANCE: Reduced from 4 orbs to 2 - orbs 3 & 4 hidden */
+        .aurora-orb-3,
         .aurora-orb-4 {
-            width: 30%;
-            height: 30%;
-            top: 20%;
-            right: 10%;
-            background: radial-gradient(circle, var(--aurora-accent) 0%, transparent 50%);
-            animation: orbPulse 10s ease-in-out infinite; /* Slower pulse */
-            animation-delay: -2s;
+            display: none;
         }
 
         /* Card content wrapper - ensures content is above aurora */
@@ -1425,6 +1412,10 @@
         .tool-card {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border: 1px solid rgba(0, 0, 0, 0.05);
+            /* PERFORMANCE: Isolate rendering and skip off-screen */
+            contain: layout style paint;
+            content-visibility: auto;
+            contain-intrinsic-size: auto 280px;
         }
 
         .tool-card:hover {
