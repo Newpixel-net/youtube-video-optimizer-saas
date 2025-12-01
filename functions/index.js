@@ -2483,7 +2483,8 @@ exports.adminGetTokenTransactions = functions.https.onCall(async (data, context)
 
     const { limit: queryLimit = 100, userId, type } = data || {};
 
-    let query = db.collection('tokenTransactions').orderBy('createdAt', 'desc');
+    // Build query with filters first, then orderBy (Firestore requirement)
+    let query = db.collection('tokenTransactions');
 
     if (userId) {
       query = query.where('userId', '==', userId);
@@ -2491,6 +2492,9 @@ exports.adminGetTokenTransactions = functions.https.onCall(async (data, context)
     if (type) {
       query = query.where('type', '==', type);
     }
+
+    // Add orderBy last
+    query = query.orderBy('createdAt', 'desc');
 
     const snapshot = await query.limit(Math.min(queryLimit, 500)).get();
 
@@ -3059,27 +3063,7 @@ exports.adminSyncExistingUsers = functions.https.onCall(async (data, context) =>
   }
 });
 
-exports.adminGetAnalytics = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const usersSnapshot = await db.collection('users').get();
-  const totalUsers = usersSnapshot.size;
-  
-  const usageSnapshot = await db.collection('usageLogs')
-    .where('timestamp', '>=', admin.firestore.Timestamp.fromDate(today))
-    .get();
-  const todayUsage = usageSnapshot.size;
-  
-  const planCounts = {};
-  usersSnapshot.forEach(doc => {
-    const plan = doc.data().subscription.plan;
-    planCounts[plan] = (planCounts[plan] || 0) + 1;
-  });
-  
-  return { success: true, analytics: { totalUsers, todayUsage, planCounts } };
-});
+// Note: adminGetAnalytics is defined earlier in the file with comprehensive revenue/cost analytics
 
 // ==============================================
 // SUBSCRIPTION MANAGEMENT
