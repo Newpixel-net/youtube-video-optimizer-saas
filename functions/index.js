@@ -6401,8 +6401,8 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const validAspectRatio = aspectRatioMap[aspectRatio] || '1:1';
 
   // Map model selection to AI models
-  // Comprehensive model mapping for both Gemini and Imagen APIs
-  // Gemini models use generateContent API, Imagen models use generateImages API
+  // All models use the Imagen API via ai.models.generateImages()
+  // The @google/genai SDK only supports Imagen for image generation
 
   // Imagen model mapping (uses ai.models.generateImages)
   const imagenModelMap = {
@@ -6412,24 +6412,18 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     'imagen-3': 'imagen-3.0-generate-001',
     // Legacy keys for backwards compatibility
     'banana1': 'imagen-4.0-generate-001',
-    'banana2': 'imagen-4.0-ultra-generate-001'
+    'banana2': 'imagen-4.0-ultra-generate-001',
+    // Map any Gemini selections to Imagen (Gemini image gen not supported by this SDK)
+    'gemini-2-flash': 'imagen-4.0-generate-001',
+    'gemini-2-flash-exp': 'imagen-4.0-generate-001',
+    'gemini-2-flash-thinking': 'imagen-4.0-generate-001',
+    'gemini-pro-vision': 'imagen-4.0-generate-001',
+    'gemini-flash-lite': 'imagen-4.0-generate-001',
+    'gemini-flash': 'imagen-4.0-generate-001'
   };
 
-  // Gemini model mapping (uses ai.getGenerativeModel + generateContent)
-  const geminiModelMap = {
-    'gemini-2-flash': 'gemini-2.0-flash-exp',
-    'gemini-2-flash-exp': 'gemini-2.0-flash-exp',
-    'gemini-2-flash-thinking': 'gemini-2.0-flash-thinking-exp-01-21',
-    'gemini-pro-vision': 'gemini-1.5-pro',
-    'gemini-flash-lite': 'gemini-1.5-flash',
-    // Legacy key
-    'gemini-flash': 'gemini-2.0-flash-exp'
-  };
-
-  // Determine which API to use based on model selection
-  const isGeminiModel = geminiModelMap.hasOwnProperty(model);
-  const geminiModelId = isGeminiModel ? geminiModelMap[model] : null;
-  const imagenModelId = !isGeminiModel ? (imagenModelMap[model] || imagenModelMap['auto']) : null;
+  // Get the Imagen model ID (all requests use Imagen API)
+  const imagenModelId = imagenModelMap[model] || imagenModelMap['auto'];
 
   try {
     // Verify token balance
@@ -6456,121 +6450,51 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     const storage = admin.storage().bucket();
     const timestamp = Date.now();
 
-    if (isGeminiModel) {
-      // Use Gemini model for image generation via generateContent API
-      console.log(`Generating ${imageCount} image(s) with Gemini model: ${geminiModelId}, aspect: ${validAspectRatio}`);
-      console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
+    // Use Imagen API for image generation (all models use this API)
+    console.log(`Generating ${imageCount} image(s) with ${imagenModelId}, aspect: ${validAspectRatio}`);
+    console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
 
-      // Gemini models use the generative model API with image output capability
-      const geminiModel = ai.getGenerativeModel({
-        model: geminiModelId
-      });
-
-      // Generate images sequentially (Gemini Flash generates one at a time)
-      for (let i = 0; i < imageCount; i++) {
-        try {
-          const result = await geminiModel.generateContent({
-            contents: [{
-              role: 'user',
-              parts: [{ text: `Generate an image: ${finalPrompt}` }]
-            }],
-            generationConfig: {
-              responseModalities: ['image', 'text'],
-              responseMimeType: 'image/png'
-            }
-          });
-
-          // Extract image from response
-          const response = result.response;
-          if (response && response.candidates && response.candidates[0]) {
-            const candidate = response.candidates[0];
-            if (candidate.content && candidate.content.parts) {
-              for (const part of candidate.content.parts) {
-                if (part.inlineData && part.inlineData.data) {
-                  const imageBytes = part.inlineData.data;
-
-                  // Upload base64 image to Firebase Storage
-                  const fileName = `creative-studio/${uid}/${timestamp}-${i + 1}.png`;
-                  const file = storage.file(fileName);
-
-                  const buffer = Buffer.from(imageBytes, 'base64');
-                  await file.save(buffer, {
-                    metadata: {
-                      contentType: 'image/png',
-                      metadata: {
-                        userId: uid,
-                        prompt: prompt.substring(0, 200),
-                        model: geminiModelId,
-                        aspectRatio: validAspectRatio
-                      }
-                    }
-                  });
-
-                  // Make the file publicly readable
-                  await file.makePublic();
-                  const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
-
-                  generatedImages.push({
-                    url: publicUrl,
-                    fileName: fileName,
-                    seed: Math.floor(Math.random() * 1000000000)
-                  });
-                  break; // Only take first image from response
-                }
-              }
-            }
-          }
-        } catch (geminiError) {
-          console.warn(`Gemini Flash image ${i + 1} generation failed:`, geminiError.message);
-          // Continue to next image
-        }
+    const response = await ai.models.generateImages({
+      model: imagenModelId,
+      prompt: finalPrompt, // Use the professional prompt when template is selected
+      config: {
+        numberOfImages: imageCount,
+        aspectRatio: validAspectRatio,
+        // Safety settings
+        includeRaiReason: true,
+        personGeneration: 'allow_adult' // Allow generating people
       }
-    } else {
-      // Use Imagen API for standard image generation
-      console.log(`Generating ${imageCount} image(s) with ${imagenModelId}, aspect: ${validAspectRatio}`);
-      console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
+    });
 
-      const response = await ai.models.generateImages({
-        model: imagenModelId,
-        prompt: finalPrompt, // Use the professional prompt when template is selected
-        config: {
-          numberOfImages: imageCount,
-          aspectRatio: validAspectRatio,
-          // Safety settings
-          includeRaiReason: true,
-          personGeneration: 'allow_adult' // Allow generating people
+    if (response.generatedImages && response.generatedImages.length > 0) {
+      for (let i = 0; i < response.generatedImages.length; i++) {
+        const genImage = response.generatedImages[i];
+
+        // Check if image was blocked by safety filters
+        if (genImage.raiFilteredReason) {
+          console.warn(`Image ${i + 1} filtered: ${genImage.raiFilteredReason}`);
+          continue;
         }
-      });
 
-      if (response.generatedImages && response.generatedImages.length > 0) {
-        for (let i = 0; i < response.generatedImages.length; i++) {
-          const genImage = response.generatedImages[i];
+        const imageBytes = genImage.image?.imageBytes;
+        if (!imageBytes) continue;
 
-          // Check if image was blocked by safety filters
-          if (genImage.raiFilteredReason) {
-            console.warn(`Image ${i + 1} filtered: ${genImage.raiFilteredReason}`);
-            continue;
-          }
+        // Upload base64 image to Firebase Storage
+        const fileName = `creative-studio/${uid}/${timestamp}-${i + 1}.png`;
+        const file = storage.file(fileName);
 
-          const imageBytes = genImage.image?.imageBytes;
-          if (!imageBytes) continue;
-
-          // Upload base64 image to Firebase Storage
-          const fileName = `creative-studio/${uid}/${timestamp}-${i + 1}.png`;
-          const file = storage.file(fileName);
-
-          const buffer = Buffer.from(imageBytes, 'base64');
-          await file.save(buffer, {
+        const buffer = Buffer.from(imageBytes, 'base64');
+        await file.save(buffer, {
+          metadata: {
+            contentType: 'image/png',
             metadata: {
-              contentType: 'image/png',
-              metadata: {
-                userId: uid,
-                prompt: prompt.substring(0, 200),
-                model: imagenModelId,
-                aspectRatio: validAspectRatio
-              }
+              userId: uid,
+              prompt: prompt.substring(0, 200),
+              model: imagenModelId,
+              aspectRatio: validAspectRatio
             }
-          });
+          }
+        });
 
         // Make file publicly accessible
         await file.makePublic();
@@ -6581,9 +6505,8 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
           fileName: fileName,
           seed: Math.floor(Math.random() * 1000000)
         });
-        }
       }
-    } // End of else (Imagen API)
+    }
 
     // Check if any images were generated
     if (generatedImages.length === 0) {
@@ -6599,7 +6522,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     });
 
     // Save to history
-    const usedModel = isGeminiModel ? geminiModelId : imagenModelId;
+    const usedModel = imagenModelId;
     const historyData = {
       userId: uid,
       prompt: prompt,
