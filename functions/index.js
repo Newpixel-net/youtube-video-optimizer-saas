@@ -6315,7 +6315,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'generateImage', 10);
 
-  const { prompt, model, quantity, aspectRatio, quality, templateId, templateVariables } = data;
+  const { prompt, model, quantity, aspectRatio, quality, templateId, templateVariables, negativePrompt, seed, styleReference, characterReference } = data;
 
   if (!prompt || prompt.trim().length === 0) {
     throw new functions.https.HttpsError('invalid-argument', 'Prompt is required');
@@ -6557,15 +6557,74 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
       console.log(`Generating ${imageCount} image(s) with ${imagenModelId}, aspect: ${validAspectRatio}`);
       console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
 
+      // Build config object with optional parameters
+      const imagenConfig = {
+        numberOfImages: imageCount,
+        aspectRatio: validAspectRatio,
+        includeRaiReason: true,
+        personGeneration: 'allow_adult'
+      };
+
+      // Add negative prompt if provided (Imagen supports this)
+      if (negativePrompt && negativePrompt.trim()) {
+        imagenConfig.negativePrompt = negativePrompt.trim();
+        console.log(`Using negative prompt: ${negativePrompt.substring(0, 50)}...`);
+      }
+
+      // Add seed if provided (for reproducible results)
+      if (seed !== undefined && seed !== null && !isNaN(seed)) {
+        imagenConfig.seed = parseInt(seed, 10);
+        console.log(`Using seed: ${seed}`);
+      }
+
+      // Add reference images if provided (Imagen 3 only)
+      // Reference images support style transfer and subject consistency
+      if (imagenModelId.includes('imagen-3') && (styleReference || characterReference)) {
+        const referenceImages = [];
+
+        // Add style reference
+        if (styleReference) {
+          if (styleReference.base64) {
+            referenceImages.push({
+              referenceType: 'STYLE',
+              referenceImage: {
+                bytesBase64Encoded: styleReference.base64
+              }
+            });
+            console.log('Adding style reference image');
+          } else if (styleReference.url) {
+            // For URL-based references, we'd need to fetch and convert to base64
+            console.log('Style reference URL provided - URL-based references not yet supported');
+          }
+        }
+
+        // Add character/subject reference
+        if (characterReference) {
+          if (characterReference.base64) {
+            referenceImages.push({
+              referenceType: 'SUBJECT',
+              referenceImage: {
+                bytesBase64Encoded: characterReference.base64
+              }
+            });
+            console.log('Adding character/subject reference image');
+          } else if (characterReference.url) {
+            console.log('Character reference URL provided - URL-based references not yet supported');
+          }
+        }
+
+        if (referenceImages.length > 0) {
+          imagenConfig.referenceImages = referenceImages;
+          console.log(`Using ${referenceImages.length} reference image(s)`);
+        }
+      } else if ((styleReference || characterReference) && !imagenModelId.includes('imagen-3')) {
+        console.log('Reference images only supported with Imagen 3 - ignoring references');
+      }
+
       const response = await ai.models.generateImages({
         model: imagenModelId,
         prompt: finalPrompt,
-        config: {
-          numberOfImages: imageCount,
-          aspectRatio: validAspectRatio,
-          includeRaiReason: true,
-          personGeneration: 'allow_adult'
-        }
+        config: imagenConfig
       });
 
       if (response.generatedImages && response.generatedImages.length > 0) {
@@ -6818,6 +6877,160 @@ exports.getCreativeHistory = functions.https.onCall(async (data, context) => {
   } catch (error) {
     console.error('Get history error:', error);
     throw new functions.https.HttpsError('internal', 'Failed to get history');
+  }
+});
+
+// Enhance prompt using AI
+exports.enhanceCreativePrompt = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'enhancePrompt', 20); // More lenient rate limit for quick operation
+
+  const { prompt, style } = data;
+
+  if (!prompt || prompt.trim().length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Prompt is required');
+  }
+
+  if (prompt.length > 500) {
+    throw new functions.https.HttpsError('invalid-argument', 'Prompt too long. Maximum 500 characters for enhancement.');
+  }
+
+  try {
+    const geminiApiKey = functions.config().gemini?.key;
+    if (!geminiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'AI service not configured');
+    }
+
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+    // Style-specific enhancements
+    const styleInstructions = {
+      'photorealistic': 'Make it suitable for photorealistic image generation with natural lighting and realistic details.',
+      'artistic': 'Make it suitable for artistic/creative image generation with expressive and stylized elements.',
+      'cinematic': 'Make it suitable for cinematic image generation with dramatic lighting and movie-like composition.',
+      'anime': 'Make it suitable for anime/manga style image generation with appropriate visual elements.',
+      'fantasy': 'Make it suitable for fantasy art generation with magical and imaginative elements.',
+      'default': 'Make it suitable for high-quality AI image generation.'
+    };
+
+    const styleGuide = styleInstructions[style] || styleInstructions['default'];
+
+    const systemPrompt = `You are an expert AI image prompt engineer. Your task is to enhance user prompts to get better results from AI image generators like Imagen and DALL-E.
+
+Rules:
+1. Keep the core concept and intent of the original prompt
+2. Add specific details about composition, lighting, colors, and style
+3. Include technical photography/art terms where appropriate
+4. ${styleGuide}
+5. Keep the enhanced prompt under 200 words
+6. Don't add controversial or inappropriate content
+7. Output ONLY the enhanced prompt, no explanations or formatting
+
+Original prompt: "${prompt}"
+
+Enhanced prompt:`;
+
+    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent(systemPrompt);
+    const enhancedPrompt = result.response.text().trim();
+
+    // Clean up the response (remove quotes if present)
+    let cleanedPrompt = enhancedPrompt
+      .replace(/^["']|["']$/g, '') // Remove surrounding quotes
+      .replace(/^Enhanced prompt:\s*/i, '') // Remove prefix if present
+      .trim();
+
+    // Validate the response
+    if (cleanedPrompt.length < 10 || cleanedPrompt.length > 2000) {
+      console.warn('Enhanced prompt invalid length, returning original');
+      return { success: true, enhancedPrompt: prompt, wasEnhanced: false };
+    }
+
+    console.log(`Prompt enhanced: ${prompt.substring(0, 50)}... -> ${cleanedPrompt.substring(0, 50)}...`);
+
+    return {
+      success: true,
+      enhancedPrompt: cleanedPrompt,
+      wasEnhanced: true,
+      originalLength: prompt.length,
+      enhancedLength: cleanedPrompt.length
+    };
+
+  } catch (error) {
+    console.error('Enhance prompt error:', error);
+    // Return original prompt on error instead of failing
+    return {
+      success: true,
+      enhancedPrompt: prompt,
+      wasEnhanced: false,
+      error: error.message
+    };
+  }
+});
+
+// Delete image from creative history
+exports.deleteCreativeHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { historyId } = data;
+
+  if (!historyId) {
+    throw new functions.https.HttpsError('invalid-argument', 'History ID is required');
+  }
+
+  try {
+    // Get the history item to verify ownership and get file info
+    const historyDoc = await db.collection('creativeHistory').doc(historyId).get();
+
+    if (!historyDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Image not found');
+    }
+
+    const historyData = historyDoc.data();
+
+    // Verify ownership
+    if (historyData.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not your image');
+    }
+
+    // Delete from Firebase Storage (if images exist)
+    const storage = admin.storage().bucket();
+    if (historyData.images && historyData.images.length > 0) {
+      for (const image of historyData.images) {
+        if (image.fileName) {
+          try {
+            await storage.file(image.fileName).delete();
+            console.log(`Deleted storage file: ${image.fileName}`);
+          } catch (storageError) {
+            // File might not exist, continue anyway
+            console.warn(`Could not delete file ${image.fileName}:`, storageError.message);
+          }
+        }
+      }
+    }
+
+    // If shared to gallery, also delete from gallery
+    if (historyData.sharedToGallery && historyData.galleryId) {
+      try {
+        await db.collection('creativeGallery').doc(historyData.galleryId).delete();
+        console.log(`Deleted gallery entry: ${historyData.galleryId}`);
+      } catch (galleryError) {
+        console.warn(`Could not delete gallery entry:`, galleryError.message);
+      }
+    }
+
+    // Delete the history document
+    await db.collection('creativeHistory').doc(historyId).delete();
+
+    console.log(`Deleted creative history ${historyId} for user ${uid}`);
+
+    return { success: true, message: 'Image deleted successfully' };
+
+  } catch (error) {
+    console.error('Delete history error:', error);
+    if (error.code) {
+      throw error; // Re-throw HttpsErrors
+    }
+    throw new functions.https.HttpsError('internal', 'Failed to delete image');
   }
 });
 

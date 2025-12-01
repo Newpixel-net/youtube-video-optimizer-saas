@@ -1326,6 +1326,163 @@
             color: white;
         }
 
+        /* Advanced Settings */
+        .advanced-settings-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            margin-top: 0.75rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            transition: all 0.2s ease;
+        }
+
+        .advanced-settings-toggle:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: white;
+        }
+
+        .advanced-settings-icon {
+            font-size: 0.7rem;
+            transition: transform 0.2s ease;
+        }
+
+        .advanced-settings-badge {
+            margin-left: auto;
+            padding: 0.15rem 0.5rem;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            color: #c4b5fd;
+        }
+
+        .advanced-settings-panel {
+            margin-top: 0.75rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.5rem;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .advanced-setting-group {
+            margin-bottom: 1rem;
+        }
+
+        .advanced-setting-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .advanced-setting-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .advanced-setting-hint {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .advanced-setting-textarea {
+            width: 100%;
+            min-height: 60px;
+            padding: 0.6rem 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.8rem;
+            font-family: inherit;
+            resize: vertical;
+            transition: all 0.2s ease;
+        }
+
+        .advanced-setting-textarea:focus {
+            outline: none;
+            border-color: rgba(139, 92, 246, 0.5);
+        }
+
+        .advanced-setting-textarea::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .advanced-setting-input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+
+        .advanced-setting-input:focus {
+            outline: none;
+            border-color: rgba(139, 92, 246, 0.5);
+        }
+
+        .advanced-setting-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .seed-input-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .seed-input-row .advanced-setting-input {
+            flex: 1;
+        }
+
+        .seed-random-btn,
+        .seed-clear-btn {
+            padding: 0.5rem 0.75rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .seed-random-btn:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .seed-clear-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .advanced-settings-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .info-icon {
+            font-size: 0.9rem;
+        }
+
         /* Generate Button */
         .generate-section {
             margin-top: auto;
@@ -2005,6 +2162,24 @@
         .smart-action-btn:hover {
             background: rgba(255, 255, 255, 0.15);
             color: white;
+        }
+
+        .smart-action-btn.enhancing {
+            background: rgba(139, 92, 246, 0.2);
+            cursor: wait;
+        }
+
+        .smart-action-btn .btn-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #8b5cf6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         /* Prompt Health Indicator */
@@ -3477,6 +3652,181 @@
         }
 
         /* ==========================================
+           TEMPLATE VARIABLES MODAL
+           ========================================== */
+        .template-vars-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 2600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .template-vars-modal {
+            background: linear-gradient(180deg, rgba(35, 35, 55, 0.98) 0%, rgba(25, 25, 45, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 480px;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: modalSlideIn 0.2s ease;
+        }
+
+        .template-vars-header {
+            padding: 1.5rem 1.5rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .template-vars-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .template-vars-subtitle {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 0.5rem;
+        }
+
+        .template-vars-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .template-vars-preview {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .template-vars-preview-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .template-vars-preview-prompt {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.5;
+        }
+
+        .template-vars-preview-prompt .var-highlight {
+            background: rgba(139, 92, 246, 0.3);
+            color: #c4b5fd;
+            padding: 0.1rem 0.3rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+        }
+
+        .template-var-field {
+            margin-bottom: 1rem;
+        }
+
+        .template-var-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 0.5rem;
+        }
+
+        .template-var-label code {
+            background: rgba(139, 92, 246, 0.2);
+            color: #c4b5fd;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+        }
+
+        .template-var-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .template-var-input:focus {
+            outline: none;
+            border-color: rgba(139, 92, 246, 0.5);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .template-var-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .template-vars-footer {
+            display: flex;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .template-vars-btn {
+            flex: 1;
+            padding: 0.875rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .template-vars-btn-cancel {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .template-vars-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .template-vars-btn-apply {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            color: white;
+        }
+
+        .template-vars-btn-apply:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        /* ==========================================
            STYLE REFERENCE MODAL
            ========================================== */
         .style-ref-modal-overlay {
@@ -3542,6 +3892,29 @@
         .style-ref-modal-close:hover {
             background: rgba(255, 255, 255, 0.2);
             color: white;
+        }
+
+        .style-ref-warning {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            margin: 0 1.5rem 1rem;
+            padding: 0.875rem 1rem;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.4;
+        }
+
+        .style-ref-warning .warning-icon {
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .style-ref-warning .warning-content strong {
+            color: #f59e0b;
         }
 
         .style-ref-modal-body {
@@ -4887,6 +5260,9 @@
             quantity: 1, // 1-4 images
             aspectRatio: '1:1', // 1:1 | 16:9 | 9:16 | 4:3
             quality: 'hd', // basic | hd | ultra
+            negativePrompt: '', // Things to avoid in generation
+            seed: '', // For reproducible results (empty = random)
+            showAdvancedSettings: false, // Toggle for advanced options
 
             // References (for advanced features)
             styleReference: null,
@@ -4928,6 +5304,7 @@
 
             // Generation state
             generating: false,
+            enhancingPrompt: false,
             generationProgress: 0,
             generationStage: 'idle', // idle, queued, processing, generating, finalizing, complete, error
 
@@ -4959,10 +5336,16 @@
             // Draft notification state
             showDraftNotification: false,
 
-            // Variable input state
+            // Variable input state (single variable - legacy)
             variableInputOpen: false,
             variableInputName: null,
             variableInputValue: '',
+
+            // Template Variables Modal state (multi-variable form)
+            templateVariablesModalOpen: false,
+            pendingTemplateForVariables: null,
+            templateVariables: {}, // { varName: value, ... }
+            detectedVariables: [], // ['subject', 'mood', 'style', ...]
 
             // Tool info accordion state
             toolInfoOpen: false,
@@ -5081,7 +5464,10 @@
                 icon: '⚡',
                 description: 'Balanced speed and quality (Imagen 4)',
                 badge: 'suggested',
-                available: true
+                available: true,
+                supportsNegativePrompt: true,
+                supportsSeed: true,
+                supportsReferenceImages: false
             },
             { divider: true, label: 'Imagen Models' },
             {
@@ -5090,7 +5476,10 @@
                 icon: '🖼️',
                 description: 'Google Imagen - photorealistic quality',
                 badge: 'new',
-                available: true
+                available: true,
+                supportsNegativePrompt: true,
+                supportsSeed: true,
+                supportsReferenceImages: false
             },
             {
                 key: 'imagen-4-ultra',
@@ -5098,7 +5487,10 @@
                 icon: '🎨',
                 description: 'Highest quality, 4K output',
                 badge: 'premium',
-                available: true
+                available: true,
+                supportsNegativePrompt: true,
+                supportsSeed: true,
+                supportsReferenceImages: false
             },
             {
                 key: 'imagen-3',
@@ -5106,7 +5498,10 @@
                 icon: '🌟',
                 description: 'Previous generation, stable',
                 badge: '',
-                available: true
+                available: true,
+                supportsNegativePrompt: true,
+                supportsSeed: true,
+                supportsReferenceImages: true // Supports customization model
             },
             { divider: true, label: 'OpenAI DALL-E' },
             {
@@ -5115,7 +5510,10 @@
                 icon: '🎭',
                 description: 'OpenAI - exceptional detail & accuracy',
                 badge: 'new',
-                available: true
+                available: true,
+                supportsNegativePrompt: false, // DALL-E 3 doesn't support negative prompts
+                supportsSeed: false, // DALL-E 3 doesn't support seed
+                supportsReferenceImages: false
             },
             {
                 key: 'dall-e-2',
@@ -5123,7 +5521,10 @@
                 icon: '🖌️',
                 description: 'OpenAI - fast & cost-effective',
                 badge: '',
-                available: true
+                available: true,
+                supportsNegativePrompt: false,
+                supportsSeed: false,
+                supportsReferenceImages: false
             },
             { divider: true, label: 'Coming Soon' },
             {
@@ -5132,7 +5533,10 @@
                 icon: '✨',
                 description: 'Latest Gemini - fast image generation',
                 badge: 'coming',
-                available: false
+                available: false,
+                supportsNegativePrompt: true,
+                supportsSeed: true,
+                supportsReferenceImages: false
             },
             {
                 key: 'flux',
@@ -5140,7 +5544,10 @@
                 icon: '△',
                 description: 'Most loved by the AI community',
                 badge: 'coming',
-                available: false
+                available: false,
+                supportsNegativePrompt: true,
+                supportsSeed: true,
+                supportsReferenceImages: false
             },
             {
                 key: 'runway',
@@ -5148,9 +5555,26 @@
                 icon: '◈',
                 description: 'Professional video & image AI',
                 badge: 'coming',
-                available: false
+                available: false,
+                supportsNegativePrompt: true,
+                supportsSeed: true,
+                supportsReferenceImages: false
             }
         ];
+
+        // Helper function to get current model capabilities
+        function getModelCapabilities(modelKey) {
+            var model = modelsConfig.find(function(m) { return m.key === modelKey; });
+            if (!model) {
+                // Default to auto model capabilities
+                model = modelsConfig[0];
+            }
+            return {
+                supportsNegativePrompt: model.supportsNegativePrompt || false,
+                supportsSeed: model.supportsSeed || false,
+                supportsReferenceImages: model.supportsReferenceImages || false
+            };
+        }
 
         /* ==========================================
            4.4 FEATURED CONTENT
@@ -5993,6 +6417,41 @@
                 render();
             },
 
+            // Toggle Advanced Settings
+            toggleAdvancedSettings: function() {
+                state.showAdvancedSettings = !state.showAdvancedSettings;
+                render();
+            },
+
+            // Set Negative Prompt
+            setNegativePrompt: function(value) {
+                state.negativePrompt = value;
+            },
+
+            // Set Seed
+            setSeed: function(value) {
+                // Validate seed is a positive integer
+                var seedValue = parseInt(value, 10);
+                if (value === '' || value === null) {
+                    state.seed = '';
+                } else if (!isNaN(seedValue) && seedValue >= 0 && seedValue <= 2147483647) {
+                    state.seed = seedValue.toString();
+                }
+                render();
+            },
+
+            // Generate Random Seed
+            generateRandomSeed: function() {
+                state.seed = Math.floor(Math.random() * 2147483647).toString();
+                render();
+            },
+
+            // Clear Seed
+            clearSeed: function() {
+                state.seed = '';
+                render();
+            },
+
             // Prompt Update with debounced re-render for variable chips
             updatePrompt: function(text) {
                 state.prompt = text;
@@ -6068,26 +6527,113 @@
                 }
             },
 
+            // Detect all {{variable}} placeholders in a template
+            detectTemplateVariables: function(templatePrompt) {
+                var regex = /\{\{([^}]+)\}\}/g;
+                var variables = [];
+                var seenVars = {};
+                var match;
+                while ((match = regex.exec(templatePrompt)) !== null) {
+                    var varName = match[1].trim();
+                    if (!seenVars[varName]) {
+                        seenVars[varName] = true;
+                        variables.push(varName);
+                    }
+                }
+                return variables;
+            },
+
             // Apply template (called directly or after confirmation)
             applyTemplate: function(template, mode) {
+                // Close confirm dialog if open
+                state.confirmDialogOpen = false;
+                state.pendingTemplate = null;
+
+                // Detect variables in template
+                var variables = app.detectTemplateVariables(template.prompt);
+
+                if (variables.length > 0) {
+                    // Has variables - show the variables modal
+                    state.pendingTemplateForVariables = { template: template, mode: mode };
+                    state.detectedVariables = variables;
+                    state.templateVariables = {};
+                    // Initialize with empty values
+                    for (var i = 0; i < variables.length; i++) {
+                        state.templateVariables[variables[i]] = '';
+                    }
+                    state.templateVariablesModalOpen = true;
+                    render();
+                    // Focus first input
+                    setTimeout(function() {
+                        var firstInput = document.querySelector('.template-var-input');
+                        if (firstInput) firstInput.focus();
+                    }, 100);
+                } else {
+                    // No variables - apply directly
+                    app.applyTemplateWithVariables(template, mode, {});
+                }
+            },
+
+            // Apply template after variables are filled
+            applyTemplateWithVariables: function(template, mode, variables) {
                 state.selectedTemplate = template;
 
-                if (mode === 'replace') {
-                    state.prompt = template.prompt;
-                } else if (mode === 'append') {
-                    state.prompt = state.prompt.trim() + '\n\n' + template.prompt;
+                // Replace variables in prompt
+                var processedPrompt = template.prompt;
+                for (var varName in variables) {
+                    if (variables.hasOwnProperty(varName)) {
+                        var value = variables[varName] || varName; // fallback to var name if empty
+                        var pattern = new RegExp('\\{\\{' + varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\}\\}', 'g');
+                        processedPrompt = processedPrompt.replace(pattern, value);
+                    }
                 }
+
+                if (mode === 'replace') {
+                    state.prompt = processedPrompt;
+                } else if (mode === 'append') {
+                    state.prompt = state.prompt.trim() + '\n\n' + processedPrompt;
+                }
+
+                // Store variables for backend
+                state.templateVariables = variables;
 
                 // Update the textarea
                 var textarea = document.getElementById('prompt-textarea');
                 if (textarea) textarea.value = state.prompt;
 
-                // Close dialog if open
-                state.confirmDialogOpen = false;
-                state.pendingTemplate = null;
-
                 render();
                 showToast('Template applied: ' + template.name, 'success');
+            },
+
+            // Update a template variable value
+            updateTemplateVariable: function(varName, value) {
+                state.templateVariables[varName] = value;
+            },
+
+            // Confirm and apply template with filled variables
+            confirmTemplateVariables: function() {
+                if (!state.pendingTemplateForVariables) return;
+
+                var template = state.pendingTemplateForVariables.template;
+                var mode = state.pendingTemplateForVariables.mode;
+                var variables = state.templateVariables;
+
+                // Close modal
+                state.templateVariablesModalOpen = false;
+                state.pendingTemplateForVariables = null;
+                state.detectedVariables = [];
+
+                // Apply with variables
+                app.applyTemplateWithVariables(template, mode, variables);
+            },
+
+            // Cancel template variables modal
+            cancelTemplateVariables: function() {
+                state.templateVariablesModalOpen = false;
+                state.pendingTemplateForVariables = null;
+                state.detectedVariables = [];
+                state.templateVariables = {};
+                render();
             },
 
             // Cancel template selection
@@ -6097,10 +6643,51 @@
                 render();
             },
 
-            // Enhance Prompt (placeholder for AI enhancement)
+            // Enhance Prompt using AI
             enhancePrompt: function() {
-                // TODO: Call AI to enhance prompt
-                showToast('Prompt enhancement coming soon!', 'info');
+                if (!state.prompt || state.prompt.trim().length === 0) {
+                    showToast('Enter a prompt first to enhance', 'warning');
+                    return;
+                }
+
+                if (state.prompt.length > 500) {
+                    showToast('Prompt too long for enhancement (max 500 chars)', 'warning');
+                    return;
+                }
+
+                if (state.enhancingPrompt) {
+                    return; // Already enhancing
+                }
+
+                state.enhancingPrompt = true;
+                render();
+                showToast('Enhancing prompt with AI...', 'info');
+
+                var enhanceCreativePrompt = functions.httpsCallable('enhanceCreativePrompt');
+                enhanceCreativePrompt({
+                    prompt: state.prompt.trim(),
+                    style: state.selectedTemplate ? state.selectedTemplate.id : 'default'
+                })
+                .then(function(result) {
+                    state.enhancingPrompt = false;
+                    if (result.data.success && result.data.wasEnhanced) {
+                        state.prompt = result.data.enhancedPrompt;
+                        var textarea = document.getElementById('prompt-textarea');
+                        if (textarea) textarea.value = state.prompt;
+                        showToast('Prompt enhanced!', 'success');
+                    } else if (result.data.error) {
+                        showToast('Enhancement unavailable: ' + result.data.error, 'warning');
+                    } else {
+                        showToast('Prompt already optimized', 'info');
+                    }
+                    render();
+                })
+                .catch(function(error) {
+                    state.enhancingPrompt = false;
+                    console.error('Enhance prompt error:', error);
+                    showToast('Failed to enhance prompt', 'error');
+                    render();
+                });
             },
 
             // Clear selected template
@@ -6294,7 +6881,47 @@
 
             // Enhance prompt in modal
             enhancePromptInModal: function() {
-                showToast('Prompt enhancement coming soon!', 'info');
+                if (!state.promptModalText || state.promptModalText.trim().length === 0) {
+                    showToast('Enter a prompt first to enhance', 'warning');
+                    return;
+                }
+
+                if (state.promptModalText.length > 500) {
+                    showToast('Prompt too long for enhancement (max 500 chars)', 'warning');
+                    return;
+                }
+
+                if (state.enhancingPrompt) {
+                    return;
+                }
+
+                state.enhancingPrompt = true;
+                render();
+                showToast('Enhancing prompt with AI...', 'info');
+
+                var enhanceCreativePrompt = functions.httpsCallable('enhanceCreativePrompt');
+                enhanceCreativePrompt({
+                    prompt: state.promptModalText.trim(),
+                    style: state.selectedTemplate ? state.selectedTemplate.id : 'default'
+                })
+                .then(function(result) {
+                    state.enhancingPrompt = false;
+                    if (result.data.success && result.data.wasEnhanced) {
+                        state.promptModalText = result.data.enhancedPrompt;
+                        var textarea = document.getElementById('prompt-modal-textarea');
+                        if (textarea) textarea.value = state.promptModalText;
+                        showToast('Prompt enhanced!', 'success');
+                    } else {
+                        showToast('Prompt already optimized', 'info');
+                    }
+                    render();
+                })
+                .catch(function(error) {
+                    state.enhancingPrompt = false;
+                    console.error('Enhance prompt error:', error);
+                    showToast('Failed to enhance prompt', 'error');
+                    render();
+                });
             },
 
             // Random prompt in modal
@@ -6467,18 +7094,46 @@
 
             // Delete from history and close modal
             deleteFromHistoryAndClose: function(imageId) {
+                if (!imageId) return;
+
+                // Show confirmation
+                if (!confirm('Are you sure you want to delete this image? This cannot be undone.')) {
+                    return;
+                }
+
                 // Cleanup focus trap
                 if (state._imageDetailFocusTrapCleanup) {
                     state._imageDetailFocusTrapCleanup();
                     state._imageDetailFocusTrapCleanup = null;
                 }
                 utils.unlockBodyScroll();
-                // TODO: Implement actual deletion via Cloud Function
-                state.history = state.history.filter(function(item) { return item.id !== imageId; });
+
+                // Close modal immediately for better UX
                 state.imageDetailModalOpen = false;
                 state.selectedImageDetail = null;
+
+                // Optimistically remove from UI
+                state.history = state.history.filter(function(item) { return item.id !== imageId; });
                 render();
-                showToast('Image removed from history', 'success');
+
+                // Call backend to actually delete
+                var deleteCreativeHistory = functions.httpsCallable('deleteCreativeHistory');
+                deleteCreativeHistory({ historyId: imageId })
+                    .then(function(result) {
+                        if (result.data.success) {
+                            showToast('Image deleted successfully', 'success');
+                            // Also refresh community gallery if open
+                            if (state.mainTab === 'community') {
+                                app.loadCommunityGallery(true);
+                            }
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Delete error:', error);
+                        showToast('Failed to delete: ' + (error.message || 'Unknown error'), 'error');
+                        // Reload history to restore if delete failed
+                        app.loadHistory();
+                    });
             },
 
             // ========================================
@@ -6994,14 +7649,61 @@
                 // Call the Cloud Function
                 var generateCreativeImage = functions.httpsCallable('generateCreativeImage');
 
-                generateCreativeImage({
+                // Get model capabilities
+                var modelCaps = getModelCapabilities(state.selectedModel);
+
+                // Build request payload
+                var requestPayload = {
                     prompt: state.prompt,
                     model: state.selectedModel,
                     quantity: state.quantity,
                     aspectRatio: state.aspectRatio,
                     quality: state.quality,
                     templateId: state.selectedTemplate ? state.selectedTemplate.id : null
-                })
+                };
+
+                // Add negative prompt if supported and provided
+                if (modelCaps.supportsNegativePrompt && state.negativePrompt && state.negativePrompt.trim()) {
+                    requestPayload.negativePrompt = state.negativePrompt.trim();
+                }
+
+                // Add seed if supported and provided
+                if (modelCaps.supportsSeed && state.seed) {
+                    requestPayload.seed = parseInt(state.seed, 10);
+                }
+
+                // Add style reference if supported and provided (base64 data)
+                if (modelCaps.supportsReferenceImages && state.styleReference) {
+                    if (state.styleReference.type === 'file' && state.styleReference.dataUrl) {
+                        // Extract base64 data from data URL
+                        var base64Data = state.styleReference.dataUrl.split(',')[1];
+                        requestPayload.styleReference = {
+                            base64: base64Data,
+                            mimeType: state.styleReference.dataUrl.split(';')[0].split(':')[1] || 'image/png'
+                        };
+                    } else if (state.styleReference.type === 'url' && state.styleReference.url) {
+                        requestPayload.styleReference = {
+                            url: state.styleReference.url
+                        };
+                    }
+                }
+
+                // Add character reference if supported and provided
+                if (modelCaps.supportsReferenceImages && state.characterReference) {
+                    if (state.characterReference.type === 'file' && state.characterReference.dataUrl) {
+                        var charBase64Data = state.characterReference.dataUrl.split(',')[1];
+                        requestPayload.characterReference = {
+                            base64: charBase64Data,
+                            mimeType: state.characterReference.dataUrl.split(';')[0].split(':')[1] || 'image/png'
+                        };
+                    } else if (state.characterReference.type === 'url' && state.characterReference.url) {
+                        requestPayload.characterReference = {
+                            url: state.characterReference.url
+                        };
+                    }
+                }
+
+                generateCreativeImage(requestPayload)
                 .then(function(result) {
                     clearInterval(progressInterval);
                     state.generationStage = 'complete';
@@ -7194,8 +7896,35 @@
             },
 
             deleteFromHistory: function(imageId) {
-                // TODO: Implement deletion
-                showToast('Image removed from history', 'success');
+                if (!imageId) return;
+
+                // Show confirmation
+                if (!confirm('Are you sure you want to delete this image? This cannot be undone.')) {
+                    return;
+                }
+
+                // Optimistically remove from UI
+                state.history = state.history.filter(function(item) { return item.id !== imageId; });
+                render();
+
+                // Call backend to actually delete
+                var deleteCreativeHistory = functions.httpsCallable('deleteCreativeHistory');
+                deleteCreativeHistory({ historyId: imageId })
+                    .then(function(result) {
+                        if (result.data.success) {
+                            showToast('Image deleted successfully', 'success');
+                            // Refresh community gallery if shared images were affected
+                            if (state.mainTab === 'community') {
+                                app.loadCommunityGallery(true);
+                            }
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Delete error:', error);
+                        showToast('Failed to delete: ' + (error.message || 'Unknown error'), 'error');
+                        // Reload history to restore if delete failed
+                        app.loadHistory();
+                    });
             },
 
             // Load more history items
@@ -7676,6 +8405,9 @@
             // Share to Gallery Dialog
             html += renderShareDialog();
 
+            // Template Variables Modal
+            html += renderTemplateVariablesModal();
+
             // Premium Feature Modal
             html += renderPremiumModal();
 
@@ -8011,7 +8743,7 @@
 
             // Smart Action Buttons with Prompt Health Indicator
             html += '<div class="smart-prompt-actions">';
-            html += '<button class="smart-action-btn" onclick="app.enhancePrompt()" title="Enhance with AI">✨</button>';
+            html += '<button class="smart-action-btn' + (state.enhancingPrompt ? ' enhancing' : '') + '" onclick="app.enhancePrompt()" title="Enhance with AI"' + (state.enhancingPrompt ? ' disabled' : '') + '>' + (state.enhancingPrompt ? '<span class="btn-spinner"></span>' : '✨') + '</button>';
             html += '<button class="smart-action-btn" onclick="app.randomPrompt()" title="Random prompt">🎲</button>';
             html += '<button class="smart-action-btn" onclick="app.clearPrompt()" title="Clear prompt">🗑️</button>';
             html += '<span style="flex: 1;"></span>';
@@ -8102,6 +8834,60 @@
             html += '</select>';
             html += '</div>';
             html += '</div>'; // settings-row
+
+            // Advanced Settings Section (model-specific)
+            var modelCapabilities = getModelCapabilities(state.selectedModel);
+            var hasAdvancedOptions = modelCapabilities.supportsNegativePrompt || modelCapabilities.supportsSeed;
+
+            if (hasAdvancedOptions) {
+                html += '<div class="advanced-settings-toggle" onclick="app.toggleAdvancedSettings()">';
+                html += '<span class="advanced-settings-icon">' + (state.showAdvancedSettings ? '▼' : '▶') + '</span>';
+                html += '<span>Advanced Settings</span>';
+                if (!state.showAdvancedSettings && (state.negativePrompt || state.seed)) {
+                    html += '<span class="advanced-settings-badge">Active</span>';
+                }
+                html += '</div>';
+
+                if (state.showAdvancedSettings) {
+                    html += '<div class="advanced-settings-panel">';
+
+                    // Negative Prompt
+                    if (modelCapabilities.supportsNegativePrompt) {
+                        html += '<div class="advanced-setting-group">';
+                        html += '<label class="advanced-setting-label">';
+                        html += '<span>Negative Prompt</span>';
+                        html += '<span class="advanced-setting-hint">Things to avoid</span>';
+                        html += '</label>';
+                        html += '<textarea class="advanced-setting-textarea" placeholder="e.g., blurry, low quality, distorted, watermark, text" onchange="app.setNegativePrompt(this.value)">' + utils.escapeHtml(state.negativePrompt) + '</textarea>';
+                        html += '</div>';
+                    }
+
+                    // Seed Control
+                    if (modelCapabilities.supportsSeed) {
+                        html += '<div class="advanced-setting-group">';
+                        html += '<label class="advanced-setting-label">';
+                        html += '<span>Seed</span>';
+                        html += '<span class="advanced-setting-hint">For reproducible results</span>';
+                        html += '</label>';
+                        html += '<div class="seed-input-row">';
+                        html += '<input type="number" class="advanced-setting-input" placeholder="Random" value="' + (state.seed || '') + '" onchange="app.setSeed(this.value)" min="0" max="2147483647" />';
+                        html += '<button class="seed-random-btn" onclick="app.generateRandomSeed()" title="Generate random seed">🎲</button>';
+                        if (state.seed) {
+                            html += '<button class="seed-clear-btn" onclick="app.clearSeed()" title="Clear seed">✕</button>';
+                        }
+                        html += '</div>';
+                        html += '</div>';
+                    }
+
+                    html += '</div>'; // advanced-settings-panel
+                }
+            } else if (state.selectedModel.includes('dall-e')) {
+                // Show info for DALL-E models that don't support advanced settings
+                html += '<div class="advanced-settings-info">';
+                html += '<span class="info-icon">ℹ️</span>';
+                html += '<span>DALL-E models don\'t support negative prompts or seed control</span>';
+                html += '</div>';
+            }
 
             html += '</div>'; // sidebar-section
 
@@ -8783,13 +9569,36 @@
             return modelNames[modelKey] || modelKey;
         }
 
-        // Helper function to format date
-        function formatDate(dateStr) {
-            if (!dateStr) return 'Unknown';
+        // Helper function to format date (handles Firestore Timestamps)
+        function formatDate(dateValue) {
+            if (!dateValue) return 'Unknown';
             try {
-                var date = new Date(dateStr);
+                var date;
+                // Handle Firestore Timestamp object with toDate() method
+                if (dateValue && typeof dateValue.toDate === 'function') {
+                    date = dateValue.toDate();
+                }
+                // Handle Firestore Timestamp as plain object with _seconds
+                else if (dateValue && dateValue._seconds) {
+                    date = new Date(dateValue._seconds * 1000);
+                }
+                // Handle Firestore Timestamp as plain object with seconds
+                else if (dateValue && dateValue.seconds) {
+                    date = new Date(dateValue.seconds * 1000);
+                }
+                // Handle ISO string or timestamp number
+                else {
+                    date = new Date(dateValue);
+                }
+
+                // Check if date is valid
+                if (isNaN(date.getTime())) {
+                    return 'Unknown';
+                }
+
                 return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             } catch (e) {
+                console.warn('Date formatting error:', e);
                 return 'Unknown';
             }
         }
@@ -8873,6 +9682,8 @@
         function renderStyleReferenceModal() {
             if (!state.styleReferenceModalOpen) return '';
 
+            var modelCaps = getModelCapabilities(state.selectedModel);
+
             var html = '<div class="style-ref-modal-overlay" onclick="app.closeStyleReference()">';
             html += '<div class="style-ref-modal" onclick="event.stopPropagation()">';
 
@@ -8881,6 +9692,17 @@
             html += '<div class="style-ref-modal-title"><span>🎨</span> Style Reference</div>';
             html += '<button class="style-ref-modal-close" onclick="app.closeStyleReference()">×</button>';
             html += '</div>';
+
+            // Model compatibility warning
+            if (!modelCaps.supportsReferenceImages) {
+                html += '<div class="style-ref-warning">';
+                html += '<span class="warning-icon">⚠️</span>';
+                html += '<div class="warning-content">';
+                html += '<strong>' + (state.selectedModel || 'Auto').replace(/-/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); }) + '</strong> doesn\'t support style references. ';
+                html += 'Switch to <strong>Imagen 3</strong> to use reference images.';
+                html += '</div>';
+                html += '</div>';
+            }
 
             // Body
             html += '<div class="style-ref-modal-body">';
@@ -9151,6 +9973,114 @@
             html += '</div>'; // overlay
 
             return html;
+        }
+
+        // Render Template Variables Modal
+        function renderTemplateVariablesModal() {
+            if (!state.templateVariablesModalOpen || !state.pendingTemplateForVariables) return '';
+
+            var template = state.pendingTemplateForVariables.template;
+            var variables = state.detectedVariables;
+
+            var html = '<div class="template-vars-modal-overlay" onclick="app.cancelTemplateVariables()">';
+            html += '<div class="template-vars-modal" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="template-vars-header">';
+            html += '<div class="template-vars-title">📝 Fill in Template Variables</div>';
+            html += '<div class="template-vars-subtitle">Customize the template by providing values for each variable</div>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="template-vars-body">';
+
+            // Preview with highlighted variables
+            html += '<div class="template-vars-preview">';
+            html += '<div class="template-vars-preview-label">Template Preview</div>';
+            var highlightedPrompt = utils.escapeHtml(template.prompt);
+            for (var v = 0; v < variables.length; v++) {
+                var varPattern = new RegExp('\\{\\{' + variables[v].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\}\\}', 'g');
+                highlightedPrompt = highlightedPrompt.replace(varPattern, '<span class="var-highlight">{{' + variables[v] + '}}</span>');
+            }
+            html += '<div class="template-vars-preview-prompt">' + highlightedPrompt + '</div>';
+            html += '</div>';
+
+            // Variable input fields
+            for (var i = 0; i < variables.length; i++) {
+                var varName = variables[i];
+                var currentValue = state.templateVariables[varName] || '';
+                var placeholder = getVariablePlaceholder(varName);
+
+                html += '<div class="template-var-field">';
+                html += '<label class="template-var-label">';
+                html += '<code>{{' + utils.escapeHtml(varName) + '}}</code>';
+                html += '<span>' + formatVariableName(varName) + '</span>';
+                html += '</label>';
+                html += '<input type="text" class="template-var-input" placeholder="' + placeholder + '" value="' + utils.escapeHtml(currentValue) + '" onchange="app.updateTemplateVariable(\'' + utils.escapeHtml(varName) + '\', this.value)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();app.confirmTemplateVariables();}else if(event.key===\'Escape\'){app.cancelTemplateVariables();}" />';
+                html += '</div>';
+            }
+
+            html += '</div>'; // body
+
+            // Footer
+            html += '<div class="template-vars-footer">';
+            html += '<button class="template-vars-btn template-vars-btn-cancel" onclick="app.cancelTemplateVariables()">Cancel</button>';
+            html += '<button class="template-vars-btn template-vars-btn-apply" onclick="app.confirmTemplateVariables()">Apply Template</button>';
+            html += '</div>';
+
+            html += '</div>'; // modal
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Helper function to format variable name for display
+        function formatVariableName(varName) {
+            // Convert snake_case or camelCase to Title Case
+            return varName
+                .replace(/_/g, ' ')
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .split(' ')
+                .map(function(word) { return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(); })
+                .join(' ');
+        }
+
+        // Helper function to get placeholder suggestions based on variable name
+        function getVariablePlaceholder(varName) {
+            var lowerName = varName.toLowerCase();
+            if (lowerName.includes('subject') || lowerName.includes('person') || lowerName.includes('character')) {
+                return 'e.g., a young woman, a businessman, a superhero';
+            }
+            if (lowerName.includes('style') || lowerName.includes('art')) {
+                return 'e.g., realistic, anime, watercolor, digital art';
+            }
+            if (lowerName.includes('mood') || lowerName.includes('emotion') || lowerName.includes('feeling')) {
+                return 'e.g., happy, mysterious, dramatic, peaceful';
+            }
+            if (lowerName.includes('color') || lowerName.includes('colour')) {
+                return 'e.g., blue, warm tones, vibrant, monochrome';
+            }
+            if (lowerName.includes('location') || lowerName.includes('place') || lowerName.includes('scene') || lowerName.includes('background')) {
+                return 'e.g., forest, city street, beach at sunset';
+            }
+            if (lowerName.includes('action') || lowerName.includes('activity') || lowerName.includes('doing')) {
+                return 'e.g., running, reading a book, looking at camera';
+            }
+            if (lowerName.includes('object') || lowerName.includes('item') || lowerName.includes('thing')) {
+                return 'e.g., vintage camera, glowing orb, treasure chest';
+            }
+            if (lowerName.includes('time') || lowerName.includes('period')) {
+                return 'e.g., sunset, nighttime, medieval era';
+            }
+            if (lowerName.includes('weather')) {
+                return 'e.g., rainy, sunny, foggy, stormy';
+            }
+            if (lowerName.includes('lighting') || lowerName.includes('light')) {
+                return 'e.g., dramatic lighting, soft diffused, golden hour';
+            }
+            return 'Enter a value...';
         }
 
         // Render Premium Feature Modal
