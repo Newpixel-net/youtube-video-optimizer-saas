@@ -4484,6 +4484,60 @@
             background: rgba(239, 68, 68, 0.25);
         }
 
+        .image-detail-btn-liked {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+        }
+
+        .image-detail-btn-liked:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        /* Creator info in modal */
+        .image-detail-creator {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+        }
+
+        .image-detail-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .image-detail-likes {
+            margin-left: auto;
+            color: #f87171;
+            font-size: 0.85rem;
+        }
+
+        /* Locked prompt style */
+        .image-detail-prompt.locked {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px dashed rgba(139, 92, 246, 0.3);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+        }
+
+        .prompt-locked-icon {
+            font-size: 1.2rem;
+        }
+
         /* ==========================================
            MODEL SELECTOR DROPDOWN
            ========================================== */
@@ -4893,6 +4947,7 @@
             // Image Detail Modal state
             imageDetailModalOpen: false,
             selectedImageDetail: null,
+            imageDetailSource: 'history', // 'history' or 'community'
 
             // Model Dropdown state
             modelDropdownOpen: false,
@@ -6328,10 +6383,43 @@
             // IMAGE DETAIL MODAL HANDLERS
             // ========================================
 
-            // Open image detail modal
+            // Open image detail modal (for history items)
             openImageDetail: function(index) {
                 if (state.history[index]) {
                     state.selectedImageDetail = state.history[index];
+                    state.imageDetailSource = 'history'; // Track source
+                    state.imageDetailModalOpen = true;
+                    utils.lockBodyScroll();
+                    render();
+                    // Setup focus trap after render
+                    setTimeout(function() {
+                        state._imageDetailFocusTrapCleanup = utils.setupFocusTrap('.image-detail-modal');
+                    }, 100);
+                }
+            },
+
+            // Open image detail modal (for community items)
+            openCommunityImageDetail: function(index) {
+                if (state.communityItems[index]) {
+                    var communityItem = state.communityItems[index];
+                    // Convert community item format to match history item format for modal display
+                    state.selectedImageDetail = {
+                        id: communityItem.id,
+                        imageUrl: communityItem.imageUrl,
+                        prompt: communityItem.isPrivate ? '[Private Prompt - ' + (communityItem.promptPrice || 5) + ' tokens to unlock]' : communityItem.prompt,
+                        model: communityItem.model || 'Unknown',
+                        quality: communityItem.quality || 'HD',
+                        aspectRatio: communityItem.aspectRatio || '1:1',
+                        createdAt: communityItem.createdAt,
+                        // Community-specific fields
+                        userName: communityItem.userName,
+                        userAvatar: communityItem.userAvatar,
+                        likes: communityItem.likes || 0,
+                        isPrivate: communityItem.isPrivate,
+                        promptPrice: communityItem.promptPrice,
+                        userId: communityItem.userId
+                    };
+                    state.imageDetailSource = 'community'; // Track source
                     state.imageDetailModalOpen = true;
                     utils.lockBodyScroll();
                     render();
@@ -8407,7 +8495,7 @@
                 var isLiked = state.userLikes[item.id] || false;
                 var cachedUrl = imageCache.get(item.imageUrl || '');
 
-                html += '<div class="community-item">';
+                html += '<div class="community-item" onclick="app.openCommunityImageDetail(' + i + ')" style="cursor: pointer;">';
                 html += '<div class="image-skeleton"></div>';
                 html += '<img src="' + cachedUrl + '" data-src="' + (item.imageUrl || '') + '" alt="Community creation" class="community-item-image" loading="lazy" onload="this.classList.add(\'loaded\')" onerror="this.src=\'https://via.placeholder.com/400x400?text=Image+Not+Found\'" />';
 
@@ -8416,7 +8504,7 @@
                     html += '<div class="private-badge">🔒 ' + (item.promptPrice || 5) + ' tokens</div>';
                 }
 
-                html += '<div class="community-item-overlay">';
+                html += '<div class="community-item-overlay" onclick="event.stopPropagation()">';
 
                 // Prompt (blurred if private)
                 html += '<p class="community-item-prompt' + (item.isPrivate ? ' locked' : '') + '">' + utils.escapeHtml(item.prompt || '') + '</p>';
@@ -8425,24 +8513,24 @@
 
                 // User info
                 html += '<div class="community-item-user">';
-                html += '<div class="community-item-avatar">' + (item.user && item.user.avatar ? item.user.avatar : 'AN') + '</div>';
-                html += '<span>' + utils.escapeHtml(item.user && item.user.name ? item.user.name : 'Anonymous') + '</span>';
+                html += '<div class="community-item-avatar">' + (item.userAvatar || (item.userName || 'A').substring(0, 2).toUpperCase()) + '</div>';
+                html += '<span>' + utils.escapeHtml(item.userName || 'Anonymous') + '</span>';
                 html += '</div>';
 
                 // Actions
                 html += '<div class="community-item-actions">';
-                html += '<button class="community-action-btn' + (isLiked ? ' liked' : '') + '" onclick="app.likeGalleryItem(\'' + item.id + '\')" title="Like">';
+                html += '<button class="community-action-btn' + (isLiked ? ' liked' : '') + '" onclick="event.stopPropagation(); app.likeGalleryItem(\'' + item.id + '\')" title="Like">';
                 html += (isLiked ? '❤️' : '🤍') + ' ' + (item.likes || 0);
                 html += '</button>';
 
                 if (item.isPrivate) {
                     // Buy prompt button
-                    html += '<button class="community-action-btn buy-prompt" onclick="app.purchasePrompt(\'' + item.id + '\', ' + (item.promptPrice || 5) + ')" title="Buy Prompt">';
+                    html += '<button class="community-action-btn buy-prompt" onclick="event.stopPropagation(); app.purchasePrompt(\'' + item.id + '\', ' + (item.promptPrice || 5) + ')" title="Buy Prompt">';
                     html += '🪙 Buy';
                     html += '</button>';
                 } else {
                     // Copy/Use prompt button
-                    html += '<button class="community-action-btn" onclick="app.usePrompt(\'' + utils.escapeHtml(item.prompt || '').replace(/'/g, "\\'") + '\')" title="Use Prompt">';
+                    html += '<button class="community-action-btn" onclick="event.stopPropagation(); app.usePrompt(\'' + utils.escapeHtml(item.prompt || '').replace(/'/g, "\\'") + '\')" title="Use Prompt">';
                     html += '📋 Use';
                     html += '</button>';
                 }
@@ -8533,6 +8621,7 @@
             if (!state.imageDetailModalOpen || !state.selectedImageDetail) return '';
 
             var item = state.selectedImageDetail;
+            var isCommunity = state.imageDetailSource === 'community';
             // Get image URL - handle both old format (imageUrl) and new format (images array)
             var imageUrl = item.imageUrl || (item.images && item.images[0] ? item.images[0].url : '');
             var html = '<div class="image-detail-modal-overlay" onclick="app.closeImageDetail(event)">';
@@ -8555,10 +8644,31 @@
             // Info panel
             html += '<div class="image-detail-info">';
 
+            // Creator info for community items
+            if (isCommunity && item.userName) {
+                html += '<div class="image-detail-section">';
+                html += '<div class="image-detail-label">Created By</div>';
+                html += '<div class="image-detail-creator">';
+                html += '<div class="image-detail-avatar">' + (item.userAvatar || 'U') + '</div>';
+                html += '<span>' + utils.escapeHtml(item.userName) + '</span>';
+                if (item.likes > 0) {
+                    html += '<span class="image-detail-likes">❤️ ' + item.likes + '</span>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+
             // Prompt section
             html += '<div class="image-detail-section">';
             html += '<div class="image-detail-label">Prompt</div>';
-            html += '<div class="image-detail-prompt">' + utils.escapeHtml(item.prompt || 'No prompt available') + '</div>';
+            if (isCommunity && item.isPrivate) {
+                html += '<div class="image-detail-prompt locked">';
+                html += '<span class="prompt-locked-icon">🔒</span>';
+                html += '<span>Private prompt - ' + (item.promptPrice || 5) + ' tokens to unlock</span>';
+                html += '</div>';
+            } else {
+                html += '<div class="image-detail-prompt">' + utils.escapeHtml(item.prompt || 'No prompt available') + '</div>';
+            }
             html += '</div>';
 
             // Model and Quality row
@@ -8585,8 +8695,8 @@
             html += '</div>';
             html += '</div>';
 
-            // Cost
-            if (item.tokenCost) {
+            // Cost (for history items)
+            if (!isCommunity && item.tokenCost) {
                 html += '<div class="image-detail-section">';
                 html += '<div class="image-detail-label">Token Cost</div>';
                 html += '<div class="image-detail-value">🪙 ' + item.tokenCost + '</div>';
@@ -8596,17 +8706,39 @@
             html += '</div>'; // info
             html += '</div>'; // body
 
-            // Actions
+            // Actions - different for history vs community
             html += '<div class="image-detail-actions">';
             html += '<button class="image-detail-btn image-detail-btn-primary" onclick="app.downloadImage(\'' + imageUrl + '\')">';
             html += '⬇️ Download';
             html += '</button>';
-            html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.usePromptFromDetail()">';
-            html += '🔄 Reuse Prompt';
-            html += '</button>';
-            html += '<button class="image-detail-btn image-detail-btn-danger" onclick="app.deleteFromHistoryAndClose(\'' + item.id + '\')">';
-            html += '🗑️ Delete';
-            html += '</button>';
+
+            if (isCommunity) {
+                // Community actions
+                if (item.isPrivate) {
+                    // Buy prompt button for private prompts
+                    html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.purchasePrompt(\'' + item.id + '\', ' + (item.promptPrice || 5) + ')">';
+                    html += '🔓 Unlock Prompt (' + (item.promptPrice || 5) + ' tokens)';
+                    html += '</button>';
+                } else {
+                    // Reuse prompt for public prompts
+                    html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.usePromptFromDetail()">';
+                    html += '🔄 Reuse Prompt';
+                    html += '</button>';
+                }
+                // Like button
+                var isLiked = state.userLikes[item.id] || false;
+                html += '<button class="image-detail-btn' + (isLiked ? ' image-detail-btn-liked' : ' image-detail-btn-secondary') + '" onclick="app.likeGalleryItem(\'' + item.id + '\')">';
+                html += (isLiked ? '❤️ Liked' : '🤍 Like');
+                html += '</button>';
+            } else {
+                // History actions
+                html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.usePromptFromDetail()">';
+                html += '🔄 Reuse Prompt';
+                html += '</button>';
+                html += '<button class="image-detail-btn image-detail-btn-danger" onclick="app.deleteFromHistoryAndClose(\'' + item.id + '\')">';
+                html += '🗑️ Delete';
+                html += '</button>';
+            }
             html += '</div>';
 
             html += '</div>'; // modal
