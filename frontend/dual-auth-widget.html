@@ -806,11 +806,15 @@
             transition: opacity 0.15s ease-out;
         }
 
-        /* Hide aurora orbs when link is clicked to prevent flash during navigation */
+        /* Hide aurora orbs when clicked to prevent flash during navigation */
         a:active .aurora-orb,
         a:active .aurora-orbs,
         a:active .living-aurora::before,
-        a:active .aurora-shimmer {
+        a:active .aurora-shimmer,
+        .living-aurora:active .aurora-orb,
+        .living-aurora:active .aurora-orbs,
+        .living-aurora:active::before,
+        .living-aurora:active .aurora-shimmer {
             opacity: 0 !important;
             transition: none;
         }
@@ -5404,7 +5408,7 @@
             html += '<div class="grid grid-cols-2 gap-4 lg:gap-6 mb-8 fade-in dashboard-cards-grid">';
 
             // My Campaign Reports Card - with Living Aurora effect
-            html += '<div class="living-aurora aurora-emerald rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" style="transition: opacity 0.1s ease-out" onclick="this.style.opacity=\'0\'; app.goToClientReports()">';
+            html += '<div class="living-aurora aurora-emerald rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" onclick="app.goToClientReports()">';
             // Aurora orbs layer
             html += '<div class="aurora-orbs">';
             html += '<div class="aurora-orb aurora-orb-1"></div>';
@@ -5432,8 +5436,8 @@
             html += '</div></div>';
 
             // Enterprise Suite Card - with Living Aurora effect
-            html += '<a href="https://ytseo.siteuo.com/enterprise-suite" class="block" onclick="this.querySelector(\'.living-aurora\').style.opacity=\'0\'">';
-            html += '<div class="living-aurora aurora-gold rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden border-2 border-yellow-300/50 h-full" style="transition: opacity 0.1s ease-out">';
+            html += '<a href="https://ytseo.siteuo.com/enterprise-suite" class="block">';
+            html += '<div class="living-aurora aurora-gold rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden border-2 border-yellow-300/50 h-full">';
             // Aurora orbs layer
             html += '<div class="aurora-orbs">';
             html += '<div class="aurora-orb aurora-orb-1"></div>';
