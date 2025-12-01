@@ -796,9 +796,28 @@
             /* REMOVED blur filter - was causing major performance issues */
             /* filter: blur(40px); */
             mix-blend-mode: screen;
-            will-change: transform, opacity;
+            /* REMOVED will-change to prevent separate compositing layer issues during navigation */
+            /* will-change: transform, opacity; */
             /* Use a softer gradient instead of blur for performance */
             opacity: 0.4;
+            /* Ensure orbs transition with parent */
+            transition: opacity 0.15s ease-out;
+        }
+
+        /* Hide aurora orbs when link is clicked to prevent flash during navigation */
+        a:active .aurora-orb,
+        a:active .aurora-orbs,
+        a:active .living-aurora::before,
+        a:active .aurora-shimmer {
+            opacity: 0 !important;
+            transition: none;
+        }
+
+        /* Also hide during view transitions */
+        .view-transitioning .aurora-orb,
+        .view-transitioning .aurora-orbs,
+        .view-transitioning .living-aurora::before {
+            opacity: 0;
         }
 
         .aurora-orb-1 {
