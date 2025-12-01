@@ -6671,7 +6671,6 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                   }
                 }
               }
-            }
           } catch (genError) {
             console.error(`Gemini generation error for image ${imgIdx + 1}:`, genError);
             // Continue with remaining images
