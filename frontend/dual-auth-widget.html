@@ -2107,14 +2107,16 @@
         /* Feature Info Collapsible Section - works same on all screen sizes */
         .feature-info-content {
             max-height: 0;
+            padding: 0 1rem !important;
             overflow: hidden;
-            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+            opacity: 0;
+            transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
         }
 
         .expanded .feature-info-content {
             max-height: 500px;
-            padding-top: 0;
-            overflow: visible;
+            padding: 0 1rem 1rem 1rem !important;
+            opacity: 1;
         }
 
         /* Glass morphism effect - OPTIMIZED: removed blur for performance */
@@ -5689,7 +5691,7 @@
             html += '</button>';
 
             // Content area - removed hidden class, CSS handles visibility
-            html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
+            html += '<div class="feature-info-content">';
             html += '<p class="text-gray-700 mb-3 leading-relaxed">Transform your video\'s discoverability with AI-powered SEO optimization. Our advanced algorithms analyze your content and generate optimized metadata to help you rank higher and get more views.</p>';
             html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
             html += '<div class="flex items-start gap-2"><span class="text-green-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO-Optimized Titles</strong> – 5 click-worthy title suggestions</span></div>';
@@ -6460,7 +6462,7 @@
                 html += '</button>';
 
                 // Content area - CSS handles visibility
-                html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
+                html += '<div class="feature-info-content">';
                 html += '<p class="text-gray-700 mb-3 leading-relaxed">Reverse-engineer the success of any YouTube video. Our AI analyzes competitor content to reveal their SEO strategies, strengths, and weaknesses – giving you the blueprint to outperform them.</p>';
                 html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
                 html += '<div class="flex items-start gap-2"><span class="text-red-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO Breakdown</strong> – Competitor\'s optimization score</span></div>';
@@ -6618,7 +6620,7 @@
                 html += '</button>';
 
                 // Content area - CSS handles visibility
-                html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
+                html += '<div class="feature-info-content">';
                 html += '<p class="text-gray-700 mb-3 leading-relaxed">Stay ahead of the curve with AI-powered trend forecasting. Discover what\'s hot right now and predict future viral topics in your niche before your competitors catch on.</p>';
                 html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
                 html += '<div class="flex items-start gap-2"><span class="text-cyan-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Current Trends</strong> – What\'s trending now in your niche</span></div>';
@@ -6817,7 +6819,7 @@
                 html += '</button>';
 
                 // Content area - CSS handles visibility
-                html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
+                html += '<div class="feature-info-content">';
                 html += '<p class="text-gray-700 mb-3 leading-relaxed">Create scroll-stopping thumbnails with our AI image generator. Get professional-quality visuals that match your video\'s content and maximize click-through rates.</p>';
                 html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
                 html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>AI-Generated Art</strong> – Unique visuals tailored to your title</span></div>';
@@ -7221,7 +7223,7 @@
                 html += '</button>';
 
                 // Content area - CSS handles visibility
-                html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
+                html += '<div class="feature-info-content">';
                 html += '<p class="text-gray-700 mb-3 leading-relaxed">Get a complete health check for any YouTube channel. Our AI analyzes every aspect of channel performance and provides actionable recommendations for growth.</p>';
                 html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
                 html += '<div class="flex items-start gap-2"><span class="text-emerald-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO Health Score</strong> – Overall optimization rating</span></div>';
