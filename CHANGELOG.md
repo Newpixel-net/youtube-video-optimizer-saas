@@ -16,6 +16,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.3] - 2025-12-01
+
+### Fixed
+- **Critical Performance Issue (Complete Fix)**: Removed ALL remaining heavy animations
+  - Removed 6 Velvet orb blur filters (`blur(55-70px)`) on massive elements (45-75vmax)
+  - Disabled all 6 velvetDrift animations (30-45s continuous animations)
+  - Removed remaining `backdrop-filter: blur(10px)` from `.btn-secondary` and `.glass`
+  - Reduced gradient opacity for softer look without blur
+
+- **Creative Studio History Not Loading**: Added missing Firestore index
+  - Added composite index for `creativeHistory` collection (userId + createdAt)
+  - History queries now work correctly with ordering
+
+### Technical Details
+- The Velvet Aurora background had 6 orbs (45-75vmax each) with blur(55-70px)
+- Each blur filter on animated elements causes continuous GPU recomputation
+- Total: 6 velvet orbs + 4 aurora orbs = 10 massive blurred animations removed
+- creativeHistory index was missing from `firestore.indexes.json`
+
+### Deployment Notes
+- **Frontend**: Update `dual-auth-widget.html` in website builder
+- **Firebase**: Must deploy indexes with `firebase deploy --only firestore:indexes`
+
+---
+
 ## [1.0.2] - 2025-12-01
 
 ### Fixed
