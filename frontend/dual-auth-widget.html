@@ -2104,7 +2104,7 @@
             display: none !important;
         }
 
-        /* Feature Info Collapsible Section */
+        /* Feature Info Collapsible Section - works same on all screen sizes */
         .feature-info-content {
             max-height: 0;
             overflow: hidden;
@@ -2114,13 +2114,7 @@
         .expanded .feature-info-content {
             max-height: 500px;
             padding-top: 0;
-        }
-
-        @media (min-width: 768px) {
-            .feature-info-content {
-                max-height: none;
-                overflow: visible;
-            }
+            overflow: visible;
         }
 
         /* Glass morphism effect - OPTIMIZED: removed blur for performance */
