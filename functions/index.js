@@ -1730,6 +1730,18 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
     const userRef = db.collection('users').doc(uid);
     const userSnap = await userRef.get();
 
+    // Get custom reset time from settings (default 1440 minutes = 24 hours)
+    let resetMinutes = 1440;
+    try {
+      const settingsDoc = await db.collection('settings').doc('quotaSettings').get();
+      if (settingsDoc.exists && settingsDoc.data().resetTimeMinutes) {
+        resetMinutes = settingsDoc.data().resetTimeMinutes;
+      }
+    } catch (e) {
+      console.log('Using default reset time');
+    }
+    const resetIntervalMs = resetMinutes * 60 * 1000;
+
     let userData;
 
     if (!userSnap.exists) {
@@ -1743,33 +1755,24 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
         isAdmin: false,
         subscription: { plan: 'free', status: 'active' },
         usage: {
-          warpOptimizer: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
-          competitorAnalysis: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
-          trendPredictor: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() },
-          thumbnailGenerator: { usedToday: 0, limit: 3, lastResetAt: new Date().toISOString() }
+          warpOptimizer: { usedToday: 0, limit: 3, lastResetAt: admin.firestore.FieldValue.serverTimestamp() },
+          competitorAnalysis: { usedToday: 0, limit: 3, lastResetAt: admin.firestore.FieldValue.serverTimestamp() },
+          trendPredictor: { usedToday: 0, limit: 3, lastResetAt: admin.firestore.FieldValue.serverTimestamp() },
+          thumbnailGenerator: { usedToday: 0, limit: 3, lastResetAt: admin.firestore.FieldValue.serverTimestamp() },
+          channelAudit: { usedToday: 0, limit: 3, lastResetAt: admin.firestore.FieldValue.serverTimestamp() }
         }
       };
       await userRef.set(userData);
+      // Re-fetch to get the server timestamps
+      const newSnap = await userRef.get();
+      userData = newSnap.data();
     } else {
       userData = userSnap.data();
-
-      // Convert Firestore Timestamps to ISO strings for serialization
-      if (userData.createdAt?.toDate) userData.createdAt = userData.createdAt.toDate().toISOString();
-      if (userData.lastLoginAt?.toDate) userData.lastLoginAt = userData.lastLoginAt.toDate().toISOString();
-      if (userData.subscription?.startDate?.toDate) userData.subscription.startDate = userData.subscription.startDate.toDate().toISOString();
-
-      // Convert usage timestamps
-      ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator'].forEach(tool => {
-        if (userData.usage?.[tool]?.lastResetAt?.toDate) {
-          userData.usage[tool].lastResetAt = userData.usage[tool].lastResetAt.toDate().toISOString();
-        }
-      });
     }
 
     // Build quotaInfo with bonus uses included
-    const tools = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator'];
+    const tools = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator', 'channelAudit'];
     const quotaInfo = {};
-    const resetIntervalMs = 24 * 60 * 60 * 1000; // 24 hours in ms
     const now = Date.now();
 
     // Ensure userData.usage has all tool keys (for existing users with old structure)
@@ -1777,40 +1780,87 @@ exports.getUserProfile = functions.https.onCall(async (data, context) => {
       userData.usage = {};
     }
 
+    // Track if any updates are needed
+    const updates = {};
+
     for (const tool of tools) {
       // Add default usage data for missing tools
       if (!userData.usage[tool]) {
-        userData.usage[tool] = { usedToday: 0, limit: 2, lastResetAt: new Date().toISOString() };
+        userData.usage[tool] = { usedToday: 0, limit: 2 };
+        updates[`usage.${tool}.usedToday`] = 0;
+        updates[`usage.${tool}.limit`] = 2;
+        updates[`usage.${tool}.lastResetAt`] = admin.firestore.FieldValue.serverTimestamp();
       }
+
       const usage = userData.usage[tool];
       const bonusUses = userData.bonusUses?.[tool] || 0;
       const baseLimit = usage.limit || 2;
       const totalLimit = baseLimit + bonusUses;
 
-      // Calculate next reset time
-      let lastResetTime = usage.lastResetAt;
-      if (typeof lastResetTime === 'string') {
-        lastResetTime = new Date(lastResetTime).getTime();
-      } else if (lastResetTime && typeof lastResetTime === 'object') {
-        lastResetTime = (lastResetTime.seconds || lastResetTime._seconds || 0) * 1000;
+      // Calculate last reset time in milliseconds
+      let lastResetTime = 0;
+      if (usage.lastResetAt) {
+        if (usage.lastResetAt.toMillis) {
+          lastResetTime = usage.lastResetAt.toMillis();
+        } else if (typeof usage.lastResetAt === 'string') {
+          lastResetTime = new Date(usage.lastResetAt).getTime();
+        } else if (typeof usage.lastResetAt === 'object') {
+          lastResetTime = (usage.lastResetAt.seconds || usage.lastResetAt._seconds || 0) * 1000;
+        }
       }
-      const nextResetMs = (lastResetTime || now) + resetIntervalMs;
 
-      quotaInfo[tool] = {
-        baseLimit: baseLimit,
-        bonusUses: bonusUses,
-        totalLimit: totalLimit,
-        usedToday: usage.usedToday || 0,
-        remaining: Math.max(0, totalLimit - (usage.usedToday || 0)),
-        nextResetMs: nextResetMs
-      };
+      // Check if quota should be reset
+      const nextResetMs = lastResetTime + resetIntervalMs;
+      let usedToday = usage.usedToday || 0;
+
+      if (lastResetTime > 0 && now >= nextResetMs) {
+        // Quota should be reset - update in database
+        updates[`usage.${tool}.usedToday`] = 0;
+        updates[`usage.${tool}.lastResetAt`] = admin.firestore.FieldValue.serverTimestamp();
+        usedToday = 0;
+        // New next reset will be from now
+        quotaInfo[tool] = {
+          baseLimit: baseLimit,
+          bonusUses: bonusUses,
+          totalLimit: totalLimit,
+          usedToday: 0,
+          remaining: totalLimit,
+          nextResetMs: now + resetIntervalMs
+        };
+      } else {
+        quotaInfo[tool] = {
+          baseLimit: baseLimit,
+          bonusUses: bonusUses,
+          totalLimit: totalLimit,
+          usedToday: usedToday,
+          remaining: Math.max(0, totalLimit - usedToday),
+          nextResetMs: lastResetTime > 0 ? nextResetMs : now + resetIntervalMs
+        };
+      }
     }
+
+    // Apply any pending updates
+    if (Object.keys(updates).length > 0) {
+      await userRef.update(updates);
+    }
+
+    // Convert Firestore Timestamps to ISO strings for serialization
+    if (userData.createdAt?.toDate) userData.createdAt = userData.createdAt.toDate().toISOString();
+    if (userData.lastLoginAt?.toDate) userData.lastLoginAt = userData.lastLoginAt.toDate().toISOString();
+    if (userData.subscription?.startDate?.toDate) userData.subscription.startDate = userData.subscription.startDate.toDate().toISOString();
+
+    // Convert usage timestamps
+    tools.forEach(tool => {
+      if (userData.usage?.[tool]?.lastResetAt?.toDate) {
+        userData.usage[tool].lastResetAt = userData.usage[tool].lastResetAt.toDate().toISOString();
+      }
+    });
 
     return {
       success: true,
       profile: userData,
       quotaInfo: quotaInfo,
-      resetTimeMinutes: 1440
+      resetTimeMinutes: resetMinutes
     };
 
   } catch (error) {
