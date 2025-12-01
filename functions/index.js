@@ -7053,7 +7053,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     'openai': 'dall-e-3'
   };
 
-  // Get the model ID based on type
+  // Get the model ID based on type [VERIFIED-FIX-2025-12-01]
   const geminiImageModelId = geminiImageModelMap[model] || geminiImageModelMap['auto'];
   const imagenModelId = imagenModelMap[model] || 'imagen-4.0-generate-001'; // Default to Imagen 4 (NOT Imagen 3!)
   const dalleModelId = dalleModelMap[model] || 'dall-e-3';
