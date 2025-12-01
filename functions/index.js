@@ -6401,8 +6401,11 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const validAspectRatio = aspectRatioMap[aspectRatio] || '1:1';
 
   // Map model selection to AI models
-  // All models use the Imagen API via ai.models.generateImages()
-  // The @google/genai SDK only supports Imagen for image generation
+  // Supports both Google Imagen API and OpenAI DALL-E API
+
+  // Check if this is a DALL-E model
+  const dalleModels = ['dall-e-3', 'dall-e-2', 'dalle-3', 'dalle-2', 'openai'];
+  const isDalleModel = dalleModels.includes(model);
 
   // Imagen model mapping (uses ai.models.generateImages)
   const imagenModelMap = {
@@ -6422,8 +6425,18 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     'gemini-flash': 'imagen-4.0-generate-001'
   };
 
-  // Get the Imagen model ID (all requests use Imagen API)
+  // DALL-E model mapping
+  const dalleModelMap = {
+    'dall-e-3': 'dall-e-3',
+    'dalle-3': 'dall-e-3',
+    'dall-e-2': 'dall-e-2',
+    'dalle-2': 'dall-e-2',
+    'openai': 'dall-e-3' // Default OpenAI selection to DALL-E 3
+  };
+
+  // Get the model ID
   const imagenModelId = imagenModelMap[model] || imagenModelMap['auto'];
+  const dalleModelId = dalleModelMap[model] || 'dall-e-3';
 
   try {
     // Verify token balance
@@ -6435,77 +6448,166 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
         `Insufficient tokens. Need ${totalCost}, have ${balance}`);
     }
 
-    // Initialize Google GenAI with API key from Firebase config
-    const geminiApiKey = functions.config().gemini?.key;
-    if (!geminiApiKey) {
-      console.error('Gemini API key not configured');
-      throw new functions.https.HttpsError('failed-precondition',
-        'Image generation service not configured. Please contact support.');
-    }
-
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-
     // Process generated images
     const generatedImages = [];
     const storage = admin.storage().bucket();
     const timestamp = Date.now();
+    let usedModel = '';
 
-    // Use Imagen API for image generation (all models use this API)
-    console.log(`Generating ${imageCount} image(s) with ${imagenModelId}, aspect: ${validAspectRatio}`);
-    console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
+    if (isDalleModel) {
+      // ==========================================
+      // DALL-E Image Generation (OpenAI)
+      // ==========================================
+      console.log(`Generating ${imageCount} image(s) with DALL-E ${dalleModelId}, aspect: ${validAspectRatio}`);
+      console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
 
-    const response = await ai.models.generateImages({
-      model: imagenModelId,
-      prompt: finalPrompt, // Use the professional prompt when template is selected
-      config: {
-        numberOfImages: imageCount,
-        aspectRatio: validAspectRatio,
-        // Safety settings
-        includeRaiReason: true,
-        personGeneration: 'allow_adult' // Allow generating people
-      }
-    });
+      // Map aspect ratios to DALL-E sizes
+      const dalleSizeMap = {
+        '1:1': '1024x1024',
+        '16:9': '1792x1024', // DALL-E 3 only
+        '9:16': '1024x1792', // DALL-E 3 only
+        '4:3': '1024x1024',  // DALL-E doesn't support 4:3, use 1:1
+        '3:4': '1024x1024'   // DALL-E doesn't support 3:4, use 1:1
+      };
 
-    if (response.generatedImages && response.generatedImages.length > 0) {
-      for (let i = 0; i < response.generatedImages.length; i++) {
-        const genImage = response.generatedImages[i];
+      // DALL-E 2 only supports 1024x1024, 512x512, 256x256
+      const dalleSize = dalleModelId === 'dall-e-3'
+        ? (dalleSizeMap[validAspectRatio] || '1024x1024')
+        : '1024x1024';
 
-        // Check if image was blocked by safety filters
-        if (genImage.raiFilteredReason) {
-          console.warn(`Image ${i + 1} filtered: ${genImage.raiFilteredReason}`);
-          continue;
-        }
+      // DALL-E 3 only supports 1 image per request, DALL-E 2 supports up to 10
+      const imagesPerRequest = dalleModelId === 'dall-e-3' ? 1 : Math.min(imageCount, 4);
+      const requestsNeeded = dalleModelId === 'dall-e-3' ? imageCount : 1;
 
-        const imageBytes = genImage.image?.imageBytes;
-        if (!imageBytes) continue;
+      for (let req = 0; req < requestsNeeded; req++) {
+        try {
+          const dalleResponse = await openai.images.generate({
+            model: dalleModelId,
+            prompt: finalPrompt,
+            n: imagesPerRequest,
+            size: dalleSize,
+            quality: quality === 'ultra' || quality === 'hd' ? 'hd' : 'standard',
+            response_format: 'b64_json'
+          });
 
-        // Upload base64 image to Firebase Storage
-        const fileName = `creative-studio/${uid}/${timestamp}-${i + 1}.png`;
-        const file = storage.file(fileName);
+          if (dalleResponse.data && dalleResponse.data.length > 0) {
+            for (let i = 0; i < dalleResponse.data.length; i++) {
+              const imageData = dalleResponse.data[i];
+              const imageBytes = imageData.b64_json;
 
-        const buffer = Buffer.from(imageBytes, 'base64');
-        await file.save(buffer, {
-          metadata: {
-            contentType: 'image/png',
-            metadata: {
-              userId: uid,
-              prompt: prompt.substring(0, 200),
-              model: imagenModelId,
-              aspectRatio: validAspectRatio
+              if (!imageBytes) continue;
+
+              // Upload base64 image to Firebase Storage
+              const imageIndex = generatedImages.length + 1;
+              const fileName = `creative-studio/${uid}/${timestamp}-dalle-${imageIndex}.png`;
+              const file = storage.file(fileName);
+
+              const buffer = Buffer.from(imageBytes, 'base64');
+              await file.save(buffer, {
+                metadata: {
+                  contentType: 'image/png',
+                  metadata: {
+                    userId: uid,
+                    prompt: prompt.substring(0, 200),
+                    model: dalleModelId,
+                    size: dalleSize,
+                    revisedPrompt: imageData.revised_prompt || ''
+                  }
+                }
+              });
+
+              // Make file publicly accessible
+              await file.makePublic();
+              const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+              generatedImages.push({
+                url: publicUrl,
+                fileName: fileName,
+                seed: Math.floor(Math.random() * 1000000),
+                revisedPrompt: imageData.revised_prompt || null
+              });
             }
           }
-        });
-
-        // Make file publicly accessible
-        await file.makePublic();
-        const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
-
-        generatedImages.push({
-          url: publicUrl,
-          fileName: fileName,
-          seed: Math.floor(Math.random() * 1000000)
-        });
+        } catch (dalleError) {
+          console.error(`DALL-E generation error (request ${req + 1}):`, dalleError);
+          if (requestsNeeded === 1) {
+            // If single request fails, throw error
+            throw new functions.https.HttpsError('internal',
+              `DALL-E generation failed: ${dalleError.message || 'Unknown error'}`);
+          }
+          // For multiple requests, continue with remaining
+        }
       }
+
+      usedModel = dalleModelId;
+
+    } else {
+      // ==========================================
+      // Imagen Image Generation (Google)
+      // ==========================================
+      const geminiApiKey = functions.config().gemini?.key;
+      if (!geminiApiKey) {
+        console.error('Gemini API key not configured');
+        throw new functions.https.HttpsError('failed-precondition',
+          'Image generation service not configured. Please contact support.');
+      }
+
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+      console.log(`Generating ${imageCount} image(s) with ${imagenModelId}, aspect: ${validAspectRatio}`);
+      console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
+
+      const response = await ai.models.generateImages({
+        model: imagenModelId,
+        prompt: finalPrompt,
+        config: {
+          numberOfImages: imageCount,
+          aspectRatio: validAspectRatio,
+          includeRaiReason: true,
+          personGeneration: 'allow_adult'
+        }
+      });
+
+      if (response.generatedImages && response.generatedImages.length > 0) {
+        for (let i = 0; i < response.generatedImages.length; i++) {
+          const genImage = response.generatedImages[i];
+
+          if (genImage.raiFilteredReason) {
+            console.warn(`Image ${i + 1} filtered: ${genImage.raiFilteredReason}`);
+            continue;
+          }
+
+          const imageBytes = genImage.image?.imageBytes;
+          if (!imageBytes) continue;
+
+          const fileName = `creative-studio/${uid}/${timestamp}-${i + 1}.png`;
+          const file = storage.file(fileName);
+
+          const buffer = Buffer.from(imageBytes, 'base64');
+          await file.save(buffer, {
+            metadata: {
+              contentType: 'image/png',
+              metadata: {
+                userId: uid,
+                prompt: prompt.substring(0, 200),
+                model: imagenModelId,
+                aspectRatio: validAspectRatio
+              }
+            }
+          });
+
+          await file.makePublic();
+          const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+          generatedImages.push({
+            url: publicUrl,
+            fileName: fileName,
+            seed: Math.floor(Math.random() * 1000000)
+          });
+        }
+      }
+
+      usedModel = imagenModelId;
     }
 
     // Check if any images were generated
@@ -6520,9 +6622,6 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
       balance: admin.firestore.FieldValue.increment(-actualCost),
       lastUsed: admin.firestore.FieldValue.serverTimestamp()
     });
-
-    // Save to history
-    const usedModel = imagenModelId;
     const historyData = {
       userId: uid,
       prompt: prompt,

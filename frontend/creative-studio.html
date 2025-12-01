@@ -1634,6 +1634,22 @@
             background: rgba(255, 255, 255, 0.3);
         }
 
+        .history-shared-badge {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            background: rgba(34, 197, 94, 0.9);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 0.375rem;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
         /* Load More Button */
         .load-more-container {
             display: flex;
@@ -3154,6 +3170,249 @@
         }
 
         /* ==========================================
+           SHARE TO GALLERY DIALOG
+           ========================================== */
+        .share-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 2500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .share-dialog {
+            background: linear-gradient(180deg, rgba(35, 35, 55, 0.98) 0%, rgba(25, 25, 45, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 440px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: modalSlideIn 0.2s ease;
+        }
+
+        .share-dialog-header {
+            padding: 1.5rem 1.5rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .share-dialog-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .share-dialog-subtitle {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 0.5rem;
+        }
+
+        .share-dialog-body {
+            padding: 1.5rem;
+        }
+
+        .share-dialog-preview {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .share-dialog-preview-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 0.5rem;
+            object-fit: cover;
+        }
+
+        .share-dialog-preview-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .share-dialog-preview-prompt {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .share-dialog-option {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .share-dialog-option:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .share-dialog-option.selected {
+            border-color: rgba(139, 92, 246, 0.5);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .share-dialog-option.locked {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .share-dialog-option-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .share-dialog-option-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .share-dialog-option-badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.25rem;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            font-weight: 600;
+        }
+
+        .share-dialog-option-desc {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.4;
+        }
+
+        .share-dialog-price-input {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .share-dialog-price-label {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .share-dialog-price-field {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .share-dialog-price-field input {
+            width: 70px;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .share-dialog-price-field input:focus {
+            outline: none;
+            border-color: rgba(139, 92, 246, 0.5);
+        }
+
+        .share-dialog-footer {
+            display: flex;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem 1.5rem;
+        }
+
+        .share-dialog-btn {
+            flex: 1;
+            padding: 0.875rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .share-dialog-btn-cancel {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .share-dialog-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .share-dialog-btn-share {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            color: white;
+        }
+
+        .share-dialog-btn-share:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .share-dialog-btn-share:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .share-dialog-upgrade-hint {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            color: #f59e0b;
+            margin-top: 0.5rem;
+        }
+
+        .share-dialog-upgrade-hint a {
+            color: #f59e0b;
+            text-decoration: underline;
+        }
+
+        /* ==========================================
            STYLE REFERENCE MODAL
            ========================================== */
         .style-ref-modal-overlay {
@@ -4595,7 +4854,14 @@
             communityError: null,
             communityLoaded: false, // Track if we've loaded at least once
             communitySort: 'newest', // newest | popular
-            userLikes: {} // Track which items user has liked: { galleryId: true }
+            userLikes: {}, // Track which items user has liked: { galleryId: true }
+
+            // Share to Gallery dialog state
+            shareDialogOpen: false,
+            shareDialogItem: null, // history item to share
+            shareDialogPrivate: false, // default is public
+            shareDialogPrice: 5, // token price for private prompts
+            shareDialogSharing: false // loading state during share
         };
 
         /* ==========================================
@@ -4723,6 +4989,23 @@
                 badge: '',
                 available: true
             },
+            { divider: true, label: 'OpenAI DALL-E' },
+            {
+                key: 'dall-e-3',
+                name: 'DALL-E 3',
+                icon: '🎭',
+                description: 'OpenAI - exceptional detail & accuracy',
+                badge: 'new',
+                available: true
+            },
+            {
+                key: 'dall-e-2',
+                name: 'DALL-E 2',
+                icon: '🖌️',
+                description: 'OpenAI - fast & cost-effective',
+                badge: '',
+                available: true
+            },
             { divider: true, label: 'Coming Soon' },
             {
                 key: 'gemini-2-flash',
@@ -4737,14 +5020,6 @@
                 name: 'Flux',
                 icon: '△',
                 description: 'Most loved by the AI community',
-                badge: 'coming',
-                available: false
-            },
-            {
-                key: 'gpt',
-                name: 'GPT',
-                icon: '◎',
-                description: 'OpenAI technology from ChatGPT',
                 badge: 'coming',
                 available: false
             },
@@ -6701,39 +6976,120 @@
                 });
             },
 
-            // Share image to community gallery
-            shareToGallery: function(historyId, makePrivate, promptPrice) {
+            // Open share dialog for an image
+            openShareDialog: function(historyId) {
                 if (!state.user) {
                     showToast('Please sign in to share images', 'error');
                     return;
                 }
 
-                var shareToGallery = functions.httpsCallable('shareToGallery');
-                shareToGallery({
-                    historyId: historyId,
-                    makePrivate: makePrivate || false,
-                    promptPrice: promptPrice || 5
+                // Find the history item
+                var item = null;
+                for (var i = 0; i < state.history.length; i++) {
+                    if (state.history[i].id === historyId) {
+                        item = state.history[i];
+                        break;
+                    }
+                }
+
+                if (!item) {
+                    showToast('Image not found', 'error');
+                    return;
+                }
+
+                // Check if already shared
+                if (item.sharedToGallery) {
+                    showToast('This image is already shared to the community', 'info');
+                    return;
+                }
+
+                // Open dialog with default settings (public)
+                state.shareDialogOpen = true;
+                state.shareDialogItem = item;
+                state.shareDialogPrivate = false; // default is public
+                state.shareDialogPrice = 5;
+                state.shareDialogSharing = false;
+                render();
+            },
+
+            // Close share dialog
+            closeShareDialog: function() {
+                state.shareDialogOpen = false;
+                state.shareDialogItem = null;
+                state.shareDialogSharing = false;
+                render();
+            },
+
+            // Set share visibility option
+            setSharePrivate: function(isPrivate) {
+                // Check if user has premium access
+                var userPlan = state.tokens.plan || 'free';
+                var isPremium = ['lite', 'pro', 'business', 'enterprise'].includes(userPlan);
+
+                if (isPrivate && !isPremium) {
+                    // Show upgrade prompt instead
+                    app.showPremiumModal('Private Prompts');
+                    return;
+                }
+
+                state.shareDialogPrivate = isPrivate;
+                render();
+            },
+
+            // Update share price
+            setSharePrice: function(price) {
+                var numPrice = parseInt(price) || 5;
+                if (numPrice < 1) numPrice = 1;
+                if (numPrice > 100) numPrice = 100;
+                state.shareDialogPrice = numPrice;
+            },
+
+            // Confirm and execute share
+            confirmShare: function() {
+                if (!state.shareDialogItem || state.shareDialogSharing) return;
+
+                state.shareDialogSharing = true;
+                render();
+
+                var shareToGalleryFn = functions.httpsCallable('shareToGallery');
+                shareToGalleryFn({
+                    historyId: state.shareDialogItem.id,
+                    makePrivate: state.shareDialogPrivate,
+                    promptPrice: state.shareDialogPrivate ? state.shareDialogPrice : 0
                 })
                 .then(function(result) {
                     if (result.data && result.data.success) {
-                        showToast('Image shared to community!', 'success');
+                        var msg = state.shareDialogPrivate
+                            ? 'Image shared with private prompt!'
+                            : 'Image shared to community!';
+                        showToast(msg, 'success');
                         // Refresh community gallery
                         app.loadCommunityGallery(true);
                         // Update history item to show it's shared
                         for (var i = 0; i < state.history.length; i++) {
-                            if (state.history[i].id === historyId) {
+                            if (state.history[i].id === state.shareDialogItem.id) {
                                 state.history[i].sharedToGallery = true;
                                 state.history[i].galleryId = result.data.galleryId;
+                                state.history[i].isPrivate = state.shareDialogPrivate;
                                 break;
                             }
                         }
-                        render();
+                        // Close dialog
+                        app.closeShareDialog();
                     }
                 })
                 .catch(function(error) {
                     console.error('Error sharing to gallery:', error);
                     showToast(error.message || 'Failed to share image', 'error');
+                    state.shareDialogSharing = false;
+                    render();
                 });
+            },
+
+            // Legacy function for backwards compatibility
+            shareToGallery: function(historyId, makePrivate, promptPrice) {
+                // Now opens dialog instead of directly sharing
+                app.openShareDialog(historyId);
             },
 
             // Purchase a private prompt
@@ -6967,6 +7323,9 @@
 
             // Image Upload Modal (PRO Feature)
             html += renderImageUploadModal();
+
+            // Share to Gallery Dialog
+            html += renderShareDialog();
 
             // Premium Feature Modal
             html += renderPremiumModal();
@@ -7599,12 +7958,21 @@
                 // Get image URL - handle both old format (imageUrl) and new format (images array)
                 var imageUrl = item.imageUrl || (item.images && item.images[0] ? item.images[0].url : '');
                 html += '<div class="history-item" onclick="app.openImageDetail(' + i + ')" style="cursor: pointer;">';
+                // Show shared badge if already shared
+                if (item.sharedToGallery) {
+                    html += '<div class="history-shared-badge">' + (item.isPrivate ? '🔒' : '✓') + ' Shared</div>';
+                }
                 html += '<img src="' + imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" />';
                 html += '<div class="history-item-overlay">';
                 html += '<div class="history-item-actions" onclick="event.stopPropagation()">';
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.downloadImage(\'' + imageUrl + '\')" title="Download">⬇️</button>';
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.usePrompt(\'' + utils.escapeHtml(item.prompt).replace(/'/g, "\\'") + '\')" title="Reuse Prompt">🔄</button>';
-                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.shareToGallery(\'' + item.id + '\', false)" title="Share">📤</button>';
+                // Show different share button based on shared status
+                if (item.sharedToGallery) {
+                    html += '<button class="history-action-btn" style="opacity: 0.5; cursor: default;" title="Already shared">✓</button>';
+                } else {
+                    html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.openShareDialog(\'' + item.id + '\')" title="Share to Community">📤</button>';
+                }
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.deleteFromHistory(\'' + item.id + '\')" title="Delete">🗑️</button>';
                 html += '</div>';
                 html += '</div>';
@@ -7963,6 +8331,11 @@
                 'imagen-4': 'Imagen 4',
                 'imagen-4-ultra': 'Imagen 4 Ultra',
                 'imagen-3': 'Imagen 3',
+                // DALL-E models
+                'dall-e-3': 'DALL-E 3',
+                'dall-e-2': 'DALL-E 2',
+                'dalle-3': 'DALL-E 3',
+                'dalle-2': 'DALL-E 2',
                 // Legacy keys
                 'banana1': 'Imagen 4',
                 'banana2': 'Imagen 4 Ultra',
@@ -8250,6 +8623,106 @@
             return html;
         }
 
+        // Render Share to Gallery Dialog
+        function renderShareDialog() {
+            if (!state.shareDialogOpen || !state.shareDialogItem) return '';
+
+            var item = state.shareDialogItem;
+            var imageUrl = item.imageUrl || (item.images && item.images[0] ? item.images[0].url : '');
+            var promptPreview = item.prompt || 'No prompt';
+            var userPlan = state.tokens.plan || 'free';
+            var isPremium = ['lite', 'pro', 'business', 'enterprise'].includes(userPlan);
+
+            var html = '<div class="share-dialog-overlay" onclick="app.closeShareDialog()">';
+            html += '<div class="share-dialog" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="share-dialog-header">';
+            html += '<div class="share-dialog-title">📤 Share to Community</div>';
+            html += '<div class="share-dialog-subtitle">Choose how you want to share your creation</div>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="share-dialog-body">';
+
+            // Preview
+            html += '<div class="share-dialog-preview">';
+            html += '<img src="' + imageUrl + '" alt="Preview" class="share-dialog-preview-image" />';
+            html += '<div class="share-dialog-preview-info">';
+            html += '<div class="share-dialog-preview-prompt">' + utils.escapeHtml(promptPreview) + '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Public Option
+            var publicSelected = !state.shareDialogPrivate;
+            html += '<div class="share-dialog-option' + (publicSelected ? ' selected' : '') + '" onclick="app.setSharePrivate(false)">';
+            html += '<div class="share-dialog-option-header">';
+            html += '<div class="share-dialog-option-title">';
+            html += '<span>🌍</span> Public';
+            html += '</div>';
+            if (publicSelected) {
+                html += '<span style="color: #22c55e;">✓</span>';
+            }
+            html += '</div>';
+            html += '<div class="share-dialog-option-desc">Everyone can see your image and copy your prompt for free. Great for sharing inspiration!</div>';
+            html += '</div>';
+
+            // Private Option
+            var privateSelected = state.shareDialogPrivate;
+            html += '<div class="share-dialog-option' + (privateSelected ? ' selected' : '') + (!isPremium ? ' locked' : '') + '" onclick="app.setSharePrivate(true)">';
+            html += '<div class="share-dialog-option-header">';
+            html += '<div class="share-dialog-option-title">';
+            html += '<span>🔒</span> Private Prompt';
+            if (!isPremium) {
+                html += '<span class="share-dialog-option-badge">PRO</span>';
+            }
+            html += '</div>';
+            if (privateSelected && isPremium) {
+                html += '<span style="color: #22c55e;">✓</span>';
+            }
+            html += '</div>';
+            html += '<div class="share-dialog-option-desc">Image is visible but prompt is hidden. Others must pay tokens to unlock your prompt.</div>';
+
+            // Price input (only shown when private is selected and user is premium)
+            if (privateSelected && isPremium) {
+                html += '<div class="share-dialog-price-input">';
+                html += '<div class="share-dialog-price-label">Prompt price:</div>';
+                html += '<div class="share-dialog-price-field">';
+                html += '<input type="number" min="1" max="100" value="' + state.shareDialogPrice + '" onchange="app.setSharePrice(this.value)" onclick="event.stopPropagation()" />';
+                html += '<span style="color: rgba(255,255,255,0.5);">tokens</span>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // private option
+
+            // Upgrade hint for free users
+            if (!isPremium) {
+                html += '<div class="share-dialog-upgrade-hint">';
+                html += '<span>💡</span> <a href="#" onclick="event.preventDefault(); app.upgradeToPremium();">Upgrade to Pro</a> to unlock private prompts and earn tokens from your creations!';
+                html += '</div>';
+            }
+
+            html += '</div>'; // body
+
+            // Footer
+            html += '<div class="share-dialog-footer">';
+            html += '<button class="share-dialog-btn share-dialog-btn-cancel" onclick="app.closeShareDialog()">Cancel</button>';
+            html += '<button class="share-dialog-btn share-dialog-btn-share" onclick="app.confirmShare()"' + (state.shareDialogSharing ? ' disabled' : '') + '>';
+            if (state.shareDialogSharing) {
+                html += '<span class="loading-spinner" style="width: 16px; height: 16px;"></span> Sharing...';
+            } else {
+                html += '<span>📤</span> Share';
+            }
+            html += '</button>';
+            html += '</div>';
+
+            html += '</div>'; // dialog
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
         // Render Premium Feature Modal
         function renderPremiumModal() {
             if (!state.premiumModalOpen) return '';
@@ -8274,6 +8747,15 @@
                         { icon: '🖼️', text: 'Upload any image as a starting point' },
                         { icon: '✨', text: 'Transform and enhance your photos' },
                         { icon: '🔄', text: 'Create variations of existing images' }
+                    ]
+                },
+                'Private Prompts': {
+                    icon: '🔒',
+                    description: 'Protect and monetize your prompts',
+                    features: [
+                        { icon: '💰', text: 'Earn tokens when others purchase your prompts' },
+                        { icon: '🔐', text: 'Keep your creative prompts private' },
+                        { icon: '🌟', text: 'Share images while protecting your techniques' }
                     ]
                 }
             };
