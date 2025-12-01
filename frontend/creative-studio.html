@@ -4367,6 +4367,11 @@
          ============================================ -->
     <script>
         /* ==========================================
+           4.0 PLATFORM VERSION
+           ========================================== */
+        const PLATFORM_VERSION = '1.0.1';
+
+        /* ==========================================
            4.1 FIREBASE CONFIGURATION
            ========================================== */
         const FIREBASE_CONFIG = {
@@ -4394,6 +4399,7 @@
             // User data
             user: null,
             profile: null,
+            hasPremiumAccess: false, // true if user has PRO or Enterprise plan
 
             // Active tool
             activeTool: 'imageCreation', // realtimeCanvas | realtimeGen | motion | imageCreation | upscaler | canvasEditor
@@ -4412,8 +4418,10 @@
             // References (for advanced features)
             styleReference: null,
             styleReferenceModalOpen: false,
-            characterReference: null, // premium
-            uploadedImage: null, // premium
+            characterReference: null, // premium - PRO/Enterprise only
+            characterReferenceModalOpen: false,
+            uploadedImage: null, // premium - PRO/Enterprise only
+            imageUploadModalOpen: false,
             premiumModalOpen: false,
             premiumModalFeature: null,
 
@@ -5883,6 +5891,142 @@
             },
 
             // ========================================
+            // CHARACTER REFERENCE (PRO FEATURE)
+            // ========================================
+
+            // Open character reference modal
+            openCharacterReference: function() {
+                if (!state.hasPremiumAccess) {
+                    app.showPremiumModal('Character Reference');
+                    return;
+                }
+                state.characterReferenceModalOpen = true;
+                render();
+            },
+
+            // Close character reference modal
+            closeCharacterReference: function() {
+                state.characterReferenceModalOpen = false;
+                render();
+            },
+
+            // Handle character reference file selection
+            handleCharacterRefFile: function(file) {
+                if (!file) return;
+
+                if (!file.type.startsWith('image/')) {
+                    showToast('Please select an image file', 'error');
+                    return;
+                }
+
+                if (file.size > 10 * 1024 * 1024) {
+                    showToast('Image must be less than 10MB', 'error');
+                    return;
+                }
+
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    state.characterReference = {
+                        type: 'file',
+                        dataUrl: e.target.result,
+                        name: file.name,
+                        file: file
+                    };
+                    render();
+                };
+                reader.readAsDataURL(file);
+            },
+
+            // Remove character reference
+            removeCharacterReference: function() {
+                state.characterReference = null;
+                render();
+            },
+
+            // Apply character reference and close modal
+            applyCharacterReference: function() {
+                if (state.characterReference) {
+                    showToast('Character reference applied!', 'success');
+                }
+                state.characterReferenceModalOpen = false;
+                render();
+            },
+
+            // Trigger character ref file input
+            triggerCharacterRefUpload: function() {
+                var input = document.getElementById('character-ref-file-input');
+                if (input) input.click();
+            },
+
+            // ========================================
+            // IMAGE UPLOAD (PRO FEATURE)
+            // ========================================
+
+            // Open image upload modal
+            openImageUpload: function() {
+                if (!state.hasPremiumAccess) {
+                    app.showPremiumModal('Image Upload');
+                    return;
+                }
+                state.imageUploadModalOpen = true;
+                render();
+            },
+
+            // Close image upload modal
+            closeImageUpload: function() {
+                state.imageUploadModalOpen = false;
+                render();
+            },
+
+            // Handle uploaded image file selection
+            handleUploadedImageFile: function(file) {
+                if (!file) return;
+
+                if (!file.type.startsWith('image/')) {
+                    showToast('Please select an image file', 'error');
+                    return;
+                }
+
+                if (file.size > 10 * 1024 * 1024) {
+                    showToast('Image must be less than 10MB', 'error');
+                    return;
+                }
+
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    state.uploadedImage = {
+                        type: 'file',
+                        dataUrl: e.target.result,
+                        name: file.name,
+                        file: file
+                    };
+                    render();
+                };
+                reader.readAsDataURL(file);
+            },
+
+            // Remove uploaded image
+            removeUploadedImage: function() {
+                state.uploadedImage = null;
+                render();
+            },
+
+            // Apply uploaded image and close modal
+            applyUploadedImage: function() {
+                if (state.uploadedImage) {
+                    showToast('Image uploaded successfully!', 'success');
+                }
+                state.imageUploadModalOpen = false;
+                render();
+            },
+
+            // Trigger upload file input
+            triggerImageUpload: function() {
+                var input = document.getElementById('upload-image-file-input');
+                if (input) input.click();
+            },
+
+            // ========================================
             // GENERATION PROGRESS UPDATES (No Flash)
             // ========================================
 
@@ -6478,7 +6622,7 @@
             // Hero content
             html += '<div class="hero-content" style="padding-top: 2rem;">';
             html += '<h1 class="hero-title">Bring your ideas to life</h1>';
-            html += '<p class="hero-subtitle">One platform, infinite possibilities</p>';
+            html += '<p class="hero-subtitle">One platform, infinite possibilities <span style="opacity:0.4;font-size:0.75em;">v' + PLATFORM_VERSION + '</span></p>';
 
             // Tool navigation
             html += renderToolNav();
@@ -6521,6 +6665,12 @@
 
             // Style Reference Modal
             html += renderStyleReferenceModal();
+
+            // Character Reference Modal (PRO Feature)
+            html += renderCharacterReferenceModal();
+
+            // Image Upload Modal (PRO Feature)
+            html += renderImageUploadModal();
 
             // Premium Feature Modal
             html += renderPremiumModal();
@@ -6691,29 +6841,49 @@
             html += '<span class="reference-btn-hint">Set the visual style</span>';
             html += '</button>';
 
-            // Character Reference (Premium)
-            html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Character Reference\')" title="Character Reference - Premium Feature">';
-            html += '<div class="premium-lock-overlay">';
-            html += '<span class="premium-lock-icon">🔒</span>';
-            html += '</div>';
-            html += '<div class="reference-btn-content">';
-            html += '<span class="reference-btn-icon">👤</span>';
-            html += '<span class="reference-btn-label">Character</span>';
-            html += '</div>';
-            html += '<span class="reference-btn-hint">Consistent faces</span>';
-            html += '</button>';
+            // Character Reference (Premium - unlocked for PRO/Enterprise)
+            if (state.hasPremiumAccess) {
+                html += '<button class="reference-btn" onclick="app.openCharacterReference()" title="Add a character reference for consistent faces">';
+                html += '<div class="reference-btn-content">';
+                html += '<span class="reference-btn-icon">👤</span>';
+                html += '<span class="reference-btn-label">Character</span>';
+                html += '</div>';
+                html += '<span class="reference-btn-hint">Consistent faces</span>';
+                html += '</button>';
+            } else {
+                html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Character Reference\')" title="Character Reference - PRO Feature">';
+                html += '<div class="premium-lock-overlay">';
+                html += '<span class="premium-lock-icon">🔒</span>';
+                html += '</div>';
+                html += '<div class="reference-btn-content">';
+                html += '<span class="reference-btn-icon">👤</span>';
+                html += '<span class="reference-btn-label">Character</span>';
+                html += '</div>';
+                html += '<span class="reference-btn-hint">Consistent faces</span>';
+                html += '</button>';
+            }
 
-            // Upload Reference (Premium)
-            html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Image Upload\')" title="Upload Image - Premium Feature">';
-            html += '<div class="premium-lock-overlay">';
-            html += '<span class="premium-lock-icon">🔒</span>';
-            html += '</div>';
-            html += '<div class="reference-btn-content">';
-            html += '<span class="reference-btn-icon">📤</span>';
-            html += '<span class="reference-btn-label">Upload</span>';
-            html += '</div>';
-            html += '<span class="reference-btn-hint">Use your images</span>';
-            html += '</button>';
+            // Upload Reference (Premium - unlocked for PRO/Enterprise)
+            if (state.hasPremiumAccess) {
+                html += '<button class="reference-btn" onclick="app.openImageUpload()" title="Upload your own image as reference">';
+                html += '<div class="reference-btn-content">';
+                html += '<span class="reference-btn-icon">📤</span>';
+                html += '<span class="reference-btn-label">Upload</span>';
+                html += '</div>';
+                html += '<span class="reference-btn-hint">Use your images</span>';
+                html += '</button>';
+            } else {
+                html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Image Upload\')" title="Upload Image - PRO Feature">';
+                html += '<div class="premium-lock-overlay">';
+                html += '<span class="premium-lock-icon">🔒</span>';
+                html += '</div>';
+                html += '<div class="reference-btn-content">';
+                html += '<span class="reference-btn-icon">📤</span>';
+                html += '<span class="reference-btn-label">Upload</span>';
+                html += '</div>';
+                html += '<span class="reference-btn-hint">Use your images</span>';
+                html += '</button>';
+            }
 
             html += '</div>';
 
@@ -6727,6 +6897,32 @@
                 html += '<div class="style-ref-indicator-name">' + utils.escapeHtml(state.styleReference.name) + '</div>';
                 html += '</div>';
                 html += '<button class="style-ref-indicator-remove" onclick="app.removeStyleReference()" title="Remove">×</button>';
+                html += '</div>';
+            }
+
+            // Character reference indicator (if applied - PRO feature)
+            if (state.characterReference) {
+                var charImgSrc = state.characterReference.type === 'file' ? state.characterReference.dataUrl : state.characterReference.url;
+                html += '<div class="style-ref-indicator">';
+                html += '<img class="style-ref-indicator-thumb" src="' + charImgSrc + '" alt="Character reference">';
+                html += '<div class="style-ref-indicator-info">';
+                html += '<div class="style-ref-indicator-label">👤 Character Reference</div>';
+                html += '<div class="style-ref-indicator-name">' + utils.escapeHtml(state.characterReference.name) + '</div>';
+                html += '</div>';
+                html += '<button class="style-ref-indicator-remove" onclick="app.removeCharacterReference()" title="Remove">×</button>';
+                html += '</div>';
+            }
+
+            // Uploaded image indicator (if applied - PRO feature)
+            if (state.uploadedImage) {
+                var uploadImgSrc = state.uploadedImage.type === 'file' ? state.uploadedImage.dataUrl : state.uploadedImage.url;
+                html += '<div class="style-ref-indicator">';
+                html += '<img class="style-ref-indicator-thumb" src="' + uploadImgSrc + '" alt="Uploaded image">';
+                html += '<div class="style-ref-indicator-info">';
+                html += '<div class="style-ref-indicator-label">📤 Uploaded Image</div>';
+                html += '<div class="style-ref-indicator-name">' + utils.escapeHtml(state.uploadedImage.name) + '</div>';
+                html += '</div>';
+                html += '<button class="style-ref-indicator-remove" onclick="app.removeUploadedImage()" title="Remove">×</button>';
                 html += '</div>';
             }
 
@@ -7540,6 +7736,128 @@
             return html;
         }
 
+        // Render Character Reference Modal (PRO Feature)
+        function renderCharacterReferenceModal() {
+            if (!state.characterReferenceModalOpen) return '';
+
+            var html = '<div class="style-ref-modal-overlay" onclick="app.closeCharacterReference()">';
+            html += '<div class="style-ref-modal" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="style-ref-modal-header">';
+            html += '<div class="style-ref-modal-title"><span>👤</span> Character Reference</div>';
+            html += '<button class="style-ref-modal-close" onclick="app.closeCharacterReference()">×</button>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="style-ref-modal-body">';
+
+            // Hidden file input
+            html += '<input type="file" id="character-ref-file-input" class="hidden-file-input" accept="image/*" onchange="app.handleCharacterRefFile(this.files[0])">';
+
+            if (state.characterReference) {
+                // Show preview
+                var imgSrc = state.characterReference.type === 'file' ? state.characterReference.dataUrl : state.characterReference.url;
+                html += '<div class="style-ref-preview">';
+                html += '<img src="' + imgSrc + '" alt="Character reference preview">';
+                html += '<div class="style-ref-preview-actions">';
+                html += '<button class="style-ref-preview-btn" onclick="app.triggerCharacterRefUpload()" title="Change image">🔄</button>';
+                html += '<button class="style-ref-preview-btn remove" onclick="app.removeCharacterReference()" title="Remove">🗑️</button>';
+                html += '</div>';
+                html += '</div>';
+            } else {
+                // Show upload zone
+                html += '<div class="style-ref-upload-zone" onclick="app.triggerCharacterRefUpload()" ';
+                html += 'ondragover="event.preventDefault(); this.classList.add(\'dragover\')" ';
+                html += 'ondragleave="this.classList.remove(\'dragover\')" ';
+                html += 'ondrop="event.preventDefault(); this.classList.remove(\'dragover\'); app.handleCharacterRefFile(event.dataTransfer.files[0])">';
+                html += '<div class="style-ref-upload-icon">👤</div>';
+                html += '<div class="style-ref-upload-title">Upload a face reference image</div>';
+                html += '<div class="style-ref-upload-hint">Use a clear photo with visible face • PNG, JPG • Max 10MB</div>';
+                html += '</div>';
+
+                // Hint section
+                html += '<div class="style-ref-url-section">';
+                html += '<label class="style-ref-url-label">💡 Pro Tip</label>';
+                html += '<p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin: 0;">Use a high-quality photo with good lighting for best results. The face should be clearly visible and unobstructed.</p>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // body
+
+            // Footer
+            html += '<div class="style-ref-modal-footer">';
+            html += '<button class="style-ref-btn style-ref-btn-cancel" onclick="app.closeCharacterReference()">Cancel</button>';
+            html += '<button class="style-ref-btn style-ref-btn-apply" onclick="app.applyCharacterReference()"' + (state.characterReference ? '' : ' disabled') + '>Apply</button>';
+            html += '</div>';
+
+            html += '</div>'; // modal
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
+        // Render Image Upload Modal (PRO Feature)
+        function renderImageUploadModal() {
+            if (!state.imageUploadModalOpen) return '';
+
+            var html = '<div class="style-ref-modal-overlay" onclick="app.closeImageUpload()">';
+            html += '<div class="style-ref-modal" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="style-ref-modal-header">';
+            html += '<div class="style-ref-modal-title"><span>📤</span> Upload Image</div>';
+            html += '<button class="style-ref-modal-close" onclick="app.closeImageUpload()">×</button>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="style-ref-modal-body">';
+
+            // Hidden file input
+            html += '<input type="file" id="upload-image-file-input" class="hidden-file-input" accept="image/*" onchange="app.handleUploadedImageFile(this.files[0])">';
+
+            if (state.uploadedImage) {
+                // Show preview
+                var imgSrc = state.uploadedImage.type === 'file' ? state.uploadedImage.dataUrl : state.uploadedImage.url;
+                html += '<div class="style-ref-preview">';
+                html += '<img src="' + imgSrc + '" alt="Uploaded image preview">';
+                html += '<div class="style-ref-preview-actions">';
+                html += '<button class="style-ref-preview-btn" onclick="app.triggerImageUpload()" title="Change image">🔄</button>';
+                html += '<button class="style-ref-preview-btn remove" onclick="app.removeUploadedImage()" title="Remove">🗑️</button>';
+                html += '</div>';
+                html += '</div>';
+            } else {
+                // Show upload zone
+                html += '<div class="style-ref-upload-zone" onclick="app.triggerImageUpload()" ';
+                html += 'ondragover="event.preventDefault(); this.classList.add(\'dragover\')" ';
+                html += 'ondragleave="this.classList.remove(\'dragover\')" ';
+                html += 'ondrop="event.preventDefault(); this.classList.remove(\'dragover\'); app.handleUploadedImageFile(event.dataTransfer.files[0])">';
+                html += '<div class="style-ref-upload-icon">📤</div>';
+                html += '<div class="style-ref-upload-title">Drop an image here or click to upload</div>';
+                html += '<div class="style-ref-upload-hint">Use as a starting point for AI transformation • PNG, JPG • Max 10MB</div>';
+                html += '</div>';
+
+                // Hint section
+                html += '<div class="style-ref-url-section">';
+                html += '<label class="style-ref-url-label">🎨 Use Cases</label>';
+                html += '<p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin: 0;">Transform photos, create variations, enhance images, or use as composition reference.</p>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // body
+
+            // Footer
+            html += '<div class="style-ref-modal-footer">';
+            html += '<button class="style-ref-btn style-ref-btn-cancel" onclick="app.closeImageUpload()">Cancel</button>';
+            html += '<button class="style-ref-btn style-ref-btn-apply" onclick="app.applyUploadedImage()"' + (state.uploadedImage ? '' : ' disabled') + '>Apply</button>';
+            html += '</div>';
+
+            html += '</div>'; // modal
+            html += '</div>'; // overlay
+
+            return html;
+        }
+
         // Render Premium Feature Modal
         function renderPremiumModal() {
             if (!state.premiumModalOpen) return '';
@@ -7838,6 +8156,12 @@
                     .then(function(doc) {
                         if (doc.exists) {
                             state.profile = doc.data();
+                            // Check if user has PRO or Enterprise subscription for premium features
+                            var userPlan = (state.profile.subscription && state.profile.subscription.plan) || 'free';
+                            state.hasPremiumAccess = (userPlan === 'pro' || userPlan === 'enterprise');
+                            // Update tokens plan to match subscription
+                            state.tokens.plan = userPlan;
+                            console.log('User plan:', userPlan, '| Premium access:', state.hasPremiumAccess);
                         }
                         state.currentView = 'studio';
                         render();
@@ -7900,6 +8224,12 @@
                     }
                     if (state.styleReferenceModalOpen) {
                         app.closeStyleReference();
+                    }
+                    if (state.characterReferenceModalOpen) {
+                        app.closeCharacterReference();
+                    }
+                    if (state.imageUploadModalOpen) {
+                        app.closeImageUpload();
                     }
                     if (state.premiumModalOpen) {
                         app.closePremiumModal();
