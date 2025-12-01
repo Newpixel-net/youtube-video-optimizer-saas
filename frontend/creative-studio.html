@@ -4670,40 +4670,84 @@
         ];
 
         // Model options for dropdown
+        // Nano Banana Pro refers to advanced Gemini image generation capabilities
+        // Models are mapped to actual Google API model IDs in the backend (index.js)
         const modelsConfig = [
             {
                 key: 'auto',
                 name: 'Auto',
                 icon: '⚡',
-                description: 'Balanced speed and quality',
+                description: 'Balanced speed and quality (Imagen 4)',
                 badge: 'suggested',
                 available: true
             },
+            { divider: true, label: 'Gemini Models' },
             {
-                key: 'gemini-flash',
-                name: 'Gemini Flash',
+                key: 'gemini-2-flash',
+                name: 'Gemini 2.0 Flash',
                 icon: '✨',
-                description: 'Best for character consistency & editing',
+                description: 'Latest Gemini - fast image generation',
                 badge: 'new',
                 available: true
             },
             {
-                key: 'banana1',
-                name: 'Imagen 4',
-                icon: '🖼️',
-                description: 'Google Imagen - great for most uses',
+                key: 'gemini-2-flash-exp',
+                name: 'Gemini 2.0 Flash Exp',
+                icon: '🧪',
+                description: 'Experimental - cutting edge features',
+                badge: 'trending',
+                available: true
+            },
+            {
+                key: 'gemini-2-flash-thinking',
+                name: 'Gemini 2.0 Flash Thinking',
+                icon: '🧠',
+                description: 'Enhanced reasoning for complex prompts',
                 badge: '',
                 available: true
             },
             {
-                key: 'banana2',
-                name: 'Imagen 4 Ultra',
-                icon: '🎨',
-                description: 'Highest quality, best details, 4K output',
-                badge: 'trending',
+                key: 'gemini-pro-vision',
+                name: 'Gemini Pro Vision',
+                icon: '👁️',
+                description: 'Best for image understanding & editing',
+                badge: '',
                 available: true
             },
-            { divider: true },
+            {
+                key: 'gemini-flash-lite',
+                name: 'Gemini Flash Lite',
+                icon: '💨',
+                description: 'Fastest response, lower cost',
+                badge: '',
+                available: true
+            },
+            { divider: true, label: 'Imagen Models' },
+            {
+                key: 'imagen-4',
+                name: 'Imagen 4',
+                icon: '🖼️',
+                description: 'Google Imagen - photorealistic quality',
+                badge: '',
+                available: true
+            },
+            {
+                key: 'imagen-4-ultra',
+                name: 'Imagen 4 Ultra',
+                icon: '🎨',
+                description: 'Highest quality, 4K output',
+                badge: 'premium',
+                available: true
+            },
+            {
+                key: 'imagen-3',
+                name: 'Imagen 3',
+                icon: '🌟',
+                description: 'Previous generation, stable',
+                badge: '',
+                available: true
+            },
+            { divider: true, label: 'Coming Soon' },
             {
                 key: 'flux',
                 name: 'Flux',
@@ -4900,6 +4944,41 @@
                         description: 'Escher-style impossible structures',
                         cost: 3,
                         prompt: 'Generate an impossible geometric structure inspired by {{style}}...'
+                    }
+                ]
+            },
+            {
+                key: 'scripts',
+                name: 'Structured Scripts (JSON)',
+                icon: '📜',
+                templates: [
+                    {
+                        id: 'script-2000s-selfie',
+                        name: '2000s Mirror Selfie Script',
+                        description: 'Detailed JSON-structured script for authentic 2000s selfie - precise control',
+                        cost: 3,
+                        prompt: 'Create a 2000s Mirror Selfie with detailed JSON specification for {{subject}}...'
+                    },
+                    {
+                        id: 'script-fashion-shoot',
+                        name: 'Fashion Photoshoot Script',
+                        description: 'Structured script for professional fashion photography',
+                        cost: 3,
+                        prompt: 'Create a fashion photoshoot with detailed specification for {{model}}...'
+                    },
+                    {
+                        id: 'script-product-hero',
+                        name: 'Product Hero Shot Script',
+                        description: 'Structured script for hero product photography',
+                        cost: 3,
+                        prompt: 'Create a product hero shot with detailed specification for {{product}}...'
+                    },
+                    {
+                        id: 'script-character',
+                        name: 'Character Portrait Script',
+                        description: 'Detailed character specification for consistent portraits',
+                        cost: 3,
+                        prompt: 'Create a character portrait with detailed specification for {{character}}...'
                     }
                 ]
             },
@@ -7752,11 +7831,29 @@
         function getModelDisplayName(modelKey) {
             if (!modelKey) return 'Auto';
             var modelNames = {
+                // Frontend keys
                 'auto': 'Auto',
-                'banana1': 'Nano Banana',
-                'banana2': 'Nano Banana Ultra',
-                'imagen-4.0-generate-001': 'Nano Banana',
-                'imagen-4.0-ultra-generate-001': 'Nano Banana Ultra'
+                'gemini-2-flash': 'Gemini 2.0 Flash',
+                'gemini-2-flash-exp': 'Gemini 2.0 Flash Exp',
+                'gemini-2-flash-thinking': 'Gemini 2.0 Flash Thinking',
+                'gemini-pro-vision': 'Gemini Pro Vision',
+                'gemini-flash-lite': 'Gemini Flash Lite',
+                'imagen-4': 'Imagen 4',
+                'imagen-4-ultra': 'Imagen 4 Ultra',
+                'imagen-3': 'Imagen 3',
+                // Legacy keys
+                'banana1': 'Imagen 4',
+                'banana2': 'Imagen 4 Ultra',
+                'gemini-flash': 'Gemini Flash',
+                // Backend model IDs (for history display)
+                'imagen-4.0-generate-001': 'Imagen 4',
+                'imagen-4.0-ultra-generate-001': 'Imagen 4 Ultra',
+                'imagen-3.0-generate-001': 'Imagen 3',
+                'gemini-2.0-flash': 'Gemini 2.0 Flash',
+                'gemini-2.0-flash-exp': 'Gemini 2.0 Flash Exp',
+                'gemini-2.0-flash-thinking-exp': 'Gemini 2.0 Flash Thinking',
+                'gemini-1.5-pro': 'Gemini Pro Vision',
+                'gemini-1.5-flash': 'Gemini Flash Lite'
             };
             return modelNames[modelKey] || modelKey;
         }
