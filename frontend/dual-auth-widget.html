@@ -2900,7 +2900,9 @@
                         triggerNotificationAttention();
                     }
 
-                    render();
+                    // OPTIMIZATION: Only update notification badge, NOT full render
+                    // This prevents flickering caused by full DOM replacement
+                    updateNotificationBadge(previousCount, notifications.length);
                 }, function(error) {
                     console.error('Notification listener error:', error);
                 });
@@ -2922,6 +2924,33 @@
                 setTimeout(function() {
                     badge.classList.remove('notification-new');
                 }, 3000);
+            }
+        }
+
+        // OPTIMIZATION: Update notification badge without full render
+        // This prevents flickering by doing targeted DOM updates
+        function updateNotificationBadge(previousCount, newCount) {
+            // Only update if count actually changed
+            if (previousCount === newCount) return;
+
+            // Update notification badge in header
+            var badge = document.querySelector('.notification-badge');
+            if (badge) {
+                if (newCount > 0) {
+                    badge.textContent = newCount > 99 ? '99+' : newCount;
+                    badge.style.display = '';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+
+            // Update unread count on dashboard card
+            var dashboardBadge = document.querySelector('.dashboard-card .notification-dot');
+            if (dashboardBadge) {
+                var countSpan = dashboardBadge.parentElement.querySelector('span:last-child');
+                if (countSpan && newCount > 0) {
+                    countSpan.textContent = newCount;
+                }
             }
         }
 
@@ -5381,7 +5410,7 @@
             html += '<div class="grid grid-cols-2 gap-4 lg:gap-6 mb-8 fade-in dashboard-cards-grid">';
 
             // My Campaign Reports Card - with Living Aurora effect
-            html += '<div class="living-aurora aurora-emerald rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" onclick="app.goToClientReports()">';
+            html += '<div class="living-aurora aurora-emerald rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" style="transition: opacity 0.1s ease-out" onclick="this.style.opacity=\'0\'; app.goToClientReports()">';
             // Aurora orbs layer
             html += '<div class="aurora-orbs">';
             html += '<div class="aurora-orb aurora-orb-1"></div>';
@@ -5409,8 +5438,8 @@
             html += '</div></div>';
 
             // Enterprise Suite Card - with Living Aurora effect
-            html += '<a href="https://ytseo.siteuo.com/enterprise-suite" class="block">';
-            html += '<div class="living-aurora aurora-gold rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden border-2 border-yellow-300/50 h-full">';
+            html += '<a href="https://ytseo.siteuo.com/enterprise-suite" class="block" onclick="this.querySelector(\'.living-aurora\').style.opacity=\'0\'">';
+            html += '<div class="living-aurora aurora-gold rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden border-2 border-yellow-300/50 h-full" style="transition: opacity 0.1s ease-out">';
             // Aurora orbs layer
             html += '<div class="aurora-orbs">';
             html += '<div class="aurora-orb aurora-orb-1"></div>';
@@ -5439,8 +5468,8 @@
             html += '</div>'; // End grid
 
             // Creative Studio Banner - Full Width
-            html += '<a href="https://ytseo.siteuo.com/creative-studio" class="block mb-8 fade-in">';
-            html += '<div class="living-aurora aurora-creative rounded-2xl shadow-xl p-6 lg:p-8 cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.01] relative overflow-hidden border border-purple-400/30">';
+            html += '<a href="https://ytseo.siteuo.com/creative-studio" class="block mb-8 fade-in" onclick="this.querySelector(\'.living-aurora\').style.opacity=\'0\'">';
+            html += '<div class="living-aurora aurora-creative rounded-2xl shadow-xl p-6 lg:p-8 cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.01] relative overflow-hidden border border-purple-400/30" style="transition: opacity 0.1s ease-out">';
             // Aurora orbs layer
             html += '<div class="aurora-orbs">';
             html += '<div class="aurora-orb aurora-orb-1"></div>';
