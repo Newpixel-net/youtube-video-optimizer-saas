@@ -5427,6 +5427,7 @@
             selectedTemplate: null,
             selectedScene: null, // For product photography scene selection
             sceneMode: null, // 'all' for random, 'custom' for manual input
+            templateCovers: {}, // Map of templateId -> coverImage URL from Firestore
 
             // Token state
             tokens: {
@@ -8209,6 +8210,27 @@
                     });
             },
 
+            // Load template cover images from Firestore
+            loadTemplateCovers: function() {
+                db.collection('promptTemplates')
+                    .get()
+                    .then(function(snapshot) {
+                        var covers = {};
+                        snapshot.forEach(function(doc) {
+                            var data = doc.data();
+                            if (data.coverImage) {
+                                covers[doc.id] = data.coverImage;
+                            }
+                        });
+                        state.templateCovers = covers;
+                        console.log('Loaded template covers:', Object.keys(covers).length);
+                        render();
+                    })
+                    .catch(function(e) {
+                        console.error('Error loading template covers:', e);
+                    });
+            },
+
             // ==========================================
             // COMMUNITY GALLERY FUNCTIONS
             // ==========================================
@@ -9428,10 +9450,11 @@
 
                     html += '<div class="template-card' + (isSelected ? ' active' : '') + '" onclick="app.selectTemplate(\'' + template.id + '\')">';
 
-                    // Cover image section
+                    // Cover image section - check Firestore covers first, then template.coverImage
+                    var coverUrl = state.templateCovers[template.id] || template.coverImage;
                     html += '<div class="template-card-cover">';
-                    if (template.coverImage) {
-                        html += '<img src="' + template.coverImage + '" alt="' + utils.escapeHtml(template.name) + '" loading="lazy">';
+                    if (coverUrl) {
+                        html += '<img src="' + coverUrl + '" alt="' + utils.escapeHtml(template.name) + '" loading="lazy">';
                     } else {
                         // Placeholder icon based on category
                         var placeholderIcon = getCategoryIcon(template.category || category.name);
@@ -10670,9 +10693,10 @@
                         state.currentView = 'studio';
                         render();
 
-                        // Load creative tokens and history
+                        // Load creative tokens, history, and template covers
                         app.loadTokens();
                         app.loadHistory();
+                        app.loadTemplateCovers();
                     })
                     .catch(function(e) {
                         console.error('Error fetching profile:', e);
