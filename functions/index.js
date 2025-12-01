@@ -8692,3 +8692,157 @@ exports.getPromptTemplates = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', 'Failed to get templates');
   }
 });
+
+// =====================================================
+// ADMIN: Fix Storage URLs and Make Files Public
+// Run this once to migrate existing images
+// =====================================================
+exports.adminFixStorageUrls = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { folder, dryRun } = data || {};
+  const targetFolder = folder || 'creative-studio';
+  const isDryRun = dryRun !== false; // Default to dry run for safety
+
+  const results = {
+    folder: targetFolder,
+    dryRun: isDryRun,
+    filesProcessed: 0,
+    filesMadePublic: 0,
+    urlsUpdated: 0,
+    errors: []
+  };
+
+  try {
+    const bucket = admin.storage().bucket();
+
+    // List all files in the folder
+    const [files] = await bucket.getFiles({ prefix: targetFolder + '/' });
+    console.log(`Found ${files.length} files in ${targetFolder}/`);
+    results.filesProcessed = files.length;
+
+    if (!isDryRun) {
+      // Make each file public
+      for (const file of files) {
+        try {
+          await file.makePublic();
+          results.filesMadePublic++;
+        } catch (err) {
+          results.errors.push(`Failed to make public: ${file.name} - ${err.message}`);
+        }
+      }
+    }
+
+    // Update URLs in Firestore collections
+    const collections = ['creativeHistory', 'creativeGallery', 'promptTemplates'];
+
+    for (const collectionName of collections) {
+      const snapshot = await db.collection(collectionName).get();
+
+      for (const doc of snapshot.docs) {
+        const docData = doc.data();
+        let needsUpdate = false;
+        const updates = {};
+
+        // Check for firebasestorage URLs and convert them
+        const oldUrlPattern = 'firebasestorage.googleapis.com';
+        const bucketName = bucket.name;
+
+        // Handle images array (creativeHistory)
+        if (docData.images && Array.isArray(docData.images)) {
+          const newImages = docData.images.map(img => {
+            if (img.url && img.url.includes(oldUrlPattern)) {
+              needsUpdate = true;
+              // Extract fileName from the encoded URL
+              const fileName = img.fileName || decodeURIComponent(
+                img.url.split('/o/')[1]?.split('?')[0] || ''
+              );
+              return {
+                ...img,
+                url: `https://storage.googleapis.com/${bucketName}/${fileName}`
+              };
+            }
+            return img;
+          });
+          if (needsUpdate) {
+            updates.images = newImages;
+          }
+        }
+
+        // Handle single imageUrl field (creativeGallery, some history)
+        if (docData.imageUrl && docData.imageUrl.includes(oldUrlPattern)) {
+          needsUpdate = true;
+          const fileName = decodeURIComponent(
+            docData.imageUrl.split('/o/')[1]?.split('?')[0] || ''
+          );
+          updates.imageUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+        }
+
+        // Handle coverImage field (promptTemplates)
+        if (docData.coverImage && docData.coverImage.includes(oldUrlPattern)) {
+          needsUpdate = true;
+          const fileName = decodeURIComponent(
+            docData.coverImage.split('/o/')[1]?.split('?')[0] || ''
+          );
+          updates.coverImage = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+        }
+
+        if (needsUpdate && !isDryRun) {
+          await db.collection(collectionName).doc(doc.id).update(updates);
+          results.urlsUpdated++;
+        } else if (needsUpdate) {
+          results.urlsUpdated++; // Count for dry run
+        }
+      }
+    }
+
+    results.message = isDryRun
+      ? `DRY RUN: Would make ${files.length} files public and update ${results.urlsUpdated} URLs`
+      : `Made ${results.filesMadePublic} files public and updated ${results.urlsUpdated} URLs`;
+
+    return results;
+
+  } catch (error) {
+    console.error('Fix storage URLs error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to fix storage URLs: ' + error.message);
+  }
+});
+
+// Make a specific file public (for RunPod thumbnails after upload completes)
+exports.makeFilePublic = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { fileName } = data;
+
+  if (!fileName) {
+    throw new functions.https.HttpsError('invalid-argument', 'fileName is required');
+  }
+
+  // Security: Only allow users to make their own files public
+  if (!fileName.includes(`/${uid}/`)) {
+    throw new functions.https.HttpsError('permission-denied', 'Cannot access this file');
+  }
+
+  try {
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(fileName);
+
+    // Check if file exists
+    const [exists] = await file.exists();
+    if (!exists) {
+      return { success: false, message: 'File not found - may still be uploading' };
+    }
+
+    await file.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
+    return {
+      success: true,
+      publicUrl,
+      message: 'File is now public'
+    };
+
+  } catch (error) {
+    console.error('Make file public error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to make file public');
+  }
+});
