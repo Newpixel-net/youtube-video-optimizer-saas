@@ -1179,6 +1179,96 @@
             font-size: 1.25rem;
         }
 
+        .reference-btn.ref-unsupported {
+            opacity: 0.5;
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
+        .reference-btn.ref-unsupported:hover {
+            border-color: rgba(245, 158, 11, 0.5);
+        }
+
+        .reference-btn.ref-applied {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: rgba(139, 92, 246, 0.4);
+            border-style: solid;
+            position: relative;
+        }
+
+        .reference-btn.ref-applied.ref-unsupported {
+            border-color: rgba(245, 158, 11, 0.5);
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        .reference-btn-preview {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 0.5rem;
+            opacity: 0.3;
+        }
+
+        .reference-btn-check {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #22c55e;
+            color: white;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            font-size: 0.6rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+        }
+
+        .reference-btn.ref-unsupported .reference-btn-check {
+            background: #f59e0b;
+        }
+
+        .references-model-warning {
+            font-size: 0.7rem;
+            color: #f59e0b;
+            margin-left: auto;
+        }
+
+        .references-compat-notice {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.75rem;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            color: #f59e0b;
+        }
+
+        .ref-switch-btn {
+            padding: 0.35rem 0.75rem;
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            border-radius: 0.25rem;
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .ref-switch-btn:hover {
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+        }
+
         /* Prompt Textarea */
         .prompt-container {
             position: relative;
@@ -3917,6 +4007,24 @@
             color: #f59e0b;
         }
 
+        .switch-model-btn {
+            margin-top: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .switch-model-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
         .style-ref-modal-body {
             padding: 1.5rem;
         }
@@ -5576,6 +5684,12 @@
             };
         }
 
+        // Helper function to get model display name
+        function getModelDisplayName(modelKey) {
+            var model = modelsConfig.find(function(m) { return m.key === modelKey; });
+            return model ? model.name : modelKey;
+        }
+
         /* ==========================================
            4.4 FEATURED CONTENT
            ========================================== */
@@ -6396,6 +6510,13 @@
             // Model Selection
             setModel: function(model) {
                 state.selectedModel = model;
+                render();
+            },
+
+            // Switch to Imagen 3 (for reference image support)
+            switchToImagen3: function() {
+                state.selectedModel = 'imagen-3';
+                showToast('Switched to Imagen 3 - Reference images are now supported!', 'success');
                 render();
             },
 
@@ -8585,30 +8706,58 @@
             html += '</div>'; // sidebar-section
 
             // References Section with Premium Locks
+            var refModelCaps = getModelCapabilities(state.selectedModel);
+            var refSupported = refModelCaps.supportsReferenceImages;
+
             html += '<div class="sidebar-section references-section">';
             html += '<div class="sidebar-section-header">';
             html += '<span class="sidebar-section-title">References</span>';
-            html += '<span class="references-hint">Add images to guide your creation</span>';
+            if (!refSupported) {
+                html += '<span class="references-model-warning" title="Switch to Imagen 3 to use references">⚠️ Imagen 3 only</span>';
+            } else {
+                html += '<span class="references-hint">Add images to guide your creation</span>';
+            }
             html += '</div>';
+
+            // Compatibility notice when model doesn't support references
+            if (!refSupported && (state.styleReference || state.characterReference || state.uploadedImage)) {
+                html += '<div class="references-compat-notice">';
+                html += '<span>⚠️ ' + getModelDisplayName(state.selectedModel) + ' ignores references.</span>';
+                html += '<button class="ref-switch-btn" onclick="app.switchToImagen3()">Switch to Imagen 3</button>';
+                html += '</div>';
+            }
+
             html += '<div class="reference-grid">';
 
-            // Style Reference (Free)
-            html += '<button class="reference-btn" onclick="app.openStyleReference()" title="Add a style reference image">';
+            // Style Reference (Free) - show applied state
+            var styleRefClass = 'reference-btn' + (!refSupported ? ' ref-unsupported' : '') + (state.styleReference ? ' ref-applied' : '');
+            html += '<button class="' + styleRefClass + '" onclick="app.openStyleReference()" title="' + (refSupported ? 'Add a style reference image' : 'Style reference - requires Imagen 3') + '">';
+            if (state.styleReference) {
+                var styleImgSrc = state.styleReference.type === 'file' ? state.styleReference.dataUrl : state.styleReference.url;
+                html += '<img src="' + styleImgSrc + '" class="reference-btn-preview" alt="Style ref">';
+                html += '<span class="reference-btn-check">✓</span>';
+            }
             html += '<div class="reference-btn-content">';
             html += '<span class="reference-btn-icon">🎨</span>';
             html += '<span class="reference-btn-label">Style</span>';
             html += '</div>';
-            html += '<span class="reference-btn-hint">Set the visual style</span>';
+            html += '<span class="reference-btn-hint">' + (state.styleReference ? 'Applied' : 'Set the visual style') + '</span>';
             html += '</button>';
 
             // Character Reference (Premium - unlocked for PRO/Enterprise)
             if (state.hasPremiumAccess) {
-                html += '<button class="reference-btn" onclick="app.openCharacterReference()" title="Add a character reference for consistent faces">';
+                var charRefClass = 'reference-btn' + (!refSupported ? ' ref-unsupported' : '') + (state.characterReference ? ' ref-applied' : '');
+                html += '<button class="' + charRefClass + '" onclick="app.openCharacterReference()" title="' + (refSupported ? 'Add a character reference for consistent faces' : 'Character reference - requires Imagen 3') + '">';
+                if (state.characterReference) {
+                    var charImgSrc = state.characterReference.type === 'file' ? state.characterReference.dataUrl : state.characterReference.url;
+                    html += '<img src="' + charImgSrc + '" class="reference-btn-preview" alt="Character ref">';
+                    html += '<span class="reference-btn-check">✓</span>';
+                }
                 html += '<div class="reference-btn-content">';
                 html += '<span class="reference-btn-icon">👤</span>';
                 html += '<span class="reference-btn-label">Character</span>';
                 html += '</div>';
-                html += '<span class="reference-btn-hint">Consistent faces</span>';
+                html += '<span class="reference-btn-hint">' + (state.characterReference ? 'Applied' : 'Consistent faces') + '</span>';
                 html += '</button>';
             } else {
                 html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Character Reference\')" title="Character Reference - PRO Feature">';
@@ -8625,12 +8774,18 @@
 
             // Upload Reference (Premium - unlocked for PRO/Enterprise)
             if (state.hasPremiumAccess) {
-                html += '<button class="reference-btn" onclick="app.openImageUpload()" title="Upload your own image as reference">';
+                var uploadRefClass = 'reference-btn' + (!refSupported ? ' ref-unsupported' : '') + (state.uploadedImage ? ' ref-applied' : '');
+                html += '<button class="' + uploadRefClass + '" onclick="app.openImageUpload()" title="' + (refSupported ? 'Upload your own image as reference' : 'Image upload - requires Imagen 3') + '">';
+                if (state.uploadedImage) {
+                    var uploadImgSrc = state.uploadedImage.type === 'file' ? state.uploadedImage.dataUrl : state.uploadedImage.url;
+                    html += '<img src="' + uploadImgSrc + '" class="reference-btn-preview" alt="Uploaded ref">';
+                    html += '<span class="reference-btn-check">✓</span>';
+                }
                 html += '<div class="reference-btn-content">';
                 html += '<span class="reference-btn-icon">📤</span>';
                 html += '<span class="reference-btn-label">Upload</span>';
                 html += '</div>';
-                html += '<span class="reference-btn-hint">Use your images</span>';
+                html += '<span class="reference-btn-hint">' + (state.uploadedImage ? 'Applied' : 'Use your images') + '</span>';
                 html += '</button>';
             } else {
                 html += '<button class="reference-btn premium-locked" onclick="app.showPremiumModal(\'Image Upload\')" title="Upload Image - PRO Feature">';
@@ -9698,8 +9853,8 @@
                 html += '<div class="style-ref-warning">';
                 html += '<span class="warning-icon">⚠️</span>';
                 html += '<div class="warning-content">';
-                html += '<strong>' + (state.selectedModel || 'Auto').replace(/-/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); }) + '</strong> doesn\'t support style references. ';
-                html += 'Switch to <strong>Imagen 3</strong> to use reference images.';
+                html += '<strong>' + getModelDisplayName(state.selectedModel) + '</strong> doesn\'t support style references.<br>';
+                html += '<button class="switch-model-btn" onclick="app.switchToImagen3()">Switch to Imagen 3</button>';
                 html += '</div>';
                 html += '</div>';
             }
@@ -9757,6 +9912,8 @@
         function renderCharacterReferenceModal() {
             if (!state.characterReferenceModalOpen) return '';
 
+            var modelCaps = getModelCapabilities(state.selectedModel);
+
             var html = '<div class="style-ref-modal-overlay" onclick="app.closeCharacterReference()">';
             html += '<div class="style-ref-modal" onclick="event.stopPropagation()">';
 
@@ -9765,6 +9922,17 @@
             html += '<div class="style-ref-modal-title"><span>👤</span> Character Reference</div>';
             html += '<button class="style-ref-modal-close" onclick="app.closeCharacterReference()">×</button>';
             html += '</div>';
+
+            // Model compatibility warning
+            if (!modelCaps.supportsReferenceImages) {
+                html += '<div class="style-ref-warning">';
+                html += '<span class="warning-icon">⚠️</span>';
+                html += '<div class="warning-content">';
+                html += '<strong>' + getModelDisplayName(state.selectedModel) + '</strong> doesn\'t support character references.<br>';
+                html += '<button class="switch-model-btn" onclick="app.switchToImagen3()">Switch to Imagen 3</button>';
+                html += '</div>';
+                html += '</div>';
+            }
 
             // Body
             html += '<div class="style-ref-modal-body">';
