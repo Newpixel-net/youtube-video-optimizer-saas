@@ -6529,6 +6529,16 @@ exports.getCreativeHistory = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   const { limit: queryLimit, offset } = data;
 
+  // Safe timestamp handler - handles various Firestore timestamp formats
+  const getTimestamp = (field) => {
+    if (!field) return Date.now();
+    if (typeof field === 'number') return field;
+    if (typeof field.toMillis === 'function') return field.toMillis();
+    if (field._seconds) return field._seconds * 1000;
+    if (field instanceof Date) return field.getTime();
+    return Date.now();
+  };
+
   try {
     let query = db.collection('creativeHistory')
       .where('userId', '==', uid)
@@ -6546,10 +6556,15 @@ exports.getCreativeHistory = functions.https.onCall(async (data, context) => {
     const history = [];
 
     snapshot.forEach(doc => {
+      const docData = doc.data();
+      const timestamp = getTimestamp(docData.createdAt);
+      // Create clean object without raw createdAt (non-serializable)
+      const { createdAt: rawCreatedAt, ...rest } = docData;
       history.push({
         id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate()?.toISOString()
+        ...rest,
+        timestamp,
+        createdAt: new Date(timestamp).toISOString()
       });
     });
 
@@ -6734,6 +6749,16 @@ exports.getCommunityGallery = functions.https.onCall(async (data, context) => {
   // This can be called without authentication for browsing
   const { sortBy, filter, category, limit: queryLimit, offset } = data || {};
 
+  // Safe timestamp handler - handles various Firestore timestamp formats
+  const getTimestamp = (field) => {
+    if (!field) return Date.now();
+    if (typeof field === 'number') return field;
+    if (typeof field.toMillis === 'function') return field.toMillis();
+    if (field._seconds) return field._seconds * 1000;
+    if (field instanceof Date) return field.getTime();
+    return Date.now();
+  };
+
   try {
     let query = db.collection('creativeGallery')
       .orderBy(sortBy === 'newest' ? 'createdAt' : 'likes', 'desc')
@@ -6748,6 +6773,7 @@ exports.getCommunityGallery = functions.https.onCall(async (data, context) => {
 
     snapshot.forEach(doc => {
       const docData = doc.data();
+      const timestamp = getTimestamp(docData.createdAt);
       items.push({
         id: doc.id,
         imageUrl: docData.imageUrl,
@@ -6760,7 +6786,7 @@ exports.getCommunityGallery = functions.https.onCall(async (data, context) => {
         },
         likes: docData.likes || 0,
         tool: docData.tool,
-        createdAt: docData.createdAt?.toDate()?.toISOString()
+        createdAt: new Date(timestamp).toISOString()
       });
     });
 
