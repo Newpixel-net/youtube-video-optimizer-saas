@@ -3890,58 +3890,36 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
   const { limit = 10 } = data || {};
   const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 20);
 
+  // Safe query helper - returns empty array if collection/index doesn't exist
+  const safeQuery = async (collectionName) => {
+    try {
+      return await db.collection(collectionName)
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get();
+    } catch (e) {
+      console.warn(`Query failed for ${collectionName}:`, e.message);
+      return { forEach: () => {}, size: 0 }; // Return empty mock snapshot
+    }
+  };
+
   try {
     // Fetch from all history collections in parallel (including enterprise tools)
     const [
       optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap,
       placementSnap, channelAuditSnap, viralSnap, monetizationSnap, scriptSnap
     ] = await Promise.all([
-      db.collection('optimizations')
-        .where('userId', '==', uid)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get(),
-      db.collection('competitorHistory')
-        .where('userId', '==', uid)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get(),
-      db.collection('trendHistory')
-        .where('userId', '==', uid)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get(),
-      db.collection('thumbnailHistory')
-        .where('userId', '==', uid)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get(),
-      db.collection('placementFinderHistory')
-        .where('userId', '==', uid)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get(),
-      db.collection('channelAuditHistory')
-        .where('userId', '==', uid)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get(),
+      safeQuery('optimizations'),
+      safeQuery('competitorHistory'),
+      safeQuery('trendHistory'),
+      safeQuery('thumbnailHistory'),
+      safeQuery('placementFinderHistory'),
+      safeQuery('channelAuditHistory'),
       // Enterprise tools
-      db.collection('viralPredictorHistory')
-        .where('userId', '==', uid)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get(),
-      db.collection('monetizationHistory')
-        .where('userId', '==', uid)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get(),
-      db.collection('scriptWriterHistory')
-        .where('userId', '==', uid)
-        .orderBy('createdAt', 'desc')
-        .limit(safeLimit)
-        .get()
+      safeQuery('viralPredictorHistory'),
+      safeQuery('monetizationHistory'),
+      safeQuery('scriptWriterHistory')
     ]);
 
     // Safe timestamp handler - handles various Firestore timestamp formats
