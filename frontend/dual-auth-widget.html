@@ -1363,9 +1363,8 @@
 
         .btn-secondary {
             padding: 0.75rem 1.25rem;
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.25);
+            /* REMOVED backdrop-filter for performance */
             color: white;
             font-weight: 600;
             font-size: 0.9375rem;
@@ -2107,11 +2106,10 @@
             }
         }
 
-        /* Glass morphism effect */
+        /* Glass morphism effect - OPTIMIZED: removed blur for performance */
         .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.15);
+            /* REMOVED backdrop-filter for performance */
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
@@ -2196,12 +2194,13 @@
             z-index: 1;
         }
 
-        /* Base orb styling */
+        /* Base orb styling - PERFORMANCE OPTIMIZED: No blur, no animations */
         .velvet-orb {
             position: absolute;
             border-radius: 50%;
             pointer-events: none;
-            will-change: transform;
+            /* REMOVED will-change - not animating anymore */
+            /* REMOVED blur filters - major performance killer */
         }
 
         /* Warm coral/dusty rose - top-left region (closer/brighter) */
@@ -2212,13 +2211,13 @@
             left: -15%;
             background: radial-gradient(
                 circle at center,
-                rgba(220, 120, 130, 0.55) 0%,
-                rgba(200, 100, 110, 0.35) 25%,
-                rgba(180, 85, 95, 0.18) 45%,
+                rgba(220, 120, 130, 0.35) 0%,
+                rgba(200, 100, 110, 0.20) 25%,
+                rgba(180, 85, 95, 0.08) 45%,
                 transparent 65%
             );
-            filter: blur(60px);
-            animation: velvetDrift1 35s ease-in-out infinite;
+            /* REMOVED: filter: blur(60px); - causes GPU thrashing */
+            /* REMOVED: animation - continuous animations kill performance */
         }
 
         /* Soft amber/gold - accent glow (mid-depth) */
@@ -2229,14 +2228,13 @@
             left: 20%;
             background: radial-gradient(
                 circle at center,
-                rgba(230, 180, 100, 0.45) 0%,
-                rgba(215, 160, 85, 0.28) 30%,
-                rgba(195, 140, 70, 0.12) 50%,
+                rgba(230, 180, 100, 0.30) 0%,
+                rgba(215, 160, 85, 0.15) 30%,
+                rgba(195, 140, 70, 0.05) 50%,
                 transparent 65%
             );
-            filter: blur(65px);
-            animation: velvetDrift2 30s ease-in-out infinite;
-            animation-delay: -8s;
+            /* REMOVED: filter: blur(65px); */
+            /* REMOVED: animation */
         }
 
         /* Muted lavender - center blend (mid-depth) */
@@ -2247,14 +2245,13 @@
             left: 30%;
             background: radial-gradient(
                 circle at center,
-                rgba(170, 140, 200, 0.4) 0%,
-                rgba(155, 125, 185, 0.25) 30%,
-                rgba(140, 110, 170, 0.1) 50%,
+                rgba(170, 140, 200, 0.25) 0%,
+                rgba(155, 125, 185, 0.12) 30%,
+                rgba(140, 110, 170, 0.05) 50%,
                 transparent 65%
             );
-            filter: blur(70px);
-            animation: velvetDrift3 40s ease-in-out infinite;
-            animation-delay: -15s;
+            /* REMOVED: filter: blur(70px); */
+            /* REMOVED: animation */
         }
 
         /* Deep teal/cyan - bottom-right region (closer/brighter) */
@@ -2265,14 +2262,13 @@
             right: -20%;
             background: radial-gradient(
                 circle at center,
-                rgba(70, 180, 190, 0.5) 0%,
-                rgba(55, 160, 170, 0.32) 25%,
-                rgba(45, 140, 150, 0.15) 45%,
+                rgba(70, 180, 190, 0.35) 0%,
+                rgba(55, 160, 170, 0.18) 25%,
+                rgba(45, 140, 150, 0.08) 45%,
                 transparent 65%
             );
-            filter: blur(55px);
-            animation: velvetDrift4 38s ease-in-out infinite;
-            animation-delay: -5s;
+            /* REMOVED: filter: blur(55px); */
+            /* REMOVED: animation */
         }
 
         /* Secondary amber - subtle accent (further/dimmer) */
@@ -2283,13 +2279,12 @@
             left: 0%;
             background: radial-gradient(
                 circle at center,
-                rgba(215, 165, 100, 0.3) 0%,
-                rgba(195, 145, 85, 0.15) 40%,
+                rgba(215, 165, 100, 0.20) 0%,
+                rgba(195, 145, 85, 0.08) 40%,
                 transparent 65%
             );
-            filter: blur(70px);
-            animation: velvetDrift5 45s ease-in-out infinite;
-            animation-delay: -20s;
+            /* REMOVED: filter: blur(70px); */
+            /* REMOVED: animation */
         }
 
         /* Secondary teal - distant accent (further/dimmer) */
@@ -2300,16 +2295,15 @@
             right: 5%;
             background: radial-gradient(
                 circle at center,
-                rgba(65, 165, 175, 0.35) 0%,
-                rgba(50, 145, 155, 0.18) 35%,
+                rgba(65, 165, 175, 0.22) 0%,
+                rgba(50, 145, 155, 0.10) 35%,
                 transparent 60%
             );
-            filter: blur(65px);
-            animation: velvetDrift6 42s ease-in-out infinite;
-            animation-delay: -25s;
+            /* REMOVED: filter: blur(65px); */
+            /* REMOVED: animation */
         }
 
-        /* Smooth drift animations - noticeable but elegant */
+        /* DISABLED: Smooth drift animations - caused severe performance issues
         @keyframes velvetDrift1 {
             0%, 100% {
                 transform: translate(0, 0) scale(1);
@@ -2387,11 +2381,14 @@
                 transform: translate(15%, -12%) scale(1.15);
             }
         }
+        END OF DISABLED ANIMATIONS */
 
-        /* Accessibility: Respect reduced motion preference */
+        /* Accessibility: Respect reduced motion preference - kept for future use */
         @media (prefers-reduced-motion: reduce) {
-            .velvet-orb {
-                animation: none;
+            .velvet-orb,
+            .aurora-orb,
+            .living-aurora::before {
+                animation: none !important;
             }
         }
     </style>
@@ -2446,7 +2443,7 @@
         }
 
         // Platform Version
-        const PLATFORM_VERSION = '1.0.2';
+        const PLATFORM_VERSION = '1.0.3';
 
         // Firebase project configuration
         const FIREBASE_CONFIG = {

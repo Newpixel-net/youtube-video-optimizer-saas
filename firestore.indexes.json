@@ -9,6 +9,14 @@
       ]
     },
     {
+      "collectionGroup": "creativeHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "competitorHistory",
       "queryScope": "COLLECTION",
       "fields": [
