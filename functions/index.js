@@ -7706,9 +7706,24 @@ Original prompt: "${prompt}"
 
 Enhanced prompt:`;
 
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const result = await model.generateContent(systemPrompt);
-    const enhancedPrompt = result.response.text().trim();
+    // Use correct SDK method: ai.models.generateContent() NOT ai.getGenerativeModel()
+    const result = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: systemPrompt
+    });
+
+    // Handle response - try multiple formats
+    let enhancedPrompt = '';
+    if (result.text) {
+      enhancedPrompt = result.text.trim();
+    } else if (result.response && typeof result.response.text === 'function') {
+      enhancedPrompt = result.response.text().trim();
+    } else if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
+      enhancedPrompt = result.candidates[0].content.parts[0].text.trim();
+    } else {
+      console.warn('Could not extract text from Gemini response');
+      return { success: true, enhancedPrompt: prompt, wasEnhanced: false };
+    }
 
     // Clean up the response (remove quotes if present)
     let cleanedPrompt = enhancedPrompt
