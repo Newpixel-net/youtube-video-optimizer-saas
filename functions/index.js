@@ -6523,9 +6523,9 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                 }
               });
 
-              // Make file publicly accessible
-              await file.makePublic();
-              const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+              // Use Firebase Storage URL format (no CORS issues)
+              const encodedFileName = encodeURIComponent(fileName);
+              const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.name}/o/${encodedFileName}?alt=media`;
 
               generatedImages.push({
                 url: publicUrl,
@@ -6654,8 +6654,9 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                     }
                   });
 
-                  await file.makePublic();
-                  const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+                  // Use Firebase Storage URL format (no CORS issues)
+                  const encodedFileName = encodeURIComponent(fileName);
+                  const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.name}/o/${encodedFileName}?alt=media`;
 
                   generatedImages.push({
                     url: publicUrl,
@@ -6801,8 +6802,9 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
             }
           });
 
-          await file.makePublic();
-          const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+          // Use Firebase Storage URL format (no CORS issues)
+          const encodedFileName = encodeURIComponent(fileName);
+          const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storage.name}/o/${encodedFileName}?alt=media`;
 
           generatedImages.push({
             url: publicUrl,
