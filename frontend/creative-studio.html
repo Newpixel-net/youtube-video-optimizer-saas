@@ -4670,7 +4670,7 @@
         ];
 
         // Model options for dropdown
-        // Nano Banana Pro refers to advanced Gemini image generation capabilities
+        // All models use Google Imagen API via ai.models.generateImages()
         // Models are mapped to actual Google API model IDs in the backend (index.js)
         const modelsConfig = [
             {
@@ -4681,54 +4681,13 @@
                 badge: 'suggested',
                 available: true
             },
-            { divider: true, label: 'Gemini Models' },
-            {
-                key: 'gemini-2-flash',
-                name: 'Gemini 2.0 Flash',
-                icon: '✨',
-                description: 'Latest Gemini - fast image generation',
-                badge: 'new',
-                available: true
-            },
-            {
-                key: 'gemini-2-flash-exp',
-                name: 'Gemini 2.0 Flash Exp',
-                icon: '🧪',
-                description: 'Experimental - cutting edge features',
-                badge: 'trending',
-                available: true
-            },
-            {
-                key: 'gemini-2-flash-thinking',
-                name: 'Gemini 2.0 Flash Thinking',
-                icon: '🧠',
-                description: 'Enhanced reasoning for complex prompts',
-                badge: '',
-                available: true
-            },
-            {
-                key: 'gemini-pro-vision',
-                name: 'Gemini Pro Vision',
-                icon: '👁️',
-                description: 'Best for image understanding & editing',
-                badge: '',
-                available: true
-            },
-            {
-                key: 'gemini-flash-lite',
-                name: 'Gemini Flash Lite',
-                icon: '💨',
-                description: 'Fastest response, lower cost',
-                badge: '',
-                available: true
-            },
             { divider: true, label: 'Imagen Models' },
             {
                 key: 'imagen-4',
                 name: 'Imagen 4',
                 icon: '🖼️',
                 description: 'Google Imagen - photorealistic quality',
-                badge: '',
+                badge: 'new',
                 available: true
             },
             {
@@ -4748,6 +4707,14 @@
                 available: true
             },
             { divider: true, label: 'Coming Soon' },
+            {
+                key: 'gemini-2-flash',
+                name: 'Gemini 2.0 Flash',
+                icon: '✨',
+                description: 'Latest Gemini - fast image generation',
+                badge: 'coming',
+                available: false
+            },
             {
                 key: 'flux',
                 name: 'Flux',
