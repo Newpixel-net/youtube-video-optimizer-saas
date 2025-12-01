@@ -6951,8 +6951,8 @@
             }
             if (!currentModel) currentModel = modelsConfig[0];
 
-            // Model dropdown trigger button
-            html += '<button class="model-dropdown-trigger" onclick="app.toggleModelDropdown()">';
+            // Model dropdown trigger button - stopPropagation prevents document click from closing it
+            html += '<button class="model-dropdown-trigger" onclick="event.stopPropagation(); app.toggleModelDropdown()">';
             html += '<span class="model-dropdown-trigger-icon">' + currentModel.icon + '</span>';
             html += '<span class="model-dropdown-trigger-name">' + currentModel.name + '</span>';
             if (currentModel.badge && currentModel.badge !== 'coming') {
@@ -6975,7 +6975,7 @@
                     if (isSelected) itemClass += ' selected';
                     if (!model.available) itemClass += ' disabled';
 
-                    html += '<div class="' + itemClass + '" onclick="' + (model.available ? 'app.selectModel(\'' + model.key + '\')' : '') + '">';
+                    html += '<div class="' + itemClass + '" onclick="event.stopPropagation(); ' + (model.available ? 'app.selectModel(\'' + model.key + '\')' : '') + '">';
                     html += '<span class="model-dropdown-item-icon">' + model.icon + '</span>';
                     html += '<div class="model-dropdown-item-info">';
                     html += '<span class="model-dropdown-item-name">' + model.name + '</span>';
