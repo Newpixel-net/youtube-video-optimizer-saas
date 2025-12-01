@@ -6328,6 +6328,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
 
   // Determine the final prompt to use
   let finalPrompt = prompt;
+  const userPromptTrimmed = prompt.trim();
 
   // If a template is selected, fetch the professional prompt from Firestore
   if (templateId) {
@@ -6336,7 +6337,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
       if (templateDoc.exists) {
         const templateData = templateDoc.data();
         if (templateData.professionalPrompt) {
-          // Use the professional prompt
+          // Use the professional prompt as the base
           finalPrompt = templateData.professionalPrompt;
 
           // Replace any {{variables}} in the professional prompt with user values
@@ -6347,17 +6348,35 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
             });
           }
 
-          // If user prompt contains additional context, append it
-          const userPromptTrimmed = prompt.trim();
-          if (userPromptTrimmed && !templateData.userPrompt?.includes(userPromptTrimmed)) {
-            // Check if user added custom details beyond the template
-            const templateUserPrompt = templateData.userPrompt || '';
-            if (userPromptTrimmed.length > templateUserPrompt.length + 20) {
-              finalPrompt += ' Additional context: ' + userPromptTrimmed;
+          // IMPORTANT: Replace ALL remaining {{variable}} placeholders with the user's prompt
+          // This ensures user input is incorporated even without explicit templateVariables
+          if (userPromptTrimmed) {
+            // Replace common variable patterns with user's prompt content
+            const remainingPlaceholders = finalPrompt.match(/\{\{[^}]+\}\}/g);
+            if (remainingPlaceholders && remainingPlaceholders.length > 0) {
+              // Replace the first placeholder with the user's main description
+              finalPrompt = finalPrompt.replace(remainingPlaceholders[0], userPromptTrimmed);
+              // Replace remaining placeholders with empty string or a generic term
+              remainingPlaceholders.slice(1).forEach(placeholder => {
+                finalPrompt = finalPrompt.replace(placeholder, '');
+              });
+            }
+          }
+
+          // Clean up any double spaces from removed placeholders
+          finalPrompt = finalPrompt.replace(/\s{2,}/g, ' ').trim();
+
+          // ALWAYS append user's custom input if they provided meaningful content
+          // This ensures their specific requests are included in the generation
+          if (userPromptTrimmed && userPromptTrimmed.length > 5) {
+            // Don't duplicate if the prompt is already fully in finalPrompt
+            if (!finalPrompt.includes(userPromptTrimmed)) {
+              finalPrompt = `${finalPrompt}\n\nUser's specific request: ${userPromptTrimmed}`;
             }
           }
 
           console.log(`Using professional prompt for template: ${templateId}`);
+          console.log(`Final prompt length: ${finalPrompt.length} chars`);
         }
       }
     } catch (templateError) {
@@ -6382,18 +6401,35 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const validAspectRatio = aspectRatioMap[aspectRatio] || '1:1';
 
   // Map model selection to AI models
-  // banana1 = imagen-4.0 (standard), banana2 = imagen-4.0-ultra (highest quality)
-  // gemini-flash = Gemini 2.5 Flash Image (best for character consistency)
-  // auto = imagen-4.0 for general use
+  // Comprehensive model mapping for both Gemini and Imagen APIs
+  // Gemini models use generateContent API, Imagen models use generateImages API
+
+  // Imagen model mapping (uses ai.models.generateImages)
   const imagenModelMap = {
+    'auto': 'imagen-4.0-generate-001',
+    'imagen-4': 'imagen-4.0-generate-001',
+    'imagen-4-ultra': 'imagen-4.0-ultra-generate-001',
+    'imagen-3': 'imagen-3.0-generate-001',
+    // Legacy keys for backwards compatibility
     'banana1': 'imagen-4.0-generate-001',
-    'banana2': 'imagen-4.0-ultra-generate-001',
-    'auto': 'imagen-4.0-generate-001'
+    'banana2': 'imagen-4.0-ultra-generate-001'
   };
 
-  // Check if using Gemini Flash Image model
-  const isGeminiFlash = model === 'gemini-flash';
-  const imagenModel = !isGeminiFlash ? (imagenModelMap[model] || imagenModelMap['auto']) : null;
+  // Gemini model mapping (uses ai.getGenerativeModel + generateContent)
+  const geminiModelMap = {
+    'gemini-2-flash': 'gemini-2.0-flash-exp',
+    'gemini-2-flash-exp': 'gemini-2.0-flash-exp',
+    'gemini-2-flash-thinking': 'gemini-2.0-flash-thinking-exp-01-21',
+    'gemini-pro-vision': 'gemini-1.5-pro',
+    'gemini-flash-lite': 'gemini-1.5-flash',
+    // Legacy key
+    'gemini-flash': 'gemini-2.0-flash-exp'
+  };
+
+  // Determine which API to use based on model selection
+  const isGeminiModel = geminiModelMap.hasOwnProperty(model);
+  const geminiModelId = isGeminiModel ? geminiModelMap[model] : null;
+  const imagenModelId = !isGeminiModel ? (imagenModelMap[model] || imagenModelMap['auto']) : null;
 
   try {
     // Verify token balance
@@ -6420,14 +6456,14 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     const storage = admin.storage().bucket();
     const timestamp = Date.now();
 
-    if (isGeminiFlash) {
-      // Use Gemini 2.5 Flash Image model for character consistency and editing
-      console.log(`Generating ${imageCount} image(s) with Gemini Flash Image, aspect: ${validAspectRatio}`);
+    if (isGeminiModel) {
+      // Use Gemini model for image generation via generateContent API
+      console.log(`Generating ${imageCount} image(s) with Gemini model: ${geminiModelId}, aspect: ${validAspectRatio}`);
       console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
 
-      // Gemini Flash Image uses the generative model API
+      // Gemini models use the generative model API with image output capability
       const geminiModel = ai.getGenerativeModel({
-        model: 'gemini-2.5-flash-preview-image-generation'
+        model: geminiModelId
       });
 
       // Generate images sequentially (Gemini Flash generates one at a time)
@@ -6464,7 +6500,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                       metadata: {
                         userId: uid,
                         prompt: prompt.substring(0, 200),
-                        model: 'gemini-flash',
+                        model: geminiModelId,
                         aspectRatio: validAspectRatio
                       }
                     }
@@ -6491,11 +6527,11 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
       }
     } else {
       // Use Imagen API for standard image generation
-      console.log(`Generating ${imageCount} image(s) with ${imagenModel}, aspect: ${validAspectRatio}`);
+      console.log(`Generating ${imageCount} image(s) with ${imagenModelId}, aspect: ${validAspectRatio}`);
       console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
 
       const response = await ai.models.generateImages({
-        model: imagenModel,
+        model: imagenModelId,
         prompt: finalPrompt, // Use the professional prompt when template is selected
         config: {
           numberOfImages: imageCount,
@@ -6530,7 +6566,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
               metadata: {
                 userId: uid,
                 prompt: prompt.substring(0, 200),
-                model: imagenModel,
+                model: imagenModelId,
                 aspectRatio: validAspectRatio
               }
             }
@@ -6563,10 +6599,11 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     });
 
     // Save to history
+    const usedModel = isGeminiModel ? geminiModelId : imagenModelId;
     const historyData = {
       userId: uid,
       prompt: prompt,
-      model: isGeminiFlash ? 'gemini-flash' : imagenModel,
+      model: usedModel,
       quantity: generatedImages.length,
       aspectRatio: validAspectRatio,
       quality: quality || 'hd',
@@ -6583,7 +6620,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
       prompt: prompt.substring(0, 100),
       quality,
       quantity: generatedImages.length,
-      model: isGeminiFlash ? 'gemini-flash' : imagenModel
+      model: usedModel
     });
 
     return {
@@ -7006,10 +7043,35 @@ exports.seedCreativePrompts = functions.https.onCall(async (data, context) => {
       id: 'mirror-selfie',
       name: '2000s Mirror Selfie',
       category: 'photorealism',
-      description: 'Authentic early smartphone era mirror selfie aesthetic',
+      description: 'Authentic early 2000s mirror selfie with detailed styling - JSON structured prompt',
       tokenCost: 2,
       userPrompt: 'Create a 2000s-style mirror selfie of {{subject}} in {{setting}}',
-      professionalPrompt: 'Generate an authentic early 2000s mirror selfie photograph. The image should capture the distinctive aesthetic of early smartphone cameras: slightly grainy image quality, visible mirror reflection, casual pose with phone visible in hand. Include period-appropriate elements like bathroom or bedroom setting with early 2000s decor. The flash should create that characteristic bright spot on the mirror. Color palette should reflect the era with slightly oversaturated or washed-out tones typical of early digital cameras.',
+      professionalPrompt: `Create a 2000s Mirror Selfie using this detailed specification:
+
+Subject: {{subject}} taking a mirror selfie. The subject should have the following characteristics:
+- Age: young adult
+- Expression: confident and slightly playful
+- Hair: very long, voluminous waves with soft wispy bangs
+- Clothing: fitted cropped t-shirt in cream white featuring a large cute anime-style cat face graphic
+- Face: preserve original features, natural glam makeup with soft pink dewy blush and glossy red pouty lips
+
+Accessories:
+- Gold geometric hoop earrings
+- Silver waistchain
+- Smartphone with patterned case visible in hand
+
+Photography Style:
+- Camera style: early-2000s digital camera aesthetic
+- Lighting: harsh super-flash with bright blown-out highlights but subject still visible
+- Angle: mirror selfie
+- Shot type: tight selfie composition
+- Texture: subtle grain, retro highlights, V6 realism, crisp details, soft shadows
+
+Background Setting: {{setting}}
+- Nostalgic early-2000s bedroom atmosphere
+- Pastel wall tones
+- Period elements: chunky wooden dresser, CD player, posters of 2000s pop icons, hanging beaded door curtain, cluttered vanity with lip glosses
+- Retro lighting creating authentic 2000s nostalgic vibe`,
       isActive: true
     },
     {
@@ -7330,6 +7392,139 @@ exports.seedCreativePrompts = functions.https.onCall(async (data, context) => {
       tokenCost: 2,
       userPrompt: 'Create a stylish weather card for {{location}} showing {{conditions}}',
       professionalPrompt: 'Design a beautiful, stylized weather card or widget visualization. Include location name, current temperature, weather condition icon, and relevant metrics (humidity, wind, UV index). Use atmospheric illustration that reflects the weather conditions: sunny scenes should feel warm and bright, rainy scenes should feel moody and wet. Apply a cohesive design language with attention to typography and iconography.',
+      isActive: true
+    },
+
+    // STRUCTURED SCRIPTS (JSON) - 4 prompts
+    {
+      id: 'script-2000s-selfie',
+      name: '2000s Mirror Selfie Script',
+      category: 'scripts',
+      description: 'Detailed JSON-structured script for authentic 2000s selfie with precise control',
+      tokenCost: 3,
+      userPrompt: 'Create a 2000s Mirror Selfie with detailed JSON specification for {{subject}}',
+      professionalPrompt: `Create a 2000s Mirror Selfie using this detailed specification:
+
+Subject: {{subject}} taking a mirror selfie. The subject should have the following characteristics:
+- Age: young adult
+- Expression: confident and slightly playful
+- Hair: very long, voluminous waves with soft wispy bangs
+- Clothing: fitted cropped t-shirt in cream white featuring a cute graphic
+- Face: preserve original features, natural glam makeup with soft pink dewy blush and glossy lips
+
+Accessories:
+- Gold geometric hoop earrings
+- Smartphone with patterned case visible in hand
+
+Photography Style:
+- Camera style: early-2000s digital camera aesthetic
+- Lighting: harsh super-flash with bright blown-out highlights but subject still visible
+- Angle: mirror selfie
+- Shot type: tight selfie composition
+- Texture: subtle grain, retro highlights, crisp details, soft shadows
+
+Background Setting:
+- Nostalgic early-2000s bedroom atmosphere
+- Pastel wall tones
+- Period elements: posters of 2000s pop icons, cluttered vanity
+- Retro lighting creating authentic 2000s nostalgic vibe`,
+      isActive: true
+    },
+    {
+      id: 'script-fashion-shoot',
+      name: 'Fashion Photoshoot Script',
+      category: 'scripts',
+      description: 'Structured script for professional fashion photography with complete styling',
+      tokenCost: 3,
+      userPrompt: 'Create a fashion photoshoot with detailed specification for {{model}}',
+      professionalPrompt: `Create a high-fashion photoshoot using this detailed specification:
+
+Model: {{model}}
+- Pose: dynamic editorial stance with confident expression
+- Hair: styled professionally, can be flowing or structured
+- Makeup: high-fashion editorial makeup, flawless skin
+
+Wardrobe:
+- Garment type: specify designer-style piece
+- Colors: bold or sophisticated palette
+- Accessories: statement jewelry, designer bag or shoes
+
+Photography Setup:
+- Lighting: professional three-point studio lighting with dramatic shadows
+- Camera: shot on professional medium format, 85mm equivalent
+- Background: seamless gradient or styled editorial set
+- Post-processing: high-end retouching, skin detail preserved
+
+Mood & Style:
+- Editorial fashion magazine quality
+- Aspirational and polished
+- Strong visual impact`,
+      isActive: true
+    },
+    {
+      id: 'script-product-hero',
+      name: 'Product Hero Shot Script',
+      category: 'scripts',
+      description: 'Structured script for hero product photography with precise control',
+      tokenCost: 3,
+      userPrompt: 'Create a product hero shot with detailed specification for {{product}}',
+      professionalPrompt: `Create a professional product hero shot using this detailed specification:
+
+Product: {{product}}
+- Position: hero angle showcasing the best features
+- Condition: pristine, brand new appearance
+- Details: all logos, textures, materials clearly visible
+
+Lighting Setup:
+- Key light: soft box at 45 degrees, creating subtle highlight
+- Fill light: reducing shadows without flattening
+- Rim light: separating product from background
+- Reflector: bouncing light into shadow areas
+
+Background & Environment:
+- Style: clean gradient or contextual lifestyle setting
+- Color: complementary to product colors
+- Props: minimal, supporting the hero product
+
+Technical Specifications:
+- Lens: macro or 100mm for product detail
+- Depth of field: sharp product, subtle background blur
+- Post-production: color-accurate, enhanced sharpness`,
+      isActive: true
+    },
+    {
+      id: 'script-character',
+      name: 'Character Portrait Script',
+      category: 'scripts',
+      description: 'Detailed character specification for consistent portraits and character design',
+      tokenCost: 3,
+      userPrompt: 'Create a character portrait with detailed specification for {{character}}',
+      professionalPrompt: `Create a detailed character portrait using this specification:
+
+Character: {{character}}
+
+Physical Attributes:
+- Face shape: define the face structure
+- Eyes: color, shape, expression
+- Hair: color, length, style, texture
+- Skin tone: natural and realistic
+- Age range: approximate visual age
+- Build: body type if visible
+
+Expression & Personality:
+- Facial expression: specific emotion or mood
+- Personality traits: visible in the pose and expression
+- Eye contact: direct, avoiding, or looking elsewhere
+
+Attire & Accessories:
+- Clothing style: period, culture, or fantasy genre
+- Color palette: primary and accent colors
+- Accessories: jewelry, glasses, hats, etc.
+
+Artistic Style:
+- Rendering: photorealistic, painterly, or stylized
+- Lighting: dramatic, soft, or natural
+- Background: simple, environmental, or abstract`,
       isActive: true
     }
   ];
