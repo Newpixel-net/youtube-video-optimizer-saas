@@ -1016,6 +1016,93 @@
             font-weight: 700;
         }
 
+        /* Tool Info Accordion */
+        .tool-info-accordion {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.75rem;
+            padding: 0;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .tool-info-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.875rem 1rem;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            user-select: none;
+        }
+
+        .tool-info-header:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tool-info-header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tool-info-icon {
+            font-size: 1rem;
+        }
+
+        .tool-info-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .tool-info-arrow {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            transition: transform 0.2s ease;
+        }
+
+        .tool-info-accordion.open .tool-info-arrow {
+            transform: rotate(180deg);
+        }
+
+        .tool-info-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+
+        .tool-info-accordion.open .tool-info-content {
+            max-height: 500px;
+            padding: 0 1rem 1rem 1rem;
+        }
+
+        .tool-info-description {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+            margin-bottom: 0.75rem;
+        }
+
+        .tool-info-features {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .tool-info-feature {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .tool-info-feature-icon {
+            color: #10b981;
+            font-size: 0.7rem;
+            margin-top: 0.1rem;
+        }
+
         /* Model Selector */
         .model-selector {
             display: flex;
@@ -4488,7 +4575,10 @@
             // Variable input state
             variableInputOpen: false,
             variableInputName: null,
-            variableInputValue: ''
+            variableInputValue: '',
+
+            // Tool info accordion state
+            toolInfoOpen: false
         };
 
         /* ==========================================
@@ -4499,37 +4589,74 @@
                 key: 'realtimeCanvas',
                 name: 'Realtime Canvas',
                 icon: 'canvas',
-                description: 'Draw and watch AI transform your sketches in real-time'
+                description: 'Draw and watch AI transform your sketches in real-time',
+                features: [
+                    'Real-time sketch-to-image transformation',
+                    'Multiple brush sizes and colors',
+                    'Style transfer from reference images',
+                    'Export in high resolution'
+                ]
             },
             {
                 key: 'realtimeGen',
                 name: 'Realtime Gen',
                 icon: 'realtime',
-                description: 'Generate images instantly as you type your prompts'
+                description: 'Generate images instantly as you type your prompts',
+                features: [
+                    'Live preview as you type',
+                    'Fast iteration on ideas',
+                    'Multiple style presets',
+                    'Instant variations'
+                ]
             },
             {
                 key: 'motion',
                 name: 'Motion',
                 icon: 'motion',
-                description: 'Bring your images to life with AI-powered animation'
+                description: 'Bring your images to life with AI-powered animation',
+                features: [
+                    'Transform static images to video',
+                    'Multiple motion styles',
+                    'Camera movement effects',
+                    'Export as MP4 or GIF'
+                ]
             },
             {
                 key: 'imageCreation',
                 name: 'Image Creation',
                 icon: 'image',
-                description: 'Create stunning images from text descriptions'
+                description: 'Create stunning images from text descriptions',
+                features: [
+                    'Generate up to 4 images at once',
+                    'Multiple aspect ratios (1:1, 16:9, 9:16, 4:3)',
+                    'Style and character reference support',
+                    'Quality settings (Standard, HD, Ultra HD)',
+                    'Save to history and share to community'
+                ]
             },
             {
                 key: 'upscaler',
                 name: 'Upscaler',
                 icon: 'upscaler',
-                description: 'Enhance and upscale your images with AI'
+                description: 'Enhance and upscale your images with AI',
+                features: [
+                    'Upscale images up to 4x resolution',
+                    'AI-powered detail enhancement',
+                    'Noise reduction and sharpening',
+                    'Face enhancement option'
+                ]
             },
             {
                 key: 'canvasEditor',
                 name: 'Canvas Editor',
                 icon: 'editor',
-                description: 'Edit and refine your images with powerful AI tools'
+                description: 'Edit and refine your images with powerful AI tools',
+                features: [
+                    'Inpainting - edit specific areas',
+                    'Outpainting - expand image boundaries',
+                    'Object removal and replacement',
+                    'Background removal and change'
+                ]
             }
         ];
 
@@ -4548,24 +4675,32 @@
                 key: 'auto',
                 name: 'Auto',
                 icon: '⚡',
-                description: 'Fast models with standard quality',
+                description: 'Balanced speed and quality',
                 badge: 'suggested',
                 available: true
             },
             {
+                key: 'gemini-flash',
+                name: 'Gemini Flash',
+                icon: '✨',
+                description: 'Best for character consistency & editing',
+                badge: 'new',
+                available: true
+            },
+            {
                 key: 'banana1',
-                name: 'Nano Banana',
-                icon: '🍌',
-                description: 'The only 4K with image references',
-                badge: 'trending',
+                name: 'Imagen 4',
+                icon: '🖼️',
+                description: 'Google Imagen - great for most uses',
+                badge: '',
                 available: true
             },
             {
                 key: 'banana2',
-                name: 'Nano Banana Ultra',
-                icon: '🍌',
-                description: 'Highest quality, best details',
-                badge: 'new',
+                name: 'Imagen 4 Ultra',
+                icon: '🎨',
+                description: 'Highest quality, best details, 4K output',
+                badge: 'trending',
                 available: true
             },
             { divider: true },
@@ -5787,6 +5922,16 @@
             },
 
             // ========================================
+            // TOOL INFO ACCORDION HANDLERS
+            // ========================================
+
+            // Toggle tool info accordion
+            toggleToolInfo: function() {
+                state.toolInfoOpen = !state.toolInfoOpen;
+                render();
+            },
+
+            // ========================================
             // REFERENCE HANDLERS
             // ========================================
 
@@ -6765,6 +6910,30 @@
         function renderToolSidebar(tool) {
             var html = '<div class="tool-sidebar">';
 
+            // Tool Info Accordion - "What can this tool do?"
+            html += '<div class="tool-info-accordion' + (state.toolInfoOpen ? ' open' : '') + '">';
+            html += '<div class="tool-info-header" onclick="app.toggleToolInfo()">';
+            html += '<div class="tool-info-header-left">';
+            html += '<span class="tool-info-icon">💡</span>';
+            html += '<span class="tool-info-title">What can this tool do?</span>';
+            html += '</div>';
+            html += '<span class="tool-info-arrow">▼</span>';
+            html += '</div>';
+            html += '<div class="tool-info-content">';
+            html += '<p class="tool-info-description">' + tool.description + '</p>';
+            if (tool.features && tool.features.length > 0) {
+                html += '<div class="tool-info-features">';
+                for (var fi = 0; fi < tool.features.length; fi++) {
+                    html += '<div class="tool-info-feature">';
+                    html += '<span class="tool-info-feature-icon">✓</span>';
+                    html += '<span>' + tool.features[fi] + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+            html += '</div>';
+
             // Model Selector with Dropdown
             html += '<div class="sidebar-section">';
             html += '<div class="sidebar-section-header">';
@@ -7276,11 +7445,13 @@
             html += '<div class="history-grid">';
             for (var i = 0; i < itemsToShow; i++) {
                 var item = state.history[i];
+                // Get image URL - handle both old format (imageUrl) and new format (images array)
+                var imageUrl = item.imageUrl || (item.images && item.images[0] ? item.images[0].url : '');
                 html += '<div class="history-item" onclick="app.openImageDetail(' + i + ')" style="cursor: pointer;">';
-                html += '<img src="' + item.imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" />';
+                html += '<img src="' + imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" />';
                 html += '<div class="history-item-overlay">';
                 html += '<div class="history-item-actions" onclick="event.stopPropagation()">';
-                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.downloadImage(\'' + item.imageUrl + '\')" title="Download">⬇️</button>';
+                html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.downloadImage(\'' + imageUrl + '\')" title="Download">⬇️</button>';
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.usePrompt(\'' + utils.escapeHtml(item.prompt).replace(/'/g, "\\'") + '\')" title="Reuse Prompt">🔄</button>';
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.shareToGallery(\'' + item.id + '\', false)" title="Share">📤</button>';
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.deleteFromHistory(\'' + item.id + '\')" title="Delete">🗑️</button>';
@@ -7495,6 +7666,8 @@
             if (!state.imageDetailModalOpen || !state.selectedImageDetail) return '';
 
             var item = state.selectedImageDetail;
+            // Get image URL - handle both old format (imageUrl) and new format (images array)
+            var imageUrl = item.imageUrl || (item.images && item.images[0] ? item.images[0].url : '');
             var html = '<div class="image-detail-modal-overlay" onclick="app.closeImageDetail(event)">';
             html += '<div class="image-detail-modal" onclick="event.stopPropagation()">';
 
@@ -7509,7 +7682,7 @@
 
             // Image preview
             html += '<div class="image-detail-preview">';
-            html += '<img src="' + item.imageUrl + '" alt="Generated image" />';
+            html += '<img src="' + imageUrl + '" alt="Generated image" />';
             html += '</div>';
 
             // Info panel
@@ -7558,7 +7731,7 @@
 
             // Actions
             html += '<div class="image-detail-actions">';
-            html += '<button class="image-detail-btn image-detail-btn-primary" onclick="app.downloadImage(\'' + item.imageUrl + '\')">';
+            html += '<button class="image-detail-btn image-detail-btn-primary" onclick="app.downloadImage(\'' + imageUrl + '\')">';
             html += '⬇️ Download';
             html += '</button>';
             html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.usePromptFromDetail()">';
