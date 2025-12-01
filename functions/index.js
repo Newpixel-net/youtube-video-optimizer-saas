@@ -6645,12 +6645,64 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
       model: usedModel
     });
 
+    // AUTO-SHARE FOR FREE USERS
+    // Free users' images are automatically shared to the community gallery
+    // Premium users can choose to share or keep private
+    let autoSharedToGallery = false;
+    let galleryId = null;
+
+    try {
+      const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+      const userPlan = tokenDoc.exists ? (tokenDoc.data().plan || 'free') : 'free';
+      const isPremium = ['lite', 'pro', 'business', 'enterprise'].includes(userPlan);
+
+      if (!isPremium) {
+        // Free user - auto-share to community gallery
+        const userDoc = await db.collection('users').doc(uid).get();
+        const userData = userDoc.exists ? userDoc.data() : {};
+
+        const galleryData = {
+          userId: uid,
+          userName: userData.displayName || 'Anonymous',
+          userAvatar: (userData.displayName || 'A').substring(0, 2).toUpperCase(),
+          historyId: historyRef.id,
+          imageUrl: generatedImages[0]?.url || '',
+          prompt: prompt,
+          isPrivate: false, // Free users can't have private prompts
+          promptPrice: 0,
+          tool: 'imageCreation',
+          likes: 0,
+          views: 0,
+          autoShared: true, // Flag indicating this was auto-shared
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        const galleryRef = await db.collection('creativeGallery').add(galleryData);
+        galleryId = galleryRef.id;
+        autoSharedToGallery = true;
+
+        // Update history to mark as shared
+        await db.collection('creativeHistory').doc(historyRef.id).update({
+          sharedToGallery: true,
+          galleryId: galleryRef.id,
+          autoShared: true
+        });
+
+        console.log(`Auto-shared image to gallery for free user ${uid}, galleryId: ${galleryRef.id}`);
+      }
+    } catch (autoShareError) {
+      // Don't fail the whole generation if auto-share fails
+      console.error('Auto-share to gallery failed:', autoShareError);
+    }
+
     return {
       success: true,
       historyId: historyRef.id,
       images: generatedImages,
       tokenCost: actualCost,
-      remainingBalance: balance - actualCost
+      remainingBalance: balance - actualCost,
+      autoSharedToGallery,
+      galleryId
     };
 
   } catch (error) {

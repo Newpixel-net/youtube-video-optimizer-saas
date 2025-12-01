@@ -6689,17 +6689,26 @@
                         // Update token balance
                         state.tokens.balance = result.data.remainingBalance;
 
-                        // Add to history
+                        // Add to history with auto-share info
                         var newHistoryItem = {
                             id: result.data.historyId,
                             prompt: state.prompt,
                             images: result.data.images,
                             imageUrl: result.data.images[0]?.url,
-                            createdAt: new Date().toISOString()
+                            createdAt: new Date().toISOString(),
+                            // Auto-share status for free users
+                            sharedToGallery: result.data.autoSharedToGallery || false,
+                            galleryId: result.data.galleryId || null,
+                            autoShared: result.data.autoSharedToGallery || false
                         };
                         state.history.unshift(newHistoryItem);
 
-                        showToast('Image generated successfully! (' + result.data.tokenCost + ' tokens used)', 'success');
+                        // Show appropriate message based on auto-share status
+                        if (result.data.autoSharedToGallery) {
+                            showToast('Image generated and shared to community! (' + result.data.tokenCost + ' tokens)', 'success');
+                        } else {
+                            showToast('Image generated successfully! (' + result.data.tokenCost + ' tokens used)', 'success');
+                        }
 
                         // Clear prompt after successful generation
                         state.prompt = '';
@@ -7952,27 +7961,50 @@
             }
             html += '</div>';
 
+            // Check if user is premium (has share control)
+            var userPlan = state.tokens.plan || 'free';
+            var isPremiumUser = ['lite', 'pro', 'business', 'enterprise'].includes(userPlan);
+
             html += '<div class="history-grid">';
             for (var i = 0; i < itemsToShow; i++) {
                 var item = state.history[i];
                 // Get image URL - handle both old format (imageUrl) and new format (images array)
                 var imageUrl = item.imageUrl || (item.images && item.images[0] ? item.images[0].url : '');
                 html += '<div class="history-item" onclick="app.openImageDetail(' + i + ')" style="cursor: pointer;">';
-                // Show shared badge if already shared
+
+                // Show shared badge based on status and user type
                 if (item.sharedToGallery) {
-                    html += '<div class="history-shared-badge">' + (item.isPrivate ? '🔒' : '✓') + ' Shared</div>';
+                    if (item.autoShared) {
+                        // Auto-shared (free user)
+                        html += '<div class="history-shared-badge" style="background: rgba(59, 130, 246, 0.9);">🌐 Community</div>';
+                    } else if (item.isPrivate) {
+                        // Manually shared as private (premium user)
+                        html += '<div class="history-shared-badge">🔒 Private</div>';
+                    } else {
+                        // Manually shared as public (premium user)
+                        html += '<div class="history-shared-badge">✓ Shared</div>';
+                    }
                 }
+
                 html += '<img src="' + imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" />';
                 html += '<div class="history-item-overlay">';
                 html += '<div class="history-item-actions" onclick="event.stopPropagation()">';
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.downloadImage(\'' + imageUrl + '\')" title="Download">⬇️</button>';
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.usePrompt(\'' + utils.escapeHtml(item.prompt).replace(/'/g, "\\'") + '\')" title="Reuse Prompt">🔄</button>';
-                // Show different share button based on shared status
-                if (item.sharedToGallery) {
-                    html += '<button class="history-action-btn" style="opacity: 0.5; cursor: default;" title="Already shared">✓</button>';
+
+                // Share button logic based on user type and share status
+                if (isPremiumUser) {
+                    // Premium users can manually share
+                    if (item.sharedToGallery) {
+                        html += '<button class="history-action-btn" style="opacity: 0.5; cursor: default;" title="Already shared">✓</button>';
+                    } else {
+                        html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.openShareDialog(\'' + item.id + '\')" title="Share to Community">📤</button>';
+                    }
                 } else {
-                    html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.openShareDialog(\'' + item.id + '\')" title="Share to Community">📤</button>';
+                    // Free users - images auto-shared, no manual control
+                    html += '<button class="history-action-btn" style="opacity: 0.5; cursor: default;" title="Auto-shared to community">🌐</button>';
                 }
+
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.deleteFromHistory(\'' + item.id + '\')" title="Delete">🗑️</button>';
                 html += '</div>';
                 html += '</div>';
@@ -8066,11 +8098,21 @@
             html += '</button>';
             html += '</div>';
 
-            // Info banner about privacy
+            // Info banner about sharing behavior
+            var userPlan = state.tokens.plan || 'free';
+            var isPremiumUser = ['lite', 'pro', 'business', 'enterprise'].includes(userPlan);
+
             html += '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">';
-            html += '<p style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin: 0;">';
-            html += '🔒 <strong>Premium Feature:</strong> Paid subscribers can make their prompts private. Share your creations from the History tab!';
-            html += '</p>';
+            if (isPremiumUser) {
+                html += '<p style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin: 0;">';
+                html += '🔒 <strong>Premium Control:</strong> You can choose to share images publicly, keep them private, or sell your prompts for tokens!';
+                html += '</p>';
+            } else {
+                html += '<p style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin: 0;">';
+                html += '🌐 <strong>Community Gallery:</strong> All free user creations are automatically shared here. ';
+                html += '<a href="#" onclick="event.preventDefault(); app.upgradeToPremium();" style="color: #a78bfa; text-decoration: underline;">Upgrade to Pro</a> for privacy control!';
+                html += '</p>';
+            }
             html += '</div>';
 
             // Loading state
