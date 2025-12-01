@@ -902,6 +902,13 @@
             }
         }
 
+        /* Pause all animations when tab is not visible (saves CPU/GPU) */
+        .animations-paused *,
+        .animations-paused *::before,
+        .animations-paused *::after {
+            animation-play-state: paused !important;
+        }
+
         /* Time-aware theme classes */
         .aurora-morning {
             --aurora-primary: var(--aurora-morning-primary);
@@ -3297,7 +3304,7 @@
                                 dot.classList.remove('active');
                             }
                         });
-                    });
+                    }, { passive: true });
                 }
             },
 
@@ -8410,6 +8417,16 @@
         /* ==========================================
            4.8 INITIALIZE APPLICATION
            ========================================== */
+
+        // Pause animations when tab is not visible to save CPU/GPU
+        document.addEventListener('visibilitychange', function() {
+            var root = document.documentElement;
+            if (document.hidden) {
+                root.classList.add('animations-paused');
+            } else {
+                root.classList.remove('animations-paused');
+            }
+        });
 
         // Initial render
         render();
