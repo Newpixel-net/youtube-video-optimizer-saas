@@ -1949,7 +1949,7 @@
         }
 
         function loadQuotaResetTime() {
-            db.collection('settings').doc('quotaConfig').get()
+            db.collection('settings').doc('quotaSettings').get()
                 .then(function(doc) {
                     if (doc.exists && doc.data().resetTimeMinutes) {
                         state.resetTimeMinutes = doc.data().resetTimeMinutes;
@@ -1957,14 +1957,14 @@
                     }
                 })
                 .catch(function(error) {
-                    console.error('Error loading quota config:', error);
+                    console.error('Error loading quota settings:', error);
                 });
         }
 
         function updateUserPlan(uid, newPlan) {
-            var adminSetSubscription = functions.httpsCallable('adminSetSubscription');
+            var adminUpdateUserPlan = functions.httpsCallable('adminUpdateUserPlan');
 
-            adminSetSubscription({ targetUid: uid, plan: newPlan })
+            adminUpdateUserPlan({ userId: uid, plan: newPlan })
                 .then(function(result) {
                     showToast('User plan updated to ' + newPlan.toUpperCase(), 'success');
                     loadUsers(); // Refresh the list
@@ -1984,9 +1984,9 @@
                 return;
             }
 
-            var adminSetQuotaResetTime = functions.httpsCallable('adminSetQuotaResetTime');
+            var adminSetQuotaSettings = functions.httpsCallable('adminSetQuotaSettings');
 
-            adminSetQuotaResetTime({ minutes: minutes })
+            adminSetQuotaSettings({ resetTimeMinutes: minutes })
                 .then(function(result) {
                     state.resetTimeMinutes = minutes;
                     showToast('Quota reset time updated to ' + minutes + ' minutes', 'success');
@@ -2018,7 +2018,7 @@
 
             var adminGrantBonusUses = functions.httpsCallable('adminGrantBonusUses');
 
-            adminGrantBonusUses({ targetUid: uid, tool: tool, amount: amount })
+            adminGrantBonusUses({ userId: uid, tool: tool, bonusAmount: amount })
                 .then(function(result) {
                     var toolName = toolConfig[tool] ? toolConfig[tool].name : tool;
                     showToast('Granted ' + amount + ' bonus uses for ' + toolName, 'success');
