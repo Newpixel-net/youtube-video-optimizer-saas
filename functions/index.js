@@ -3891,8 +3891,11 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
   const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 20);
 
   try {
-    // Fetch from all history collections in parallel
-    const [optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap, placementSnap, channelAuditSnap] = await Promise.all([
+    // Fetch from all history collections in parallel (including enterprise tools)
+    const [
+      optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap,
+      placementSnap, channelAuditSnap, viralSnap, monetizationSnap, scriptSnap
+    ] = await Promise.all([
       db.collection('optimizations')
         .where('userId', '==', uid)
         .orderBy('createdAt', 'desc')
@@ -3919,6 +3922,22 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
         .limit(safeLimit)
         .get(),
       db.collection('channelAuditHistory')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get(),
+      // Enterprise tools
+      db.collection('viralPredictorHistory')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get(),
+      db.collection('monetizationHistory')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get(),
+      db.collection('scriptWriterHistory')
         .where('userId', '==', uid)
         .orderBy('createdAt', 'desc')
         .limit(safeLimit)
@@ -3981,7 +4000,11 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       ...formatHistory(trendSnap, 'trend'),
       ...formatHistory(thumbnailSnap, 'thumbnail'),
       ...formatHistory(placementSnap, 'placement'),
-      ...formatHistory(channelAuditSnap, 'channelAudit')
+      ...formatHistory(channelAuditSnap, 'channelAudit'),
+      // Enterprise tools
+      ...formatHistory(viralSnap, 'viral'),
+      ...formatHistory(monetizationSnap, 'monetization'),
+      ...formatHistory(scriptSnap, 'script')
     ];
 
     // Sort by timestamp descending
@@ -3990,13 +4013,17 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
     return {
       success: true,
       history: {
-        all: allHistory.slice(0, safeLimit * 2),
+        all: allHistory.slice(0, safeLimit * 3),
         optimizations: formatHistory(optimizationsSnap, 'optimization'),
         competitor: formatHistory(competitorSnap, 'competitor'),
         trends: formatHistory(trendSnap, 'trend'),
         thumbnails: formatHistory(thumbnailSnap, 'thumbnail'),
         placements: formatHistory(placementSnap, 'placement'),
-        channelAudit: formatHistory(channelAuditSnap, 'channelAudit')
+        channelAudit: formatHistory(channelAuditSnap, 'channelAudit'),
+        // Enterprise tools
+        viral: formatHistory(viralSnap, 'viral'),
+        monetization: formatHistory(monetizationSnap, 'monetization'),
+        scripts: formatHistory(scriptSnap, 'script')
       },
       counts: {
         optimizations: optimizationsSnap.size,
@@ -4004,7 +4031,11 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
         trends: trendSnap.size,
         thumbnails: thumbnailSnap.size,
         placements: placementSnap.size,
-        channelAudit: channelAuditSnap.size
+        channelAudit: channelAuditSnap.size,
+        // Enterprise tools
+        viral: viralSnap.size,
+        monetization: monetizationSnap.size,
+        scripts: scriptSnap.size
       }
     };
   } catch (error) {
