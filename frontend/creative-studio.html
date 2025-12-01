@@ -974,8 +974,8 @@
 
         /* Left Sidebar */
         .tool-sidebar {
-            width: 320px;
-            min-width: 320px;
+            width: 520px;
+            min-width: 520px;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 1rem;
@@ -1592,6 +1592,31 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .history-item-image.loaded {
+            opacity: 1;
+        }
+
+        .history-item .image-skeleton {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                90deg,
+                rgba(255, 255, 255, 0.03) 25%,
+                rgba(255, 255, 255, 0.08) 50%,
+                rgba(255, 255, 255, 0.03) 75%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            z-index: 0;
         }
 
         .history-item-overlay {
@@ -1703,6 +1728,37 @@
         .community-item-image {
             width: 100%;
             display: block;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .community-item-image.loaded {
+            opacity: 1;
+        }
+
+        /* Skeleton loading animation */
+        .image-skeleton {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                90deg,
+                rgba(255, 255, 255, 0.03) 25%,
+                rgba(255, 255, 255, 0.08) 50%,
+                rgba(255, 255, 255, 0.03) 75%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            z-index: 0;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
 
         .community-item-overlay {
@@ -2646,8 +2702,8 @@
         /* Large screens - wider sidebar */
         @media (min-width: 1440px) {
             .tool-sidebar {
-                width: 380px;
-                min-width: 380px;
+                width: 580px;
+                min-width: 580px;
             }
 
             .tool-interface {
@@ -2662,8 +2718,8 @@
         /* Extra large screens - even wider */
         @media (min-width: 1800px) {
             .tool-sidebar {
-                width: 420px;
-                min-width: 420px;
+                width: 620px;
+                min-width: 620px;
             }
 
             .tool-interface {
@@ -2678,8 +2734,16 @@
         /* Medium-large screens */
         @media (max-width: 1280px) {
             .tool-sidebar {
-                width: 300px;
-                min-width: 300px;
+                width: 480px;
+                min-width: 480px;
+            }
+        }
+
+        /* Medium screens - narrower sidebar */
+        @media (max-width: 1180px) {
+            .tool-sidebar {
+                width: 420px;
+                min-width: 420px;
             }
         }
 
@@ -4420,6 +4484,60 @@
             background: rgba(239, 68, 68, 0.25);
         }
 
+        .image-detail-btn-liked {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+        }
+
+        .image-detail-btn-liked:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        /* Creator info in modal */
+        .image-detail-creator {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+        }
+
+        .image-detail-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .image-detail-likes {
+            margin-left: auto;
+            color: #f87171;
+            font-size: 0.85rem;
+        }
+
+        /* Locked prompt style */
+        .image-detail-prompt.locked {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px dashed rgba(139, 92, 246, 0.3);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+        }
+
+        .prompt-locked-icon {
+            font-size: 1.2rem;
+        }
+
         /* ==========================================
            MODEL SELECTOR DROPDOWN
            ========================================== */
@@ -4829,6 +4947,7 @@
             // Image Detail Modal state
             imageDetailModalOpen: false,
             selectedImageDetail: null,
+            imageDetailSource: 'history', // 'history' or 'community'
 
             // Model Dropdown state
             modelDropdownOpen: false,
@@ -5610,6 +5729,177 @@
         };
 
         /* ==========================================
+           4.6.1 IMAGE CACHE SYSTEM
+           Fast loading for community/history images
+           ========================================== */
+        const imageCache = {
+            // In-memory cache for blob URLs
+            cache: {},
+            // Track loading promises to avoid duplicate requests
+            loading: {},
+            // Cache size limit (number of images)
+            maxSize: 100,
+            // Cache order for LRU eviction
+            order: [],
+
+            // Preload an image and cache it
+            preload: function(url) {
+                if (!url || imageCache.cache[url] || imageCache.loading[url]) {
+                    return imageCache.loading[url] || Promise.resolve(imageCache.cache[url]);
+                }
+
+                imageCache.loading[url] = new Promise(function(resolve, reject) {
+                    var img = new Image();
+                    img.crossOrigin = 'anonymous';
+
+                    img.onload = function() {
+                        // Create canvas to convert to blob
+                        try {
+                            var canvas = document.createElement('canvas');
+                            canvas.width = img.naturalWidth;
+                            canvas.height = img.naturalHeight;
+                            var ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0);
+
+                            canvas.toBlob(function(blob) {
+                                if (blob) {
+                                    var blobUrl = URL.createObjectURL(blob);
+                                    imageCache.set(url, blobUrl);
+                                    resolve(blobUrl);
+                                } else {
+                                    // Fallback to original URL
+                                    imageCache.set(url, url);
+                                    resolve(url);
+                                }
+                                delete imageCache.loading[url];
+                            }, 'image/webp', 0.85);
+                        } catch (e) {
+                            // Canvas operations might fail due to CORS
+                            imageCache.set(url, url);
+                            resolve(url);
+                            delete imageCache.loading[url];
+                        }
+                    };
+
+                    img.onerror = function() {
+                        delete imageCache.loading[url];
+                        resolve(url); // Return original URL on error
+                    };
+
+                    img.src = url;
+                });
+
+                return imageCache.loading[url];
+            },
+
+            // Set cache entry with LRU eviction
+            set: function(key, value) {
+                // If cache is full, remove oldest entry
+                if (imageCache.order.length >= imageCache.maxSize) {
+                    var oldest = imageCache.order.shift();
+                    if (imageCache.cache[oldest] && imageCache.cache[oldest].startsWith('blob:')) {
+                        URL.revokeObjectURL(imageCache.cache[oldest]);
+                    }
+                    delete imageCache.cache[oldest];
+                }
+
+                // Add new entry
+                imageCache.cache[key] = value;
+                imageCache.order.push(key);
+            },
+
+            // Get cached URL or original
+            get: function(url) {
+                if (imageCache.cache[url]) {
+                    // Move to end of order (most recently used)
+                    var index = imageCache.order.indexOf(url);
+                    if (index > -1) {
+                        imageCache.order.splice(index, 1);
+                        imageCache.order.push(url);
+                    }
+                    return imageCache.cache[url];
+                }
+                return url;
+            },
+
+            // Preload multiple images
+            preloadBatch: function(urls) {
+                var promises = [];
+                for (var i = 0; i < Math.min(urls.length, 20); i++) {
+                    if (urls[i]) {
+                        promises.push(imageCache.preload(urls[i]));
+                    }
+                }
+                return Promise.all(promises);
+            },
+
+            // Clear all cache
+            clear: function() {
+                for (var key in imageCache.cache) {
+                    if (imageCache.cache[key] && imageCache.cache[key].startsWith('blob:')) {
+                        URL.revokeObjectURL(imageCache.cache[key]);
+                    }
+                }
+                imageCache.cache = {};
+                imageCache.order = [];
+                imageCache.loading = {};
+            }
+        };
+
+        // Initialize lazy loading with intersection observer
+        var imageObserver = null;
+        function initImageObserver() {
+            if ('IntersectionObserver' in window) {
+                imageObserver = new IntersectionObserver(function(entries) {
+                    entries.forEach(function(entry) {
+                        if (entry.isIntersecting) {
+                            var img = entry.target;
+                            var src = img.dataset.src;
+                            if (src) {
+                                // Use cached version if available
+                                var cachedSrc = imageCache.get(src);
+                                img.src = cachedSrc;
+
+                                // Preload if not cached
+                                if (cachedSrc === src) {
+                                    imageCache.preload(src).then(function(newSrc) {
+                                        if (img.src === src) {
+                                            img.src = newSrc;
+                                        }
+                                    });
+                                }
+
+                                img.classList.add('loaded');
+                                imageObserver.unobserve(img);
+                            }
+                        }
+                    });
+                }, {
+                    rootMargin: '100px', // Start loading 100px before visible
+                    threshold: 0.01
+                });
+            }
+        }
+
+        // Apply lazy loading to an image element
+        function lazyLoadImage(img) {
+            if (imageObserver && img.dataset.src) {
+                imageObserver.observe(img);
+            } else if (img.dataset.src) {
+                // Fallback for browsers without IntersectionObserver
+                img.src = img.dataset.src;
+            }
+        }
+
+        // Setup lazy loading after render
+        function setupLazyImages() {
+            var images = document.querySelectorAll('img[data-src]:not(.loaded)');
+            images.forEach(function(img) {
+                lazyLoadImage(img);
+            });
+        }
+
+        /* ==========================================
            4.7 APPLICATION CONTROLLER
            ========================================== */
 
@@ -6093,10 +6383,43 @@
             // IMAGE DETAIL MODAL HANDLERS
             // ========================================
 
-            // Open image detail modal
+            // Open image detail modal (for history items)
             openImageDetail: function(index) {
                 if (state.history[index]) {
                     state.selectedImageDetail = state.history[index];
+                    state.imageDetailSource = 'history'; // Track source
+                    state.imageDetailModalOpen = true;
+                    utils.lockBodyScroll();
+                    render();
+                    // Setup focus trap after render
+                    setTimeout(function() {
+                        state._imageDetailFocusTrapCleanup = utils.setupFocusTrap('.image-detail-modal');
+                    }, 100);
+                }
+            },
+
+            // Open image detail modal (for community items)
+            openCommunityImageDetail: function(index) {
+                if (state.communityItems[index]) {
+                    var communityItem = state.communityItems[index];
+                    // Convert community item format to match history item format for modal display
+                    state.selectedImageDetail = {
+                        id: communityItem.id,
+                        imageUrl: communityItem.imageUrl,
+                        prompt: communityItem.isPrivate ? '[Private Prompt - ' + (communityItem.promptPrice || 5) + ' tokens to unlock]' : communityItem.prompt,
+                        model: communityItem.model || 'Unknown',
+                        quality: communityItem.quality || 'HD',
+                        aspectRatio: communityItem.aspectRatio || '1:1',
+                        createdAt: communityItem.createdAt,
+                        // Community-specific fields
+                        userName: communityItem.userName,
+                        userAvatar: communityItem.userAvatar,
+                        likes: communityItem.likes || 0,
+                        isPrivate: communityItem.isPrivate,
+                        promptPrice: communityItem.promptPrice,
+                        userId: communityItem.userId
+                    };
+                    state.imageDetailSource = 'community'; // Track source
                     state.imageDetailModalOpen = true;
                     utils.lockBodyScroll();
                     render();
@@ -6938,7 +7261,16 @@
                             state.history.push({ id: doc.id, ...doc.data() });
                         });
                         state.historyLoading = false;
+
+                        // Preload history images for faster display
+                        var imageUrls = state.history.map(function(item) {
+                            return item.imageUrl || (item.images && item.images[0] ? item.images[0].url : null);
+                        }).filter(Boolean);
+                        imageCache.preloadBatch(imageUrls);
+
                         render();
+                        // Setup lazy loading after render
+                        setTimeout(setupLazyImages, 50);
                     })
                     .catch(function(e) {
                         console.error('Error loading history:', e);
@@ -6971,11 +7303,19 @@
                         state.communityItems = result.data.items || [];
                         state.communityLoaded = true;
                         state.communityError = null;
+
+                        // Preload images for faster display
+                        var imageUrls = state.communityItems.map(function(item) {
+                            return item.imageUrl;
+                        }).filter(Boolean);
+                        imageCache.preloadBatch(imageUrls);
                     } else {
                         state.communityError = 'Failed to load community gallery';
                     }
                     state.communityLoading = false;
                     render();
+                    // Setup lazy loading after render
+                    setTimeout(setupLazyImages, 50);
                 })
                 .catch(function(error) {
                     console.error('Error loading community gallery:', error);
@@ -7970,6 +8310,7 @@
                 var item = state.history[i];
                 // Get image URL - handle both old format (imageUrl) and new format (images array)
                 var imageUrl = item.imageUrl || (item.images && item.images[0] ? item.images[0].url : '');
+                var cachedUrl = imageCache.get(imageUrl);
                 html += '<div class="history-item" onclick="app.openImageDetail(' + i + ')" style="cursor: pointer;">';
 
                 // Show shared badge based on status and user type
@@ -7986,7 +8327,8 @@
                     }
                 }
 
-                html += '<img src="' + imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" />';
+                html += '<div class="image-skeleton"></div>';
+                html += '<img src="' + cachedUrl + '" data-src="' + imageUrl + '" alt="Creation" class="history-item-image" loading="lazy" onload="this.classList.add(\'loaded\')" />';
                 html += '<div class="history-item-overlay">';
                 html += '<div class="history-item-actions" onclick="event.stopPropagation()">';
                 html += '<button class="history-action-btn" onclick="event.stopPropagation(); app.downloadImage(\'' + imageUrl + '\')" title="Download">⬇️</button>';
@@ -8151,16 +8493,18 @@
             for (var i = 0; i < state.communityItems.length; i++) {
                 var item = state.communityItems[i];
                 var isLiked = state.userLikes[item.id] || false;
+                var cachedUrl = imageCache.get(item.imageUrl || '');
 
-                html += '<div class="community-item">';
-                html += '<img src="' + (item.imageUrl || '') + '" alt="Community creation" class="community-item-image" loading="lazy" onerror="this.src=\'https://via.placeholder.com/400x400?text=Image+Not+Found\'" />';
+                html += '<div class="community-item" onclick="app.openCommunityImageDetail(' + i + ')" style="cursor: pointer;">';
+                html += '<div class="image-skeleton"></div>';
+                html += '<img src="' + cachedUrl + '" data-src="' + (item.imageUrl || '') + '" alt="Community creation" class="community-item-image" loading="lazy" onload="this.classList.add(\'loaded\')" onerror="this.src=\'https://via.placeholder.com/400x400?text=Image+Not+Found\'" />';
 
                 // Private badge
                 if (item.isPrivate) {
                     html += '<div class="private-badge">🔒 ' + (item.promptPrice || 5) + ' tokens</div>';
                 }
 
-                html += '<div class="community-item-overlay">';
+                html += '<div class="community-item-overlay" onclick="event.stopPropagation()">';
 
                 // Prompt (blurred if private)
                 html += '<p class="community-item-prompt' + (item.isPrivate ? ' locked' : '') + '">' + utils.escapeHtml(item.prompt || '') + '</p>';
@@ -8169,24 +8513,24 @@
 
                 // User info
                 html += '<div class="community-item-user">';
-                html += '<div class="community-item-avatar">' + (item.user && item.user.avatar ? item.user.avatar : 'AN') + '</div>';
-                html += '<span>' + utils.escapeHtml(item.user && item.user.name ? item.user.name : 'Anonymous') + '</span>';
+                html += '<div class="community-item-avatar">' + (item.userAvatar || (item.userName || 'A').substring(0, 2).toUpperCase()) + '</div>';
+                html += '<span>' + utils.escapeHtml(item.userName || 'Anonymous') + '</span>';
                 html += '</div>';
 
                 // Actions
                 html += '<div class="community-item-actions">';
-                html += '<button class="community-action-btn' + (isLiked ? ' liked' : '') + '" onclick="app.likeGalleryItem(\'' + item.id + '\')" title="Like">';
+                html += '<button class="community-action-btn' + (isLiked ? ' liked' : '') + '" onclick="event.stopPropagation(); app.likeGalleryItem(\'' + item.id + '\')" title="Like">';
                 html += (isLiked ? '❤️' : '🤍') + ' ' + (item.likes || 0);
                 html += '</button>';
 
                 if (item.isPrivate) {
                     // Buy prompt button
-                    html += '<button class="community-action-btn buy-prompt" onclick="app.purchasePrompt(\'' + item.id + '\', ' + (item.promptPrice || 5) + ')" title="Buy Prompt">';
+                    html += '<button class="community-action-btn buy-prompt" onclick="event.stopPropagation(); app.purchasePrompt(\'' + item.id + '\', ' + (item.promptPrice || 5) + ')" title="Buy Prompt">';
                     html += '🪙 Buy';
                     html += '</button>';
                 } else {
                     // Copy/Use prompt button
-                    html += '<button class="community-action-btn" onclick="app.usePrompt(\'' + utils.escapeHtml(item.prompt || '').replace(/'/g, "\\'") + '\')" title="Use Prompt">';
+                    html += '<button class="community-action-btn" onclick="event.stopPropagation(); app.usePrompt(\'' + utils.escapeHtml(item.prompt || '').replace(/'/g, "\\'") + '\')" title="Use Prompt">';
                     html += '📋 Use';
                     html += '</button>';
                 }
@@ -8277,6 +8621,7 @@
             if (!state.imageDetailModalOpen || !state.selectedImageDetail) return '';
 
             var item = state.selectedImageDetail;
+            var isCommunity = state.imageDetailSource === 'community';
             // Get image URL - handle both old format (imageUrl) and new format (images array)
             var imageUrl = item.imageUrl || (item.images && item.images[0] ? item.images[0].url : '');
             var html = '<div class="image-detail-modal-overlay" onclick="app.closeImageDetail(event)">';
@@ -8299,10 +8644,31 @@
             // Info panel
             html += '<div class="image-detail-info">';
 
+            // Creator info for community items
+            if (isCommunity && item.userName) {
+                html += '<div class="image-detail-section">';
+                html += '<div class="image-detail-label">Created By</div>';
+                html += '<div class="image-detail-creator">';
+                html += '<div class="image-detail-avatar">' + (item.userAvatar || 'U') + '</div>';
+                html += '<span>' + utils.escapeHtml(item.userName) + '</span>';
+                if (item.likes > 0) {
+                    html += '<span class="image-detail-likes">❤️ ' + item.likes + '</span>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+
             // Prompt section
             html += '<div class="image-detail-section">';
             html += '<div class="image-detail-label">Prompt</div>';
-            html += '<div class="image-detail-prompt">' + utils.escapeHtml(item.prompt || 'No prompt available') + '</div>';
+            if (isCommunity && item.isPrivate) {
+                html += '<div class="image-detail-prompt locked">';
+                html += '<span class="prompt-locked-icon">🔒</span>';
+                html += '<span>Private prompt - ' + (item.promptPrice || 5) + ' tokens to unlock</span>';
+                html += '</div>';
+            } else {
+                html += '<div class="image-detail-prompt">' + utils.escapeHtml(item.prompt || 'No prompt available') + '</div>';
+            }
             html += '</div>';
 
             // Model and Quality row
@@ -8329,8 +8695,8 @@
             html += '</div>';
             html += '</div>';
 
-            // Cost
-            if (item.tokenCost) {
+            // Cost (for history items)
+            if (!isCommunity && item.tokenCost) {
                 html += '<div class="image-detail-section">';
                 html += '<div class="image-detail-label">Token Cost</div>';
                 html += '<div class="image-detail-value">🪙 ' + item.tokenCost + '</div>';
@@ -8340,17 +8706,39 @@
             html += '</div>'; // info
             html += '</div>'; // body
 
-            // Actions
+            // Actions - different for history vs community
             html += '<div class="image-detail-actions">';
             html += '<button class="image-detail-btn image-detail-btn-primary" onclick="app.downloadImage(\'' + imageUrl + '\')">';
             html += '⬇️ Download';
             html += '</button>';
-            html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.usePromptFromDetail()">';
-            html += '🔄 Reuse Prompt';
-            html += '</button>';
-            html += '<button class="image-detail-btn image-detail-btn-danger" onclick="app.deleteFromHistoryAndClose(\'' + item.id + '\')">';
-            html += '🗑️ Delete';
-            html += '</button>';
+
+            if (isCommunity) {
+                // Community actions
+                if (item.isPrivate) {
+                    // Buy prompt button for private prompts
+                    html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.purchasePrompt(\'' + item.id + '\', ' + (item.promptPrice || 5) + ')">';
+                    html += '🔓 Unlock Prompt (' + (item.promptPrice || 5) + ' tokens)';
+                    html += '</button>';
+                } else {
+                    // Reuse prompt for public prompts
+                    html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.usePromptFromDetail()">';
+                    html += '🔄 Reuse Prompt';
+                    html += '</button>';
+                }
+                // Like button
+                var isLiked = state.userLikes[item.id] || false;
+                html += '<button class="image-detail-btn' + (isLiked ? ' image-detail-btn-liked' : ' image-detail-btn-secondary') + '" onclick="app.likeGalleryItem(\'' + item.id + '\')">';
+                html += (isLiked ? '❤️ Liked' : '🤍 Like');
+                html += '</button>';
+            } else {
+                // History actions
+                html += '<button class="image-detail-btn image-detail-btn-secondary" onclick="app.usePromptFromDetail()">';
+                html += '🔄 Reuse Prompt';
+                html += '</button>';
+                html += '<button class="image-detail-btn image-detail-btn-danger" onclick="app.deleteFromHistoryAndClose(\'' + item.id + '\')">';
+                html += '🗑️ Delete';
+                html += '</button>';
+            }
             html += '</div>';
 
             html += '</div>'; // modal
@@ -9096,6 +9484,9 @@
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize image observer for lazy loading
+            initImageObserver();
+
             render();
             checkAccess();
 
