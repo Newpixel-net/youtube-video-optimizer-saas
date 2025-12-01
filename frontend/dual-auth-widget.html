@@ -5688,14 +5688,14 @@
             html += '<div class="mb-6">';
             html += '<div class="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-xl overflow-hidden border border-blue-100">';
 
-            // Mobile: Collapsible header
-            html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+            // Mobile: Collapsible header - NOW VISIBLE ON ALL SCREENS
+            html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left">';
             html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">💡</span> What can this tool do?</span>';
             html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
             html += '</button>';
 
-            // Content area
-            html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+            // Content area - removed hidden class, CSS handles visibility
+            html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
             html += '<p class="text-gray-700 mb-3 leading-relaxed">Transform your video\'s discoverability with AI-powered SEO optimization. Our advanced algorithms analyze your content and generate optimized metadata to help you rank higher and get more views.</p>';
             html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
             html += '<div class="flex items-start gap-2"><span class="text-green-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO-Optimized Titles</strong> – 5 click-worthy title suggestions</span></div>';
@@ -6459,14 +6459,14 @@
                 html += '<div class="mb-6">';
                 html += '<div class="bg-gradient-to-r from-red-50 via-orange-50 to-amber-50 rounded-xl overflow-hidden border border-red-100">';
 
-                // Mobile: Collapsible header
-                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+                // Collapsible header - VISIBLE ON ALL SCREENS
+                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left">';
                 html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">🎯</span> How does this help?</span>';
                 html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
                 html += '</button>';
 
-                // Content area
-                html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+                // Content area - CSS handles visibility
+                html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
                 html += '<p class="text-gray-700 mb-3 leading-relaxed">Reverse-engineer the success of any YouTube video. Our AI analyzes competitor content to reveal their SEO strategies, strengths, and weaknesses – giving you the blueprint to outperform them.</p>';
                 html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
                 html += '<div class="flex items-start gap-2"><span class="text-red-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO Breakdown</strong> – Competitor\'s optimization score</span></div>';
@@ -6617,14 +6617,14 @@
                 html += '<div class="mb-6">';
                 html += '<div class="bg-gradient-to-r from-cyan-50 via-blue-50 to-indigo-50 rounded-xl overflow-hidden border border-cyan-100">';
 
-                // Mobile: Collapsible header
-                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+                // Collapsible header - VISIBLE ON ALL SCREENS
+                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left">';
                 html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">🔮</span> What will you discover?</span>';
                 html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
                 html += '</button>';
 
-                // Content area
-                html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+                // Content area - CSS handles visibility
+                html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
                 html += '<p class="text-gray-700 mb-3 leading-relaxed">Stay ahead of the curve with AI-powered trend forecasting. Discover what\'s hot right now and predict future viral topics in your niche before your competitors catch on.</p>';
                 html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
                 html += '<div class="flex items-start gap-2"><span class="text-cyan-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Current Trends</strong> – What\'s trending now in your niche</span></div>';
@@ -6816,14 +6816,14 @@
                 html += '<div class="mb-6">';
                 html += '<div class="bg-gradient-to-r from-pink-50 via-rose-50 to-fuchsia-50 rounded-xl overflow-hidden border border-pink-100">';
 
-                // Mobile: Collapsible header
-                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+                // Collapsible header - VISIBLE ON ALL SCREENS
+                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left">';
                 html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">🎨</span> What makes great thumbnails?</span>';
                 html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
                 html += '</button>';
 
-                // Content area
-                html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+                // Content area - CSS handles visibility
+                html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
                 html += '<p class="text-gray-700 mb-3 leading-relaxed">Create scroll-stopping thumbnails with our AI image generator. Get professional-quality visuals that match your video\'s content and maximize click-through rates.</p>';
                 html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
                 html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>AI-Generated Art</strong> – Unique visuals tailored to your title</span></div>';
@@ -7220,14 +7220,14 @@
                 html += '<div class="mb-6">';
                 html += '<div class="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 rounded-xl overflow-hidden border border-emerald-100">';
 
-                // Mobile: Collapsible header
-                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left md:hidden">';
+                // Collapsible header - VISIBLE ON ALL SCREENS
+                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left">';
                 html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">📊</span> What will you learn?</span>';
                 html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
                 html += '</button>';
 
-                // Content area
-                html += '<div class="feature-info-content p-4 pt-0 md:p-5 hidden md:block">';
+                // Content area - CSS handles visibility
+                html += '<div class="feature-info-content p-4 pt-0 md:p-5">';
                 html += '<p class="text-gray-700 mb-3 leading-relaxed">Get a complete health check for any YouTube channel. Our AI analyzes every aspect of channel performance and provides actionable recommendations for growth.</p>';
                 html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
                 html += '<div class="flex items-start gap-2"><span class="text-emerald-500 mt-0.5">✓</span><span class="text-gray-600"><strong>SEO Health Score</strong> – Overall optimization rating</span></div>';
