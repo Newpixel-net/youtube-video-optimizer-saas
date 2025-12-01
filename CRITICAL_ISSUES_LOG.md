@@ -385,6 +385,52 @@ gsutil cors set cors.json gs://ytseo-6d1b0.firebasestorage.app
 
 ---
 
+## Issue #5: Invalid Gemini Model Name - gemini-2.5-flash-image
+
+**Date**: 2025-12-01
+
+**Symptom**:
+- "Nano Banana" model option fails with model not found or API errors
+- Gemini image generation not working for nano-banana selection
+- Error: Model not found or similar API errors
+
+**What DID NOT fix it**:
+- Assuming the model name `gemini-2.5-flash-image` was valid
+- Looking for model name variations
+
+**Root Cause**:
+The model ID `gemini-2.5-flash-image` used for "nano-banana" **does not exist** in Google AI Studio. Looking at the available models in Google AI Studio:
+- `gemini-3-pro-image-preview` - Valid for image generation
+- `gemini-2.0-flash-exp` - Valid for image generation (experimental)
+- `gemini-2.5-flash-preview-09-2025` - Text only, NOT image generation
+- There is NO `gemini-2.5-flash-image` model!
+
+**The ACTUAL fix**:
+Change the model mapping from non-existent model to valid one:
+
+```javascript
+// WRONG - This model doesn't exist!
+'nano-banana': 'gemini-2.5-flash-image'
+
+// CORRECT - Use existing Gemini 2.0 Flash Experimental
+'nano-banana': 'gemini-2.0-flash-exp'
+```
+
+**Valid Gemini models for image generation** (as of Dec 2025):
+- `gemini-3-pro-image-preview` - Recommended for quality
+- `gemini-2.0-flash-exp` - For faster generation
+
+**File locations**:
+- `functions/index.js` (line ~7043 - geminiImageModelMap)
+- `frontend/creative-studio.html` (line ~5682 - modelsConfig description)
+
+**Key Lesson**:
+Always verify model names against Google AI Studio (aistudio.google.com) before using them. Model names that seem logical may not actually exist.
+
+**Time wasted**: ~1 hour
+
+---
+
 ## Template for Future Issues
 
 ### Issue #X: [Title]

@@ -6903,7 +6903,7 @@ exports.testImagenApi = functions.https.onCall(async (data, context) => {
       if (errMsg.includes('api key')) {
         results.errors.push('API Key Error: Your API key is invalid or not authorized for Imagen. Get a key from https://aistudio.google.com/apikey');
       } else if (errMsg.includes('not found') || errMsg.includes('404')) {
-        results.errors.push('Model Not Found: The imagen-3.0-generate-001 model is not accessible. This could mean: (1) Your API key does not have Imagen access, (2) Imagen is not available in your region, or (3) You need to accept terms at https://aistudio.google.com');
+        results.errors.push('Model Not Found: The imagen-4.0-generate-001 model is not accessible. This could mean: (1) Your API key does not have Imagen access, (2) Imagen is not available in your region, or (3) You need to accept terms at https://aistudio.google.com');
       } else if (errMsg.includes('permission') || errMsg.includes('403') || errMsg.includes('denied')) {
         results.errors.push('Permission Denied: Your API key does not have permission to use Imagen. Make sure you created the key at https://aistudio.google.com/apikey and that billing is enabled.');
       } else if (errMsg.includes('billing')) {
@@ -7035,10 +7035,12 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const isGeminiImageModel = geminiImageModels.includes(model);
 
   // Gemini Image model mapping (uses generateContent with responseModalities)
+  // NOTE: gemini-2.5-flash-image does NOT exist in Google AI Studio
+  // Valid models for image generation: gemini-3-pro-image-preview, gemini-2.0-flash-exp
   const geminiImageModelMap = {
     'auto': 'gemini-3-pro-image-preview',
     'nano-banana-pro': 'gemini-3-pro-image-preview',
-    'nano-banana': 'gemini-2.5-flash-image'
+    'nano-banana': 'gemini-2.0-flash-exp'  // Was gemini-2.5-flash-image which doesn't exist!
   };
 
   // Imagen model mapping (uses ai.models.generateImages)
