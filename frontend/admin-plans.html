@@ -709,6 +709,51 @@
             color: #ef4444;
         }
 
+        /* Stats Grid (Users Tab) */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-card.stat-highlight {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: white;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
         /* API Token Cards */
         .api-card {
             background: rgba(255, 255, 255, 0.03);
@@ -1054,9 +1099,14 @@
         // Application State
         const state = {
             currentView: 'loading',
-            activeTab: 'plans', // plans | api | prompts
+            activeTab: 'users', // users | plans | api | prompts
             user: null,
             isAdmin: false,
+
+            // Users state (moved from dual-auth-widget)
+            adminUsers: [],
+            usersLoading: false,
+            resetTimeMinutes: 1440,
 
             // Plans state
             plans: [],
@@ -1286,6 +1336,10 @@
 
             // Main Tabs
             html += '<div class="main-tabs">';
+            html += '<button class="main-tab' + (state.activeTab === 'users' ? ' active' : '') + '" onclick="setActiveTab(\'users\')">';
+            html += '<span class="main-tab-icon">👥</span>';
+            html += '<span>Users</span>';
+            html += '</button>';
             html += '<button class="main-tab' + (state.activeTab === 'plans' ? ' active' : '') + '" onclick="setActiveTab(\'plans\')">';
             html += '<span class="main-tab-icon">📋</span>';
             html += '<span>Plans</span>';
@@ -1296,12 +1350,16 @@
             html += '</button>';
             html += '<button class="main-tab' + (state.activeTab === 'prompts' ? ' active' : '') + '" onclick="setActiveTab(\'prompts\')">';
             html += '<span class="main-tab-icon">✨</span>';
-            html += '<span>Prompts Management</span>';
+            html += '<span>Prompts</span>';
             html += '</button>';
             html += '</div>';
             html += '</div>';
 
             // Tab Content
+            html += '<div class="tab-content' + (state.activeTab === 'users' ? ' active' : '') + '">';
+            html += renderUsersTab();
+            html += '</div>';
+
             html += '<div class="tab-content' + (state.activeTab === 'plans' ? ' active' : '') + '">';
             html += renderPlansTab();
             html += '</div>';
@@ -1315,6 +1373,182 @@
             html += '</div>';
 
             html += '</div>';
+            return html;
+        }
+
+        // =============================================
+        // USERS TAB (Moved from dual-auth-widget.html)
+        // =============================================
+        function renderUsersTab() {
+            var html = '';
+
+            // Stats Cards
+            var totalUsers = state.adminUsers ? state.adminUsers.length : 0;
+            var proUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscription && u.subscription.plan === 'pro'; }).length : 0;
+            var enterpriseUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscription && u.subscription.plan === 'enterprise'; }).length : 0;
+            var liteUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscription && u.subscription.plan === 'lite'; }).length : 0;
+            var freeUsers = totalUsers - proUsers - enterpriseUsers - liteUsers;
+
+            html += '<div class="stats-grid">';
+
+            html += '<div class="stat-card">';
+            html += '<div class="stat-icon">👥</div>';
+            html += '<div class="stat-value">' + totalUsers + '</div>';
+            html += '<div class="stat-label">Total Users</div>';
+            html += '</div>';
+
+            html += '<div class="stat-card stat-highlight">';
+            html += '<div class="stat-icon">⭐</div>';
+            html += '<div class="stat-value">' + proUsers + '</div>';
+            html += '<div class="stat-label">Pro Users</div>';
+            html += '</div>';
+
+            html += '<div class="stat-card">';
+            html += '<div class="stat-icon">💎</div>';
+            html += '<div class="stat-value">' + enterpriseUsers + '</div>';
+            html += '<div class="stat-label">Enterprise</div>';
+            html += '</div>';
+
+            html += '<div class="stat-card">';
+            html += '<div class="stat-icon">🆓</div>';
+            html += '<div class="stat-value">' + freeUsers + '</div>';
+            html += '<div class="stat-label">Free Users</div>';
+            html += '</div>';
+
+            html += '</div>';
+
+            // Two-column layout for settings and user table
+            html += '<div class="grid-2" style="margin-top: 1.5rem;">';
+
+            // Left Column: User Management Table
+            html += '<div class="card" style="grid-column: span 2;">';
+            html += '<h3 class="card-title">👥 User Management</h3>';
+
+            if (state.usersLoading) {
+                html += '<div style="text-align: center; padding: 3rem;">';
+                html += '<div class="spinner" style="margin: 0 auto 1rem;"></div>';
+                html += '<p style="color: rgba(255,255,255,0.6);">Loading users...</p>';
+                html += '</div>';
+            } else if (!state.adminUsers || state.adminUsers.length === 0) {
+                html += '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 2rem;">No users found</p>';
+            } else {
+                html += '<div style="overflow-x: auto;">';
+                html += '<table class="prompt-table">';
+                html += '<thead><tr>';
+                html += '<th>User</th>';
+                html += '<th>Plan</th>';
+                html += '<th>Usage Today</th>';
+                html += '<th>Actions</th>';
+                html += '</tr></thead>';
+                html += '<tbody>';
+
+                for (var i = 0; i < state.adminUsers.length; i++) {
+                    var user = state.adminUsers[i];
+                    var plan = user.subscription ? user.subscription.plan : 'free';
+                    var planColors = {
+                        'free': 'background: rgba(107, 114, 128, 0.2); color: #9ca3af;',
+                        'lite': 'background: rgba(59, 130, 246, 0.2); color: #60a5fa;',
+                        'pro': 'background: rgba(139, 92, 246, 0.2); color: #a78bfa;',
+                        'enterprise': 'background: rgba(245, 158, 11, 0.2); color: #fbbf24;'
+                    };
+
+                    var baseLimit = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.limit : 0;
+                    var bonusUses = user.bonusUses && user.bonusUses.warpOptimizer ? user.bonusUses.warpOptimizer : 0;
+                    var usedToday = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.usedToday : 0;
+                    var totalLimit = baseLimit + bonusUses;
+
+                    html += '<tr>';
+                    html += '<td>';
+                    html += '<div style="font-weight: 600; color: white;">' + escapeHtml(user.email || 'No email') + '</div>';
+                    html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">ID: ' + escapeHtml(user.uid ? user.uid.substring(0, 12) + '...' : '') + '</div>';
+                    html += '</td>';
+                    html += '<td>';
+                    html += '<span style="padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; ' + (planColors[plan] || planColors['free']) + '">' + plan.toUpperCase() + '</span>';
+                    html += '</td>';
+                    html += '<td>';
+                    html += '<span style="color: white; font-weight: 500;">' + usedToday + '/' + totalLimit + '</span>';
+                    if (bonusUses > 0) {
+                        html += '<span style="color: #10b981; font-size: 0.75rem; margin-left: 0.5rem;">(+' + bonusUses + ' bonus)</span>';
+                    }
+                    html += '</td>';
+                    html += '<td>';
+                    html += '<select onchange="updateUserPlan(\'' + user.uid + '\', this.value)" class="select-field" style="width: auto; padding: 0.5rem 1rem;">';
+                    html += '<option value="free"' + (plan === 'free' ? ' selected' : '') + '>Free</option>';
+                    html += '<option value="lite"' + (plan === 'lite' ? ' selected' : '') + '>Lite</option>';
+                    html += '<option value="pro"' + (plan === 'pro' ? ' selected' : '') + '>Pro</option>';
+                    html += '<option value="enterprise"' + (plan === 'enterprise' ? ' selected' : '') + '>Enterprise</option>';
+                    html += '</select>';
+                    html += '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            html += '</div>'; // End grid-2
+
+            // Bottom row: Settings cards
+            html += '<div class="grid-2" style="margin-top: 1.5rem;">';
+
+            // Quota Reset Time
+            html += '<div class="card">';
+            html += '<h3 class="card-title">⏱️ Quota Reset Time</h3>';
+            html += '<p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 1rem;">Set how often user quotas reset. Default: 1440 minutes (24 hours).</p>';
+            html += '<div style="display: flex; gap: 0.75rem; align-items: flex-end;">';
+            html += '<div style="flex: 1;">';
+            html += '<label class="input-label">Reset Interval (minutes)</label>';
+            html += '<input type="number" id="reset-time-input" value="' + (state.resetTimeMinutes || 1440) + '" min="1" class="input-field" />';
+            html += '</div>';
+            html += '<button onclick="setQuotaResetTime()" class="btn-primary" style="height: 42px;">Save</button>';
+            html += '</div>';
+            html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.5rem;">Examples: 60 = 1 hour, 240 = 4 hours, 1440 = 24 hours</p>';
+            html += '</div>';
+
+            // Grant Bonus Uses
+            html += '<div class="card">';
+            html += '<h3 class="card-title">🎁 Grant Bonus Uses</h3>';
+            html += '<p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 1rem;">Give extra uses to a specific user as a gift or bonus.</p>';
+
+            html += '<div style="display: grid; gap: 0.75rem;">';
+
+            html += '<div>';
+            html += '<label class="input-label">Select User</label>';
+            html += '<select id="bonus-user-select" class="select-field">';
+            html += '<option value="">-- Select a user --</option>';
+            if (state.adminUsers) {
+                for (var j = 0; j < state.adminUsers.length; j++) {
+                    var u = state.adminUsers[j];
+                    html += '<option value="' + u.uid + '">' + escapeHtml(u.email || u.uid) + '</option>';
+                }
+            }
+            html += '</select>';
+            html += '</div>';
+
+            html += '<div>';
+            html += '<label class="input-label">Select Tool</label>';
+            html += '<select id="bonus-tool-select" class="select-field">';
+            html += '<option value="warpOptimizer">Warp Optimizer</option>';
+            html += '<option value="competitorAnalysis">Competitor Analysis</option>';
+            html += '<option value="trendPredictor">Trend Predictor</option>';
+            html += '<option value="thumbnailGenerator">AI Thumbnails</option>';
+            html += '<option value="channelAudit">Channel Audit</option>';
+            html += '</select>';
+            html += '</div>';
+
+            html += '<div>';
+            html += '<label class="input-label">Bonus Amount</label>';
+            html += '<input type="number" id="bonus-amount-input" value="5" min="1" class="input-field" />';
+            html += '</div>';
+
+            html += '<button onclick="grantBonusUses()" class="btn-primary" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">🎁 Grant Bonus Uses</button>';
+            html += '</div>';
+
+            html += '</div>';
+
+            html += '</div>'; // End grid-2
+
             return html;
         }
 
@@ -1676,11 +1910,124 @@
             render();
 
             // Load data if needed
-            if (tab === 'plans' && state.plans.length === 0) {
+            if (tab === 'users' && state.adminUsers.length === 0) {
+                loadUsers();
+            } else if (tab === 'plans' && state.plans.length === 0) {
                 loadPlans();
             } else if (tab === 'prompts' && state.prompts.length === 0) {
                 loadPrompts();
             }
+        }
+
+        // =============================================
+        // USER MANAGEMENT FUNCTIONS
+        // =============================================
+
+        function loadUsers() {
+            state.usersLoading = true;
+            render();
+
+            db.collection('users')
+                .get()
+                .then(function(snapshot) {
+                    state.adminUsers = [];
+                    snapshot.forEach(function(doc) {
+                        state.adminUsers.push({ uid: doc.id, ...doc.data() });
+                    });
+                    state.usersLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading users:', error);
+                    state.usersLoading = false;
+                    showToast('Failed to load users', 'error');
+                    render();
+                });
+
+            // Also load quota reset time
+            loadQuotaResetTime();
+        }
+
+        function loadQuotaResetTime() {
+            db.collection('settings').doc('quotaConfig').get()
+                .then(function(doc) {
+                    if (doc.exists && doc.data().resetTimeMinutes) {
+                        state.resetTimeMinutes = doc.data().resetTimeMinutes;
+                        render();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error loading quota config:', error);
+                });
+        }
+
+        function updateUserPlan(uid, newPlan) {
+            var adminSetSubscription = functions.httpsCallable('adminSetSubscription');
+
+            adminSetSubscription({ targetUid: uid, plan: newPlan })
+                .then(function(result) {
+                    showToast('User plan updated to ' + newPlan.toUpperCase(), 'success');
+                    loadUsers(); // Refresh the list
+                })
+                .catch(function(error) {
+                    console.error('Error updating plan:', error);
+                    showToast('Failed to update plan: ' + error.message, 'error');
+                });
+        }
+
+        function setQuotaResetTime() {
+            var input = document.getElementById('reset-time-input');
+            var minutes = parseInt(input.value, 10);
+
+            if (isNaN(minutes) || minutes < 1) {
+                showToast('Please enter a valid number of minutes (minimum 1)', 'error');
+                return;
+            }
+
+            var adminSetQuotaResetTime = functions.httpsCallable('adminSetQuotaResetTime');
+
+            adminSetQuotaResetTime({ minutes: minutes })
+                .then(function(result) {
+                    state.resetTimeMinutes = minutes;
+                    showToast('Quota reset time updated to ' + minutes + ' minutes', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error setting quota reset time:', error);
+                    showToast('Failed to update: ' + error.message, 'error');
+                });
+        }
+
+        function grantBonusUses() {
+            var userSelect = document.getElementById('bonus-user-select');
+            var toolSelect = document.getElementById('bonus-tool-select');
+            var amountInput = document.getElementById('bonus-amount-input');
+
+            var uid = userSelect.value;
+            var tool = toolSelect.value;
+            var amount = parseInt(amountInput.value, 10);
+
+            if (!uid) {
+                showToast('Please select a user', 'error');
+                return;
+            }
+            if (isNaN(amount) || amount < 1) {
+                showToast('Please enter a valid amount (minimum 1)', 'error');
+                return;
+            }
+
+            var adminGrantBonusUses = functions.httpsCallable('adminGrantBonusUses');
+
+            adminGrantBonusUses({ targetUid: uid, tool: tool, amount: amount })
+                .then(function(result) {
+                    var toolName = toolConfig[tool] ? toolConfig[tool].name : tool;
+                    showToast('Granted ' + amount + ' bonus uses for ' + toolName, 'success');
+                    loadUsers(); // Refresh to show new bonus
+                })
+                .catch(function(error) {
+                    console.error('Error granting bonus:', error);
+                    showToast('Failed to grant bonus: ' + error.message, 'error');
+                });
         }
 
         // Data Functions - Plans
@@ -2128,8 +2475,21 @@
                         if (doc.exists) {
                             state.isAdmin = true;
                             state.currentView = 'dashboard';
+
+                            // Check URL parameter for tab selection
+                            var urlParams = new URLSearchParams(window.location.search);
+                            var tabParam = urlParams.get('tab');
+                            if (tabParam && ['plans', 'tokens', 'prompts', 'users'].includes(tabParam)) {
+                                state.activeTab = tabParam;
+                            }
+
                             loadPlans();
                             loadPrompts();
+
+                            // Load users if users tab is active
+                            if (state.activeTab === 'users') {
+                                loadUsers();
+                            }
                         } else {
                             state.currentView = 'unauthorized';
                             render();
