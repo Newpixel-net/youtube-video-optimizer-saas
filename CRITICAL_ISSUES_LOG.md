@@ -299,8 +299,23 @@ const imagenModelMap = {
 **Key Lesson**:
 Never remove working functionality! Imagen 4 was working perfectly. Add new options as alternatives, don't replace what works.
 
+**Additional Fixes Applied (2025-12-01)**:
+
+1. **Indentation/Brace Alignment** - The Gemini generation block had inconsistent indentation causing mismatched braces. The entire block was rewritten with proper alignment.
+
+2. **Fallback Model Fix** - Line ~7058 had a bad fallback:
+   ```javascript
+   // WRONG - Imagen 3 doesn't exist in Google AI Studio!
+   const imagenModelId = imagenModelMap[model] || 'imagen-3.0-generate-001';
+
+   // CORRECT - Default to working Imagen 4
+   const imagenModelId = imagenModelMap[model] || 'imagen-4.0-generate-001';
+   ```
+
+3. **Token Initialization** - Added token initialization directly in `generateCreativeImage` to prevent "Insufficient tokens. Need X, have 0" errors for new users whose token document wasn't created yet.
+
 **File locations**:
-- `functions/index.js` (lines ~6400-6700)
+- `functions/index.js` (lines ~7029-7300 for model handling)
 - `frontend/creative-studio.html` (modelsConfig around line 5569)
 
 **Time wasted**: ~3 hours
