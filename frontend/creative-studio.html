@@ -1753,32 +1753,36 @@
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 0.75rem;
-            padding: 0;
             cursor: pointer;
             transition: all 0.2s ease;
             overflow: hidden;
+            position: relative;
+            min-height: 140px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
         }
 
         .template-card:hover {
-            background: rgba(255, 255, 255, 0.06);
             border-color: rgba(139, 92, 246, 0.3);
             transform: translateY(-2px);
         }
 
         .template-card.active {
             border-color: rgba(139, 92, 246, 0.6);
-            background: rgba(139, 92, 246, 0.1);
         }
 
+        /* Background image covers entire card */
         .template-card-cover {
-            width: 100%;
-            height: 100px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
             display: flex;
             align-items: center;
             justify-content: center;
-            position: relative;
-            overflow: hidden;
         }
 
         .template-card-cover img {
@@ -1788,41 +1792,58 @@
         }
 
         .template-card-cover-placeholder {
-            font-size: 1.5rem;
-            opacity: 0.4;
+            font-size: 2rem;
+            opacity: 0.3;
         }
 
+        /* Dark gradient overlay for text readability */
+        .template-card-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 50%, rgba(0, 0, 0, 0.1) 100%);
+            pointer-events: none;
+        }
+
+        /* Content positioned at bottom */
         .template-card-content {
-            padding: 0.65rem 0.85rem 0.85rem;
+            position: relative;
+            z-index: 1;
+            padding: 0.75rem;
         }
 
         .template-card-title {
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             font-weight: 600;
             color: white;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.2rem;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .template-card-desc {
             font-size: 0.7rem;
-            color: rgba(255, 255, 255, 0.5);
+            color: rgba(255, 255, 255, 0.75);
             line-height: 1.3;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
             margin-bottom: 0.4rem;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .template-card-cost {
             display: inline-flex;
             align-items: center;
             gap: 0.25rem;
-            padding: 0.15rem 0.45rem;
-            background: rgba(139, 92, 246, 0.2);
+            padding: 0.2rem 0.5rem;
+            background: rgba(139, 92, 246, 0.4);
+            backdrop-filter: blur(4px);
             border-radius: 9999px;
             font-size: 0.65rem;
-            color: #a78bfa;
+            color: #e9d5ff;
         }
 
         /* History Stats */
@@ -3132,8 +3153,8 @@
                 gap: 0.5rem;
             }
 
-            .template-card-cover {
-                height: 80px;
+            .template-card {
+                min-height: 120px;
             }
 
             .template-card-content {
@@ -3145,7 +3166,7 @@
             }
 
             .template-card-desc {
-                font-size: 0.65rem;
+                font-size: 0.6rem;
                 -webkit-line-clamp: 1;
             }
         }
@@ -3155,8 +3176,8 @@
                 grid-template-columns: 1fr;
             }
 
-            .template-card-cover {
-                height: 100px;
+            .template-card {
+                min-height: 140px;
             }
 
             .quantity-btns {
@@ -9462,7 +9483,10 @@
                     }
                     html += '</div>';
 
-                    // Content section
+                    // Dark gradient overlay for text readability
+                    html += '<div class="template-card-overlay"></div>';
+
+                    // Content section (positioned at bottom)
                     html += '<div class="template-card-content">';
                     html += '<div class="template-card-title">' + utils.escapeHtml(template.name) + '</div>';
                     html += '<div class="template-card-desc">' + utils.escapeHtml(template.description) + '</div>';
