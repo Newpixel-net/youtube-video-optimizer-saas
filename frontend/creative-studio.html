@@ -1777,6 +1777,15 @@
             background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
         }
 
+        .community-action-btn.liked {
+            background: rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        .community-action-btn.liked:hover {
+            background: rgba(239, 68, 68, 0.4);
+        }
+
         .private-badge {
             position: absolute;
             top: 0.5rem;
@@ -4578,7 +4587,15 @@
             variableInputValue: '',
 
             // Tool info accordion state
-            toolInfoOpen: false
+            toolInfoOpen: false,
+
+            // Community Gallery state
+            communityItems: [],
+            communityLoading: false,
+            communityError: null,
+            communityLoaded: false, // Track if we've loaded at least once
+            communitySort: 'newest', // newest | popular
+            userLikes: {} // Track which items user has liked: { galleryId: true }
         };
 
         /* ==========================================
@@ -5148,90 +5165,10 @@
         ];
 
         /* ==========================================
-           4.5.2 COMMUNITY GALLERY DATA (Enhanced)
+           4.5.2 COMMUNITY GALLERY DATA
+           Note: Community gallery now loaded from Firestore via getCommunityGallery()
+           See state.communityItems and app.loadCommunityGallery()
            ========================================== */
-        const communityGalleryData = [
-            {
-                id: 1,
-                image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=400&h=500&fit=crop',
-                prompt: 'Abstract golden art portrait with geometric shapes and warm lighting',
-                user: { name: 'ArtMaster', avatar: 'AM' },
-                isPrivate: false,
-                promptPrice: 0,
-                likes: 234,
-                tool: 'imageCreation'
-            },
-            {
-                id: 2,
-                image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=350&fit=crop',
-                prompt: 'Luxury fashion handbag floating in ethereal light',
-                user: { name: 'DesignPro', avatar: 'DP' },
-                isPrivate: true,
-                promptPrice: 5,
-                likes: 189,
-                tool: 'imageCreation'
-            },
-            {
-                id: 3,
-                image: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=400&h=600&fit=crop',
-                prompt: 'High fashion model in colorful avant-garde dress, editorial style',
-                user: { name: 'FashionAI', avatar: 'FA' },
-                isPrivate: true,
-                promptPrice: 8,
-                likes: 456,
-                tool: 'imageCreation'
-            },
-            {
-                id: 4,
-                image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=400&fit=crop',
-                prompt: 'Abstract 3D fluid art with iridescent colors',
-                user: { name: 'FluidArt', avatar: 'FL' },
-                isPrivate: false,
-                promptPrice: 0,
-                likes: 312,
-                tool: 'imageCreation'
-            },
-            {
-                id: 5,
-                image: 'https://images.unsplash.com/photo-1567653418876-5bb0e566e1c2?w=400&h=450&fit=crop',
-                prompt: 'Portrait with golden metallic makeup and dramatic lighting',
-                user: { name: 'GlamShot', avatar: 'GS' },
-                isPrivate: true,
-                promptPrice: 6,
-                likes: 278,
-                tool: 'imageCreation'
-            },
-            {
-                id: 6,
-                image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=350&fit=crop',
-                prompt: 'Gourmet food photography, michelin star presentation',
-                user: { name: 'FoodieAI', avatar: 'FO' },
-                isPrivate: false,
-                promptPrice: 0,
-                likes: 167,
-                tool: 'imageCreation'
-            },
-            {
-                id: 7,
-                image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=500&fit=crop',
-                prompt: 'Majestic mountain landscape at golden hour with mist',
-                user: { name: 'NaturePix', avatar: 'NP' },
-                isPrivate: false,
-                promptPrice: 0,
-                likes: 523,
-                tool: 'imageCreation'
-            },
-            {
-                id: 8,
-                image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&h=400&fit=crop',
-                prompt: 'Futuristic sci-fi cityscape with neon lights and flying vehicles',
-                user: { name: 'SciFiDreams', avatar: 'SF' },
-                isPrivate: true,
-                promptPrice: 10,
-                likes: 891,
-                tool: 'imageCreation'
-            }
-        ];
 
         /* ==========================================
            4.5.3 TOKEN SYSTEM CONFIGURATION
@@ -5454,6 +5391,12 @@
             // Main Area Tab Switching
             setMainTab: function(tab) {
                 state.mainTab = tab;
+
+                // Auto-load community gallery when switching to community tab
+                if (tab === 'community') {
+                    app.loadCommunityGallery();
+                }
+
                 render();
                 // Update floating button visibility after tab change
                 setTimeout(function() {
@@ -6717,6 +6660,168 @@
                         console.error('Error loading history:', e);
                         state.historyLoading = false;
                     });
+            },
+
+            // ==========================================
+            // COMMUNITY GALLERY FUNCTIONS
+            // ==========================================
+
+            // Load Community Gallery from backend
+            loadCommunityGallery: function(forceRefresh) {
+                // Skip if already loaded and not forcing refresh
+                if (state.communityLoaded && !forceRefresh && state.communityItems.length > 0) {
+                    return;
+                }
+
+                state.communityLoading = true;
+                state.communityError = null;
+                render();
+
+                var getCommunityGallery = functions.httpsCallable('getCommunityGallery');
+                getCommunityGallery({
+                    sortBy: state.communitySort,
+                    limit: 50
+                })
+                .then(function(result) {
+                    if (result.data && result.data.success) {
+                        state.communityItems = result.data.items || [];
+                        state.communityLoaded = true;
+                        state.communityError = null;
+                    } else {
+                        state.communityError = 'Failed to load community gallery';
+                    }
+                    state.communityLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading community gallery:', error);
+                    state.communityError = error.message || 'Failed to load community gallery';
+                    state.communityLoading = false;
+                    render();
+                });
+            },
+
+            // Share image to community gallery
+            shareToGallery: function(historyId, makePrivate, promptPrice) {
+                if (!state.user) {
+                    showToast('Please sign in to share images', 'error');
+                    return;
+                }
+
+                var shareToGallery = functions.httpsCallable('shareToGallery');
+                shareToGallery({
+                    historyId: historyId,
+                    makePrivate: makePrivate || false,
+                    promptPrice: promptPrice || 5
+                })
+                .then(function(result) {
+                    if (result.data && result.data.success) {
+                        showToast('Image shared to community!', 'success');
+                        // Refresh community gallery
+                        app.loadCommunityGallery(true);
+                        // Update history item to show it's shared
+                        for (var i = 0; i < state.history.length; i++) {
+                            if (state.history[i].id === historyId) {
+                                state.history[i].sharedToGallery = true;
+                                state.history[i].galleryId = result.data.galleryId;
+                                break;
+                            }
+                        }
+                        render();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error sharing to gallery:', error);
+                    showToast(error.message || 'Failed to share image', 'error');
+                });
+            },
+
+            // Purchase a private prompt
+            purchasePrompt: function(galleryId, price) {
+                if (!state.user) {
+                    showToast('Please sign in to purchase prompts', 'error');
+                    return;
+                }
+
+                if (state.tokens.balance < price) {
+                    showToast('Insufficient tokens. You need ' + price + ' tokens.', 'error');
+                    return;
+                }
+
+                // Confirm purchase
+                if (!confirm('Purchase this prompt for ' + price + ' tokens?')) {
+                    return;
+                }
+
+                var purchasePromptFn = functions.httpsCallable('purchasePrompt');
+                purchasePromptFn({ galleryId: galleryId })
+                .then(function(result) {
+                    if (result.data && result.data.success) {
+                        showToast('Prompt purchased! Check below.', 'success');
+                        // Show the prompt in a modal or alert
+                        if (result.data.prompt) {
+                            app.showPurchasedPrompt(result.data.prompt);
+                        }
+                        // Refresh tokens
+                        app.loadUserTokens();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error purchasing prompt:', error);
+                    showToast(error.message || 'Failed to purchase prompt', 'error');
+                });
+            },
+
+            // Show purchased prompt in a modal
+            showPurchasedPrompt: function(prompt) {
+                state.promptModalOpen = true;
+                state.promptModalText = prompt;
+                render();
+            },
+
+            // Like/unlike a gallery item
+            likeGalleryItem: function(galleryId) {
+                if (!state.user) {
+                    showToast('Please sign in to like images', 'error');
+                    return;
+                }
+
+                var likeGalleryItem = functions.httpsCallable('likeGalleryItem');
+                likeGalleryItem({ galleryId: galleryId })
+                .then(function(result) {
+                    if (result.data && result.data.success) {
+                        // Update local state
+                        if (result.data.liked) {
+                            state.userLikes[galleryId] = true;
+                        } else {
+                            delete state.userLikes[galleryId];
+                        }
+                        // Update like count in community items
+                        for (var i = 0; i < state.communityItems.length; i++) {
+                            if (state.communityItems[i].id === galleryId) {
+                                state.communityItems[i].likes += result.data.liked ? 1 : -1;
+                                break;
+                            }
+                        }
+                        render();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error liking item:', error);
+                });
+            },
+
+            // Refresh community gallery
+            refreshCommunityGallery: function() {
+                app.loadCommunityGallery(true);
+            },
+
+            // Change community sort order
+            setCommunitySort: function(sortBy) {
+                if (state.communitySort !== sortBy) {
+                    state.communitySort = sortBy;
+                    app.loadCommunityGallery(true);
+                }
             }
         };
 
@@ -7419,7 +7524,7 @@
             var tabs = [
                 { key: 'history', name: 'History', count: state.history.length },
                 { key: 'templates', name: 'Templates', count: getTotalTemplateCount() },
-                { key: 'community', name: 'Community', count: communityGalleryData.length }
+                { key: 'community', name: 'Community', count: state.communityItems.length }
             ];
             for (var t = 0; t < tabs.length; t++) {
                 var tab = tabs[t];
@@ -7574,54 +7679,104 @@
         function renderCommunityTab() {
             var html = '';
 
+            // Header with sort options and refresh
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">';
+
+            // Sort buttons
+            html += '<div style="display: flex; gap: 0.5rem;">';
+            html += '<button class="' + (state.communitySort === 'newest' ? 'template-category-pill active' : 'template-category-pill') + '" onclick="app.setCommunitySort(\'newest\')">';
+            html += '🕐 Newest';
+            html += '</button>';
+            html += '<button class="' + (state.communitySort === 'popular' ? 'template-category-pill active' : 'template-category-pill') + '" onclick="app.setCommunitySort(\'popular\')">';
+            html += '🔥 Popular';
+            html += '</button>';
+            html += '</div>';
+
+            // Refresh button
+            html += '<button class="template-category-pill" onclick="app.refreshCommunityGallery()" style="display: flex; align-items: center; gap: 0.25rem;">';
+            html += '<span>🔄</span> Refresh';
+            html += '</button>';
+            html += '</div>';
+
             // Info banner about privacy
             html += '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">';
             html += '<p style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin: 0;">';
-            html += '🔒 <strong>Premium Feature:</strong> Paid subscribers can make their prompts private. To use a private prompt, pay the creator with tokens.';
+            html += '🔒 <strong>Premium Feature:</strong> Paid subscribers can make their prompts private. Share your creations from the History tab!';
             html += '</p>';
             html += '</div>';
+
+            // Loading state
+            if (state.communityLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-spinner mx-auto"></div>';
+                html += '<p class="text-white/60 mt-4">Loading community gallery...</p>';
+                html += '</div>';
+                return html;
+            }
+
+            // Error state
+            if (state.communityError) {
+                html += '<div class="empty-state">';
+                html += '<div class="empty-state-icon">⚠️</div>';
+                html += '<h3 class="empty-state-title">Failed to load</h3>';
+                html += '<p class="empty-state-text">' + utils.escapeHtml(state.communityError) + '</p>';
+                html += '<button class="btn-primary" onclick="app.refreshCommunityGallery()" style="margin-top: 1rem;">Try Again</button>';
+                html += '</div>';
+                return html;
+            }
+
+            // Empty state
+            if (state.communityItems.length === 0) {
+                html += '<div class="empty-state">';
+                html += '<div class="empty-state-icon">🌟</div>';
+                html += '<h3 class="empty-state-title">No community creations yet</h3>';
+                html += '<p class="empty-state-text">Be the first to share! Create an image and click the share button in your History tab.</p>';
+                html += '</div>';
+                return html;
+            }
 
             // Community Gallery Grid (Masonry)
             html += '<div class="gallery-grid">';
 
-            for (var i = 0; i < communityGalleryData.length; i++) {
-                var item = communityGalleryData[i];
+            for (var i = 0; i < state.communityItems.length; i++) {
+                var item = state.communityItems[i];
+                var isLiked = state.userLikes[item.id] || false;
 
                 html += '<div class="community-item">';
-                html += '<img src="' + item.image + '" alt="Community creation" class="community-item-image" loading="lazy" />';
+                html += '<img src="' + (item.imageUrl || '') + '" alt="Community creation" class="community-item-image" loading="lazy" onerror="this.src=\'https://via.placeholder.com/400x400?text=Image+Not+Found\'" />';
 
                 // Private badge
                 if (item.isPrivate) {
-                    html += '<div class="private-badge">🔒 ' + item.promptPrice + ' tokens</div>';
+                    html += '<div class="private-badge">🔒 ' + (item.promptPrice || 5) + ' tokens</div>';
                 }
 
                 html += '<div class="community-item-overlay">';
 
                 // Prompt (blurred if private)
-                html += '<p class="community-item-prompt' + (item.isPrivate ? ' locked' : '') + '">' + utils.escapeHtml(item.prompt) + '</p>';
+                html += '<p class="community-item-prompt' + (item.isPrivate ? ' locked' : '') + '">' + utils.escapeHtml(item.prompt || '') + '</p>';
 
                 html += '<div class="community-item-footer">';
 
                 // User info
                 html += '<div class="community-item-user">';
-                html += '<div class="community-item-avatar">' + item.user.avatar + '</div>';
-                html += '<span>' + utils.escapeHtml(item.user.name) + '</span>';
+                html += '<div class="community-item-avatar">' + (item.user && item.user.avatar ? item.user.avatar : 'AN') + '</div>';
+                html += '<span>' + utils.escapeHtml(item.user && item.user.name ? item.user.name : 'Anonymous') + '</span>';
                 html += '</div>';
 
                 // Actions
                 html += '<div class="community-item-actions">';
-                html += '<button class="community-action-btn" onclick="app.likeImage(' + item.id + ')" title="Like">';
-                html += '❤️ ' + item.likes;
+                html += '<button class="community-action-btn' + (isLiked ? ' liked' : '') + '" onclick="app.likeGalleryItem(\'' + item.id + '\')" title="Like">';
+                html += (isLiked ? '❤️' : '🤍') + ' ' + (item.likes || 0);
                 html += '</button>';
 
                 if (item.isPrivate) {
                     // Buy prompt button
-                    html += '<button class="community-action-btn buy-prompt" onclick="app.purchasePrompt(' + item.id + ', ' + item.promptPrice + ')" title="Buy Prompt">';
+                    html += '<button class="community-action-btn buy-prompt" onclick="app.purchasePrompt(\'' + item.id + '\', ' + (item.promptPrice || 5) + ')" title="Buy Prompt">';
                     html += '🪙 Buy';
                     html += '</button>';
                 } else {
                     // Copy/Use prompt button
-                    html += '<button class="community-action-btn" onclick="app.usePrompt(\'' + utils.escapeHtml(item.prompt).replace(/'/g, "\\'") + '\')" title="Use Prompt">';
+                    html += '<button class="community-action-btn" onclick="app.usePrompt(\'' + utils.escapeHtml(item.prompt || '').replace(/'/g, "\\'") + '\')" title="Use Prompt">';
                     html += '📋 Use';
                     html += '</button>';
                 }
