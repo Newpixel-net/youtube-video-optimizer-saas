@@ -6401,28 +6401,31 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const validAspectRatio = aspectRatioMap[aspectRatio] || '1:1';
 
   // Map model selection to AI models
-  // Supports both Google Imagen API and OpenAI DALL-E API
+  // Supports: Gemini Image Models, OpenAI DALL-E, and legacy Imagen API
 
-  // Check if this is a DALL-E model
+  // Check model type
   const dalleModels = ['dall-e-3', 'dall-e-2', 'dalle-3', 'dalle-2', 'openai'];
   const isDalleModel = dalleModels.includes(model);
 
-  // Imagen model mapping (uses ai.models.generateImages)
+  // Gemini Image models (use generateContent API with image output)
+  const geminiImageModels = ['auto', 'nano-banana-pro', 'nano-banana'];
+  const isGeminiImageModel = geminiImageModels.includes(model);
+
+  // Gemini Image model mapping (uses generateContent with responseModalities)
+  const geminiImageModelMap = {
+    'auto': 'gemini-3-pro-image-preview',
+    'nano-banana-pro': 'gemini-3-pro-image-preview',
+    'nano-banana': 'gemini-2.5-flash-image'
+  };
+
+  // Legacy Imagen model mapping (uses ai.models.generateImages - if available)
   const imagenModelMap = {
-    'auto': 'imagen-4.0-generate-001',
     'imagen-4': 'imagen-4.0-generate-001',
     'imagen-4-ultra': 'imagen-4.0-ultra-generate-001',
     'imagen-3': 'imagen-3.0-generate-001',
     // Legacy keys for backwards compatibility
     'banana1': 'imagen-4.0-generate-001',
-    'banana2': 'imagen-4.0-ultra-generate-001',
-    // Map any Gemini selections to Imagen (Gemini image gen not supported by this SDK)
-    'gemini-2-flash': 'imagen-4.0-generate-001',
-    'gemini-2-flash-exp': 'imagen-4.0-generate-001',
-    'gemini-2-flash-thinking': 'imagen-4.0-generate-001',
-    'gemini-pro-vision': 'imagen-4.0-generate-001',
-    'gemini-flash-lite': 'imagen-4.0-generate-001',
-    'gemini-flash': 'imagen-4.0-generate-001'
+    'banana2': 'imagen-4.0-ultra-generate-001'
   };
 
   // DALL-E model mapping
@@ -6431,11 +6434,12 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     'dalle-3': 'dall-e-3',
     'dall-e-2': 'dall-e-2',
     'dalle-2': 'dall-e-2',
-    'openai': 'dall-e-3' // Default OpenAI selection to DALL-E 3
+    'openai': 'dall-e-3'
   };
 
-  // Get the model ID
-  const imagenModelId = imagenModelMap[model] || imagenModelMap['auto'];
+  // Get the model ID based on type
+  const geminiImageModelId = geminiImageModelMap[model] || geminiImageModelMap['auto'];
+  const imagenModelId = imagenModelMap[model] || 'imagen-3.0-generate-001';
   const dalleModelId = dalleModelMap[model] || 'dall-e-3';
 
   try {
@@ -6541,9 +6545,11 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
 
       usedModel = dalleModelId;
 
-    } else {
+    } else if (isGeminiImageModel) {
       // ==========================================
-      // Imagen Image Generation (Google)
+      // Gemini Image Generation (Google AI Studio)
+      // Uses generateContent API with image output
+      // Supports: gemini-3-pro-image-preview, gemini-2.5-flash-image
       // ==========================================
       const geminiApiKey = functions.config().gemini?.key;
       if (!geminiApiKey) {
@@ -6554,7 +6560,144 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
 
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
-      console.log(`Generating ${imageCount} image(s) with ${imagenModelId}, aspect: ${validAspectRatio}`);
+      console.log(`Generating image with Gemini model: ${geminiImageModelId}`);
+      console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
+
+      // Build the content parts for the request
+      const contentParts = [];
+
+      // Add reference images if provided (Gemini supports multimodal input)
+      if (styleReference && styleReference.base64) {
+        contentParts.push({
+          inlineData: {
+            mimeType: styleReference.mimeType || 'image/png',
+            data: styleReference.base64
+          }
+        });
+        console.log('Adding style reference image as input');
+      }
+
+      if (characterReference && characterReference.base64) {
+        contentParts.push({
+          inlineData: {
+            mimeType: characterReference.mimeType || 'image/png',
+            data: characterReference.base64
+          }
+        });
+        console.log('Adding character reference image as input');
+      }
+
+      // Build the prompt with reference instructions if needed
+      let imagePrompt = finalPrompt;
+      if (styleReference && styleReference.base64) {
+        imagePrompt = `Using the provided image as a style reference, generate a new image with the following description: ${finalPrompt}`;
+      }
+      if (characterReference && characterReference.base64) {
+        imagePrompt = `Using the provided image as a character/face reference to maintain consistency, generate a new image: ${finalPrompt}`;
+      }
+      if (styleReference && characterReference) {
+        imagePrompt = `Using the first image as style reference and the second image as character reference, generate: ${finalPrompt}`;
+      }
+
+      // Add negative prompt instruction if provided
+      if (negativePrompt && negativePrompt.trim()) {
+        imagePrompt += `\n\nIMPORTANT: Avoid the following in the image: ${negativePrompt.trim()}`;
+      }
+
+      // Add the text prompt
+      contentParts.push({ text: imagePrompt });
+
+      try {
+        const geminiModel = ai.getGenerativeModel({
+          model: geminiImageModelId,
+          generationConfig: {
+            responseModalities: ['image', 'text']
+          }
+        });
+
+        // Generate images (Gemini generates one at a time)
+        for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
+          try {
+            const result = await geminiModel.generateContent({
+              contents: [{ role: 'user', parts: contentParts }]
+            });
+
+            const response = result.response;
+
+            // Extract image from response
+            if (response.candidates && response.candidates.length > 0) {
+              const candidate = response.candidates[0];
+              if (candidate.content && candidate.content.parts) {
+                for (const part of candidate.content.parts) {
+                  if (part.inlineData && part.inlineData.data) {
+                    // Found an image
+                    const imageBytes = part.inlineData.data;
+                    const mimeType = part.inlineData.mimeType || 'image/png';
+                    const extension = mimeType.includes('jpeg') ? 'jpg' : 'png';
+
+                    const fileName = `creative-studio/${uid}/${timestamp}-gemini-${imgIdx + 1}.${extension}`;
+                    const file = storage.file(fileName);
+
+                    const buffer = Buffer.from(imageBytes, 'base64');
+                    await file.save(buffer, {
+                      metadata: {
+                        contentType: mimeType,
+                        metadata: {
+                          prompt: finalPrompt.substring(0, 500),
+                          model: geminiImageModelId,
+                          generatedAt: new Date().toISOString()
+                        }
+                      }
+                    });
+
+                    await file.makePublic();
+                    const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+                    generatedImages.push({
+                      url: publicUrl,
+                      fileName: fileName
+                    });
+
+                    console.log(`Gemini image ${imgIdx + 1} saved: ${fileName}`);
+                    break; // Only take first image from this response
+                  }
+                }
+              }
+            }
+          } catch (genError) {
+            console.error(`Gemini generation error for image ${imgIdx + 1}:`, genError);
+            // Continue with remaining images
+          }
+        }
+
+        if (generatedImages.length === 0) {
+          throw new functions.https.HttpsError('internal',
+            'Gemini did not generate any images. The content may have been filtered.');
+        }
+
+        usedModel = geminiImageModelId;
+
+      } catch (geminiError) {
+        console.error('Gemini image generation error:', geminiError);
+        throw new functions.https.HttpsError('internal',
+          `Gemini generation failed: ${geminiError.message || 'Unknown error'}`);
+      }
+
+    } else {
+      // ==========================================
+      // Legacy Imagen Image Generation (Google)
+      // Uses ai.models.generateImages API
+      // ==========================================
+      const geminiApiKey = functions.config().gemini?.key;
+      if (!geminiApiKey) {
+        console.error('Gemini API key not configured');
+        throw new functions.https.HttpsError('failed-precondition',
+          'Image generation service not configured. Please contact support.');
+      }
+
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+      console.log(`Generating ${imageCount} image(s) with Imagen model: ${imagenModelId}`);
       console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
 
       // Build config object with optional parameters
