@@ -743,6 +743,8 @@
             position: relative;
             overflow: hidden;
             isolation: isolate;
+            /* PERFORMANCE: Isolate rendering from rest of page */
+            contain: layout style paint;
         }
 
         /* Aurora gradient background layer - OPTIMIZED */
@@ -821,44 +823,29 @@
         }
 
         .aurora-orb-1 {
-            width: 60%;
-            height: 60%;
-            top: -20%;
-            left: -10%;
+            width: 80%;
+            height: 80%;
+            top: -25%;
+            left: -15%;
             /* Softer gradient to simulate blur without GPU cost */
-            background: radial-gradient(circle, var(--aurora-primary) 0%, transparent 50%);
+            background: radial-gradient(circle, var(--aurora-primary) 0%, var(--aurora-tertiary) 30%, transparent 55%);
             animation: orbFloat1 20s ease-in-out infinite; /* Slower = less GPU work */
         }
 
         .aurora-orb-2 {
-            width: 50%;
-            height: 50%;
-            bottom: -15%;
-            right: -15%;
-            background: radial-gradient(circle, var(--aurora-secondary) 0%, transparent 50%);
+            width: 70%;
+            height: 70%;
+            bottom: -20%;
+            right: -20%;
+            background: radial-gradient(circle, var(--aurora-secondary) 0%, var(--aurora-accent) 30%, transparent 55%);
             animation: orbFloat2 18s ease-in-out infinite;
             animation-delay: -3s;
         }
 
-        .aurora-orb-3 {
-            width: 40%;
-            height: 40%;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: radial-gradient(circle, var(--aurora-tertiary) 0%, transparent 50%);
-            animation: orbFloat3 22s ease-in-out infinite;
-            animation-delay: -5s;
-        }
-
+        /* PERFORMANCE: Reduced from 4 orbs to 2 - orbs 3 & 4 hidden */
+        .aurora-orb-3,
         .aurora-orb-4 {
-            width: 30%;
-            height: 30%;
-            top: 20%;
-            right: 10%;
-            background: radial-gradient(circle, var(--aurora-accent) 0%, transparent 50%);
-            animation: orbPulse 10s ease-in-out infinite; /* Slower pulse */
-            animation-delay: -2s;
+            display: none;
         }
 
         /* Card content wrapper - ensures content is above aurora */
@@ -900,6 +887,13 @@
             .living-aurora::before {
                 background-position: 50% 50%;
             }
+        }
+
+        /* Pause all animations when tab is not visible (saves CPU/GPU) */
+        .animations-paused *,
+        .animations-paused *::before,
+        .animations-paused *::after {
+            animation-play-state: paused !important;
         }
 
         /* Time-aware theme classes */
@@ -1418,6 +1412,10 @@
         .tool-card {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border: 1px solid rgba(0, 0, 0, 0.05);
+            /* PERFORMANCE: Isolate rendering and skip off-screen */
+            contain: layout style paint;
+            content-visibility: auto;
+            contain-intrinsic-size: auto 280px;
         }
 
         .tool-card:hover {
@@ -2900,7 +2898,9 @@
                         triggerNotificationAttention();
                     }
 
-                    render();
+                    // OPTIMIZATION: Only update notification badge, NOT full render
+                    // This prevents flickering caused by full DOM replacement
+                    updateNotificationBadge(previousCount, notifications.length);
                 }, function(error) {
                     console.error('Notification listener error:', error);
                 });
@@ -2922,6 +2922,33 @@
                 setTimeout(function() {
                     badge.classList.remove('notification-new');
                 }, 3000);
+            }
+        }
+
+        // OPTIMIZATION: Update notification badge without full render
+        // This prevents flickering by doing targeted DOM updates
+        function updateNotificationBadge(previousCount, newCount) {
+            // Only update if count actually changed
+            if (previousCount === newCount) return;
+
+            // Update notification badge in header
+            var badge = document.querySelector('.notification-badge');
+            if (badge) {
+                if (newCount > 0) {
+                    badge.textContent = newCount > 99 ? '99+' : newCount;
+                    badge.style.display = '';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+
+            // Update unread count on dashboard card
+            var dashboardBadge = document.querySelector('.dashboard-card .notification-dot');
+            if (dashboardBadge) {
+                var countSpan = dashboardBadge.parentElement.querySelector('span:last-child');
+                if (countSpan && newCount > 0) {
+                    countSpan.textContent = newCount;
+                }
             }
         }
 
@@ -3268,7 +3295,7 @@
                                 dot.classList.remove('active');
                             }
                         });
-                    });
+                    }, { passive: true });
                 }
             },
 
@@ -5381,7 +5408,7 @@
             html += '<div class="grid grid-cols-2 gap-4 lg:gap-6 mb-8 fade-in dashboard-cards-grid">';
 
             // My Campaign Reports Card - with Living Aurora effect
-            html += '<div class="living-aurora aurora-emerald rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" onclick="app.goToClientReports()">';
+            html += '<div class="living-aurora aurora-emerald rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" style="transition: opacity 0.1s ease-out" onclick="this.style.opacity=\'0\'; app.goToClientReports()">';
             // Aurora orbs layer
             html += '<div class="aurora-orbs">';
             html += '<div class="aurora-orb aurora-orb-1"></div>';
@@ -5409,8 +5436,8 @@
             html += '</div></div>';
 
             // Enterprise Suite Card - with Living Aurora effect
-            html += '<a href="https://ytseo.siteuo.com/enterprise-suite" class="block">';
-            html += '<div class="living-aurora aurora-gold rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden border-2 border-yellow-300/50 h-full">';
+            html += '<a href="https://ytseo.siteuo.com/enterprise-suite" class="block" onclick="this.querySelector(\'.living-aurora\').style.opacity=\'0\'">';
+            html += '<div class="living-aurora aurora-gold rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden border-2 border-yellow-300/50 h-full" style="transition: opacity 0.1s ease-out">';
             // Aurora orbs layer
             html += '<div class="aurora-orbs">';
             html += '<div class="aurora-orb aurora-orb-1"></div>';
@@ -5439,8 +5466,8 @@
             html += '</div>'; // End grid
 
             // Creative Studio Banner - Full Width
-            html += '<a href="https://ytseo.siteuo.com/creative-studio" class="block mb-8 fade-in">';
-            html += '<div class="living-aurora aurora-creative rounded-2xl shadow-xl p-6 lg:p-8 cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.01] relative overflow-hidden border border-purple-400/30">';
+            html += '<a href="https://ytseo.siteuo.com/creative-studio" class="block mb-8 fade-in" onclick="this.querySelector(\'.living-aurora\').style.opacity=\'0\'">';
+            html += '<div class="living-aurora aurora-creative rounded-2xl shadow-xl p-6 lg:p-8 cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.01] relative overflow-hidden border border-purple-400/30" style="transition: opacity 0.1s ease-out">';
             // Aurora orbs layer
             html += '<div class="aurora-orbs">';
             html += '<div class="aurora-orb aurora-orb-1"></div>';
@@ -8381,6 +8408,16 @@
         /* ==========================================
            4.8 INITIALIZE APPLICATION
            ========================================== */
+
+        // Pause animations when tab is not visible to save CPU/GPU
+        document.addEventListener('visibilitychange', function() {
+            var root = document.documentElement;
+            if (document.hidden) {
+                root.classList.add('animations-paused');
+            } else {
+                root.classList.remove('animations-paused');
+            }
+        });
 
         // Initial render
         render();
