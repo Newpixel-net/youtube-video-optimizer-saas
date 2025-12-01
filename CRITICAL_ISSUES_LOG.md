@@ -216,6 +216,97 @@ firebase deploy --only functions
 
 ---
 
+## Issue #3: Creative Studio Image Generation Models - Imagen vs Gemini API
+
+**Date**: 2025-12-01
+
+**Symptom**:
+- `ai.getGenerativeModel is not a function` error when generating images
+- Reference images (Style/Character) not working with Imagen 4 models
+- Confusion about which models are available in Google AI Studio
+
+**What DID NOT fix it**:
+- Removing working Imagen 4 models (they were actually working!)
+- Using `ai.getGenerativeModel()` method (wrong SDK method)
+- Assuming Imagen 3 API was available (it's NOT in Google AI Studio)
+
+**Root Cause**:
+Two separate issues combined:
+
+1. **Imagen 4 works but doesn't support reference images** - Imagen 4 and Imagen 4 Ultra use `ai.models.generateImages()` API and work perfectly for regular generation, but don't support style/character references.
+
+2. **Imagen 3 is NOT available in Google AI Studio** - Only in Vertex AI. The available Gemini image models are:
+   - `gemini-3-pro-image-preview` (Nano Banana Pro)
+   - `gemini-2.5-flash-image` (Nano Banana)
+
+3. **Wrong SDK method** - The `@google/genai` SDK does NOT have `getGenerativeModel()`. It uses:
+   - `ai.models.generateContent()` for Gemini models
+   - `ai.models.generateImages()` for Imagen models
+
+**The ACTUAL fix**:
+
+**1. Keep Imagen 4 models (they work!)**:
+```javascript
+// Frontend modelsConfig - Keep these!
+{ key: 'imagen-4', name: 'Imagen 4', supportsReferenceImages: false },
+{ key: 'imagen-4-ultra', name: 'Imagen 4 Ultra', supportsReferenceImages: false },
+```
+
+**2. Add Gemini Image models for reference support**:
+```javascript
+{ key: 'nano-banana-pro', name: 'Nano Banana Pro', supportsReferenceImages: true },
+{ key: 'nano-banana', name: 'Nano Banana', supportsReferenceImages: true },
+```
+
+**3. Use correct SDK methods in backend**:
+```javascript
+// For Gemini Image models (Nano Banana)
+const result = await ai.models.generateContent({
+  model: 'gemini-3-pro-image-preview',
+  contents: [{ role: 'user', parts: contentParts }],
+  config: {
+    responseModalities: ['image', 'text']
+  }
+});
+
+// For Imagen models (Imagen 4)
+const response = await ai.models.generateImages({
+  model: 'imagen-4.0-generate-001',
+  prompt: finalPrompt,
+  config: imagenConfig
+});
+```
+
+**4. "Auto" should default to Imagen 4 (working model)**:
+```javascript
+const imagenModelMap = {
+  'auto': 'imagen-4.0-generate-001',  // Default to working model
+  'imagen-4': 'imagen-4.0-generate-001',
+  'imagen-4-ultra': 'imagen-4.0-ultra-generate-001'
+};
+```
+
+**Model Capabilities Summary**:
+
+| Model | API Method | Reference Images | Status |
+|-------|------------|------------------|--------|
+| Imagen 4 | `generateImages()` | No | Working |
+| Imagen 4 Ultra | `generateImages()` | No | Working |
+| Nano Banana Pro | `generateContent()` | Yes (multimodal) | Beta |
+| Nano Banana | `generateContent()` | Yes (multimodal) | Beta |
+| DALL-E 3/2 | OpenAI API | No | Working |
+
+**Key Lesson**:
+Never remove working functionality! Imagen 4 was working perfectly. Add new options as alternatives, don't replace what works.
+
+**File locations**:
+- `functions/index.js` (lines ~6400-6700)
+- `frontend/creative-studio.html` (modelsConfig around line 5569)
+
+**Time wasted**: ~3 hours
+
+---
+
 ## Template for Future Issues
 
 ### Issue #X: [Title]
