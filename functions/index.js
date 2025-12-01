@@ -2189,6 +2189,639 @@ exports.adminGrantBonusUses = functions.https.onCall(async (data, context) => {
   }
 });
 
+// =============================================
+// TOKEN SYSTEM FUNCTIONS
+// =============================================
+
+// Get API cost configuration
+exports.adminGetApiCosts = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const costsDoc = await db.collection('settings').doc('apiCosts').get();
+
+    // Default API costs if not configured
+    const defaultCosts = {
+      modules: {
+        warpOptimizer: {
+          name: 'Warp Optimizer',
+          provider: 'OpenAI',
+          apiModel: 'gpt-4',
+          estimatedCostUSD: 0.035,
+          tokenCost: 5,
+          markupPercent: 200
+        },
+        competitorAnalysis: {
+          name: 'Competitor Analysis',
+          provider: 'OpenAI + YouTube',
+          apiModel: 'gpt-4 + YouTube Data API',
+          estimatedCostUSD: 0.04,
+          tokenCost: 6,
+          markupPercent: 200
+        },
+        trendPredictor: {
+          name: 'Trend Predictor',
+          provider: 'OpenAI + YouTube',
+          apiModel: 'gpt-4 + YouTube Data API',
+          estimatedCostUSD: 0.035,
+          tokenCost: 5,
+          markupPercent: 200
+        },
+        thumbnailGenerator: {
+          name: 'AI Thumbnails',
+          provider: 'Google Imagen / OpenAI',
+          apiModel: 'Imagen 4 / DALL-E 3',
+          estimatedCostUSD: 0.08,
+          tokenCost: 10,
+          markupPercent: 150
+        },
+        channelAudit: {
+          name: 'Channel Audit',
+          provider: 'OpenAI + YouTube',
+          apiModel: 'gpt-4 + YouTube Data API',
+          estimatedCostUSD: 0.05,
+          tokenCost: 8,
+          markupPercent: 200
+        }
+      },
+      lastUpdated: null
+    };
+
+    if (!costsDoc.exists) {
+      return { success: true, costs: defaultCosts };
+    }
+
+    return { success: true, costs: { ...defaultCosts, ...costsDoc.data() } };
+  } catch (error) {
+    console.error('adminGetApiCosts error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get API costs'));
+  }
+});
+
+// Update API cost configuration
+exports.adminUpdateApiCosts = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const { modules } = data || {};
+    if (!modules || typeof modules !== 'object') {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid modules configuration');
+    }
+
+    // Validate each module configuration
+    const validModules = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator', 'channelAudit'];
+    const sanitizedModules = {};
+
+    for (const [moduleId, config] of Object.entries(modules)) {
+      if (!validModules.includes(moduleId)) continue;
+
+      sanitizedModules[moduleId] = {
+        name: config.name || moduleId,
+        provider: config.provider || 'Unknown',
+        apiModel: config.apiModel || 'Unknown',
+        estimatedCostUSD: parseFloat(config.estimatedCostUSD) || 0,
+        tokenCost: parseInt(config.tokenCost) || 1,
+        markupPercent: parseInt(config.markupPercent) || 100
+      };
+    }
+
+    await db.collection('settings').doc('apiCosts').set({
+      modules: sanitizedModules,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: context.auth.uid
+    }, { merge: true });
+
+    return { success: true, message: 'API costs updated successfully' };
+  } catch (error) {
+    console.error('adminUpdateApiCosts error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update API costs'));
+  }
+});
+
+// Get token configuration for plans
+exports.adminGetTokenConfig = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const tokenConfigDoc = await db.collection('settings').doc('tokenConfig').get();
+
+    // Default token allocation per plan
+    const defaultConfig = {
+      plans: {
+        free: { monthlyTokens: 10, rolloverPercent: 0 },
+        lite: { monthlyTokens: 50, rolloverPercent: 25 },
+        pro: { monthlyTokens: 200, rolloverPercent: 50 },
+        enterprise: { monthlyTokens: 1000, rolloverPercent: 100 }
+      },
+      lastUpdated: null
+    };
+
+    if (!tokenConfigDoc.exists) {
+      return { success: true, config: defaultConfig };
+    }
+
+    return { success: true, config: { ...defaultConfig, ...tokenConfigDoc.data() } };
+  } catch (error) {
+    console.error('adminGetTokenConfig error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get token configuration'));
+  }
+});
+
+// Update token configuration for plans
+exports.adminUpdateTokenConfig = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const { plans } = data || {};
+    if (!plans || typeof plans !== 'object') {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid plans configuration');
+    }
+
+    const validPlans = ['free', 'lite', 'pro', 'enterprise'];
+    const sanitizedPlans = {};
+
+    for (const [planId, config] of Object.entries(plans)) {
+      if (!validPlans.includes(planId)) continue;
+
+      sanitizedPlans[planId] = {
+        monthlyTokens: parseInt(config.monthlyTokens) || 0,
+        rolloverPercent: Math.min(100, Math.max(0, parseInt(config.rolloverPercent) || 0))
+      };
+    }
+
+    await db.collection('settings').doc('tokenConfig').set({
+      plans: sanitizedPlans,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: context.auth.uid
+    }, { merge: true });
+
+    return { success: true, message: 'Token configuration updated successfully' };
+  } catch (error) {
+    console.error('adminUpdateTokenConfig error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update token configuration'));
+  }
+});
+
+// Add/Remove tokens from a user (manual adjustment)
+exports.adminAdjustUserTokens = functions.https.onCall(async (data, context) => {
+  try {
+    const adminId = await requireAdmin(context);
+
+    const { userId, amount, reason } = data || {};
+
+    if (!userId || typeof userId !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'Valid user ID is required');
+    }
+
+    const tokenAmount = parseInt(amount);
+    if (isNaN(tokenAmount) || tokenAmount === 0) {
+      throw new functions.https.HttpsError('invalid-argument', 'Token amount must be a non-zero number');
+    }
+
+    // Check if user exists
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'User not found');
+    }
+
+    const userData = userDoc.data();
+    const currentBalance = userData.tokens?.balance || 0;
+    const newBalance = Math.max(0, currentBalance + tokenAmount);
+
+    // Update user token balance
+    await db.collection('users').doc(userId).set({
+      tokens: {
+        balance: newBalance,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      }
+    }, { merge: true });
+
+    // Log the transaction
+    await db.collection('tokenTransactions').add({
+      userId,
+      type: tokenAmount > 0 ? 'admin_credit' : 'admin_debit',
+      amount: tokenAmount,
+      balanceAfter: newBalance,
+      reason: reason || 'Manual adjustment by admin',
+      performedBy: adminId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      message: `${tokenAmount > 0 ? 'Added' : 'Removed'} ${Math.abs(tokenAmount)} tokens`,
+      newBalance
+    };
+  } catch (error) {
+    console.error('adminAdjustUserTokens error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to adjust tokens'));
+  }
+});
+
+// Get user token balance and history
+exports.getUserTokenInfo = functions.https.onCall(async (data, context) => {
+  try {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+    }
+
+    const userId = context.auth.uid;
+    const userDoc = await db.collection('users').doc(userId).get();
+
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'User not found');
+    }
+
+    const userData = userDoc.data();
+    const tokens = userData.tokens || { balance: 0 };
+
+    // Get recent transactions
+    const transactionsSnapshot = await db.collection('tokenTransactions')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+
+    const transactions = [];
+    transactionsSnapshot.forEach(doc => {
+      const data = doc.data();
+      transactions.push({
+        id: doc.id,
+        type: data.type,
+        amount: data.amount,
+        balanceAfter: data.balanceAfter,
+        reason: data.reason,
+        createdAt: data.createdAt?.toMillis() || Date.now()
+      });
+    });
+
+    return {
+      success: true,
+      tokens: {
+        balance: tokens.balance || 0,
+        lastRefill: tokens.lastRefillAt?.toMillis() || null,
+        rolloverAmount: tokens.rolloverAmount || 0
+      },
+      transactions
+    };
+  } catch (error) {
+    console.error('getUserTokenInfo error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get token info'));
+  }
+});
+
+// Admin get all token transactions (for audit)
+exports.adminGetTokenTransactions = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const { limit: queryLimit = 100, userId, type } = data || {};
+
+    // Build query with filters first, then orderBy (Firestore requirement)
+    let query = db.collection('tokenTransactions');
+
+    if (userId) {
+      query = query.where('userId', '==', userId);
+    }
+    if (type) {
+      query = query.where('type', '==', type);
+    }
+
+    // Add orderBy last
+    query = query.orderBy('createdAt', 'desc');
+
+    const snapshot = await query.limit(Math.min(queryLimit, 500)).get();
+
+    const transactions = [];
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+
+      // Get user email for display
+      let userEmail = 'Unknown';
+      try {
+        const userDoc = await db.collection('users').doc(data.userId).get();
+        if (userDoc.exists) {
+          userEmail = userDoc.data().email || 'No email';
+        }
+      } catch (e) { /* ignore */ }
+
+      transactions.push({
+        id: doc.id,
+        userId: data.userId,
+        userEmail,
+        type: data.type,
+        amount: data.amount,
+        balanceAfter: data.balanceAfter,
+        reason: data.reason,
+        performedBy: data.performedBy,
+        createdAt: data.createdAt?.toMillis() || Date.now()
+      });
+    }
+
+    return { success: true, transactions };
+  } catch (error) {
+    console.error('adminGetTokenTransactions error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get transactions'));
+  }
+});
+
+// =============================================
+// PROMO CODE SYSTEM
+// =============================================
+
+// Create a promo code
+exports.adminCreatePromoCode = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const { code, tokenAmount, maxUses, expiresAt, description } = data || {};
+
+    if (!code || typeof code !== 'string' || code.length < 3) {
+      throw new functions.https.HttpsError('invalid-argument', 'Code must be at least 3 characters');
+    }
+
+    const tokens = parseInt(tokenAmount);
+    if (isNaN(tokens) || tokens < 1) {
+      throw new functions.https.HttpsError('invalid-argument', 'Token amount must be at least 1');
+    }
+
+    // Check if code already exists
+    const existingCode = await db.collection('promoCodes').doc(code.toUpperCase()).get();
+    if (existingCode.exists) {
+      throw new functions.https.HttpsError('already-exists', 'This promo code already exists');
+    }
+
+    await db.collection('promoCodes').doc(code.toUpperCase()).set({
+      code: code.toUpperCase(),
+      tokenAmount: tokens,
+      maxUses: parseInt(maxUses) || 0, // 0 = unlimited
+      usedCount: 0,
+      usedBy: [],
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      description: description || '',
+      isActive: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: context.auth.uid
+    });
+
+    return { success: true, message: `Promo code ${code.toUpperCase()} created` };
+  } catch (error) {
+    console.error('adminCreatePromoCode error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to create promo code'));
+  }
+});
+
+// Get all promo codes
+exports.adminGetPromoCodes = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const snapshot = await db.collection('promoCodes').orderBy('createdAt', 'desc').get();
+
+    const codes = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      codes.push({
+        id: doc.id,
+        code: data.code,
+        tokenAmount: data.tokenAmount,
+        maxUses: data.maxUses,
+        usedCount: data.usedCount,
+        expiresAt: data.expiresAt?.toMillis() || null,
+        description: data.description,
+        isActive: data.isActive,
+        createdAt: data.createdAt?.toMillis() || Date.now()
+      });
+    });
+
+    return { success: true, codes };
+  } catch (error) {
+    console.error('adminGetPromoCodes error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get promo codes'));
+  }
+});
+
+// Toggle promo code active status
+exports.adminTogglePromoCode = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const { code, isActive } = data || {};
+    if (!code) {
+      throw new functions.https.HttpsError('invalid-argument', 'Code is required');
+    }
+
+    await db.collection('promoCodes').doc(code.toUpperCase()).update({
+      isActive: !!isActive,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, message: `Promo code ${isActive ? 'activated' : 'deactivated'}` };
+  } catch (error) {
+    console.error('adminTogglePromoCode error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update promo code'));
+  }
+});
+
+// Redeem a promo code (user function)
+exports.redeemPromoCode = functions.https.onCall(async (data, context) => {
+  try {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+    }
+
+    const userId = context.auth.uid;
+    const { code } = data || {};
+
+    if (!code || typeof code !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'Valid promo code is required');
+    }
+
+    const codeDoc = await db.collection('promoCodes').doc(code.toUpperCase()).get();
+
+    if (!codeDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Invalid promo code');
+    }
+
+    const codeData = codeDoc.data();
+
+    // Validate code
+    if (!codeData.isActive) {
+      throw new functions.https.HttpsError('failed-precondition', 'This promo code is no longer active');
+    }
+
+    if (codeData.expiresAt && codeData.expiresAt.toDate() < new Date()) {
+      throw new functions.https.HttpsError('failed-precondition', 'This promo code has expired');
+    }
+
+    if (codeData.maxUses > 0 && codeData.usedCount >= codeData.maxUses) {
+      throw new functions.https.HttpsError('failed-precondition', 'This promo code has reached its usage limit');
+    }
+
+    if (codeData.usedBy && codeData.usedBy.includes(userId)) {
+      throw new functions.https.HttpsError('failed-precondition', 'You have already used this promo code');
+    }
+
+    // Get current user balance
+    const userDoc = await db.collection('users').doc(userId).get();
+    const currentBalance = userDoc.exists ? (userDoc.data().tokens?.balance || 0) : 0;
+    const newBalance = currentBalance + codeData.tokenAmount;
+
+    // Update user balance
+    await db.collection('users').doc(userId).set({
+      tokens: {
+        balance: newBalance,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      }
+    }, { merge: true });
+
+    // Mark code as used
+    await db.collection('promoCodes').doc(code.toUpperCase()).update({
+      usedCount: admin.firestore.FieldValue.increment(1),
+      usedBy: admin.firestore.FieldValue.arrayUnion(userId)
+    });
+
+    // Log transaction
+    await db.collection('tokenTransactions').add({
+      userId,
+      type: 'promo_redemption',
+      amount: codeData.tokenAmount,
+      balanceAfter: newBalance,
+      reason: `Redeemed promo code: ${code.toUpperCase()}`,
+      promoCode: code.toUpperCase(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      message: `Successfully redeemed ${codeData.tokenAmount} tokens!`,
+      tokensAdded: codeData.tokenAmount,
+      newBalance
+    };
+  } catch (error) {
+    console.error('redeemPromoCode error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to redeem promo code'));
+  }
+});
+
+// =============================================
+// REVENUE & ANALYTICS
+// =============================================
+
+// Get revenue and cost analytics
+exports.adminGetAnalytics = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const { period = '30d' } = data || {};
+
+    // Calculate date range
+    const now = new Date();
+    let startDate;
+    switch (period) {
+      case '7d': startDate = new Date(now - 7 * 24 * 60 * 60 * 1000); break;
+      case '30d': startDate = new Date(now - 30 * 24 * 60 * 60 * 1000); break;
+      case '90d': startDate = new Date(now - 90 * 24 * 60 * 60 * 1000); break;
+      default: startDate = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    // Get API costs config
+    const costsDoc = await db.collection('settings').doc('apiCosts').get();
+    const apiCosts = costsDoc.exists ? costsDoc.data().modules || {} : {};
+
+    // Get usage logs for the period
+    const usageSnapshot = await db.collection('usageLogs')
+      .where('timestamp', '>=', startDate)
+      .orderBy('timestamp', 'desc')
+      .limit(10000)
+      .get();
+
+    // Calculate usage by module
+    const usageByModule = {};
+    const usageByDay = {};
+    let totalApiCost = 0;
+    let totalTokensUsed = 0;
+
+    usageSnapshot.forEach(doc => {
+      const data = doc.data();
+      const tool = data.tool || 'unknown';
+      const date = data.timestamp?.toDate().toISOString().split('T')[0] || 'unknown';
+
+      // Count by module
+      usageByModule[tool] = (usageByModule[tool] || 0) + 1;
+
+      // Count by day
+      if (!usageByDay[date]) usageByDay[date] = {};
+      usageByDay[date][tool] = (usageByDay[date][tool] || 0) + 1;
+
+      // Calculate costs
+      const moduleCost = apiCosts[tool]?.estimatedCostUSD || 0.03;
+      const tokenCost = apiCosts[tool]?.tokenCost || 5;
+      totalApiCost += moduleCost;
+      totalTokensUsed += tokenCost;
+    });
+
+    // Get user stats
+    const usersSnapshot = await db.collection('users').get();
+    let totalUsers = 0;
+    let paidUsers = 0;
+    const planCounts = { free: 0, lite: 0, pro: 0, enterprise: 0 };
+
+    usersSnapshot.forEach(doc => {
+      totalUsers++;
+      const plan = doc.data().subscription?.plan || 'free';
+      planCounts[plan] = (planCounts[plan] || 0) + 1;
+      if (plan !== 'free') paidUsers++;
+    });
+
+    // Calculate estimated revenue (based on plan prices)
+    const planPrices = { free: 0, lite: 9.99, pro: 19.99, enterprise: 49.99 };
+    const estimatedMonthlyRevenue = Object.entries(planCounts)
+      .reduce((sum, [plan, count]) => sum + (planPrices[plan] || 0) * count, 0);
+
+    return {
+      success: true,
+      analytics: {
+        period,
+        users: {
+          total: totalUsers,
+          paid: paidUsers,
+          byPlan: planCounts
+        },
+        usage: {
+          totalCalls: usageSnapshot.size,
+          byModule: usageByModule,
+          byDay: usageByDay
+        },
+        costs: {
+          estimatedApiCost: Math.round(totalApiCost * 100) / 100,
+          totalTokensUsed
+        },
+        revenue: {
+          estimatedMonthly: Math.round(estimatedMonthlyRevenue * 100) / 100,
+          profitMargin: totalApiCost > 0 ?
+            Math.round((1 - totalApiCost / estimatedMonthlyRevenue) * 10000) / 100 : 100
+        }
+      }
+    };
+  } catch (error) {
+    console.error('adminGetAnalytics error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get analytics'));
+  }
+});
+
 // Initialize/Update subscription plans with correct limits
 exports.adminInitPlans = functions.https.onCall(async (data, context) => {
   try {
@@ -2430,27 +3063,7 @@ exports.adminSyncExistingUsers = functions.https.onCall(async (data, context) =>
   }
 });
 
-exports.adminGetAnalytics = functions.https.onCall(async (data, context) => {
-  await requireAdmin(context);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const usersSnapshot = await db.collection('users').get();
-  const totalUsers = usersSnapshot.size;
-  
-  const usageSnapshot = await db.collection('usageLogs')
-    .where('timestamp', '>=', admin.firestore.Timestamp.fromDate(today))
-    .get();
-  const todayUsage = usageSnapshot.size;
-  
-  const planCounts = {};
-  usersSnapshot.forEach(doc => {
-    const plan = doc.data().subscription.plan;
-    planCounts[plan] = (planCounts[plan] || 0) + 1;
-  });
-  
-  return { success: true, analytics: { totalUsers, todayUsage, planCounts } };
-});
+// Note: adminGetAnalytics is defined earlier in the file with comprehensive revenue/cost analytics
 
 // ==============================================
 // SUBSCRIPTION MANAGEMENT

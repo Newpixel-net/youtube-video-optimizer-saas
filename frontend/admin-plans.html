@@ -709,6 +709,51 @@
             color: #ef4444;
         }
 
+        /* Stats Grid (Users Tab) */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-card.stat-highlight {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: white;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
         /* API Token Cards */
         .api-card {
             background: rgba(255, 255, 255, 0.03);
@@ -1054,9 +1099,14 @@
         // Application State
         const state = {
             currentView: 'loading',
-            activeTab: 'plans', // plans | api | prompts
+            activeTab: 'users', // users | plans | api | prompts
             user: null,
             isAdmin: false,
+
+            // Users state (moved from dual-auth-widget)
+            adminUsers: [],
+            usersLoading: false,
+            resetTimeMinutes: 1440,
 
             // Plans state
             plans: [],
@@ -1078,6 +1128,30 @@
             promptFilter: 'all',
             promptSearch: '',
             editingPrompt: null,
+
+            // Token Configuration state
+            tokenConfig: null,
+            tokenConfigLoading: false,
+            editedTokenConfig: {},
+
+            // API Costs & Pricing state
+            apiCosts: null,
+            apiCostsLoading: false,
+            editedApiCosts: {},
+
+            // Promo Codes state
+            promoCodes: [],
+            promoCodesLoading: false,
+            newPromoCode: { code: '', tokenAmount: 10, maxUses: 0, expiresAt: '', description: '' },
+
+            // Analytics state
+            analytics: null,
+            analyticsLoading: false,
+            analyticsPeriod: '30d',
+
+            // Token Transactions state
+            transactions: [],
+            transactionsLoading: false,
 
             // UI state
             toast: null,
@@ -1284,30 +1358,74 @@
             html += '</div>';
             html += '</div>';
 
-            // Main Tabs
+            // Main Tabs - Row 1: Core Management
             html += '<div class="main-tabs">';
+            html += '<button class="main-tab' + (state.activeTab === 'users' ? ' active' : '') + '" onclick="setActiveTab(\'users\')">';
+            html += '<span class="main-tab-icon">👥</span>';
+            html += '<span>Users</span>';
+            html += '</button>';
             html += '<button class="main-tab' + (state.activeTab === 'plans' ? ' active' : '') + '" onclick="setActiveTab(\'plans\')">';
             html += '<span class="main-tab-icon">📋</span>';
             html += '<span>Plans</span>';
             html += '</button>';
-            html += '<button class="main-tab' + (state.activeTab === 'api' ? ' active' : '') + '" onclick="setActiveTab(\'api\')">';
-            html += '<span class="main-tab-icon">🔑</span>';
-            html += '<span>API Tokens</span>';
+            html += '<button class="main-tab' + (state.activeTab === 'tokenConfig' ? ' active' : '') + '" onclick="setActiveTab(\'tokenConfig\')">';
+            html += '<span class="main-tab-icon">🪙</span>';
+            html += '<span>Tokens</span>';
+            html += '</button>';
+            html += '<button class="main-tab' + (state.activeTab === 'pricing' ? ' active' : '') + '" onclick="setActiveTab(\'pricing\')">';
+            html += '<span class="main-tab-icon">💰</span>';
+            html += '<span>Pricing</span>';
+            html += '</button>';
+            html += '</div>';
+
+            // Main Tabs - Row 2: Marketing & Analytics
+            html += '<div class="main-tabs" style="margin-top: 0.5rem;">';
+            html += '<button class="main-tab' + (state.activeTab === 'promoCodes' ? ' active' : '') + '" onclick="setActiveTab(\'promoCodes\')">';
+            html += '<span class="main-tab-icon">🎁</span>';
+            html += '<span>Promo Codes</span>';
+            html += '</button>';
+            html += '<button class="main-tab' + (state.activeTab === 'analytics' ? ' active' : '') + '" onclick="setActiveTab(\'analytics\')">';
+            html += '<span class="main-tab-icon">📊</span>';
+            html += '<span>Analytics</span>';
+            html += '</button>';
+            html += '<button class="main-tab' + (state.activeTab === 'transactions' ? ' active' : '') + '" onclick="setActiveTab(\'transactions\')">';
+            html += '<span class="main-tab-icon">📜</span>';
+            html += '<span>Transactions</span>';
             html += '</button>';
             html += '<button class="main-tab' + (state.activeTab === 'prompts' ? ' active' : '') + '" onclick="setActiveTab(\'prompts\')">';
             html += '<span class="main-tab-icon">✨</span>';
-            html += '<span>Prompts Management</span>';
+            html += '<span>Prompts</span>';
             html += '</button>';
             html += '</div>';
             html += '</div>';
 
             // Tab Content
+            html += '<div class="tab-content' + (state.activeTab === 'users' ? ' active' : '') + '">';
+            html += renderUsersTab();
+            html += '</div>';
+
             html += '<div class="tab-content' + (state.activeTab === 'plans' ? ' active' : '') + '">';
             html += renderPlansTab();
             html += '</div>';
 
-            html += '<div class="tab-content' + (state.activeTab === 'api' ? ' active' : '') + '">';
-            html += renderApiTab();
+            html += '<div class="tab-content' + (state.activeTab === 'tokenConfig' ? ' active' : '') + '">';
+            html += renderTokenConfigTab();
+            html += '</div>';
+
+            html += '<div class="tab-content' + (state.activeTab === 'pricing' ? ' active' : '') + '">';
+            html += renderPricingTab();
+            html += '</div>';
+
+            html += '<div class="tab-content' + (state.activeTab === 'promoCodes' ? ' active' : '') + '">';
+            html += renderPromoCodesTab();
+            html += '</div>';
+
+            html += '<div class="tab-content' + (state.activeTab === 'analytics' ? ' active' : '') + '">';
+            html += renderAnalyticsTab();
+            html += '</div>';
+
+            html += '<div class="tab-content' + (state.activeTab === 'transactions' ? ' active' : '') + '">';
+            html += renderTransactionsTab();
             html += '</div>';
 
             html += '<div class="tab-content' + (state.activeTab === 'prompts' ? ' active' : '') + '">';
@@ -1315,6 +1433,182 @@
             html += '</div>';
 
             html += '</div>';
+            return html;
+        }
+
+        // =============================================
+        // USERS TAB (Moved from dual-auth-widget.html)
+        // =============================================
+        function renderUsersTab() {
+            var html = '';
+
+            // Stats Cards
+            var totalUsers = state.adminUsers ? state.adminUsers.length : 0;
+            var proUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscription && u.subscription.plan === 'pro'; }).length : 0;
+            var enterpriseUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscription && u.subscription.plan === 'enterprise'; }).length : 0;
+            var liteUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscription && u.subscription.plan === 'lite'; }).length : 0;
+            var freeUsers = totalUsers - proUsers - enterpriseUsers - liteUsers;
+
+            html += '<div class="stats-grid">';
+
+            html += '<div class="stat-card">';
+            html += '<div class="stat-icon">👥</div>';
+            html += '<div class="stat-value">' + totalUsers + '</div>';
+            html += '<div class="stat-label">Total Users</div>';
+            html += '</div>';
+
+            html += '<div class="stat-card stat-highlight">';
+            html += '<div class="stat-icon">⭐</div>';
+            html += '<div class="stat-value">' + proUsers + '</div>';
+            html += '<div class="stat-label">Pro Users</div>';
+            html += '</div>';
+
+            html += '<div class="stat-card">';
+            html += '<div class="stat-icon">💎</div>';
+            html += '<div class="stat-value">' + enterpriseUsers + '</div>';
+            html += '<div class="stat-label">Enterprise</div>';
+            html += '</div>';
+
+            html += '<div class="stat-card">';
+            html += '<div class="stat-icon">🆓</div>';
+            html += '<div class="stat-value">' + freeUsers + '</div>';
+            html += '<div class="stat-label">Free Users</div>';
+            html += '</div>';
+
+            html += '</div>';
+
+            // Two-column layout for settings and user table
+            html += '<div class="grid-2" style="margin-top: 1.5rem;">';
+
+            // Left Column: User Management Table
+            html += '<div class="card" style="grid-column: span 2;">';
+            html += '<h3 class="card-title">👥 User Management</h3>';
+
+            if (state.usersLoading) {
+                html += '<div style="text-align: center; padding: 3rem;">';
+                html += '<div class="spinner" style="margin: 0 auto 1rem;"></div>';
+                html += '<p style="color: rgba(255,255,255,0.6);">Loading users...</p>';
+                html += '</div>';
+            } else if (!state.adminUsers || state.adminUsers.length === 0) {
+                html += '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 2rem;">No users found</p>';
+            } else {
+                html += '<div style="overflow-x: auto;">';
+                html += '<table class="prompt-table">';
+                html += '<thead><tr>';
+                html += '<th>User</th>';
+                html += '<th>Plan</th>';
+                html += '<th>Usage Today</th>';
+                html += '<th>Actions</th>';
+                html += '</tr></thead>';
+                html += '<tbody>';
+
+                for (var i = 0; i < state.adminUsers.length; i++) {
+                    var user = state.adminUsers[i];
+                    var plan = user.subscription ? user.subscription.plan : 'free';
+                    var planColors = {
+                        'free': 'background: rgba(107, 114, 128, 0.2); color: #9ca3af;',
+                        'lite': 'background: rgba(59, 130, 246, 0.2); color: #60a5fa;',
+                        'pro': 'background: rgba(139, 92, 246, 0.2); color: #a78bfa;',
+                        'enterprise': 'background: rgba(245, 158, 11, 0.2); color: #fbbf24;'
+                    };
+
+                    var baseLimit = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.limit : 0;
+                    var bonusUses = user.bonusUses && user.bonusUses.warpOptimizer ? user.bonusUses.warpOptimizer : 0;
+                    var usedToday = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.usedToday : 0;
+                    var totalLimit = baseLimit + bonusUses;
+
+                    html += '<tr>';
+                    html += '<td>';
+                    html += '<div style="font-weight: 600; color: white;">' + escapeHtml(user.email || 'No email') + '</div>';
+                    html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">ID: ' + escapeHtml(user.uid ? user.uid.substring(0, 12) + '...' : '') + '</div>';
+                    html += '</td>';
+                    html += '<td>';
+                    html += '<span style="padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; ' + (planColors[plan] || planColors['free']) + '">' + plan.toUpperCase() + '</span>';
+                    html += '</td>';
+                    html += '<td>';
+                    html += '<span style="color: white; font-weight: 500;">' + usedToday + '/' + totalLimit + '</span>';
+                    if (bonusUses > 0) {
+                        html += '<span style="color: #10b981; font-size: 0.75rem; margin-left: 0.5rem;">(+' + bonusUses + ' bonus)</span>';
+                    }
+                    html += '</td>';
+                    html += '<td>';
+                    html += '<select onchange="updateUserPlan(\'' + user.uid + '\', this.value)" class="select-field" style="width: auto; padding: 0.5rem 1rem;">';
+                    html += '<option value="free"' + (plan === 'free' ? ' selected' : '') + '>Free</option>';
+                    html += '<option value="lite"' + (plan === 'lite' ? ' selected' : '') + '>Lite</option>';
+                    html += '<option value="pro"' + (plan === 'pro' ? ' selected' : '') + '>Pro</option>';
+                    html += '<option value="enterprise"' + (plan === 'enterprise' ? ' selected' : '') + '>Enterprise</option>';
+                    html += '</select>';
+                    html += '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            html += '</div>'; // End grid-2
+
+            // Bottom row: Settings cards
+            html += '<div class="grid-2" style="margin-top: 1.5rem;">';
+
+            // Quota Reset Time
+            html += '<div class="card">';
+            html += '<h3 class="card-title">⏱️ Quota Reset Time</h3>';
+            html += '<p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 1rem;">Set how often user quotas reset. Default: 1440 minutes (24 hours).</p>';
+            html += '<div style="display: flex; gap: 0.75rem; align-items: flex-end;">';
+            html += '<div style="flex: 1;">';
+            html += '<label class="input-label">Reset Interval (minutes)</label>';
+            html += '<input type="number" id="reset-time-input" value="' + (state.resetTimeMinutes || 1440) + '" min="1" class="input-field" />';
+            html += '</div>';
+            html += '<button onclick="setQuotaResetTime()" class="btn-primary" style="height: 42px;">Save</button>';
+            html += '</div>';
+            html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.5rem;">Examples: 60 = 1 hour, 240 = 4 hours, 1440 = 24 hours</p>';
+            html += '</div>';
+
+            // Grant Bonus Uses
+            html += '<div class="card">';
+            html += '<h3 class="card-title">🎁 Grant Bonus Uses</h3>';
+            html += '<p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 1rem;">Give extra uses to a specific user as a gift or bonus.</p>';
+
+            html += '<div style="display: grid; gap: 0.75rem;">';
+
+            html += '<div>';
+            html += '<label class="input-label">Select User</label>';
+            html += '<select id="bonus-user-select" class="select-field">';
+            html += '<option value="">-- Select a user --</option>';
+            if (state.adminUsers) {
+                for (var j = 0; j < state.adminUsers.length; j++) {
+                    var u = state.adminUsers[j];
+                    html += '<option value="' + u.uid + '">' + escapeHtml(u.email || u.uid) + '</option>';
+                }
+            }
+            html += '</select>';
+            html += '</div>';
+
+            html += '<div>';
+            html += '<label class="input-label">Select Tool</label>';
+            html += '<select id="bonus-tool-select" class="select-field">';
+            html += '<option value="warpOptimizer">Warp Optimizer</option>';
+            html += '<option value="competitorAnalysis">Competitor Analysis</option>';
+            html += '<option value="trendPredictor">Trend Predictor</option>';
+            html += '<option value="thumbnailGenerator">AI Thumbnails</option>';
+            html += '<option value="channelAudit">Channel Audit</option>';
+            html += '</select>';
+            html += '</div>';
+
+            html += '<div>';
+            html += '<label class="input-label">Bonus Amount</label>';
+            html += '<input type="number" id="bonus-amount-input" value="5" min="1" class="input-field" />';
+            html += '</div>';
+
+            html += '<button onclick="grantBonusUses()" class="btn-primary" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">🎁 Grant Bonus Uses</button>';
+            html += '</div>';
+
+            html += '</div>';
+
+            html += '</div>'; // End grid-2
+
             return html;
         }
 
@@ -1670,17 +1964,859 @@
             return filtered;
         }
 
+        // =============================================
+        // TOKEN CONFIGURATION TAB
+        // =============================================
+        function renderTokenConfigTab() {
+            var html = '';
+
+            html += '<div class="card">';
+            html += '<h3 class="card-title">🪙 Token Allocation Per Plan</h3>';
+            html += '<p style="color: rgba(255,255,255,0.6); margin-bottom: 1.5rem;">Configure how many tokens each subscription plan receives monthly.</p>';
+
+            if (state.tokenConfigLoading) {
+                html += '<div style="text-align: center; padding: 2rem;"><div class="spinner" style="margin: 0 auto;"></div></div>';
+            } else {
+                var config = state.tokenConfig || { plans: { free: { monthlyTokens: 10, rolloverPercent: 0 }, lite: { monthlyTokens: 50, rolloverPercent: 25 }, pro: { monthlyTokens: 200, rolloverPercent: 50 }, enterprise: { monthlyTokens: 1000, rolloverPercent: 100 } } };
+
+                html += '<div class="grid-2">';
+
+                var planOrder = ['free', 'lite', 'pro', 'enterprise'];
+                var planNames = { free: 'Free', lite: 'Lite', pro: 'Pro', enterprise: 'Enterprise' };
+                var planColors = { free: '#9ca3af', lite: '#60a5fa', pro: '#a78bfa', enterprise: '#fbbf24' };
+
+                for (var i = 0; i < planOrder.length; i++) {
+                    var planId = planOrder[i];
+                    var planConfig = config.plans[planId] || { monthlyTokens: 0, rolloverPercent: 0 };
+                    var edited = state.editedTokenConfig[planId] || {};
+
+                    html += '<div class="card" style="border-left: 4px solid ' + planColors[planId] + ';">';
+                    html += '<h4 style="color: white; margin-bottom: 1rem;">' + planNames[planId] + ' Plan</h4>';
+
+                    html += '<div style="margin-bottom: 1rem;">';
+                    html += '<label class="input-label">Monthly Tokens</label>';
+                    html += '<input type="number" class="input-field" value="' + (edited.monthlyTokens !== undefined ? edited.monthlyTokens : planConfig.monthlyTokens) + '" ';
+                    html += 'onchange="updateTokenConfig(\'' + planId + '\', \'monthlyTokens\', this.value)" min="0" />';
+                    html += '</div>';
+
+                    html += '<div>';
+                    html += '<label class="input-label">Rollover %</label>';
+                    html += '<input type="number" class="input-field" value="' + (edited.rolloverPercent !== undefined ? edited.rolloverPercent : planConfig.rolloverPercent) + '" ';
+                    html += 'onchange="updateTokenConfig(\'' + planId + '\', \'rolloverPercent\', this.value)" min="0" max="100" />';
+                    html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">% of unused tokens that carry over to next month</p>';
+                    html += '</div>';
+
+                    html += '</div>';
+                }
+
+                html += '</div>';
+
+                html += '<div style="margin-top: 1.5rem; text-align: right;">';
+                html += '<button onclick="saveTokenConfig()" class="btn-primary">💾 Save Token Configuration</button>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            // Manual Token Adjustment Section
+            html += '<div class="card" style="margin-top: 1.5rem;">';
+            html += '<h3 class="card-title">➕ Manual Token Adjustment</h3>';
+            html += '<p style="color: rgba(255,255,255,0.6); margin-bottom: 1.5rem;">Add or remove tokens from a specific user.</p>';
+
+            html += '<div class="grid-2">';
+
+            html += '<div>';
+            html += '<label class="input-label">Select User</label>';
+            html += '<select id="token-user-select" class="select-field">';
+            html += '<option value="">-- Select a user --</option>';
+            if (state.adminUsers) {
+                for (var j = 0; j < state.adminUsers.length; j++) {
+                    var u = state.adminUsers[j];
+                    var tokenBal = u.tokens ? u.tokens.balance : 0;
+                    html += '<option value="' + u.uid + '">' + escapeHtml(u.email || u.uid) + ' (' + tokenBal + ' tokens)</option>';
+                }
+            }
+            html += '</select>';
+            html += '</div>';
+
+            html += '<div>';
+            html += '<label class="input-label">Amount (+/- tokens)</label>';
+            html += '<input type="number" id="token-amount-input" class="input-field" placeholder="e.g., 50 or -10" />';
+            html += '</div>';
+
+            html += '</div>';
+
+            html += '<div style="margin-top: 1rem;">';
+            html += '<label class="input-label">Reason (optional)</label>';
+            html += '<input type="text" id="token-reason-input" class="input-field" placeholder="e.g., Bonus for feedback, Refund, etc." />';
+            html += '</div>';
+
+            html += '<div style="margin-top: 1rem;">';
+            html += '<button onclick="adjustUserTokens()" class="btn-primary" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">💰 Adjust Tokens</button>';
+            html += '</div>';
+
+            html += '</div>';
+
+            return html;
+        }
+
+        // =============================================
+        // PRICING TAB (API Costs & Markup)
+        // =============================================
+        function renderPricingTab() {
+            var html = '';
+
+            html += '<div class="card">';
+            html += '<h3 class="card-title">💰 API Cost & Profit Control</h3>';
+            html += '<p style="color: rgba(255,255,255,0.6); margin-bottom: 1.5rem;">Configure the token cost for each module and set your markup percentage.</p>';
+
+            if (state.apiCostsLoading) {
+                html += '<div style="text-align: center; padding: 2rem;"><div class="spinner" style="margin: 0 auto;"></div></div>';
+            } else {
+                var costs = state.apiCosts || { modules: {} };
+                var modules = costs.modules || {};
+
+                html += '<div style="overflow-x: auto;">';
+                html += '<table class="prompt-table">';
+                html += '<thead><tr>';
+                html += '<th>Module</th>';
+                html += '<th>Provider</th>';
+                html += '<th>API Cost (USD)</th>';
+                html += '<th>Token Cost</th>';
+                html += '<th>Markup %</th>';
+                html += '<th>Est. Profit</th>';
+                html += '</tr></thead>';
+                html += '<tbody>';
+
+                var moduleIds = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator', 'channelAudit'];
+
+                for (var i = 0; i < moduleIds.length; i++) {
+                    var moduleId = moduleIds[i];
+                    var mod = modules[moduleId] || { name: moduleId, provider: 'Unknown', estimatedCostUSD: 0, tokenCost: 5, markupPercent: 100 };
+                    var edited = state.editedApiCosts[moduleId] || {};
+
+                    var apiCost = edited.estimatedCostUSD !== undefined ? edited.estimatedCostUSD : mod.estimatedCostUSD;
+                    var tokenCost = edited.tokenCost !== undefined ? edited.tokenCost : mod.tokenCost;
+                    var markup = edited.markupPercent !== undefined ? edited.markupPercent : mod.markupPercent;
+
+                    // Calculate profit per token (assuming $0.01 per token as base price)
+                    var tokenValue = tokenCost * 0.01 * (markup / 100);
+                    var profit = tokenValue - apiCost;
+                    var profitColor = profit >= 0 ? '#10b981' : '#ef4444';
+
+                    html += '<tr>';
+                    html += '<td><strong style="color: white;">' + escapeHtml(mod.name) + '</strong></td>';
+                    html += '<td style="color: rgba(255,255,255,0.7);">' + escapeHtml(mod.provider || 'Unknown') + '</td>';
+                    html += '<td>';
+                    html += '<input type="number" class="input-field" style="width: 100px;" step="0.001" value="' + apiCost + '" ';
+                    html += 'onchange="updateApiCost(\'' + moduleId + '\', \'estimatedCostUSD\', this.value)" />';
+                    html += '</td>';
+                    html += '<td>';
+                    html += '<input type="number" class="input-field" style="width: 80px;" value="' + tokenCost + '" ';
+                    html += 'onchange="updateApiCost(\'' + moduleId + '\', \'tokenCost\', this.value)" min="1" />';
+                    html += '</td>';
+                    html += '<td>';
+                    html += '<input type="number" class="input-field" style="width: 80px;" value="' + markup + '" ';
+                    html += 'onchange="updateApiCost(\'' + moduleId + '\', \'markupPercent\', this.value)" min="0" />%';
+                    html += '</td>';
+                    html += '<td style="color: ' + profitColor + '; font-weight: 600;">$' + profit.toFixed(3) + '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table>';
+                html += '</div>';
+
+                html += '<div style="margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center;">';
+                html += '<p style="font-size: 0.85rem; color: rgba(255,255,255,0.5);">Profit = (Token Cost × $0.01 × Markup%) - API Cost</p>';
+                html += '<button onclick="saveApiCosts()" class="btn-primary">💾 Save Pricing</button>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            return html;
+        }
+
+        // =============================================
+        // PROMO CODES TAB
+        // =============================================
+        function renderPromoCodesTab() {
+            var html = '';
+
+            // Create New Promo Code
+            html += '<div class="card">';
+            html += '<h3 class="card-title">🎁 Create Promo Code</h3>';
+
+            html += '<div class="grid-2" style="margin-bottom: 1rem;">';
+
+            html += '<div>';
+            html += '<label class="input-label">Code</label>';
+            html += '<input type="text" id="promo-code-input" class="input-field" placeholder="e.g., WELCOME50" style="text-transform: uppercase;" />';
+            html += '</div>';
+
+            html += '<div>';
+            html += '<label class="input-label">Token Amount</label>';
+            html += '<input type="number" id="promo-tokens-input" class="input-field" value="10" min="1" />';
+            html += '</div>';
+
+            html += '<div>';
+            html += '<label class="input-label">Max Uses (0 = unlimited)</label>';
+            html += '<input type="number" id="promo-maxuses-input" class="input-field" value="0" min="0" />';
+            html += '</div>';
+
+            html += '<div>';
+            html += '<label class="input-label">Expires At (optional)</label>';
+            html += '<input type="date" id="promo-expires-input" class="input-field" />';
+            html += '</div>';
+
+            html += '</div>';
+
+            html += '<div style="margin-bottom: 1rem;">';
+            html += '<label class="input-label">Description (optional)</label>';
+            html += '<input type="text" id="promo-desc-input" class="input-field" placeholder="e.g., Welcome bonus for new users" />';
+            html += '</div>';
+
+            html += '<button onclick="createPromoCode()" class="btn-primary">➕ Create Promo Code</button>';
+            html += '</div>';
+
+            // Existing Promo Codes
+            html += '<div class="card" style="margin-top: 1.5rem;">';
+            html += '<h3 class="card-title">📋 Existing Promo Codes</h3>';
+
+            if (state.promoCodesLoading) {
+                html += '<div style="text-align: center; padding: 2rem;"><div class="spinner" style="margin: 0 auto;"></div></div>';
+            } else if (!state.promoCodes || state.promoCodes.length === 0) {
+                html += '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 2rem;">No promo codes created yet</p>';
+            } else {
+                html += '<div style="overflow-x: auto;">';
+                html += '<table class="prompt-table">';
+                html += '<thead><tr>';
+                html += '<th>Code</th>';
+                html += '<th>Tokens</th>';
+                html += '<th>Usage</th>';
+                html += '<th>Expires</th>';
+                html += '<th>Status</th>';
+                html += '<th>Actions</th>';
+                html += '</tr></thead>';
+                html += '<tbody>';
+
+                for (var i = 0; i < state.promoCodes.length; i++) {
+                    var code = state.promoCodes[i];
+                    var isExpired = code.expiresAt && code.expiresAt < Date.now();
+                    var statusColor = code.isActive && !isExpired ? '#10b981' : '#ef4444';
+                    var statusText = !code.isActive ? 'Disabled' : (isExpired ? 'Expired' : 'Active');
+
+                    html += '<tr>';
+                    html += '<td><code style="background: rgba(139,92,246,0.2); padding: 0.25rem 0.5rem; border-radius: 4px; color: #a78bfa;">' + escapeHtml(code.code) + '</code></td>';
+                    html += '<td style="color: white; font-weight: 600;">' + code.tokenAmount + '</td>';
+                    html += '<td>' + code.usedCount + (code.maxUses > 0 ? '/' + code.maxUses : '/∞') + '</td>';
+                    html += '<td style="color: rgba(255,255,255,0.6);">' + (code.expiresAt ? new Date(code.expiresAt).toLocaleDateString() : 'Never') + '</td>';
+                    html += '<td><span style="color: ' + statusColor + ';">● ' + statusText + '</span></td>';
+                    html += '<td>';
+                    if (code.isActive) {
+                        html += '<button onclick="togglePromoCode(\'' + code.code + '\', false)" class="btn-icon" title="Disable" style="color: #ef4444;">⏸️</button>';
+                    } else {
+                        html += '<button onclick="togglePromoCode(\'' + code.code + '\', true)" class="btn-icon" title="Enable" style="color: #10b981;">▶️</button>';
+                    }
+                    html += '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            return html;
+        }
+
+        // =============================================
+        // ANALYTICS TAB
+        // =============================================
+        function renderAnalyticsTab() {
+            var html = '';
+
+            // Period Selector
+            html += '<div class="card">';
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">';
+            html += '<h3 class="card-title" style="margin: 0;">📊 Revenue & Usage Analytics</h3>';
+            html += '<div style="display: flex; gap: 0.5rem;">';
+            html += '<button onclick="setAnalyticsPeriod(\'7d\')" class="' + (state.analyticsPeriod === '7d' ? 'btn-primary' : 'btn-secondary') + '" style="padding: 0.5rem 1rem;">7 Days</button>';
+            html += '<button onclick="setAnalyticsPeriod(\'30d\')" class="' + (state.analyticsPeriod === '30d' ? 'btn-primary' : 'btn-secondary') + '" style="padding: 0.5rem 1rem;">30 Days</button>';
+            html += '<button onclick="setAnalyticsPeriod(\'90d\')" class="' + (state.analyticsPeriod === '90d' ? 'btn-primary' : 'btn-secondary') + '" style="padding: 0.5rem 1rem;">90 Days</button>';
+            html += '</div>';
+            html += '</div>';
+
+            if (state.analyticsLoading) {
+                html += '<div style="text-align: center; padding: 3rem;"><div class="spinner" style="margin: 0 auto;"></div></div>';
+            } else if (!state.analytics) {
+                html += '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 2rem;">Click a period to load analytics</p>';
+            } else {
+                var a = state.analytics;
+
+                // Revenue Summary
+                html += '<div class="stats-grid">';
+
+                html += '<div class="stat-card stat-highlight">';
+                html += '<div class="stat-icon">💵</div>';
+                html += '<div class="stat-value">$' + (a.revenue?.estimatedMonthly || 0).toFixed(2) + '</div>';
+                html += '<div class="stat-label">Est. Monthly Revenue</div>';
+                html += '</div>';
+
+                html += '<div class="stat-card">';
+                html += '<div class="stat-icon">📉</div>';
+                html += '<div class="stat-value">$' + (a.costs?.estimatedApiCost || 0).toFixed(2) + '</div>';
+                html += '<div class="stat-label">API Costs (' + state.analyticsPeriod + ')</div>';
+                html += '</div>';
+
+                html += '<div class="stat-card">';
+                html += '<div class="stat-icon">📈</div>';
+                html += '<div class="stat-value">' + (a.revenue?.profitMargin || 0).toFixed(1) + '%</div>';
+                html += '<div class="stat-label">Profit Margin</div>';
+                html += '</div>';
+
+                html += '<div class="stat-card">';
+                html += '<div class="stat-icon">⚡</div>';
+                html += '<div class="stat-value">' + (a.usage?.totalCalls || 0) + '</div>';
+                html += '<div class="stat-label">API Calls (' + state.analyticsPeriod + ')</div>';
+                html += '</div>';
+
+                html += '</div>';
+
+                // User Distribution
+                html += '<div class="grid-2" style="margin-top: 1.5rem;">';
+
+                html += '<div class="card">';
+                html += '<h4 style="color: white; margin-bottom: 1rem;">👥 User Distribution</h4>';
+                var users = a.users || { total: 0, paid: 0, byPlan: {} };
+                html += '<div style="display: flex; flex-direction: column; gap: 0.75rem;">';
+
+                var planNames = { free: 'Free', lite: 'Lite', pro: 'Pro', enterprise: 'Enterprise' };
+                var planColors = { free: '#9ca3af', lite: '#60a5fa', pro: '#a78bfa', enterprise: '#fbbf24' };
+
+                for (var plan in planNames) {
+                    var count = users.byPlan[plan] || 0;
+                    var pct = users.total > 0 ? Math.round(count / users.total * 100) : 0;
+                    html += '<div>';
+                    html += '<div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">';
+                    html += '<span style="color: ' + planColors[plan] + ';">' + planNames[plan] + '</span>';
+                    html += '<span style="color: white;">' + count + ' (' + pct + '%)</span>';
+                    html += '</div>';
+                    html += '<div style="background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px; overflow: hidden;">';
+                    html += '<div style="width: ' + pct + '%; height: 100%; background: ' + planColors[plan] + ';"></div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                html += '</div>';
+
+                html += '<div class="card">';
+                html += '<h4 style="color: white; margin-bottom: 1rem;">📊 Usage by Module</h4>';
+                var usage = a.usage?.byModule || {};
+                html += '<div style="display: flex; flex-direction: column; gap: 0.75rem;">';
+
+                var totalUsage = Object.values(usage).reduce(function(sum, v) { return sum + v; }, 0);
+
+                var modNames = { warpOptimizer: 'Warp Optimizer', competitorAnalysis: 'Competitor Analysis', trendPredictor: 'Trend Predictor', thumbnailGenerator: 'AI Thumbnails', channelAudit: 'Channel Audit' };
+
+                for (var mod in modNames) {
+                    var modCount = usage[mod] || 0;
+                    var modPct = totalUsage > 0 ? Math.round(modCount / totalUsage * 100) : 0;
+                    html += '<div>';
+                    html += '<div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">';
+                    html += '<span style="color: rgba(255,255,255,0.7);">' + modNames[mod] + '</span>';
+                    html += '<span style="color: white;">' + modCount + '</span>';
+                    html += '</div>';
+                    html += '<div style="background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px; overflow: hidden;">';
+                    html += '<div style="width: ' + modPct + '%; height: 100%; background: #8b5cf6;"></div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                html += '</div>';
+
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            return html;
+        }
+
+        // =============================================
+        // TRANSACTIONS TAB
+        // =============================================
+        function renderTransactionsTab() {
+            var html = '';
+
+            html += '<div class="card">';
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">';
+            html += '<h3 class="card-title" style="margin: 0;">📜 Token Transaction History</h3>';
+            html += '<button onclick="loadTransactions()" class="btn-secondary">↻ Refresh</button>';
+            html += '</div>';
+
+            if (state.transactionsLoading) {
+                html += '<div style="text-align: center; padding: 3rem;"><div class="spinner" style="margin: 0 auto;"></div></div>';
+            } else if (!state.transactions || state.transactions.length === 0) {
+                html += '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 2rem;">No transactions yet</p>';
+            } else {
+                html += '<div style="overflow-x: auto;">';
+                html += '<table class="prompt-table">';
+                html += '<thead><tr>';
+                html += '<th>Date</th>';
+                html += '<th>User</th>';
+                html += '<th>Type</th>';
+                html += '<th>Amount</th>';
+                html += '<th>Balance After</th>';
+                html += '<th>Reason</th>';
+                html += '</tr></thead>';
+                html += '<tbody>';
+
+                for (var i = 0; i < state.transactions.length; i++) {
+                    var tx = state.transactions[i];
+                    var typeColors = {
+                        admin_credit: '#10b981',
+                        admin_debit: '#ef4444',
+                        promo_redemption: '#8b5cf6',
+                        usage: '#f59e0b',
+                        refill: '#3b82f6'
+                    };
+                    var typeLabels = {
+                        admin_credit: 'Admin Credit',
+                        admin_debit: 'Admin Debit',
+                        promo_redemption: 'Promo Code',
+                        usage: 'Usage',
+                        refill: 'Monthly Refill'
+                    };
+
+                    html += '<tr>';
+                    html += '<td style="color: rgba(255,255,255,0.6);">' + new Date(tx.createdAt).toLocaleString() + '</td>';
+                    html += '<td style="color: white;">' + escapeHtml(tx.userEmail || 'Unknown') + '</td>';
+                    html += '<td><span style="color: ' + (typeColors[tx.type] || '#fff') + ';">' + (typeLabels[tx.type] || tx.type) + '</span></td>';
+                    html += '<td style="color: ' + (tx.amount >= 0 ? '#10b981' : '#ef4444') + '; font-weight: 600;">' + (tx.amount >= 0 ? '+' : '') + tx.amount + '</td>';
+                    html += '<td style="color: white;">' + tx.balanceAfter + '</td>';
+                    html += '<td style="color: rgba(255,255,255,0.6); max-width: 200px; overflow: hidden; text-overflow: ellipsis;">' + escapeHtml(tx.reason || '-') + '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            return html;
+        }
+
         // Tab Navigation
         function setActiveTab(tab) {
             state.activeTab = tab;
             render();
 
             // Load data if needed
-            if (tab === 'plans' && state.plans.length === 0) {
+            if (tab === 'users' && state.adminUsers.length === 0) {
+                loadUsers();
+            } else if (tab === 'plans' && state.plans.length === 0) {
                 loadPlans();
             } else if (tab === 'prompts' && state.prompts.length === 0) {
                 loadPrompts();
+            } else if (tab === 'tokenConfig' && !state.tokenConfig) {
+                loadTokenConfig();
+                if (state.adminUsers.length === 0) loadUsers(); // Need users for dropdown
+            } else if (tab === 'pricing' && !state.apiCosts) {
+                loadApiCosts();
+            } else if (tab === 'promoCodes' && state.promoCodes.length === 0) {
+                loadPromoCodes();
+            } else if (tab === 'analytics' && !state.analytics) {
+                loadAnalytics();
+            } else if (tab === 'transactions' && state.transactions.length === 0) {
+                loadTransactions();
             }
+        }
+
+        // =============================================
+        // USER MANAGEMENT FUNCTIONS
+        // =============================================
+
+        function loadUsers() {
+            state.usersLoading = true;
+            render();
+
+            db.collection('users')
+                .get()
+                .then(function(snapshot) {
+                    state.adminUsers = [];
+                    snapshot.forEach(function(doc) {
+                        state.adminUsers.push({ uid: doc.id, ...doc.data() });
+                    });
+                    state.usersLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading users:', error);
+                    state.usersLoading = false;
+                    showToast('Failed to load users', 'error');
+                    render();
+                });
+
+            // Also load quota reset time
+            loadQuotaResetTime();
+        }
+
+        function loadQuotaResetTime() {
+            db.collection('settings').doc('quotaSettings').get()
+                .then(function(doc) {
+                    if (doc.exists && doc.data().resetTimeMinutes) {
+                        state.resetTimeMinutes = doc.data().resetTimeMinutes;
+                        render();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error loading quota settings:', error);
+                });
+        }
+
+        function updateUserPlan(uid, newPlan) {
+            var adminUpdateUserPlan = functions.httpsCallable('adminUpdateUserPlan');
+
+            adminUpdateUserPlan({ userId: uid, plan: newPlan })
+                .then(function(result) {
+                    showToast('User plan updated to ' + newPlan.toUpperCase(), 'success');
+                    loadUsers(); // Refresh the list
+                })
+                .catch(function(error) {
+                    console.error('Error updating plan:', error);
+                    showToast('Failed to update plan: ' + error.message, 'error');
+                });
+        }
+
+        function setQuotaResetTime() {
+            var input = document.getElementById('reset-time-input');
+            var minutes = parseInt(input.value, 10);
+
+            if (isNaN(minutes) || minutes < 1) {
+                showToast('Please enter a valid number of minutes (minimum 1)', 'error');
+                return;
+            }
+
+            var adminSetQuotaSettings = functions.httpsCallable('adminSetQuotaSettings');
+
+            adminSetQuotaSettings({ resetTimeMinutes: minutes })
+                .then(function(result) {
+                    state.resetTimeMinutes = minutes;
+                    showToast('Quota reset time updated to ' + minutes + ' minutes', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error setting quota reset time:', error);
+                    showToast('Failed to update: ' + error.message, 'error');
+                });
+        }
+
+        function grantBonusUses() {
+            var userSelect = document.getElementById('bonus-user-select');
+            var toolSelect = document.getElementById('bonus-tool-select');
+            var amountInput = document.getElementById('bonus-amount-input');
+
+            var uid = userSelect.value;
+            var tool = toolSelect.value;
+            var amount = parseInt(amountInput.value, 10);
+
+            if (!uid) {
+                showToast('Please select a user', 'error');
+                return;
+            }
+            if (isNaN(amount) || amount < 1) {
+                showToast('Please enter a valid amount (minimum 1)', 'error');
+                return;
+            }
+
+            var adminGrantBonusUses = functions.httpsCallable('adminGrantBonusUses');
+
+            adminGrantBonusUses({ userId: uid, tool: tool, bonusAmount: amount })
+                .then(function(result) {
+                    var toolName = toolConfig[tool] ? toolConfig[tool].name : tool;
+                    showToast('Granted ' + amount + ' bonus uses for ' + toolName, 'success');
+                    loadUsers(); // Refresh to show new bonus
+                })
+                .catch(function(error) {
+                    console.error('Error granting bonus:', error);
+                    showToast('Failed to grant bonus: ' + error.message, 'error');
+                });
+        }
+
+        // =============================================
+        // TOKEN CONFIGURATION FUNCTIONS
+        // =============================================
+
+        function loadTokenConfig() {
+            state.tokenConfigLoading = true;
+            render();
+
+            functions.httpsCallable('adminGetTokenConfig')()
+                .then(function(result) {
+                    state.tokenConfig = result.data.config;
+                    state.editedTokenConfig = {};
+                    state.tokenConfigLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading token config:', error);
+                    state.tokenConfigLoading = false;
+                    showToast('Failed to load token configuration', 'error');
+                    render();
+                });
+        }
+
+        function updateTokenConfig(planId, field, value) {
+            if (!state.editedTokenConfig[planId]) {
+                state.editedTokenConfig[planId] = {};
+            }
+            state.editedTokenConfig[planId][field] = parseInt(value) || 0;
+            render();
+        }
+
+        function saveTokenConfig() {
+            var plans = {};
+            var planOrder = ['free', 'lite', 'pro', 'enterprise'];
+
+            for (var i = 0; i < planOrder.length; i++) {
+                var planId = planOrder[i];
+                var current = state.tokenConfig?.plans?.[planId] || { monthlyTokens: 0, rolloverPercent: 0 };
+                var edited = state.editedTokenConfig[planId] || {};
+
+                plans[planId] = {
+                    monthlyTokens: edited.monthlyTokens !== undefined ? edited.monthlyTokens : current.monthlyTokens,
+                    rolloverPercent: edited.rolloverPercent !== undefined ? edited.rolloverPercent : current.rolloverPercent
+                };
+            }
+
+            functions.httpsCallable('adminUpdateTokenConfig')({ plans: plans })
+                .then(function(result) {
+                    showToast('Token configuration saved successfully', 'success');
+                    loadTokenConfig();
+                })
+                .catch(function(error) {
+                    console.error('Error saving token config:', error);
+                    showToast('Failed to save: ' + error.message, 'error');
+                });
+        }
+
+        function adjustUserTokens() {
+            var userId = document.getElementById('token-user-select').value;
+            var amount = parseInt(document.getElementById('token-amount-input').value, 10);
+            var reason = document.getElementById('token-reason-input').value;
+
+            if (!userId) {
+                showToast('Please select a user', 'error');
+                return;
+            }
+            if (isNaN(amount) || amount === 0) {
+                showToast('Please enter a valid token amount', 'error');
+                return;
+            }
+
+            functions.httpsCallable('adminAdjustUserTokens')({ userId: userId, amount: amount, reason: reason })
+                .then(function(result) {
+                    showToast(result.data.message, 'success');
+                    document.getElementById('token-amount-input').value = '';
+                    document.getElementById('token-reason-input').value = '';
+                    loadUsers();
+                })
+                .catch(function(error) {
+                    console.error('Error adjusting tokens:', error);
+                    showToast('Failed: ' + error.message, 'error');
+                });
+        }
+
+        // =============================================
+        // API COSTS / PRICING FUNCTIONS
+        // =============================================
+
+        function loadApiCosts() {
+            state.apiCostsLoading = true;
+            render();
+
+            functions.httpsCallable('adminGetApiCosts')()
+                .then(function(result) {
+                    state.apiCosts = result.data.costs;
+                    state.editedApiCosts = {};
+                    state.apiCostsLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading API costs:', error);
+                    state.apiCostsLoading = false;
+                    showToast('Failed to load API costs', 'error');
+                    render();
+                });
+        }
+
+        function updateApiCost(moduleId, field, value) {
+            if (!state.editedApiCosts[moduleId]) {
+                state.editedApiCosts[moduleId] = {};
+            }
+            if (field === 'estimatedCostUSD') {
+                state.editedApiCosts[moduleId][field] = parseFloat(value) || 0;
+            } else {
+                state.editedApiCosts[moduleId][field] = parseInt(value) || 0;
+            }
+            render();
+        }
+
+        function saveApiCosts() {
+            var modules = {};
+            var moduleIds = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator', 'channelAudit'];
+
+            for (var i = 0; i < moduleIds.length; i++) {
+                var moduleId = moduleIds[i];
+                var current = state.apiCosts?.modules?.[moduleId] || {};
+                var edited = state.editedApiCosts[moduleId] || {};
+
+                modules[moduleId] = {
+                    name: current.name || moduleId,
+                    provider: current.provider || 'Unknown',
+                    apiModel: current.apiModel || 'Unknown',
+                    estimatedCostUSD: edited.estimatedCostUSD !== undefined ? edited.estimatedCostUSD : current.estimatedCostUSD,
+                    tokenCost: edited.tokenCost !== undefined ? edited.tokenCost : current.tokenCost,
+                    markupPercent: edited.markupPercent !== undefined ? edited.markupPercent : current.markupPercent
+                };
+            }
+
+            functions.httpsCallable('adminUpdateApiCosts')({ modules: modules })
+                .then(function(result) {
+                    showToast('API pricing saved successfully', 'success');
+                    loadApiCosts();
+                })
+                .catch(function(error) {
+                    console.error('Error saving API costs:', error);
+                    showToast('Failed to save: ' + error.message, 'error');
+                });
+        }
+
+        // =============================================
+        // PROMO CODES FUNCTIONS
+        // =============================================
+
+        function loadPromoCodes() {
+            state.promoCodesLoading = true;
+            render();
+
+            functions.httpsCallable('adminGetPromoCodes')()
+                .then(function(result) {
+                    state.promoCodes = result.data.codes || [];
+                    state.promoCodesLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading promo codes:', error);
+                    state.promoCodesLoading = false;
+                    showToast('Failed to load promo codes', 'error');
+                    render();
+                });
+        }
+
+        function createPromoCode() {
+            var code = document.getElementById('promo-code-input').value.trim().toUpperCase();
+            var tokenAmount = parseInt(document.getElementById('promo-tokens-input').value, 10);
+            var maxUses = parseInt(document.getElementById('promo-maxuses-input').value, 10) || 0;
+            var expiresAt = document.getElementById('promo-expires-input').value;
+            var description = document.getElementById('promo-desc-input').value.trim();
+
+            if (!code || code.length < 3) {
+                showToast('Code must be at least 3 characters', 'error');
+                return;
+            }
+            if (isNaN(tokenAmount) || tokenAmount < 1) {
+                showToast('Token amount must be at least 1', 'error');
+                return;
+            }
+
+            functions.httpsCallable('adminCreatePromoCode')({
+                code: code,
+                tokenAmount: tokenAmount,
+                maxUses: maxUses,
+                expiresAt: expiresAt || null,
+                description: description
+            })
+                .then(function(result) {
+                    showToast(result.data.message, 'success');
+                    document.getElementById('promo-code-input').value = '';
+                    document.getElementById('promo-tokens-input').value = '10';
+                    document.getElementById('promo-maxuses-input').value = '0';
+                    document.getElementById('promo-expires-input').value = '';
+                    document.getElementById('promo-desc-input').value = '';
+                    loadPromoCodes();
+                })
+                .catch(function(error) {
+                    console.error('Error creating promo code:', error);
+                    showToast('Failed: ' + error.message, 'error');
+                });
+        }
+
+        function togglePromoCode(code, isActive) {
+            functions.httpsCallable('adminTogglePromoCode')({ code: code, isActive: isActive })
+                .then(function(result) {
+                    showToast(result.data.message, 'success');
+                    loadPromoCodes();
+                })
+                .catch(function(error) {
+                    console.error('Error toggling promo code:', error);
+                    showToast('Failed: ' + error.message, 'error');
+                });
+        }
+
+        // =============================================
+        // ANALYTICS FUNCTIONS
+        // =============================================
+
+        function loadAnalytics() {
+            state.analyticsLoading = true;
+            render();
+
+            functions.httpsCallable('adminGetAnalytics')({ period: state.analyticsPeriod })
+                .then(function(result) {
+                    state.analytics = result.data.analytics;
+                    state.analyticsLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading analytics:', error);
+                    state.analyticsLoading = false;
+                    showToast('Failed to load analytics', 'error');
+                    render();
+                });
+        }
+
+        function setAnalyticsPeriod(period) {
+            state.analyticsPeriod = period;
+            state.analytics = null;
+            loadAnalytics();
+        }
+
+        // =============================================
+        // TRANSACTIONS FUNCTIONS
+        // =============================================
+
+        function loadTransactions() {
+            state.transactionsLoading = true;
+            render();
+
+            functions.httpsCallable('adminGetTokenTransactions')({ limit: 100 })
+                .then(function(result) {
+                    state.transactions = result.data.transactions || [];
+                    state.transactionsLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading transactions:', error);
+                    state.transactionsLoading = false;
+                    showToast('Failed to load transactions', 'error');
+                    render();
+                });
         }
 
         // Data Functions - Plans
@@ -2128,8 +3264,33 @@
                         if (doc.exists) {
                             state.isAdmin = true;
                             state.currentView = 'dashboard';
+
+                            // Check URL parameter for tab selection
+                            var urlParams = new URLSearchParams(window.location.search);
+                            var tabParam = urlParams.get('tab');
+                            var validTabs = ['plans', 'prompts', 'users', 'tokenConfig', 'pricing', 'promoCodes', 'analytics', 'transactions'];
+                            if (tabParam && validTabs.includes(tabParam)) {
+                                state.activeTab = tabParam;
+                            }
+
                             loadPlans();
                             loadPrompts();
+
+                            // Load data based on active tab
+                            if (state.activeTab === 'users') {
+                                loadUsers();
+                            } else if (state.activeTab === 'tokenConfig') {
+                                loadTokenConfig();
+                                loadUsers(); // Need users for dropdown
+                            } else if (state.activeTab === 'pricing') {
+                                loadApiCosts();
+                            } else if (state.activeTab === 'promoCodes') {
+                                loadPromoCodes();
+                            } else if (state.activeTab === 'analytics') {
+                                loadAnalytics();
+                            } else if (state.activeTab === 'transactions') {
+                                loadTransactions();
+                            }
                         } else {
                             state.currentView = 'unauthorized';
                             render();

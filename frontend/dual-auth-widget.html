@@ -3824,23 +3824,8 @@
                ------------------------------------------ */
 
             goToAdmin: function() {
-                state.currentView = 'admin';
-                state.error = null;
-                state.adminLoading = true;
-                render();
-
-                // Load admin data
-                functions.httpsCallable('adminGetUsers')()
-                    .then(function(result) {
-                        state.adminUsers = result.data.users || [];
-                        state.adminLoading = false;
-                        render();
-                    })
-                    .catch(function(e) {
-                        state.adminLoading = false;
-                        state.error = { message: 'Failed to load admin data: ' + e.message };
-                        render();
-                    });
+                // Redirect to consolidated admin panel at admin-plans.html with Users tab
+                window.location.href = 'admin-plans.html?tab=users';
             },
 
             setupAdmin: function() {
