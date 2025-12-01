@@ -6626,51 +6626,47 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
               }
             });
 
-            // @google/genai SDK returns result directly (not result.response)
-            // The structure is: result.candidates[].content.parts[] with text or inlineData
-
-            // Extract image from response - handle both response structures
+            // Extract image from response - handle both SDK response structures
             const candidates = result.candidates || (result.response && result.response.candidates);
             if (candidates && candidates.length > 0) {
               const candidate = candidates[0];
               const parts = candidate.content?.parts || candidate.parts || [];
               for (const part of parts) {
-                // Check for inlineData (image)
                 const inlineData = part.inlineData || part.inline_data;
                 if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
-                    // Found an image - handle different field names from SDK versions
-                    const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
-                    const mimeType = inlineData.mimeType || inlineData.mime_type || 'image/png';
-                    const extension = mimeType.includes('jpeg') ? 'jpg' : 'png';
+                  // Found an image
+                  const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
+                  const mimeType = inlineData.mimeType || inlineData.mime_type || 'image/png';
+                  const extension = mimeType.includes('jpeg') ? 'jpg' : 'png';
 
-                    const fileName = `creative-studio/${uid}/${timestamp}-gemini-${imgIdx + 1}.${extension}`;
-                    const file = storage.file(fileName);
+                  const fileName = `creative-studio/${uid}/${timestamp}-gemini-${imgIdx + 1}.${extension}`;
+                  const file = storage.file(fileName);
 
-                    const buffer = Buffer.from(imageBytes, 'base64');
-                    await file.save(buffer, {
+                  const buffer = Buffer.from(imageBytes, 'base64');
+                  await file.save(buffer, {
+                    metadata: {
+                      contentType: mimeType,
                       metadata: {
-                        contentType: mimeType,
-                        metadata: {
-                          prompt: finalPrompt.substring(0, 500),
-                          model: geminiImageModelId,
-                          generatedAt: new Date().toISOString()
-                        }
+                        prompt: finalPrompt.substring(0, 500),
+                        model: geminiImageModelId,
+                        generatedAt: new Date().toISOString()
                       }
-                    });
+                    }
+                  });
 
-                    await file.makePublic();
-                    const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+                  await file.makePublic();
+                  const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
 
-                    generatedImages.push({
-                      url: publicUrl,
-                      fileName: fileName
-                    });
+                  generatedImages.push({
+                    url: publicUrl,
+                    fileName: fileName
+                  });
 
-                    console.log(`Gemini image ${imgIdx + 1} saved: ${fileName}`);
-                    break; // Only take first image from this response
-                  }
+                  console.log(`Gemini image ${imgIdx + 1} saved: ${fileName}`);
+                  break; // Only take first image from this response
                 }
               }
+            }
           } catch (genError) {
             console.error(`Gemini generation error for image ${imgIdx + 1}:`, genError);
             // Continue with remaining images
