@@ -5563,53 +5563,43 @@
         ];
 
         // Model options for dropdown
-        // All models use Google Imagen API via ai.models.generateImages()
-        // Models are mapped to actual Google API model IDs in the backend (index.js)
+        // Gemini models use generateContent() API with image output
+        // DALL-E models use OpenAI API
+        // Models are mapped to actual API model IDs in the backend (index.js)
         const modelsConfig = [
             {
                 key: 'auto',
                 name: 'Auto',
                 icon: '⚡',
-                description: 'Balanced speed and quality (Imagen 4)',
+                description: 'Best quality model (Nano Banana Pro)',
                 badge: 'suggested',
                 available: true,
                 supportsNegativePrompt: true,
-                supportsSeed: true,
-                supportsReferenceImages: false
+                supportsSeed: false,
+                supportsReferenceImages: true
             },
-            { divider: true, label: 'Imagen Models' },
+            { divider: true, label: 'Gemini Image Models' },
             {
-                key: 'imagen-4',
-                name: 'Imagen 4',
-                icon: '🖼️',
-                description: 'Google Imagen - photorealistic quality',
+                key: 'nano-banana-pro',
+                name: 'Nano Banana Pro',
+                icon: '🎨',
+                description: 'Gemini 3 Pro - Best quality with reference support',
                 badge: 'new',
                 available: true,
                 supportsNegativePrompt: true,
-                supportsSeed: true,
-                supportsReferenceImages: false
+                supportsSeed: false,
+                supportsReferenceImages: true // Supports multimodal input (image + text)
             },
             {
-                key: 'imagen-4-ultra',
-                name: 'Imagen 4 Ultra',
-                icon: '🎨',
-                description: 'Highest quality, 4K output',
-                badge: 'premium',
-                available: true,
-                supportsNegativePrompt: true,
-                supportsSeed: true,
-                supportsReferenceImages: false
-            },
-            {
-                key: 'imagen-3',
-                name: 'Imagen 3',
-                icon: '🌟',
-                description: 'Previous generation, stable',
+                key: 'nano-banana',
+                name: 'Nano Banana',
+                icon: '🖼️',
+                description: 'Gemini 2.5 Flash - Fast & cost-effective',
                 badge: '',
                 available: true,
                 supportsNegativePrompt: true,
-                supportsSeed: true,
-                supportsReferenceImages: true // Supports customization model
+                supportsSeed: false,
+                supportsReferenceImages: true // Also supports multimodal
             },
             { divider: true, label: 'OpenAI DALL-E' },
             {
@@ -5617,35 +5607,36 @@
                 name: 'DALL-E 3',
                 icon: '🎭',
                 description: 'OpenAI - exceptional detail & accuracy',
-                badge: 'new',
-                available: true,
-                supportsNegativePrompt: false, // DALL-E 3 doesn't support negative prompts
-                supportsSeed: false, // DALL-E 3 doesn't support seed
-                supportsReferenceImages: false
-            },
-            {
-                key: 'dall-e-2',
-                name: 'DALL-E 2',
-                icon: '🖌️',
-                description: 'OpenAI - fast & cost-effective',
                 badge: '',
                 available: true,
                 supportsNegativePrompt: false,
                 supportsSeed: false,
                 supportsReferenceImages: false
             },
-            { divider: true, label: 'Coming Soon' },
             {
-                key: 'gemini-2-flash',
-                name: 'Gemini 2.0 Flash',
-                icon: '✨',
-                description: 'Latest Gemini - fast image generation',
-                badge: 'coming',
-                available: false,
+                key: 'dall-e-2',
+                name: 'DALL-E 2',
+                icon: '🖌️',
+                description: 'OpenAI - fast & budget-friendly',
+                badge: '',
+                available: true,
+                supportsNegativePrompt: false,
+                supportsSeed: false,
+                supportsReferenceImages: false
+            },
+            { divider: true, label: 'Legacy Imagen (if available)' },
+            {
+                key: 'imagen-3',
+                name: 'Imagen 3',
+                icon: '🌟',
+                description: 'Google Imagen - if API access available',
+                badge: '',
+                available: true,
                 supportsNegativePrompt: true,
                 supportsSeed: true,
                 supportsReferenceImages: false
             },
+            { divider: true, label: 'Coming Soon' },
             {
                 key: 'flux',
                 name: 'Flux',
