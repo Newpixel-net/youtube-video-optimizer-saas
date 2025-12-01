@@ -7055,13 +7055,28 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
 
   // Get the model ID based on type
   const geminiImageModelId = geminiImageModelMap[model] || geminiImageModelMap['auto'];
-  const imagenModelId = imagenModelMap[model] || 'imagen-3.0-generate-001';
+  const imagenModelId = imagenModelMap[model] || 'imagen-4.0-generate-001'; // Default to Imagen 4 (NOT Imagen 3!)
   const dalleModelId = dalleModelMap[model] || 'dall-e-3';
 
   try {
-    // Verify token balance
-    const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
-    const balance = tokenDoc.exists ? tokenDoc.data().balance : 0;
+    // Verify token balance - initialize if new user
+    let tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+
+    if (!tokenDoc.exists) {
+      // Initialize new user with free tier tokens
+      const initialTokens = {
+        balance: 50,
+        rollover: 0,
+        plan: 'free',
+        monthlyAllocation: 50,
+        lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      await db.collection('creativeTokens').doc(uid).set(initialTokens);
+      tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+    }
+
+    const balance = tokenDoc.data().balance || 0;
 
     if (balance < totalCost) {
       throw new functions.https.HttpsError('resource-exhausted',
