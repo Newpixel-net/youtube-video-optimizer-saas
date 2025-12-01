@@ -6408,7 +6408,8 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const isDalleModel = dalleModels.includes(model);
 
   // Gemini Image models (use generateContent API with image output)
-  const geminiImageModels = ['auto', 'nano-banana-pro', 'nano-banana'];
+  // These models support reference images via multimodal input
+  const geminiImageModels = ['nano-banana-pro', 'nano-banana'];
   const isGeminiImageModel = geminiImageModels.includes(model);
 
   // Gemini Image model mapping (uses generateContent with responseModalities)
@@ -6418,8 +6419,10 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
     'nano-banana': 'gemini-2.5-flash-image'
   };
 
-  // Legacy Imagen model mapping (uses ai.models.generateImages - if available)
+  // Imagen model mapping (uses ai.models.generateImages)
+  // Auto defaults to Imagen 4 (best working model)
   const imagenModelMap = {
+    'auto': 'imagen-4.0-generate-001',
     'imagen-4': 'imagen-4.0-generate-001',
     'imagen-4-ultra': 'imagen-4.0-ultra-generate-001',
     'imagen-3': 'imagen-3.0-generate-001',
@@ -6608,31 +6611,36 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
       contentParts.push({ text: imagePrompt });
 
       try {
-        const geminiModel = ai.getGenerativeModel({
-          model: geminiImageModelId,
-          generationConfig: {
-            responseModalities: ['image', 'text']
-          }
-        });
+        // Gemini Image Generation using @google/genai SDK
+        // Uses ai.models.generateContent() with responseModalities for image output
+        // Reference: https://ai.google.dev/gemini-api/docs/image-generation
 
         // Generate images (Gemini generates one at a time)
         for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
           try {
-            const result = await geminiModel.generateContent({
-              contents: [{ role: 'user', parts: contentParts }]
+            const result = await ai.models.generateContent({
+              model: geminiImageModelId,
+              contents: [{ role: 'user', parts: contentParts }],
+              config: {
+                responseModalities: ['image', 'text']
+              }
             });
 
-            const response = result.response;
+            // @google/genai SDK returns result directly (not result.response)
+            // The structure is: result.candidates[].content.parts[] with text or inlineData
 
-            // Extract image from response
-            if (response.candidates && response.candidates.length > 0) {
-              const candidate = response.candidates[0];
-              if (candidate.content && candidate.content.parts) {
-                for (const part of candidate.content.parts) {
-                  if (part.inlineData && part.inlineData.data) {
-                    // Found an image
-                    const imageBytes = part.inlineData.data;
-                    const mimeType = part.inlineData.mimeType || 'image/png';
+            // Extract image from response - handle both response structures
+            const candidates = result.candidates || (result.response && result.response.candidates);
+            if (candidates && candidates.length > 0) {
+              const candidate = candidates[0];
+              const parts = candidate.content?.parts || candidate.parts || [];
+              for (const part of parts) {
+                // Check for inlineData (image)
+                const inlineData = part.inlineData || part.inline_data;
+                if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
+                    // Found an image - handle different field names from SDK versions
+                    const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
+                    const mimeType = inlineData.mimeType || inlineData.mime_type || 'image/png';
                     const extension = mimeType.includes('jpeg') ? 'jpg' : 'png';
 
                     const fileName = `creative-studio/${uid}/${timestamp}-gemini-${imgIdx + 1}.${extension}`;
