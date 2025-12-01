@@ -6712,6 +6712,7 @@ exports.getCreativeTokens = functions.https.onCall(async (data, context) => {
 
     if (!tokenDoc.exists) {
       // Initialize new user with free tier tokens
+      const now = new Date();
       const initialTokens = {
         balance: 50,
         rollover: 0,
@@ -6721,7 +6722,15 @@ exports.getCreativeTokens = functions.https.onCall(async (data, context) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       };
       await db.collection('creativeTokens').doc(uid).set(initialTokens);
-      return initialTokens;
+      // Return serializable data (FieldValue.serverTimestamp() doesn't serialize well)
+      return {
+        balance: 50,
+        rollover: 0,
+        plan: 'free',
+        monthlyAllocation: 50,
+        lastRefresh: now.toISOString(),
+        createdAt: now.toISOString()
+      };
     }
 
     const tokenData = tokenDoc.data();
@@ -7061,6 +7070,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   try {
     // Verify token balance - initialize if new user
     let tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+    let balance = 0;
 
     if (!tokenDoc.exists) {
       // Initialize new user with free tier tokens
@@ -7073,10 +7083,11 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       };
       await db.collection('creativeTokens').doc(uid).set(initialTokens);
-      tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+      // Use the known initial balance directly (avoid re-fetch timing issues)
+      balance = 50;
+    } else {
+      balance = tokenDoc.data().balance || 0;
     }
-
-    const balance = tokenDoc.data().balance || 0;
 
     if (balance < totalCost) {
       throw new functions.https.HttpsError('resource-exhausted',
