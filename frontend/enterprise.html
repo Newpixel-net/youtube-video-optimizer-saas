@@ -256,6 +256,34 @@
             border-color: rgba(255, 255, 255, 0.3);
         }
 
+        /* History tab buttons */
+        .tab-btn {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .tab-btn.active {
+            background: rgba(255, 215, 0, 0.15);
+            border-color: rgba(255, 215, 0, 0.3);
+            color: #ffd700;
+        }
+
+        /* History item hover effect */
+        .history-item:hover {
+            transform: translateY(-2px);
+        }
+
         /* ------------------------------------------
            2.6 FORM INPUTS
            ------------------------------------------ */
@@ -615,7 +643,7 @@
            ========================================== */
         const state = {
             // Current state
-            currentView: 'loading', // loading | locked | tools
+            currentView: 'loading', // loading | locked | tools | history
             activeTool: 'bulk', // bulk | placement | viral | monetization | script
 
             // User data
@@ -659,7 +687,16 @@
             // Script Writer
             scriptResults: null,
             scriptLoading: false,
-            scriptStyle: 'engaging' // engaging | educational | storytelling | listicle
+            scriptStyle: 'engaging', // engaging | educational | storytelling | listicle
+
+            // History state
+            historyTab: 'all', // all | placement | viral | monetization | script
+            allHistory: null,
+            placementHistory: null,
+            viralHistory: null,
+            monetizationHistory: null,
+            scriptHistory: null,
+            historyCounts: null
         };
 
         /* ==========================================
@@ -732,6 +769,52 @@
                 state.activeTool = tool;
                 state.error = null;
                 state.success = null;
+                render();
+            },
+
+            goToTools: function() {
+                state.currentView = 'tools';
+                state.error = null;
+                render();
+            },
+
+            // History Navigation
+            goToHistory: function(tab) {
+                state.currentView = 'history';
+                state.error = null;
+                state.loading = true;
+                state.historyTab = tab || 'all';
+                state.allHistory = null;
+                state.placementHistory = null;
+                state.viralHistory = null;
+                state.monetizationHistory = null;
+                state.scriptHistory = null;
+                state.historyCounts = null;
+                render();
+
+                // Fetch history from backend
+                functions.httpsCallable('getAllHistory')({ limit: 20 })
+                    .then(function(result) {
+                        var data = result.data;
+                        state.allHistory = data.history.all || [];
+                        state.placementHistory = data.history.placements || [];
+                        state.viralHistory = data.history.viral || [];
+                        state.monetizationHistory = data.history.monetization || [];
+                        state.scriptHistory = data.history.scripts || [];
+                        state.historyCounts = data.counts || {};
+                        state.loading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        console.error('Failed to load history:', e);
+                        state.loading = false;
+                        state.error = 'Failed to load history';
+                        render();
+                    });
+            },
+
+            setHistoryTab: function(tab) {
+                state.historyTab = tab;
                 render();
             },
 
@@ -1136,6 +1219,8 @@
 
             if (state.currentView === 'loading') {
                 root.innerHTML = renderLoading();
+            } else if (state.currentView === 'history') {
+                root.innerHTML = renderHistory() + renderUpgradeModal();
             } else {
                 // Always show tools, add upgrade modal on top if needed
                 root.innerHTML = renderTools() + renderUpgradeModal();
@@ -1198,7 +1283,10 @@
             html += '<p class="text-white/60">Premium tools for power users <span style="opacity:0.5;">v' + PLATFORM_VERSION + '</span></p>';
             html += '</div>';
             html += '</div>';
+            html += '<div class="flex gap-3">';
+            html += '<button onclick="app.goToHistory()" class="btn-secondary">📜 View History</button>';
             html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
+            html += '</div>';
             html += '</div>';
 
             // Tool tabs
@@ -1909,6 +1997,156 @@
             html += '</form>';
 
             return html;
+        }
+
+        // History view
+        function renderHistory() {
+            var html = '';
+
+            // Toast notifications
+            if (state.error) {
+                html += '<div class="toast toast-error">❌ ' + utils.escapeHtml(state.error) + '</div>';
+            }
+
+            html += '<div class="min-h-screen py-8 px-4">';
+            html += '<div class="max-w-6xl mx-auto">';
+
+            // Header with back button
+            html += '<div class="flex items-center gap-4 mb-6">';
+            html += '<button onclick="app.goToTools()" class="btn-secondary px-4 py-2">← Back to Tools</button>';
+            html += '<h1 class="text-2xl font-bold text-white">📜 History</h1>';
+            html += '</div>';
+
+            // History tabs
+            html += '<div class="flex flex-wrap gap-2 mb-6">';
+            var tabs = [
+                { key: 'all', icon: '📋', name: 'All', count: state.allHistory ? state.allHistory.length : 0 },
+                { key: 'placement', icon: '📍', name: 'Placement', count: state.historyCounts?.placements || 0 },
+                { key: 'viral', icon: '📈', name: 'Viral Score', count: state.historyCounts?.viral || 0 },
+                { key: 'monetization', icon: '💰', name: 'Monetization', count: state.historyCounts?.monetization || 0 },
+                { key: 'script', icon: '📝', name: 'Scripts', count: state.historyCounts?.scripts || 0 }
+            ];
+
+            for (var i = 0; i < tabs.length; i++) {
+                var tab = tabs[i];
+                var isActive = state.historyTab === tab.key;
+                html += '<button onclick="app.setHistoryTab(\'' + tab.key + '\')" class="tab-btn' + (isActive ? ' active' : '') + '">';
+                html += tab.icon + ' ' + tab.name + ' <span class="text-xs opacity-60">(' + tab.count + ')</span>';
+                html += '</button>';
+            }
+            html += '</div>';
+
+            // Content
+            html += '<div class="tool-card p-6">';
+
+            if (state.loading) {
+                html += '<div class="text-center py-12">';
+                html += '<div class="loading-emoji mb-4">📜</div>';
+                html += '<p class="text-white/60">Loading history...</p>';
+                html += '</div>';
+            } else {
+                var historyItems = getHistoryItems();
+
+                if (historyItems.length === 0) {
+                    html += '<div class="text-center py-12">';
+                    html += '<div class="text-6xl mb-4">📭</div>';
+                    html += '<p class="text-white/60 text-lg">No history yet</p>';
+                    html += '<p class="text-white/40 text-sm mt-2">Your tool results will appear here</p>';
+                    html += '</div>';
+                } else {
+                    html += '<div class="space-y-4">';
+                    for (var j = 0; j < historyItems.length; j++) {
+                        html += renderHistoryItem(historyItems[j]);
+                    }
+                    html += '</div>';
+                }
+            }
+
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
+        // Get history items based on active tab
+        function getHistoryItems() {
+            switch (state.historyTab) {
+                case 'placement':
+                    return state.placementHistory || [];
+                case 'viral':
+                    return state.viralHistory || [];
+                case 'monetization':
+                    return state.monetizationHistory || [];
+                case 'script':
+                    return state.scriptHistory || [];
+                default:
+                    // Filter allHistory to only show enterprise tool types
+                    return (state.allHistory || []).filter(function(item) {
+                        return ['placement', 'viral', 'monetization', 'script'].indexOf(item.type) !== -1;
+                    });
+            }
+        }
+
+        // Render individual history item
+        function renderHistoryItem(item) {
+            var html = '<div class="history-item p-4 bg-white/5 rounded-lg border border-white/10 hover:border-white/20 transition-all">';
+
+            // Header with type badge and date
+            html += '<div class="flex items-center justify-between mb-3">';
+            html += '<div class="flex items-center gap-2">';
+
+            // Type badge
+            var typeInfo = getTypeInfo(item.type);
+            html += '<span class="px-2 py-1 text-xs rounded-full ' + typeInfo.bgClass + '">' + typeInfo.icon + ' ' + typeInfo.name + '</span>';
+
+            html += '</div>';
+            html += '<span class="text-white/40 text-sm">' + formatDate(item.createdAt) + '</span>';
+            html += '</div>';
+
+            // Content based on type
+            if (item.type === 'placement') {
+                html += '<h3 class="text-white font-medium mb-2">Niche: ' + utils.escapeHtml(item.niche || 'Unknown') + '</h3>';
+                html += '<p class="text-white/60 text-sm">' + (item.channels ? item.channels.length : 0) + ' channels found</p>';
+            } else if (item.type === 'viral') {
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(item.title || 'Untitled') + '</h3>';
+                html += '<p class="text-white/60 text-sm">Viral Score: ' + (item.viralScore || 0) + '/100</p>';
+            } else if (item.type === 'monetization') {
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(item.channelTitle || item.channelName || 'Channel Analysis') + '</h3>';
+                html += '<p class="text-white/60 text-sm">Est. Revenue: ' + (item.estimatedRevenue || 'N/A') + '</p>';
+            } else if (item.type === 'script') {
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(item.title || item.topic || 'Script') + '</h3>';
+                html += '<p class="text-white/60 text-sm">' + (item.wordCount || 0) + ' words • ' + (item.style || 'engaging') + ' style</p>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Get type info for badges
+        function getTypeInfo(type) {
+            var types = {
+                'placement': { icon: '📍', name: 'Placement', bgClass: 'bg-purple-500/20 text-purple-300' },
+                'viral': { icon: '📈', name: 'Viral Score', bgClass: 'bg-orange-500/20 text-orange-300' },
+                'monetization': { icon: '💰', name: 'Monetization', bgClass: 'bg-green-500/20 text-green-300' },
+                'script': { icon: '📝', name: 'Script', bgClass: 'bg-blue-500/20 text-blue-300' }
+            };
+            return types[type] || { icon: '📋', name: type, bgClass: 'bg-gray-500/20 text-gray-300' };
+        }
+
+        // Format date
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Unknown date';
+            var date = new Date(dateStr);
+            var now = new Date();
+            var diffMs = now - date;
+            var diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 0) return 'Today';
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return diffDays + ' days ago';
+
+            return date.toLocaleDateString();
         }
 
         /* ==========================================
