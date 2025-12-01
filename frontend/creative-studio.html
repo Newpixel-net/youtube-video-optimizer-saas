@@ -1753,9 +1753,10 @@
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 0.75rem;
-            padding: 1rem;
+            padding: 0;
             cursor: pointer;
             transition: all 0.2s ease;
+            overflow: hidden;
         }
 
         .template-card:hover {
@@ -1764,32 +1765,63 @@
             transform: translateY(-2px);
         }
 
+        .template-card.active {
+            border-color: rgba(139, 92, 246, 0.6);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .template-card-cover {
+            width: 100%;
+            height: 100px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .template-card-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .template-card-cover-placeholder {
+            font-size: 1.5rem;
+            opacity: 0.4;
+        }
+
+        .template-card-content {
+            padding: 0.65rem 0.85rem 0.85rem;
+        }
+
         .template-card-title {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 600;
             color: white;
-            margin-bottom: 0.35rem;
+            margin-bottom: 0.25rem;
         }
 
         .template-card-desc {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: rgba(255, 255, 255, 0.5);
-            line-height: 1.4;
+            line-height: 1.3;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+            margin-bottom: 0.4rem;
         }
 
         .template-card-cost {
             display: inline-flex;
             align-items: center;
             gap: 0.25rem;
-            margin-top: 0.5rem;
-            padding: 0.2rem 0.5rem;
+            padding: 0.15rem 0.45rem;
             background: rgba(139, 92, 246, 0.2);
             border-radius: 9999px;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: #a78bfa;
         }
 
@@ -3100,16 +3132,20 @@
                 gap: 0.5rem;
             }
 
-            .template-card {
-                padding: 0.75rem;
+            .template-card-cover {
+                height: 80px;
+            }
+
+            .template-card-content {
+                padding: 0.5rem 0.65rem 0.65rem;
             }
 
             .template-card-title {
-                font-size: 0.8rem;
+                font-size: 0.75rem;
             }
 
             .template-card-desc {
-                font-size: 0.7rem;
+                font-size: 0.65rem;
                 -webkit-line-clamp: 1;
             }
         }
@@ -3117,6 +3153,10 @@
         @media (max-width: 400px) {
             .template-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .template-card-cover {
+                height: 100px;
             }
 
             .quantity-btns {
@@ -5702,6 +5742,33 @@
         function getModelDisplayName(modelKey) {
             var model = modelsConfig.find(function(m) { return m.key === modelKey; });
             return model ? model.name : modelKey;
+        }
+
+        // Helper function to get category icon for template placeholder
+        function getCategoryIcon(category) {
+            var icons = {
+                'Portrait': '👤',
+                'Business': '💼',
+                'Product': '📦',
+                'Lifestyle': '🌟',
+                'Fashion': '👗',
+                'Food': '🍽️',
+                'Travel': '✈️',
+                'Nature': '🌿',
+                'Art': '🎨',
+                'Technology': '💻',
+                'Sports': '⚽',
+                'Music': '🎵',
+                'Animals': '🐾',
+                'Architecture': '🏛️',
+                'Abstract': '🔮',
+                'Vintage': '📷',
+                'Minimalist': '◻️',
+                'Fantasy': '🦄',
+                'Sci-Fi': '🚀',
+                'Horror': '👻'
+            };
+            return icons[category] || '🖼️';
         }
 
         /* ==========================================
@@ -9360,9 +9427,25 @@
                     var isSelected = state.selectedTemplate && state.selectedTemplate.id === template.id;
 
                     html += '<div class="template-card' + (isSelected ? ' active' : '') + '" onclick="app.selectTemplate(\'' + template.id + '\')">';
+
+                    // Cover image section
+                    html += '<div class="template-card-cover">';
+                    if (template.coverImage) {
+                        html += '<img src="' + template.coverImage + '" alt="' + utils.escapeHtml(template.name) + '" loading="lazy">';
+                    } else {
+                        // Placeholder icon based on category
+                        var placeholderIcon = getCategoryIcon(template.category || category.name);
+                        html += '<span class="template-card-cover-placeholder">' + placeholderIcon + '</span>';
+                    }
+                    html += '</div>';
+
+                    // Content section
+                    html += '<div class="template-card-content">';
                     html += '<div class="template-card-title">' + utils.escapeHtml(template.name) + '</div>';
                     html += '<div class="template-card-desc">' + utils.escapeHtml(template.description) + '</div>';
                     html += '<div class="template-card-cost">🪙 ' + template.cost + ' tokens</div>';
+                    html += '</div>';
+
                     html += '</div>';
                 }
                 html += '</div>'; // template-grid

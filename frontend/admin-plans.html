@@ -393,6 +393,130 @@
             color: white;
         }
 
+        .btn-icon.btn-cover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-icon.btn-cover:hover {
+            background: rgba(139, 92, 246, 0.35);
+        }
+
+        /* Cover Modal Styles */
+        .cover-modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+
+        .cover-modal {
+            background: #1a1a2e;
+            border-radius: 1rem;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cover-modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cover-modal-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .cover-modal-close {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .cover-modal-close:hover {
+            color: white;
+        }
+
+        .cover-modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .cover-preview-area {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            text-align: center;
+            margin-bottom: 1rem;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cover-preview-area img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 0.5rem;
+        }
+
+        .cover-preview-placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .cover-preview-placeholder span {
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 0.75rem;
+        }
+
+        .cover-info-box {
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 0.5rem;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .cover-info-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.25rem;
+        }
+
+        .cover-info-value {
+            font-size: 0.9rem;
+            color: white;
+        }
+
+        .cover-modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
         /* Toast Notifications */
         .toast {
             position: fixed;
@@ -958,7 +1082,10 @@
             // UI state
             toast: null,
             confirmModal: null,
-            promptModal: null
+            promptModal: null,
+
+            // Cover image modal state
+            coverModal: null,  // { promptId, prompt, generatedImage, generating, saving }
         };
 
         // Tool configuration with icons and colors
@@ -1010,6 +1137,9 @@
             }
             if (state.promptModal) {
                 html += renderPromptModal();
+            }
+            if (state.coverModal) {
+                html += renderCoverModal();
             }
 
             if (state.currentView === 'loading') {
@@ -1452,12 +1582,13 @@
                 html += '<table class="prompt-table">';
                 html += '<thead>';
                 html += '<tr>';
-                html += '<th style="width: 25%;">Template Name</th>';
-                html += '<th style="width: 15%;">Category</th>';
-                html += '<th style="width: 35%;">Professional Prompt Preview</th>';
-                html += '<th style="width: 8%;">Cost</th>';
-                html += '<th style="width: 8%;">Status</th>';
-                html += '<th style="width: 9%;">Actions</th>';
+                html += '<th style="width: 8%;">Cover</th>';
+                html += '<th style="width: 22%;">Template Name</th>';
+                html += '<th style="width: 12%;">Category</th>';
+                html += '<th style="width: 28%;">Professional Prompt Preview</th>';
+                html += '<th style="width: 6%;">Cost</th>';
+                html += '<th style="width: 6%;">Status</th>';
+                html += '<th style="width: 18%;">Actions</th>';
                 html += '</tr>';
                 html += '</thead>';
                 html += '<tbody>';
@@ -1468,6 +1599,16 @@
                     var catConfig = promptCategoriesConfig.find(function(c) { return c.key === prompt.category; });
 
                     html += '<tr>';
+                    // Cover image thumbnail
+                    html += '<td style="padding: 0.5rem;">';
+                    html += '<div class="cover-thumbnail">';
+                    if (prompt.coverImage) {
+                        html += '<img src="' + prompt.coverImage + '" alt="Cover" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;">';
+                    } else {
+                        html += '<div style="width: 50px; height: 50px; background: rgba(139,92,246,0.2); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.4); font-size: 1.2rem;">🖼️</div>';
+                    }
+                    html += '</div>';
+                    html += '</td>';
                     html += '<td>';
                     html += '<div style="font-weight: 600; color: white;">' + escapeHtml(prompt.name) + '</div>';
                     html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">' + escapeHtml(prompt.description) + '</div>';
@@ -1477,7 +1618,7 @@
                         html += '<span class="category-badge">' + catConfig.icon + ' ' + catConfig.name + '</span>';
                     }
                     html += '</td>';
-                    html += '<td class="prompt-preview">' + escapeHtml(truncateText(prompt.professionalPrompt, 80)) + '</td>';
+                    html += '<td class="prompt-preview">' + escapeHtml(truncateText(prompt.professionalPrompt, 60)) + '</td>';
                     html += '<td style="text-align: center;">🪙 ' + (prompt.tokenCost || 2) + '</td>';
                     html += '<td>';
                     html += '<span class="status-badge ' + (prompt.isActive !== false ? 'active' : 'inactive') + '">';
@@ -1485,7 +1626,8 @@
                     html += '</span>';
                     html += '</td>';
                     html += '<td>';
-                    html += '<div style="display: flex; gap: 0.35rem;">';
+                    html += '<div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">';
+                    html += '<button class="btn-icon btn-cover" onclick="openCoverModal(\'' + prompt.id + '\')" title="Generate Cover Image">🖼️</button>';
                     html += '<button class="btn-icon" onclick="editPrompt(\'' + prompt.id + '\')" title="Edit">✏️</button>';
                     html += '<button class="btn-icon" onclick="confirmDeletePrompt(\'' + prompt.id + '\', \'' + escapeHtml(prompt.name) + '\')" title="Delete" style="color: #ef4444;">🗑️</button>';
                     html += '</div>';
@@ -1764,6 +1906,168 @@
                     console.error('Error deleting prompt:', error);
                     showToast('Failed to delete prompt', 'error');
                 });
+        }
+
+        // =============================================
+        // COVER IMAGE MODAL FUNCTIONS
+        // =============================================
+
+        function openCoverModal(promptId) {
+            var prompt = state.prompts.find(function(p) { return p.id === promptId; });
+            if (!prompt) return;
+
+            state.coverModal = {
+                promptId: promptId,
+                prompt: prompt,
+                generatedImage: null,
+                generating: false,
+                saving: false
+            };
+            render();
+        }
+
+        function closeCoverModal() {
+            state.coverModal = null;
+            render();
+        }
+
+        function generateCoverImage() {
+            if (!state.coverModal || state.coverModal.generating) return;
+
+            state.coverModal.generating = true;
+            state.coverModal.generatedImage = null;
+            render();
+
+            var prompt = state.coverModal.prompt;
+
+            // Build a simple prompt for the cover image
+            var coverPrompt = prompt.professionalPrompt || prompt.name + ' - ' + prompt.description;
+
+            // Use the existing generateCreativeImage function
+            var generateCreativeImage = firebase.functions().httpsCallable('generateCreativeImage');
+
+            generateCreativeImage({
+                prompt: coverPrompt,
+                model: 'imagen-4',
+                quantity: 1,
+                aspectRatio: '1:1',
+                quality: 'hd'
+            })
+            .then(function(result) {
+                if (result.data && result.data.images && result.data.images.length > 0) {
+                    state.coverModal.generatedImage = result.data.images[0].url;
+                    showToast('Cover image generated!', 'success');
+                } else {
+                    showToast('No image generated', 'error');
+                }
+                state.coverModal.generating = false;
+                render();
+            })
+            .catch(function(error) {
+                console.error('Error generating cover:', error);
+                showToast('Failed to generate cover: ' + (error.message || 'Unknown error'), 'error');
+                state.coverModal.generating = false;
+                render();
+            });
+        }
+
+        function saveCoverImage() {
+            if (!state.coverModal || !state.coverModal.generatedImage || state.coverModal.saving) return;
+
+            state.coverModal.saving = true;
+            render();
+
+            var promptId = state.coverModal.promptId;
+            var coverImage = state.coverModal.generatedImage;
+
+            // Update the prompt document with the cover image URL
+            db.collection('promptTemplates').doc(promptId).update({
+                coverImage: coverImage,
+                coverUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            })
+            .then(function() {
+                showToast('Cover image saved!', 'success');
+                loadPrompts(); // Reload to show updated cover
+                closeCoverModal();
+            })
+            .catch(function(error) {
+                console.error('Error saving cover:', error);
+                showToast('Failed to save cover image', 'error');
+                state.coverModal.saving = false;
+                render();
+            });
+        }
+
+        function renderCoverModal() {
+            if (!state.coverModal) return '';
+
+            var modal = state.coverModal;
+            var prompt = modal.prompt;
+
+            var html = '<div class="cover-modal-backdrop" onclick="closeCoverModal()">';
+            html += '<div class="cover-modal" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="cover-modal-header">';
+            html += '<h3 class="cover-modal-title">🖼️ Generate Cover Image</h3>';
+            html += '<button class="cover-modal-close" onclick="closeCoverModal()">&times;</button>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="cover-modal-body">';
+
+            // Template info
+            html += '<div class="cover-info-box">';
+            html += '<div class="cover-info-label">Template</div>';
+            html += '<div class="cover-info-value" style="font-weight: 600;">' + escapeHtml(prompt.name) + '</div>';
+            html += '<div style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">' + escapeHtml(prompt.description) + '</div>';
+            html += '</div>';
+
+            // Preview area
+            html += '<div class="cover-preview-area">';
+            if (modal.generating) {
+                html += '<div style="text-align: center;">';
+                html += '<div class="spinner" style="width: 40px; height: 40px; margin: 0 auto 1rem;"></div>';
+                html += '<p style="color: rgba(255,255,255,0.6);">Generating cover image...</p>';
+                html += '</div>';
+            } else if (modal.generatedImage) {
+                html += '<img src="' + modal.generatedImage + '" alt="Generated cover">';
+            } else if (prompt.coverImage) {
+                html += '<div>';
+                html += '<img src="' + prompt.coverImage + '" alt="Current cover" style="margin-bottom: 0.5rem;">';
+                html += '<p style="color: rgba(255,255,255,0.5); font-size: 0.8rem;">Current cover image</p>';
+                html += '</div>';
+            } else {
+                html += '<div class="cover-preview-placeholder">';
+                html += '<span>🖼️</span>';
+                html += '<p>Click "Generate Preview" to create a cover image</p>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            html += '</div>'; // body
+
+            // Footer
+            html += '<div class="cover-modal-footer">';
+            html += '<button class="btn-secondary" onclick="closeCoverModal()">Cancel</button>';
+
+            if (modal.generatedImage && !modal.generating) {
+                html += '<button class="btn-secondary" onclick="generateCoverImage()" ' + (modal.saving ? 'disabled' : '') + '>🔄 Regenerate</button>';
+                html += '<button class="btn-primary" onclick="saveCoverImage()" ' + (modal.saving ? 'disabled' : '') + '>';
+                html += modal.saving ? '<span class="spinner" style="width: 16px; height: 16px; margin-right: 0.5rem;"></span> Saving...' : '💾 Save as Cover';
+                html += '</button>';
+            } else {
+                html += '<button class="btn-primary" onclick="generateCoverImage()" ' + (modal.generating ? 'disabled' : '') + '>';
+                html += modal.generating ? '<span class="spinner" style="width: 16px; height: 16px; margin-right: 0.5rem;"></span> Generating...' : '✨ Generate Preview';
+                html += '</button>';
+            }
+
+            html += '</div>';
+
+            html += '</div>'; // modal
+            html += '</div>'; // backdrop
+
+            return html;
         }
 
         // Seed default prompts from template
