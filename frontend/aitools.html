@@ -760,10 +760,16 @@
             html += '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
             html += '<span>Back to Dashboard</span>';
             html += '</a>';
+            html += '<div class="flex items-center gap-4">';
+            html += '<button onclick="app.navigateTo(\'history\')" class="flex items-center gap-2 px-4 py-2 bg-gray-800/60 hover:bg-gray-700/60 border border-gray-600 rounded-xl text-gray-300 hover:text-white transition-all">';
+            html += '<span>📜</span>';
+            html += '<span class="font-medium">History</span>';
+            html += '</button>';
             html += '<div class="token-display">';
             html += '<span class="text-2xl">🪙</span>';
             html += '<span class="font-bold text-white">' + state.tokens.balance + '</span>';
             html += '<span class="text-gray-400">tokens</span>';
+            html += '</div>';
             html += '</div>';
             html += '</div>';
 
@@ -833,13 +839,6 @@
             html += '</div>';
 
             html += '</div>'; // End grid
-
-            // History Button
-            html += '<div class="mt-8 text-center">';
-            html += '<button onclick="app.navigateTo(\'history\')" class="btn-secondary">';
-            html += '<span class="mr-2">📜</span> View History';
-            html += '</button>';
-            html += '</div>';
 
             html += '</div>'; // End container
 
