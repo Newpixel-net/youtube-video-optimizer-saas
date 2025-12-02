@@ -565,7 +565,7 @@
            ========================================== */
 
         const state = {
-            currentView: 'initializing', // initializing | hub | script | hooks | multiplier | thumbnail | trends | gaps | history
+            currentView: 'initializing', // initializing | hub | script | hooks | multiplier | thumbnail | trends | gaps | audience | collab | revenue | coach | history
             user: null,
             profile: null,
             loading: false,
@@ -634,8 +634,45 @@
                 history: []
             },
 
+            // Audience DNA Analyzer
+            audience: {
+                niche: '',
+                channelUrl: '',
+                depth: 'standard',
+                result: null,
+                history: []
+            },
+
+            // Collab Matchmaker
+            collab: {
+                niche: '',
+                channelSize: 'any',
+                contentStyle: 'any',
+                result: null,
+                history: []
+            },
+
+            // Revenue Maximizer Pro
+            revenue: {
+                niche: '',
+                audienceSize: 'small',
+                currentMethods: [],
+                result: null,
+                history: []
+            },
+
+            // AI Video Coach
+            coach: {
+                videoUrl: '',
+                transcript: '',
+                challenge: '',
+                focusArea: 'general',
+                result: null,
+                history: []
+            },
+
             // History view
-            historyType: 'script' // script | hooks | multiplier | thumbnail | trends | gaps
+            historyType: 'script' // script | hooks | multiplier | thumbnail | trends | gaps | audience | collab | revenue | coach
         };
 
         /* ==========================================
@@ -733,6 +770,18 @@
                     break;
                 case 'gaps':
                     html += renderContentGapFinder();
+                    break;
+                case 'audience':
+                    html += renderAudienceDNA();
+                    break;
+                case 'collab':
+                    html += renderCollabMatchmaker();
+                    break;
+                case 'revenue':
+                    html += renderRevenueMaximizer();
+                    break;
+                case 'coach':
+                    html += renderAICoach();
                     break;
                 default:
                     html += renderHub();
@@ -885,6 +934,58 @@
             html += '<span class="text-teal-400"><span class="font-bold">6</span> tokens</span>';
             html += '<span class="text-gray-500">|</span>';
             html += '<span class="text-gray-400">~90 seconds</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Audience DNA Analyzer Card
+            html += '<div class="tool-card audience-dna" onclick="app.navigateTo(\'audience\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);">Deep Insights</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);">🧬</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">Audience DNA Analyzer</h3>';
+            html += '<p class="text-gray-400 mb-4">Decode your audience\'s psychology. Get deep insights into demographics, interests, pain points & content preferences.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-purple-400"><span class="font-bold">7</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~2 minutes</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Collab Matchmaker Card
+            html += '<div class="tool-card collab-match" onclick="app.navigateTo(\'collab\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);">Growth</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);">🤝</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">Collab Matchmaker</h3>';
+            html += '<p class="text-gray-400 mb-4">Find your perfect collaboration partners. AI matches you with creators who share your audience but aren\'t competitors.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-sky-400"><span class="font-bold">5</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~60 seconds</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Revenue Maximizer Pro Card
+            html += '<div class="tool-card revenue-max" onclick="app.navigateTo(\'revenue\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #22c55e 0%, #eab308 100%);">💵 Money</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #22c55e 0%, #eab308 100%);">💰</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">Revenue Maximizer Pro</h3>';
+            html += '<p class="text-gray-400 mb-4">Unlock hidden revenue streams. Get personalized monetization strategies, pricing guides & sponsor pitch templates.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-green-400"><span class="font-bold">8</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~2 minutes</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // AI Video Coach Card
+            html += '<div class="tool-card ai-coach" onclick="app.navigateTo(\'coach\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #f43f5e 0%, #fb923c 100%);">Premium</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #f43f5e 0%, #fb923c 100%);">🧠</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">AI Video Coach</h3>';
+            html += '<p class="text-gray-400 mb-4">Your personal YouTube mentor. Get expert coaching on retention, engagement, strategy & growth tailored to your content.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-rose-400"><span class="font-bold">10</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~3 minutes</span>';
             html += '</div>';
             html += '</div>';
 
@@ -1718,6 +1819,686 @@
             return html;
         }
 
+        // ==========================================
+        // AUDIENCE DNA ANALYZER RENDERER
+        // ==========================================
+        function renderAudienceDNA() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('Audience DNA Analyzer', '🧬', 'audience-dna', '7 tokens per analysis');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.audience.result) {
+                html += renderAudienceResults();
+            } else {
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                // Niche input
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Your Niche / Content Area</label>';
+                html += '<input type="text" id="audience-niche" class="input-field" placeholder="e.g., personal finance for millennials, beginner photography, home fitness..." value="' + utils.escapeHtml(state.audience.niche) + '">';
+                html += '</div>';
+
+                // Channel URL (optional)
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Your Channel URL (Optional)</label>';
+                html += '<input type="text" id="audience-channel" class="input-field" placeholder="https://youtube.com/@yourchannel" value="' + utils.escapeHtml(state.audience.channelUrl) + '">';
+                html += '<p class="text-gray-500 text-sm mt-1">Add your channel for more personalized insights</p>';
+                html += '</div>';
+
+                // Analysis depth
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Analysis Depth</label>';
+                html += '<div class="grid grid-cols-3 gap-3">';
+                var depths = [
+                    { id: 'quick', name: 'Quick Scan', desc: 'Key demographics', icon: '⚡' },
+                    { id: 'standard', name: 'Standard', desc: 'Full profile', icon: '📊' },
+                    { id: 'deep', name: 'Deep Dive', desc: 'Psychographics', icon: '🔬' }
+                ];
+                depths.forEach(function(depth) {
+                    var selected = state.audience.depth === depth.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setAudienceDepth(\'' + depth.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + depth.icon + '</div>';
+                    html += '<div class="font-medium text-white">' + depth.name + '</div>';
+                    html += '<div class="text-gray-500 text-xs">' + depth.desc + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Generate button
+                html += '<button onclick="app.analyzeAudience()" class="btn-primary w-full">';
+                html += '<span class="mr-2">🧬</span> Analyze Audience DNA';
+                html += '</button>';
+
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderAudienceResults() {
+            var html = '';
+            var result = state.audience.result;
+
+            // Success header
+            html += '<div class="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-2xl p-6 mb-6">';
+            html += '<div class="flex items-center justify-between">';
+            html += '<div>';
+            html += '<h3 class="text-xl font-bold text-white mb-1">🧬 Audience DNA Decoded!</h3>';
+            html += '<p class="text-gray-400">Profile for ' + utils.escapeHtml(state.audience.niche) + '</p>';
+            html += '</div>';
+            html += '<button onclick="app.resetAudience()" class="btn-secondary">New Analysis</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Demographics section
+            if (result.demographics) {
+                html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-4">';
+                html += '<h4 class="text-lg font-bold text-white mb-4">👥 Demographics</h4>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">';
+                if (result.demographics.ageRange) {
+                    html += '<div class="text-center p-3 bg-gray-900/50 rounded-lg">';
+                    html += '<div class="text-2xl mb-1">📅</div>';
+                    html += '<div class="text-gray-400 text-xs">Age Range</div>';
+                    html += '<div class="text-white font-bold">' + utils.escapeHtml(result.demographics.ageRange) + '</div>';
+                    html += '</div>';
+                }
+                if (result.demographics.gender) {
+                    html += '<div class="text-center p-3 bg-gray-900/50 rounded-lg">';
+                    html += '<div class="text-2xl mb-1">⚧️</div>';
+                    html += '<div class="text-gray-400 text-xs">Gender Split</div>';
+                    html += '<div class="text-white font-bold">' + utils.escapeHtml(result.demographics.gender) + '</div>';
+                    html += '</div>';
+                }
+                if (result.demographics.location) {
+                    html += '<div class="text-center p-3 bg-gray-900/50 rounded-lg">';
+                    html += '<div class="text-2xl mb-1">🌍</div>';
+                    html += '<div class="text-gray-400 text-xs">Top Location</div>';
+                    html += '<div class="text-white font-bold">' + utils.escapeHtml(result.demographics.location) + '</div>';
+                    html += '</div>';
+                }
+                if (result.demographics.income) {
+                    html += '<div class="text-center p-3 bg-gray-900/50 rounded-lg">';
+                    html += '<div class="text-2xl mb-1">💵</div>';
+                    html += '<div class="text-gray-400 text-xs">Income Level</div>';
+                    html += '<div class="text-white font-bold">' + utils.escapeHtml(result.demographics.income) + '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Interests
+            if (result.interests && result.interests.length > 0) {
+                html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-4">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">🎯 Interests & Hobbies</h4>';
+                html += '<div class="flex flex-wrap gap-2">';
+                result.interests.forEach(function(interest) {
+                    html += '<span class="px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-full text-sm">' + utils.escapeHtml(interest) + '</span>';
+                });
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Pain points
+            if (result.painPoints && result.painPoints.length > 0) {
+                html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-4">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">😫 Pain Points & Challenges</h4>';
+                html += '<ul class="space-y-2">';
+                result.painPoints.forEach(function(pain) {
+                    html += '<li class="flex items-start gap-2 text-gray-300">';
+                    html += '<span class="text-red-400">•</span>';
+                    html += '<span>' + utils.escapeHtml(pain) + '</span>';
+                    html += '</li>';
+                });
+                html += '</ul>';
+                html += '</div>';
+            }
+
+            // Content preferences
+            if (result.contentPreferences) {
+                html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-4">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">📺 Content Preferences</h4>';
+                html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+                if (result.contentPreferences.formats) {
+                    html += '<div>';
+                    html += '<p class="text-gray-400 text-sm mb-2">Preferred Formats:</p>';
+                    html += '<p class="text-white">' + utils.escapeHtml(result.contentPreferences.formats.join(', ')) + '</p>';
+                    html += '</div>';
+                }
+                if (result.contentPreferences.length) {
+                    html += '<div>';
+                    html += '<p class="text-gray-400 text-sm mb-2">Ideal Video Length:</p>';
+                    html += '<p class="text-white">' + utils.escapeHtml(result.contentPreferences.length) + '</p>';
+                    html += '</div>';
+                }
+                if (result.contentPreferences.watchTime) {
+                    html += '<div>';
+                    html += '<p class="text-gray-400 text-sm mb-2">Peak Watch Times:</p>';
+                    html += '<p class="text-white">' + utils.escapeHtml(result.contentPreferences.watchTime) + '</p>';
+                    html += '</div>';
+                }
+                if (result.contentPreferences.tone) {
+                    html += '<div>';
+                    html += '<p class="text-gray-400 text-sm mb-2">Preferred Tone:</p>';
+                    html += '<p class="text-white">' + utils.escapeHtml(result.contentPreferences.tone) + '</p>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Recommendations
+            if (result.recommendations && result.recommendations.length > 0) {
+                html += '<div class="bg-purple-500/10 border border-purple-500/30 rounded-xl p-5">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">💡 Content Recommendations</h4>';
+                html += '<ul class="space-y-2">';
+                result.recommendations.forEach(function(rec) {
+                    html += '<li class="flex items-start gap-2 text-gray-300">';
+                    html += '<span class="text-purple-400">→</span>';
+                    html += '<span>' + utils.escapeHtml(rec) + '</span>';
+                    html += '</li>';
+                });
+                html += '</ul>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        // ==========================================
+        // COLLAB MATCHMAKER RENDERER
+        // ==========================================
+        function renderCollabMatchmaker() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('Collab Matchmaker', '🤝', 'collab-match', '5 tokens per search');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.collab.result) {
+                html += renderCollabResults();
+            } else {
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                // Niche input
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Your Niche / Content Area</label>';
+                html += '<input type="text" id="collab-niche" class="input-field" placeholder="e.g., tech reviews, cooking tutorials, gaming commentary..." value="' + utils.escapeHtml(state.collab.niche) + '">';
+                html += '</div>';
+
+                // Channel size preference
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Preferred Partner Size</label>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                var sizes = [
+                    { id: 'any', name: 'Any Size', desc: 'All creators', icon: '🌐' },
+                    { id: 'small', name: 'Small', desc: '1K-10K subs', icon: '🌱' },
+                    { id: 'medium', name: 'Medium', desc: '10K-100K subs', icon: '📈' },
+                    { id: 'large', name: 'Large', desc: '100K+ subs', icon: '🚀' }
+                ];
+                sizes.forEach(function(size) {
+                    var selected = state.collab.channelSize === size.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setCollabSize(\'' + size.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + size.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + size.name + '</div>';
+                    html += '<div class="text-gray-500 text-xs">' + size.desc + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Content style preference
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Content Style Match</label>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                var styles = [
+                    { id: 'any', name: 'Any Style', icon: '🎨' },
+                    { id: 'educational', name: 'Educational', icon: '📚' },
+                    { id: 'entertainment', name: 'Entertainment', icon: '🎭' },
+                    { id: 'lifestyle', name: 'Lifestyle', icon: '✨' }
+                ];
+                styles.forEach(function(style) {
+                    var selected = state.collab.contentStyle === style.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setCollabStyle(\'' + style.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + style.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + style.name + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Generate button
+                html += '<button onclick="app.findCollabs()" class="btn-primary w-full">';
+                html += '<span class="mr-2">🤝</span> Find Collaboration Partners';
+                html += '</button>';
+
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderCollabResults() {
+            var html = '';
+            var result = state.collab.result;
+
+            // Success header
+            html += '<div class="bg-gradient-to-r from-sky-500/20 to-indigo-500/20 border border-sky-500/30 rounded-2xl p-6 mb-6">';
+            html += '<div class="flex items-center justify-between">';
+            html += '<div>';
+            html += '<h3 class="text-xl font-bold text-white mb-1">🤝 Perfect Matches Found!</h3>';
+            html += '<p class="text-gray-400">Collaboration partners for ' + utils.escapeHtml(state.collab.niche) + '</p>';
+            html += '</div>';
+            html += '<button onclick="app.resetCollab()" class="btn-secondary">New Search</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Partner matches
+            if (result.matches && result.matches.length > 0) {
+                html += '<div class="space-y-4">';
+                result.matches.forEach(function(match, index) {
+                    var matchColor = match.compatibility >= 80 ? 'text-green-400' : match.compatibility >= 60 ? 'text-yellow-400' : 'text-gray-400';
+
+                    html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:border-sky-500/50 transition-all">';
+
+                    html += '<div class="flex items-start justify-between mb-3">';
+                    html += '<div class="flex items-center gap-3">';
+                    html += '<div class="w-12 h-12 rounded-full bg-gradient-to-br from-sky-500 to-indigo-500 flex items-center justify-center text-xl font-bold">' + (index + 1) + '</div>';
+                    html += '<div>';
+                    html += '<h4 class="text-lg font-bold text-white">' + utils.escapeHtml(match.creatorType) + '</h4>';
+                    html += '<div class="flex items-center gap-2 mt-1">';
+                    html += '<span class="' + matchColor + ' font-bold">' + match.compatibility + '% Match</span>';
+                    html += '<span class="text-gray-500">•</span>';
+                    html += '<span class="text-gray-400 text-sm">' + utils.escapeHtml(match.audienceSize || 'Various sizes') + '</span>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    // Why they match
+                    html += '<p class="text-gray-400 mb-3">' + utils.escapeHtml(match.reason) + '</p>';
+
+                    // Collab ideas
+                    if (match.collabIdeas && match.collabIdeas.length > 0) {
+                        html += '<div class="mb-3">';
+                        html += '<p class="text-sm font-medium text-gray-300 mb-2">💡 Collaboration Ideas:</p>';
+                        html += '<div class="flex flex-wrap gap-2">';
+                        match.collabIdeas.forEach(function(idea) {
+                            html += '<span class="px-3 py-1 bg-sky-500/20 text-sky-300 rounded-full text-sm">' + utils.escapeHtml(idea) + '</span>';
+                        });
+                        html += '</div>';
+                        html += '</div>';
+                    }
+
+                    // Outreach template
+                    if (match.outreachTemplate) {
+                        html += '<div class="bg-gray-900/50 rounded-lg p-3">';
+                        html += '<div class="flex items-center justify-between mb-2">';
+                        html += '<p class="text-sm text-gray-400">📧 Outreach Template:</p>';
+                        html += '<button onclick="utils.copyToClipboard(\'' + utils.escapeHtml(match.outreachTemplate).replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\', this)" class="text-sky-400 hover:text-sky-300 text-xs">Copy</button>';
+                        html += '</div>';
+                        html += '<p class="text-gray-300 text-sm whitespace-pre-line">' + utils.escapeHtml(match.outreachTemplate) + '</p>';
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+
+            // Tips
+            if (result.tips) {
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-xl p-5 mt-6">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">🎯 Collaboration Tips</h4>';
+                html += '<p class="text-gray-400">' + utils.escapeHtml(result.tips) + '</p>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        // ==========================================
+        // REVENUE MAXIMIZER PRO RENDERER
+        // ==========================================
+        function renderRevenueMaximizer() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('Revenue Maximizer Pro', '💰', 'revenue-max', '8 tokens per analysis');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.revenue.result) {
+                html += renderRevenueResults();
+            } else {
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                // Niche input
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Your Niche / Content Area</label>';
+                html += '<input type="text" id="revenue-niche" class="input-field" placeholder="e.g., tech tutorials, fitness coaching, personal finance..." value="' + utils.escapeHtml(state.revenue.niche) + '">';
+                html += '</div>';
+
+                // Audience size
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Your Audience Size</label>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                var sizes = [
+                    { id: 'starter', name: 'Starter', desc: '0-1K subs', icon: '🌱' },
+                    { id: 'small', name: 'Small', desc: '1K-10K subs', icon: '📈' },
+                    { id: 'medium', name: 'Medium', desc: '10K-100K subs', icon: '🚀' },
+                    { id: 'large', name: 'Large', desc: '100K+ subs', icon: '⭐' }
+                ];
+                sizes.forEach(function(size) {
+                    var selected = state.revenue.audienceSize === size.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setRevenueSize(\'' + size.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + size.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + size.name + '</div>';
+                    html += '<div class="text-gray-500 text-xs">' + size.desc + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Current monetization methods
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Current Revenue Streams (select all that apply)</label>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">';
+                var methods = [
+                    { id: 'adsense', name: 'AdSense', icon: '📺' },
+                    { id: 'sponsors', name: 'Sponsors', icon: '🤝' },
+                    { id: 'affiliates', name: 'Affiliates', icon: '🔗' },
+                    { id: 'merch', name: 'Merchandise', icon: '👕' },
+                    { id: 'memberships', name: 'Memberships', icon: '⭐' },
+                    { id: 'courses', name: 'Courses', icon: '📚' }
+                ];
+                methods.forEach(function(method) {
+                    var selected = state.revenue.currentMethods.indexOf(method.id) > -1 ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.toggleRevenueMethod(\'' + method.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + method.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + method.name + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Generate button
+                html += '<button onclick="app.analyzeRevenue()" class="btn-primary w-full">';
+                html += '<span class="mr-2">💰</span> Maximize My Revenue';
+                html += '</button>';
+
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderRevenueResults() {
+            var html = '';
+            var result = state.revenue.result;
+
+            // Success header with potential earnings
+            html += '<div class="bg-gradient-to-r from-green-500/20 to-yellow-500/20 border border-green-500/30 rounded-2xl p-6 mb-6">';
+            html += '<div class="flex items-center justify-between">';
+            html += '<div>';
+            html += '<h3 class="text-xl font-bold text-white mb-1">💰 Revenue Opportunities Unlocked!</h3>';
+            if (result.potentialMonthly) {
+                html += '<p class="text-green-400 font-bold text-lg">Potential: $' + result.potentialMonthly + '/month</p>';
+            }
+            html += '</div>';
+            html += '<button onclick="app.resetRevenue()" class="btn-secondary">New Analysis</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Revenue opportunities
+            if (result.opportunities && result.opportunities.length > 0) {
+                html += '<div class="space-y-4">';
+                result.opportunities.forEach(function(opp, index) {
+                    var priorityColor = opp.priority === 'high' ? 'bg-green-500/20 text-green-400' : opp.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400';
+
+                    html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:border-green-500/50 transition-all">';
+
+                    html += '<div class="flex items-start justify-between mb-3">';
+                    html += '<div class="flex items-center gap-3">';
+                    html += '<span class="text-3xl">' + (opp.icon || '💵') + '</span>';
+                    html += '<div>';
+                    html += '<h4 class="text-lg font-bold text-white">' + utils.escapeHtml(opp.name) + '</h4>';
+                    html += '<div class="flex items-center gap-2 mt-1">';
+                    html += '<span class="px-2 py-0.5 rounded text-xs font-medium ' + priorityColor + '">' + (opp.priority || 'medium').toUpperCase() + ' PRIORITY</span>';
+                    if (opp.estimatedRevenue) {
+                        html += '<span class="text-green-400 font-bold">$' + opp.estimatedRevenue + '/mo</span>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    html += '<p class="text-gray-400 mb-3">' + utils.escapeHtml(opp.description) + '</p>';
+
+                    // Action steps
+                    if (opp.steps && opp.steps.length > 0) {
+                        html += '<div class="mb-3">';
+                        html += '<p class="text-sm font-medium text-gray-300 mb-2">📋 Action Steps:</p>';
+                        html += '<ol class="list-decimal list-inside space-y-1">';
+                        opp.steps.forEach(function(step) {
+                            html += '<li class="text-gray-400 text-sm">' + utils.escapeHtml(step) + '</li>';
+                        });
+                        html += '</ol>';
+                        html += '</div>';
+                    }
+
+                    // Tools/Resources
+                    if (opp.tools && opp.tools.length > 0) {
+                        html += '<div class="flex flex-wrap gap-2">';
+                        opp.tools.forEach(function(tool) {
+                            html += '<span class="px-2 py-1 bg-gray-700/50 rounded text-xs text-gray-300">🔧 ' + utils.escapeHtml(tool) + '</span>';
+                        });
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+
+            // Pricing guide
+            if (result.pricingGuide) {
+                html += '<div class="bg-green-500/10 border border-green-500/30 rounded-xl p-5 mt-6">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">💵 Pricing Guide</h4>';
+                html += '<div class="text-gray-300 whitespace-pre-line">' + utils.escapeHtml(result.pricingGuide) + '</div>';
+                html += '</div>';
+            }
+
+            // Sponsor pitch template
+            if (result.sponsorPitch) {
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-xl p-5 mt-4">';
+                html += '<div class="flex items-center justify-between mb-3">';
+                html += '<h4 class="text-lg font-bold text-white">📧 Sponsor Pitch Template</h4>';
+                html += '<button onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.sponsorPitch).replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\', this)" class="text-green-400 hover:text-green-300 text-sm">Copy Template</button>';
+                html += '</div>';
+                html += '<p class="text-gray-400 text-sm whitespace-pre-line">' + utils.escapeHtml(result.sponsorPitch) + '</p>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        // ==========================================
+        // AI VIDEO COACH RENDERER
+        // ==========================================
+        function renderAICoach() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('AI Video Coach', '🧠', 'ai-coach', '10 tokens per session');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.coach.result) {
+                html += renderCoachResults();
+            } else {
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                // Video URL or transcript
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Video URL or Title</label>';
+                html += '<input type="text" id="coach-video" class="input-field" placeholder="https://youtube.com/watch?v=... or paste your video title" value="' + utils.escapeHtml(state.coach.videoUrl) + '">';
+                html += '</div>';
+
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Video Transcript / Script (Optional)</label>';
+                html += '<textarea id="coach-transcript" class="input-field h-24" placeholder="Paste your video transcript or script for deeper analysis...">' + utils.escapeHtml(state.coach.transcript) + '</textarea>';
+                html += '</div>';
+
+                // Challenge/Question
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">What challenge do you need help with?</label>';
+                html += '<textarea id="coach-challenge" class="input-field h-20" placeholder="e.g., My retention drops at 2 minutes, I\'m not getting clicks despite good thumbnails, How can I improve my hooks...">' + utils.escapeHtml(state.coach.challenge) + '</textarea>';
+                html += '</div>';
+
+                // Focus area
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Focus Area</label>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                var areas = [
+                    { id: 'general', name: 'General Review', icon: '📋' },
+                    { id: 'retention', name: 'Retention', icon: '📈' },
+                    { id: 'hooks', name: 'Hooks & Intros', icon: '🎣' },
+                    { id: 'ctr', name: 'CTR & Titles', icon: '🖱️' },
+                    { id: 'engagement', name: 'Engagement', icon: '💬' },
+                    { id: 'growth', name: 'Growth Strategy', icon: '🚀' },
+                    { id: 'monetization', name: 'Monetization', icon: '💰' },
+                    { id: 'scripting', name: 'Scripting', icon: '📝' }
+                ];
+                areas.forEach(function(area) {
+                    var selected = state.coach.focusArea === area.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setCoachFocus(\'' + area.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + area.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + area.name + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Generate button
+                html += '<button onclick="app.getCoaching()" class="btn-primary w-full">';
+                html += '<span class="mr-2">🧠</span> Get Expert Coaching';
+                html += '</button>';
+
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderCoachResults() {
+            var html = '';
+            var result = state.coach.result;
+
+            // Success header
+            html += '<div class="bg-gradient-to-r from-rose-500/20 to-orange-500/20 border border-rose-500/30 rounded-2xl p-6 mb-6">';
+            html += '<div class="flex items-center justify-between">';
+            html += '<div>';
+            html += '<h3 class="text-xl font-bold text-white mb-1">🧠 Your Coaching Session</h3>';
+            html += '<p class="text-gray-400">Focus: ' + utils.escapeHtml(state.coach.focusArea) + '</p>';
+            html += '</div>';
+            html += '<button onclick="app.resetCoach()" class="btn-secondary">New Session</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Overall assessment
+            if (result.assessment) {
+                html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-4">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">📊 Overall Assessment</h4>';
+                html += '<p class="text-gray-300">' + utils.escapeHtml(result.assessment) + '</p>';
+                if (result.score) {
+                    html += '<div class="mt-4 flex items-center gap-4">';
+                    html += '<div class="text-3xl font-bold text-rose-400">' + result.score + '/10</div>';
+                    html += '<div class="flex-1">';
+                    html += '<div class="w-full bg-gray-700 rounded-full h-3">';
+                    html += '<div class="bg-gradient-to-r from-rose-500 to-orange-500 h-3 rounded-full" style="width: ' + (result.score * 10) + '%"></div>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+
+            // Strengths
+            if (result.strengths && result.strengths.length > 0) {
+                html += '<div class="bg-green-500/10 border border-green-500/30 rounded-xl p-5 mb-4">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">✅ What You\'re Doing Well</h4>';
+                html += '<ul class="space-y-2">';
+                result.strengths.forEach(function(strength) {
+                    html += '<li class="flex items-start gap-2 text-gray-300">';
+                    html += '<span class="text-green-400">✓</span>';
+                    html += '<span>' + utils.escapeHtml(strength) + '</span>';
+                    html += '</li>';
+                });
+                html += '</ul>';
+                html += '</div>';
+            }
+
+            // Areas to improve
+            if (result.improvements && result.improvements.length > 0) {
+                html += '<div class="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5 mb-4">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">🎯 Priority Improvements</h4>';
+                html += '<div class="space-y-3">';
+                result.improvements.forEach(function(imp, index) {
+                    html += '<div class="flex items-start gap-3">';
+                    html += '<span class="w-6 h-6 flex-shrink-0 rounded-full bg-yellow-500/30 text-yellow-400 flex items-center justify-center text-sm font-bold">' + (index + 1) + '</span>';
+                    html += '<div>';
+                    html += '<p class="text-white font-medium">' + utils.escapeHtml(imp.title || imp) + '</p>';
+                    if (imp.action) {
+                        html += '<p class="text-gray-400 text-sm mt-1">' + utils.escapeHtml(imp.action) + '</p>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Action plan
+            if (result.actionPlan && result.actionPlan.length > 0) {
+                html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-4">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">📋 Your Action Plan</h4>';
+                html += '<div class="space-y-2">';
+                result.actionPlan.forEach(function(action, index) {
+                    html += '<div class="flex items-center gap-3 p-2 bg-gray-900/50 rounded-lg">';
+                    html += '<span class="w-6 h-6 flex-shrink-0 rounded bg-rose-500/30 text-rose-400 flex items-center justify-center text-xs font-bold">' + (index + 1) + '</span>';
+                    html += '<span class="text-gray-300">' + utils.escapeHtml(action) + '</span>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Pro tips
+            if (result.proTips && result.proTips.length > 0) {
+                html += '<div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-5">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">💎 Pro Tips</h4>';
+                html += '<ul class="space-y-2">';
+                result.proTips.forEach(function(tip) {
+                    html += '<li class="flex items-start gap-2 text-gray-300">';
+                    html += '<span class="text-rose-400">💡</span>';
+                    html += '<span>' + utils.escapeHtml(tip) + '</span>';
+                    html += '</li>';
+                });
+                html += '</ul>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
         function renderHistory() {
             var html = '';
 
@@ -1742,7 +2523,11 @@
                 { id: 'multiplier', name: 'Content', icon: '🔄' },
                 { id: 'thumbnail', name: 'Thumbnails', icon: '📊' },
                 { id: 'trends', name: 'Trends', icon: '🎯' },
-                { id: 'gaps', name: 'Gaps', icon: '🗺️' }
+                { id: 'gaps', name: 'Gaps', icon: '🗺️' },
+                { id: 'audience', name: 'Audience', icon: '🧬' },
+                { id: 'collab', name: 'Collabs', icon: '🤝' },
+                { id: 'revenue', name: 'Revenue', icon: '💰' },
+                { id: 'coach', name: 'Coaching', icon: '🧠' }
             ];
             historyTypes.forEach(function(type) {
                 var active = state.historyType === type.id ? 'active' : '';
@@ -1760,6 +2545,10 @@
                 case 'thumbnail': historyData = state.thumbnailArena.history; break;
                 case 'trends': historyData = state.trends.history; break;
                 case 'gaps': historyData = state.gaps.history; break;
+                case 'audience': historyData = state.audience.history; break;
+                case 'collab': historyData = state.collab.history; break;
+                case 'revenue': historyData = state.revenue.history; break;
+                case 'coach': historyData = state.coach.history; break;
             }
 
             if (historyData.length === 0) {
@@ -2172,6 +2961,202 @@
                 render();
             },
 
+            // Audience DNA Analyzer methods
+            setAudienceDepth: function(depth) {
+                state.audience.depth = depth;
+                render();
+            },
+
+            analyzeAudience: function() {
+                var niche = document.getElementById('audience-niche').value.trim();
+                if (!niche) {
+                    utils.showToast('Please enter your niche or content area', 'error');
+                    return;
+                }
+
+                var channelUrl = document.getElementById('audience-channel').value.trim();
+
+                state.audience.niche = niche;
+                state.audience.channelUrl = channelUrl;
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('analyzeAudienceDNA')({
+                    niche: niche,
+                    channelUrl: channelUrl,
+                    depth: state.audience.depth
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.audience.result = result.data;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Audience analysis complete!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to analyze audience', 'error');
+                    render();
+                });
+            },
+
+            resetAudience: function() {
+                state.audience.result = null;
+                state.audience.niche = '';
+                state.audience.channelUrl = '';
+                render();
+            },
+
+            // Collab Matchmaker methods
+            setCollabSize: function(size) {
+                state.collab.channelSize = size;
+                render();
+            },
+
+            setCollabStyle: function(style) {
+                state.collab.contentStyle = style;
+                render();
+            },
+
+            findCollabs: function() {
+                var niche = document.getElementById('collab-niche').value.trim();
+                if (!niche) {
+                    utils.showToast('Please enter your niche or content area', 'error');
+                    return;
+                }
+
+                state.collab.niche = niche;
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('findCollabPartners')({
+                    niche: niche,
+                    channelSize: state.collab.channelSize,
+                    contentStyle: state.collab.contentStyle
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.collab.result = result.data;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Collaboration partners found!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to find partners', 'error');
+                    render();
+                });
+            },
+
+            resetCollab: function() {
+                state.collab.result = null;
+                state.collab.niche = '';
+                render();
+            },
+
+            // Revenue Maximizer methods
+            setRevenueSize: function(size) {
+                state.revenue.audienceSize = size;
+                render();
+            },
+
+            toggleRevenueMethod: function(method) {
+                var index = state.revenue.currentMethods.indexOf(method);
+                if (index > -1) {
+                    state.revenue.currentMethods.splice(index, 1);
+                } else {
+                    state.revenue.currentMethods.push(method);
+                }
+                render();
+            },
+
+            analyzeRevenue: function() {
+                var niche = document.getElementById('revenue-niche').value.trim();
+                if (!niche) {
+                    utils.showToast('Please enter your niche or content area', 'error');
+                    return;
+                }
+
+                state.revenue.niche = niche;
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('analyzeRevenue')({
+                    niche: niche,
+                    audienceSize: state.revenue.audienceSize,
+                    currentMethods: state.revenue.currentMethods
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.revenue.result = result.data;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Revenue opportunities found!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to analyze revenue', 'error');
+                    render();
+                });
+            },
+
+            resetRevenue: function() {
+                state.revenue.result = null;
+                state.revenue.niche = '';
+                state.revenue.currentMethods = [];
+                render();
+            },
+
+            // AI Video Coach methods
+            setCoachFocus: function(focus) {
+                state.coach.focusArea = focus;
+                render();
+            },
+
+            getCoaching: function() {
+                var videoUrl = document.getElementById('coach-video').value.trim();
+                var transcript = document.getElementById('coach-transcript').value.trim();
+                var challenge = document.getElementById('coach-challenge').value.trim();
+
+                if (!challenge && !transcript && !videoUrl) {
+                    utils.showToast('Please provide some context for coaching', 'error');
+                    return;
+                }
+
+                state.coach.videoUrl = videoUrl;
+                state.coach.transcript = transcript;
+                state.coach.challenge = challenge;
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('getVideoCoaching')({
+                    videoUrl: videoUrl,
+                    transcript: transcript,
+                    challenge: challenge,
+                    focusArea: state.coach.focusArea
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.coach.result = result.data;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Coaching session complete!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to get coaching', 'error');
+                    render();
+                });
+            },
+
+            resetCoach: function() {
+                state.coach.result = null;
+                state.coach.videoUrl = '';
+                state.coach.transcript = '';
+                state.coach.challenge = '';
+                render();
+            },
+
             // History methods
             setHistoryType: function(type) {
                 state.historyType = type;
@@ -2189,6 +3174,10 @@
                     case 'thumbnail': collectionName = 'thumbnailTestHistory'; break;
                     case 'trends': collectionName = 'trendHistory'; break;
                     case 'gaps': collectionName = 'contentGapHistory'; break;
+                    case 'audience': collectionName = 'audienceHistory'; break;
+                    case 'collab': collectionName = 'collabHistory'; break;
+                    case 'revenue': collectionName = 'revenueHistory'; break;
+                    case 'coach': collectionName = 'coachHistory'; break;
                 }
 
                 db.collection(collectionName)
@@ -2209,6 +3198,10 @@
                             case 'thumbnail': state.thumbnailArena.history = history; break;
                             case 'trends': state.trends.history = history; break;
                             case 'gaps': state.gaps.history = history; break;
+                            case 'audience': state.audience.history = history; break;
+                            case 'collab': state.collab.history = history; break;
+                            case 'revenue': state.revenue.history = history; break;
+                            case 'coach': state.coach.history = history; break;
                         }
                         render();
                     })
