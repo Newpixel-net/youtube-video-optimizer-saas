@@ -287,6 +287,141 @@ service cloud.firestore {
     }
 
     // ============================================
+    // AI TOOLS HUB - SCRIPT HISTORY
+    // ============================================
+
+    match /scriptHistory/{historyId} {
+      // Users can read their own script history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // AI TOOLS HUB - HOOK HISTORY
+    // ============================================
+
+    match /hookHistory/{historyId} {
+      // Users can read their own hook history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // AI TOOLS HUB - CONTENT MULTIPLIER HISTORY
+    // ============================================
+
+    match /contentMultiplierHistory/{historyId} {
+      // Users can read their own content multiplier history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // AI TOOLS HUB - THUMBNAIL TEST HISTORY
+    // ============================================
+
+    match /thumbnailTestHistory/{historyId} {
+      // Users can read their own thumbnail test history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // AI TOOLS HUB - CONTENT GAP HISTORY
+    // ============================================
+
+    match /contentGapHistory/{historyId} {
+      // Users can read their own content gap history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // AI TOOLS HUB - AUDIENCE HISTORY
+    // ============================================
+
+    match /audienceHistory/{historyId} {
+      // Users can read their own audience analysis history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // AI TOOLS HUB - COLLAB HISTORY
+    // ============================================
+
+    match /collabHistory/{historyId} {
+      // Users can read their own collab matchmaker history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // AI TOOLS HUB - REVENUE HISTORY
+    // ============================================
+
+    match /revenueHistory/{historyId} {
+      // Users can read their own revenue analysis history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // AI TOOLS HUB - COACH HISTORY
+    // ============================================
+
+    match /coachHistory/{historyId} {
+      // Users can read their own coaching history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
     // TOKEN TRANSACTIONS
     // ============================================
 
