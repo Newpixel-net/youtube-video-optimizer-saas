@@ -3249,13 +3249,8 @@
             },
 
             goToMoreTools: function() {
-                // Placeholder for future "More AI Tools" page
-                // For now, show a coming soon toast or navigate to a placeholder
-                if (typeof showToast === 'function') {
-                    showToast('More AI Tools coming soon! Stay tuned for exciting new features.', 'info');
-                } else {
-                    alert('More AI Tools coming soon! Stay tuned for exciting new features.');
-                }
+                // Navigate to AI Tools Hub page
+                window.location.href = '/aitools';
             },
 
             runChannelAudit: function(e) {
