@@ -12109,3 +12109,1035 @@ Respond in JSON format:
     throw new functions.https.HttpsError('internal', 'Failed to analyze thumbnails. Please try again.');
   }
 });
+
+// ==============================================================================
+// TREND HIJACKER - Find trending topics in your niche
+// ==============================================================================
+exports.generateTrendReport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'generateTrendReport', 10);
+
+  const { niche, region = 'US', timeframe = 'week' } = data;
+
+  if (!niche || niche.trim().length < 2) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a valid niche or topic area');
+  }
+
+  // Token cost: 6 tokens per trend analysis
+  const tokenCost = 6;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  try {
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'AI service not configured');
+    }
+
+    const timeframeText = timeframe === 'day' ? 'today (last 24 hours)' :
+                          timeframe === 'week' ? 'this week (last 7 days)' :
+                          'this month (last 30 days)';
+
+    const regionText = region === 'GLOBAL' ? 'globally' : `in ${region}`;
+
+    const prompt = `You are a trend analysis expert specializing in YouTube content strategy. Analyze current trends ${regionText} for the "${niche}" niche ${timeframeText}.
+
+Identify 5-7 trending topics that a YouTube creator in this niche should create content about RIGHT NOW to capitalize on rising interest.
+
+For each trend, provide:
+1. The specific trending topic
+2. A trend score (0-100) based on current momentum
+3. Urgency level (high/medium/low) - how quickly they need to act
+4. A brief description of why this is trending
+5. 2-3 content angles they could take
+6. A suggested video title that would perform well
+
+Consider:
+- Current news and events
+- Seasonal relevance
+- Platform-specific trends (YouTube, TikTok, Twitter discussions)
+- Search volume patterns
+- Competitor content gaps
+
+Respond in JSON format:
+{
+  "trends": [
+    {
+      "topic": "Topic name",
+      "score": 85,
+      "urgency": "high",
+      "description": "Why this is trending now",
+      "angles": ["Angle 1", "Angle 2", "Angle 3"],
+      "suggestedTitle": "A clickable video title"
+    }
+  ],
+  "insights": "Overall market insight about the niche right now"
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a YouTube trend analyst who identifies emerging trends and viral opportunities. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.8,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error:', errorText);
+      throw new Error('AI service error');
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+
+    let trendData;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        trendData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (parseError) {
+      // Fallback structure if parsing fails
+      trendData = {
+        trends: [
+          {
+            topic: niche + ' trends',
+            score: 75,
+            urgency: 'medium',
+            description: 'Current trending topic in your niche',
+            angles: ['Educational breakdown', 'News reaction', 'How-to guide'],
+            suggestedTitle: `The ${niche} Trend Everyone Is Talking About Right Now`
+          }
+        ],
+        insights: content
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('trendHistory').add({
+      userId: uid,
+      niche: niche.trim(),
+      region,
+      timeframe,
+      trends: trendData.trends,
+      insights: trendData.insights,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      trends: trendData.trends,
+      insights: trendData.insights,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Trend analysis error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze trends. Please try again.');
+  }
+});
+
+// ==============================================================================
+// CONTENT GAP FINDER - Discover untapped content opportunities
+// ==============================================================================
+exports.findContentGaps = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'findContentGaps', 10);
+
+  const { niche, competitors = '', depth = 'moderate' } = data;
+
+  if (!niche || niche.trim().length < 2) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a valid niche or topic area');
+  }
+
+  // Token cost: 6 tokens per gap analysis
+  const tokenCost = 6;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  try {
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'AI service not configured');
+    }
+
+    const depthText = depth === 'quick' ? 'top 4-5 opportunities' :
+                      depth === 'deep' ? 'comprehensive analysis with 8-10 opportunities' :
+                      '5-7 balanced opportunities';
+
+    const competitorText = competitors.trim()
+      ? `\n\nCompetitors to analyze for gaps: ${competitors}`
+      : '';
+
+    const prompt = `You are a YouTube content strategy expert specializing in finding untapped content opportunities. Analyze the "${niche}" niche and identify ${depthText}.${competitorText}
+
+Find content gaps - topics that have:
+- High search interest but low quality existing content
+- Underserved audience segments
+- Questions that aren't being answered well
+- Emerging subtopics with growth potential
+- Unique angles competitors haven't explored
+
+For each gap opportunity, provide:
+1. The topic/gap opportunity
+2. Difficulty level (easy/medium/hard) to rank for
+3. Potential score (0-100) based on opportunity size
+4. Why this is a gap (what's missing in current content)
+5. Description of the opportunity
+6. 2-3 specific video title ideas
+
+Respond in JSON format:
+{
+  "gaps": [
+    {
+      "topic": "Gap topic name",
+      "difficulty": "easy",
+      "potential": 85,
+      "reason": "Why this content gap exists",
+      "description": "What kind of content would fill this gap",
+      "suggestedTitles": [
+        "Video Title Idea 1",
+        "Video Title Idea 2",
+        "Video Title Idea 3"
+      ]
+    }
+  ],
+  "summary": "Overall market summary and strategy recommendation"
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a YouTube content strategist who identifies underserved topics and content gaps. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.8,
+        max_tokens: 2500
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error:', errorText);
+      throw new Error('AI service error');
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+
+    let gapData;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        gapData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (parseError) {
+      // Fallback structure if parsing fails
+      gapData = {
+        gaps: [
+          {
+            topic: 'Beginner-friendly ' + niche + ' content',
+            difficulty: 'easy',
+            potential: 80,
+            reason: 'Most content assumes prior knowledge',
+            description: 'Create truly beginner-friendly content for newcomers',
+            suggestedTitles: [
+              `${niche} for Complete Beginners - Everything You Need to Know`,
+              `I Tried Learning ${niche} From Scratch - Here's What Happened`,
+              `The ${niche} Beginner's Guide Everyone Wishes They Had`
+            ]
+          }
+        ],
+        summary: content
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('contentGapHistory').add({
+      userId: uid,
+      niche: niche.trim(),
+      competitors: competitors.trim(),
+      depth,
+      gaps: gapData.gaps,
+      summary: gapData.summary,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      gaps: gapData.gaps,
+      summary: gapData.summary,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Content gap analysis error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to find content gaps. Please try again.');
+  }
+});
+
+// ==============================================================================
+// AUDIENCE DNA ANALYZER - Deep audience insights
+// ==============================================================================
+exports.analyzeAudienceDNA = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'analyzeAudienceDNA', 10);
+
+  const { niche, channelUrl = '', depth = 'standard' } = data;
+
+  if (!niche || niche.trim().length < 2) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a valid niche or content area');
+  }
+
+  // Token cost: 7 tokens per analysis
+  const tokenCost = 7;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  try {
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'AI service not configured');
+    }
+
+    const depthText = depth === 'quick' ? 'key demographics only' :
+                      depth === 'deep' ? 'comprehensive psychographic analysis' :
+                      'full audience profile';
+
+    const channelContext = channelUrl ? `The creator's channel: ${channelUrl}` : '';
+
+    const prompt = `You are an expert audience research analyst. Create a detailed audience DNA profile for a YouTube creator in the "${niche}" niche. Provide ${depthText}. ${channelContext}
+
+Analyze and provide:
+1. Demographics: age range, gender split, primary locations, income level
+2. Interests & hobbies related to the niche
+3. Pain points and challenges they face
+4. Content preferences (formats, length, tone, peak watch times)
+5. Actionable recommendations for content
+
+Respond in JSON format:
+{
+  "demographics": {
+    "ageRange": "25-34",
+    "gender": "60% male, 40% female",
+    "location": "United States, UK, Canada",
+    "income": "Middle income"
+  },
+  "interests": ["Interest 1", "Interest 2", "Interest 3", "Interest 4", "Interest 5"],
+  "painPoints": ["Pain point 1", "Pain point 2", "Pain point 3"],
+  "contentPreferences": {
+    "formats": ["Tutorials", "Reviews", "Vlogs"],
+    "length": "10-15 minutes optimal",
+    "watchTime": "Evenings and weekends",
+    "tone": "Friendly and educational"
+  },
+  "recommendations": [
+    "Recommendation 1",
+    "Recommendation 2",
+    "Recommendation 3"
+  ]
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an audience research expert who creates detailed viewer personas. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('AI service error');
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+
+    let audienceData;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        audienceData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (parseError) {
+      audienceData = {
+        demographics: { ageRange: '25-44', gender: 'Mixed', location: 'Global', income: 'Varied' },
+        interests: ['Related topics', 'Learning', 'Entertainment'],
+        painPoints: ['Finding quality content', 'Time management'],
+        contentPreferences: { formats: ['Various'], length: '10-20 minutes', watchTime: 'Flexible', tone: 'Engaging' },
+        recommendations: [content]
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('audienceHistory').add({
+      userId: uid,
+      niche: niche.trim(),
+      channelUrl,
+      depth,
+      result: audienceData,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      ...audienceData,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Audience analysis error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze audience. Please try again.');
+  }
+});
+
+// ==============================================================================
+// COLLAB MATCHMAKER - Find collaboration partners
+// ==============================================================================
+exports.findCollabPartners = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'findCollabPartners', 10);
+
+  const { niche, channelSize = 'any', contentStyle = 'any' } = data;
+
+  if (!niche || niche.trim().length < 2) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a valid niche or content area');
+  }
+
+  // Token cost: 5 tokens per search
+  const tokenCost = 5;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  try {
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'AI service not configured');
+    }
+
+    const sizeText = channelSize === 'any' ? 'any size' :
+                     channelSize === 'small' ? '1K-10K subscribers' :
+                     channelSize === 'medium' ? '10K-100K subscribers' :
+                     '100K+ subscribers';
+
+    const styleText = contentStyle === 'any' ? 'any style' : contentStyle;
+
+    const prompt = `You are a YouTube collaboration strategist. Find 5 ideal collaboration partner TYPES (not specific channels) for a creator in the "${niche}" niche.
+
+Target partner size: ${sizeText}
+Content style preference: ${styleText}
+
+For each potential partner type, provide:
+1. Type of creator (e.g., "Tech Reviewers", "Lifestyle Vloggers")
+2. Compatibility score (0-100)
+3. Why they would be a good match
+4. Their typical audience size range
+5. 3 collaboration video ideas
+6. A personalized outreach email template
+
+Respond in JSON format:
+{
+  "matches": [
+    {
+      "creatorType": "Creator type name",
+      "compatibility": 85,
+      "reason": "Why this is a great match",
+      "audienceSize": "10K-50K typically",
+      "collabIdeas": ["Idea 1", "Idea 2", "Idea 3"],
+      "outreachTemplate": "Hi [Name],\\n\\nI love your content about...\\n\\nWould you be interested in...\\n\\nBest,\\n[Your Name]"
+    }
+  ],
+  "tips": "General collaboration tips for this niche"
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a YouTube collaboration expert who matches creators for mutual growth. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.8,
+        max_tokens: 2500
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('AI service error');
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+
+    let collabData;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        collabData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (parseError) {
+      collabData = {
+        matches: [{
+          creatorType: 'Complementary creators in ' + niche,
+          compatibility: 75,
+          reason: 'Shared audience interests',
+          audienceSize: 'Various',
+          collabIdeas: ['Joint video', 'Guest appearance', 'Challenge video'],
+          outreachTemplate: 'Hi! I love your content and think we could create something great together. Would you be interested in collaborating?'
+        }],
+        tips: content
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('collabHistory').add({
+      userId: uid,
+      niche: niche.trim(),
+      channelSize,
+      contentStyle,
+      matches: collabData.matches,
+      tips: collabData.tips,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      matches: collabData.matches,
+      tips: collabData.tips,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Collab matchmaker error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to find collaboration partners. Please try again.');
+  }
+});
+
+// ==============================================================================
+// REVENUE MAXIMIZER PRO - Maximize earnings
+// ==============================================================================
+exports.analyzeRevenue = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'analyzeRevenue', 10);
+
+  const { niche, audienceSize = 'small', currentMethods = [] } = data;
+
+  if (!niche || niche.trim().length < 2) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a valid niche or content area');
+  }
+
+  // Token cost: 8 tokens per analysis
+  const tokenCost = 8;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  try {
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'AI service not configured');
+    }
+
+    const sizeText = audienceSize === 'starter' ? '0-1K subscribers' :
+                     audienceSize === 'small' ? '1K-10K subscribers' :
+                     audienceSize === 'medium' ? '10K-100K subscribers' :
+                     '100K+ subscribers';
+
+    const currentMethodsText = currentMethods.length > 0
+      ? `Currently using: ${currentMethods.join(', ')}`
+      : 'Not currently monetizing';
+
+    const prompt = `You are a YouTube monetization expert. Create a comprehensive revenue maximization strategy for a creator in the "${niche}" niche.
+
+Audience size: ${sizeText}
+${currentMethodsText}
+
+Identify 5-6 revenue opportunities with:
+1. Revenue stream name
+2. Priority (high/medium/low)
+3. Estimated monthly revenue potential
+4. Description of the opportunity
+5. Step-by-step implementation guide
+6. Recommended tools/platforms
+
+Also provide:
+- A pricing guide for sponsorships at their level
+- A sponsor pitch email template
+
+Respond in JSON format:
+{
+  "potentialMonthly": "500-2000",
+  "opportunities": [
+    {
+      "name": "Revenue stream name",
+      "icon": "💰",
+      "priority": "high",
+      "estimatedRevenue": "200-500",
+      "description": "What this opportunity is",
+      "steps": ["Step 1", "Step 2", "Step 3"],
+      "tools": ["Tool 1", "Tool 2"]
+    }
+  ],
+  "pricingGuide": "Sponsorship pricing guide text...",
+  "sponsorPitch": "Email template for reaching out to sponsors..."
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a YouTube monetization expert who helps creators maximize revenue. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 3000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('AI service error');
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+
+    let revenueData;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        revenueData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (parseError) {
+      revenueData = {
+        potentialMonthly: 'Varies',
+        opportunities: [{
+          name: 'Multiple revenue streams',
+          icon: '💰',
+          priority: 'high',
+          estimatedRevenue: 'Varies',
+          description: 'Explore various monetization options',
+          steps: ['Research options', 'Start with one method', 'Expand gradually'],
+          tools: ['YouTube Studio', 'Various platforms']
+        }],
+        pricingGuide: content,
+        sponsorPitch: 'Contact for personalized template'
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('revenueHistory').add({
+      userId: uid,
+      niche: niche.trim(),
+      audienceSize,
+      currentMethods,
+      result: revenueData,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      ...revenueData,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Revenue analysis error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze revenue opportunities. Please try again.');
+  }
+});
+
+// ==============================================================================
+// AI VIDEO COACH - Personal YouTube mentor
+// ==============================================================================
+exports.getVideoCoaching = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getVideoCoaching', 10);
+
+  const { videoUrl = '', transcript = '', challenge = '', focusArea = 'general' } = data;
+
+  if (!challenge && !transcript && !videoUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a video URL, transcript, or describe your challenge');
+  }
+
+  // Token cost: 10 tokens per coaching session
+  const tokenCost = 10;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  try {
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'AI service not configured');
+    }
+
+    const focusAreaMap = {
+      'general': 'overall video quality and strategy',
+      'retention': 'viewer retention and watch time optimization',
+      'hooks': 'hooks, intros, and first 30 seconds',
+      'ctr': 'click-through rate, titles, and thumbnails',
+      'engagement': 'comments, likes, and community engagement',
+      'growth': 'channel growth and subscriber acquisition',
+      'monetization': 'monetization and revenue optimization',
+      'scripting': 'script writing and storytelling'
+    };
+
+    const focusText = focusAreaMap[focusArea] || focusAreaMap['general'];
+
+    let contextText = '';
+    if (videoUrl) contextText += `Video URL: ${videoUrl}\n`;
+    if (transcript) contextText += `Transcript/Script:\n${transcript.substring(0, 2000)}\n`;
+    if (challenge) contextText += `Creator's Challenge: ${challenge}\n`;
+
+    const prompt = `You are an elite YouTube coach who has helped channels grow from 0 to millions of subscribers. Provide expert coaching focused on ${focusText}.
+
+${contextText}
+
+Analyze and provide:
+1. Overall assessment with a score out of 10
+2. What they're doing well (strengths)
+3. Priority improvements (with specific actions)
+4. Step-by-step action plan
+5. Pro tips from top creators
+
+Be specific, actionable, and encouraging. Reference specific timestamps or sections if analyzing a transcript.
+
+Respond in JSON format:
+{
+  "score": 7.5,
+  "assessment": "Overall assessment of current performance...",
+  "strengths": [
+    "Strength 1",
+    "Strength 2",
+    "Strength 3"
+  ],
+  "improvements": [
+    {
+      "title": "Improvement area",
+      "action": "Specific action to take"
+    }
+  ],
+  "actionPlan": [
+    "Immediate action 1",
+    "This week action 2",
+    "This month action 3"
+  ],
+  "proTips": [
+    "Pro tip 1",
+    "Pro tip 2",
+    "Pro tip 3"
+  ]
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert YouTube coach with deep knowledge of algorithm, retention, and growth strategies. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2500
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('AI service error');
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+
+    let coachData;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        coachData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (parseError) {
+      coachData = {
+        score: 7,
+        assessment: content,
+        strengths: ['Good effort', 'Room for growth'],
+        improvements: [{ title: 'See detailed feedback', action: 'Review the assessment above' }],
+        actionPlan: ['Start with one improvement', 'Track your progress', 'Iterate and improve'],
+        proTips: ['Consistency is key', 'Focus on your audience', 'Study your analytics']
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('coachHistory').add({
+      userId: uid,
+      videoUrl,
+      hasTranscript: !!transcript,
+      challenge,
+      focusArea,
+      result: coachData,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      ...coachData,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Video coaching error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get coaching. Please try again.');
+  }
+});
