@@ -3051,7 +3051,7 @@
                 editedVerified: user.isFiverrVerified || false,
                 editedNotes: user.adminNotes || '',
                 editedPlan: user.subscription ? user.subscription.plan : 'free',
-                editedDuration: 'month',
+                editedDuration: (user.subscription && user.subscription.duration) ? user.subscription.duration : 'month',
                 saving: false
             };
             render();
@@ -3156,6 +3156,7 @@
                     // Update local state with new subscription info
                     state.userDetailModal.user.subscription = state.userDetailModal.user.subscription || {};
                     state.userDetailModal.user.subscription.plan = plan;
+                    state.userDetailModal.user.subscription.duration = duration;
                     if (result.data && result.data.endDate) {
                         state.userDetailModal.user.subscription.endDate = result.data.endDate;
                     }
