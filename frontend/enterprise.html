@@ -2359,14 +2359,26 @@
 
             // Content based on type
             if (item.type === 'placement') {
-                html += '<h3 class="text-white font-medium mb-2">Niche: ' + utils.escapeHtml(item.niche || 'Unknown') + '</h3>';
-                html += '<p class="text-white/60 text-sm">' + (item.channels ? item.channels.length : 0) + ' channels found</p>';
+                // Fix: Access nested niche from analysis or channelInfo objects
+                var niche = (item.analysis && item.analysis.niche) || (item.channelInfo && item.channelInfo.niche) || item.niche || 'Unknown';
+                // Fix: Use placements array (or totalFound count) instead of channels
+                var channelCount = item.totalFound || (item.placements ? item.placements.length : 0) || (item.channels ? item.channels.length : 0) || 0;
+                var channelName = (item.channelInfo && item.channelInfo.name) || item.channelName || '';
+
+                html += '<h3 class="text-white font-medium mb-2">' + (channelName ? utils.escapeHtml(channelName) : 'Niche: ' + utils.escapeHtml(niche)) + '</h3>';
+                html += '<p class="text-white/60 text-sm">' + channelCount + ' channels found</p>';
             } else if (item.type === 'viral') {
                 html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(item.title || 'Untitled') + '</h3>';
                 html += '<p class="text-white/60 text-sm">Viral Score: ' + (item.viralScore || 0) + '/100</p>';
             } else if (item.type === 'monetization') {
-                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(item.channelTitle || item.channelName || 'Channel Analysis') + '</h3>';
-                html += '<p class="text-white/60 text-sm">Est. Revenue: ' + (item.estimatedRevenue || 'N/A') + '</p>';
+                // Fix: Access nested channel name from channelInfo
+                var channelTitle = item.channelTitle || item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel Analysis';
+                // Fix: Access earnings data from various possible field names
+                var revenue = item.estimatedRevenue || item.monthlyEarnings || (item.earnings && item.earnings.monthly) || 'N/A';
+                if (typeof revenue === 'number') revenue = '$' + revenue.toLocaleString();
+
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelTitle) + '</h3>';
+                html += '<p class="text-white/60 text-sm">Est. Monthly: ' + revenue + '</p>';
             } else if (item.type === 'script') {
                 html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(item.title || item.topic || 'Script') + '</h3>';
                 html += '<p class="text-white/60 text-sm">' + (item.wordCount || 0) + ' words • ' + (item.style || 'engaging') + ' style</p>';
