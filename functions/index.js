@@ -11543,3 +11543,569 @@ exports.adminProcessRenewalRequest = functions.https.onCall(async (data, context
     return { success: true, message: 'Request denied' };
   }
 });
+
+// ==========================================
+// AI TOOLS HUB - CLOUD FUNCTIONS
+// ==========================================
+
+// AI Script Studio - Generate full video scripts
+exports.generateScript = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'generateScript', 10);
+
+  const { topic, tone = 'engaging', length = 'medium', includeHook = true, includeCTA = true } = data;
+
+  if (!topic || topic.trim().length < 3) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a valid video topic');
+  }
+
+  // Token cost: 5 tokens per script
+  const tokenCost = 5;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = 0;
+
+  if (!tokenDoc.exists) {
+    const initialTokens = {
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    await tokenRef.set(initialTokens);
+    balance = 50;
+  } else {
+    balance = tokenDoc.data().balance || 0;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}. Please upgrade your plan.`);
+  }
+
+  // Length configurations
+  const lengthConfig = {
+    short: { minutes: '3-5', words: 500 },
+    medium: { minutes: '8-12', words: 1200 },
+    long: { minutes: '15-20', words: 2000 }
+  };
+  const config = lengthConfig[length] || lengthConfig.medium;
+
+  // Tone descriptions
+  const toneDescriptions = {
+    engaging: 'conversational, energetic, keeps viewers hooked with dynamic pacing and relatable language',
+    educational: 'informative, clear explanations, authoritative yet accessible, with structured learning points',
+    entertaining: 'fun, humorous, uses storytelling and personality to captivate, includes jokes and pop culture references',
+    professional: 'polished, business-appropriate, credible and trustworthy, with data-backed insights'
+  };
+  const toneDesc = toneDescriptions[tone] || toneDescriptions.engaging;
+
+  try {
+    const systemPrompt = `You are a professional YouTube script writer who creates viral, engaging video scripts. Your scripts consistently achieve high watch time and engagement.
+
+Your scripts always include:
+- Pattern interrupts to maintain viewer attention
+- B-roll suggestions marked with [B-ROLL: description]
+- Emphasis markers for key words using *asterisks*
+- Natural pauses marked with (pause)
+- Speaking pace notes where needed
+
+Format your response as JSON with these exact keys:
+{
+  "hook": "Opening hook (first 5-10 seconds - the most crucial part)",
+  "intro": "Introduction that establishes credibility and previews value",
+  "mainContent": "The main body with all key points, transitions, and B-roll markers",
+  "cta": "Call-to-action that drives engagement"
+}`;
+
+    const userPrompt = `Create a ${config.minutes} minute YouTube script (approximately ${config.words} words) about:
+
+TOPIC: ${topic}
+
+TONE: ${toneDesc}
+
+Requirements:
+${includeHook ? '- Start with a powerful hook that creates curiosity or makes a bold claim' : ''}
+- Include clear section transitions
+- Add [B-ROLL: description] markers for visual suggestions
+- Mark emphasis words with *asterisks*
+- Include retention markers every 60-90 seconds
+${includeCTA ? '- End with a compelling call-to-action for likes, comments, and subscribes' : ''}
+
+Make it feel natural, not scripted. Write like a top YouTuber speaks.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 3000
+    });
+
+    let scriptData;
+    const content = response.choices[0]?.message?.content;
+
+    try {
+      // Try to parse as JSON
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        scriptData = JSON.parse(jsonMatch[0]);
+      } else {
+        // Fallback: treat as full script
+        scriptData = {
+          hook: '',
+          intro: '',
+          mainContent: content,
+          cta: ''
+        };
+      }
+    } catch (parseError) {
+      scriptData = {
+        hook: '',
+        intro: '',
+        mainContent: content,
+        cta: ''
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('scriptHistory').add({
+      userId: uid,
+      topic,
+      tone,
+      length,
+      script: scriptData,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      ...scriptData,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Script generation error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to generate script. Please try again.');
+  }
+});
+
+// Viral Hook Laboratory - Generate attention-grabbing hooks
+exports.generateHooks = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'generateHooks', 15);
+
+  const { topic, style = 'question', count = 5 } = data;
+
+  if (!topic || topic.trim().length < 3) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a valid video topic');
+  }
+
+  // Token cost: 3 tokens per generation
+  const tokenCost = 3;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  // Hook style descriptions
+  const styleGuides = {
+    question: 'Questions that spark curiosity and demand answers. Make viewers think "I need to know this!"',
+    controversy: 'Controversial or contrarian statements that challenge common beliefs. Use "Actually, everything you know about X is wrong..."',
+    promise: 'Clear value propositions that promise specific outcomes. "In the next X minutes, you\'ll learn..."',
+    story: 'Personal story openers that create emotional connection. Start mid-action for maximum impact.',
+    statistic: 'Shocking statistics or data points that make viewers stop scrolling. Use specific numbers.',
+    challenge: 'Direct challenges to the viewer that engage their ego. "I bet you can\'t..." or "Most people fail at..."'
+  };
+
+  const styleGuide = styleGuides[style] || styleGuides.question;
+
+  try {
+    const systemPrompt = `You are a viral content expert who specializes in YouTube hooks. You understand that the first 3-5 seconds determine if a viewer stays or leaves.
+
+Your hooks achieve:
+- 80%+ retention past the first 30 seconds
+- High curiosity gaps that MUST be resolved
+- Emotional triggers that stop the scroll
+
+Always provide hooks with predicted effectiveness scores and explanations.
+
+Respond in JSON format:
+{
+  "hooks": [
+    {
+      "text": "The hook text",
+      "score": 85,
+      "explanation": "Why this hook works"
+    }
+  ]
+}`;
+
+    const userPrompt = `Generate ${count} viral YouTube hooks for this video topic:
+
+TOPIC: ${topic}
+
+STYLE: ${styleGuide}
+
+Requirements:
+- Each hook should be 1-2 sentences max (speakable in 5 seconds)
+- Create curiosity gaps that MUST be resolved
+- Use power words that trigger emotional responses
+- Make each hook distinctly different
+- Score each hook 1-100 based on predicted viral potential
+- Explain WHY each hook would work
+
+Think like MrBeast, MKBHD, and other top creators when crafting these.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.9,
+      max_tokens: 1500
+    });
+
+    let hooksData;
+    const content = response.choices[0]?.message?.content;
+
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        hooksData = JSON.parse(jsonMatch[0]);
+      } else {
+        hooksData = { hooks: [{ text: content, score: 70, explanation: 'Generated hook' }] };
+      }
+    } catch (parseError) {
+      hooksData = { hooks: [{ text: content, score: 70, explanation: 'Generated hook' }] };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('hookHistory').add({
+      userId: uid,
+      topic,
+      style,
+      count,
+      hooks: hooksData.hooks,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      hooks: hooksData.hooks,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Hook generation error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to generate hooks. Please try again.');
+  }
+});
+
+// Content Multiplier - Repurpose video content into multiple formats
+exports.multiplyContent = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'multiplyContent', 5);
+
+  const { transcript, formats = ['shorts', 'twitter', 'blog'] } = data;
+
+  if (!transcript || transcript.trim().length < 100) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a transcript with at least 100 characters');
+  }
+
+  // Token cost: 8 tokens per multiply
+  const tokenCost = 8;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  // Format instructions
+  const formatInstructions = {
+    shorts: 'Extract 3 viral YouTube Shorts scripts (60 seconds each). Focus on the most shareable, hook-worthy moments. Include visual suggestions.',
+    twitter: 'Create a 10-15 tweet thread that tells the story of the video. Each tweet should be standalone but connected. Use hooks and cliffhangers between tweets.',
+    blog: 'Write a full SEO-optimized blog post (800-1200 words) with headers, bullet points, and a compelling introduction. Include meta description.',
+    quotes: 'Extract 5 quote-worthy statements that would work as shareable graphics. Make them punchy and memorable.',
+    email: 'Create a newsletter email summarizing the key insights. Include a compelling subject line, preview text, and clear CTA.',
+    linkedin: 'Write a professional LinkedIn post version of the key insights. Include engagement prompts and relevant hashtags.'
+  };
+
+  const selectedFormats = formats.filter(f => formatInstructions[f]);
+  if (selectedFormats.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please select at least one valid format');
+  }
+
+  try {
+    const systemPrompt = `You are a content repurposing expert. You transform long-form video content into multiple formats while maintaining the core message and maximizing engagement for each platform.
+
+Always preserve the creator's voice and key insights while adapting to platform-specific best practices.
+
+Respond in JSON format with each requested format as a key.`;
+
+    let formatPrompts = selectedFormats.map(f => `${f.toUpperCase()}: ${formatInstructions[f]}`).join('\n\n');
+
+    const userPrompt = `Transform this video transcript into multiple content formats:
+
+TRANSCRIPT:
+${transcript.substring(0, 8000)}
+
+REQUESTED FORMATS:
+${formatPrompts}
+
+Create high-quality, platform-optimized content for each format. Maintain the original insights but adapt the style for each platform.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 4000
+    });
+
+    let contentData;
+    const content = response.choices[0]?.message?.content;
+
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        contentData = JSON.parse(jsonMatch[0]);
+      } else {
+        contentData = { content: content };
+      }
+    } catch (parseError) {
+      contentData = { content: content };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('contentMultiplierHistory').add({
+      userId: uid,
+      transcriptPreview: transcript.substring(0, 200),
+      formats: selectedFormats,
+      content: contentData,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      content: contentData,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Content multiplier error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to multiply content. Please try again.');
+  }
+});
+
+// Thumbnail A/B Arena - Analyze and predict thumbnail CTR
+exports.analyzeThumbnails = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'analyzeThumbnails', 10);
+
+  const { thumbnailA, thumbnailB } = data;
+
+  if (!thumbnailA?.base64 || !thumbnailB?.base64) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide two thumbnails to compare');
+  }
+
+  // Token cost: 4 tokens per analysis
+  const tokenCost = 4;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  try {
+    // Use Gemini Vision for thumbnail analysis
+    const geminiApiKey = functions.config().gemini?.key;
+    if (!geminiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'Vision service not configured');
+    }
+
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+    const analysisPrompt = `You are a YouTube thumbnail CTR expert. Analyze these two thumbnails and predict which will perform better.
+
+For each thumbnail, evaluate:
+1. Visual hierarchy and focal points
+2. Color contrast and vibrancy
+3. Emotional impact and curiosity triggers
+4. Text readability (if any)
+5. Face/expression effectiveness (if any)
+6. Mobile-friendliness (will it work at small sizes?)
+7. Click-worthiness and curiosity gap
+
+Respond in JSON format:
+{
+  "thumbnailA": {
+    "score": 75,
+    "strengths": ["Clear focal point", "Good contrast"],
+    "weaknesses": ["Text too small", "Low emotional impact"]
+  },
+  "thumbnailB": {
+    "score": 82,
+    "strengths": ["Strong emotion", "Vibrant colors"],
+    "weaknesses": ["Busy background"]
+  },
+  "winner": "b",
+  "winnerScore": 9.3,
+  "recommendations": [
+    "Add more contrast to Thumbnail A",
+    "Consider larger text for both"
+  ]
+}`;
+
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType: thumbnailA.mimeType || 'image/png', data: thumbnailA.base64 } },
+          { text: 'This is Thumbnail A' },
+          { inlineData: { mimeType: thumbnailB.mimeType || 'image/png', data: thumbnailB.base64 } },
+          { text: 'This is Thumbnail B' },
+          { text: analysisPrompt }
+        ]
+      }]
+    });
+
+    let analysisData;
+    const content = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        analysisData = JSON.parse(jsonMatch[0]);
+      } else {
+        analysisData = {
+          thumbnailA: { score: 70, strengths: ['Analyzed'], weaknesses: ['See recommendations'] },
+          thumbnailB: { score: 70, strengths: ['Analyzed'], weaknesses: ['See recommendations'] },
+          winner: 'tie',
+          winnerScore: 0,
+          recommendations: [content]
+        };
+      }
+    } catch (parseError) {
+      analysisData = {
+        thumbnailA: { score: 70, strengths: ['Analyzed'], weaknesses: [] },
+        thumbnailB: { score: 70, strengths: ['Analyzed'], weaknesses: [] },
+        winner: 'tie',
+        winnerScore: 0,
+        recommendations: ['Analysis completed - see details above']
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history (without storing full images)
+    await db.collection('thumbnailTestHistory').add({
+      userId: uid,
+      analysis: analysisData,
+      winner: analysisData.winner,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      ...analysisData,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Thumbnail analysis error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze thumbnails. Please try again.');
+  }
+});

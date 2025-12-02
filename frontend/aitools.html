@@ -1,0 +1,1795 @@
+<!-- ================================================================
+     YOUTUBE VIDEO OPTIMIZER - AI TOOLS HUB
+     ================================================================
+
+     Structure:
+     - SECTION 1: External Dependencies (CDN)
+     - SECTION 2: Styles (CSS)
+     - SECTION 3: HTML Container
+     - SECTION 4: Scripts (JavaScript)
+
+     Tools:
+     - AI Script Studio - Full script generation from topic
+     - Viral Hook Laboratory - Hook optimization and A/B testing
+     - Content Multiplier - Repurpose video into multiple formats
+     - Thumbnail A/B Arena - CTR prediction and analysis
+
+     Access: All authenticated users (with token system)
+
+     Main Dashboard URL: https://ytseo.siteuo.com/video-optimizer
+
+     Last Updated: 2024
+     ================================================================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>AI Tools Hub - YouTube Video Optimizer</title>
+
+    <!-- ============================================
+         SECTION 1: EXTERNAL DEPENDENCIES
+         ============================================ -->
+
+    <!-- 1.1 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 1.2 Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+
+    <!-- ============================================
+         SECTION 2: STYLES
+         ============================================ -->
+    <style>
+        /* ------------------------------------------
+           2.1 BASE & RESET
+           ------------------------------------------ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 16px;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 1rem;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: white;
+        }
+
+        #app-root {
+            width: 100%;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+        }
+
+        /* ------------------------------------------
+           2.2 ANIMATIONS
+           ------------------------------------------ */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.6); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        .animate-pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .animate-glow {
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        /* ------------------------------------------
+           2.3 HERO SECTION
+           ------------------------------------------ */
+        .hero-section {
+            position: relative;
+            padding: 2rem 1.5rem;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at top right, rgba(99, 102, 241, 0.2) 0%, transparent 50%),
+                        radial-gradient(ellipse at bottom left, rgba(168, 85, 247, 0.2) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        /* ------------------------------------------
+           2.4 TOOL CARDS
+           ------------------------------------------ */
+        .tool-card {
+            background: linear-gradient(145deg, rgba(30, 30, 50, 0.9) 0%, rgba(20, 20, 35, 0.95) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tool-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .tool-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .tool-card:hover::before {
+            opacity: 1;
+        }
+
+        .tool-card.script-studio {
+            --accent-start: #f59e0b;
+            --accent-end: #ef4444;
+        }
+
+        .tool-card.hook-lab {
+            --accent-start: #ec4899;
+            --accent-end: #8b5cf6;
+        }
+
+        .tool-card.content-multiplier {
+            --accent-start: #10b981;
+            --accent-end: #3b82f6;
+        }
+
+        .tool-card.thumbnail-arena {
+            --accent-start: #6366f1;
+            --accent-end: #a855f7;
+        }
+
+        .tool-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .tool-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* ------------------------------------------
+           2.5 TOOL VIEWS
+           ------------------------------------------ */
+        .tool-view {
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .tool-view.active {
+            display: block;
+        }
+
+        .input-field {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            color: white;
+            font-size: 1rem;
+            width: 100%;
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: rgba(99, 102, 241, 0.5);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .input-field::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            font-weight: 600;
+            padding: 0.875rem 1.5rem;
+            border-radius: 0.75rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-weight: 500;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* ------------------------------------------
+           2.6 RESULTS SECTIONS
+           ------------------------------------------ */
+        .result-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .result-card:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .copy-btn {
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: rgba(99, 102, 241, 0.3);
+        }
+
+        /* ------------------------------------------
+           2.7 TOKEN DISPLAY
+           ------------------------------------------ */
+        .token-display {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 0.75rem;
+            padding: 0.5rem 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* ------------------------------------------
+           2.8 TABS
+           ------------------------------------------ */
+        .tab-container {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background: rgba(99, 102, 241, 0.3);
+            color: white;
+        }
+
+        .tab-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        /* ------------------------------------------
+           2.9 LOADING STATES
+           ------------------------------------------ */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-card {
+            background: linear-gradient(145deg, rgba(30, 30, 50, 0.95) 0%, rgba(20, 20, 35, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #6366f1;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1.5rem;
+        }
+
+        /* ------------------------------------------
+           2.10 SCROLLBAR
+           ------------------------------------------ */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* ------------------------------------------
+           2.11 RESPONSIVE
+           ------------------------------------------ */
+        @media (max-width: 768px) {
+            .hero-section {
+                padding: 1.5rem 1rem;
+            }
+
+            .tool-card {
+                padding: 1.25rem;
+            }
+
+            .tool-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
+            }
+        }
+
+        /* ------------------------------------------
+           2.12 OPTION CARDS
+           ------------------------------------------ */
+        .option-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .option-card:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .option-card.selected {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        /* History panel */
+        .history-panel {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .history-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- ============================================
+         SECTION 3: HTML CONTAINER
+         ============================================ -->
+    <div id="app-root"></div>
+
+    <!-- ============================================
+         SECTION 4: SCRIPTS
+         ============================================ -->
+    <script>
+    (function() {
+        'use strict';
+
+        /* ==========================================
+           4.1 FIREBASE CONFIGURATION
+           ========================================== */
+
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase SDK not loaded');
+            document.getElementById('app-root').innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">' +
+                '<div style="text-align:center;color:white;">' +
+                '<h2 style="color:#ef4444;margin-bottom:1rem;">Error Loading Page</h2>' +
+                '<p style="color:#9ca3af;">Failed to load Firebase. Please refresh the page.</p></div></div>';
+            return;
+        }
+
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyAGczY5ZEIJdTq25BpQdia3lv2I556wOZo",
+            authDomain: "ytseo-6d1b0.firebaseapp.com",
+            projectId: "ytseo-6d1b0",
+            storageBucket: "ytseo-6d1b0.firebasestorage.app",
+            messagingSenderId: "382790048044",
+            appId: "1:382790048044:web:cd427679ff72108c1f3489"
+        };
+
+        firebase.initializeApp(FIREBASE_CONFIG);
+        const auth = firebase.auth();
+        const functions = firebase.functions();
+        const db = firebase.firestore();
+
+        /* ==========================================
+           4.2 APPLICATION STATE
+           ========================================== */
+
+        const state = {
+            currentView: 'initializing', // initializing | hub | script | hooks | multiplier | thumbnail | history
+            user: null,
+            profile: null,
+            loading: false,
+            error: null,
+            success: null,
+
+            // Token system
+            tokens: {
+                balance: 0,
+                plan: 'free',
+                rollover: 0
+            },
+
+            // Tool-specific state
+            // AI Script Studio
+            script: {
+                topic: '',
+                tone: 'engaging',
+                length: 'medium',
+                includeHook: true,
+                includeCTA: true,
+                result: null,
+                history: []
+            },
+
+            // Viral Hook Laboratory
+            hooks: {
+                topic: '',
+                style: 'question',
+                count: 5,
+                result: null,
+                history: []
+            },
+
+            // Content Multiplier
+            multiplier: {
+                videoUrl: '',
+                transcript: '',
+                formats: ['shorts', 'twitter', 'blog'],
+                result: null,
+                history: []
+            },
+
+            // Thumbnail A/B Arena
+            thumbnailArena: {
+                thumbnails: [],
+                analysisResult: null,
+                history: []
+            },
+
+            // History view
+            historyType: 'script' // script | hooks | multiplier | thumbnail
+        };
+
+        /* ==========================================
+           4.3 UTILITY FUNCTIONS
+           ========================================== */
+
+        const utils = {
+            escapeHtml: function(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            },
+
+            formatDate: function(timestamp) {
+                if (!timestamp) return '';
+                const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            },
+
+            copyToClipboard: function(text, btn) {
+                navigator.clipboard.writeText(text).then(function() {
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    btn.style.background = 'rgba(16, 185, 129, 0.3)';
+                    setTimeout(function() {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 2000);
+                });
+            },
+
+            showToast: function(message, type) {
+                const toast = document.createElement('div');
+                toast.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg text-white font-medium z-50 fade-in';
+                toast.style.background = type === 'success' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' :
+                                         type === 'error' ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' :
+                                         'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)';
+                toast.textContent = message;
+                document.body.appendChild(toast);
+                setTimeout(function() {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateY(10px)';
+                    setTimeout(function() { toast.remove(); }, 300);
+                }, 3000);
+            }
+        };
+
+        /* ==========================================
+           4.4 RENDER FUNCTION
+           ========================================== */
+
+        function render() {
+            const root = document.getElementById('app-root');
+            let html = '';
+
+            // Loading overlay
+            if (state.loading) {
+                html += renderLoading();
+            }
+
+            // Main content based on view
+            switch (state.currentView) {
+                case 'initializing':
+                    html += renderInitializing();
+                    break;
+                case 'login':
+                    html += renderLoginPrompt();
+                    break;
+                case 'hub':
+                    html += renderHub();
+                    break;
+                case 'script':
+                    html += renderScriptStudio();
+                    break;
+                case 'hooks':
+                    html += renderHookLab();
+                    break;
+                case 'multiplier':
+                    html += renderContentMultiplier();
+                    break;
+                case 'thumbnail':
+                    html += renderThumbnailArena();
+                    break;
+                case 'history':
+                    html += renderHistory();
+                    break;
+                default:
+                    html += renderHub();
+            }
+
+            root.innerHTML = html;
+            attachEventListeners();
+        }
+
+        /* ==========================================
+           4.5 VIEW RENDERERS
+           ========================================== */
+
+        function renderInitializing() {
+            return '<div class="flex items-center justify-center min-h-screen">' +
+                '<div class="text-center">' +
+                '<div class="spinner mb-4"></div>' +
+                '<p class="text-gray-400">Loading AI Tools...</p>' +
+                '</div></div>';
+        }
+
+        function renderLoginPrompt() {
+            return '<div class="flex items-center justify-center min-h-screen p-4">' +
+                '<div class="bg-gray-800/50 border border-gray-700 rounded-2xl p-8 text-center max-w-md">' +
+                '<div class="text-5xl mb-4">🔐</div>' +
+                '<h2 class="text-2xl font-bold text-white mb-2">Sign In Required</h2>' +
+                '<p class="text-gray-400 mb-6">Please sign in to access AI Tools</p>' +
+                '<a href="/video-optimizer" class="btn-primary inline-block">Go to Dashboard</a>' +
+                '</div></div>';
+        }
+
+        function renderLoading() {
+            return '<div class="loading-overlay">' +
+                '<div class="loading-card">' +
+                '<div class="spinner"></div>' +
+                '<h3 class="text-xl font-bold text-white mb-2">Processing...</h3>' +
+                '<p class="text-gray-400">AI is working its magic</p>' +
+                '</div></div>';
+        }
+
+        function renderHub() {
+            var html = '';
+
+            // Header
+            html += '<div class="hero-section relative z-10">';
+            html += '<div class="max-w-6xl mx-auto">';
+            html += '<div class="flex items-center justify-between mb-6">';
+            html += '<a href="/video-optimizer" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">';
+            html += '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
+            html += '<span>Back to Dashboard</span>';
+            html += '</a>';
+            html += '<div class="token-display">';
+            html += '<span class="text-2xl">🪙</span>';
+            html += '<span class="font-bold text-white">' + state.tokens.balance + '</span>';
+            html += '<span class="text-gray-400">tokens</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Title
+            html += '<div class="text-center mb-8">';
+            html += '<h1 class="text-4xl md:text-5xl font-bold text-white mb-3">';
+            html += '<span class="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">AI Tools Hub</span>';
+            html += '</h1>';
+            html += '<p class="text-gray-400 text-lg">Powerful AI tools to supercharge your YouTube content</p>';
+            html += '</div>';
+            html += '</div></div>';
+
+            // Tools Grid
+            html += '<div class="max-w-6xl mx-auto px-4 py-8">';
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">';
+
+            // AI Script Studio Card
+            html += '<div class="tool-card script-studio" onclick="app.navigateTo(\'script\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);">Popular</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);">🎬</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">AI Script Studio</h3>';
+            html += '<p class="text-gray-400 mb-4">From idea to full video script in 60 seconds. Smart generation with hooks, story beats, and CTAs.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-amber-400"><span class="font-bold">5</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~60 seconds</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Viral Hook Laboratory Card
+            html += '<div class="tool-card hook-lab" onclick="app.navigateTo(\'hooks\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);">High Impact</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);">🎣</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">Viral Hook Laboratory</h3>';
+            html += '<p class="text-gray-400 mb-4">Win the first 3 seconds or lose everything. Generate winning hooks with AI prediction.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-pink-400"><span class="font-bold">3</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~30 seconds</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Content Multiplier Card
+            html += '<div class="tool-card content-multiplier" onclick="app.navigateTo(\'multiplier\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);">10x Output</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);">🔄</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">Content Multiplier</h3>';
+            html += '<p class="text-gray-400 mb-4">One video becomes 30 pieces of content. Auto-extract Shorts, threads, blog posts & more.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-emerald-400"><span class="font-bold">8</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~2 minutes</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Thumbnail A/B Arena Card
+            html += '<div class="tool-card thumbnail-arena" onclick="app.navigateTo(\'thumbnail\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);">CTR Boost</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);">📊</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">Thumbnail A/B Arena</h3>';
+            html += '<p class="text-gray-400 mb-4">Never guess which thumbnail will win. AI predicts CTR and analyzes what drives clicks.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-indigo-400"><span class="font-bold">4</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~45 seconds</span>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>'; // End grid
+
+            // History Button
+            html += '<div class="mt-8 text-center">';
+            html += '<button onclick="app.navigateTo(\'history\')" class="btn-secondary">';
+            html += '<span class="mr-2">📜</span> View History';
+            html += '</button>';
+            html += '</div>';
+
+            html += '</div>'; // End container
+
+            return html;
+        }
+
+        function renderScriptStudio() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('AI Script Studio', '🎬', 'script-studio', '5 tokens per script');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.script.result) {
+                // Show results
+                html += renderScriptResults();
+            } else {
+                // Show form
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                // Topic input
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Video Topic / Idea</label>';
+                html += '<textarea id="script-topic" class="input-field h-24" placeholder="Enter your video topic or idea... e.g., \'10 productivity hacks for remote workers\' or \'Why AI will change everything in 2025\'">' + utils.escapeHtml(state.script.topic) + '</textarea>';
+                html += '</div>';
+
+                // Tone selection
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Script Tone</label>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                var tones = [
+                    { id: 'engaging', name: 'Engaging', icon: '🎯' },
+                    { id: 'educational', name: 'Educational', icon: '📚' },
+                    { id: 'entertaining', name: 'Entertaining', icon: '🎉' },
+                    { id: 'professional', name: 'Professional', icon: '💼' }
+                ];
+                tones.forEach(function(tone) {
+                    var selected = state.script.tone === tone.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setScriptTone(\'' + tone.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + tone.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + tone.name + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Length selection
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Script Length</label>';
+                html += '<div class="grid grid-cols-3 gap-3">';
+                var lengths = [
+                    { id: 'short', name: 'Short', desc: '3-5 min', icon: '⚡' },
+                    { id: 'medium', name: 'Medium', desc: '8-12 min', icon: '📝' },
+                    { id: 'long', name: 'Long', desc: '15-20 min', icon: '📖' }
+                ];
+                lengths.forEach(function(len) {
+                    var selected = state.script.length === len.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setScriptLength(\'' + len.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + len.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + len.name + '</div>';
+                    html += '<div class="text-gray-500 text-xs">' + len.desc + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Options
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Include</label>';
+                html += '<div class="flex flex-wrap gap-4">';
+                html += '<label class="flex items-center gap-2 cursor-pointer">';
+                html += '<input type="checkbox" id="include-hook" ' + (state.script.includeHook ? 'checked' : '') + ' class="w-5 h-5 rounded accent-indigo-500">';
+                html += '<span class="text-gray-300">Opening Hook</span>';
+                html += '</label>';
+                html += '<label class="flex items-center gap-2 cursor-pointer">';
+                html += '<input type="checkbox" id="include-cta" ' + (state.script.includeCTA ? 'checked' : '') + ' class="w-5 h-5 rounded accent-indigo-500">';
+                html += '<span class="text-gray-300">Call-to-Action</span>';
+                html += '</label>';
+                html += '</div></div>';
+
+                // Generate button
+                html += '<button onclick="app.generateScript()" class="btn-primary w-full text-lg py-4" ' + (state.loading ? 'disabled' : '') + '>';
+                html += '<span class="text-xl mr-2">🎬</span> Generate Script';
+                html += '</button>';
+
+                html += '</div>'; // End form card
+            }
+
+            html += '</div>'; // End container
+
+            return html;
+        }
+
+        function renderScriptResults() {
+            var html = '';
+            var result = state.script.result;
+
+            html += '<div class="mb-6">';
+            html += '<button onclick="app.clearScriptResult()" class="btn-secondary mb-4">';
+            html += '← Create New Script';
+            html += '</button>';
+            html += '</div>';
+
+            // Script sections
+            if (result.hook) {
+                html += '<div class="result-card mb-4">';
+                html += '<div class="flex items-center justify-between mb-3">';
+                html += '<h3 class="text-lg font-bold text-amber-400">🎣 Opening Hook</h3>';
+                html += '<button class="copy-btn" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.hook).replace(/'/g, "\\'") + '\', this)">Copy</button>';
+                html += '</div>';
+                html += '<p class="text-gray-300 whitespace-pre-wrap">' + utils.escapeHtml(result.hook) + '</p>';
+                html += '</div>';
+            }
+
+            if (result.intro) {
+                html += '<div class="result-card mb-4">';
+                html += '<div class="flex items-center justify-between mb-3">';
+                html += '<h3 class="text-lg font-bold text-blue-400">📖 Introduction</h3>';
+                html += '<button class="copy-btn" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.intro).replace(/'/g, "\\'") + '\', this)">Copy</button>';
+                html += '</div>';
+                html += '<p class="text-gray-300 whitespace-pre-wrap">' + utils.escapeHtml(result.intro) + '</p>';
+                html += '</div>';
+            }
+
+            if (result.mainContent) {
+                html += '<div class="result-card mb-4">';
+                html += '<div class="flex items-center justify-between mb-3">';
+                html += '<h3 class="text-lg font-bold text-green-400">📝 Main Content</h3>';
+                html += '<button class="copy-btn" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.mainContent).replace(/'/g, "\\'") + '\', this)">Copy</button>';
+                html += '</div>';
+                html += '<p class="text-gray-300 whitespace-pre-wrap">' + utils.escapeHtml(result.mainContent) + '</p>';
+                html += '</div>';
+            }
+
+            if (result.cta) {
+                html += '<div class="result-card mb-4">';
+                html += '<div class="flex items-center justify-between mb-3">';
+                html += '<h3 class="text-lg font-bold text-purple-400">🎯 Call-to-Action</h3>';
+                html += '<button class="copy-btn" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.cta).replace(/'/g, "\\'") + '\', this)">Copy</button>';
+                html += '</div>';
+                html += '<p class="text-gray-300 whitespace-pre-wrap">' + utils.escapeHtml(result.cta) + '</p>';
+                html += '</div>';
+            }
+
+            // Full script copy
+            html += '<div class="mt-6 text-center">';
+            html += '<button class="btn-primary" onclick="app.copyFullScript()">📋 Copy Full Script</button>';
+            html += '</div>';
+
+            return html;
+        }
+
+        function renderHookLab() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('Viral Hook Laboratory', '🎣', 'hook-lab', '3 tokens per generation');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.hooks.result) {
+                // Show results
+                html += renderHookResults();
+            } else {
+                // Show form
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                // Topic input
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Video Topic</label>';
+                html += '<input type="text" id="hook-topic" class="input-field" placeholder="What is your video about?" value="' + utils.escapeHtml(state.hooks.topic) + '">';
+                html += '</div>';
+
+                // Hook style
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Hook Style</label>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">';
+                var styles = [
+                    { id: 'question', name: 'Question', icon: '❓', desc: 'Spark curiosity' },
+                    { id: 'controversy', name: 'Controversy', icon: '🔥', desc: 'Challenge beliefs' },
+                    { id: 'promise', name: 'Promise', icon: '🎁', desc: 'Value proposition' },
+                    { id: 'story', name: 'Story', icon: '📖', desc: 'Personal narrative' },
+                    { id: 'statistic', name: 'Statistic', icon: '📊', desc: 'Shocking data' },
+                    { id: 'challenge', name: 'Challenge', icon: '💪', desc: 'Direct challenge' }
+                ];
+                styles.forEach(function(style) {
+                    var selected = state.hooks.style === style.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setHookStyle(\'' + style.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + style.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + style.name + '</div>';
+                    html += '<div class="text-gray-500 text-xs">' + style.desc + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Number of hooks
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Number of Hooks</label>';
+                html += '<div class="flex gap-2">';
+                [3, 5, 10].forEach(function(num) {
+                    var selected = state.hooks.count === num ? 'bg-indigo-600' : 'bg-gray-700';
+                    html += '<button onclick="app.setHookCount(' + num + ')" class="px-4 py-2 rounded-lg font-medium ' + selected + '">' + num + '</button>';
+                });
+                html += '</div></div>';
+
+                // Generate button
+                html += '<button onclick="app.generateHooks()" class="btn-primary w-full text-lg py-4" ' + (state.loading ? 'disabled' : '') + '>';
+                html += '<span class="text-xl mr-2">🎣</span> Generate Hooks';
+                html += '</button>';
+
+                html += '</div>'; // End form card
+            }
+
+            html += '</div>'; // End container
+
+            return html;
+        }
+
+        function renderHookResults() {
+            var html = '';
+            var result = state.hooks.result;
+
+            html += '<div class="mb-6">';
+            html += '<button onclick="app.clearHookResult()" class="btn-secondary mb-4">';
+            html += '← Generate New Hooks';
+            html += '</button>';
+            html += '</div>';
+
+            if (result.hooks && result.hooks.length > 0) {
+                result.hooks.forEach(function(hook, index) {
+                    html += '<div class="result-card mb-4">';
+                    html += '<div class="flex items-start justify-between gap-4">';
+                    html += '<div class="flex-1">';
+                    html += '<div class="flex items-center gap-2 mb-2">';
+                    html += '<span class="bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded">#' + (index + 1) + '</span>';
+                    if (hook.score) {
+                        html += '<span class="text-amber-400 text-sm">⭐ ' + hook.score + '/100 predicted CTR</span>';
+                    }
+                    html += '</div>';
+                    html += '<p class="text-white text-lg">' + utils.escapeHtml(hook.text || hook) + '</p>';
+                    if (hook.explanation) {
+                        html += '<p class="text-gray-500 text-sm mt-2">💡 ' + utils.escapeHtml(hook.explanation) + '</p>';
+                    }
+                    html += '</div>';
+                    html += '<button class="copy-btn flex-shrink-0" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(hook.text || hook).replace(/'/g, "\\'") + '\', this)">Copy</button>';
+                    html += '</div>';
+                    html += '</div>';
+                });
+            }
+
+            return html;
+        }
+
+        function renderContentMultiplier() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('Content Multiplier', '🔄', 'content-multiplier', '8 tokens per video');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.multiplier.result) {
+                // Show results
+                html += renderMultiplierResults();
+            } else {
+                // Show form
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                // Input type tabs
+                html += '<div class="tab-container mb-6">';
+                html += '<button class="tab-btn active" onclick="app.setMultiplierInput(\'transcript\')">Paste Transcript</button>';
+                html += '<button class="tab-btn" onclick="app.setMultiplierInput(\'url\')">YouTube URL</button>';
+                html += '</div>';
+
+                // Transcript input
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Video Transcript or Script</label>';
+                html += '<textarea id="multiplier-transcript" class="input-field h-40" placeholder="Paste your video transcript or script here...">' + utils.escapeHtml(state.multiplier.transcript) + '</textarea>';
+                html += '</div>';
+
+                // Output formats
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Output Formats</label>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">';
+                var formats = [
+                    { id: 'shorts', name: 'YouTube Shorts', icon: '📱', desc: '3 viral clips' },
+                    { id: 'twitter', name: 'Twitter Thread', icon: '🐦', desc: '10-15 tweets' },
+                    { id: 'blog', name: 'Blog Post', icon: '📝', desc: 'SEO optimized' },
+                    { id: 'quotes', name: 'Quote Cards', icon: '💬', desc: '5 shareable quotes' },
+                    { id: 'email', name: 'Email Newsletter', icon: '📧', desc: 'Subscriber digest' },
+                    { id: 'linkedin', name: 'LinkedIn Post', icon: '💼', desc: 'Professional format' }
+                ];
+                formats.forEach(function(format) {
+                    var selected = state.multiplier.formats.includes(format.id) ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.toggleMultiplierFormat(\'' + format.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + format.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + format.name + '</div>';
+                    html += '<div class="text-gray-500 text-xs">' + format.desc + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Generate button
+                html += '<button onclick="app.multiplyContent()" class="btn-primary w-full text-lg py-4" ' + (state.loading ? 'disabled' : '') + '>';
+                html += '<span class="text-xl mr-2">🔄</span> Multiply Content';
+                html += '</button>';
+
+                html += '</div>'; // End form card
+            }
+
+            html += '</div>'; // End container
+
+            return html;
+        }
+
+        function renderMultiplierResults() {
+            var html = '';
+            var result = state.multiplier.result;
+
+            html += '<div class="mb-6">';
+            html += '<button onclick="app.clearMultiplierResult()" class="btn-secondary mb-4">';
+            html += '← Multiply New Content';
+            html += '</button>';
+            html += '</div>';
+
+            // Tabs for different formats
+            html += '<div class="tab-container">';
+            var tabs = Object.keys(result);
+            tabs.forEach(function(tab, index) {
+                var active = index === 0 ? 'active' : '';
+                html += '<button class="tab-btn ' + active + '" onclick="app.showMultiplierTab(\'' + tab + '\')">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>';
+            });
+            html += '</div>';
+
+            // Tab content
+            tabs.forEach(function(tab, index) {
+                var display = index === 0 ? 'block' : 'none';
+                html += '<div id="multiplier-tab-' + tab + '" style="display:' + display + '">';
+
+                if (Array.isArray(result[tab])) {
+                    result[tab].forEach(function(item, i) {
+                        html += '<div class="result-card mb-4">';
+                        html += '<div class="flex items-start justify-between gap-4">';
+                        html += '<div class="flex-1">';
+                        html += '<span class="text-indigo-400 text-sm font-medium">#' + (i + 1) + '</span>';
+                        html += '<p class="text-gray-300 whitespace-pre-wrap mt-1">' + utils.escapeHtml(item) + '</p>';
+                        html += '</div>';
+                        html += '<button class="copy-btn flex-shrink-0" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(item).replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\', this)">Copy</button>';
+                        html += '</div>';
+                        html += '</div>';
+                    });
+                } else {
+                    html += '<div class="result-card">';
+                    html += '<div class="flex items-start justify-between gap-4">';
+                    html += '<p class="text-gray-300 whitespace-pre-wrap flex-1">' + utils.escapeHtml(result[tab]) + '</p>';
+                    html += '<button class="copy-btn flex-shrink-0" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result[tab]).replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\', this)">Copy</button>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            });
+
+            return html;
+        }
+
+        function renderThumbnailArena() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('Thumbnail A/B Arena', '📊', 'thumbnail-arena', '4 tokens per analysis');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.thumbnailArena.analysisResult) {
+                // Show results
+                html += renderThumbnailResults();
+            } else {
+                // Show form
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                html += '<div class="text-center mb-6">';
+                html += '<h3 class="text-xl font-bold text-white mb-2">Upload Thumbnails to Compare</h3>';
+                html += '<p class="text-gray-400">AI will predict CTR and analyze which thumbnail will perform best</p>';
+                html += '</div>';
+
+                // Upload area
+                html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">';
+
+                // Thumbnail A
+                html += '<div class="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-indigo-500 transition-colors cursor-pointer" onclick="document.getElementById(\'thumbnail-a\').click()">';
+                html += '<input type="file" id="thumbnail-a" accept="image/*" class="hidden" onchange="app.handleThumbnailUpload(\'a\', event)">';
+                if (state.thumbnailArena.thumbnails[0]) {
+                    html += '<img src="' + state.thumbnailArena.thumbnails[0].preview + '" class="w-full h-32 object-cover rounded-lg mb-2">';
+                    html += '<p class="text-green-400 text-sm">Thumbnail A uploaded</p>';
+                } else {
+                    html += '<div class="text-4xl mb-2">🖼️</div>';
+                    html += '<p class="text-gray-400">Click to upload Thumbnail A</p>';
+                }
+                html += '</div>';
+
+                // Thumbnail B
+                html += '<div class="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-indigo-500 transition-colors cursor-pointer" onclick="document.getElementById(\'thumbnail-b\').click()">';
+                html += '<input type="file" id="thumbnail-b" accept="image/*" class="hidden" onchange="app.handleThumbnailUpload(\'b\', event)">';
+                if (state.thumbnailArena.thumbnails[1]) {
+                    html += '<img src="' + state.thumbnailArena.thumbnails[1].preview + '" class="w-full h-32 object-cover rounded-lg mb-2">';
+                    html += '<p class="text-green-400 text-sm">Thumbnail B uploaded</p>';
+                } else {
+                    html += '<div class="text-4xl mb-2">🖼️</div>';
+                    html += '<p class="text-gray-400">Click to upload Thumbnail B</p>';
+                }
+                html += '</div>';
+
+                html += '</div>';
+
+                // Analyze button
+                var canAnalyze = state.thumbnailArena.thumbnails.length >= 2;
+                html += '<button onclick="app.analyzeThumbnails()" class="btn-primary w-full text-lg py-4" ' + (!canAnalyze || state.loading ? 'disabled' : '') + '>';
+                html += '<span class="text-xl mr-2">📊</span> Analyze & Predict Winner';
+                html += '</button>';
+
+                if (!canAnalyze) {
+                    html += '<p class="text-gray-500 text-center mt-2 text-sm">Upload at least 2 thumbnails to compare</p>';
+                }
+
+                html += '</div>'; // End form card
+            }
+
+            html += '</div>'; // End container
+
+            return html;
+        }
+
+        function renderThumbnailResults() {
+            var html = '';
+            var result = state.thumbnailArena.analysisResult;
+
+            html += '<div class="mb-6">';
+            html += '<button onclick="app.clearThumbnailResult()" class="btn-secondary mb-4">';
+            html += '← Analyze New Thumbnails';
+            html += '</button>';
+            html += '</div>';
+
+            // Winner announcement
+            if (result.winner) {
+                html += '<div class="bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-xl p-6 mb-6 text-center">';
+                html += '<div class="text-4xl mb-2">🏆</div>';
+                html += '<h3 class="text-2xl font-bold text-amber-400">Thumbnail ' + result.winner.toUpperCase() + ' Wins!</h3>';
+                html += '<p class="text-gray-300 mt-2">Predicted to get <span class="text-amber-400 font-bold">' + result.winnerScore + '%</span> higher CTR</p>';
+                html += '</div>';
+            }
+
+            // Thumbnail comparisons
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+
+            if (result.thumbnailA) {
+                html += '<div class="result-card ' + (result.winner === 'a' ? 'border-amber-500' : '') + '">';
+                html += '<div class="flex items-center justify-between mb-3">';
+                html += '<h4 class="font-bold text-white">Thumbnail A</h4>';
+                html += '<span class="text-2xl font-bold ' + (result.winner === 'a' ? 'text-amber-400' : 'text-gray-400') + '">' + result.thumbnailA.score + '%</span>';
+                html += '</div>';
+                if (state.thumbnailArena.thumbnails[0]) {
+                    html += '<img src="' + state.thumbnailArena.thumbnails[0].preview + '" class="w-full h-32 object-cover rounded-lg mb-3">';
+                }
+                html += '<div class="space-y-2">';
+                if (result.thumbnailA.strengths) {
+                    html += '<p class="text-green-400 text-sm">✅ ' + result.thumbnailA.strengths.join(', ') + '</p>';
+                }
+                if (result.thumbnailA.weaknesses) {
+                    html += '<p class="text-red-400 text-sm">⚠️ ' + result.thumbnailA.weaknesses.join(', ') + '</p>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+
+            if (result.thumbnailB) {
+                html += '<div class="result-card ' + (result.winner === 'b' ? 'border-amber-500' : '') + '">';
+                html += '<div class="flex items-center justify-between mb-3">';
+                html += '<h4 class="font-bold text-white">Thumbnail B</h4>';
+                html += '<span class="text-2xl font-bold ' + (result.winner === 'b' ? 'text-amber-400' : 'text-gray-400') + '">' + result.thumbnailB.score + '%</span>';
+                html += '</div>';
+                if (state.thumbnailArena.thumbnails[1]) {
+                    html += '<img src="' + state.thumbnailArena.thumbnails[1].preview + '" class="w-full h-32 object-cover rounded-lg mb-3">';
+                }
+                html += '<div class="space-y-2">';
+                if (result.thumbnailB.strengths) {
+                    html += '<p class="text-green-400 text-sm">✅ ' + result.thumbnailB.strengths.join(', ') + '</p>';
+                }
+                if (result.thumbnailB.weaknesses) {
+                    html += '<p class="text-red-400 text-sm">⚠️ ' + result.thumbnailB.weaknesses.join(', ') + '</p>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            // Recommendations
+            if (result.recommendations) {
+                html += '<div class="result-card mt-6">';
+                html += '<h4 class="font-bold text-white mb-3">💡 Recommendations</h4>';
+                html += '<ul class="space-y-2">';
+                result.recommendations.forEach(function(rec) {
+                    html += '<li class="text-gray-300 flex items-start gap-2">';
+                    html += '<span class="text-indigo-400">•</span>';
+                    html += '<span>' + utils.escapeHtml(rec) + '</span>';
+                    html += '</li>';
+                });
+                html += '</ul>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        function renderHistory() {
+            var html = '';
+
+            // Header
+            html += '<div class="hero-section relative z-10">';
+            html += '<div class="max-w-6xl mx-auto">';
+            html += '<div class="flex items-center justify-between mb-6">';
+            html += '<a href="javascript:void(0)" onclick="app.navigateTo(\'hub\')" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">';
+            html += '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
+            html += '<span>Back to Tools</span>';
+            html += '</a>';
+            html += '</div>';
+            html += '<h1 class="text-3xl font-bold text-white mb-2">📜 History</h1>';
+            html += '</div></div>';
+
+            // History tabs
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            html += '<div class="tab-container">';
+            var historyTypes = [
+                { id: 'script', name: 'Scripts', icon: '🎬' },
+                { id: 'hooks', name: 'Hooks', icon: '🎣' },
+                { id: 'multiplier', name: 'Content', icon: '🔄' },
+                { id: 'thumbnail', name: 'Thumbnails', icon: '📊' }
+            ];
+            historyTypes.forEach(function(type) {
+                var active = state.historyType === type.id ? 'active' : '';
+                html += '<button class="tab-btn ' + active + '" onclick="app.setHistoryType(\'' + type.id + '\')">' + type.icon + ' ' + type.name + '</button>';
+            });
+            html += '</div>';
+
+            // History content
+            html += '<div class="history-panel">';
+            var historyData = [];
+            switch (state.historyType) {
+                case 'script': historyData = state.script.history; break;
+                case 'hooks': historyData = state.hooks.history; break;
+                case 'multiplier': historyData = state.multiplier.history; break;
+                case 'thumbnail': historyData = state.thumbnailArena.history; break;
+            }
+
+            if (historyData.length === 0) {
+                html += '<div class="p-8 text-center">';
+                html += '<div class="text-4xl mb-2">📭</div>';
+                html += '<p class="text-gray-400">No history yet</p>';
+                html += '</div>';
+            } else {
+                historyData.forEach(function(item) {
+                    html += '<div class="history-item">';
+                    html += '<div class="flex items-center justify-between">';
+                    html += '<div>';
+                    html += '<p class="text-white font-medium">' + utils.escapeHtml(item.title || item.topic || 'Untitled') + '</p>';
+                    html += '<p class="text-gray-500 text-sm">' + utils.formatDate(item.createdAt) + '</p>';
+                    html += '</div>';
+                    html += '<button class="text-indigo-400 hover:text-indigo-300 text-sm">View →</button>';
+                    html += '</div>';
+                    html += '</div>';
+                });
+            }
+            html += '</div>';
+
+            html += '</div>';
+
+            return html;
+        }
+
+        function renderToolHeader(title, icon, colorClass, cost) {
+            var html = '';
+            html += '<div class="hero-section relative z-10">';
+            html += '<div class="max-w-6xl mx-auto">';
+            html += '<div class="flex items-center justify-between mb-4">';
+            html += '<a href="javascript:void(0)" onclick="app.navigateTo(\'hub\')" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">';
+            html += '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
+            html += '<span>Back to Tools</span>';
+            html += '</a>';
+            html += '<div class="token-display">';
+            html += '<span class="text-2xl">🪙</span>';
+            html += '<span class="font-bold text-white">' + state.tokens.balance + '</span>';
+            html += '</div>';
+            html += '</div>';
+            html += '<div class="flex items-center gap-4">';
+            html += '<div class="text-5xl">' + icon + '</div>';
+            html += '<div>';
+            html += '<h1 class="text-3xl font-bold text-white">' + title + '</h1>';
+            html += '<p class="text-gray-400">' + cost + '</p>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div></div>';
+            return html;
+        }
+
+        /* ==========================================
+           4.6 APPLICATION METHODS
+           ========================================== */
+
+        const app = {
+            navigateTo: function(view) {
+                state.currentView = view;
+                render();
+                window.scrollTo(0, 0);
+            },
+
+            // Token loading
+            loadTokens: function() {
+                if (!auth.currentUser) return;
+
+                functions.httpsCallable('getCreativeTokens')({})
+                    .then(function(result) {
+                        state.tokens = {
+                            balance: result.data.balance || 0,
+                            plan: result.data.plan || 'free',
+                            rollover: result.data.rollover || 0
+                        };
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading tokens:', error);
+                    });
+            },
+
+            // Script Studio methods
+            setScriptTone: function(tone) {
+                state.script.tone = tone;
+                render();
+            },
+
+            setScriptLength: function(length) {
+                state.script.length = length;
+                render();
+            },
+
+            generateScript: function() {
+                var topic = document.getElementById('script-topic').value.trim();
+                if (!topic) {
+                    utils.showToast('Please enter a video topic', 'error');
+                    return;
+                }
+
+                state.script.topic = topic;
+                state.script.includeHook = document.getElementById('include-hook').checked;
+                state.script.includeCTA = document.getElementById('include-cta').checked;
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('generateScript')({
+                    topic: topic,
+                    tone: state.script.tone,
+                    length: state.script.length,
+                    includeHook: state.script.includeHook,
+                    includeCTA: state.script.includeCTA
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.script.result = result.data;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Script generated successfully!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to generate script', 'error');
+                    render();
+                });
+            },
+
+            clearScriptResult: function() {
+                state.script.result = null;
+                state.script.topic = '';
+                render();
+            },
+
+            copyFullScript: function() {
+                var result = state.script.result;
+                var fullScript = '';
+                if (result.hook) fullScript += '=== HOOK ===\n' + result.hook + '\n\n';
+                if (result.intro) fullScript += '=== INTRODUCTION ===\n' + result.intro + '\n\n';
+                if (result.mainContent) fullScript += '=== MAIN CONTENT ===\n' + result.mainContent + '\n\n';
+                if (result.cta) fullScript += '=== CALL TO ACTION ===\n' + result.cta;
+
+                navigator.clipboard.writeText(fullScript).then(function() {
+                    utils.showToast('Full script copied!', 'success');
+                });
+            },
+
+            // Hook Lab methods
+            setHookStyle: function(style) {
+                state.hooks.style = style;
+                render();
+            },
+
+            setHookCount: function(count) {
+                state.hooks.count = count;
+                render();
+            },
+
+            generateHooks: function() {
+                var topic = document.getElementById('hook-topic').value.trim();
+                if (!topic) {
+                    utils.showToast('Please enter a video topic', 'error');
+                    return;
+                }
+
+                state.hooks.topic = topic;
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('generateHooks')({
+                    topic: topic,
+                    style: state.hooks.style,
+                    count: state.hooks.count
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.hooks.result = result.data;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Hooks generated successfully!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to generate hooks', 'error');
+                    render();
+                });
+            },
+
+            clearHookResult: function() {
+                state.hooks.result = null;
+                state.hooks.topic = '';
+                render();
+            },
+
+            // Content Multiplier methods
+            toggleMultiplierFormat: function(format) {
+                var index = state.multiplier.formats.indexOf(format);
+                if (index > -1) {
+                    state.multiplier.formats.splice(index, 1);
+                } else {
+                    state.multiplier.formats.push(format);
+                }
+                render();
+            },
+
+            multiplyContent: function() {
+                var transcript = document.getElementById('multiplier-transcript').value.trim();
+                if (!transcript) {
+                    utils.showToast('Please enter a transcript', 'error');
+                    return;
+                }
+
+                if (state.multiplier.formats.length === 0) {
+                    utils.showToast('Please select at least one output format', 'error');
+                    return;
+                }
+
+                state.multiplier.transcript = transcript;
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('multiplyContent')({
+                    transcript: transcript,
+                    formats: state.multiplier.formats
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.multiplier.result = result.data.content;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Content multiplied successfully!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to multiply content', 'error');
+                    render();
+                });
+            },
+
+            clearMultiplierResult: function() {
+                state.multiplier.result = null;
+                state.multiplier.transcript = '';
+                render();
+            },
+
+            showMultiplierTab: function(tab) {
+                // Hide all tabs
+                var tabs = document.querySelectorAll('[id^="multiplier-tab-"]');
+                tabs.forEach(function(t) { t.style.display = 'none'; });
+
+                // Show selected tab
+                var selectedTab = document.getElementById('multiplier-tab-' + tab);
+                if (selectedTab) selectedTab.style.display = 'block';
+
+                // Update tab buttons
+                var buttons = document.querySelectorAll('.tab-btn');
+                buttons.forEach(function(btn) {
+                    btn.classList.remove('active');
+                    if (btn.textContent.toLowerCase().includes(tab)) {
+                        btn.classList.add('active');
+                    }
+                });
+            },
+
+            // Thumbnail Arena methods
+            handleThumbnailUpload: function(slot, event) {
+                var file = event.target.files[0];
+                if (!file) return;
+
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var index = slot === 'a' ? 0 : 1;
+                    state.thumbnailArena.thumbnails[index] = {
+                        file: file,
+                        preview: e.target.result,
+                        base64: e.target.result.split(',')[1]
+                    };
+                    render();
+                };
+                reader.readAsDataURL(file);
+            },
+
+            analyzeThumbnails: function() {
+                if (state.thumbnailArena.thumbnails.length < 2) {
+                    utils.showToast('Please upload at least 2 thumbnails', 'error');
+                    return;
+                }
+
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('analyzeThumbnails')({
+                    thumbnailA: {
+                        base64: state.thumbnailArena.thumbnails[0].base64,
+                        mimeType: state.thumbnailArena.thumbnails[0].file.type
+                    },
+                    thumbnailB: {
+                        base64: state.thumbnailArena.thumbnails[1].base64,
+                        mimeType: state.thumbnailArena.thumbnails[1].file.type
+                    }
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.thumbnailArena.analysisResult = result.data;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Analysis complete!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to analyze thumbnails', 'error');
+                    render();
+                });
+            },
+
+            clearThumbnailResult: function() {
+                state.thumbnailArena.analysisResult = null;
+                state.thumbnailArena.thumbnails = [];
+                render();
+            },
+
+            // History methods
+            setHistoryType: function(type) {
+                state.historyType = type;
+                render();
+            },
+
+            loadHistory: function(type) {
+                if (!auth.currentUser) return;
+
+                var collectionName = '';
+                switch (type) {
+                    case 'script': collectionName = 'scriptHistory'; break;
+                    case 'hooks': collectionName = 'hookHistory'; break;
+                    case 'multiplier': collectionName = 'contentMultiplierHistory'; break;
+                    case 'thumbnail': collectionName = 'thumbnailTestHistory'; break;
+                }
+
+                db.collection(collectionName)
+                    .where('userId', '==', auth.currentUser.uid)
+                    .orderBy('createdAt', 'desc')
+                    .limit(20)
+                    .get()
+                    .then(function(snapshot) {
+                        var history = [];
+                        snapshot.forEach(function(doc) {
+                            history.push({ id: doc.id, ...doc.data() });
+                        });
+
+                        switch (type) {
+                            case 'script': state.script.history = history; break;
+                            case 'hooks': state.hooks.history = history; break;
+                            case 'multiplier': state.multiplier.history = history; break;
+                            case 'thumbnail': state.thumbnailArena.history = history; break;
+                        }
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading history:', error);
+                    });
+            }
+        };
+
+        // Make app and utils available globally
+        window.app = app;
+        window.utils = utils;
+
+        /* ==========================================
+           4.7 EVENT LISTENERS
+           ========================================== */
+
+        function attachEventListeners() {
+            // Add any dynamic event listeners here
+        }
+
+        /* ==========================================
+           4.8 INITIALIZATION
+           ========================================== */
+
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                state.user = user;
+                state.currentView = 'hub';
+                app.loadTokens();
+                render();
+            } else {
+                state.user = null;
+                state.currentView = 'login';
+                render();
+            }
+        });
+
+        // Initial render
+        render();
+
+    })();
+    </script>
+</body>
+</html>
