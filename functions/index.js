@@ -9323,3 +9323,595 @@ exports.adminSetBucketCors = functions.https.onCall(async (data, context) => {
       'Failed to set CORS: ' + error.message);
   }
 });
+
+// =====================================================
+// FEATURE 1: CLIENT ACTIVITY TIMELINE / HISTORY LOG
+// =====================================================
+
+// Helper function to log user activity (called internally)
+async function logUserActivity(userId, activityType, details, adminId = null) {
+  try {
+    const activityRef = db.collection('users').doc(userId).collection('activityLog');
+    await activityRef.add({
+      type: activityType,
+      details: details,
+      adminId: adminId,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error logging activity:', error);
+  }
+}
+
+// Get user activity history
+exports.adminGetUserActivity = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  const { userId, limit: queryLimit = 50 } = data || {};
+  if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+
+  try {
+    const activityRef = db.collection('users').doc(userId).collection('activityLog');
+    const snapshot = await activityRef.orderBy('timestamp', 'desc').limit(Math.min(queryLimit, 100)).get();
+    const activities = [];
+    snapshot.forEach(doc => {
+      const d = doc.data();
+      activities.push({
+        id: doc.id,
+        type: d.type,
+        details: d.details,
+        adminId: d.adminId,
+        timestamp: d.timestamp?.toDate?.()?.toISOString() || null
+      });
+    });
+    return { success: true, activities };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to get activity: ' + error.message);
+  }
+});
+
+// Track user login
+exports.trackUserLogin = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  try {
+    await db.collection('users').doc(uid).update({ lastLoginAt: admin.firestore.FieldValue.serverTimestamp() });
+    await logUserActivity(uid, 'login', { source: data?.source || 'web' });
+    return { success: true };
+  } catch (error) {
+    return { success: false };
+  }
+});
+
+// =====================================================
+// FEATURE 2: BULK OPERATIONS
+// =====================================================
+
+// Bulk extend subscriptions
+exports.adminBulkExtendSubscriptions = functions.https.onCall(async (data, context) => {
+  const adminUid = await requireAdmin(context);
+  const { userIds, days } = data || {};
+
+  if (!userIds || !Array.isArray(userIds) || userIds.length === 0) throw new functions.https.HttpsError('invalid-argument', 'User IDs array required');
+  if (!days || days < 1 || days > 365) throw new functions.https.HttpsError('invalid-argument', 'Days must be 1-365');
+  if (userIds.length > 100) throw new functions.https.HttpsError('invalid-argument', 'Max 100 users per batch');
+
+  const results = { success: 0, failed: 0, errors: [] };
+
+  for (const userId of userIds) {
+    try {
+      const userRef = db.collection('users').doc(userId);
+      const userDoc = await userRef.get();
+      if (!userDoc.exists) { results.failed++; continue; }
+
+      const userData = userDoc.data();
+      const currentEnd = userData.subscription?.endDate?.toDate?.() || new Date();
+      const baseDate = currentEnd > new Date() ? currentEnd : new Date();
+      const newEndDate = new Date(baseDate);
+      newEndDate.setDate(newEndDate.getDate() + days);
+
+      await userRef.update({ 'subscription.endDate': admin.firestore.Timestamp.fromDate(newEndDate) });
+      await logUserActivity(userId, 'subscription_change', { action: 'bulk_extend', days, newEndDate: newEndDate.toISOString() }, adminUid);
+      results.success++;
+    } catch (error) {
+      results.failed++;
+      results.errors.push({ userId, error: error.message });
+    }
+  }
+  return { success: true, message: `Extended ${results.success} subscriptions by ${days} days`, results };
+});
+
+// Bulk set plan
+exports.adminBulkSetPlan = functions.https.onCall(async (data, context) => {
+  const adminUid = await requireAdmin(context);
+  const { userIds, plan, duration } = data || {};
+
+  const validPlans = ['free', 'lite', 'pro', 'enterprise'];
+  if (!validPlans.includes(plan)) throw new functions.https.HttpsError('invalid-argument', 'Invalid plan');
+  if (!userIds || !Array.isArray(userIds) || userIds.length === 0) throw new functions.https.HttpsError('invalid-argument', 'User IDs required');
+  if (userIds.length > 100) throw new functions.https.HttpsError('invalid-argument', 'Max 100 users');
+
+  const durationDays = { 'week': 7, 'month': 30, '3months': 90, 'year': 365, 'lifetime': null };
+  const days = durationDays[duration || 'month'];
+  const results = { success: 0, failed: 0, errors: [] };
+
+  const planDoc = await db.collection('plans').doc(plan).get();
+  const planLimits = planDoc.exists ? planDoc.data() : {};
+
+  for (const userId of userIds) {
+    try {
+      const userRef = db.collection('users').doc(userId);
+      const userDoc = await userRef.get();
+      if (!userDoc.exists) { results.failed++; continue; }
+
+      const now = new Date();
+      const endDate = days === null ? null : new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+      const updateData = {
+        'subscription.plan': plan,
+        'subscription.startDate': admin.firestore.Timestamp.fromDate(now),
+        'subscription.updatedAt': admin.firestore.FieldValue.serverTimestamp()
+      };
+      if (endDate) {
+        updateData['subscription.endDate'] = admin.firestore.Timestamp.fromDate(endDate);
+      } else {
+        updateData['subscription.endDate'] = null;
+        updateData['subscription.isLifetime'] = true;
+      }
+      if (planLimits.warpOptimizer !== undefined) updateData['usage.warpOptimizer.limit'] = planLimits.warpOptimizer;
+      if (planLimits.competitorAnalysis !== undefined) updateData['usage.competitorAnalysis.limit'] = planLimits.competitorAnalysis;
+
+      await userRef.update(updateData);
+      await logUserActivity(userId, 'subscription_change', { action: 'bulk_set_plan', plan, duration: duration || 'month' }, adminUid);
+      results.success++;
+    } catch (error) {
+      results.failed++;
+    }
+  }
+  return { success: true, message: `Set ${results.success} users to ${plan.toUpperCase()}`, results };
+});
+
+// Export users data
+exports.adminExportUsers = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  const { format = 'json', filters = {} } = data || {};
+
+  try {
+    const snapshot = await db.collection('users').get();
+    const users = [];
+
+    snapshot.forEach(doc => {
+      const userData = doc.data();
+      const plan = userData.subscription?.plan || 'free';
+      if (filters.plan && plan !== filters.plan) return;
+      if (filters.verified && !userData.isFiverrVerified) return;
+      if (filters.hasTag && (!userData.tags || !userData.tags.includes(filters.hasTag))) return;
+
+      users.push({
+        uid: doc.id,
+        email: userData.email || '',
+        displayName: userData.displayName || '',
+        clientAlias: userData.clientAlias || '',
+        isFiverrVerified: userData.isFiverrVerified || false,
+        tags: userData.tags || [],
+        plan,
+        subscriptionEnd: userData.subscription?.endDate?.toDate?.()?.toISOString() || null,
+        lastLoginAt: userData.lastLoginAt?.toDate?.()?.toISOString() || null,
+        adminNotes: userData.adminNotes || ''
+      });
+    });
+
+    if (format === 'csv') {
+      const headers = ['Email', 'Client Alias', 'Fiverr Verified', 'Tags', 'Plan', 'Subscription End', 'Last Login', 'Admin Notes'];
+      const csvRows = [headers.join(',')];
+      users.forEach(u => {
+        csvRows.push([
+          `"${u.email}"`, `"${u.clientAlias}"`, u.isFiverrVerified ? 'Yes' : 'No',
+          `"${(u.tags || []).join('; ')}"`, u.plan, u.subscriptionEnd || '', u.lastLoginAt || '',
+          `"${(u.adminNotes || '').replace(/"/g, '""')}"`
+        ].join(','));
+      });
+      return { success: true, format: 'csv', data: csvRows.join('\n'), count: users.length };
+    }
+    return { success: true, format: 'json', data: users, count: users.length };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to export: ' + error.message);
+  }
+});
+
+// =====================================================
+// FEATURE 3: CLIENT TAGS SYSTEM
+// =====================================================
+
+// Get all available tags
+exports.adminGetTags = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  try {
+    const tagsDoc = await db.collection('settings').doc('tags').get();
+    const tagsData = tagsDoc.exists ? tagsDoc.data() : {};
+    return { success: true, tags: tagsData.list || [], autoTagRules: tagsData.autoTagRules || [] };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to get tags: ' + error.message);
+  }
+});
+
+// Create a new tag
+exports.adminCreateTag = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  const { name, color = '#6b7280' } = data || {};
+  if (!name || name.trim().length === 0) throw new functions.https.HttpsError('invalid-argument', 'Tag name required');
+
+  const tagName = name.trim().substring(0, 30);
+  const tagId = tagName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+  try {
+    const tagsRef = db.collection('settings').doc('tags');
+    const tagsDoc = await tagsRef.get();
+    const currentTags = tagsDoc.exists ? (tagsDoc.data().list || []) : [];
+    if (currentTags.some(t => t.id === tagId)) throw new functions.https.HttpsError('already-exists', 'Tag exists');
+
+    const newTag = { id: tagId, name: tagName, color, createdAt: new Date().toISOString() };
+    currentTags.push(newTag);
+    await tagsRef.set({ list: currentTags }, { merge: true });
+    return { success: true, tag: newTag };
+  } catch (error) {
+    if (error.code) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to create tag: ' + error.message);
+  }
+});
+
+// Delete a tag
+exports.adminDeleteTag = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  const { tagId } = data || {};
+  if (!tagId) throw new functions.https.HttpsError('invalid-argument', 'Tag ID required');
+
+  try {
+    const tagsRef = db.collection('settings').doc('tags');
+    const tagsDoc = await tagsRef.get();
+    const currentTags = tagsDoc.exists ? (tagsDoc.data().list || []) : [];
+    await tagsRef.update({ list: currentTags.filter(t => t.id !== tagId) });
+
+    const usersSnapshot = await db.collection('users').where('tags', 'array-contains', tagId).get();
+    const batch = db.batch();
+    usersSnapshot.forEach(doc => batch.update(doc.ref, { tags: admin.firestore.FieldValue.arrayRemove(tagId) }));
+    await batch.commit();
+    return { success: true, message: 'Tag deleted' };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to delete tag: ' + error.message);
+  }
+});
+
+// Add tag to user
+exports.adminAddUserTag = functions.https.onCall(async (data, context) => {
+  const adminUid = await requireAdmin(context);
+  const { userId, tagId } = data || {};
+  if (!userId || !tagId) throw new functions.https.HttpsError('invalid-argument', 'User ID and Tag ID required');
+
+  try {
+    await db.collection('users').doc(userId).update({ tags: admin.firestore.FieldValue.arrayUnion(tagId) });
+    await logUserActivity(userId, 'tag_change', { action: 'add', tagId }, adminUid);
+    return { success: true };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to add tag: ' + error.message);
+  }
+});
+
+// Remove tag from user
+exports.adminRemoveUserTag = functions.https.onCall(async (data, context) => {
+  const adminUid = await requireAdmin(context);
+  const { userId, tagId } = data || {};
+  if (!userId || !tagId) throw new functions.https.HttpsError('invalid-argument', 'User ID and Tag ID required');
+
+  try {
+    await db.collection('users').doc(userId).update({ tags: admin.firestore.FieldValue.arrayRemove(tagId) });
+    await logUserActivity(userId, 'tag_change', { action: 'remove', tagId }, adminUid);
+    return { success: true };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to remove tag: ' + error.message);
+  }
+});
+
+// Set auto-tag rules
+exports.adminSetAutoTagRules = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  const { rules } = data || {};
+  if (!rules || !Array.isArray(rules)) throw new functions.https.HttpsError('invalid-argument', 'Rules array required');
+
+  const validRules = rules.filter(r => r.tagId && r.condition).map(r => ({
+    tagId: r.tagId, condition: r.condition, value: r.value, enabled: r.enabled !== false
+  }));
+
+  try {
+    await db.collection('settings').doc('tags').set({ autoTagRules: validRules }, { merge: true });
+    return { success: true, rules: validRules };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to save rules: ' + error.message);
+  }
+});
+
+// Run auto-tag rules manually
+exports.adminRunAutoTagRules = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  try {
+    const tagsDoc = await db.collection('settings').doc('tags').get();
+    const rules = tagsDoc.exists ? (tagsDoc.data().autoTagRules || []) : [];
+    if (rules.length === 0) return { success: true, tagged: 0 };
+
+    const usersSnapshot = await db.collection('users').get();
+    let taggedCount = 0;
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const userTags = userData.tags || [];
+      const tagsToAdd = [];
+
+      for (const rule of rules) {
+        if (!rule.enabled || userTags.includes(rule.tagId)) continue;
+        let shouldTag = false;
+
+        if (rule.condition === 'usage_above') {
+          const used = userData.usage?.warpOptimizer?.usedToday || 0;
+          const limit = userData.usage?.warpOptimizer?.limit || 1;
+          shouldTag = (used / limit) * 100 >= rule.value;
+        } else if (rule.condition === 'inactive_days') {
+          const lastLogin = userData.lastLoginAt?.toDate?.();
+          if (lastLogin) {
+            const days = Math.floor((Date.now() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));
+            shouldTag = days >= rule.value;
+          }
+        } else if (rule.condition === 'plan_is') {
+          shouldTag = (userData.subscription?.plan || 'free') === rule.value;
+        }
+        if (shouldTag) tagsToAdd.push(rule.tagId);
+      }
+
+      if (tagsToAdd.length > 0) {
+        await userDoc.ref.update({ tags: admin.firestore.FieldValue.arrayUnion(...tagsToAdd) });
+        taggedCount++;
+      }
+    }
+    return { success: true, tagged: taggedCount };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to run rules: ' + error.message);
+  }
+});
+
+// =====================================================
+// FEATURE 4: NOTIFICATIONS SYSTEM
+// =====================================================
+
+// Get notification settings
+exports.adminGetNotificationSettings = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  try {
+    const doc = await db.collection('settings').doc('notifications').get();
+    const s = doc.exists ? doc.data() : {};
+    return {
+      success: true,
+      settings: {
+        expiringDays: s.expiringDays || 3,
+        inactiveDays: s.inactiveDays || 7,
+        highUsagePercent: s.highUsagePercent || 80,
+        emailEnabled: s.emailEnabled || false,
+        adminEmail: s.adminEmail || ''
+      }
+    };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to get settings: ' + error.message);
+  }
+});
+
+// Set notification settings
+exports.adminSetNotificationSettings = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  const { expiringDays, inactiveDays, highUsagePercent, emailEnabled, adminEmail } = data || {};
+
+  try {
+    await db.collection('settings').doc('notifications').set({
+      expiringDays: Math.max(1, Math.min(30, expiringDays || 3)),
+      inactiveDays: Math.max(1, Math.min(90, inactiveDays || 7)),
+      highUsagePercent: Math.max(50, Math.min(100, highUsagePercent || 80)),
+      emailEnabled: !!emailEnabled,
+      adminEmail: (adminEmail || '').trim().substring(0, 100),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { success: true };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to save: ' + error.message);
+  }
+});
+
+// Get notifications
+exports.adminGetNotifications = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  try {
+    const snapshot = await db.collection('adminNotifications')
+      .where('dismissed', '==', false)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get();
+
+    const notifications = [];
+    snapshot.forEach(doc => {
+      const d = doc.data();
+      notifications.push({
+        id: doc.id, type: d.type, title: d.title, message: d.message,
+        userId: d.userId, userEmail: d.userEmail, priority: d.priority || 'normal',
+        createdAt: d.createdAt?.toDate?.()?.toISOString() || null
+      });
+    });
+    return { success: true, notifications };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to get notifications: ' + error.message);
+  }
+});
+
+// Dismiss notification
+exports.adminDismissNotification = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+  const { notificationId, dismissAll = false } = data || {};
+
+  try {
+    if (dismissAll) {
+      const snapshot = await db.collection('adminNotifications').where('dismissed', '==', false).get();
+      const batch = db.batch();
+      snapshot.forEach(doc => batch.update(doc.ref, { dismissed: true, dismissedAt: admin.firestore.FieldValue.serverTimestamp() }));
+      await batch.commit();
+      return { success: true, message: 'All dismissed' };
+    }
+    if (!notificationId) throw new functions.https.HttpsError('invalid-argument', 'ID required');
+    await db.collection('adminNotifications').doc(notificationId).update({ dismissed: true, dismissedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { success: true };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed: ' + error.message);
+  }
+});
+
+// Check and create notifications (scheduled daily at 8 AM UTC)
+exports.checkAndCreateNotifications = functions.pubsub.schedule('0 8 * * *').timeZone('UTC').onRun(async (context) => {
+  try {
+    const settingsDoc = await db.collection('settings').doc('notifications').get();
+    const s = settingsDoc.exists ? settingsDoc.data() : {};
+    const expiringDays = s.expiringDays || 3;
+    const inactiveDays = s.inactiveDays || 7;
+    const highUsagePercent = s.highUsagePercent || 80;
+
+    const now = new Date();
+    const expiringThreshold = new Date(now.getTime() + expiringDays * 24 * 60 * 60 * 1000);
+    const inactiveThreshold = new Date(now.getTime() - inactiveDays * 24 * 60 * 60 * 1000);
+
+    const usersSnapshot = await db.collection('users').get();
+    const existingSnapshot = await db.collection('adminNotifications').where('dismissed', '==', false).get();
+    const existingKeys = new Set();
+    existingSnapshot.forEach(doc => {
+      const d = doc.data();
+      if (d.userId && d.type) existingKeys.add(`${d.userId}_${d.type}`);
+    });
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const userId = userDoc.id;
+      const email = userData.clientAlias || userData.email || 'Unknown';
+      const plan = userData.subscription?.plan || 'free';
+
+      // Expiring subscriptions
+      const endDate = userData.subscription?.endDate?.toDate?.();
+      if (endDate && endDate <= expiringThreshold && endDate > now && !existingKeys.has(`${userId}_expiring_subscription`)) {
+        const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+        await db.collection('adminNotifications').add({
+          type: 'expiring_subscription', title: 'Subscription Expiring',
+          message: `${email}'s subscription expires in ${daysLeft} day(s)`,
+          userId, userEmail: userData.email, priority: daysLeft <= 1 ? 'high' : 'normal',
+          dismissed: false, createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      // Inactive paid users
+      if (plan !== 'free') {
+        const lastLogin = userData.lastLoginAt?.toDate?.();
+        if (lastLogin && lastLogin < inactiveThreshold && !existingKeys.has(`${userId}_inactive_user`)) {
+          const daysSince = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
+          await db.collection('adminNotifications').add({
+            type: 'inactive_user', title: 'Inactive Paid User',
+            message: `${email} hasn't logged in for ${daysSince} days`,
+            userId, userEmail: userData.email, priority: 'low',
+            dismissed: false, createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      }
+
+      // High usage
+      const used = userData.usage?.warpOptimizer?.usedToday || 0;
+      const limit = userData.usage?.warpOptimizer?.limit || 1;
+      const pct = (used / limit) * 100;
+      if (pct >= highUsagePercent && plan !== 'enterprise' && !existingKeys.has(`${userId}_high_usage`)) {
+        await db.collection('adminNotifications').add({
+          type: 'high_usage', title: 'High Usage - Upsell Opportunity',
+          message: `${email} using ${Math.round(pct)}% of quota`,
+          userId, userEmail: userData.email, priority: 'normal',
+          dismissed: false, createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Notification check error:', error);
+    return null;
+  }
+});
+
+// Manual notification check
+exports.adminCheckNotifications = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  try {
+    const settingsDoc = await db.collection('settings').doc('notifications').get();
+    const s = settingsDoc.exists ? settingsDoc.data() : {};
+    const expiringDays = s.expiringDays || 3;
+    const inactiveDays = s.inactiveDays || 7;
+    const highUsagePercent = s.highUsagePercent || 80;
+
+    const now = new Date();
+    const expiringThreshold = new Date(now.getTime() + expiringDays * 24 * 60 * 60 * 1000);
+    const inactiveThreshold = new Date(now.getTime() - inactiveDays * 24 * 60 * 60 * 1000);
+
+    const usersSnapshot = await db.collection('users').get();
+    const existingSnapshot = await db.collection('adminNotifications').where('dismissed', '==', false).get();
+    const existingKeys = new Set();
+    existingSnapshot.forEach(doc => {
+      const d = doc.data();
+      if (d.userId && d.type) existingKeys.add(`${d.userId}_${d.type}`);
+    });
+
+    let created = 0;
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const userId = userDoc.id;
+      const email = userData.clientAlias || userData.email || 'Unknown';
+      const plan = userData.subscription?.plan || 'free';
+
+      const endDate = userData.subscription?.endDate?.toDate?.();
+      if (endDate && endDate <= expiringThreshold && endDate > now && !existingKeys.has(`${userId}_expiring_subscription`)) {
+        const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+        await db.collection('adminNotifications').add({
+          type: 'expiring_subscription', title: 'Subscription Expiring',
+          message: `${email}'s subscription expires in ${daysLeft} day(s)`,
+          userId, userEmail: userData.email, priority: daysLeft <= 1 ? 'high' : 'normal',
+          dismissed: false, createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        created++;
+      }
+
+      if (plan !== 'free') {
+        const lastLogin = userData.lastLoginAt?.toDate?.();
+        if (lastLogin && lastLogin < inactiveThreshold && !existingKeys.has(`${userId}_inactive_user`)) {
+          const daysSince = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
+          await db.collection('adminNotifications').add({
+            type: 'inactive_user', title: 'Inactive Paid User',
+            message: `${email} hasn't logged in for ${daysSince} days`,
+            userId, userEmail: userData.email, priority: 'low',
+            dismissed: false, createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          created++;
+        }
+      }
+
+      const used = userData.usage?.warpOptimizer?.usedToday || 0;
+      const limit = userData.usage?.warpOptimizer?.limit || 1;
+      const pct = (used / limit) * 100;
+      if (pct >= highUsagePercent && plan !== 'enterprise' && !existingKeys.has(`${userId}_high_usage`)) {
+        await db.collection('adminNotifications').add({
+          type: 'high_usage', title: 'High Usage - Upsell',
+          message: `${email} using ${Math.round(pct)}% of quota`,
+          userId, userEmail: userData.email, priority: 'normal',
+          dismissed: false, createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        created++;
+      }
+    }
+    return { success: true, created };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed: ' + error.message);
+  }
+});
