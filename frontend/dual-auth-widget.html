@@ -1421,7 +1421,7 @@
            ------------------------------------------ */
         .tool-card {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             /* PERFORMANCE: Isolate rendering and skip off-screen */
             contain: layout style paint;
             content-visibility: auto;
@@ -1430,14 +1430,17 @@
 
         .tool-card:hover {
             transform: translateY(-6px);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-            border-color: rgba(124, 58, 237, 0.2);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 30px rgba(236, 72, 153, 0.2);
+            border-color: rgba(236, 72, 153, 0.3);
         }
 
         .card {
-            background: white;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 1.25rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
             padding: 2.5rem;
         }
 
@@ -6123,18 +6126,18 @@
                 var percent = utils.getUsagePercent(usage.usedToday, totalLimit);
                 var color = utils.getUsageColor(percent);
 
-                var cardHtml = '<div class="bg-white rounded-2xl shadow-lg p-6 lg:p-8 mobile-padding hover:shadow-xl transition-all ' + (extraClass || '') + '">';
+                var cardHtml = '<div class="rounded-2xl shadow-lg p-6 lg:p-8 mobile-padding hover:shadow-xl transition-all ' + (extraClass || '') + '" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08);">';
                 cardHtml += '<div class="flex justify-between items-start mb-4">';
                 cardHtml += '<div class="w-14 h-14 lg:w-16 lg:h-16 bg-gradient-to-br ' + tool.color + ' rounded-2xl flex items-center justify-center text-3xl lg:text-4xl shadow-lg">' + tool.emoji + '</div>';
                 cardHtml += '<div class="text-right">';
-                cardHtml += '<span class="text-3xl lg:text-4xl font-bold text-gray-800">' + usage.usedToday + '<span class="text-xl lg:text-2xl text-gray-400">/' + baseLimit + '</span></span>';
+                cardHtml += '<span class="text-3xl lg:text-4xl font-bold text-white">' + usage.usedToday + '<span class="text-xl lg:text-2xl text-white/50">/' + baseLimit + '</span></span>';
                 if (bonusUses > 0) {
-                    cardHtml += '<span class="text-lg lg:text-xl font-bold text-green-500 ml-1">+' + bonusUses + '</span>';
+                    cardHtml += '<span class="text-lg lg:text-xl font-bold text-green-400 ml-1">+' + bonusUses + '</span>';
                 }
                 cardHtml += '</div>';
                 cardHtml += '</div>';
-                cardHtml += '<h4 class="font-bold text-gray-800 text-lg lg:text-xl mb-3">' + tool.name + '</h4>';
-                cardHtml += '<div class="w-full bg-gray-100 rounded-full h-3 mb-3">';
+                cardHtml += '<h4 class="font-bold text-white text-lg lg:text-xl mb-3">' + tool.name + '</h4>';
+                cardHtml += '<div class="w-full rounded-full h-3 mb-3" style="background: rgba(255, 255, 255, 0.1);">';
                 cardHtml += '<div class="' + color + ' h-3 rounded-full usage-bar transition-all" style="width:' + percent + '%"></div>';
                 cardHtml += '</div>';
 
@@ -6146,11 +6149,11 @@
                     }
                     var remainingMs = Math.max(0, nextResetMs - now);
                     cardHtml += '<div class="flex items-center justify-between">';
-                    cardHtml += '<p class="text-sm lg:text-base text-red-500 font-medium">⏱️ Resets in:</p>';
-                    cardHtml += '<span class="quota-countdown text-red-600 font-bold text-lg" data-reset-at="' + nextResetMs + '">' + formatCountdown(remainingMs) + '</span>';
+                    cardHtml += '<p class="text-sm lg:text-base text-red-400 font-medium">⏱️ Resets in:</p>';
+                    cardHtml += '<span class="quota-countdown text-red-400 font-bold text-lg" data-reset-at="' + nextResetMs + '">' + formatCountdown(remainingMs) + '</span>';
                     cardHtml += '</div>';
                 } else {
-                    cardHtml += '<p class="text-sm lg:text-base text-gray-500 font-medium">' + remainingUses + ' uses remaining</p>';
+                    cardHtml += '<p class="text-sm lg:text-base text-white/70 font-medium">' + remainingUses + ' uses remaining</p>';
                 }
                 cardHtml += '</div>';
                 return cardHtml;
@@ -6375,61 +6378,61 @@
             html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 fade-in">';
 
             // Optimizer Card
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100" onclick="app.goToOptimizer()">';
+            html += '<div class="rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08);" onclick="app.goToOptimizer()">';
             html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🚀</div>';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Video Optimizer</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">AI-powered SEO optimization for your videos</p>';
-            html += '<div class="flex items-center text-blue-600 font-bold group">';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-white mb-2">Video Optimizer</h3>';
+            html += '<p class="text-white/70 mb-4 text-sm lg:text-base">AI-powered SEO optimization for your videos</p>';
+            html += '<div class="flex items-center text-blue-400 font-bold group">';
             html += '<span>Optimize</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
             // Competitor Analysis Card (NEW)
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToCompetitor()">';
+            html += '<div class="rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer relative overflow-hidden" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08);" onclick="app.goToCompetitor()">';
             html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
             html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-red-500 to-orange-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🎯</div>';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Competitor Analysis</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Analyze competitors and find ways to beat them</p>';
-            html += '<div class="flex items-center text-red-600 font-bold group">';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-white mb-2">Competitor Analysis</h3>';
+            html += '<p class="text-white/70 mb-4 text-sm lg:text-base">Analyze competitors and find ways to beat them</p>';
+            html += '<div class="flex items-center text-red-400 font-bold group">';
             html += '<span>Analyze</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
             // Trend Predictor Card (NEW)
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToTrends()">';
+            html += '<div class="rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer relative overflow-hidden" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08);" onclick="app.goToTrends()">';
             html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
             html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">📈</div>';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Trend Predictor</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Predict viral trends before they happen</p>';
-            html += '<div class="flex items-center text-cyan-600 font-bold group">';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-white mb-2">Trend Predictor</h3>';
+            html += '<p class="text-white/70 mb-4 text-sm lg:text-base">Predict viral trends before they happen</p>';
+            html += '<div class="flex items-center text-cyan-400 font-bold group">';
             html += '<span>Predict</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
             // Thumbnail Generator Card (NEW)
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToThumbnail()">';
+            html += '<div class="rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer relative overflow-hidden" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08);" onclick="app.goToThumbnail()">';
             html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
             html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-pink-500 to-rose-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🎨</div>';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">AI Thumbnails</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Generate click-worthy thumbnails with AI</p>';
-            html += '<div class="flex items-center text-pink-600 font-bold group">';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-white mb-2">AI Thumbnails</h3>';
+            html += '<p class="text-white/70 mb-4 text-sm lg:text-base">Generate click-worthy thumbnails with AI</p>';
+            html += '<div class="flex items-center text-pink-400 font-bold group">';
             html += '<span>Generate</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
             // Channel Audit Pro Card (NEW - replaces Placement Finder)
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToChannelAudit()">';
+            html += '<div class="rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer relative overflow-hidden" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08);" onclick="app.goToChannelAudit()">';
             html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-green-400 to-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">NEW</div>';
             html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🔍</div>';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">Channel Audit Pro</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Complete channel analysis with growth recommendations</p>';
-            html += '<div class="flex items-center text-emerald-600 font-bold group">';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-white mb-2">Channel Audit Pro</h3>';
+            html += '<p class="text-white/70 mb-4 text-sm lg:text-base">Complete channel analysis with growth recommendations</p>';
+            html += '<div class="flex items-center text-emerald-400 font-bold group">';
             html += '<span>Audit Channel</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
             // More AI Tools Card - Links to expanded tools page
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToMoreTools()">';
+            html += '<div class="rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer relative overflow-hidden" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08);" onclick="app.goToMoreTools()">';
             html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-purple-400 to-indigo-500 text-white text-xs font-bold px-2 py-1 rounded-full">EXPLORE</div>';
             html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🧰</div>';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">More AI Tools</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Discover additional AI-powered tools</p>';
-            html += '<div class="flex items-center text-purple-600 font-bold group">';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-white mb-2">More AI Tools</h3>';
+            html += '<p class="text-white/70 mb-4 text-sm lg:text-base">Discover additional AI-powered tools</p>';
+            html += '<div class="flex items-center text-purple-400 font-bold group">';
             html += '<span>Explore</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
