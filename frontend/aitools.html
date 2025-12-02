@@ -1128,7 +1128,9 @@
             },
 
             // History view
-            historyType: 'script' // script | hooks | multiplier | thumbnail | trends | gaps | audience | collab | revenue | coach
+            historyType: 'script', // script | hooks | multiplier | thumbnail | trends | gaps | audience | collab | revenue | coach
+            historyLoading: false,
+            selectedHistoryItem: null // For viewing history item details
         };
 
         /* ==========================================
@@ -1179,6 +1181,11 @@
                     toast.style.transform = 'translateY(10px)';
                     setTimeout(function() { toast.remove(); }, 300);
                 }, 3000);
+            },
+
+            // Alias for showToast (used by PDF export)
+            showNotification: function(message, type) {
+                this.showToast(message, type);
             }
         };
 
@@ -3023,37 +3030,51 @@
 
             // History content
             html += '<div class="history-panel">';
-            var historyData = [];
-            switch (state.historyType) {
-                case 'script': historyData = state.script.history; break;
-                case 'hooks': historyData = state.hooks.history; break;
-                case 'multiplier': historyData = state.multiplier.history; break;
-                case 'thumbnail': historyData = state.thumbnailArena.history; break;
-                case 'trends': historyData = state.trends.history; break;
-                case 'gaps': historyData = state.gaps.history; break;
-                case 'audience': historyData = state.audience.history; break;
-                case 'collab': historyData = state.collab.history; break;
-                case 'revenue': historyData = state.revenue.history; break;
-                case 'coach': historyData = state.coach.history; break;
-            }
 
-            if (historyData.length === 0) {
+            // Show loading state
+            if (state.historyLoading) {
                 html += '<div class="p-8 text-center">';
-                html += '<div class="text-4xl mb-2">📭</div>';
-                html += '<p class="text-gray-400">No history yet</p>';
+                html += '<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto mb-4"></div>';
+                html += '<p class="text-gray-400">Loading history...</p>';
                 html += '</div>';
             } else {
-                historyData.forEach(function(item) {
-                    html += '<div class="history-item">';
-                    html += '<div class="flex items-center justify-between">';
-                    html += '<div>';
-                    html += '<p class="text-white font-medium">' + utils.escapeHtml(item.title || item.topic || 'Untitled') + '</p>';
-                    html += '<p class="text-gray-500 text-sm">' + utils.formatDate(item.createdAt) + '</p>';
+                var historyData = [];
+                switch (state.historyType) {
+                    case 'script': historyData = state.script.history; break;
+                    case 'hooks': historyData = state.hooks.history; break;
+                    case 'multiplier': historyData = state.multiplier.history; break;
+                    case 'thumbnail': historyData = state.thumbnailArena.history; break;
+                    case 'trends': historyData = state.trends.history; break;
+                    case 'gaps': historyData = state.gaps.history; break;
+                    case 'audience': historyData = state.audience.history; break;
+                    case 'collab': historyData = state.collab.history; break;
+                    case 'revenue': historyData = state.revenue.history; break;
+                    case 'coach': historyData = state.coach.history; break;
+                }
+
+                if (historyData.length === 0) {
+                    html += '<div class="p-8 text-center">';
+                    html += '<div class="text-4xl mb-2">📭</div>';
+                    html += '<p class="text-gray-400">No history yet for this tool</p>';
+                    html += '<p class="text-gray-500 text-sm mt-2">Use the tool to generate content and it will appear here</p>';
                     html += '</div>';
-                    html += '<button class="text-indigo-400 hover:text-indigo-300 text-sm">View →</button>';
-                    html += '</div>';
-                    html += '</div>';
-                });
+                } else {
+                    historyData.forEach(function(item, index) {
+                        var title = item.title || item.topic || item.niche || item.videoUrl || 'Untitled';
+                        html += '<div class="history-item">';
+                        html += '<div class="flex items-center justify-between">';
+                        html += '<div class="flex-1 min-w-0 mr-4">';
+                        html += '<p class="text-white font-medium truncate">' + utils.escapeHtml(title) + '</p>';
+                        html += '<p class="text-gray-500 text-sm">' + utils.formatDate(item.createdAt) + '</p>';
+                        html += '</div>';
+                        html += '<div class="flex items-center gap-2">';
+                        html += '<button onclick="app.viewHistoryItem(\'' + state.historyType + '\', ' + index + ')" class="px-3 py-1.5 bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 rounded-lg text-sm transition-colors">View →</button>';
+                        html += '<button onclick="app.deleteHistoryItem(\'' + state.historyType + '\', \'' + item.id + '\', ' + index + ')" class="px-2 py-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg text-sm transition-colors">🗑️</button>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    });
+                }
             }
             html += '</div>';
 
@@ -3094,6 +3115,12 @@
         const app = {
             navigateTo: function(view) {
                 state.currentView = view;
+
+                // Load history data when navigating to history view
+                if (view === 'history') {
+                    this.loadAllHistory();
+                }
+
                 render();
                 window.scrollTo(0, 0);
             },
@@ -3787,10 +3814,14 @@
             loadAllHistory: function() {
                 if (!auth.currentUser) return;
 
+                state.historyLoading = true;
+                render();
+
                 var getAIToolsHistory = firebase.functions().httpsCallable('getAIToolsHistory');
 
                 getAIToolsHistory({ type: 'all', limit: 20 })
                     .then(function(result) {
+                        state.historyLoading = false;
                         if (result.data && result.data.success) {
                             var history = result.data.history;
                             state.script.history = history.script || [];
@@ -3803,11 +3834,136 @@
                             state.collab.history = history.collab || [];
                             state.revenue.history = history.revenue || [];
                             state.coach.history = history.coach || [];
-                            render();
                         }
+                        render();
                     })
                     .catch(function(error) {
                         console.error('Error loading all history:', error);
+                        state.historyLoading = false;
+                        utils.showToast('Failed to load history', 'error');
+                        render();
+                    });
+            },
+
+            // View a history item - loads result into the tool view
+            viewHistoryItem: function(type, index) {
+                var historyData = [];
+                switch (type) {
+                    case 'script': historyData = state.script.history; break;
+                    case 'hooks': historyData = state.hooks.history; break;
+                    case 'multiplier': historyData = state.multiplier.history; break;
+                    case 'thumbnail': historyData = state.thumbnailArena.history; break;
+                    case 'trends': historyData = state.trends.history; break;
+                    case 'gaps': historyData = state.gaps.history; break;
+                    case 'audience': historyData = state.audience.history; break;
+                    case 'collab': historyData = state.collab.history; break;
+                    case 'revenue': historyData = state.revenue.history; break;
+                    case 'coach': historyData = state.coach.history; break;
+                }
+
+                var item = historyData[index];
+                if (!item) {
+                    utils.showToast('History item not found', 'error');
+                    return;
+                }
+
+                // Load the result into the tool's state and navigate to the tool view
+                switch (type) {
+                    case 'script':
+                        state.script.topic = item.topic || '';
+                        state.script.tone = item.tone || 'engaging';
+                        state.script.length = item.length || 'medium';
+                        state.script.result = item.script || item.result || item;
+                        break;
+                    case 'hooks':
+                        state.hooks.topic = item.topic || '';
+                        state.hooks.style = item.style || 'question';
+                        state.hooks.result = { hooks: item.hooks || [] };
+                        break;
+                    case 'multiplier':
+                        state.multiplier.result = item.content || item.result || item;
+                        break;
+                    case 'thumbnail':
+                        state.thumbnailArena.analysisResult = item.analysis || item.result || item;
+                        break;
+                    case 'trends':
+                        state.trends.niche = item.niche || '';
+                        state.trends.result = item.report || item.result || item;
+                        break;
+                    case 'gaps':
+                        state.gaps.niche = item.niche || '';
+                        state.gaps.result = item.gaps || item.result || item;
+                        break;
+                    case 'audience':
+                        state.audience.niche = item.niche || '';
+                        state.audience.result = item.analysis || item.result || item;
+                        break;
+                    case 'collab':
+                        state.collab.niche = item.niche || '';
+                        state.collab.result = item.partners || item.result || item;
+                        break;
+                    case 'revenue':
+                        state.revenue.niche = item.niche || '';
+                        state.revenue.result = item.strategies || item.result || item;
+                        break;
+                    case 'coach':
+                        state.coach.videoUrl = item.videoUrl || '';
+                        state.coach.result = item.result || item;
+                        break;
+                }
+
+                // Navigate to the tool view
+                state.currentView = type;
+                render();
+                window.scrollTo(0, 0);
+                utils.showToast('Loaded from history', 'success');
+            },
+
+            // Delete a history item
+            deleteHistoryItem: function(type, id, index) {
+                if (!confirm('Are you sure you want to delete this history item?')) return;
+
+                var collectionMap = {
+                    script: 'scriptHistory',
+                    hooks: 'hookHistory',
+                    multiplier: 'contentMultiplierHistory',
+                    thumbnail: 'thumbnailTestHistory',
+                    trends: 'trendHistory',
+                    gaps: 'contentGapHistory',
+                    audience: 'audienceHistory',
+                    collab: 'collabHistory',
+                    revenue: 'revenueHistory',
+                    coach: 'coachHistory'
+                };
+
+                var collection = collectionMap[type];
+                if (!collection) {
+                    utils.showToast('Invalid history type', 'error');
+                    return;
+                }
+
+                // Delete from Firestore
+                db.collection(collection).doc(id).delete()
+                    .then(function() {
+                        // Remove from local state
+                        switch (type) {
+                            case 'script': state.script.history.splice(index, 1); break;
+                            case 'hooks': state.hooks.history.splice(index, 1); break;
+                            case 'multiplier': state.multiplier.history.splice(index, 1); break;
+                            case 'thumbnail': state.thumbnailArena.history.splice(index, 1); break;
+                            case 'trends': state.trends.history.splice(index, 1); break;
+                            case 'gaps': state.gaps.history.splice(index, 1); break;
+                            case 'audience': state.audience.history.splice(index, 1); break;
+                            case 'collab': state.collab.history.splice(index, 1); break;
+                            case 'revenue': state.revenue.history.splice(index, 1); break;
+                            case 'coach': state.coach.history.splice(index, 1); break;
+                        }
+                        render();
+                        utils.showToast('History item deleted', 'success');
+                    })
+                    .catch(function(error) {
+                        console.error('Error deleting history:', error);
+                        utils.showToast('Failed to delete history item', 'error');
                     });
             }
         };
