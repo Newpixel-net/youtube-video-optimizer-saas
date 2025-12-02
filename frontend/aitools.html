@@ -807,6 +807,168 @@
         .history-item:last-child {
             border-bottom: none;
         }
+
+        /* ------------------------------------------
+           2.13 CINEMATIC WIDE LAYOUT SYSTEM
+           ------------------------------------------ */
+        .tool-page-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem;
+        }
+
+        .tool-layout {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        .tool-input-panel {
+            position: sticky;
+            top: 1.5rem;
+            background: linear-gradient(145deg, rgba(30, 30, 50, 0.6) 0%, rgba(20, 20, 35, 0.8) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .tool-results-panel {
+            min-height: 400px;
+        }
+
+        .results-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .results-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .results-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .result-section {
+            background: linear-gradient(145deg, rgba(30, 30, 50, 0.5) 0%, rgba(20, 20, 35, 0.7) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1.25rem;
+            transition: all 0.3s ease;
+        }
+
+        .result-section:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .result-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .result-section-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .result-section-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        /* Full-width result view for when no input panel is needed */
+        .tool-layout.full-width {
+            grid-template-columns: 1fr;
+        }
+
+        .tool-layout.full-width .tool-results-panel {
+            max-width: 100%;
+        }
+
+        /* Results grid for multiple items */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.25rem;
+        }
+
+        /* PDF Download Button Styling */
+        .btn-pdf {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1.25rem;
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            border: none;
+            border-radius: 0.625rem;
+            color: white;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-pdf:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+        }
+
+        /* Wide layout responsive */
+        @media (max-width: 1200px) {
+            .tool-layout {
+                grid-template-columns: 380px 1fr;
+                gap: 1.5rem;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .tool-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .tool-input-panel {
+                position: static;
+            }
+
+            .tool-page-container {
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .tool-page-container {
+                padding: 0.75rem;
+            }
+
+            .tool-input-panel {
+                padding: 1.25rem;
+            }
+
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1252,83 +1414,86 @@
             // Header
             html += renderToolHeader('AI Script Studio', '🎬', 'script-studio', '5 tokens per script');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.script.result ? '' : ' full-width') + '">';
 
-            if (state.script.result) {
-                // Show results
-                html += renderScriptResults();
-            } else {
-                // Show form
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+            // Input panel (sidebar when results exist)
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">📝 Script Settings</h3>';
 
-                // Topic input
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Video Topic / Idea</label>';
-                html += '<textarea id="script-topic" class="input-field h-24" placeholder="Enter your video topic or idea... e.g., \'10 productivity hacks for remote workers\' or \'Why AI will change everything in 2025\'">' + utils.escapeHtml(state.script.topic) + '</textarea>';
+            // Topic input
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Video Topic / Idea</label>';
+            html += '<textarea id="script-topic" class="input-field h-20 text-sm" placeholder="e.g., \'10 productivity hacks for remote workers\'">' + utils.escapeHtml(state.script.topic) + '</textarea>';
+            html += '</div>';
+
+            // Tone selection
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Script Tone</label>';
+            html += '<div class="grid grid-cols-2 gap-2">';
+            var tones = [
+                { id: 'engaging', name: 'Engaging', icon: '🎯' },
+                { id: 'educational', name: 'Educational', icon: '📚' },
+                { id: 'entertaining', name: 'Entertaining', icon: '🎉' },
+                { id: 'professional', name: 'Professional', icon: '💼' }
+            ];
+            tones.forEach(function(tone) {
+                var selected = state.script.tone === tone.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setScriptTone(\'' + tone.id + '\')" style="padding: 0.625rem;">';
+                html += '<div class="text-lg">' + tone.icon + ' <span class="text-sm text-white">' + tone.name + '</span></div>';
                 html += '</div>';
+            });
+            html += '</div></div>';
 
-                // Tone selection
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Script Tone</label>';
-                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
-                var tones = [
-                    { id: 'engaging', name: 'Engaging', icon: '🎯' },
-                    { id: 'educational', name: 'Educational', icon: '📚' },
-                    { id: 'entertaining', name: 'Entertaining', icon: '🎉' },
-                    { id: 'professional', name: 'Professional', icon: '💼' }
-                ];
-                tones.forEach(function(tone) {
-                    var selected = state.script.tone === tone.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setScriptTone(\'' + tone.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + tone.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + tone.name + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
+            // Length selection
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Script Length</label>';
+            html += '<div class="grid grid-cols-3 gap-2">';
+            var lengths = [
+                { id: 'short', name: 'Short', desc: '3-5m', icon: '⚡' },
+                { id: 'medium', name: 'Medium', desc: '8-12m', icon: '📝' },
+                { id: 'long', name: 'Long', desc: '15-20m', icon: '📖' }
+            ];
+            lengths.forEach(function(len) {
+                var selected = state.script.length === len.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setScriptLength(\'' + len.id + '\')" style="padding: 0.5rem; text-align: center;">';
+                html += '<div class="text-lg">' + len.icon + '</div>';
+                html += '<div class="text-xs text-white">' + len.name + '</div>';
+                html += '<div class="text-xs text-gray-500">' + len.desc + '</div>';
+                html += '</div>';
+            });
+            html += '</div></div>';
 
-                // Length selection
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Script Length</label>';
-                html += '<div class="grid grid-cols-3 gap-3">';
-                var lengths = [
-                    { id: 'short', name: 'Short', desc: '3-5 min', icon: '⚡' },
-                    { id: 'medium', name: 'Medium', desc: '8-12 min', icon: '📝' },
-                    { id: 'long', name: 'Long', desc: '15-20 min', icon: '📖' }
-                ];
-                lengths.forEach(function(len) {
-                    var selected = state.script.length === len.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setScriptLength(\'' + len.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + len.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + len.name + '</div>';
-                    html += '<div class="text-gray-500 text-xs">' + len.desc + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
+            // Options
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Include</label>';
+            html += '<div class="space-y-2">';
+            html += '<label class="flex items-center gap-2 cursor-pointer">';
+            html += '<input type="checkbox" id="include-hook" ' + (state.script.includeHook ? 'checked' : '') + ' class="w-4 h-4 rounded accent-indigo-500">';
+            html += '<span class="text-gray-300 text-sm">Opening Hook</span>';
+            html += '</label>';
+            html += '<label class="flex items-center gap-2 cursor-pointer">';
+            html += '<input type="checkbox" id="include-cta" ' + (state.script.includeCTA ? 'checked' : '') + ' class="w-4 h-4 rounded accent-indigo-500">';
+            html += '<span class="text-gray-300 text-sm">Call-to-Action</span>';
+            html += '</label>';
+            html += '</div></div>';
 
-                // Options
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Include</label>';
-                html += '<div class="flex flex-wrap gap-4">';
-                html += '<label class="flex items-center gap-2 cursor-pointer">';
-                html += '<input type="checkbox" id="include-hook" ' + (state.script.includeHook ? 'checked' : '') + ' class="w-5 h-5 rounded accent-indigo-500">';
-                html += '<span class="text-gray-300">Opening Hook</span>';
-                html += '</label>';
-                html += '<label class="flex items-center gap-2 cursor-pointer">';
-                html += '<input type="checkbox" id="include-cta" ' + (state.script.includeCTA ? 'checked' : '') + ' class="w-5 h-5 rounded accent-indigo-500">';
-                html += '<span class="text-gray-300">Call-to-Action</span>';
-                html += '</label>';
-                html += '</div></div>';
+            // Generate button
+            html += '<button onclick="app.generateScript()" class="btn-primary w-full py-3" ' + (state.loading ? 'disabled' : '') + '>';
+            html += '<span class="mr-2">🎬</span> ' + (state.script.result ? 'Regenerate' : 'Generate Script');
+            html += '</button>';
 
-                // Generate button
-                html += '<button onclick="app.generateScript()" class="btn-primary w-full text-lg py-4" ' + (state.loading ? 'disabled' : '') + '>';
-                html += '<span class="text-xl mr-2">🎬</span> Generate Script';
-                html += '</button>';
+            html += '</div>'; // End input panel
 
-                html += '</div>'; // End form card
+            // Results panel (only show when we have results)
+            if (state.script.result) {
+                html += '<div class="tool-results-panel">';
+                html += renderScriptResults();
+                html += '</div>';
             }
 
-            html += '</div>'; // End container
+            html += '</div></div>'; // End layout and container
 
             return html;
         }
@@ -1337,57 +1502,60 @@
             var html = '';
             var result = state.script.result;
 
-            html += '<div class="mb-6">';
-            html += '<button onclick="app.clearScriptResult()" class="btn-secondary mb-4">';
-            html += '← Create New Script';
-            html += '</button>';
+            // Results header with actions
+            html += '<div class="results-header">';
+            html += '<h2>🎬 Generated Script</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'script\')">📥 Download PDF</button>';
+            html += '<button class="btn-primary" onclick="app.copyFullScript()">📋 Copy All</button>';
             html += '</div>';
+            html += '</div>';
+
+            // Results content area with ID for PDF capture
+            html += '<div id="pdf-content-script">';
 
             // Script sections
             if (result.hook) {
-                html += '<div class="result-card mb-4">';
-                html += '<div class="flex items-center justify-between mb-3">';
-                html += '<h3 class="text-lg font-bold text-amber-400">🎣 Opening Hook</h3>';
+                html += '<div class="result-section">';
+                html += '<div class="result-section-header">';
+                html += '<div class="result-section-title"><span class="result-section-icon" style="background: rgba(251, 191, 36, 0.2);">🎣</span><span class="text-amber-400">Opening Hook</span></div>';
                 html += '<button class="copy-btn" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.hook).replace(/'/g, "\\'") + '\', this)">Copy</button>';
                 html += '</div>';
-                html += '<p class="text-gray-300 whitespace-pre-wrap">' + utils.escapeHtml(result.hook) + '</p>';
+                html += '<p class="text-gray-300 whitespace-pre-wrap leading-relaxed">' + utils.escapeHtml(result.hook) + '</p>';
                 html += '</div>';
             }
 
             if (result.intro) {
-                html += '<div class="result-card mb-4">';
-                html += '<div class="flex items-center justify-between mb-3">';
-                html += '<h3 class="text-lg font-bold text-blue-400">📖 Introduction</h3>';
+                html += '<div class="result-section">';
+                html += '<div class="result-section-header">';
+                html += '<div class="result-section-title"><span class="result-section-icon" style="background: rgba(59, 130, 246, 0.2);">📖</span><span class="text-blue-400">Introduction</span></div>';
                 html += '<button class="copy-btn" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.intro).replace(/'/g, "\\'") + '\', this)">Copy</button>';
                 html += '</div>';
-                html += '<p class="text-gray-300 whitespace-pre-wrap">' + utils.escapeHtml(result.intro) + '</p>';
+                html += '<p class="text-gray-300 whitespace-pre-wrap leading-relaxed">' + utils.escapeHtml(result.intro) + '</p>';
                 html += '</div>';
             }
 
             if (result.mainContent) {
-                html += '<div class="result-card mb-4">';
-                html += '<div class="flex items-center justify-between mb-3">';
-                html += '<h3 class="text-lg font-bold text-green-400">📝 Main Content</h3>';
+                html += '<div class="result-section">';
+                html += '<div class="result-section-header">';
+                html += '<div class="result-section-title"><span class="result-section-icon" style="background: rgba(34, 197, 94, 0.2);">📝</span><span class="text-green-400">Main Content</span></div>';
                 html += '<button class="copy-btn" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.mainContent).replace(/'/g, "\\'") + '\', this)">Copy</button>';
                 html += '</div>';
-                html += '<p class="text-gray-300 whitespace-pre-wrap">' + utils.escapeHtml(result.mainContent) + '</p>';
+                html += '<p class="text-gray-300 whitespace-pre-wrap leading-relaxed">' + utils.escapeHtml(result.mainContent) + '</p>';
                 html += '</div>';
             }
 
             if (result.cta) {
-                html += '<div class="result-card mb-4">';
-                html += '<div class="flex items-center justify-between mb-3">';
-                html += '<h3 class="text-lg font-bold text-purple-400">🎯 Call-to-Action</h3>';
+                html += '<div class="result-section">';
+                html += '<div class="result-section-header">';
+                html += '<div class="result-section-title"><span class="result-section-icon" style="background: rgba(168, 85, 247, 0.2);">🎯</span><span class="text-purple-400">Call-to-Action</span></div>';
                 html += '<button class="copy-btn" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.cta).replace(/'/g, "\\'") + '\', this)">Copy</button>';
                 html += '</div>';
-                html += '<p class="text-gray-300 whitespace-pre-wrap">' + utils.escapeHtml(result.cta) + '</p>';
+                html += '<p class="text-gray-300 whitespace-pre-wrap leading-relaxed">' + utils.escapeHtml(result.cta) + '</p>';
                 html += '</div>';
             }
 
-            // Full script copy
-            html += '<div class="mt-6 text-center">';
-            html += '<button class="btn-primary" onclick="app.copyFullScript()">📋 Copy Full Script</button>';
-            html += '</div>';
+            html += '</div>'; // End pdf-content
 
             return html;
         }
@@ -1398,63 +1566,65 @@
             // Header
             html += renderToolHeader('Viral Hook Laboratory', '🎣', 'hook-lab', '3 tokens per generation');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.hooks.result ? '' : ' full-width') + '">';
 
-            if (state.hooks.result) {
-                // Show results
-                html += renderHookResults();
-            } else {
-                // Show form
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+            // Input panel
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">🎣 Hook Settings</h3>';
 
-                // Topic input
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Video Topic</label>';
-                html += '<input type="text" id="hook-topic" class="input-field" placeholder="What is your video about?" value="' + utils.escapeHtml(state.hooks.topic) + '">';
+            // Topic input
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Video Topic</label>';
+            html += '<input type="text" id="hook-topic" class="input-field text-sm" placeholder="What is your video about?" value="' + utils.escapeHtml(state.hooks.topic) + '">';
+            html += '</div>';
+
+            // Hook style
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Hook Style</label>';
+            html += '<div class="grid grid-cols-2 gap-2">';
+            var styles = [
+                { id: 'question', name: 'Question', icon: '❓' },
+                { id: 'controversy', name: 'Controversy', icon: '🔥' },
+                { id: 'promise', name: 'Promise', icon: '🎁' },
+                { id: 'story', name: 'Story', icon: '📖' },
+                { id: 'statistic', name: 'Statistic', icon: '📊' },
+                { id: 'challenge', name: 'Challenge', icon: '💪' }
+            ];
+            styles.forEach(function(style) {
+                var selected = state.hooks.style === style.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setHookStyle(\'' + style.id + '\')" style="padding: 0.5rem;">';
+                html += '<div class="text-sm">' + style.icon + ' ' + style.name + '</div>';
                 html += '</div>';
+            });
+            html += '</div></div>';
 
-                // Hook style
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Hook Style</label>';
-                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">';
-                var styles = [
-                    { id: 'question', name: 'Question', icon: '❓', desc: 'Spark curiosity' },
-                    { id: 'controversy', name: 'Controversy', icon: '🔥', desc: 'Challenge beliefs' },
-                    { id: 'promise', name: 'Promise', icon: '🎁', desc: 'Value proposition' },
-                    { id: 'story', name: 'Story', icon: '📖', desc: 'Personal narrative' },
-                    { id: 'statistic', name: 'Statistic', icon: '📊', desc: 'Shocking data' },
-                    { id: 'challenge', name: 'Challenge', icon: '💪', desc: 'Direct challenge' }
-                ];
-                styles.forEach(function(style) {
-                    var selected = state.hooks.style === style.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setHookStyle(\'' + style.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + style.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + style.name + '</div>';
-                    html += '<div class="text-gray-500 text-xs">' + style.desc + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
+            // Number of hooks
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Number of Hooks</label>';
+            html += '<div class="flex gap-2">';
+            [3, 5, 10].forEach(function(num) {
+                var selected = state.hooks.count === num ? 'bg-indigo-600' : 'bg-gray-700';
+                html += '<button onclick="app.setHookCount(' + num + ')" class="flex-1 px-3 py-2 rounded-lg font-medium text-sm ' + selected + '">' + num + '</button>';
+            });
+            html += '</div></div>';
 
-                // Number of hooks
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Number of Hooks</label>';
-                html += '<div class="flex gap-2">';
-                [3, 5, 10].forEach(function(num) {
-                    var selected = state.hooks.count === num ? 'bg-indigo-600' : 'bg-gray-700';
-                    html += '<button onclick="app.setHookCount(' + num + ')" class="px-4 py-2 rounded-lg font-medium ' + selected + '">' + num + '</button>';
-                });
-                html += '</div></div>';
+            // Generate button
+            html += '<button onclick="app.generateHooks()" class="btn-primary w-full py-3" ' + (state.loading ? 'disabled' : '') + '>';
+            html += '<span class="mr-2">🎣</span> ' + (state.hooks.result ? 'Regenerate' : 'Generate Hooks');
+            html += '</button>';
 
-                // Generate button
-                html += '<button onclick="app.generateHooks()" class="btn-primary w-full text-lg py-4" ' + (state.loading ? 'disabled' : '') + '>';
-                html += '<span class="text-xl mr-2">🎣</span> Generate Hooks';
-                html += '</button>';
+            html += '</div>'; // End input panel
 
-                html += '</div>'; // End form card
+            // Results panel
+            if (state.hooks.result) {
+                html += '<div class="tool-results-panel">';
+                html += renderHookResults();
+                html += '</div>';
             }
 
-            html += '</div>'; // End container
+            html += '</div></div>'; // End layout and container
 
             return html;
         }
@@ -1463,24 +1633,28 @@
             var html = '';
             var result = state.hooks.result;
 
-            html += '<div class="mb-6">';
-            html += '<button onclick="app.clearHookResult()" class="btn-secondary mb-4">';
-            html += '← Generate New Hooks';
-            html += '</button>';
+            // Results header
+            html += '<div class="results-header">';
+            html += '<h2>🎣 Generated Hooks</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'hooks\')">📥 Download PDF</button>';
             html += '</div>';
+            html += '</div>';
+
+            html += '<div id="pdf-content-hooks" class="results-grid">';
 
             if (result.hooks && result.hooks.length > 0) {
                 result.hooks.forEach(function(hook, index) {
-                    html += '<div class="result-card mb-4">';
-                    html += '<div class="flex items-start justify-between gap-4">';
+                    html += '<div class="result-section">';
+                    html += '<div class="flex items-start justify-between gap-3">';
                     html += '<div class="flex-1">';
                     html += '<div class="flex items-center gap-2 mb-2">';
                     html += '<span class="bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded">#' + (index + 1) + '</span>';
                     if (hook.score) {
-                        html += '<span class="text-amber-400 text-sm">⭐ ' + hook.score + '/100 predicted CTR</span>';
+                        html += '<span class="text-amber-400 text-sm">⭐ ' + hook.score + '/100</span>';
                     }
                     html += '</div>';
-                    html += '<p class="text-white text-lg">' + utils.escapeHtml(hook.text || hook) + '</p>';
+                    html += '<p class="text-white text-base leading-relaxed">' + utils.escapeHtml(hook.text || hook) + '</p>';
                     if (hook.explanation) {
                         html += '<p class="text-gray-500 text-sm mt-2">💡 ' + utils.escapeHtml(hook.explanation) + '</p>';
                     }
@@ -1491,6 +1665,8 @@
                 });
             }
 
+            html += '</div>';
+
             return html;
         }
 
@@ -1500,59 +1676,55 @@
             // Header
             html += renderToolHeader('Content Multiplier', '🔄', 'content-multiplier', '8 tokens per video');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.multiplier.result ? '' : ' full-width') + '">';
 
+            // Input panel
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">🔄 Multiplier Settings</h3>';
+
+            // Transcript input
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Video Transcript</label>';
+            html += '<textarea id="multiplier-transcript" class="input-field h-28 text-sm" placeholder="Paste your video transcript...">' + utils.escapeHtml(state.multiplier.transcript) + '</textarea>';
+            html += '</div>';
+
+            // Output formats
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Output Formats</label>';
+            html += '<div class="grid grid-cols-2 gap-2">';
+            var formats = [
+                { id: 'shorts', name: 'Shorts', icon: '📱' },
+                { id: 'twitter', name: 'Twitter', icon: '🐦' },
+                { id: 'blog', name: 'Blog', icon: '📝' },
+                { id: 'quotes', name: 'Quotes', icon: '💬' },
+                { id: 'email', name: 'Email', icon: '📧' },
+                { id: 'linkedin', name: 'LinkedIn', icon: '💼' }
+            ];
+            formats.forEach(function(format) {
+                var selected = state.multiplier.formats.includes(format.id) ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.toggleMultiplierFormat(\'' + format.id + '\')" style="padding: 0.5rem;">';
+                html += '<div class="text-sm">' + format.icon + ' ' + format.name + '</div>';
+                html += '</div>';
+            });
+            html += '</div></div>';
+
+            // Generate button
+            html += '<button onclick="app.multiplyContent()" class="btn-primary w-full py-3" ' + (state.loading ? 'disabled' : '') + '>';
+            html += '<span class="mr-2">🔄</span> ' + (state.multiplier.result ? 'Regenerate' : 'Multiply Content');
+            html += '</button>';
+
+            html += '</div>'; // End input panel
+
+            // Results panel
             if (state.multiplier.result) {
-                // Show results
+                html += '<div class="tool-results-panel">';
                 html += renderMultiplierResults();
-            } else {
-                // Show form
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
-
-                // Input type tabs
-                html += '<div class="tab-container mb-6">';
-                html += '<button class="tab-btn active" onclick="app.setMultiplierInput(\'transcript\')">Paste Transcript</button>';
-                html += '<button class="tab-btn" onclick="app.setMultiplierInput(\'url\')">YouTube URL</button>';
                 html += '</div>';
-
-                // Transcript input
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Video Transcript or Script</label>';
-                html += '<textarea id="multiplier-transcript" class="input-field h-40" placeholder="Paste your video transcript or script here...">' + utils.escapeHtml(state.multiplier.transcript) + '</textarea>';
-                html += '</div>';
-
-                // Output formats
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Output Formats</label>';
-                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">';
-                var formats = [
-                    { id: 'shorts', name: 'YouTube Shorts', icon: '📱', desc: '3 viral clips' },
-                    { id: 'twitter', name: 'Twitter Thread', icon: '🐦', desc: '10-15 tweets' },
-                    { id: 'blog', name: 'Blog Post', icon: '📝', desc: 'SEO optimized' },
-                    { id: 'quotes', name: 'Quote Cards', icon: '💬', desc: '5 shareable quotes' },
-                    { id: 'email', name: 'Email Newsletter', icon: '📧', desc: 'Subscriber digest' },
-                    { id: 'linkedin', name: 'LinkedIn Post', icon: '💼', desc: 'Professional format' }
-                ];
-                formats.forEach(function(format) {
-                    var selected = state.multiplier.formats.includes(format.id) ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.toggleMultiplierFormat(\'' + format.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + format.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + format.name + '</div>';
-                    html += '<div class="text-gray-500 text-xs">' + format.desc + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
-
-                // Generate button
-                html += '<button onclick="app.multiplyContent()" class="btn-primary w-full text-lg py-4" ' + (state.loading ? 'disabled' : '') + '>';
-                html += '<span class="text-xl mr-2">🔄</span> Multiply Content';
-                html += '</button>';
-
-                html += '</div>'; // End form card
             }
 
-            html += '</div>'; // End container
+            html += '</div></div>'; // End layout and container
 
             return html;
         }
@@ -1561,14 +1733,18 @@
             var html = '';
             var result = state.multiplier.result;
 
-            html += '<div class="mb-6">';
-            html += '<button onclick="app.clearMultiplierResult()" class="btn-secondary mb-4">';
-            html += '← Multiply New Content';
-            html += '</button>';
+            // Results header
+            html += '<div class="results-header">';
+            html += '<h2>🔄 Multiplied Content</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'multiplier\')">📥 Download PDF</button>';
+            html += '</div>';
             html += '</div>';
 
+            html += '<div id="pdf-content-multiplier">';
+
             // Tabs for different formats
-            html += '<div class="tab-container">';
+            html += '<div class="tab-container mb-4">';
             var tabs = Object.keys(result);
             tabs.forEach(function(tab, index) {
                 var active = index === 0 ? 'active' : '';
@@ -1583,20 +1759,20 @@
 
                 if (Array.isArray(result[tab])) {
                     result[tab].forEach(function(item, i) {
-                        html += '<div class="result-card mb-4">';
+                        html += '<div class="result-section">';
                         html += '<div class="flex items-start justify-between gap-4">';
                         html += '<div class="flex-1">';
                         html += '<span class="text-indigo-400 text-sm font-medium">#' + (i + 1) + '</span>';
-                        html += '<p class="text-gray-300 whitespace-pre-wrap mt-1">' + utils.escapeHtml(item) + '</p>';
+                        html += '<p class="text-gray-300 whitespace-pre-wrap mt-1 leading-relaxed">' + utils.escapeHtml(item) + '</p>';
                         html += '</div>';
                         html += '<button class="copy-btn flex-shrink-0" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(item).replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\', this)">Copy</button>';
                         html += '</div>';
                         html += '</div>';
                     });
                 } else {
-                    html += '<div class="result-card">';
+                    html += '<div class="result-section">';
                     html += '<div class="flex items-start justify-between gap-4">';
-                    html += '<p class="text-gray-300 whitespace-pre-wrap flex-1">' + utils.escapeHtml(result[tab]) + '</p>';
+                    html += '<p class="text-gray-300 whitespace-pre-wrap flex-1 leading-relaxed">' + utils.escapeHtml(result[tab]) + '</p>';
                     html += '<button class="copy-btn flex-shrink-0" onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result[tab]).replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\', this)">Copy</button>';
                     html += '</div>';
                     html += '</div>';
@@ -1604,6 +1780,8 @@
 
                 html += '</div>';
             });
+
+            html += '</div>';
 
             return html;
         }
@@ -1614,64 +1792,63 @@
             // Header
             html += renderToolHeader('Thumbnail A/B Arena', '📊', 'thumbnail-arena', '4 tokens per analysis');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.thumbnailArena.analysisResult ? '' : ' full-width') + '">';
 
-            if (state.thumbnailArena.analysisResult) {
-                // Show results
-                html += renderThumbnailResults();
+            // Input panel
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">📊 Upload Thumbnails</h3>';
+
+            // Upload area
+            html += '<div class="space-y-3 mb-5">';
+
+            // Thumbnail A
+            html += '<div class="border-2 border-dashed border-gray-600 rounded-xl p-4 text-center hover:border-indigo-500 transition-colors cursor-pointer" onclick="document.getElementById(\'thumbnail-a\').click()">';
+            html += '<input type="file" id="thumbnail-a" accept="image/*" class="hidden" onchange="app.handleThumbnailUpload(\'a\', event)">';
+            if (state.thumbnailArena.thumbnails[0]) {
+                html += '<img src="' + state.thumbnailArena.thumbnails[0].preview + '" class="w-full h-24 object-cover rounded-lg mb-2">';
+                html += '<p class="text-green-400 text-xs">Thumbnail A ✓</p>';
             } else {
-                // Show form
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+                html += '<div class="text-2xl mb-1">🖼️</div>';
+                html += '<p class="text-gray-400 text-sm">Upload Thumbnail A</p>';
+            }
+            html += '</div>';
 
-                html += '<div class="text-center mb-6">';
-                html += '<h3 class="text-xl font-bold text-white mb-2">Upload Thumbnails to Compare</h3>';
-                html += '<p class="text-gray-400">AI will predict CTR and analyze which thumbnail will perform best</p>';
-                html += '</div>';
+            // Thumbnail B
+            html += '<div class="border-2 border-dashed border-gray-600 rounded-xl p-4 text-center hover:border-indigo-500 transition-colors cursor-pointer" onclick="document.getElementById(\'thumbnail-b\').click()">';
+            html += '<input type="file" id="thumbnail-b" accept="image/*" class="hidden" onchange="app.handleThumbnailUpload(\'b\', event)">';
+            if (state.thumbnailArena.thumbnails[1]) {
+                html += '<img src="' + state.thumbnailArena.thumbnails[1].preview + '" class="w-full h-24 object-cover rounded-lg mb-2">';
+                html += '<p class="text-green-400 text-xs">Thumbnail B ✓</p>';
+            } else {
+                html += '<div class="text-2xl mb-1">🖼️</div>';
+                html += '<p class="text-gray-400 text-sm">Upload Thumbnail B</p>';
+            }
+            html += '</div>';
 
-                // Upload area
-                html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">';
+            html += '</div>';
 
-                // Thumbnail A
-                html += '<div class="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-indigo-500 transition-colors cursor-pointer" onclick="document.getElementById(\'thumbnail-a\').click()">';
-                html += '<input type="file" id="thumbnail-a" accept="image/*" class="hidden" onchange="app.handleThumbnailUpload(\'a\', event)">';
-                if (state.thumbnailArena.thumbnails[0]) {
-                    html += '<img src="' + state.thumbnailArena.thumbnails[0].preview + '" class="w-full h-32 object-cover rounded-lg mb-2">';
-                    html += '<p class="text-green-400 text-sm">Thumbnail A uploaded</p>';
-                } else {
-                    html += '<div class="text-4xl mb-2">🖼️</div>';
-                    html += '<p class="text-gray-400">Click to upload Thumbnail A</p>';
-                }
-                html += '</div>';
+            // Analyze button
+            var canAnalyze = state.thumbnailArena.thumbnails.length >= 2;
+            html += '<button onclick="app.analyzeThumbnails()" class="btn-primary w-full py-3" ' + (!canAnalyze || state.loading ? 'disabled' : '') + '>';
+            html += '<span class="mr-2">📊</span> ' + (state.thumbnailArena.analysisResult ? 'Re-analyze' : 'Analyze');
+            html += '</button>';
 
-                // Thumbnail B
-                html += '<div class="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-indigo-500 transition-colors cursor-pointer" onclick="document.getElementById(\'thumbnail-b\').click()">';
-                html += '<input type="file" id="thumbnail-b" accept="image/*" class="hidden" onchange="app.handleThumbnailUpload(\'b\', event)">';
-                if (state.thumbnailArena.thumbnails[1]) {
-                    html += '<img src="' + state.thumbnailArena.thumbnails[1].preview + '" class="w-full h-32 object-cover rounded-lg mb-2">';
-                    html += '<p class="text-green-400 text-sm">Thumbnail B uploaded</p>';
-                } else {
-                    html += '<div class="text-4xl mb-2">🖼️</div>';
-                    html += '<p class="text-gray-400">Click to upload Thumbnail B</p>';
-                }
-                html += '</div>';
-
-                html += '</div>';
-
-                // Analyze button
-                var canAnalyze = state.thumbnailArena.thumbnails.length >= 2;
-                html += '<button onclick="app.analyzeThumbnails()" class="btn-primary w-full text-lg py-4" ' + (!canAnalyze || state.loading ? 'disabled' : '') + '>';
-                html += '<span class="text-xl mr-2">📊</span> Analyze & Predict Winner';
-                html += '</button>';
-
-                if (!canAnalyze) {
-                    html += '<p class="text-gray-500 text-center mt-2 text-sm">Upload at least 2 thumbnails to compare</p>';
-                }
-
-                html += '</div>'; // End form card
+            if (!canAnalyze) {
+                html += '<p class="text-gray-500 text-center mt-2 text-xs">Upload 2 thumbnails to compare</p>';
             }
 
-            html += '</div>'; // End container
+            html += '</div>'; // End input panel
+
+            // Results panel
+            if (state.thumbnailArena.analysisResult) {
+                html += '<div class="tool-results-panel">';
+                html += renderThumbnailResults();
+                html += '</div>';
+            }
+
+            html += '</div></div>'; // End layout and container
 
             return html;
         }
@@ -1680,32 +1857,36 @@
             var html = '';
             var result = state.thumbnailArena.analysisResult;
 
-            html += '<div class="mb-6">';
-            html += '<button onclick="app.clearThumbnailResult()" class="btn-secondary mb-4">';
-            html += '← Analyze New Thumbnails';
-            html += '</button>';
+            // Results header
+            html += '<div class="results-header">';
+            html += '<h2>📊 Thumbnail Analysis</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'thumbnail\')">📥 Download PDF</button>';
             html += '</div>';
+            html += '</div>';
+
+            html += '<div id="pdf-content-thumbnail">';
 
             // Winner announcement
             if (result.winner) {
                 html += '<div class="bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-xl p-6 mb-6 text-center">';
                 html += '<div class="text-4xl mb-2">🏆</div>';
                 html += '<h3 class="text-2xl font-bold text-amber-400">Thumbnail ' + result.winner.toUpperCase() + ' Wins!</h3>';
-                html += '<p class="text-gray-300 mt-2">Predicted to get <span class="text-amber-400 font-bold">' + result.winnerScore + '%</span> higher CTR</p>';
+                html += '<p class="text-gray-300 mt-2">Predicted <span class="text-amber-400 font-bold">' + result.winnerScore + '%</span> higher CTR</p>';
                 html += '</div>';
             }
 
             // Thumbnail comparisons
-            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+            html += '<div class="results-grid">';
 
             if (result.thumbnailA) {
-                html += '<div class="result-card ' + (result.winner === 'a' ? 'border-amber-500' : '') + '">';
+                html += '<div class="result-section ' + (result.winner === 'a' ? 'border-amber-500' : '') + '">';
                 html += '<div class="flex items-center justify-between mb-3">';
                 html += '<h4 class="font-bold text-white">Thumbnail A</h4>';
                 html += '<span class="text-2xl font-bold ' + (result.winner === 'a' ? 'text-amber-400' : 'text-gray-400') + '">' + result.thumbnailA.score + '%</span>';
                 html += '</div>';
                 if (state.thumbnailArena.thumbnails[0]) {
-                    html += '<img src="' + state.thumbnailArena.thumbnails[0].preview + '" class="w-full h-32 object-cover rounded-lg mb-3">';
+                    html += '<img src="' + state.thumbnailArena.thumbnails[0].preview + '" class="w-full h-40 object-cover rounded-lg mb-3">';
                 }
                 html += '<div class="space-y-2">';
                 if (result.thumbnailA.strengths) {
@@ -1719,13 +1900,13 @@
             }
 
             if (result.thumbnailB) {
-                html += '<div class="result-card ' + (result.winner === 'b' ? 'border-amber-500' : '') + '">';
+                html += '<div class="result-section ' + (result.winner === 'b' ? 'border-amber-500' : '') + '">';
                 html += '<div class="flex items-center justify-between mb-3">';
                 html += '<h4 class="font-bold text-white">Thumbnail B</h4>';
                 html += '<span class="text-2xl font-bold ' + (result.winner === 'b' ? 'text-amber-400' : 'text-gray-400') + '">' + result.thumbnailB.score + '%</span>';
                 html += '</div>';
                 if (state.thumbnailArena.thumbnails[1]) {
-                    html += '<img src="' + state.thumbnailArena.thumbnails[1].preview + '" class="w-full h-32 object-cover rounded-lg mb-3">';
+                    html += '<img src="' + state.thumbnailArena.thumbnails[1].preview + '" class="w-full h-40 object-cover rounded-lg mb-3">';
                 }
                 html += '<div class="space-y-2">';
                 if (result.thumbnailB.strengths) {
@@ -1742,7 +1923,7 @@
 
             // Recommendations
             if (result.recommendations) {
-                html += '<div class="result-card mt-6">';
+                html += '<div class="result-section mt-4">';
                 html += '<h4 class="font-bold text-white mb-3">💡 Recommendations</h4>';
                 html += '<ul class="space-y-2">';
                 result.recommendations.forEach(function(rec) {
@@ -1754,6 +1935,8 @@
                 html += '</ul>';
                 html += '</div>';
             }
+
+            html += '</div>'; // End pdf-content
 
             return html;
         }
@@ -1767,74 +1950,71 @@
             // Header
             html += renderToolHeader('Trend Hijacker', '🎯', 'trend-hijacker', '6 tokens per analysis');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.trends.result ? '' : ' full-width') + '">';
 
-            if (state.trends.result) {
-                // Show results
-                html += renderTrendResults();
-            } else {
-                // Show form
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+            // Input panel
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">🎯 Trend Settings</h3>';
 
-                // Niche input
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Your Niche / Topic Area</label>';
-                html += '<input type="text" id="trend-niche" class="input-field" placeholder="e.g., productivity, fitness, tech reviews, cooking, gaming..." value="' + utils.escapeHtml(state.trends.niche) + '">';
-                html += '<p class="text-gray-500 text-sm mt-1">Enter your content niche to find relevant trending topics</p>';
+            // Niche input
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Your Niche</label>';
+            html += '<input type="text" id="trend-niche" class="input-field text-sm" placeholder="e.g., productivity, fitness..." value="' + utils.escapeHtml(state.trends.niche) + '">';
+            html += '</div>';
+
+            // Region selection
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Target Region</label>';
+            html += '<div class="grid grid-cols-2 gap-2">';
+            var regions = [
+                { id: 'US', name: 'US', icon: '🇺🇸' },
+                { id: 'GB', name: 'UK', icon: '🇬🇧' },
+                { id: 'CA', name: 'Canada', icon: '🇨🇦' },
+                { id: 'GLOBAL', name: 'Global', icon: '🌍' }
+            ];
+            regions.forEach(function(region) {
+                var selected = state.trends.region === region.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setTrendRegion(\'' + region.id + '\')" style="padding: 0.5rem;">';
+                html += '<div class="text-sm">' + region.icon + ' ' + region.name + '</div>';
                 html += '</div>';
+            });
+            html += '</div></div>';
 
-                // Region selection
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Target Region</label>';
-                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
-                var regions = [
-                    { id: 'US', name: 'United States', icon: '🇺🇸' },
-                    { id: 'GB', name: 'United Kingdom', icon: '🇬🇧' },
-                    { id: 'CA', name: 'Canada', icon: '🇨🇦' },
-                    { id: 'AU', name: 'Australia', icon: '🇦🇺' },
-                    { id: 'DE', name: 'Germany', icon: '🇩🇪' },
-                    { id: 'FR', name: 'France', icon: '🇫🇷' },
-                    { id: 'IN', name: 'India', icon: '🇮🇳' },
-                    { id: 'GLOBAL', name: 'Global', icon: '🌍' }
-                ];
-                regions.forEach(function(region) {
-                    var selected = state.trends.region === region.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setTrendRegion(\'' + region.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + region.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + region.name + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
+            // Timeframe selection
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Timeframe</label>';
+            html += '<div class="grid grid-cols-3 gap-2">';
+            var timeframes = [
+                { id: 'day', name: 'Day', icon: '⚡' },
+                { id: 'week', name: 'Week', icon: '📅' },
+                { id: 'month', name: 'Month', icon: '📆' }
+            ];
+            timeframes.forEach(function(tf) {
+                var selected = state.trends.timeframe === tf.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setTrendTimeframe(\'' + tf.id + '\')" style="padding: 0.5rem; text-align: center;">';
+                html += '<div class="text-lg">' + tf.icon + '</div>';
+                html += '<div class="text-xs text-white">' + tf.name + '</div>';
+                html += '</div>';
+            });
+            html += '</div></div>';
 
-                // Timeframe selection
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Trend Timeframe</label>';
-                html += '<div class="grid grid-cols-3 gap-3">';
-                var timeframes = [
-                    { id: 'day', name: 'Today', desc: 'Last 24 hours', icon: '⚡' },
-                    { id: 'week', name: 'This Week', desc: 'Last 7 days', icon: '📅' },
-                    { id: 'month', name: 'This Month', desc: 'Last 30 days', icon: '📆' }
-                ];
-                timeframes.forEach(function(tf) {
-                    var selected = state.trends.timeframe === tf.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setTrendTimeframe(\'' + tf.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + tf.icon + '</div>';
-                    html += '<div class="font-medium text-white">' + tf.name + '</div>';
-                    html += '<div class="text-gray-500 text-xs">' + tf.desc + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
+            // Generate button
+            html += '<button onclick="app.generateTrends()" class="btn-primary w-full py-3">';
+            html += '<span class="mr-2">🎯</span> ' + (state.trends.result ? 'New Search' : 'Find Trends');
+            html += '</button>';
 
-                // Generate button
-                html += '<button onclick="app.generateTrends()" class="btn-primary w-full">';
-                html += '<span class="mr-2">🎯</span> Find Trending Topics';
-                html += '</button>';
+            html += '</div>'; // End input panel
 
+            // Results panel
+            if (state.trends.result) {
+                html += '<div class="tool-results-panel">';
+                html += renderTrendResults();
                 html += '</div>';
             }
 
-            html += '</div>';
+            html += '</div></div>'; // End layout and container
             return html;
         }
 
@@ -1842,15 +2022,19 @@
             var html = '';
             var result = state.trends.result;
 
-            // Success header
-            html += '<div class="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 border border-orange-500/30 rounded-2xl p-6 mb-6">';
-            html += '<div class="flex items-center justify-between">';
-            html += '<div>';
-            html += '<h3 class="text-xl font-bold text-white mb-1">🔥 Trending Topics Found!</h3>';
-            html += '<p class="text-gray-400">Based on ' + utils.escapeHtml(state.trends.niche) + ' in ' + state.trends.region + '</p>';
+            // Results header
+            html += '<div class="results-header">';
+            html += '<h2>🔥 Trending Topics</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'trends\')">📥 Download PDF</button>';
             html += '</div>';
-            html += '<button onclick="app.resetTrends()" class="btn-secondary">New Search</button>';
             html += '</div>';
+
+            html += '<div id="pdf-content-trends">';
+
+            // Info banner
+            html += '<div class="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 border border-orange-500/30 rounded-xl p-4 mb-6">';
+            html += '<p class="text-gray-300">Based on <span class="text-orange-400 font-medium">' + utils.escapeHtml(state.trends.niche) + '</span> in ' + state.trends.region + '</p>';
             html += '</div>';
 
             // Trending topics
@@ -1905,11 +2089,13 @@
 
             // Insights section
             if (result.insights) {
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-xl p-5 mt-6">';
+                html += '<div class="result-section mt-4">';
                 html += '<h4 class="text-lg font-bold text-white mb-3">📊 Market Insights</h4>';
                 html += '<p class="text-gray-400">' + utils.escapeHtml(result.insights) + '</p>';
                 html += '</div>';
             }
+
+            html += '</div>'; // End pdf-content
 
             return html;
         }
@@ -1923,58 +2109,59 @@
             // Header
             html += renderToolHeader('Content Gap Finder', '🗺️', 'gap-finder', '6 tokens per analysis');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.gaps.result ? '' : ' full-width') + '">';
 
+            // Input panel
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">🗺️ Gap Settings</h3>';
+
+            // Niche input
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Your Niche</label>';
+            html += '<input type="text" id="gap-niche" class="input-field text-sm" placeholder="e.g., personal finance..." value="' + utils.escapeHtml(state.gaps.niche) + '">';
+            html += '</div>';
+
+            // Competitors input
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Competitors (Optional)</label>';
+            html += '<textarea id="gap-competitors" class="input-field h-16 text-sm" placeholder="Channel names, one per line...">' + utils.escapeHtml(state.gaps.competitors) + '</textarea>';
+            html += '</div>';
+
+            // Analysis depth
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Analysis Depth</label>';
+            html += '<div class="grid grid-cols-3 gap-2">';
+            var depths = [
+                { id: 'quick', name: 'Quick', icon: '⚡' },
+                { id: 'moderate', name: 'Medium', icon: '📊' },
+                { id: 'deep', name: 'Deep', icon: '🔬' }
+            ];
+            depths.forEach(function(depth) {
+                var selected = state.gaps.depth === depth.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setGapDepth(\'' + depth.id + '\')" style="padding: 0.5rem; text-align: center;">';
+                html += '<div class="text-lg">' + depth.icon + '</div>';
+                html += '<div class="text-xs text-white">' + depth.name + '</div>';
+                html += '</div>';
+            });
+            html += '</div></div>';
+
+            // Generate button
+            html += '<button onclick="app.findGaps()" class="btn-primary w-full py-3">';
+            html += '<span class="mr-2">🗺️</span> ' + (state.gaps.result ? 'New Analysis' : 'Find Gaps');
+            html += '</button>';
+
+            html += '</div>'; // End input panel
+
+            // Results panel
             if (state.gaps.result) {
-                // Show results
+                html += '<div class="tool-results-panel">';
                 html += renderGapResults();
-            } else {
-                // Show form
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
-
-                // Niche input
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Your Niche / Topic Area</label>';
-                html += '<input type="text" id="gap-niche" class="input-field" placeholder="e.g., personal finance, home workouts, Python programming..." value="' + utils.escapeHtml(state.gaps.niche) + '">';
-                html += '<p class="text-gray-500 text-sm mt-1">Enter your niche to discover content opportunities</p>';
-                html += '</div>';
-
-                // Competitors input
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Competitor Channels (Optional)</label>';
-                html += '<textarea id="gap-competitors" class="input-field h-20" placeholder="Enter competitor channel names or URLs, one per line (optional)...">' + utils.escapeHtml(state.gaps.competitors) + '</textarea>';
-                html += '<p class="text-gray-500 text-sm mt-1">List competitors to analyze their content gaps</p>';
-                html += '</div>';
-
-                // Analysis depth
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Analysis Depth</label>';
-                html += '<div class="grid grid-cols-3 gap-3">';
-                var depths = [
-                    { id: 'quick', name: 'Quick Scan', desc: 'Top opportunities', icon: '⚡' },
-                    { id: 'moderate', name: 'Moderate', desc: 'Balanced analysis', icon: '📊' },
-                    { id: 'deep', name: 'Deep Dive', desc: 'Comprehensive', icon: '🔬' }
-                ];
-                depths.forEach(function(depth) {
-                    var selected = state.gaps.depth === depth.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setGapDepth(\'' + depth.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + depth.icon + '</div>';
-                    html += '<div class="font-medium text-white">' + depth.name + '</div>';
-                    html += '<div class="text-gray-500 text-xs">' + depth.desc + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
-
-                // Generate button
-                html += '<button onclick="app.findGaps()" class="btn-primary w-full">';
-                html += '<span class="mr-2">🗺️</span> Find Content Gaps';
-                html += '</button>';
-
                 html += '</div>';
             }
 
-            html += '</div>';
+            html += '</div></div>'; // End layout and container
             return html;
         }
 
@@ -1982,15 +2169,19 @@
             var html = '';
             var result = state.gaps.result;
 
-            // Success header
-            html += '<div class="bg-gradient-to-r from-teal-500/20 to-cyan-500/20 border border-teal-500/30 rounded-2xl p-6 mb-6">';
-            html += '<div class="flex items-center justify-between">';
-            html += '<div>';
-            html += '<h3 class="text-xl font-bold text-white mb-1">🎯 Content Opportunities Found!</h3>';
-            html += '<p class="text-gray-400">Analysis of ' + utils.escapeHtml(state.gaps.niche) + '</p>';
+            // Results header
+            html += '<div class="results-header">';
+            html += '<h2>🗺️ Content Opportunities</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'gaps\')">📥 Download PDF</button>';
             html += '</div>';
-            html += '<button onclick="app.resetGaps()" class="btn-secondary">New Analysis</button>';
             html += '</div>';
+
+            html += '<div id="pdf-content-gaps">';
+
+            // Info banner
+            html += '<div class="bg-gradient-to-r from-teal-500/20 to-cyan-500/20 border border-teal-500/30 rounded-xl p-4 mb-6">';
+            html += '<p class="text-gray-300">Analysis of <span class="text-teal-400 font-medium">' + utils.escapeHtml(state.gaps.niche) + '</span></p>';
             html += '</div>';
 
             // Gap opportunities
@@ -2060,11 +2251,13 @@
 
             // Market summary
             if (result.summary) {
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-xl p-5 mt-6">';
+                html += '<div class="result-section mt-4">';
                 html += '<h4 class="text-lg font-bold text-white mb-3">📈 Market Summary</h4>';
                 html += '<p class="text-gray-400">' + utils.escapeHtml(result.summary) + '</p>';
                 html += '</div>';
             }
+
+            html += '</div>'; // End pdf-content
 
             return html;
         }
@@ -2078,55 +2271,59 @@
             // Header
             html += renderToolHeader('Audience DNA Analyzer', '🧬', 'audience-dna', '7 tokens per analysis');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.audience.result ? '' : ' full-width') + '">';
 
+            // Input panel
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">🧬 Audience Settings</h3>';
+
+            // Niche input
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Your Niche</label>';
+            html += '<input type="text" id="audience-niche" class="input-field text-sm" placeholder="e.g., personal finance..." value="' + utils.escapeHtml(state.audience.niche) + '">';
+            html += '</div>';
+
+            // Channel URL (optional)
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Channel URL (Optional)</label>';
+            html += '<input type="text" id="audience-channel" class="input-field text-sm" placeholder="youtube.com/@channel" value="' + utils.escapeHtml(state.audience.channelUrl) + '">';
+            html += '</div>';
+
+            // Analysis depth
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Analysis Depth</label>';
+            html += '<div class="grid grid-cols-3 gap-2">';
+            var depths = [
+                { id: 'quick', name: 'Quick', icon: '⚡' },
+                { id: 'standard', name: 'Standard', icon: '📊' },
+                { id: 'deep', name: 'Deep', icon: '🔬' }
+            ];
+            depths.forEach(function(depth) {
+                var selected = state.audience.depth === depth.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setAudienceDepth(\'' + depth.id + '\')" style="padding: 0.5rem; text-align: center;">';
+                html += '<div class="text-lg">' + depth.icon + '</div>';
+                html += '<div class="text-xs text-white">' + depth.name + '</div>';
+                html += '</div>';
+            });
+            html += '</div></div>';
+
+            // Generate button
+            html += '<button onclick="app.analyzeAudience()" class="btn-primary w-full py-3">';
+            html += '<span class="mr-2">🧬</span> ' + (state.audience.result ? 'Re-analyze' : 'Analyze');
+            html += '</button>';
+
+            html += '</div>'; // End input panel
+
+            // Results panel
             if (state.audience.result) {
+                html += '<div class="tool-results-panel">';
                 html += renderAudienceResults();
-            } else {
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
-
-                // Niche input
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Your Niche / Content Area</label>';
-                html += '<input type="text" id="audience-niche" class="input-field" placeholder="e.g., personal finance for millennials, beginner photography, home fitness..." value="' + utils.escapeHtml(state.audience.niche) + '">';
-                html += '</div>';
-
-                // Channel URL (optional)
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Your Channel URL (Optional)</label>';
-                html += '<input type="text" id="audience-channel" class="input-field" placeholder="https://youtube.com/@yourchannel" value="' + utils.escapeHtml(state.audience.channelUrl) + '">';
-                html += '<p class="text-gray-500 text-sm mt-1">Add your channel for more personalized insights</p>';
-                html += '</div>';
-
-                // Analysis depth
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Analysis Depth</label>';
-                html += '<div class="grid grid-cols-3 gap-3">';
-                var depths = [
-                    { id: 'quick', name: 'Quick Scan', desc: 'Key demographics', icon: '⚡' },
-                    { id: 'standard', name: 'Standard', desc: 'Full profile', icon: '📊' },
-                    { id: 'deep', name: 'Deep Dive', desc: 'Psychographics', icon: '🔬' }
-                ];
-                depths.forEach(function(depth) {
-                    var selected = state.audience.depth === depth.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setAudienceDepth(\'' + depth.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + depth.icon + '</div>';
-                    html += '<div class="font-medium text-white">' + depth.name + '</div>';
-                    html += '<div class="text-gray-500 text-xs">' + depth.desc + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
-
-                // Generate button
-                html += '<button onclick="app.analyzeAudience()" class="btn-primary w-full">';
-                html += '<span class="mr-2">🧬</span> Analyze Audience DNA';
-                html += '</button>';
-
                 html += '</div>';
             }
 
-            html += '</div>';
+            html += '</div></div>'; // End layout and container
             return html;
         }
 
@@ -2134,15 +2331,19 @@
             var html = '';
             var result = state.audience.result;
 
-            // Success header
-            html += '<div class="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-2xl p-6 mb-6">';
-            html += '<div class="flex items-center justify-between">';
-            html += '<div>';
-            html += '<h3 class="text-xl font-bold text-white mb-1">🧬 Audience DNA Decoded!</h3>';
-            html += '<p class="text-gray-400">Profile for ' + utils.escapeHtml(state.audience.niche) + '</p>';
+            // Results header
+            html += '<div class="results-header">';
+            html += '<h2>🧬 Audience DNA</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'audience\')">📥 Download PDF</button>';
             html += '</div>';
-            html += '<button onclick="app.resetAudience()" class="btn-secondary">New Analysis</button>';
             html += '</div>';
+
+            html += '<div id="pdf-content-audience">';
+
+            // Info banner
+            html += '<div class="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-4 mb-6">';
+            html += '<p class="text-gray-300">Profile for <span class="text-purple-400 font-medium">' + utils.escapeHtml(state.audience.niche) + '</span></p>';
             html += '</div>';
 
             // Demographics section
@@ -2244,7 +2445,7 @@
 
             // Recommendations
             if (result.recommendations && result.recommendations.length > 0) {
-                html += '<div class="bg-purple-500/10 border border-purple-500/30 rounded-xl p-5">';
+                html += '<div class="result-section">';
                 html += '<h4 class="text-lg font-bold text-white mb-3">💡 Content Recommendations</h4>';
                 html += '<ul class="space-y-2">';
                 result.recommendations.forEach(function(rec) {
@@ -2256,6 +2457,8 @@
                 html += '</ul>';
                 html += '</div>';
             }
+
+            html += '</div>'; // End pdf-content
 
             return html;
         }
@@ -2269,68 +2472,71 @@
             // Header
             html += renderToolHeader('Collab Matchmaker', '🤝', 'collab-match', '5 tokens per search');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.collab.result ? '' : ' full-width') + '">';
 
-            if (state.collab.result) {
-                html += renderCollabResults();
-            } else {
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+            // Input panel
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">🤝 Collab Settings</h3>';
 
-                // Niche input
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Your Niche / Content Area</label>';
-                html += '<input type="text" id="collab-niche" class="input-field" placeholder="e.g., tech reviews, cooking tutorials, gaming commentary..." value="' + utils.escapeHtml(state.collab.niche) + '">';
+            // Niche input
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Your Niche</label>';
+            html += '<input type="text" id="collab-niche" class="input-field text-sm" placeholder="e.g., tech reviews..." value="' + utils.escapeHtml(state.collab.niche) + '">';
+            html += '</div>';
+
+            // Channel size preference
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Partner Size</label>';
+            html += '<div class="grid grid-cols-2 gap-2">';
+            var sizes = [
+                { id: 'any', name: 'Any', icon: '🌐' },
+                { id: 'small', name: 'Small', icon: '🌱' },
+                { id: 'medium', name: 'Medium', icon: '📈' },
+                { id: 'large', name: 'Large', icon: '🚀' }
+            ];
+            sizes.forEach(function(size) {
+                var selected = state.collab.channelSize === size.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setCollabSize(\'' + size.id + '\')" style="padding: 0.5rem;">';
+                html += '<div class="text-sm">' + size.icon + ' ' + size.name + '</div>';
                 html += '</div>';
+            });
+            html += '</div></div>';
 
-                // Channel size preference
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Preferred Partner Size</label>';
-                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
-                var sizes = [
-                    { id: 'any', name: 'Any Size', desc: 'All creators', icon: '🌐' },
-                    { id: 'small', name: 'Small', desc: '1K-10K subs', icon: '🌱' },
-                    { id: 'medium', name: 'Medium', desc: '10K-100K subs', icon: '📈' },
-                    { id: 'large', name: 'Large', desc: '100K+ subs', icon: '🚀' }
-                ];
-                sizes.forEach(function(size) {
-                    var selected = state.collab.channelSize === size.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setCollabSize(\'' + size.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + size.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + size.name + '</div>';
-                    html += '<div class="text-gray-500 text-xs">' + size.desc + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
+            // Content style preference
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Style</label>';
+            html += '<div class="grid grid-cols-2 gap-2">';
+            var styles = [
+                { id: 'any', name: 'Any', icon: '🎨' },
+                { id: 'educational', name: 'Edu', icon: '📚' },
+                { id: 'entertainment', name: 'Fun', icon: '🎭' },
+                { id: 'lifestyle', name: 'Life', icon: '✨' }
+            ];
+            styles.forEach(function(style) {
+                var selected = state.collab.contentStyle === style.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setCollabStyle(\'' + style.id + '\')" style="padding: 0.5rem;">';
+                html += '<div class="text-sm">' + style.icon + ' ' + style.name + '</div>';
+                html += '</div>';
+            });
+            html += '</div></div>';
 
-                // Content style preference
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Content Style Match</label>';
-                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
-                var styles = [
-                    { id: 'any', name: 'Any Style', icon: '🎨' },
-                    { id: 'educational', name: 'Educational', icon: '📚' },
-                    { id: 'entertainment', name: 'Entertainment', icon: '🎭' },
-                    { id: 'lifestyle', name: 'Lifestyle', icon: '✨' }
-                ];
-                styles.forEach(function(style) {
-                    var selected = state.collab.contentStyle === style.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setCollabStyle(\'' + style.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + style.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + style.name + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
+            // Generate button
+            html += '<button onclick="app.findCollabs()" class="btn-primary w-full py-3">';
+            html += '<span class="mr-2">🤝</span> ' + (state.collab.result ? 'New Search' : 'Find Partners');
+            html += '</button>';
 
-                // Generate button
-                html += '<button onclick="app.findCollabs()" class="btn-primary w-full">';
-                html += '<span class="mr-2">🤝</span> Find Collaboration Partners';
-                html += '</button>';
+            html += '</div>'; // End input panel
 
+            // Results panel
+            if (state.collab.result) {
+                html += '<div class="tool-results-panel">';
+                html += renderCollabResults();
                 html += '</div>';
             }
 
-            html += '</div>';
+            html += '</div></div>'; // End layout and container
             return html;
         }
 
@@ -2338,15 +2544,19 @@
             var html = '';
             var result = state.collab.result;
 
-            // Success header
-            html += '<div class="bg-gradient-to-r from-sky-500/20 to-indigo-500/20 border border-sky-500/30 rounded-2xl p-6 mb-6">';
-            html += '<div class="flex items-center justify-between">';
-            html += '<div>';
-            html += '<h3 class="text-xl font-bold text-white mb-1">🤝 Perfect Matches Found!</h3>';
-            html += '<p class="text-gray-400">Collaboration partners for ' + utils.escapeHtml(state.collab.niche) + '</p>';
+            // Results header
+            html += '<div class="results-header">';
+            html += '<h2>🤝 Collab Matches</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'collab\')">📥 Download PDF</button>';
             html += '</div>';
-            html += '<button onclick="app.resetCollab()" class="btn-secondary">New Search</button>';
             html += '</div>';
+
+            html += '<div id="pdf-content-collab">';
+
+            // Info banner
+            html += '<div class="bg-gradient-to-r from-sky-500/20 to-indigo-500/20 border border-sky-500/30 rounded-xl p-4 mb-6">';
+            html += '<p class="text-gray-300">Partners for <span class="text-sky-400 font-medium">' + utils.escapeHtml(state.collab.niche) + '</span></p>';
             html += '</div>';
 
             // Partner matches
@@ -2404,11 +2614,13 @@
 
             // Tips
             if (result.tips) {
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-xl p-5 mt-6">';
+                html += '<div class="result-section mt-4">';
                 html += '<h4 class="text-lg font-bold text-white mb-3">🎯 Collaboration Tips</h4>';
                 html += '<p class="text-gray-400">' + utils.escapeHtml(result.tips) + '</p>';
                 html += '</div>';
             }
+
+            html += '</div>'; // End pdf-content
 
             return html;
         }
@@ -2422,70 +2634,73 @@
             // Header
             html += renderToolHeader('Revenue Maximizer Pro', '💰', 'revenue-max', '8 tokens per analysis');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.revenue.result ? '' : ' full-width') + '">';
 
-            if (state.revenue.result) {
-                html += renderRevenueResults();
-            } else {
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+            // Input panel
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">💰 Revenue Settings</h3>';
 
-                // Niche input
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Your Niche / Content Area</label>';
-                html += '<input type="text" id="revenue-niche" class="input-field" placeholder="e.g., tech tutorials, fitness coaching, personal finance..." value="' + utils.escapeHtml(state.revenue.niche) + '">';
+            // Niche input
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Your Niche</label>';
+            html += '<input type="text" id="revenue-niche" class="input-field text-sm" placeholder="e.g., tech tutorials..." value="' + utils.escapeHtml(state.revenue.niche) + '">';
+            html += '</div>';
+
+            // Audience size
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Audience Size</label>';
+            html += '<div class="grid grid-cols-2 gap-2">';
+            var sizes = [
+                { id: 'starter', name: 'Starter', icon: '🌱' },
+                { id: 'small', name: 'Small', icon: '📈' },
+                { id: 'medium', name: 'Medium', icon: '🚀' },
+                { id: 'large', name: 'Large', icon: '⭐' }
+            ];
+            sizes.forEach(function(size) {
+                var selected = state.revenue.audienceSize === size.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setRevenueSize(\'' + size.id + '\')" style="padding: 0.5rem;">';
+                html += '<div class="text-sm">' + size.icon + ' ' + size.name + '</div>';
                 html += '</div>';
+            });
+            html += '</div></div>';
 
-                // Audience size
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Your Audience Size</label>';
-                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
-                var sizes = [
-                    { id: 'starter', name: 'Starter', desc: '0-1K subs', icon: '🌱' },
-                    { id: 'small', name: 'Small', desc: '1K-10K subs', icon: '📈' },
-                    { id: 'medium', name: 'Medium', desc: '10K-100K subs', icon: '🚀' },
-                    { id: 'large', name: 'Large', desc: '100K+ subs', icon: '⭐' }
-                ];
-                sizes.forEach(function(size) {
-                    var selected = state.revenue.audienceSize === size.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setRevenueSize(\'' + size.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + size.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + size.name + '</div>';
-                    html += '<div class="text-gray-500 text-xs">' + size.desc + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
+            // Current monetization methods
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Current Streams</label>';
+            html += '<div class="grid grid-cols-2 gap-2">';
+            var methods = [
+                { id: 'adsense', name: 'AdSense', icon: '📺' },
+                { id: 'sponsors', name: 'Sponsors', icon: '🤝' },
+                { id: 'affiliates', name: 'Affiliates', icon: '🔗' },
+                { id: 'merch', name: 'Merch', icon: '👕' },
+                { id: 'memberships', name: 'Members', icon: '⭐' },
+                { id: 'courses', name: 'Courses', icon: '📚' }
+            ];
+            methods.forEach(function(method) {
+                var selected = state.revenue.currentMethods.indexOf(method.id) > -1 ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.toggleRevenueMethod(\'' + method.id + '\')" style="padding: 0.5rem;">';
+                html += '<div class="text-sm">' + method.icon + ' ' + method.name + '</div>';
+                html += '</div>';
+            });
+            html += '</div></div>';
 
-                // Current monetization methods
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Current Revenue Streams (select all that apply)</label>';
-                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">';
-                var methods = [
-                    { id: 'adsense', name: 'AdSense', icon: '📺' },
-                    { id: 'sponsors', name: 'Sponsors', icon: '🤝' },
-                    { id: 'affiliates', name: 'Affiliates', icon: '🔗' },
-                    { id: 'merch', name: 'Merchandise', icon: '👕' },
-                    { id: 'memberships', name: 'Memberships', icon: '⭐' },
-                    { id: 'courses', name: 'Courses', icon: '📚' }
-                ];
-                methods.forEach(function(method) {
-                    var selected = state.revenue.currentMethods.indexOf(method.id) > -1 ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.toggleRevenueMethod(\'' + method.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + method.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + method.name + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
+            // Generate button
+            html += '<button onclick="app.analyzeRevenue()" class="btn-primary w-full py-3">';
+            html += '<span class="mr-2">💰</span> ' + (state.revenue.result ? 'Re-analyze' : 'Analyze');
+            html += '</button>';
 
-                // Generate button
-                html += '<button onclick="app.analyzeRevenue()" class="btn-primary w-full">';
-                html += '<span class="mr-2">💰</span> Maximize My Revenue';
-                html += '</button>';
+            html += '</div>'; // End input panel
 
+            // Results panel
+            if (state.revenue.result) {
+                html += '<div class="tool-results-panel">';
+                html += renderRevenueResults();
                 html += '</div>';
             }
 
-            html += '</div>';
+            html += '</div></div>'; // End layout and container
             return html;
         }
 
@@ -2493,17 +2708,21 @@
             var html = '';
             var result = state.revenue.result;
 
-            // Success header with potential earnings
-            html += '<div class="bg-gradient-to-r from-green-500/20 to-yellow-500/20 border border-green-500/30 rounded-2xl p-6 mb-6">';
-            html += '<div class="flex items-center justify-between">';
-            html += '<div>';
-            html += '<h3 class="text-xl font-bold text-white mb-1">💰 Revenue Opportunities Unlocked!</h3>';
+            // Results header
+            html += '<div class="results-header">';
+            html += '<h2>💰 Revenue Opportunities</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'revenue\')">📥 Download PDF</button>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div id="pdf-content-revenue">';
+
+            // Success banner with potential earnings
+            html += '<div class="bg-gradient-to-r from-green-500/20 to-yellow-500/20 border border-green-500/30 rounded-xl p-4 mb-6">';
             if (result.potentialMonthly) {
                 html += '<p class="text-green-400 font-bold text-lg">Potential: $' + result.potentialMonthly + '/month</p>';
             }
-            html += '</div>';
-            html += '<button onclick="app.resetRevenue()" class="btn-secondary">New Analysis</button>';
-            html += '</div>';
             html += '</div>';
 
             // Revenue opportunities
@@ -2567,14 +2786,16 @@
 
             // Sponsor pitch template
             if (result.sponsorPitch) {
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-xl p-5 mt-4">';
+                html += '<div class="result-section mt-4">';
                 html += '<div class="flex items-center justify-between mb-3">';
                 html += '<h4 class="text-lg font-bold text-white">📧 Sponsor Pitch Template</h4>';
-                html += '<button onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.sponsorPitch).replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\', this)" class="text-green-400 hover:text-green-300 text-sm">Copy Template</button>';
+                html += '<button onclick="utils.copyToClipboard(\'' + utils.escapeHtml(result.sponsorPitch).replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\', this)" class="text-green-400 hover:text-green-300 text-sm">Copy</button>';
                 html += '</div>';
                 html += '<p class="text-gray-400 text-sm whitespace-pre-line">' + utils.escapeHtml(result.sponsorPitch) + '</p>';
                 html += '</div>';
             }
+
+            html += '</div>'; // End pdf-content
 
             return html;
         }
@@ -2588,63 +2809,68 @@
             // Header
             html += renderToolHeader('AI Video Coach', '🧠', 'ai-coach', '10 tokens per session');
 
-            // Main content
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // Wide layout container
+            html += '<div class="tool-page-container">';
+            html += '<div class="tool-layout' + (state.coach.result ? '' : ' full-width') + '">';
 
+            // Input panel
+            html += '<div class="tool-input-panel">';
+            html += '<h3 class="text-lg font-bold text-white mb-4">🧠 Coach Settings</h3>';
+
+            // Video URL or transcript
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Video URL or Title</label>';
+            html += '<input type="text" id="coach-video" class="input-field text-sm" placeholder="youtube.com/watch?v=..." value="' + utils.escapeHtml(state.coach.videoUrl) + '">';
+            html += '</div>';
+
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Transcript (Optional)</label>';
+            html += '<textarea id="coach-transcript" class="input-field h-16 text-sm" placeholder="Paste transcript for deeper analysis...">' + utils.escapeHtml(state.coach.transcript) + '</textarea>';
+            html += '</div>';
+
+            // Challenge/Question
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Your Challenge</label>';
+            html += '<textarea id="coach-challenge" class="input-field h-16 text-sm" placeholder="What do you need help with?">' + utils.escapeHtml(state.coach.challenge) + '</textarea>';
+            html += '</div>';
+
+            // Focus area
+            html += '<div class="mb-5">';
+            html += '<label class="block text-gray-300 font-medium mb-2 text-sm">Focus Area</label>';
+            html += '<div class="grid grid-cols-2 gap-2">';
+            var areas = [
+                { id: 'general', name: 'General', icon: '📋' },
+                { id: 'retention', name: 'Retention', icon: '📈' },
+                { id: 'hooks', name: 'Hooks', icon: '🎣' },
+                { id: 'ctr', name: 'CTR', icon: '🖱️' },
+                { id: 'engagement', name: 'Engage', icon: '💬' },
+                { id: 'growth', name: 'Growth', icon: '🚀' },
+                { id: 'monetization', name: 'Money', icon: '💰' },
+                { id: 'scripting', name: 'Script', icon: '📝' }
+            ];
+            areas.forEach(function(area) {
+                var selected = state.coach.focusArea === area.id ? 'selected' : '';
+                html += '<div class="option-card ' + selected + '" onclick="app.setCoachFocus(\'' + area.id + '\')" style="padding: 0.5rem;">';
+                html += '<div class="text-sm">' + area.icon + ' ' + area.name + '</div>';
+                html += '</div>';
+            });
+            html += '</div></div>';
+
+            // Generate button
+            html += '<button onclick="app.getCoaching()" class="btn-primary w-full py-3">';
+            html += '<span class="mr-2">🧠</span> ' + (state.coach.result ? 'New Session' : 'Get Coaching');
+            html += '</button>';
+
+            html += '</div>'; // End input panel
+
+            // Results panel
             if (state.coach.result) {
+                html += '<div class="tool-results-panel">';
                 html += renderCoachResults();
-            } else {
-                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
-
-                // Video URL or transcript
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Video URL or Title</label>';
-                html += '<input type="text" id="coach-video" class="input-field" placeholder="https://youtube.com/watch?v=... or paste your video title" value="' + utils.escapeHtml(state.coach.videoUrl) + '">';
-                html += '</div>';
-
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">Video Transcript / Script (Optional)</label>';
-                html += '<textarea id="coach-transcript" class="input-field h-24" placeholder="Paste your video transcript or script for deeper analysis...">' + utils.escapeHtml(state.coach.transcript) + '</textarea>';
-                html += '</div>';
-
-                // Challenge/Question
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-2">What challenge do you need help with?</label>';
-                html += '<textarea id="coach-challenge" class="input-field h-20" placeholder="e.g., My retention drops at 2 minutes, I\'m not getting clicks despite good thumbnails, How can I improve my hooks...">' + utils.escapeHtml(state.coach.challenge) + '</textarea>';
-                html += '</div>';
-
-                // Focus area
-                html += '<div class="mb-6">';
-                html += '<label class="block text-white font-semibold mb-3">Focus Area</label>';
-                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
-                var areas = [
-                    { id: 'general', name: 'General Review', icon: '📋' },
-                    { id: 'retention', name: 'Retention', icon: '📈' },
-                    { id: 'hooks', name: 'Hooks & Intros', icon: '🎣' },
-                    { id: 'ctr', name: 'CTR & Titles', icon: '🖱️' },
-                    { id: 'engagement', name: 'Engagement', icon: '💬' },
-                    { id: 'growth', name: 'Growth Strategy', icon: '🚀' },
-                    { id: 'monetization', name: 'Monetization', icon: '💰' },
-                    { id: 'scripting', name: 'Scripting', icon: '📝' }
-                ];
-                areas.forEach(function(area) {
-                    var selected = state.coach.focusArea === area.id ? 'selected' : '';
-                    html += '<div class="option-card ' + selected + '" onclick="app.setCoachFocus(\'' + area.id + '\')">';
-                    html += '<div class="text-2xl mb-1">' + area.icon + '</div>';
-                    html += '<div class="font-medium text-white text-sm">' + area.name + '</div>';
-                    html += '</div>';
-                });
-                html += '</div></div>';
-
-                // Generate button
-                html += '<button onclick="app.getCoaching()" class="btn-primary w-full">';
-                html += '<span class="mr-2">🧠</span> Get Expert Coaching';
-                html += '</button>';
-
                 html += '</div>';
             }
 
-            html += '</div>';
+            html += '</div></div>'; // End layout and container
             return html;
         }
 
@@ -2652,15 +2878,19 @@
             var html = '';
             var result = state.coach.result;
 
-            // Success header
-            html += '<div class="bg-gradient-to-r from-rose-500/20 to-orange-500/20 border border-rose-500/30 rounded-2xl p-6 mb-6">';
-            html += '<div class="flex items-center justify-between">';
-            html += '<div>';
-            html += '<h3 class="text-xl font-bold text-white mb-1">🧠 Your Coaching Session</h3>';
-            html += '<p class="text-gray-400">Focus: ' + utils.escapeHtml(state.coach.focusArea) + '</p>';
+            // Results header
+            html += '<div class="results-header">';
+            html += '<h2>🧠 Coaching Session</h2>';
+            html += '<div class="results-actions">';
+            html += '<button class="btn-pdf" onclick="app.downloadPDF(\'coach\')">📥 Download PDF</button>';
             html += '</div>';
-            html += '<button onclick="app.resetCoach()" class="btn-secondary">New Session</button>';
             html += '</div>';
+
+            html += '<div id="pdf-content-coach">';
+
+            // Info banner
+            html += '<div class="bg-gradient-to-r from-rose-500/20 to-orange-500/20 border border-rose-500/30 rounded-xl p-4 mb-6">';
+            html += '<p class="text-gray-300">Focus: <span class="text-rose-400 font-medium">' + utils.escapeHtml(state.coach.focusArea) + '</span></p>';
             html += '</div>';
 
             // Overall assessment
@@ -2733,7 +2963,7 @@
 
             // Pro tips
             if (result.proTips && result.proTips.length > 0) {
-                html += '<div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-5">';
+                html += '<div class="result-section">';
                 html += '<h4 class="text-lg font-bold text-white mb-3">💎 Pro Tips</h4>';
                 html += '<ul class="space-y-2">';
                 result.proTips.forEach(function(tip) {
@@ -2745,6 +2975,8 @@
                 html += '</ul>';
                 html += '</div>';
             }
+
+            html += '</div>'; // End pdf-content
 
             return html;
         }
@@ -2764,8 +2996,8 @@
             html += '<h1 class="text-3xl font-bold text-white mb-2">📜 History</h1>';
             html += '</div></div>';
 
-            // History tabs
-            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+            // History container with wider layout
+            html += '<div class="tool-page-container">';
             html += '<div class="tab-container flex-wrap">';
             var historyTypes = [
                 { id: 'script', name: 'Scripts', icon: '🎬' },
