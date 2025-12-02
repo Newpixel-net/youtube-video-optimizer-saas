@@ -2733,12 +2733,15 @@
             render();
 
             var adminSetAlias = functions.httpsCallable('adminSetClientAlias');
-            adminSetAlias({ userId: uid, clientAlias: alias })
+            adminSetAlias({ userId: uid, alias: alias })
                 .then(function(result) {
-                    showToast('Client alias updated', 'success');
+                    showToast('Client alias saved!', 'success');
+                    // Update the user object in modal to reflect saved value
+                    state.userDetailModal.user.clientAlias = alias;
                     state.userDetailModal.saving = false;
-                    loadUsers();
-                    closeUserDetailModal();
+                    // Refresh users list in background (don't close modal)
+                    loadUsersBackground();
+                    render();
                 })
                 .catch(function(error) {
                     console.error('Error saving alias:', error);
@@ -2757,12 +2760,14 @@
             render();
 
             var adminSetVerified = functions.httpsCallable('adminSetFiverrVerified');
-            adminSetVerified({ userId: uid, isVerified: verified })
+            adminSetVerified({ userId: uid, verified: verified })
                 .then(function(result) {
-                    showToast('Verification status updated', 'success');
+                    showToast(verified ? 'Marked as Fiverr Verified!' : 'Verification removed', 'success');
+                    // Update the user object in modal
+                    state.userDetailModal.user.isFiverrVerified = verified;
                     state.userDetailModal.saving = false;
-                    loadUsers();
-                    closeUserDetailModal();
+                    loadUsersBackground();
+                    render();
                 })
                 .catch(function(error) {
                     console.error('Error saving verified:', error);
@@ -2783,10 +2788,11 @@
             var adminUpdateNotes = functions.httpsCallable('adminUpdateUserNotes');
             adminUpdateNotes({ userId: uid, notes: notes })
                 .then(function(result) {
-                    showToast('Admin notes saved', 'success');
+                    showToast('Admin notes saved!', 'success');
+                    state.userDetailModal.user.adminNotes = notes;
                     state.userDetailModal.saving = false;
-                    loadUsers();
-                    closeUserDetailModal();
+                    loadUsersBackground();
+                    render();
                 })
                 .catch(function(error) {
                     console.error('Error saving notes:', error);
@@ -2809,15 +2815,34 @@
             adminUpdateSub({ userId: uid, plan: plan, duration: duration })
                 .then(function(result) {
                     showToast('Subscription updated: ' + plan.toUpperCase() + ' (' + duration + ')', 'success');
+                    // Update local state with new subscription info
+                    state.userDetailModal.user.subscription = state.userDetailModal.user.subscription || {};
+                    state.userDetailModal.user.subscription.plan = plan;
+                    if (result.data && result.data.endDate) {
+                        state.userDetailModal.user.subscription.endDate = result.data.endDate;
+                    }
                     state.userDetailModal.saving = false;
-                    loadUsers();
-                    closeUserDetailModal();
+                    loadUsersBackground();
+                    render();
                 })
                 .catch(function(error) {
                     console.error('Error updating subscription:', error);
                     showToast('Failed to update: ' + error.message, 'error');
                     state.userDetailModal.saving = false;
                     render();
+                });
+        }
+
+        // Background user refresh (doesn't trigger UI loading state)
+        function loadUsersBackground() {
+            var adminGetUsers = functions.httpsCallable('adminGetUsers');
+            adminGetUsers({})
+                .then(function(result) {
+                    state.adminUsers = result.data.users || [];
+                    // Don't re-render here to avoid disrupting modal
+                })
+                .catch(function(error) {
+                    console.error('Background user refresh failed:', error);
                 });
         }
 
@@ -2856,7 +2881,7 @@
             html += '<div class="form-group">';
             html += '<label class="form-label">Client Alias (Fiverr Username)</label>';
             html += '<div style="display: flex; gap: 0.75rem;">';
-            html += '<input type="text" id="modal-alias-input" class="input-field" placeholder="e.g., john_doe_fiverr" value="' + escapeHtml(modal.editedAlias) + '" onchange="state.userDetailModal.editedAlias = this.value" />';
+            html += '<input type="text" id="modal-alias-input" class="input-field" placeholder="e.g., john_doe_fiverr" value="' + escapeHtml(modal.editedAlias) + '" oninput="state.userDetailModal.editedAlias = this.value" />';
             html += '<button onclick="saveUserAlias()" class="btn-primary" ' + (modal.saving ? 'disabled' : '') + ' style="white-space: nowrap;">Save Alias</button>';
             html += '</div>';
             html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">This helps you identify clients from Fiverr orders</p>';
@@ -2867,7 +2892,7 @@
             html += '<label class="form-label">Fiverr Verified Status</label>';
             html += '<div style="display: flex; gap: 1rem; align-items: center;">';
             html += '<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">';
-            html += '<input type="checkbox" id="modal-verified-checkbox" ' + (modal.editedVerified ? 'checked' : '') + ' onchange="state.userDetailModal.editedVerified = this.checked; render();" style="width: 20px; height: 20px;" />';
+            html += '<input type="checkbox" id="modal-verified-checkbox" ' + (modal.editedVerified ? 'checked' : '') + ' onchange="state.userDetailModal.editedVerified = this.checked" style="width: 20px; height: 20px;" />';
             html += '<span style="color: white;">✅ Fiverr Approved</span>';
             html += '</label>';
             html += '<button onclick="saveUserVerified()" class="btn-primary" ' + (modal.saving ? 'disabled' : '') + ' style="font-size: 0.8rem; padding: 0.5rem 1rem;">Save</button>';
@@ -2917,7 +2942,7 @@
             // Admin Notes Section
             html += '<div class="form-group">';
             html += '<label class="form-label">Admin Notes (Internal)</label>';
-            html += '<textarea id="modal-notes-textarea" class="textarea-field" rows="4" placeholder="Add private notes about this client..." onchange="state.userDetailModal.editedNotes = this.value">' + escapeHtml(modal.editedNotes) + '</textarea>';
+            html += '<textarea id="modal-notes-textarea" class="textarea-field" rows="4" placeholder="Add private notes about this client..." oninput="state.userDetailModal.editedNotes = this.value">' + escapeHtml(modal.editedNotes) + '</textarea>';
             html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">';
             html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Only visible to admins</p>';
             html += '<button onclick="saveUserNotes()" class="btn-primary" ' + (modal.saving ? 'disabled' : '') + ' style="font-size: 0.8rem; padding: 0.5rem 1rem;">Save Notes</button>';
