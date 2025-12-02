@@ -2559,6 +2559,15 @@
             thumbnailCategory: 'general', // general | gaming | tutorial | vlog | review | news | entertainment
             thumbnailVariations: 1, // 1-4 variations
             thumbnailReference: null, // { dataUrl, file, mimeType, name }
+
+            // Phase 8: Advanced Reference Settings
+            thumbnailReferenceType: 'auto', // auto | face | product | style | background
+            thumbnailComposition: 'auto', // auto | face-right | face-center | split-screen | product-hero | action-shot | collage
+            thumbnailFaceStrength: 0.85, // 0.5 - 1.0 (face preservation strength)
+            thumbnailStyleStrength: 0.7, // 0.5 - 1.0 (style transfer strength)
+            thumbnailExpression: 'keep', // keep | excited | serious | surprised | curious | confident
+            thumbnailBackground: 'auto', // auto | studio | blur | gradient | contextual | dark | vibrant
+            showAdvancedOptions: false, // Toggle for advanced options panel
             thumbnailTokenBalance: 50, // Token balance from creativeTokens (default like Creative Studio)
             thumbnailTokenPlan: 'free', // User's subscription plan
             thumbnailTokenRollover: 0, // Rollover tokens from previous month
@@ -4575,6 +4584,42 @@
                 app.updateThumbnailCostUI();
             },
 
+            // Phase 8: Advanced Options Handlers
+            setThumbnailReferenceType: function(type) {
+                state.thumbnailReferenceType = type;
+                render();
+            },
+
+            setThumbnailComposition: function(composition) {
+                state.thumbnailComposition = composition;
+                render();
+            },
+
+            setThumbnailExpression: function(expression) {
+                state.thumbnailExpression = expression;
+                render();
+            },
+
+            setThumbnailFaceStrength: function(value) {
+                state.thumbnailFaceStrength = parseInt(value) / 100;
+                render();
+            },
+
+            setThumbnailStyleStrength: function(value) {
+                state.thumbnailStyleStrength = parseInt(value) / 100;
+                render();
+            },
+
+            setThumbnailBackground: function(bg) {
+                state.thumbnailBackground = bg;
+                render();
+            },
+
+            toggleAdvancedOptions: function() {
+                state.showAdvancedOptions = !state.showAdvancedOptions;
+                render();
+            },
+
             calculateThumbnailCost: function() {
                 var modeCosts = {
                     quick: 2,
@@ -4747,7 +4792,10 @@
                     style: state.thumbnailStyle,
                     mode: state.thumbnailMode,
                     category: state.thumbnailCategory,
-                    variations: state.thumbnailVariations
+                    variations: state.thumbnailVariations,
+                    // Phase 8: Advanced options
+                    compositionTemplate: state.thumbnailComposition,
+                    backgroundStyle: state.thumbnailBackground
                 };
 
                 // Add reference image if in reference mode
@@ -4759,6 +4807,12 @@
                         base64: base64,
                         mimeType: state.thumbnailReference.mimeType
                     };
+
+                    // Phase 8: Reference-specific advanced options
+                    payload.referenceType = state.thumbnailReferenceType;
+                    payload.faceStrength = state.thumbnailFaceStrength;
+                    payload.styleStrength = state.thumbnailStyleStrength;
+                    payload.expressionModifier = state.thumbnailExpression;
                 }
 
                 functions.httpsCallable('generateThumbnailPro')(payload)
@@ -7864,6 +7918,133 @@
                         html += '<p class="text-xs text-gray-400 mt-2">JPG, PNG, WebP • Max 5MB</p>';
                         html += '</div>';
                     }
+                    html += '</div>';
+
+                    // ========== REFERENCE TYPE SELECTOR (when reference uploaded) ==========
+                    if (state.thumbnailReference) {
+                        html += '<div class="mb-4 p-4 bg-white rounded-xl border border-gray-200">';
+                        html += '<label class="block text-gray-700 font-semibold mb-3">🎯 What should AI focus on from your reference?</label>';
+                        html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-2">';
+
+                        var refTypes = [
+                            { id: 'auto', name: 'Auto Detect', icon: '🤖', desc: 'AI decides' },
+                            { id: 'face', name: 'My Face', icon: '👤', desc: 'Keep my likeness' },
+                            { id: 'product', name: 'Product', icon: '📦', desc: 'Showcase item' },
+                            { id: 'style', name: 'Style Only', icon: '🎨', desc: 'Match colors/mood' }
+                        ];
+
+                        refTypes.forEach(function(rt) {
+                            var isActive = state.thumbnailReferenceType === rt.id;
+                            var btnClass = isActive ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-purple-300';
+                            html += '<div onclick="app.setThumbnailReferenceType(\'' + rt.id + '\')" class="cursor-pointer p-3 border-2 ' + btnClass + ' rounded-xl text-center transition-all">';
+                            html += '<div class="text-xl">' + rt.icon + '</div>';
+                            html += '<p class="font-semibold text-gray-800 text-sm">' + rt.name + '</p>';
+                            html += '<p class="text-xs text-gray-500">' + rt.desc + '</p>';
+                            html += '</div>';
+                        });
+                        html += '</div></div>';
+
+                        // Face-specific options (expression, strength)
+                        if (state.thumbnailReferenceType === 'face') {
+                            html += '<div class="mb-4 p-4 bg-white rounded-xl border border-gray-200">';
+                            html += '<label class="block text-gray-700 font-semibold mb-3">😊 Expression Style</label>';
+                            html += '<div class="flex flex-wrap gap-2">';
+
+                            var expressions = [
+                                { id: 'keep', name: 'Keep Original', icon: '📸' },
+                                { id: 'excited', name: 'Excited', icon: '😃' },
+                                { id: 'serious', name: 'Serious', icon: '😐' },
+                                { id: 'surprised', name: 'Surprised', icon: '😮' },
+                                { id: 'confident', name: 'Confident', icon: '😎' }
+                            ];
+
+                            expressions.forEach(function(exp) {
+                                var isActive = state.thumbnailExpression === exp.id;
+                                var btnClass = isActive ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-purple-100';
+                                html += '<button type="button" onclick="app.setThumbnailExpression(\'' + exp.id + '\')" class="px-3 py-2 rounded-full font-medium transition-all text-sm ' + btnClass + '">';
+                                html += exp.icon + ' ' + exp.name;
+                                html += '</button>';
+                            });
+                            html += '</div>';
+
+                            // Face strength slider
+                            html += '<div class="mt-4">';
+                            html += '<label class="block text-gray-600 text-sm mb-2">Face Preservation Strength: <span class="font-bold text-purple-600">' + Math.round(state.thumbnailFaceStrength * 100) + '%</span></label>';
+                            html += '<input type="range" min="50" max="100" value="' + Math.round(state.thumbnailFaceStrength * 100) + '" oninput="app.setThumbnailFaceStrength(this.value)" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500" />';
+                            html += '<div class="flex justify-between text-xs text-gray-400 mt-1"><span>More Creative</span><span>Exact Match</span></div>';
+                            html += '</div></div>';
+                        }
+
+                        // Style-specific options (strength)
+                        if (state.thumbnailReferenceType === 'style') {
+                            html += '<div class="mb-4 p-4 bg-white rounded-xl border border-gray-200">';
+                            html += '<label class="block text-gray-600 text-sm mb-2">Style Transfer Strength: <span class="font-bold text-purple-600">' + Math.round(state.thumbnailStyleStrength * 100) + '%</span></label>';
+                            html += '<input type="range" min="50" max="100" value="' + Math.round(state.thumbnailStyleStrength * 100) + '" oninput="app.setThumbnailStyleStrength(this.value)" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500" />';
+                            html += '<div class="flex justify-between text-xs text-gray-400 mt-1"><span>Subtle Hints</span><span>Strong Match</span></div>';
+                            html += '</div>';
+                        }
+                    }
+                }
+
+                // ========== ADVANCED OPTIONS TOGGLE ==========
+                html += '<div class="mb-4">';
+                html += '<button type="button" onclick="app.toggleAdvancedOptions()" class="flex items-center gap-2 text-gray-600 hover:text-pink-600 transition-colors">';
+                html += '<span class="text-lg">' + (state.showAdvancedOptions ? '▼' : '▶') + '</span>';
+                html += '<span class="font-medium">Advanced Options</span>';
+                html += '<span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Pro Tips</span>';
+                html += '</button>';
+                html += '</div>';
+
+                // ========== ADVANCED OPTIONS PANEL ==========
+                if (state.showAdvancedOptions) {
+                    html += '<div class="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">';
+
+                    // Composition Template
+                    html += '<div>';
+                    html += '<label class="block text-gray-700 font-semibold mb-3">📐 Composition Template</label>';
+                    html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-2">';
+
+                    var compositions = [
+                        { id: 'auto', name: 'Auto', icon: '🤖', desc: 'AI decides' },
+                        { id: 'face-right', name: 'Face Right', icon: '👤→', desc: 'Best for vloggers' },
+                        { id: 'face-center', name: 'Face Center', icon: '👤', desc: 'Bold impact' },
+                        { id: 'split-screen', name: 'Split Screen', icon: '◧', desc: 'Before/After' },
+                        { id: 'product-hero', name: 'Product Hero', icon: '📦', desc: 'Clean spotlight' },
+                        { id: 'action-shot', name: 'Action Shot', icon: '⚡', desc: 'Dynamic energy' }
+                    ];
+
+                    compositions.forEach(function(comp) {
+                        var isActive = state.thumbnailComposition === comp.id;
+                        var btnClass = isActive ? 'border-pink-500 bg-pink-50' : 'border-gray-200 hover:border-pink-300';
+                        html += '<div onclick="app.setThumbnailComposition(\'' + comp.id + '\')" class="cursor-pointer p-2 border-2 ' + btnClass + ' rounded-lg text-center transition-all">';
+                        html += '<div class="text-lg">' + comp.icon + '</div>';
+                        html += '<p class="font-medium text-gray-800 text-xs">' + comp.name + '</p>';
+                        html += '<p class="text-xs text-gray-500">' + comp.desc + '</p>';
+                        html += '</div>';
+                    });
+                    html += '</div></div>';
+
+                    // Background Style
+                    html += '<div>';
+                    html += '<label class="block text-gray-700 font-semibold mb-3">🖼️ Background Style</label>';
+                    html += '<div class="flex flex-wrap gap-2">';
+
+                    var backgrounds = [
+                        { id: 'auto', name: 'Auto' },
+                        { id: 'studio', name: 'Studio' },
+                        { id: 'blur', name: 'Blur/Bokeh' },
+                        { id: 'gradient', name: 'Gradient' },
+                        { id: 'dark', name: 'Dark' },
+                        { id: 'vibrant', name: 'Vibrant' }
+                    ];
+
+                    backgrounds.forEach(function(bg) {
+                        var isActive = state.thumbnailBackground === bg.id;
+                        var btnClass = isActive ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-pink-100';
+                        html += '<button type="button" onclick="app.setThumbnailBackground(\'' + bg.id + '\')" class="px-3 py-1.5 rounded-full font-medium transition-all text-sm ' + btnClass + '">' + bg.name + '</button>';
+                    });
+                    html += '</div></div>';
+
                     html += '</div>';
                 }
 

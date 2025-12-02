@@ -4881,10 +4881,17 @@ exports.generateThumbnailPro = functions.https.onCall(async (data, context) => {
     title,
     style = 'professional',
     customPrompt = '',
-    mode = 'quick', // quick | reference | premium
+    mode = 'quick', // quick | reference | premium | faceHero | styleClone | productPro
     category = 'general', // general | gaming | tutorial | vlog | review | news | entertainment
     variations = 1, // 1-4
-    referenceImage = null // { base64, mimeType }
+    referenceImage = null, // { base64, mimeType }
+    // NEW Phase 1 & 6 parameters
+    referenceType = 'auto', // auto | face | product | style | background
+    compositionTemplate = 'auto', // auto | face-right | face-center | split-screen | product-hero | action-shot
+    faceStrength = 0.85, // 0.5-1.0 - how much to preserve face
+    styleStrength = 0.7, // 0.3-1.0 - how much to match style
+    expressionModifier = 'keep', // keep | excited | serious | surprised
+    backgroundStyle = 'auto' // auto | studio | blur | gradient | custom
   } = data;
 
   if (!title || title.trim().length < 3) {
@@ -4894,38 +4901,245 @@ exports.generateThumbnailPro = functions.https.onCall(async (data, context) => {
   // Validate variations
   const imageCount = Math.min(Math.max(parseInt(variations) || 1, 1), 4);
 
-  // Model configuration based on mode
+  // ==========================================
+  // PHASE 1: ENHANCED MODE CONFIGURATION
+  // ==========================================
   const modeConfig = {
     quick: { model: 'imagen-4', tokenCost: 2, supportsReference: false },
     reference: { model: 'nano-banana-pro', tokenCost: 4, supportsReference: true },
-    premium: { model: 'dall-e-3', tokenCost: 6, supportsReference: false }
+    premium: { model: 'dall-e-3', tokenCost: 6, supportsReference: false },
+    // NEW specialized modes
+    faceHero: { model: 'nano-banana-pro', tokenCost: 5, supportsReference: true, specialization: 'face' },
+    styleClone: { model: 'nano-banana-pro', tokenCost: 4, supportsReference: true, specialization: 'style' },
+    productPro: { model: 'dall-e-3', tokenCost: 6, supportsReference: false, specialization: 'product' }
   };
 
   const config = modeConfig[mode] || modeConfig.quick;
   const totalCost = config.tokenCost * imageCount;
 
-  // Validate reference image for reference mode
-  if (mode === 'reference' && !referenceImage?.base64) {
-    throw new functions.https.HttpsError('invalid-argument', 'Reference mode requires a reference image');
+  // Validate reference image for reference-supporting modes
+  const needsReference = ['reference', 'faceHero', 'styleClone'].includes(mode);
+  if (needsReference && !referenceImage?.base64) {
+    throw new functions.https.HttpsError('invalid-argument', `${mode} mode requires a reference image`);
   }
 
-  // Category-specific prompt enhancements
-  const categoryPrompts = {
-    general: 'Professional YouTube thumbnail with eye-catching design',
-    gaming: 'Gaming YouTube thumbnail with vibrant neon colors, action-packed composition, dramatic lighting, game-style effects, energetic feel',
-    tutorial: 'Tutorial/How-to YouTube thumbnail with clean layout, professional look, clear visual hierarchy, trust-building design, step indicator elements',
-    vlog: 'Vlog YouTube thumbnail with warm personal aesthetic, lifestyle feel, authentic expression, relatable mood, natural lighting',
-    review: 'Product review YouTube thumbnail with professional product showcase, comparison elements, trust signals, clean background, expert feel',
-    news: 'News/Commentary YouTube thumbnail with bold impactful design, serious professional tone, headline-worthy composition, current events aesthetic',
-    entertainment: 'Entertainment YouTube thumbnail with dramatic expressive composition, high energy, bold colors, maximum engagement appeal'
+  // ==========================================
+  // PHASE 1: REVOLUTIONARY PROMPT ENGINEERING
+  // ==========================================
+
+  // Reference Type Specialized Prompts (THE KEY FIX)
+  const referenceTypePrompts = {
+    face: `CRITICAL FACE PRESERVATION REQUIREMENTS:
+┌─────────────────────────────────────────────────────────────┐
+│ FACE IDENTITY - MUST PRESERVE EXACTLY:                      │
+├─────────────────────────────────────────────────────────────┤
+│ • Facial structure: exact bone structure, face shape        │
+│ • Eyes: precise shape, color, spacing, brow arch           │
+│ • Nose: exact shape, size, bridge profile                  │
+│ • Mouth: lip shape, size, natural expression               │
+│ • Skin: tone, texture, any distinctive features            │
+│ • Hair: color, style, texture, length exactly as shown     │
+└─────────────────────────────────────────────────────────────┘
+
+COMPOSITION FOR FACE THUMBNAILS:
+• Face should occupy 35-45% of the thumbnail
+• Position face on RIGHT THIRD of frame (golden ratio)
+• Eyes should be in upper third of frame
+• Leave LEFT 40% clear for text overlay space
+• Face should "pop" from background with rim lighting
+
+LIGHTING FOR FACES:
+• Soft key light at 45° angle (beauty lighting)
+• Subtle fill light to reduce harsh shadows
+• Rim/hair light for separation from background
+• Catch lights in eyes (essential for life-like look)
+
+QUALITY REQUIREMENTS:
+• 4K photorealistic quality
+• Magazine cover / professional headshot quality
+• Sharp focus on face, subtle background blur (f/2.8 equivalent)
+• Color grade: cinematic with skin tone preservation`,
+
+    product: `CRITICAL PRODUCT SHOWCASE REQUIREMENTS:
+┌─────────────────────────────────────────────────────────────┐
+│ PRODUCT IDENTITY - MUST PRESERVE EXACTLY:                   │
+├─────────────────────────────────────────────────────────────┤
+│ • Product shape and proportions: exact dimensions          │
+│ • Brand colors: match precisely                            │
+│ • Logos/text on product: if visible, keep accurate         │
+│ • Material/texture: show quality and finish                │
+│ • Key features: highlight what makes it special            │
+└─────────────────────────────────────────────────────────────┘
+
+COMPOSITION FOR PRODUCT THUMBNAILS:
+• Product as HERO - center or golden ratio position
+• 45° hero angle (most flattering for products)
+• Clean background: gradient, solid, or contextual lifestyle
+• Subtle reflection/shadow for grounding and depth
+• Leave space for text overlay (top or side)
+
+LIGHTING FOR PRODUCTS:
+• 3-point professional product photography lighting
+• Soft key light to show form
+• Fill to reveal details in shadows
+• Accent light for highlights and rim
+
+QUALITY REQUIREMENTS:
+• Commercial product photography quality
+• Sharp focus throughout (deep depth of field)
+• Clean, distraction-free presentation
+• Premium, aspirational feel`,
+
+    style: `STYLE TRANSFER REQUIREMENTS:
+┌─────────────────────────────────────────────────────────────┐
+│ STYLE ELEMENTS TO EXTRACT AND APPLY:                        │
+├─────────────────────────────────────────────────────────────┤
+│ • Color palette: exact hues, saturation, contrast levels   │
+│ • Lighting style: direction, quality, mood                 │
+│ • Composition approach: framing, balance, focal points     │
+│ • Texture/finish: glossy, matte, gritty, smooth           │
+│ • Overall mood: energetic, calm, dramatic, playful        │
+│ • Visual effects: any gradients, overlays, treatments     │
+└─────────────────────────────────────────────────────────────┘
+
+Apply these extracted style elements to create a NEW thumbnail for the given topic.
+The result should feel like it belongs in the same "series" as the reference.`,
+
+    background: `BACKGROUND REFERENCE REQUIREMENTS:
+Use the reference image as the BACKGROUND or ENVIRONMENT.
+Place new subjects/elements INTO this background setting.
+Maintain the lighting direction and color temperature of the background.
+Ensure new elements are properly composited and lit to match.`
   };
 
-  // Style-specific prompt additions
+  // ==========================================
+  // PHASE 4: ADVANCED PROMPT TEMPLATES
+  // ==========================================
+
+  // YouTube-Optimized Thumbnail Formulas
+  const thumbnailFormulas = {
+    curiosityGap: {
+      prompt: 'Subject showing shocked/surprised expression, one hand raised pointing at something mysterious off-screen or partially visible. Big expressive eyes, slightly open mouth conveying amazement. Mystery element blurred or partially hidden to create intrigue.',
+      composition: 'Subject on right, mystery element on left, dramatic lighting'
+    },
+    transformation: {
+      prompt: 'Split-screen style showing dramatic before/after transformation. Clear visual divide (diagonal or vertical). High contrast between the two states. Arrow or visual indicator showing progression.',
+      composition: 'Even split, clear contrast, transformation arrow'
+    },
+    faceContext: {
+      prompt: 'Large expressive face taking up right portion of frame, relevant context/props/background filling the left side. Face shows appropriate emotion for the content. Context elements support the video topic visually.',
+      composition: 'Face 40% on right, context 60% on left'
+    },
+    productHero: {
+      prompt: 'Product showcased as the hero with dramatic studio lighting. Clean gradient or contextual background. Product at compelling 45-degree angle. Subtle reflection below for premium feel. Space for title text.',
+      composition: 'Product centered, clean background, text space top/bottom'
+    },
+    reaction: {
+      prompt: 'Close-up face showing intense, exaggerated emotion filling most of the frame. Expression is unmistakable and attention-grabbing. Bold, vibrant colors. High energy feel with subtle effect elements (sparkles, glow, etc).',
+      composition: 'Face 70% of frame, minimal background, maximum impact'
+    },
+    educational: {
+      prompt: 'Clean, professional layout with clear visual hierarchy. Subject matter visualized clearly. Trust-building elements. Step numbers or progression indicators if applicable. Expert/authority positioning.',
+      composition: 'Organized layout, clear focal point, professional feel'
+    },
+    gaming: {
+      prompt: 'Dynamic, action-packed composition with vibrant neon colors. Game-style effects (particles, glow, energy). High contrast and saturation. Dramatic pose or moment captured. Esports/streaming aesthetic.',
+      composition: 'Dynamic angles, effect overlays, gaming aesthetic'
+    }
+  };
+
+  // ==========================================
+  // PHASE 6: COMPOSITION TEMPLATES
+  // ==========================================
+
+  const compositionTemplates = {
+    'auto': {
+      name: 'Auto (AI decides)',
+      prompt: 'Compose for maximum YouTube thumbnail impact. Position key elements using rule of thirds. Leave appropriate space for text overlay.',
+      textSpace: 'adaptive'
+    },
+    'face-right': {
+      name: 'Face Right (Most Effective)',
+      prompt: 'Position the main subject/face on the RIGHT THIRD of the frame, looking slightly toward center-left. Face should occupy 35-45% of frame height. LEFT 40% of frame should be relatively clear or have non-competing elements for text overlay. Background should complement but not distract.',
+      textSpace: 'left 40%'
+    },
+    'face-center': {
+      name: 'Face Center Impact',
+      prompt: 'Position the main subject/face CENTERED in frame, large and impactful (50-60% of frame). Dramatic lighting from above or side. Minimal, dark, or blurred background. This composition relies on facial expression alone - make it powerful.',
+      textSpace: 'top and bottom edges'
+    },
+    'split-screen': {
+      name: 'Before/After Split',
+      prompt: 'Divide the image vertically or diagonally into two distinct halves. Left side shows "before" state, right side shows "after" state. Clear visual contrast between the two. Consider adding a subtle dividing line or gradient transition.',
+      textSpace: 'top banner area'
+    },
+    'product-hero': {
+      name: 'Product Spotlight',
+      prompt: 'Position the product/object as the CENTRAL HERO of the image. Clean background (gradient or solid, not busy). Product lit dramatically with rim lighting. Subtle shadow/reflection below for grounding. Premium, aspirational feel.',
+      textSpace: 'top third or bottom third'
+    },
+    'action-shot': {
+      name: 'Dynamic Action',
+      prompt: 'Capture a dynamic moment with sense of movement and energy. Subject positioned off-center (rule of thirds). Motion blur on background or secondary elements. Bright accent colors and high contrast. Convey excitement and energy.',
+      textSpace: 'varies - work around action'
+    },
+    'collage': {
+      name: 'Multi-Element',
+      prompt: 'Arrange multiple elements/images in a cohesive collage style. Main element largest and most prominent. Supporting elements smaller and positioned around edges. Unified color treatment ties everything together.',
+      textSpace: 'center or strategic gaps'
+    }
+  };
+
+  // ==========================================
+  // ENHANCED CATEGORY PROMPTS
+  // ==========================================
+
+  const categoryPrompts = {
+    general: 'Professional YouTube thumbnail with eye-catching design, bold visual hierarchy, and click-worthy appeal. Universal style that works across topics.',
+    gaming: 'HIGH ENERGY gaming thumbnail with: vibrant neon colors (cyan, magenta, electric blue), dramatic RGB-style lighting, action-packed dynamic composition, game UI elements or effects, esports/streaming aesthetic, particle effects and glow, dark background with color pops.',
+    tutorial: 'EDUCATIONAL thumbnail with: clean organized layout, professional and trustworthy appearance, clear visual hierarchy showing the topic, step indicators or numbered elements, expert positioning, before/after if applicable, tools or materials visible if relevant.',
+    vlog: 'AUTHENTIC vlog thumbnail with: warm personal aesthetic, lifestyle photography feel, genuine relatable expression, natural lighting (golden hour ideal), candid moment captured, personal branding consistency, emotional connection focus.',
+    review: 'PRODUCT REVIEW thumbnail with: professional product showcase as hero, comparison layout if vs video, trust signals (checkmarks, ratings visual), clean background letting product shine, verdict/conclusion visual hint, expert reviewer positioning.',
+    news: 'NEWS/COMMENTARY thumbnail with: bold impactful headline-style design, serious professional tone, current events aesthetic, authority positioning, dramatic or concerned expression if person featured, bold typography-friendly layout.',
+    entertainment: 'ENTERTAINMENT thumbnail with: maximum energy and drama, bold saturated colors, exaggerated expressions, movie-poster quality production, dynamic composition, celebrity/influencer styling, peak emotional moment captured.'
+  };
+
+  // ==========================================
+  // ENHANCED STYLE PROMPTS
+  // ==========================================
+
   const stylePrompts = {
-    professional: 'Clean, professional look with sharp focus, studio lighting, high contrast, polished finish',
-    dramatic: 'Dramatic lighting, intense colors, bold shadows, cinematic feel, movie-poster quality',
-    minimal: 'Minimalist design, soft colors, clean background, elegant simplicity, breathing room',
-    bold: 'Vibrant saturated colors, eye-catching, bold graphics, high energy, dynamic composition, maximum impact'
+    professional: 'PROFESSIONAL STYLE: Clean and polished look, sharp focus throughout, studio-quality lighting (soft key, fill, rim), high contrast with controlled highlights, corporate-appropriate color palette, premium finish, trustworthy and competent feel.',
+    dramatic: 'DRAMATIC STYLE: Cinematic movie-poster quality, intense chiaroscuro lighting, bold shadows and highlights, rich saturated colors, emotional intensity, epic scale feeling, film color grade (teal/orange or similar), theatrical composition.',
+    minimal: 'MINIMAL STYLE: Clean simplicity, generous negative space, limited color palette (2-3 colors max), elegant typography-friendly, soft muted tones, breathing room in composition, sophisticated restraint, Scandinavian design influence.',
+    bold: 'BOLD STYLE: Maximum visual impact, vibrant fully-saturated colors, high energy composition, dynamic angles, attention-demanding contrast, graphic design influence, pattern/texture use, unapologetic brightness.'
+  };
+
+  // ==========================================
+  // EXPRESSION MODIFIER PROMPTS
+  // ==========================================
+
+  const expressionModifiers = {
+    keep: '', // Don't modify expression
+    excited: 'Expression should convey excitement and enthusiasm - bright eyes, genuine smile, energetic and engaging.',
+    serious: 'Expression should convey seriousness and authority - confident gaze, composed demeanor, professional gravitas.',
+    surprised: 'Expression should convey surprise and amazement - widened eyes, raised eyebrows, open mouth showing genuine shock.',
+    curious: 'Expression should convey curiosity and intrigue - slightly raised eyebrow, thoughtful look, engaged and interested.',
+    confident: 'Expression should convey confidence and expertise - direct eye contact feel, slight knowing smile, authoritative presence.'
+  };
+
+  // ==========================================
+  // BACKGROUND STYLE PROMPTS
+  // ==========================================
+
+  const backgroundStyles = {
+    auto: 'Background should complement the subject and content appropriately.',
+    studio: 'Clean professional studio background - seamless gradient (dark to light or vice versa), perfect for subject isolation, corporate and polished feel.',
+    blur: 'Softly blurred background (bokeh effect, f/1.8 equivalent) keeping subject sharp. Creates depth and focuses attention on subject.',
+    gradient: 'Smooth color gradient background that complements the subject. Can be radial (spotlight effect) or linear (modern feel).',
+    contextual: 'Relevant contextual background that supports the video topic. Should add meaning but not distract from the main subject.',
+    dark: 'Dark/black background for dramatic effect and maximum subject pop. Good for gaming, dramatic, or premium feel.',
+    vibrant: 'Vibrant colorful background with energy. Gradients, patterns, or abstract elements that add visual interest.'
   };
 
   try {
@@ -4955,55 +5169,171 @@ exports.generateThumbnailPro = functions.https.onCall(async (data, context) => {
         `Insufficient tokens. Need ${totalCost}, have ${balance}. Please upgrade your plan.`);
     }
 
+    // ==========================================
+    // PHASE 2: SMART REFERENCE ANALYSIS
+    // ==========================================
+
+    // Determine effective reference type (auto-detect or use specified)
+    let effectiveReferenceType = referenceType;
+    let referenceAnalysis = null;
+
+    if (referenceImage && referenceImage.base64 && referenceType === 'auto') {
+      // Auto-detect reference type using Gemini Vision
+      try {
+        const geminiApiKey = functions.config().gemini?.key;
+        if (geminiApiKey) {
+          const aiAnalysis = new GoogleGenAI({ apiKey: geminiApiKey });
+          const analysisResult = await aiAnalysis.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: [{
+              role: 'user',
+              parts: [
+                { inlineData: { mimeType: referenceImage.mimeType || 'image/png', data: referenceImage.base64 } },
+                { text: `Analyze this image for YouTube thumbnail generation. Respond in JSON format only:
+{
+  "primarySubject": "face|product|scene|style",
+  "hasFace": true/false,
+  "faceDetails": { "position": "left|center|right", "expression": "description", "prominentFeatures": ["feature1", "feature2"] },
+  "hasProduct": true/false,
+  "productDetails": { "type": "description", "colors": ["color1", "color2"], "brandVisible": true/false },
+  "dominantColors": ["#hex1", "#hex2", "#hex3"],
+  "lightingStyle": "studio|natural|dramatic|soft|harsh",
+  "mood": "energetic|calm|professional|playful|serious",
+  "compositionStyle": "portrait|product-shot|scene|abstract",
+  "recommendedUse": "face-preservation|style-transfer|product-showcase|background"
+}` }
+              ]
+            }]
+          });
+
+          const analysisText = analysisResult.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            referenceAnalysis = JSON.parse(jsonMatch[0]);
+            // Auto-determine reference type based on analysis
+            if (referenceAnalysis.hasFace && referenceAnalysis.primarySubject === 'face') {
+              effectiveReferenceType = 'face';
+            } else if (referenceAnalysis.hasProduct || referenceAnalysis.primarySubject === 'product') {
+              effectiveReferenceType = 'product';
+            } else if (referenceAnalysis.primarySubject === 'scene') {
+              effectiveReferenceType = 'background';
+            } else {
+              effectiveReferenceType = 'style';
+            }
+            console.log(`Reference analysis: detected ${effectiveReferenceType} type`, referenceAnalysis);
+          }
+        }
+      } catch (analysisError) {
+        console.log('Reference analysis skipped:', analysisError.message);
+        // Default to face if analysis fails and mode suggests face
+        effectiveReferenceType = (mode === 'faceHero') ? 'face' : 'style';
+      }
+    }
+
+    // Override reference type for specialized modes
+    if (mode === 'faceHero') effectiveReferenceType = 'face';
+    if (mode === 'styleClone') effectiveReferenceType = 'style';
+    if (mode === 'productPro') effectiveReferenceType = 'product';
+
     // Build the enhanced prompt
     const categoryEnhancement = categoryPrompts[category] || categoryPrompts.general;
     const styleEnhancement = stylePrompts[style] || stylePrompts.professional;
+    const compositionGuide = compositionTemplates[compositionTemplate] || compositionTemplates.auto;
+    const expressionGuide = expressionModifiers[expressionModifier] || '';
+    const backgroundGuide = backgroundStyles[backgroundStyle] || backgroundStyles.auto;
 
     let imagePrompt;
     try {
-      // Use GPT-4 to create an optimized prompt
+      // ==========================================
+      // ENHANCED GPT-4 PROMPT GENERATION
+      // ==========================================
+
+      // Build context for reference-based generation
+      let referenceContext = '';
+      if (referenceImage && effectiveReferenceType) {
+        referenceContext = `
+REFERENCE IMAGE PROVIDED - Type: ${effectiveReferenceType.toUpperCase()}
+${referenceAnalysis ? `Analysis: ${JSON.stringify(referenceAnalysis)}` : ''}
+
+${referenceTypePrompts[effectiveReferenceType] || ''}
+`;
+      }
+
       const promptGeneratorResponse = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [{
+          role: 'system',
+          content: `You are an expert YouTube thumbnail designer and AI image prompt engineer. Your prompts consistently produce viral, high-CTR thumbnails. You understand composition, color psychology, and what makes viewers click.`
+        }, {
           role: 'user',
-          content: `Create a detailed image generation prompt for a YouTube thumbnail.
+          content: `Create a DETAILED image generation prompt for an AMAZING YouTube thumbnail.
 
-Video Title: "${title}"
+═══════════════════════════════════════════════════════════════
+VIDEO DETAILS
+═══════════════════════════════════════════════════════════════
+Title: "${title}"
 Category: ${category}
-Style: ${style}
+Visual Style: ${style}
+${customPrompt ? `Creator's Notes: ${customPrompt}` : ''}
 
-Category Guidelines: ${categoryEnhancement}
-Style Guidelines: ${styleEnhancement}
+═══════════════════════════════════════════════════════════════
+STYLE & CATEGORY REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+${categoryEnhancement}
 
-${customPrompt ? `Additional Requirements: ${customPrompt}` : ''}
+${styleEnhancement}
 
-IMPORTANT RULES:
-- Thumbnail must be eye-catching and click-worthy
-- Design should leave space for text overlay
-- Use bold colors and high contrast
-- Perfect for 16:9 YouTube thumbnail format (1280x720)
-- Should stand out in YouTube search results and suggested videos
-${mode === 'reference' ? '- The user will provide a reference image - incorporate elements from it naturally' : ''}
+═══════════════════════════════════════════════════════════════
+COMPOSITION TEMPLATE
+═══════════════════════════════════════════════════════════════
+${compositionGuide.prompt}
+Text overlay space: ${compositionGuide.textSpace}
 
-Provide ONLY the image generation prompt, no explanations. Be specific and detailed for best AI generation results.`
+═══════════════════════════════════════════════════════════════
+BACKGROUND STYLE
+═══════════════════════════════════════════════════════════════
+${backgroundGuide}
+
+${expressionGuide ? `═══════════════════════════════════════════════════════════════
+EXPRESSION GUIDANCE
+═══════════════════════════════════════════════════════════════
+${expressionGuide}` : ''}
+
+${referenceContext ? `═══════════════════════════════════════════════════════════════
+REFERENCE IMAGE REQUIREMENTS (CRITICAL)
+═══════════════════════════════════════════════════════════════
+${referenceContext}` : ''}
+
+═══════════════════════════════════════════════════════════════
+OUTPUT REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+- Format: 16:9 aspect ratio (1280x720), YouTube thumbnail
+- Quality: 4K photorealistic, professional photography quality
+- Must be INSTANTLY eye-catching at small sizes (search results)
+- Colors should pop and contrast well
+- Main subject must be immediately clear
+
+Generate a comprehensive, detailed prompt that will produce a STUNNING thumbnail.
+Output ONLY the prompt, no explanations or preamble.`
         }],
         temperature: 0.7,
-        max_tokens: 400
+        max_tokens: 600
       });
 
       imagePrompt = promptGeneratorResponse?.choices?.[0]?.message?.content?.trim();
     } catch (openaiError) {
       console.error('OpenAI prompt generation failed:', openaiError.message);
-      // Fallback prompt
-      imagePrompt = `${categoryEnhancement}. ${styleEnhancement}. Video title: "${title}". ${customPrompt || ''} High quality, 4K resolution, perfect for YouTube.`;
+      // Fallback prompt with all enhancements
+      imagePrompt = `${categoryEnhancement}. ${styleEnhancement}. ${compositionGuide.prompt}. Video title: "${title}". ${customPrompt || ''} ${backgroundGuide}. High quality, 4K resolution, professional YouTube thumbnail, 16:9 aspect ratio.`;
     }
 
     // Ensure prompt is valid
     if (!imagePrompt || imagePrompt.length < 20) {
-      imagePrompt = `Professional YouTube thumbnail for "${title}". ${categoryEnhancement}. ${styleEnhancement}. Eye-catching design, bold colors, high contrast, 4K quality.`;
+      imagePrompt = `Professional YouTube thumbnail for "${title}". ${categoryEnhancement}. ${styleEnhancement}. ${compositionGuide.prompt}. Eye-catching design, bold colors, high contrast, 4K quality.`;
     }
 
-    const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, excessive text, cluttered, amateur";
+    // Enhanced negative prompt
+    const negativePrompt = "blurry, low quality, ugly, distorted faces, watermark, nsfw, excessive text, cluttered, amateur, bad anatomy, disfigured, poorly drawn face, mutation, mutated, extra limbs, ugly, poorly drawn hands, missing limbs, floating limbs, disconnected limbs, malformed hands, blur, out of focus, long neck, long body, disgusting, bad proportions, gross proportions, text, error, missing fingers, cropped, worst quality, jpeg artifacts, signature";
     const storage = admin.storage().bucket();
     const timestamp = Date.now();
     const generatedImages = [];
@@ -5039,13 +5369,82 @@ Provide ONLY the image generation prompt, no explanations. Be specific and detai
             });
           }
 
-          // Build prompt with reference instruction
-          let finalPrompt = referenceImage
-            ? `Using the provided reference image as inspiration (incorporate the person/subject/style from it), create a YouTube thumbnail: ${imagePrompt}`
-            : imagePrompt;
+          // Build prompt with ENHANCED reference instruction based on detected type
+          let finalPrompt;
 
-          finalPrompt += `\n\nIMPORTANT: Avoid: ${negativePrompt}`;
-          finalPrompt += '\nFormat: 16:9 aspect ratio (1280x720), YouTube thumbnail optimized.';
+          if (referenceImage && referenceImage.base64) {
+            // Get the specialized reference prompt based on type
+            const refTypePrompt = referenceTypePrompts[effectiveReferenceType] || referenceTypePrompts.style;
+
+            // Build enhanced reference-based prompt
+            finalPrompt = `REFERENCE IMAGE GENERATION - Type: ${effectiveReferenceType.toUpperCase()}
+
+═══════════════════════════════════════════════════════════════
+REFERENCE PROCESSING INSTRUCTIONS (CRITICAL)
+═══════════════════════════════════════════════════════════════
+${refTypePrompt}
+
+═══════════════════════════════════════════════════════════════
+THUMBNAIL GENERATION PROMPT
+═══════════════════════════════════════════════════════════════
+${imagePrompt}
+
+═══════════════════════════════════════════════════════════════
+COMPOSITION GUIDANCE
+═══════════════════════════════════════════════════════════════
+${compositionGuide.prompt}
+Text overlay space: ${compositionGuide.textSpace}
+
+═══════════════════════════════════════════════════════════════
+TECHNICAL SPECIFICATIONS
+═══════════════════════════════════════════════════════════════
+• Aspect Ratio: 16:9 (1280x720 pixels)
+• Quality: 4K photorealistic, professional photography
+• Focus: Sharp on main subject, appropriate background treatment
+• Colors: Vibrant, high contrast, YouTube-optimized
+• Lighting: Professional, flattering, depth-creating`;
+
+            // Add expression modifier if face-based
+            if ((effectiveReferenceType === 'face' || mode === 'faceHero') && expressionGuide) {
+              finalPrompt += `\n\n═══════════════════════════════════════════════════════════════
+EXPRESSION GUIDANCE
+═══════════════════════════════════════════════════════════════
+${expressionGuide}`;
+            }
+
+            // Add face strength guidance
+            if (effectiveReferenceType === 'face') {
+              finalPrompt += `\n\nFACE PRESERVATION STRENGTH: ${faceStrength * 100}% - ${faceStrength >= 0.9 ? 'EXACT match required' : faceStrength >= 0.7 ? 'Strong likeness required' : 'Inspired by reference'}`;
+            }
+
+            // Add style strength guidance
+            if (effectiveReferenceType === 'style') {
+              finalPrompt += `\n\nSTYLE TRANSFER STRENGTH: ${styleStrength * 100}% - ${styleStrength >= 0.9 ? 'EXACT style match' : styleStrength >= 0.7 ? 'Strong style influence' : 'Subtle style hints'}`;
+            }
+
+          } else {
+            // No reference image - use enhanced prompt directly
+            finalPrompt = `${imagePrompt}
+
+═══════════════════════════════════════════════════════════════
+COMPOSITION
+═══════════════════════════════════════════════════════════════
+${compositionGuide.prompt}
+Text overlay space: ${compositionGuide.textSpace}
+
+═══════════════════════════════════════════════════════════════
+TECHNICAL SPECIFICATIONS
+═══════════════════════════════════════════════════════════════
+• Aspect Ratio: 16:9 (1280x720 pixels)
+• Quality: 4K photorealistic, professional photography
+• YouTube thumbnail optimized`;
+          }
+
+          // Add negative prompt and format
+          finalPrompt += `\n\n═══════════════════════════════════════════════════════════════
+AVOID (NEGATIVE PROMPT)
+═══════════════════════════════════════════════════════════════
+${negativePrompt}`;
 
           contentParts.push({ text: finalPrompt });
 
@@ -5107,17 +5506,41 @@ Provide ONLY the image generation prompt, no explanations. Be specific and detai
       usedModel = geminiModelId;
 
     } else if (config.model === 'dall-e-3') {
-      // DALL-E 3 Premium Generation
+      // DALL-E 3 Premium Generation (ENHANCED Phase 3)
       console.log(`Generating ${imageCount} thumbnail(s) with DALL-E 3`);
+
+      // Build enhanced DALL-E prompt with all improvements
+      const dalleEnhancedPrompt = `${imagePrompt}
+
+═══════════════════════════════════════════════════════════════
+COMPOSITION REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+${compositionGuide.prompt}
+Leave space for text overlay: ${compositionGuide.textSpace}
+
+═══════════════════════════════════════════════════════════════
+TECHNICAL SPECIFICATIONS (CRITICAL)
+═══════════════════════════════════════════════════════════════
+• Format: YouTube thumbnail, 16:9 aspect ratio
+• Quality: 4K photorealistic, professional photography
+• Lighting: Professional studio or cinematic lighting
+• Colors: Vibrant, high-contrast, YouTube-optimized color palette
+• Focus: Crystal sharp on main subject
+
+═══════════════════════════════════════════════════════════════
+AVOID
+═══════════════════════════════════════════════════════════════
+${negativePrompt}`;
 
       for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
         try {
           const dalleResponse = await openai.images.generate({
             model: 'dall-e-3',
-            prompt: `${imagePrompt}\n\nStyle: YouTube thumbnail, 16:9 aspect ratio, eye-catching, professional quality.`,
+            prompt: dalleEnhancedPrompt,
             n: 1,
             size: '1792x1024', // Closest to 16:9 for DALL-E 3
             quality: 'hd',
+            style: style === 'dramatic' || style === 'bold' ? 'vivid' : 'natural',
             response_format: 'b64_json'
           });
 
@@ -5163,7 +5586,7 @@ Provide ONLY the image generation prompt, no explanations. Be specific and detai
       usedModel = 'dall-e-3';
 
     } else {
-      // Imagen 4 Quick Generation (Default)
+      // Imagen 4 Quick Generation (Default) - ENHANCED Phase 3
       const geminiApiKey = functions.config().gemini?.key;
       if (!geminiApiKey) {
         throw new functions.https.HttpsError('failed-precondition', 'Image generation service not configured');
@@ -5174,10 +5597,17 @@ Provide ONLY the image generation prompt, no explanations. Be specific and detai
 
       console.log(`Generating ${imageCount} thumbnail(s) with Imagen 4`);
 
+      // Build enhanced Imagen prompt with composition and quality guidance
+      const imagenEnhancedPrompt = `${imagePrompt}
+
+COMPOSITION: ${compositionGuide.prompt}
+STYLE: ${styleEnhancement}
+FORMAT: YouTube thumbnail, 16:9 aspect ratio, 4K quality, professional photography, high contrast, vibrant colors optimized for small preview sizes.`;
+
       try {
         const result = await ai.models.generateImages({
           model: imagenModelId,
-          prompt: imagePrompt,
+          prompt: imagenEnhancedPrompt,
           config: {
             numberOfImages: imageCount,
             aspectRatio: '16:9',
@@ -5243,7 +5673,66 @@ Provide ONLY the image generation prompt, no explanations. Be specific and detai
       lastUsed: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    // Save to history
+    // ==========================================
+    // PHASE 7: QUALITY ENHANCEMENT PIPELINE
+    // ==========================================
+
+    // Build generation metadata for quality tracking and improvement
+    const generationMetadata = {
+      // Reference analysis data (if applicable)
+      referenceAnalysis: referenceAnalysis || null,
+      effectiveReferenceType: referenceImage ? effectiveReferenceType : null,
+
+      // Settings used
+      settings: {
+        style,
+        category,
+        mode,
+        compositionTemplate,
+        faceStrength: effectiveReferenceType === 'face' ? faceStrength : null,
+        styleStrength: effectiveReferenceType === 'style' ? styleStrength : null,
+        expressionModifier,
+        backgroundStyle
+      },
+
+      // Quality hints for user feedback
+      qualityHints: {
+        // Composition feedback
+        composition: compositionGuide.name || 'Auto',
+        textOverlaySpace: compositionGuide.textSpace || 'adaptive',
+
+        // Suggestions for improvement
+        suggestions: []
+      },
+
+      // A/B testing data
+      abTestData: {
+        promptVersion: 'v2.0-enhanced',
+        modelVersion: usedModel,
+        generationTimestamp: Date.now(),
+        promptHash: imagePrompt.length > 100 ? imagePrompt.substring(0, 100) : imagePrompt
+      }
+    };
+
+    // Add contextual suggestions based on settings
+    if (mode === 'quick' && !referenceImage) {
+      generationMetadata.qualityHints.suggestions.push(
+        'Try "Reference Mode" with your photo for personalized thumbnails',
+        'Upload a reference image to match your channel style'
+      );
+    }
+    if (effectiveReferenceType === 'face' && faceStrength < 0.8) {
+      generationMetadata.qualityHints.suggestions.push(
+        'Increase "Face Strength" for better facial accuracy'
+      );
+    }
+    if (category === 'general') {
+      generationMetadata.qualityHints.suggestions.push(
+        'Select a specific category for more optimized results'
+      );
+    }
+
+    // Save to history with enhanced metadata
     const historyRef = await db.collection('thumbnailHistory').add({
       userId: uid,
       title,
@@ -5257,6 +5746,15 @@ Provide ONLY the image generation prompt, no explanations. Be specific and detai
       model: usedModel,
       tokenCost: actualCost,
       hasReference: !!referenceImage,
+      // Phase 7: Enhanced metadata
+      metadata: generationMetadata,
+      // User feedback placeholders for quality improvement
+      userFeedback: {
+        rating: null,
+        selectedImage: null,
+        usedInVideo: null,
+        improvementNotes: null
+      },
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
@@ -5279,7 +5777,14 @@ Provide ONLY the image generation prompt, no explanations. Be specific and detai
       model: usedModel,
       tokenCost: actualCost,
       remainingBalance: balance - actualCost,
-      message: `Generated ${generatedImages.length} thumbnail(s) successfully`
+      message: `Generated ${generatedImages.length} thumbnail(s) successfully`,
+      // Phase 7: Enhanced response data
+      metadata: {
+        referenceType: referenceImage ? effectiveReferenceType : null,
+        composition: compositionGuide.name || 'Auto',
+        textOverlaySpace: compositionGuide.textSpace || 'adaptive',
+        suggestions: generationMetadata.qualityHints.suggestions
+      }
     };
 
   } catch (error) {
