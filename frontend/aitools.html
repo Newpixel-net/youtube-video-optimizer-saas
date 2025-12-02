@@ -3137,7 +3137,31 @@
             downloadPDF: function(toolType) {
                 var element = document.getElementById('pdf-content-' + toolType);
                 if (!element) {
-                    utils.showNotification('Could not find content to export', 'error');
+                    console.error('PDF content element not found: pdf-content-' + toolType);
+                    utils.showNotification('Could not find content to export. Make sure you have generated results first.', 'error');
+                    return;
+                }
+
+                // Check if libraries are loaded
+                if (typeof html2canvas === 'undefined') {
+                    console.error('html2canvas library not loaded');
+                    utils.showNotification('PDF library not loaded. Please refresh the page.', 'error');
+                    return;
+                }
+
+                // Check jsPDF - handle different global names
+                var jsPDFClass = null;
+                if (typeof jspdf !== 'undefined' && jspdf.jsPDF) {
+                    jsPDFClass = jspdf.jsPDF;
+                } else if (typeof jsPDF !== 'undefined') {
+                    jsPDFClass = jsPDF;
+                } else if (typeof window.jspdf !== 'undefined' && window.jspdf.jsPDF) {
+                    jsPDFClass = window.jspdf.jsPDF;
+                }
+
+                if (!jsPDFClass) {
+                    console.error('jsPDF library not loaded');
+                    utils.showNotification('PDF library not loaded. Please refresh the page.', 'error');
                     return;
                 }
 
@@ -3165,66 +3189,73 @@
                     backgroundColor: '#0f0f1a',
                     scale: 2,
                     useCORS: true,
-                    logging: false
+                    logging: false,
+                    allowTaint: true,
+                    foreignObjectRendering: false
                 }).then(function(canvas) {
-                    var imgData = canvas.toDataURL('image/png');
-                    var pdf = new jspdf.jsPDF({
-                        orientation: 'portrait',
-                        unit: 'mm',
-                        format: 'a4'
-                    });
+                    try {
+                        var imgData = canvas.toDataURL('image/png');
+                        var pdf = new jsPDFClass({
+                            orientation: 'portrait',
+                            unit: 'mm',
+                            format: 'a4'
+                        });
 
-                    // Calculate dimensions
-                    var pageWidth = pdf.internal.pageSize.getWidth();
-                    var pageHeight = pdf.internal.pageSize.getHeight();
-                    var margin = 10;
-                    var contentWidth = pageWidth - (margin * 2);
+                        // Calculate dimensions
+                        var pageWidth = pdf.internal.pageSize.getWidth();
+                        var pageHeight = pdf.internal.pageSize.getHeight();
+                        var margin = 10;
+                        var contentWidth = pageWidth - (margin * 2);
 
-                    // Add header
-                    pdf.setFillColor(15, 15, 26);
-                    pdf.rect(0, 0, pageWidth, 35, 'F');
+                        // Add header
+                        pdf.setFillColor(15, 15, 26);
+                        pdf.rect(0, 0, pageWidth, 35, 'F');
 
-                    pdf.setFontSize(18);
-                    pdf.setTextColor(255, 255, 255);
-                    pdf.text(toolName + ' Report', margin, 15);
+                        pdf.setFontSize(18);
+                        pdf.setTextColor(255, 255, 255);
+                        pdf.text(toolName + ' Report', margin, 15);
 
-                    pdf.setFontSize(10);
-                    pdf.setTextColor(156, 163, 175);
-                    pdf.text('Generated on ' + new Date().toLocaleDateString(), margin, 22);
-                    pdf.text('YouTube Video Optimizer', margin, 28);
+                        pdf.setFontSize(10);
+                        pdf.setTextColor(156, 163, 175);
+                        pdf.text('Generated on ' + new Date().toLocaleDateString(), margin, 22);
+                        pdf.text('YouTube Video Optimizer', margin, 28);
 
-                    // Add the captured content
-                    var imgWidth = contentWidth;
-                    var imgHeight = (canvas.height * imgWidth) / canvas.width;
-                    var yOffset = 40;
+                        // Add the captured content
+                        var imgWidth = contentWidth;
+                        var imgHeight = (canvas.height * imgWidth) / canvas.width;
+                        var yOffset = 40;
 
-                    // Handle multi-page if needed
-                    var heightLeft = imgHeight;
-                    var position = yOffset;
+                        // Handle multi-page if needed
+                        var heightLeft = imgHeight;
+                        var position = yOffset;
 
-                    pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
-                    heightLeft -= (pageHeight - position);
-
-                    while (heightLeft > 0) {
-                        position = heightLeft - imgHeight + 10;
-                        pdf.addPage();
                         pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
-                        heightLeft -= pageHeight;
+                        heightLeft -= (pageHeight - position);
+
+                        while (heightLeft > 0) {
+                            position = heightLeft - imgHeight + 10;
+                            pdf.addPage();
+                            pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+                            heightLeft -= pageHeight;
+                        }
+
+                        // Add footer on last page
+                        pdf.setFontSize(8);
+                        pdf.setTextColor(107, 114, 128);
+                        pdf.text('Powered by YouTube Video Optimizer - ytseo.siteuo.com', margin, pageHeight - 10);
+
+                        // Download the PDF
+                        var filename = toolType + '-report-' + new Date().toISOString().slice(0, 10) + '.pdf';
+                        pdf.save(filename);
+
+                        utils.showNotification('PDF downloaded successfully!', 'success');
+                    } catch (pdfError) {
+                        console.error('PDF creation error:', pdfError);
+                        utils.showNotification('Failed to create PDF: ' + pdfError.message, 'error');
                     }
-
-                    // Add footer on last page
-                    pdf.setFontSize(8);
-                    pdf.setTextColor(107, 114, 128);
-                    pdf.text('Powered by YouTube Video Optimizer - ytseo.siteuo.com', margin, pageHeight - 10);
-
-                    // Download the PDF
-                    var filename = toolType + '-report-' + new Date().toISOString().slice(0, 10) + '.pdf';
-                    pdf.save(filename);
-
-                    utils.showNotification('PDF downloaded successfully!', 'success');
                 }).catch(function(error) {
-                    console.error('PDF generation error:', error);
-                    utils.showNotification('Failed to generate PDF', 'error');
+                    console.error('html2canvas error:', error);
+                    utils.showNotification('Failed to capture content: ' + error.message, 'error');
                 });
             },
 
