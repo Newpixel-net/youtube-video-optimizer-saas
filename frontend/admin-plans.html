@@ -1345,6 +1345,13 @@
             transactions: [],
             transactionsLoading: false,
 
+            // Renewal Requests state
+            renewalRequests: [],
+            renewalRequestsLoading: false,
+            renewalRequestCounts: { pending: 0, approved: 0, denied: 0 },
+            renewalRequestFilter: 'pending',
+            processingRequestId: null,
+
             // UI state
             toast: null,
             confirmModal: null,
@@ -1626,6 +1633,13 @@
             html += '<span class="main-tab-icon">💰</span>';
             html += '<span>Pricing</span>';
             html += '</button>';
+            html += '<button class="main-tab' + (state.activeTab === 'requests' ? ' active' : '') + '" onclick="setActiveTab(\'requests\')">';
+            html += '<span class="main-tab-icon">📨</span>';
+            html += '<span>Requests</span>';
+            if (state.renewalRequestCounts && state.renewalRequestCounts.pending > 0) {
+                html += '<span style="background: #ef4444; color: white; font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: 9999px; margin-left: 0.25rem;">' + state.renewalRequestCounts.pending + '</span>';
+            }
+            html += '</button>';
             html += '</div>';
 
             // Main Tabs - Row 2: Marketing & Analytics
@@ -1664,6 +1678,10 @@
 
             html += '<div class="tab-content' + (state.activeTab === 'pricing' ? ' active' : '') + '">';
             html += renderPricingTab();
+            html += '</div>';
+
+            html += '<div class="tab-content' + (state.activeTab === 'requests' ? ' active' : '') + '">';
+            html += renderRequestsTab();
             html += '</div>';
 
             html += '<div class="tab-content' + (state.activeTab === 'promoCodes' ? ' active' : '') + '">';
@@ -2879,6 +2897,8 @@
                 loadAnalytics();
             } else if (tab === 'transactions' && state.transactions.length === 0) {
                 loadTransactions();
+            } else if (tab === 'requests' && state.renewalRequests.length === 0) {
+                loadRenewalRequests();
             }
         }
 
@@ -3338,6 +3358,229 @@
                 loadNotifications();
             }
             render();
+        }
+
+        // =============================================
+        // RENEWAL REQUESTS FUNCTIONS
+        // =============================================
+
+        function loadRenewalRequestCounts() {
+            var adminGetRenewalRequests = functions.httpsCallable('adminGetRenewalRequests');
+            adminGetRenewalRequests({ status: 'pending', limit: 1 })
+                .then(function(result) {
+                    state.renewalRequestCounts = result.data.counts || { pending: 0, approved: 0, denied: 0 };
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading renewal request counts:', error);
+                });
+        }
+
+        function loadRenewalRequests() {
+            state.renewalRequestsLoading = true;
+            render();
+
+            var adminGetRenewalRequests = functions.httpsCallable('adminGetRenewalRequests');
+            adminGetRenewalRequests({ status: state.renewalRequestFilter })
+                .then(function(result) {
+                    state.renewalRequests = result.data.requests || [];
+                    state.renewalRequestCounts = result.data.counts || { pending: 0, approved: 0, denied: 0 };
+                    state.renewalRequestsLoading = false;
+                    render();
+                })
+                .catch(function(error) {
+                    console.error('Error loading renewal requests:', error);
+                    showToast('Failed to load requests: ' + error.message, 'error');
+                    state.renewalRequestsLoading = false;
+                    render();
+                });
+        }
+
+        function setRenewalRequestFilter(filter) {
+            state.renewalRequestFilter = filter;
+            loadRenewalRequests();
+        }
+
+        function processRenewalRequest(requestId, action, duration) {
+            if (state.processingRequestId) return;
+
+            var adminResponse = '';
+            if (action === 'deny') {
+                adminResponse = prompt('Enter reason for denial (optional):') || '';
+            }
+
+            state.processingRequestId = requestId;
+            render();
+
+            var adminProcessRequest = functions.httpsCallable('adminProcessRenewalRequest');
+            adminProcessRequest({
+                requestId: requestId,
+                action: action,
+                duration: duration || null,
+                adminResponse: adminResponse
+            })
+                .then(function(result) {
+                    showToast(result.data.message, 'success');
+                    state.processingRequestId = null;
+                    loadRenewalRequests();
+                })
+                .catch(function(error) {
+                    console.error('Error processing request:', error);
+                    showToast('Failed: ' + error.message, 'error');
+                    state.processingRequestId = null;
+                    render();
+                });
+        }
+
+        function renderRequestsTab() {
+            var html = '';
+
+            // Stats
+            var counts = state.renewalRequestCounts;
+            html += '<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 1.5rem;">';
+
+            html += '<div class="stat-card' + (state.renewalRequestFilter === 'pending' ? ' stat-highlight' : '') + '" style="cursor: pointer;" onclick="setRenewalRequestFilter(\'pending\')">';
+            html += '<div class="stat-icon">⏳</div>';
+            html += '<div class="stat-value">' + counts.pending + '</div>';
+            html += '<div class="stat-label">Pending</div>';
+            html += '</div>';
+
+            html += '<div class="stat-card' + (state.renewalRequestFilter === 'approved' ? ' stat-highlight' : '') + '" style="cursor: pointer;" onclick="setRenewalRequestFilter(\'approved\')">';
+            html += '<div class="stat-icon">✅</div>';
+            html += '<div class="stat-value">' + counts.approved + '</div>';
+            html += '<div class="stat-label">Approved</div>';
+            html += '</div>';
+
+            html += '<div class="stat-card' + (state.renewalRequestFilter === 'denied' ? ' stat-highlight' : '') + '" style="cursor: pointer;" onclick="setRenewalRequestFilter(\'denied\')">';
+            html += '<div class="stat-icon">❌</div>';
+            html += '<div class="stat-value">' + counts.denied + '</div>';
+            html += '<div class="stat-label">Denied</div>';
+            html += '</div>';
+
+            html += '</div>';
+
+            // Requests List
+            html += '<div class="card">';
+            html += '<div class="card-header">';
+            html += '<h3 class="card-title">📨 Renewal Requests</h3>';
+            html += '<button onclick="loadRenewalRequests()" class="btn-secondary" style="font-size: 0.8rem;">↻ Refresh</button>';
+            html += '</div>';
+
+            if (state.renewalRequestsLoading) {
+                html += '<div style="text-align: center; padding: 3rem;">';
+                html += '<div class="spinner" style="margin: 0 auto 1rem;"></div>';
+                html += '<p style="color: rgba(255,255,255,0.6);">Loading requests...</p>';
+                html += '</div>';
+            } else if (state.renewalRequests.length === 0) {
+                html += '<div style="text-align: center; padding: 3rem; color: rgba(255,255,255,0.5);">';
+                html += '<div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>';
+                html += '<p>No ' + state.renewalRequestFilter + ' requests</p>';
+                html += '</div>';
+            } else {
+                html += '<div style="display: flex; flex-direction: column; gap: 1rem;">';
+
+                for (var i = 0; i < state.renewalRequests.length; i++) {
+                    var req = state.renewalRequests[i];
+                    var isProcessing = state.processingRequestId === req.id;
+                    var createdDate = req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'Unknown';
+                    var createdTime = req.createdAt ? new Date(req.createdAt).toLocaleTimeString() : '';
+
+                    // Calculate days since request
+                    var daysSince = req.createdAt ? Math.floor((Date.now() - new Date(req.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                    var urgencyColor = daysSince > 3 ? '#ef4444' : daysSince > 1 ? '#f59e0b' : '#22c55e';
+
+                    html += '<div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; padding: 1.25rem;' + (isProcessing ? ' opacity: 0.6;' : '') + '">';
+
+                    // Header row
+                    html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">';
+                    html += '<div>';
+                    html += '<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">';
+                    if (req.isFiverrVerified) {
+                        html += '<span title="Fiverr Verified" style="font-size: 1rem;">✅</span>';
+                    }
+                    html += '<span style="font-weight: 600; color: white;">' + escapeHtml(req.userName || req.userEmail) + '</span>';
+                    html += '</div>';
+                    html += '<div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">' + escapeHtml(req.userEmail) + '</div>';
+                    html += '</div>';
+
+                    // Status badge and date
+                    html += '<div style="text-align: right;">';
+                    if (req.status === 'pending') {
+                        html += '<span style="background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600;">Pending</span>';
+                    } else if (req.status === 'approved') {
+                        html += '<span style="background: rgba(34, 197, 94, 0.2); color: #4ade80; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600;">Approved</span>';
+                    } else if (req.status === 'denied') {
+                        html += '<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600;">Denied</span>';
+                    }
+                    html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">' + createdDate + '</div>';
+                    if (req.status === 'pending' && daysSince > 0) {
+                        html += '<div style="font-size: 0.7rem; color: ' + urgencyColor + ';">' + daysSince + ' day' + (daysSince > 1 ? 's' : '') + ' ago</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+
+                    // Request details
+                    html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem;">';
+
+                    html += '<div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: 0.5rem;">';
+                    html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Previous Plan</div>';
+                    html += '<div style="font-weight: 600; color: #9ca3af;">' + (req.currentPlan || 'Free').toUpperCase() + '</div>';
+                    html += '</div>';
+
+                    html += '<div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: 0.5rem;">';
+                    html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Requested Plan</div>';
+                    html += '<div style="font-weight: 600; color: #ffd700;">' + (req.preferredPlan || 'N/A').toUpperCase() + '</div>';
+                    html += '</div>';
+
+                    html += '<div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: 0.5rem;">';
+                    html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Duration</div>';
+                    var durationLabels = { week: '1 Week', month: '1 Month', '3months': '3 Months', year: '1 Year', lifetime: 'Lifetime' };
+                    html += '<div style="font-weight: 600; color: white;">' + (durationLabels[req.preferredDuration] || req.preferredDuration || 'N/A') + '</div>';
+                    html += '</div>';
+
+                    html += '</div>';
+
+                    // User message
+                    if (req.message) {
+                        html += '<div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem;">';
+                        html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">💬 Message</div>';
+                        html += '<div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.5;">' + escapeHtml(req.message) + '</div>';
+                        html += '</div>';
+                    }
+
+                    // Admin response (for processed requests)
+                    if (req.adminResponse && req.status !== 'pending') {
+                        html += '<div style="background: rgba(139, 92, 246, 0.1); padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; border: 1px solid rgba(139, 92, 246, 0.2);">';
+                        html += '<div style="font-size: 0.7rem; color: rgba(139, 92, 246, 0.8); margin-bottom: 0.25rem;">Admin Response</div>';
+                        html += '<div style="font-size: 0.85rem; color: rgba(255,255,255,0.8);">' + escapeHtml(req.adminResponse) + '</div>';
+                        html += '</div>';
+                    }
+
+                    // Action buttons (only for pending)
+                    if (req.status === 'pending') {
+                        html += '<div style="display: flex; gap: 0.5rem; flex-wrap: wrap; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">';
+
+                        // Quick approve buttons
+                        html += '<button onclick="processRenewalRequest(\'' + req.id + '\', \'approve\', \'week\')" class="btn-secondary" style="font-size: 0.75rem; padding: 0.4rem 0.75rem;"' + (isProcessing ? ' disabled' : '') + '>✅ +1 Week</button>';
+                        html += '<button onclick="processRenewalRequest(\'' + req.id + '\', \'approve\', \'month\')" class="btn-primary" style="font-size: 0.75rem; padding: 0.4rem 0.75rem;"' + (isProcessing ? ' disabled' : '') + '>✅ +1 Month</button>';
+                        html += '<button onclick="processRenewalRequest(\'' + req.id + '\', \'approve\', \'3months\')" class="btn-secondary" style="font-size: 0.75rem; padding: 0.4rem 0.75rem;"' + (isProcessing ? ' disabled' : '') + '>✅ +3 Months</button>';
+                        html += '<button onclick="processRenewalRequest(\'' + req.id + '\', \'approve\', \'year\')" class="btn-secondary" style="font-size: 0.75rem; padding: 0.4rem 0.75rem;"' + (isProcessing ? ' disabled' : '') + '>✅ +1 Year</button>';
+
+                        html += '<div style="flex: 1;"></div>';
+
+                        html += '<button onclick="processRenewalRequest(\'' + req.id + '\', \'deny\')" class="btn-danger" style="font-size: 0.75rem; padding: 0.4rem 0.75rem;"' + (isProcessing ? ' disabled' : '') + '>❌ Deny</button>';
+
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
         }
 
         // =============================================
@@ -4375,7 +4618,7 @@
                             // Check URL parameter for tab selection
                             var urlParams = new URLSearchParams(window.location.search);
                             var tabParam = urlParams.get('tab');
-                            var validTabs = ['plans', 'prompts', 'users', 'tokenConfig', 'pricing', 'promoCodes', 'analytics', 'transactions'];
+                            var validTabs = ['plans', 'prompts', 'users', 'tokenConfig', 'pricing', 'promoCodes', 'analytics', 'transactions', 'requests'];
                             if (tabParam && validTabs.includes(tabParam)) {
                                 state.activeTab = tabParam;
                             }
@@ -4384,6 +4627,7 @@
                             loadPrompts();
                             loadTags();
                             loadNotifications();
+                            loadRenewalRequestCounts(); // Load counts for badge
 
                             // Load data based on active tab
                             if (state.activeTab === 'users') {
@@ -4399,6 +4643,8 @@
                                 loadAnalytics();
                             } else if (state.activeTab === 'transactions') {
                                 loadTransactions();
+                            } else if (state.activeTab === 'requests') {
+                                loadRenewalRequests();
                             }
                         } else {
                             state.currentView = 'unauthorized';

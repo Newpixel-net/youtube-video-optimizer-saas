@@ -9930,3 +9930,421 @@ exports.adminCheckNotifications = functions.https.onCall(async (data, context) =
     throw new functions.https.HttpsError('internal', 'Failed: ' + error.message);
   }
 });
+
+// ==============================================
+// RENEWAL REQUEST SYSTEM
+// ==============================================
+
+// Helper: Create notification for a user
+async function createUserNotification(userId, type, title, message, data = {}) {
+  try {
+    await db.collection('users').doc(userId).collection('notifications').add({
+      type,
+      title,
+      message,
+      data,
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error creating user notification:', error);
+    return false;
+  }
+}
+
+// User: Submit a renewal request
+exports.userSubmitRenewalRequest = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  }
+
+  const userId = context.auth.uid;
+  const { preferredPlan, preferredDuration, message } = data || {};
+
+  if (!preferredPlan) {
+    throw new functions.https.HttpsError('invalid-argument', 'Preferred plan is required');
+  }
+
+  const validPlans = ['lite', 'pro', 'enterprise'];
+  if (!validPlans.includes(preferredPlan)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid plan');
+  }
+
+  const validDurations = ['week', 'month', '3months', 'year', 'lifetime'];
+  if (preferredDuration && !validDurations.includes(preferredDuration)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid duration');
+  }
+
+  // Check for existing pending request
+  const existingRequest = await db.collection('renewalRequests')
+    .where('userId', '==', userId)
+    .where('status', '==', 'pending')
+    .limit(1)
+    .get();
+
+  if (!existingRequest.empty) {
+    throw new functions.https.HttpsError('already-exists', 'You already have a pending renewal request');
+  }
+
+  // Get user data for the request
+  const userDoc = await db.collection('users').doc(userId).get();
+  const userData = userDoc.exists ? userDoc.data() : {};
+
+  const requestData = {
+    userId,
+    userEmail: userData.email || context.auth.token.email || '',
+    userName: userData.displayName || userData.clientAlias || '',
+    isFiverrVerified: userData.isFiverrVerified || false,
+    currentPlan: userData.subscription?.plan || 'free',
+    previousEndDate: userData.subscription?.endDate || null,
+    preferredPlan,
+    preferredDuration: preferredDuration || 'month',
+    message: (message || '').trim().substring(0, 500),
+    status: 'pending',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    processedAt: null,
+    processedBy: null,
+    adminResponse: null,
+    renewalDuration: null
+  };
+
+  const docRef = await db.collection('renewalRequests').add(requestData);
+
+  // Create notification for user
+  await createUserNotification(userId, 'request_submitted',
+    'Renewal Request Submitted',
+    'Your request for ' + preferredPlan.toUpperCase() + ' plan has been submitted. We will review it shortly.',
+    { requestId: docRef.id }
+  );
+
+  // Log activity
+  await logUserActivity(userId, 'renewal_request', { action: 'submitted', preferredPlan, preferredDuration });
+
+  return { success: true, requestId: docRef.id, message: 'Renewal request submitted successfully' };
+});
+
+// User: Get their renewal requests
+exports.userGetRenewalRequests = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  }
+
+  const userId = context.auth.uid;
+
+  const snapshot = await db.collection('renewalRequests')
+    .where('userId', '==', userId)
+    .orderBy('createdAt', 'desc')
+    .limit(20)
+    .get();
+
+  const requests = [];
+  snapshot.forEach(doc => {
+    const d = doc.data();
+    requests.push({
+      id: doc.id,
+      ...d,
+      createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
+      processedAt: d.processedAt?.toDate?.()?.toISOString() || null,
+      previousEndDate: d.previousEndDate?.toDate?.()?.toISOString() || null
+    });
+  });
+
+  return { requests };
+});
+
+// User: Cancel a pending request
+exports.userCancelRenewalRequest = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  }
+
+  const userId = context.auth.uid;
+  const { requestId } = data || {};
+
+  if (!requestId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Request ID required');
+  }
+
+  const requestDoc = await db.collection('renewalRequests').doc(requestId).get();
+  if (!requestDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'Request not found');
+  }
+
+  const requestData = requestDoc.data();
+  if (requestData.userId !== userId) {
+    throw new functions.https.HttpsError('permission-denied', 'Not your request');
+  }
+
+  if (requestData.status !== 'pending') {
+    throw new functions.https.HttpsError('failed-precondition', 'Can only cancel pending requests');
+  }
+
+  await db.collection('renewalRequests').doc(requestId).update({
+    status: 'cancelled',
+    processedAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+
+  return { success: true, message: 'Request cancelled' };
+});
+
+// User: Get their notifications
+exports.userGetNotifications = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  }
+
+  const userId = context.auth.uid;
+  const { limit: limitCount = 20, unreadOnly = false } = data || {};
+
+  let query = db.collection('users').doc(userId).collection('notifications')
+    .orderBy('createdAt', 'desc')
+    .limit(limitCount);
+
+  if (unreadOnly) {
+    query = query.where('read', '==', false);
+  }
+
+  const snapshot = await query.get();
+  const notifications = [];
+
+  snapshot.forEach(doc => {
+    const d = doc.data();
+    notifications.push({
+      id: doc.id,
+      ...d,
+      createdAt: d.createdAt?.toDate?.()?.toISOString() || null
+    });
+  });
+
+  // Get total unread count
+  const unreadSnapshot = await db.collection('users').doc(userId).collection('notifications')
+    .where('read', '==', false)
+    .get();
+
+  return { notifications, unreadCount: unreadSnapshot.size };
+});
+
+// User: Mark notification as read
+exports.userMarkNotificationRead = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  }
+
+  const userId = context.auth.uid;
+  const { notificationId, markAllRead = false } = data || {};
+
+  if (markAllRead) {
+    const unreadSnapshot = await db.collection('users').doc(userId).collection('notifications')
+      .where('read', '==', false)
+      .get();
+
+    const batch = db.batch();
+    unreadSnapshot.forEach(doc => {
+      batch.update(doc.ref, { read: true });
+    });
+    await batch.commit();
+
+    return { success: true, message: 'All notifications marked as read' };
+  }
+
+  if (!notificationId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Notification ID required');
+  }
+
+  await db.collection('users').doc(userId).collection('notifications').doc(notificationId).update({
+    read: true
+  });
+
+  return { success: true };
+});
+
+// Admin: Get all renewal requests
+exports.adminGetRenewalRequests = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { status = 'pending', limit: limitCount = 50 } = data || {};
+
+  let query = db.collection('renewalRequests')
+    .orderBy('createdAt', 'desc')
+    .limit(limitCount);
+
+  if (status && status !== 'all') {
+    query = query.where('status', '==', status);
+  }
+
+  const snapshot = await query.get();
+  const requests = [];
+
+  snapshot.forEach(doc => {
+    const d = doc.data();
+    requests.push({
+      id: doc.id,
+      ...d,
+      createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
+      processedAt: d.processedAt?.toDate?.()?.toISOString() || null,
+      previousEndDate: d.previousEndDate?.toDate?.()?.toISOString() || null
+    });
+  });
+
+  // Get counts by status
+  const pendingSnapshot = await db.collection('renewalRequests').where('status', '==', 'pending').get();
+  const approvedSnapshot = await db.collection('renewalRequests').where('status', '==', 'approved').get();
+  const deniedSnapshot = await db.collection('renewalRequests').where('status', '==', 'denied').get();
+
+  return {
+    requests,
+    counts: {
+      pending: pendingSnapshot.size,
+      approved: approvedSnapshot.size,
+      denied: deniedSnapshot.size
+    }
+  };
+});
+
+// Admin: Process (approve/deny) a renewal request
+exports.adminProcessRenewalRequest = functions.https.onCall(async (data, context) => {
+  const adminUid = await requireAdmin(context);
+
+  const { requestId, action, duration, adminResponse } = data || {};
+
+  if (!requestId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Request ID required');
+  }
+
+  if (!action || !['approve', 'deny'].includes(action)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Action must be approve or deny');
+  }
+
+  const requestDoc = await db.collection('renewalRequests').doc(requestId).get();
+  if (!requestDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'Request not found');
+  }
+
+  const requestData = requestDoc.data();
+  if (requestData.status !== 'pending') {
+    throw new functions.https.HttpsError('failed-precondition', 'Request already processed');
+  }
+
+  const userId = requestData.userId;
+
+  if (action === 'approve') {
+    const renewalDuration = duration || requestData.preferredDuration || 'month';
+    const plan = requestData.preferredPlan;
+
+    // Calculate new end date
+    const now = new Date();
+    let endDate = null;
+
+    if (renewalDuration !== 'lifetime') {
+      const durationDays = {
+        'week': 7,
+        'month': 30,
+        '3months': 90,
+        'year': 365
+      };
+      endDate = new Date(now.getTime() + (durationDays[renewalDuration] || 30) * 24 * 60 * 60 * 1000);
+    }
+
+    // Update user subscription
+    const planDoc = await db.collection('subscriptionPlans').doc(plan).get();
+    const planLimits = planDoc.exists ? planDoc.data()?.limits || {} : {};
+    const defaultToolLimit = 2;
+
+    await db.collection('users').doc(userId).update({
+      'subscription.plan': plan,
+      'subscription.status': 'active',
+      'subscription.duration': renewalDuration,
+      'subscription.startDate': admin.firestore.FieldValue.serverTimestamp(),
+      'subscription.endDate': endDate ? admin.firestore.Timestamp.fromDate(endDate) : null,
+      'usage.warpOptimizer': {
+        usedToday: 0,
+        limit: planLimits.warpOptimizer?.dailyLimit || defaultToolLimit,
+        lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+        cooldownUntil: null
+      },
+      'usage.competitorAnalysis': {
+        usedToday: 0,
+        limit: planLimits.competitorAnalysis?.dailyLimit || defaultToolLimit,
+        lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+        cooldownUntil: null
+      },
+      'usage.trendPredictor': {
+        usedToday: 0,
+        limit: planLimits.trendPredictor?.dailyLimit || defaultToolLimit,
+        lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+        cooldownUntil: null
+      },
+      'usage.thumbnailGenerator': {
+        usedToday: 0,
+        limit: planLimits.thumbnailGenerator?.dailyLimit || defaultToolLimit,
+        lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+        cooldownUntil: null
+      }
+    });
+
+    // Update request
+    await db.collection('renewalRequests').doc(requestId).update({
+      status: 'approved',
+      processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      processedBy: adminUid,
+      adminResponse: adminResponse || null,
+      renewalDuration
+    });
+
+    // Notify user
+    const durationLabel = {
+      'week': '1 Week',
+      'month': '1 Month',
+      '3months': '3 Months',
+      'year': '1 Year',
+      'lifetime': 'Lifetime'
+    };
+
+    const endDateStr = endDate ? endDate.toLocaleDateString() : '';
+    await createUserNotification(userId, 'request_approved',
+      'Subscription Renewed!',
+      'Great news! Your ' + plan.toUpperCase() + ' subscription has been renewed for ' + (durationLabel[renewalDuration] || renewalDuration) + '.' + (endDateStr ? ' Valid until ' + endDateStr + '.' : ''),
+      { plan, duration: renewalDuration, endDate: endDate?.toISOString() || null }
+    );
+
+    // Log activity
+    await logUserActivity(userId, 'subscription_change', {
+      action: 'renewal_approved',
+      plan,
+      duration: renewalDuration,
+      approvedBy: adminUid
+    }, adminUid);
+
+    return {
+      success: true,
+      message: 'Subscription renewed: ' + plan.toUpperCase() + ' for ' + renewalDuration,
+      newEndDate: endDate?.toISOString() || null
+    };
+
+  } else {
+    // Deny request
+    await db.collection('renewalRequests').doc(requestId).update({
+      status: 'denied',
+      processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      processedBy: adminUid,
+      adminResponse: adminResponse || null
+    });
+
+    // Notify user
+    const denyMessage = adminResponse
+      ? 'Your renewal request has been reviewed. Response: ' + adminResponse
+      : 'Your renewal request has been reviewed. Please contact support for more information.';
+
+    await createUserNotification(userId, 'request_denied',
+      'Renewal Request Update',
+      denyMessage,
+      { reason: adminResponse || null }
+    );
+
+    // Log activity
+    await logUserActivity(userId, 'renewal_request', { action: 'denied', reason: adminResponse }, adminUid);
+
+    return { success: true, message: 'Request denied' };
+  }
+});
