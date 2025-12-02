@@ -149,7 +149,7 @@
            ------------------------------------------ */
         .hero-section {
             position: relative;
-            padding: 2rem 1.5rem;
+            padding: 2rem 1.5rem 1rem;
             background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
@@ -167,82 +167,278 @@
         }
 
         /* ------------------------------------------
-           2.4 TOOL CARDS
+           2.4 STATS BAR
            ------------------------------------------ */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            padding: 1rem 0;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 2rem;
+            font-size: 0.85rem;
+        }
+
+        .stat-item .stat-icon {
+            font-size: 1rem;
+        }
+
+        .stat-item .stat-value {
+            font-weight: 700;
+            color: white;
+        }
+
+        .stat-item .stat-label {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* ------------------------------------------
+           2.5 CATEGORY SECTIONS
+           ------------------------------------------ */
+        .category-section {
+            margin-bottom: 2.5rem;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .category-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .category-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            letter-spacing: 0.025em;
+        }
+
+        .category-count {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-left: auto;
+        }
+
+        /* ------------------------------------------
+           2.6 TOOL CARDS - GLASSMORPHISM
+           ------------------------------------------ */
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        @media (max-width: 1200px) {
+            .tools-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 900px) {
+            .tools-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .tool-card {
-            background: linear-gradient(145deg, rgba(30, 30, 50, 0.9) 0%, rgba(20, 20, 35, 0.95) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 1.25rem;
-            padding: 1.5rem;
-            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
             position: relative;
             overflow: hidden;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: cardFadeIn 0.5s ease forwards;
+        }
+
+        .tool-card:nth-child(1) { animation-delay: 0.05s; }
+        .tool-card:nth-child(2) { animation-delay: 0.1s; }
+        .tool-card:nth-child(3) { animation-delay: 0.15s; }
+        .tool-card:nth-child(4) { animation-delay: 0.2s; }
+
+        @keyframes cardFadeIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .tool-card::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+            inset: 0;
+            border-radius: 1rem;
+            padding: 1px;
+            background: linear-gradient(135deg, var(--accent-start, transparent), var(--accent-end, transparent));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.4s ease;
+        }
+
+        .tool-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+            transition: left 0.6s ease;
         }
 
         .tool-card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(255, 255, 255, 0.2);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5),
+                        0 0 40px var(--glow-color, rgba(99, 102, 241, 0.15));
+            background: rgba(255, 255, 255, 0.05);
         }
 
         .tool-card:hover::before {
             opacity: 1;
         }
 
-        .tool-card.script-studio {
-            --accent-start: #f59e0b;
-            --accent-end: #ef4444;
+        .tool-card:hover::after {
+            left: 100%;
         }
 
-        .tool-card.hook-lab {
-            --accent-start: #ec4899;
-            --accent-end: #8b5cf6;
-        }
+        .tool-card.script-studio { --accent-start: #f59e0b; --accent-end: #ef4444; --glow-color: rgba(245, 158, 11, 0.2); }
+        .tool-card.hook-lab { --accent-start: #ec4899; --accent-end: #8b5cf6; --glow-color: rgba(236, 72, 153, 0.2); }
+        .tool-card.content-multiplier { --accent-start: #10b981; --accent-end: #3b82f6; --glow-color: rgba(16, 185, 129, 0.2); }
+        .tool-card.thumbnail-arena { --accent-start: #6366f1; --accent-end: #a855f7; --glow-color: rgba(99, 102, 241, 0.2); }
+        .tool-card.trend-hijacker { --accent-start: #f97316; --accent-end: #eab308; --glow-color: rgba(249, 115, 22, 0.2); }
+        .tool-card.gap-finder { --accent-start: #14b8a6; --accent-end: #06b6d4; --glow-color: rgba(20, 184, 166, 0.2); }
+        .tool-card.audience-dna { --accent-start: #8b5cf6; --accent-end: #d946ef; --glow-color: rgba(139, 92, 246, 0.2); }
+        .tool-card.collab-match { --accent-start: #0ea5e9; --accent-end: #6366f1; --glow-color: rgba(14, 165, 233, 0.2); }
+        .tool-card.revenue-max { --accent-start: #22c55e; --accent-end: #eab308; --glow-color: rgba(34, 197, 94, 0.2); }
+        .tool-card.ai-coach { --accent-start: #f43f5e; --accent-end: #fb923c; --glow-color: rgba(244, 63, 94, 0.2); }
 
-        .tool-card.content-multiplier {
-            --accent-start: #10b981;
-            --accent-end: #3b82f6;
-        }
-
-        .tool-card.thumbnail-arena {
-            --accent-start: #6366f1;
-            --accent-end: #a855f7;
+        .tool-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
         }
 
         .tool-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 1rem;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.75rem;
-            margin-bottom: 1rem;
+            font-size: 1.35rem;
+            flex-shrink: 0;
         }
 
         .tool-badge {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.7rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.65rem;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+
+        .tool-card h3 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.5rem;
+            line-height: 1.3;
+        }
+
+        .tool-card p {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.5;
+            margin-bottom: 0.75rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .tool-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .tool-tokens {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .tool-time {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .tool-cta {
+            position: absolute;
+            bottom: 1.25rem;
+            right: 1.25rem;
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: all 0.3s ease;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .tool-card:hover .tool-cta {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .tool-card:hover .tool-time {
+            opacity: 0;
         }
 
         /* ------------------------------------------
@@ -827,172 +1023,140 @@
 
             // Header
             html += '<div class="hero-section relative z-10">';
-            html += '<div class="max-w-6xl mx-auto">';
-            html += '<div class="flex items-center justify-between mb-6">';
-            html += '<a href="/video-optimizer" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">';
-            html += '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
+            html += '<div class="max-w-7xl mx-auto">';
+            html += '<div class="flex items-center justify-between mb-4">';
+            html += '<a href="/video-optimizer" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm">';
+            html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
             html += '<span>Back to Dashboard</span>';
             html += '</a>';
-            html += '<div class="flex items-center gap-4">';
-            html += '<button onclick="app.navigateTo(\'history\')" class="flex items-center gap-2 px-4 py-2 bg-gray-800/60 hover:bg-gray-700/60 border border-gray-600 rounded-xl text-gray-300 hover:text-white transition-all">';
+            html += '<div class="flex items-center gap-3">';
+            html += '<button onclick="app.navigateTo(\'history\')" class="flex items-center gap-2 px-3 py-1.5 bg-gray-800/60 hover:bg-gray-700/60 border border-gray-700 rounded-lg text-gray-300 hover:text-white transition-all text-sm">';
             html += '<span>📜</span>';
             html += '<span class="font-medium">History</span>';
             html += '</button>';
             html += '<div class="token-display">';
-            html += '<span class="text-2xl">🪙</span>';
+            html += '<span class="text-lg">🪙</span>';
             html += '<span class="font-bold text-white">' + state.tokens.balance + '</span>';
-            html += '<span class="text-gray-400">tokens</span>';
+            html += '<span class="text-gray-400 text-sm">tokens</span>';
             html += '</div>';
             html += '</div>';
             html += '</div>';
 
             // Title
-            html += '<div class="text-center mb-8">';
-            html += '<h1 class="text-4xl md:text-5xl font-bold text-white mb-3">';
+            html += '<div class="text-center mb-4">';
+            html += '<h1 class="text-3xl md:text-4xl font-bold text-white mb-2">';
             html += '<span class="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">AI Tools Hub</span>';
             html += '</h1>';
-            html += '<p class="text-gray-400 text-lg">Powerful AI tools to supercharge your YouTube content</p>';
+            html += '<p class="text-gray-400">Powerful AI tools to supercharge your YouTube content</p>';
             html += '</div>';
+
+            // Stats Bar
+            html += '<div class="stats-bar">';
+            html += '<div class="stat-item"><span class="stat-icon">🛠️</span><span class="stat-value">10</span><span class="stat-label">Tools</span></div>';
+            html += '<div class="stat-item"><span class="stat-icon">🪙</span><span class="stat-value">' + state.tokens.balance + '</span><span class="stat-label">Available</span></div>';
+            html += '<div class="stat-item"><span class="stat-icon">⭐</span><span class="stat-value">Script Studio</span><span class="stat-label">Popular</span></div>';
+            html += '<div class="stat-item"><span class="stat-icon">⚡</span><span class="stat-value">3-62</span><span class="stat-label">Token Range</span></div>';
+            html += '</div>';
+
             html += '</div></div>';
 
-            // Tools Grid
-            html += '<div class="max-w-6xl mx-auto px-4 py-8">';
-            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">';
+            // Main Content
+            html += '<div class="max-w-7xl mx-auto px-4 py-6">';
 
-            // AI Script Studio Card
-            html += '<div class="tool-card script-studio" onclick="app.navigateTo(\'script\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);">Popular</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);">🎬</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">AI Script Studio</h3>';
-            html += '<p class="text-gray-400 mb-4">From idea to full video script in 60 seconds. Smart generation with hooks, story beats, and CTAs.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-amber-400"><span class="font-bold">5</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~60 seconds</span>';
+            // Category 1: Content Creation
+            html += '<div class="category-section">';
+            html += '<div class="category-header">';
+            html += '<div class="category-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);">✏️</div>';
+            html += '<span class="category-title">Content Creation</span>';
+            html += '<span class="category-count">3 tools</span>';
             html += '</div>';
-            html += '</div>';
+            html += '<div class="tools-grid">';
 
-            // Viral Hook Laboratory Card
-            html += '<div class="tool-card hook-lab" onclick="app.navigateTo(\'hooks\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);">High Impact</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);">🎣</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">Viral Hook Laboratory</h3>';
-            html += '<p class="text-gray-400 mb-4">Win the first 3 seconds or lose everything. Generate winning hooks with AI prediction.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-pink-400"><span class="font-bold">3</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~30 seconds</span>';
-            html += '</div>';
-            html += '</div>';
+            // AI Script Studio
+            html += renderToolCard('script', 'script-studio', '🎬', 'AI Script Studio', 'From idea to full video script in 60 seconds with hooks & CTAs.', 5, '~60s', 'Popular', '#f59e0b', '#ef4444', 'text-amber-400');
 
-            // Content Multiplier Card
-            html += '<div class="tool-card content-multiplier" onclick="app.navigateTo(\'multiplier\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);">10x Output</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);">🔄</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">Content Multiplier</h3>';
-            html += '<p class="text-gray-400 mb-4">One video becomes 30 pieces of content. Auto-extract Shorts, threads, blog posts & more.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-emerald-400"><span class="font-bold">8</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~2 minutes</span>';
-            html += '</div>';
-            html += '</div>';
+            // Viral Hook Laboratory
+            html += renderToolCard('hooks', 'hook-lab', '🎣', 'Viral Hook Lab', 'Win the first 3 seconds. Generate winning hooks with AI prediction.', 3, '~30s', 'Impact', '#ec4899', '#8b5cf6', 'text-pink-400');
 
-            // Thumbnail A/B Arena Card
-            html += '<div class="tool-card thumbnail-arena" onclick="app.navigateTo(\'thumbnail\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);">CTR Boost</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);">📊</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">Thumbnail A/B Arena</h3>';
-            html += '<p class="text-gray-400 mb-4">Never guess which thumbnail will win. AI predicts CTR and analyzes what drives clicks.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-indigo-400"><span class="font-bold">4</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~45 seconds</span>';
-            html += '</div>';
-            html += '</div>';
+            // Content Multiplier
+            html += renderToolCard('multiplier', 'content-multiplier', '🔄', 'Content Multiplier', 'One video becomes 30 pieces. Extract Shorts, threads & more.', 8, '~2m', '10x', '#10b981', '#3b82f6', 'text-emerald-400');
 
-            // Trend Hijacker Card
-            html += '<div class="tool-card trend-hijacker" onclick="app.navigateTo(\'trends\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #f97316 0%, #eab308 100%);">🔥 Hot</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #f97316 0%, #eab308 100%);">🎯</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">Trend Hijacker</h3>';
-            html += '<p class="text-gray-400 mb-4">Catch trending topics before they peak. Get early-mover advantage with AI-powered trend detection.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-orange-400"><span class="font-bold">6</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~90 seconds</span>';
-            html += '</div>';
-            html += '</div>';
+            html += '</div></div>';
 
-            // Content Gap Finder Card
-            html += '<div class="tool-card gap-finder" onclick="app.navigateTo(\'gaps\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);">Opportunity</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);">🗺️</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">Content Gap Finder</h3>';
-            html += '<p class="text-gray-400 mb-4">Discover untapped content opportunities your competitors missed. Find high-potential topics with low competition.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-teal-400"><span class="font-bold">6</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~90 seconds</span>';
+            // Category 2: Visual & CTR
+            html += '<div class="category-section">';
+            html += '<div class="category-header">';
+            html += '<div class="category-icon" style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);">🎨</div>';
+            html += '<span class="category-title">Visual & CTR</span>';
+            html += '<span class="category-count">1 tool</span>';
             html += '</div>';
-            html += '</div>';
+            html += '<div class="tools-grid">';
 
-            // Audience DNA Analyzer Card
-            html += '<div class="tool-card audience-dna" onclick="app.navigateTo(\'audience\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);">Deep Insights</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);">🧬</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">Audience DNA Analyzer</h3>';
-            html += '<p class="text-gray-400 mb-4">Decode your audience\'s psychology. Get deep insights into demographics, interests, pain points & content preferences.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-purple-400"><span class="font-bold">7</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~2 minutes</span>';
-            html += '</div>';
-            html += '</div>';
+            // Thumbnail A/B Arena
+            html += renderToolCard('thumbnail', 'thumbnail-arena', '📊', 'Thumbnail A/B Arena', 'Never guess which thumbnail wins. AI predicts CTR instantly.', 4, '~45s', 'CTR+', '#6366f1', '#a855f7', 'text-indigo-400');
 
-            // Collab Matchmaker Card
-            html += '<div class="tool-card collab-match" onclick="app.navigateTo(\'collab\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);">Growth</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);">🤝</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">Collab Matchmaker</h3>';
-            html += '<p class="text-gray-400 mb-4">Find your perfect collaboration partners. AI matches you with creators who share your audience but aren\'t competitors.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-sky-400"><span class="font-bold">5</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~60 seconds</span>';
-            html += '</div>';
-            html += '</div>';
+            html += '</div></div>';
 
-            // Revenue Maximizer Pro Card
-            html += '<div class="tool-card revenue-max" onclick="app.navigateTo(\'revenue\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #22c55e 0%, #eab308 100%);">💵 Money</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #22c55e 0%, #eab308 100%);">💰</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">Revenue Maximizer Pro</h3>';
-            html += '<p class="text-gray-400 mb-4">Unlock hidden revenue streams. Get personalized monetization strategies, pricing guides & sponsor pitch templates.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-green-400"><span class="font-bold">8</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~2 minutes</span>';
+            // Category 3: Research & Discovery
+            html += '<div class="category-section">';
+            html += '<div class="category-header">';
+            html += '<div class="category-icon" style="background: linear-gradient(135deg, #f97316 0%, #14b8a6 100%);">🔍</div>';
+            html += '<span class="category-title">Research & Discovery</span>';
+            html += '<span class="category-count">3 tools</span>';
             html += '</div>';
-            html += '</div>';
+            html += '<div class="tools-grid">';
 
-            // AI Video Coach Card
-            html += '<div class="tool-card ai-coach" onclick="app.navigateTo(\'coach\')">';
-            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #f43f5e 0%, #fb923c 100%);">Premium</div>';
-            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #f43f5e 0%, #fb923c 100%);">🧠</div>';
-            html += '<h3 class="text-xl font-bold text-white mb-2">AI Video Coach</h3>';
-            html += '<p class="text-gray-400 mb-4">Your personal YouTube mentor. Get expert coaching on retention, engagement, strategy & growth tailored to your content.</p>';
-            html += '<div class="flex items-center gap-4 text-sm">';
-            html += '<span class="text-rose-400"><span class="font-bold">10</span> tokens</span>';
-            html += '<span class="text-gray-500">|</span>';
-            html += '<span class="text-gray-400">~3 minutes</span>';
-            html += '</div>';
-            html += '</div>';
+            // Trend Hijacker
+            html += renderToolCard('trends', 'trend-hijacker', '🎯', 'Trend Hijacker', 'Catch trending topics before they peak. Early-mover advantage.', 6, '~90s', '🔥 Hot', '#f97316', '#eab308', 'text-orange-400');
 
-            html += '</div>'; // End grid
+            // Content Gap Finder
+            html += renderToolCard('gaps', 'gap-finder', '🗺️', 'Content Gap Finder', 'Discover untapped opportunities competitors missed.', 6, '~90s', 'Opportunity', '#14b8a6', '#06b6d4', 'text-teal-400');
+
+            // Audience DNA Analyzer
+            html += renderToolCard('audience', 'audience-dna', '🧬', 'Audience DNA', 'Decode your audience psychology. Deep demographic insights.', 7, '~2m', 'Deep', '#8b5cf6', '#d946ef', 'text-purple-400');
+
+            html += '</div></div>';
+
+            // Category 4: Growth & Revenue
+            html += '<div class="category-section">';
+            html += '<div class="category-header">';
+            html += '<div class="category-icon" style="background: linear-gradient(135deg, #22c55e 0%, #f43f5e 100%);">📈</div>';
+            html += '<span class="category-title">Growth & Revenue</span>';
+            html += '<span class="category-count">3 tools</span>';
+            html += '</div>';
+            html += '<div class="tools-grid">';
+
+            // Collab Matchmaker
+            html += renderToolCard('collab', 'collab-match', '🤝', 'Collab Matchmaker', 'Find perfect collaboration partners with audience overlap.', 5, '~60s', 'Growth', '#0ea5e9', '#6366f1', 'text-sky-400');
+
+            // Revenue Maximizer Pro
+            html += renderToolCard('revenue', 'revenue-max', '💰', 'Revenue Maximizer', 'Unlock hidden revenue streams with pricing guides & pitches.', 8, '~2m', '💵', '#22c55e', '#eab308', 'text-green-400');
+
+            // AI Video Coach
+            html += renderToolCard('coach', 'ai-coach', '🧠', 'AI Video Coach', 'Personal YouTube mentor for retention, engagement & growth.', 10, '~3m', 'Premium', '#f43f5e', '#fb923c', 'text-rose-400');
+
+            html += '</div></div>';
 
             html += '</div>'; // End container
 
+            return html;
+        }
+
+        function renderToolCard(view, cardClass, icon, title, desc, tokens, time, badge, gradStart, gradEnd, tokenColor) {
+            var html = '';
+            html += '<div class="tool-card ' + cardClass + '" onclick="app.navigateTo(\'' + view + '\')">';
+            html += '<div class="tool-card-header">';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, ' + gradStart + ' 0%, ' + gradEnd + ' 100%);">' + icon + '</div>';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, ' + gradStart + ' 0%, ' + gradEnd + ' 100%);">' + badge + '</div>';
+            html += '</div>';
+            html += '<h3>' + title + '</h3>';
+            html += '<p>' + desc + '</p>';
+            html += '<div class="tool-meta">';
+            html += '<div class="tool-tokens ' + tokenColor + '"><span>🪙</span><span>' + tokens + '</span></div>';
+            html += '<span class="tool-time">' + time + '</span>';
+            html += '<span class="tool-cta">Try Now →</span>';
+            html += '</div>';
+            html += '</div>';
             return html;
         }
 
