@@ -1923,28 +1923,77 @@ exports.adminGetUsers = functions.https.onCall(async (data, context) => {
     const safeData = data || {};
     const limitCount = safeData.limit || 100;
     const planFilter = safeData.plan || null;
+    const searchQuery = safeData.search || null;
+    const verifiedFilter = safeData.verifiedOnly || false;
 
     let query = db.collection('users').orderBy('createdAt', 'desc').limit(limitCount);
-    if (planFilter) {
+    if (planFilter && planFilter !== 'all') {
       query = query.where('subscription.plan', '==', planFilter);
     }
 
     const snapshot = await query.get();
-    const users = [];
+    let users = [];
 
     snapshot.forEach(doc => {
       const userData = doc.data();
+
+      // Calculate subscription status
+      let subscriptionStatus = 'free';
+      const plan = userData.subscription?.plan || 'free';
+      const endDate = userData.subscription?.endDate;
+
+      if (plan !== 'free') {
+        if (!endDate) {
+          subscriptionStatus = 'lifetime';
+        } else {
+          const endDateMs = endDate.toDate ? endDate.toDate().getTime() : endDate;
+          const now = Date.now();
+          const daysLeft = Math.ceil((endDateMs - now) / (1000 * 60 * 60 * 24));
+
+          if (daysLeft < 0) {
+            subscriptionStatus = 'expired';
+          } else if (daysLeft <= 7) {
+            subscriptionStatus = 'expiring';
+          } else {
+            subscriptionStatus = 'active';
+          }
+        }
+      }
+
       users.push({
         uid: doc.id,
         email: userData.email || '',
-        subscription: userData.subscription || { plan: 'free' },
+        displayName: userData.displayName || '',
+        clientAlias: userData.clientAlias || '',
+        isFiverrVerified: userData.isFiverrVerified || false,
+        adminNotes: userData.adminNotes || '',
+        subscription: {
+          ...(userData.subscription || { plan: 'free' }),
+          endDate: userData.subscription?.endDate?.toDate?.()?.toISOString() || null,
+          startDate: userData.subscription?.startDate?.toDate?.()?.toISOString() || null
+        },
+        subscriptionStatus,
         usage: userData.usage || {},
-        bonusUses: userData.bonusUses || {},  // Include bonus uses for display
+        bonusUses: userData.bonusUses || {},
         isAdmin: userData.isAdmin || false,
         createdAt: userData.createdAt?.toDate?.()?.toISOString() || null,
         lastLoginAt: userData.lastLoginAt?.toDate?.()?.toISOString() || null
       });
     });
+
+    // Apply client-side filters (search and verified)
+    if (searchQuery && searchQuery.trim()) {
+      const search = searchQuery.toLowerCase().trim();
+      users = users.filter(u =>
+        (u.email && u.email.toLowerCase().includes(search)) ||
+        (u.clientAlias && u.clientAlias.toLowerCase().includes(search)) ||
+        (u.uid && u.uid.toLowerCase().includes(search))
+      );
+    }
+
+    if (verifiedFilter) {
+      users = users.filter(u => u.isFiverrVerified);
+    }
 
     return { success: true, users, count: users.length };
   } catch (error) {
@@ -2060,6 +2109,375 @@ exports.adminSetCustomLimits = functions.https.onCall(async (data, context) => {
   });
 
   return { success: true, message: `Custom limits set for ${tool}` };
+});
+
+// ==============================================
+// ADMIN: Client Management Functions
+// ==============================================
+
+// Update user subscription with duration (calculates endDate)
+exports.adminUpdateUserSubscription = functions.https.onCall(async (data, context) => {
+  const adminUid = await requireAdmin(context);
+
+  const { userId, plan, duration } = data || {};
+
+  if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+  if (!plan) throw new functions.https.HttpsError('invalid-argument', 'Plan required');
+
+  // Validate plan
+  const validPlans = ['free', 'lite', 'pro', 'enterprise'];
+  if (!validPlans.includes(plan)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid plan');
+  }
+
+  // Validate duration
+  const validDurations = ['week', 'month', '3months', 'year', 'lifetime', null];
+  if (duration && !validDurations.includes(duration)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid duration');
+  }
+
+  // Verify user exists
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
+
+  // Get plan limits
+  const planDoc = await db.collection('subscriptionPlans').doc(plan).get();
+  const planLimits = planDoc.exists ? planDoc.data()?.limits || {} : {};
+  const defaultToolLimit = 2;
+
+  // Calculate end date based on duration
+  let endDate = null;
+  const now = new Date();
+
+  if (plan !== 'free' && duration && duration !== 'lifetime') {
+    switch (duration) {
+      case 'week':
+        endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '3months':
+        endDate = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+        break;
+      case 'year':
+        endDate = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+        break;
+    }
+  }
+
+  // Build update object
+  const updateData = {
+    'subscription.plan': plan,
+    'subscription.status': plan === 'free' ? 'free' : 'active',
+    'subscription.startDate': admin.firestore.FieldValue.serverTimestamp(),
+    'subscription.endDate': endDate ? admin.firestore.Timestamp.fromDate(endDate) : null,
+    'subscription.duration': duration || null,
+    'usage.warpOptimizer': {
+      usedToday: 0,
+      limit: planLimits.warpOptimizer?.dailyLimit || defaultToolLimit,
+      lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+      cooldownUntil: null
+    },
+    'usage.competitorAnalysis': {
+      usedToday: 0,
+      limit: planLimits.competitorAnalysis?.dailyLimit || defaultToolLimit,
+      lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+      cooldownUntil: null
+    },
+    'usage.trendPredictor': {
+      usedToday: 0,
+      limit: planLimits.trendPredictor?.dailyLimit || defaultToolLimit,
+      lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+      cooldownUntil: null
+    },
+    'usage.thumbnailGenerator': {
+      usedToday: 0,
+      limit: planLimits.thumbnailGenerator?.dailyLimit || defaultToolLimit,
+      lastResetAt: admin.firestore.FieldValue.serverTimestamp(),
+      cooldownUntil: null
+    }
+  };
+
+  await db.collection('users').doc(userId).update(updateData);
+
+  await logUsage(userId, 'subscription_updated_by_admin', {
+    plan,
+    duration,
+    endDate: endDate ? endDate.toISOString() : null,
+    changedBy: adminUid
+  });
+
+  return {
+    success: true,
+    message: `Subscription updated to ${plan}` + (duration ? ` for ${duration}` : ''),
+    endDate: endDate ? endDate.toISOString() : null
+  };
+});
+
+// Set client alias (Fiverr username)
+exports.adminSetClientAlias = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { userId, alias } = data || {};
+
+  if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+
+  // Verify user exists
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
+
+  // Sanitize alias (alphanumeric, underscores, max 50 chars)
+  const sanitizedAlias = (alias || '').trim().substring(0, 50);
+
+  await db.collection('users').doc(userId).update({
+    clientAlias: sanitizedAlias
+  });
+
+  return { success: true, message: 'Client alias updated' };
+});
+
+// Toggle Fiverr verified status
+exports.adminSetFiverrVerified = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { userId, verified } = data || {};
+
+  if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+  if (typeof verified !== 'boolean') throw new functions.https.HttpsError('invalid-argument', 'Verified status must be boolean');
+
+  // Verify user exists
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
+
+  await db.collection('users').doc(userId).update({
+    isFiverrVerified: verified
+  });
+
+  return { success: true, message: verified ? 'User marked as Fiverr verified' : 'Fiverr verification removed' };
+});
+
+// Update admin notes for a user
+exports.adminUpdateUserNotes = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { userId, notes } = data || {};
+
+  if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+
+  // Verify user exists
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
+
+  // Sanitize notes (max 2000 chars)
+  const sanitizedNotes = (notes || '').substring(0, 2000);
+
+  await db.collection('users').doc(userId).update({
+    adminNotes: sanitizedNotes
+  });
+
+  return { success: true, message: 'Notes updated' };
+});
+
+// Extend subscription by duration (quick action)
+exports.adminExtendSubscription = functions.https.onCall(async (data, context) => {
+  const adminUid = await requireAdmin(context);
+
+  const { userId, extensionDays } = data || {};
+
+  if (!userId) throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+  if (!extensionDays || extensionDays < 1 || extensionDays > 365) {
+    throw new functions.https.HttpsError('invalid-argument', 'Extension days must be between 1 and 365');
+  }
+
+  // Verify user exists
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
+
+  const userData = userDoc.data();
+  const currentPlan = userData.subscription?.plan || 'free';
+
+  if (currentPlan === 'free') {
+    throw new functions.https.HttpsError('failed-precondition', 'Cannot extend free plan. Set a paid plan first.');
+  }
+
+  // Calculate new end date
+  let baseDate = new Date();
+  if (userData.subscription?.endDate) {
+    const existingEnd = userData.subscription.endDate.toDate();
+    // If existing end date is in the future, extend from there
+    if (existingEnd > baseDate) {
+      baseDate = existingEnd;
+    }
+  }
+
+  const newEndDate = new Date(baseDate.getTime() + extensionDays * 24 * 60 * 60 * 1000);
+
+  await db.collection('users').doc(userId).update({
+    'subscription.endDate': admin.firestore.Timestamp.fromDate(newEndDate),
+    'subscription.status': 'active'
+  });
+
+  await logUsage(userId, 'subscription_extended', {
+    extensionDays,
+    newEndDate: newEndDate.toISOString(),
+    extendedBy: adminUid
+  });
+
+  return {
+    success: true,
+    message: `Subscription extended by ${extensionDays} days`,
+    newEndDate: newEndDate.toISOString()
+  };
+});
+
+// Scheduled function: Check expired subscriptions daily and revert to free
+// Runs every day at midnight UTC
+exports.checkExpiredSubscriptions = functions.pubsub
+  .schedule('0 0 * * *')
+  .timeZone('UTC')
+  .onRun(async (context) => {
+    console.log('Running subscription expiry check...');
+
+    const now = admin.firestore.Timestamp.now();
+    let expiredCount = 0;
+    let expiringCount = 0;
+
+    try {
+      // Find users with expired subscriptions (endDate < now and plan != free)
+      const expiredSnapshot = await db.collection('users')
+        .where('subscription.endDate', '<', now)
+        .where('subscription.plan', '!=', 'free')
+        .get();
+
+      const batch = db.batch();
+
+      for (const doc of expiredSnapshot.docs) {
+        const userData = doc.data();
+        const plan = userData.subscription?.plan;
+
+        // Skip if already free
+        if (plan === 'free') continue;
+
+        console.log(`Expiring subscription for user: ${doc.id} (was ${plan})`);
+
+        // Revert to free plan
+        batch.update(doc.ref, {
+          'subscription.plan': 'free',
+          'subscription.status': 'expired',
+          'subscription.previousPlan': plan,
+          'subscription.expiredAt': admin.firestore.FieldValue.serverTimestamp(),
+          // Reset usage limits to free tier
+          'usage.warpOptimizer.limit': 2,
+          'usage.competitorAnalysis.limit': 2,
+          'usage.trendPredictor.limit': 2,
+          'usage.thumbnailGenerator.limit': 2
+        });
+
+        expiredCount++;
+      }
+
+      if (expiredCount > 0) {
+        await batch.commit();
+      }
+
+      // Log results
+      console.log(`Subscription expiry check complete. Expired: ${expiredCount}`);
+
+      // Optional: Find users expiring in 7 days for potential notification
+      const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const expiringSnapshot = await db.collection('users')
+        .where('subscription.endDate', '>', now)
+        .where('subscription.endDate', '<', admin.firestore.Timestamp.fromDate(sevenDaysFromNow))
+        .where('subscription.plan', '!=', 'free')
+        .get();
+
+      expiringCount = expiringSnapshot.size;
+      console.log(`Users expiring in 7 days: ${expiringCount}`);
+
+      return { expiredCount, expiringCount };
+
+    } catch (error) {
+      console.error('Subscription expiry check error:', error);
+      throw error;
+    }
+  });
+
+// Manual trigger for subscription expiry check (admin only)
+exports.adminCheckExpiredSubscriptions = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const now = admin.firestore.Timestamp.now();
+  let expiredCount = 0;
+  const expiredUsers = [];
+
+  try {
+    // Find users with expired subscriptions
+    const expiredSnapshot = await db.collection('users')
+      .where('subscription.plan', '!=', 'free')
+      .get();
+
+    const batch = db.batch();
+
+    for (const doc of expiredSnapshot.docs) {
+      const userData = doc.data();
+      const endDate = userData.subscription?.endDate;
+
+      // Skip if no end date (lifetime) or end date is in the future
+      if (!endDate) continue;
+      const endDateMs = endDate.toDate ? endDate.toDate().getTime() : endDate;
+      if (endDateMs > now.toMillis()) continue;
+
+      const plan = userData.subscription?.plan;
+      if (plan === 'free') continue;
+
+      expiredUsers.push({
+        uid: doc.id,
+        email: userData.email || '',
+        previousPlan: plan,
+        expiredAt: endDate.toDate ? endDate.toDate().toISOString() : null
+      });
+
+      // Revert to free plan
+      batch.update(doc.ref, {
+        'subscription.plan': 'free',
+        'subscription.status': 'expired',
+        'subscription.previousPlan': plan,
+        'subscription.expiredAt': admin.firestore.FieldValue.serverTimestamp(),
+        'usage.warpOptimizer.limit': 2,
+        'usage.competitorAnalysis.limit': 2,
+        'usage.trendPredictor.limit': 2,
+        'usage.thumbnailGenerator.limit': 2
+      });
+
+      expiredCount++;
+    }
+
+    if (expiredCount > 0) {
+      await batch.commit();
+    }
+
+    return {
+      success: true,
+      message: `Processed ${expiredCount} expired subscriptions`,
+      expiredCount,
+      expiredUsers
+    };
+
+  } catch (error) {
+    console.error('Manual expiry check error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to check expired subscriptions');
+  }
 });
 
 // ==============================================

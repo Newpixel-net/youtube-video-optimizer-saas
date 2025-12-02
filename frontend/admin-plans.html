@@ -1144,6 +1144,11 @@
             promoCodesLoading: false,
             newPromoCode: { code: '', tokenAmount: 10, maxUses: 0, expiresAt: '', description: '' },
 
+            // User Management Enhanced state
+            userSearch: '',
+            userFilter: 'all', // all, free, lite, pro, enterprise, expiring, verified
+            userDetailModal: null, // { user: {...}, saving: false }
+
             // Analytics state
             analytics: null,
             analyticsLoading: false,
@@ -1214,6 +1219,9 @@
             }
             if (state.coverModal) {
                 html += renderCoverModal();
+            }
+            if (state.userDetailModal) {
+                html += renderUserDetailModal();
             }
 
             if (state.currentView === 'loading') {
@@ -1448,6 +1456,8 @@
             var enterpriseUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscription && u.subscription.plan === 'enterprise'; }).length : 0;
             var liteUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscription && u.subscription.plan === 'lite'; }).length : 0;
             var freeUsers = totalUsers - proUsers - enterpriseUsers - liteUsers;
+            var expiringUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.subscriptionStatus === 'expiring'; }).length : 0;
+            var verifiedUsers = state.adminUsers ? state.adminUsers.filter(function(u) { return u.isFiverrVerified; }).length : 0;
 
             html += '<div class="stats-grid">';
 
@@ -1470,9 +1480,15 @@
             html += '</div>';
 
             html += '<div class="stat-card">';
-            html += '<div class="stat-icon">🆓</div>';
-            html += '<div class="stat-value">' + freeUsers + '</div>';
-            html += '<div class="stat-label">Free Users</div>';
+            html += '<div class="stat-icon">⚠️</div>';
+            html += '<div class="stat-value">' + expiringUsers + '</div>';
+            html += '<div class="stat-label">Expiring Soon</div>';
+            html += '</div>';
+
+            html += '<div class="stat-card">';
+            html += '<div class="stat-icon">✅</div>';
+            html += '<div class="stat-value">' + verifiedUsers + '</div>';
+            html += '<div class="stat-label">Fiverr Verified</div>';
             html += '</div>';
 
             html += '</div>';
@@ -1482,7 +1498,27 @@
 
             // Left Column: User Management Table
             html += '<div class="card" style="grid-column: span 2;">';
+            html += '<div class="card-header" style="border-bottom: none; padding-bottom: 0; margin-bottom: 0;">';
             html += '<h3 class="card-title">👥 User Management</h3>';
+            html += '<button onclick="checkExpiredSubscriptions()" class="btn-secondary" style="font-size: 0.8rem; padding: 0.5rem 1rem;" title="Check and expire overdue subscriptions">🔄 Check Expired</button>';
+            html += '</div>';
+
+            // Search & Filter Controls
+            html += '<div style="display: flex; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; align-items: center;">';
+            html += '<div style="flex: 1; min-width: 200px;">';
+            html += '<input type="text" id="user-search-input" placeholder="Search by email, alias, or ID..." class="input-field" value="' + escapeHtml(state.userSearch) + '" onkeyup="handleUserSearch(this.value)" />';
+            html += '</div>';
+            html += '<select id="user-filter-select" class="select-field" style="width: auto;" onchange="handleUserFilter(this.value)">';
+            html += '<option value="all"' + (state.userFilter === 'all' ? ' selected' : '') + '>All Users</option>';
+            html += '<option value="free"' + (state.userFilter === 'free' ? ' selected' : '') + '>Free</option>';
+            html += '<option value="lite"' + (state.userFilter === 'lite' ? ' selected' : '') + '>Lite</option>';
+            html += '<option value="pro"' + (state.userFilter === 'pro' ? ' selected' : '') + '>Pro</option>';
+            html += '<option value="enterprise"' + (state.userFilter === 'enterprise' ? ' selected' : '') + '>Enterprise</option>';
+            html += '<option value="expiring"' + (state.userFilter === 'expiring' ? ' selected' : '') + '>Expiring Soon</option>';
+            html += '<option value="expired"' + (state.userFilter === 'expired' ? ' selected' : '') + '>Expired</option>';
+            html += '<option value="verified"' + (state.userFilter === 'verified' ? ' selected' : '') + '>Fiverr Verified</option>';
+            html += '</select>';
+            html += '</div>';
 
             if (state.usersLoading) {
                 html += '<div style="text-align: center; padding: 3rem;">';
@@ -1492,58 +1528,134 @@
             } else if (!state.adminUsers || state.adminUsers.length === 0) {
                 html += '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 2rem;">No users found</p>';
             } else {
-                html += '<div style="overflow-x: auto;">';
-                html += '<table class="prompt-table">';
-                html += '<thead><tr>';
-                html += '<th>User</th>';
-                html += '<th>Plan</th>';
-                html += '<th>Usage Today</th>';
-                html += '<th>Actions</th>';
-                html += '</tr></thead>';
-                html += '<tbody>';
+                // Filter users based on search and filter
+                var filteredUsers = state.adminUsers.filter(function(u) {
+                    var plan = u.subscription ? u.subscription.plan : 'free';
+                    var searchLower = state.userSearch.toLowerCase();
+                    var matchesSearch = !state.userSearch ||
+                        (u.email && u.email.toLowerCase().indexOf(searchLower) !== -1) ||
+                        (u.clientAlias && u.clientAlias.toLowerCase().indexOf(searchLower) !== -1) ||
+                        (u.uid && u.uid.toLowerCase().indexOf(searchLower) !== -1);
 
-                for (var i = 0; i < state.adminUsers.length; i++) {
-                    var user = state.adminUsers[i];
-                    var plan = user.subscription ? user.subscription.plan : 'free';
-                    var planColors = {
-                        'free': 'background: rgba(107, 114, 128, 0.2); color: #9ca3af;',
-                        'lite': 'background: rgba(59, 130, 246, 0.2); color: #60a5fa;',
-                        'pro': 'background: rgba(139, 92, 246, 0.2); color: #a78bfa;',
-                        'enterprise': 'background: rgba(245, 158, 11, 0.2); color: #fbbf24;'
-                    };
+                    var matchesFilter = state.userFilter === 'all' ||
+                        (state.userFilter === 'expiring' && u.subscriptionStatus === 'expiring') ||
+                        (state.userFilter === 'expired' && u.subscriptionStatus === 'expired') ||
+                        (state.userFilter === 'verified' && u.isFiverrVerified) ||
+                        (plan === state.userFilter);
 
-                    var baseLimit = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.limit : 0;
-                    var bonusUses = user.bonusUses && user.bonusUses.warpOptimizer ? user.bonusUses.warpOptimizer : 0;
-                    var usedToday = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.usedToday : 0;
-                    var totalLimit = baseLimit + bonusUses;
+                    return matchesSearch && matchesFilter;
+                });
 
-                    html += '<tr>';
-                    html += '<td>';
-                    html += '<div style="font-weight: 600; color: white;">' + escapeHtml(user.email || 'No email') + '</div>';
-                    html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">ID: ' + escapeHtml(user.uid ? user.uid.substring(0, 12) + '...' : '') + '</div>';
-                    html += '</td>';
-                    html += '<td>';
-                    html += '<span style="padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; ' + (planColors[plan] || planColors['free']) + '">' + plan.toUpperCase() + '</span>';
-                    html += '</td>';
-                    html += '<td>';
-                    html += '<span style="color: white; font-weight: 500;">' + usedToday + '/' + totalLimit + '</span>';
-                    if (bonusUses > 0) {
-                        html += '<span style="color: #10b981; font-size: 0.75rem; margin-left: 0.5rem;">(+' + bonusUses + ' bonus)</span>';
+                if (filteredUsers.length === 0) {
+                    html += '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 2rem;">No users match your search/filter</p>';
+                } else {
+                    html += '<div style="overflow-x: auto;">';
+                    html += '<table class="prompt-table">';
+                    html += '<thead><tr>';
+                    html += '<th>User / Client</th>';
+                    html += '<th>Plan</th>';
+                    html += '<th>Status</th>';
+                    html += '<th>Expires</th>';
+                    html += '<th>Usage Today</th>';
+                    html += '<th>Actions</th>';
+                    html += '</tr></thead>';
+                    html += '<tbody>';
+
+                    for (var i = 0; i < filteredUsers.length; i++) {
+                        var user = filteredUsers[i];
+                        var plan = user.subscription ? user.subscription.plan : 'free';
+                        var planColors = {
+                            'free': 'background: rgba(107, 114, 128, 0.2); color: #9ca3af;',
+                            'lite': 'background: rgba(59, 130, 246, 0.2); color: #60a5fa;',
+                            'pro': 'background: rgba(139, 92, 246, 0.2); color: #a78bfa;',
+                            'enterprise': 'background: rgba(245, 158, 11, 0.2); color: #fbbf24;'
+                        };
+
+                        var statusColors = {
+                            'free': 'background: rgba(107, 114, 128, 0.2); color: #9ca3af;',
+                            'active': 'background: rgba(34, 197, 94, 0.2); color: #4ade80;',
+                            'expiring': 'background: rgba(251, 191, 36, 0.2); color: #fbbf24;',
+                            'expired': 'background: rgba(239, 68, 68, 0.2); color: #f87171;',
+                            'lifetime': 'background: rgba(168, 85, 247, 0.2); color: #c084fc;'
+                        };
+
+                        var baseLimit = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.limit : 0;
+                        var bonusUses = user.bonusUses && user.bonusUses.warpOptimizer ? user.bonusUses.warpOptimizer : 0;
+                        var usedToday = user.usage && user.usage.warpOptimizer ? user.usage.warpOptimizer.usedToday : 0;
+                        var totalLimit = baseLimit + bonusUses;
+
+                        var endDate = user.subscription && user.subscription.endDate ? new Date(user.subscription.endDate) : null;
+                        var endDateStr = endDate ? endDate.toLocaleDateString() : '-';
+
+                        html += '<tr>';
+
+                        // User/Client column with alias and verified badge
+                        html += '<td>';
+                        html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+                        if (user.isFiverrVerified) {
+                            html += '<span title="Fiverr Approved" style="cursor: help; font-size: 1.1rem;">✅</span>';
+                        }
+                        html += '<div>';
+                        if (user.clientAlias) {
+                            html += '<div style="font-weight: 600; color: #ffd700;">' + escapeHtml(user.clientAlias) + '</div>';
+                            html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">' + escapeHtml(user.email || 'No email') + '</div>';
+                        } else {
+                            html += '<div style="font-weight: 600; color: white;">' + escapeHtml(user.email || 'No email') + '</div>';
+                        }
+                        html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.3);">ID: ' + escapeHtml(user.uid ? user.uid.substring(0, 10) + '...' : '') + '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</td>';
+
+                        // Plan column
+                        html += '<td>';
+                        html += '<span style="padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; ' + (planColors[plan] || planColors['free']) + '">' + plan.toUpperCase() + '</span>';
+                        html += '</td>';
+
+                        // Status column
+                        html += '<td>';
+                        var status = user.subscriptionStatus || 'free';
+                        var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+                        html += '<span style="padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; ' + (statusColors[status] || statusColors['free']) + '">' + statusLabel + '</span>';
+                        html += '</td>';
+
+                        // Expires column
+                        html += '<td>';
+                        if (status === 'lifetime') {
+                            html += '<span style="color: #c084fc;">Never</span>';
+                        } else if (endDate) {
+                            var daysLeft = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
+                            html += '<span style="color: ' + (daysLeft <= 3 ? '#f87171' : daysLeft <= 7 ? '#fbbf24' : 'rgba(255,255,255,0.7)') + ';">' + endDateStr + '</span>';
+                            if (daysLeft > 0 && daysLeft <= 7) {
+                                html += '<div style="font-size: 0.7rem; color: #fbbf24;">(' + daysLeft + ' days left)</div>';
+                            }
+                        } else {
+                            html += '<span style="color: rgba(255,255,255,0.4);">-</span>';
+                        }
+                        html += '</td>';
+
+                        // Usage column
+                        html += '<td>';
+                        html += '<span style="color: white; font-weight: 500;">' + usedToday + '/' + totalLimit + '</span>';
+                        if (bonusUses > 0) {
+                            html += '<span style="color: #10b981; font-size: 0.7rem; margin-left: 0.25rem;">(+' + bonusUses + ')</span>';
+                        }
+                        html += '</td>';
+
+                        // Actions column
+                        html += '<td>';
+                        html += '<div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">';
+                        html += '<button onclick="openUserDetailModal(\'' + user.uid + '\')" class="btn-icon" title="Edit User Details" style="background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.3);">✏️</button>';
+                        html += '<button onclick="quickExtendSubscription(\'' + user.uid + '\')" class="btn-icon" title="Extend +7 Days" style="background: rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.3);">📅</button>';
+                        html += '</div>';
+                        html += '</td>';
+
+                        html += '</tr>';
                     }
-                    html += '</td>';
-                    html += '<td>';
-                    html += '<select onchange="updateUserPlan(\'' + user.uid + '\', this.value)" class="select-field" style="width: auto; padding: 0.5rem 1rem;">';
-                    html += '<option value="free"' + (plan === 'free' ? ' selected' : '') + '>Free</option>';
-                    html += '<option value="lite"' + (plan === 'lite' ? ' selected' : '') + '>Lite</option>';
-                    html += '<option value="pro"' + (plan === 'pro' ? ' selected' : '') + '>Pro</option>';
-                    html += '<option value="enterprise"' + (plan === 'enterprise' ? ' selected' : '') + '>Enterprise</option>';
-                    html += '</select>';
-                    html += '</td>';
-                    html += '</tr>';
-                }
 
-                html += '</tbody></table>';
-                html += '</div>';
+                    html += '</tbody></table>';
+                    html += '</div>';
+                }
             }
             html += '</div>';
 
@@ -2445,20 +2557,19 @@
             state.usersLoading = true;
             render();
 
-            db.collection('users')
-                .get()
-                .then(function(snapshot) {
-                    state.adminUsers = [];
-                    snapshot.forEach(function(doc) {
-                        state.adminUsers.push({ uid: doc.id, ...doc.data() });
-                    });
+            // Use Cloud Function for enhanced user data with subscription status
+            var adminGetUsers = functions.httpsCallable('adminGetUsers');
+
+            adminGetUsers({})
+                .then(function(result) {
+                    state.adminUsers = result.data.users || [];
                     state.usersLoading = false;
                     render();
                 })
                 .catch(function(error) {
                     console.error('Error loading users:', error);
                     state.usersLoading = false;
-                    showToast('Failed to load users', 'error');
+                    showToast('Failed to load users: ' + error.message, 'error');
                     render();
                 });
 
@@ -2546,6 +2657,284 @@
                     console.error('Error granting bonus:', error);
                     showToast('Failed to grant bonus: ' + error.message, 'error');
                 });
+        }
+
+        // =============================================
+        // ENHANCED USER MANAGEMENT FUNCTIONS
+        // =============================================
+
+        function handleUserSearch(value) {
+            state.userSearch = value;
+            render();
+        }
+
+        function handleUserFilter(value) {
+            state.userFilter = value;
+            render();
+        }
+
+        function checkExpiredSubscriptions() {
+            showToast('Checking expired subscriptions...', 'info');
+            var adminCheckExpired = functions.httpsCallable('adminCheckExpiredSubscriptions');
+
+            adminCheckExpired({})
+                .then(function(result) {
+                    showToast('Checked subscriptions. ' + (result.data.expiredCount || 0) + ' expired, ' + (result.data.expiringCount || 0) + ' expiring soon.', 'success');
+                    loadUsers();
+                })
+                .catch(function(error) {
+                    console.error('Error checking subscriptions:', error);
+                    showToast('Failed to check subscriptions: ' + error.message, 'error');
+                });
+        }
+
+        function quickExtendSubscription(uid) {
+            if (!confirm('Extend subscription by 7 days?')) return;
+
+            var adminExtend = functions.httpsCallable('adminExtendSubscription');
+            adminExtend({ userId: uid, days: 7 })
+                .then(function(result) {
+                    showToast('Subscription extended by 7 days', 'success');
+                    loadUsers();
+                })
+                .catch(function(error) {
+                    console.error('Error extending subscription:', error);
+                    showToast('Failed to extend: ' + error.message, 'error');
+                });
+        }
+
+        function openUserDetailModal(uid) {
+            var user = state.adminUsers.find(function(u) { return u.uid === uid; });
+            if (!user) return;
+
+            state.userDetailModal = {
+                user: JSON.parse(JSON.stringify(user)), // Deep copy
+                editedAlias: user.clientAlias || '',
+                editedVerified: user.isFiverrVerified || false,
+                editedNotes: user.adminNotes || '',
+                editedPlan: user.subscription ? user.subscription.plan : 'free',
+                editedDuration: 'month',
+                saving: false
+            };
+            render();
+        }
+
+        function closeUserDetailModal() {
+            state.userDetailModal = null;
+            render();
+        }
+
+        function saveUserAlias() {
+            if (!state.userDetailModal) return;
+            var uid = state.userDetailModal.user.uid;
+            var alias = state.userDetailModal.editedAlias.trim();
+
+            state.userDetailModal.saving = true;
+            render();
+
+            var adminSetAlias = functions.httpsCallable('adminSetClientAlias');
+            adminSetAlias({ userId: uid, clientAlias: alias })
+                .then(function(result) {
+                    showToast('Client alias updated', 'success');
+                    state.userDetailModal.saving = false;
+                    loadUsers();
+                    closeUserDetailModal();
+                })
+                .catch(function(error) {
+                    console.error('Error saving alias:', error);
+                    showToast('Failed to save alias: ' + error.message, 'error');
+                    state.userDetailModal.saving = false;
+                    render();
+                });
+        }
+
+        function saveUserVerified() {
+            if (!state.userDetailModal) return;
+            var uid = state.userDetailModal.user.uid;
+            var verified = state.userDetailModal.editedVerified;
+
+            state.userDetailModal.saving = true;
+            render();
+
+            var adminSetVerified = functions.httpsCallable('adminSetFiverrVerified');
+            adminSetVerified({ userId: uid, isVerified: verified })
+                .then(function(result) {
+                    showToast('Verification status updated', 'success');
+                    state.userDetailModal.saving = false;
+                    loadUsers();
+                    closeUserDetailModal();
+                })
+                .catch(function(error) {
+                    console.error('Error saving verified:', error);
+                    showToast('Failed to save: ' + error.message, 'error');
+                    state.userDetailModal.saving = false;
+                    render();
+                });
+        }
+
+        function saveUserNotes() {
+            if (!state.userDetailModal) return;
+            var uid = state.userDetailModal.user.uid;
+            var notes = state.userDetailModal.editedNotes;
+
+            state.userDetailModal.saving = true;
+            render();
+
+            var adminUpdateNotes = functions.httpsCallable('adminUpdateUserNotes');
+            adminUpdateNotes({ userId: uid, notes: notes })
+                .then(function(result) {
+                    showToast('Admin notes saved', 'success');
+                    state.userDetailModal.saving = false;
+                    loadUsers();
+                    closeUserDetailModal();
+                })
+                .catch(function(error) {
+                    console.error('Error saving notes:', error);
+                    showToast('Failed to save notes: ' + error.message, 'error');
+                    state.userDetailModal.saving = false;
+                    render();
+                });
+        }
+
+        function saveUserSubscription() {
+            if (!state.userDetailModal) return;
+            var uid = state.userDetailModal.user.uid;
+            var plan = state.userDetailModal.editedPlan;
+            var duration = state.userDetailModal.editedDuration;
+
+            state.userDetailModal.saving = true;
+            render();
+
+            var adminUpdateSub = functions.httpsCallable('adminUpdateUserSubscription');
+            adminUpdateSub({ userId: uid, plan: plan, duration: duration })
+                .then(function(result) {
+                    showToast('Subscription updated: ' + plan.toUpperCase() + ' (' + duration + ')', 'success');
+                    state.userDetailModal.saving = false;
+                    loadUsers();
+                    closeUserDetailModal();
+                })
+                .catch(function(error) {
+                    console.error('Error updating subscription:', error);
+                    showToast('Failed to update: ' + error.message, 'error');
+                    state.userDetailModal.saving = false;
+                    render();
+                });
+        }
+
+        function renderUserDetailModal() {
+            if (!state.userDetailModal) return '';
+
+            var modal = state.userDetailModal;
+            var user = modal.user;
+
+            var html = '<div class="cover-modal-backdrop" onclick="closeUserDetailModal()">';
+            html += '<div class="cover-modal" onclick="event.stopPropagation()" style="max-width: 700px;">';
+
+            // Header
+            html += '<div class="cover-modal-header">';
+            html += '<h3 class="cover-modal-title">✏️ Edit User Details</h3>';
+            html += '<button class="cover-modal-close" onclick="closeUserDetailModal()">&times;</button>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="cover-modal-body" style="max-height: 70vh; overflow-y: auto;">';
+
+            // User Info Header
+            html += '<div class="cover-info-box" style="background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.2);">';
+            html += '<div style="display: flex; align-items: center; gap: 1rem;">';
+            if (user.isFiverrVerified) {
+                html += '<span style="font-size: 1.5rem;">✅</span>';
+            }
+            html += '<div>';
+            html += '<div style="font-weight: 600; color: white;">' + escapeHtml(user.email || 'No email') + '</div>';
+            html += '<div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">ID: ' + escapeHtml(user.uid) + '</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Client Alias Section
+            html += '<div class="form-group">';
+            html += '<label class="form-label">Client Alias (Fiverr Username)</label>';
+            html += '<div style="display: flex; gap: 0.75rem;">';
+            html += '<input type="text" id="modal-alias-input" class="input-field" placeholder="e.g., john_doe_fiverr" value="' + escapeHtml(modal.editedAlias) + '" onchange="state.userDetailModal.editedAlias = this.value" />';
+            html += '<button onclick="saveUserAlias()" class="btn-primary" ' + (modal.saving ? 'disabled' : '') + ' style="white-space: nowrap;">Save Alias</button>';
+            html += '</div>';
+            html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">This helps you identify clients from Fiverr orders</p>';
+            html += '</div>';
+
+            // Fiverr Verified Toggle
+            html += '<div class="form-group">';
+            html += '<label class="form-label">Fiverr Verified Status</label>';
+            html += '<div style="display: flex; gap: 1rem; align-items: center;">';
+            html += '<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">';
+            html += '<input type="checkbox" id="modal-verified-checkbox" ' + (modal.editedVerified ? 'checked' : '') + ' onchange="state.userDetailModal.editedVerified = this.checked; render();" style="width: 20px; height: 20px;" />';
+            html += '<span style="color: white;">✅ Fiverr Approved</span>';
+            html += '</label>';
+            html += '<button onclick="saveUserVerified()" class="btn-primary" ' + (modal.saving ? 'disabled' : '') + ' style="font-size: 0.8rem; padding: 0.5rem 1rem;">Save</button>';
+            html += '</div>';
+            html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">Shows verified badge in the user table</p>';
+            html += '</div>';
+
+            // Subscription Section
+            html += '<div class="form-group" style="background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.1);">';
+            html += '<label class="form-label" style="margin-bottom: 0.75rem;">Subscription Management</label>';
+
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">';
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: rgba(255,255,255,0.6); display: block; margin-bottom: 0.25rem;">Plan</label>';
+            html += '<select id="modal-plan-select" class="select-field" onchange="state.userDetailModal.editedPlan = this.value">';
+            html += '<option value="free"' + (modal.editedPlan === 'free' ? ' selected' : '') + '>Free</option>';
+            html += '<option value="lite"' + (modal.editedPlan === 'lite' ? ' selected' : '') + '>Lite</option>';
+            html += '<option value="pro"' + (modal.editedPlan === 'pro' ? ' selected' : '') + '>Pro</option>';
+            html += '<option value="enterprise"' + (modal.editedPlan === 'enterprise' ? ' selected' : '') + '>Enterprise</option>';
+            html += '</select>';
+            html += '</div>';
+
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: rgba(255,255,255,0.6); display: block; margin-bottom: 0.25rem;">Duration</label>';
+            html += '<select id="modal-duration-select" class="select-field" onchange="state.userDetailModal.editedDuration = this.value">';
+            html += '<option value="week"' + (modal.editedDuration === 'week' ? ' selected' : '') + '>1 Week</option>';
+            html += '<option value="month"' + (modal.editedDuration === 'month' ? ' selected' : '') + '>1 Month</option>';
+            html += '<option value="3months"' + (modal.editedDuration === '3months' ? ' selected' : '') + '>3 Months</option>';
+            html += '<option value="year"' + (modal.editedDuration === 'year' ? ' selected' : '') + '>1 Year</option>';
+            html += '<option value="lifetime"' + (modal.editedDuration === 'lifetime' ? ' selected' : '') + '>Lifetime</option>';
+            html += '</select>';
+            html += '</div>';
+            html += '</div>';
+
+            // Current subscription info
+            var currentPlan = user.subscription ? user.subscription.plan : 'free';
+            var currentEnd = user.subscription && user.subscription.endDate ? new Date(user.subscription.endDate).toLocaleDateString() : 'N/A';
+            html += '<div style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin-bottom: 0.75rem;">';
+            html += 'Current: ' + currentPlan.toUpperCase() + ' | Expires: ' + currentEnd;
+            html += '</div>';
+
+            html += '<button onclick="saveUserSubscription()" class="btn-primary" ' + (modal.saving ? 'disabled' : '') + ' style="width: 100%;">';
+            html += modal.saving ? '<span class="spinner" style="width: 16px; height: 16px; margin-right: 0.5rem;"></span> Saving...' : 'Update Subscription';
+            html += '</button>';
+            html += '</div>';
+
+            // Admin Notes Section
+            html += '<div class="form-group">';
+            html += '<label class="form-label">Admin Notes (Internal)</label>';
+            html += '<textarea id="modal-notes-textarea" class="textarea-field" rows="4" placeholder="Add private notes about this client..." onchange="state.userDetailModal.editedNotes = this.value">' + escapeHtml(modal.editedNotes) + '</textarea>';
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">';
+            html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Only visible to admins</p>';
+            html += '<button onclick="saveUserNotes()" class="btn-primary" ' + (modal.saving ? 'disabled' : '') + ' style="font-size: 0.8rem; padding: 0.5rem 1rem;">Save Notes</button>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>'; // End modal body
+
+            // Footer
+            html += '<div class="cover-modal-footer" style="padding: 1rem 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: flex-end;">';
+            html += '<button onclick="closeUserDetailModal()" class="btn-secondary">Close</button>';
+            html += '</div>';
+
+            html += '</div>'; // End modal
+            html += '</div>'; // End backdrop
+
+            return html;
         }
 
         // =============================================
