@@ -5351,15 +5351,17 @@ Output ONLY the prompt, no explanations or preamble.`
       }
 
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-      const geminiModelId = 'gemini-2.0-flash-exp-image-generation';
+      // Use gemini-3-pro-image-preview - SAME as Creative Studio where face preservation works!
+      const geminiModelId = 'gemini-3-pro-image-preview';
 
       console.log(`Generating ${imageCount} thumbnail(s) with Gemini: ${geminiModelId}`);
 
       for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
         try {
-          // Build content parts with reference image
+          // Build content parts - REFERENCE IMAGE FIRST (like Creative Studio)
           const contentParts = [];
 
+          // Add reference image FIRST (this is how Creative Studio does it)
           if (referenceImage && referenceImage.base64) {
             contentParts.push({
               inlineData: {
@@ -5367,85 +5369,53 @@ Output ONLY the prompt, no explanations or preamble.`
                 data: referenceImage.base64
               }
             });
+            console.log('Added reference image as input (face/character reference)');
           }
 
-          // Build prompt with ENHANCED reference instruction based on detected type
+          // Build prompt - USE SAME SIMPLE FORMAT AS CREATIVE STUDIO
+          // Creative Studio's working format: "Using the provided image as a character/face reference to maintain consistency, generate a new image: ${prompt}"
           let finalPrompt;
 
           if (referenceImage && referenceImage.base64) {
-            // Get the specialized reference prompt based on type
-            const refTypePrompt = referenceTypePrompts[effectiveReferenceType] || referenceTypePrompts.style;
+            // ============================================================
+            // MATCH CREATIVE STUDIO'S SIMPLE, WORKING FORMAT
+            // ============================================================
+            if (effectiveReferenceType === 'face' || mode === 'faceHero') {
+              // Face preservation - use Creative Studio's exact working pattern
+              finalPrompt = `Using the provided image as a character/face reference to maintain consistency, generate a YouTube thumbnail: ${imagePrompt}
 
-            // Build enhanced reference-based prompt
-            finalPrompt = `REFERENCE IMAGE GENERATION - Type: ${effectiveReferenceType.toUpperCase()}
+The person in the thumbnail must look exactly like the person in the reference image - same face, same hair, same features. Position them on the right side of the frame, leaving space on the left for text. 16:9 aspect ratio, professional YouTube thumbnail quality.`;
 
-═══════════════════════════════════════════════════════════════
-REFERENCE PROCESSING INSTRUCTIONS (CRITICAL)
-═══════════════════════════════════════════════════════════════
-${refTypePrompt}
+            } else if (effectiveReferenceType === 'product') {
+              // Product reference
+              finalPrompt = `Using the provided image as a product reference, generate a YouTube thumbnail showcasing this exact product: ${imagePrompt}
 
-═══════════════════════════════════════════════════════════════
-THUMBNAIL GENERATION PROMPT
-═══════════════════════════════════════════════════════════════
-${imagePrompt}
+Keep the product's appearance accurate. Professional product photography, clean background, 16:9 YouTube thumbnail format.`;
 
-═══════════════════════════════════════════════════════════════
-COMPOSITION GUIDANCE
-═══════════════════════════════════════════════════════════════
-${compositionGuide.prompt}
-Text overlay space: ${compositionGuide.textSpace}
+            } else if (effectiveReferenceType === 'style') {
+              // Style transfer - use Creative Studio's style reference pattern
+              finalPrompt = `Using the provided image as a style reference, generate a new YouTube thumbnail with the following description: ${imagePrompt}
 
-═══════════════════════════════════════════════════════════════
-TECHNICAL SPECIFICATIONS
-═══════════════════════════════════════════════════════════════
-• Aspect Ratio: 16:9 (1280x720 pixels)
-• Quality: 4K photorealistic, professional photography
-• Focus: Sharp on main subject, appropriate background treatment
-• Colors: Vibrant, high contrast, YouTube-optimized
-• Lighting: Professional, flattering, depth-creating`;
+Match the color palette, lighting style, and overall aesthetic of the reference. 16:9 YouTube thumbnail format.`;
 
-            // Add expression modifier if face-based
-            if ((effectiveReferenceType === 'face' || mode === 'faceHero') && expressionGuide) {
-              finalPrompt += `\n\n═══════════════════════════════════════════════════════════════
-EXPRESSION GUIDANCE
-═══════════════════════════════════════════════════════════════
-${expressionGuide}`;
-            }
+            } else {
+              // Background/general reference
+              finalPrompt = `Using the provided image as reference, generate a YouTube thumbnail: ${imagePrompt}
 
-            // Add face strength guidance
-            if (effectiveReferenceType === 'face') {
-              finalPrompt += `\n\nFACE PRESERVATION STRENGTH: ${faceStrength * 100}% - ${faceStrength >= 0.9 ? 'EXACT match required' : faceStrength >= 0.7 ? 'Strong likeness required' : 'Inspired by reference'}`;
-            }
-
-            // Add style strength guidance
-            if (effectiveReferenceType === 'style') {
-              finalPrompt += `\n\nSTYLE TRANSFER STRENGTH: ${styleStrength * 100}% - ${styleStrength >= 0.9 ? 'EXACT style match' : styleStrength >= 0.7 ? 'Strong style influence' : 'Subtle style hints'}`;
+16:9 aspect ratio, professional quality, eye-catching design.`;
             }
 
           } else {
-            // No reference image - use enhanced prompt directly
+            // No reference image - use full enhanced prompt
             finalPrompt = `${imagePrompt}
 
-═══════════════════════════════════════════════════════════════
-COMPOSITION
-═══════════════════════════════════════════════════════════════
-${compositionGuide.prompt}
-Text overlay space: ${compositionGuide.textSpace}
+COMPOSITION: ${compositionGuide.prompt}
+FORMAT: 16:9 YouTube thumbnail (1280x720), professional photography quality, vibrant colors.
 
-═══════════════════════════════════════════════════════════════
-TECHNICAL SPECIFICATIONS
-═══════════════════════════════════════════════════════════════
-• Aspect Ratio: 16:9 (1280x720 pixels)
-• Quality: 4K photorealistic, professional photography
-• YouTube thumbnail optimized`;
+AVOID: ${negativePrompt}`;
           }
 
-          // Add negative prompt and format
-          finalPrompt += `\n\n═══════════════════════════════════════════════════════════════
-AVOID (NEGATIVE PROMPT)
-═══════════════════════════════════════════════════════════════
-${negativePrompt}`;
-
+          // Add text prompt AFTER the reference image (Creative Studio order)
           contentParts.push({ text: finalPrompt });
 
           const result = await ai.models.generateContent({
