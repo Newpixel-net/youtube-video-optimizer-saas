@@ -2554,6 +2554,17 @@
             thumbnailStyle: 'professional', // professional | dramatic | minimal | bold
             thumbnailFromOptimizer: false,   // Flag if user came from optimizer results
 
+            // Thumbnail Pro - Enhanced thumbnail generator
+            thumbnailMode: 'quick', // quick | reference | premium
+            thumbnailCategory: 'general', // general | gaming | tutorial | vlog | review | news | entertainment
+            thumbnailVariations: 1, // 1-4 variations
+            thumbnailReference: null, // { dataUrl, file, mimeType, name }
+            thumbnailTokenBalance: 0, // Token balance from creativeTokens
+            thumbnailTokenCost: 2, // Calculated cost
+            generatedThumbnails: [], // Array of generated thumbnails for multi-variation
+            selectedThumbnailIndex: 0, // Currently selected thumbnail from variations
+            showYouTubePreview: false, // YouTube preview modal visibility
+
             // Quota settings (from getUserProfile)
             quotaInfo: null,           // Quota info for each tool with reset times
             resetTimeMinutes: 1440,    // Admin-configured reset time in minutes
@@ -3152,6 +3163,13 @@
                 state.thumbnailStatus = null;
                 state.thumbnailImage = null;
                 state.thumbnailFromOptimizer = fromOptimizer === true;
+                // Reset Thumbnail Pro state
+                state.generatedThumbnails = [];
+                state.selectedThumbnailIndex = 0;
+                state.thumbnailReference = null;
+                state.showYouTubePreview = false;
+                // Load token balance
+                app.loadThumbnailTokenBalance();
                 render();
             },
 
@@ -4346,6 +4364,216 @@
                             }
                         });
                 }, 3000); // Poll every 3 seconds
+            },
+
+            /* ------------------------------------------
+               4.5.7b Thumbnail Pro Actions
+               ------------------------------------------ */
+            setThumbnailMode: function(mode) {
+                state.thumbnailMode = mode;
+                // Auto-calculate cost when mode changes
+                app.calculateThumbnailCost();
+                // If switching away from reference mode, clear reference
+                if (mode !== 'reference') {
+                    state.thumbnailReference = null;
+                }
+                render();
+            },
+
+            setThumbnailCategory: function(category) {
+                state.thumbnailCategory = category;
+                render();
+            },
+
+            setThumbnailVariations: function(count) {
+                state.thumbnailVariations = Math.min(Math.max(parseInt(count) || 1, 1), 4);
+                app.calculateThumbnailCost();
+                render();
+            },
+
+            calculateThumbnailCost: function() {
+                var modeCosts = {
+                    quick: 2,
+                    reference: 4,
+                    premium: 6
+                };
+                var baseCost = modeCosts[state.thumbnailMode] || 2;
+                state.thumbnailTokenCost = baseCost * state.thumbnailVariations;
+                return state.thumbnailTokenCost;
+            },
+
+            loadThumbnailTokenBalance: function() {
+                functions.httpsCallable('getThumbnailTokenBalance')({})
+                    .then(function(result) {
+                        if (result.data.success) {
+                            state.thumbnailTokenBalance = result.data.balance;
+                            render();
+                        }
+                    })
+                    .catch(function(e) {
+                        console.error('Failed to load token balance:', e);
+                    });
+            },
+
+            handleReferenceUpload: function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+
+                // Validate file type
+                var validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+                if (!validTypes.includes(file.type)) {
+                    state.error = { message: 'Please upload a JPG, PNG, or WebP image' };
+                    render();
+                    return;
+                }
+
+                // Validate file size (max 5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    state.error = { message: 'Image must be less than 5MB' };
+                    render();
+                    return;
+                }
+
+                // Read file as data URL
+                var reader = new FileReader();
+                reader.onload = function(event) {
+                    state.thumbnailReference = {
+                        dataUrl: event.target.result,
+                        file: file,
+                        mimeType: file.type,
+                        name: file.name
+                    };
+                    // Auto-switch to reference mode
+                    state.thumbnailMode = 'reference';
+                    app.calculateThumbnailCost();
+                    render();
+                };
+                reader.readAsDataURL(file);
+            },
+
+            removeReference: function() {
+                state.thumbnailReference = null;
+                // Reset file input
+                var input = document.getElementById('reference-upload');
+                if (input) input.value = '';
+                render();
+            },
+
+            selectThumbnail: function(index) {
+                state.selectedThumbnailIndex = index;
+                render();
+            },
+
+            toggleYouTubePreview: function() {
+                state.showYouTubePreview = !state.showYouTubePreview;
+                render();
+            },
+
+            generateThumbnailPro: function(e) {
+                e.preventDefault();
+                var title = document.getElementById('thumbnail-title').value.trim();
+                var customPrompt = document.getElementById('thumbnail-prompt')?.value.trim() || '';
+
+                if (!title) {
+                    state.error = { message: 'Please enter a video title' };
+                    render();
+                    return;
+                }
+
+                // Check token balance
+                var cost = app.calculateThumbnailCost();
+                if (state.thumbnailTokenBalance < cost) {
+                    state.error = { message: 'Insufficient tokens. You need ' + cost + ' tokens but have ' + state.thumbnailTokenBalance + '. Visit Creative Studio to get more tokens.' };
+                    render();
+                    return;
+                }
+
+                // Validate reference for reference mode
+                if (state.thumbnailMode === 'reference' && !state.thumbnailReference) {
+                    state.error = { message: 'Please upload a reference image for Reference Mode' };
+                    render();
+                    return;
+                }
+
+                state.loading = true;
+                state.error = null;
+                state.thumbnailImage = null;
+                state.generatedThumbnails = [];
+                state.selectedThumbnailIndex = 0;
+                state.loadingSteps = [
+                    { name: 'Preparing request', icon: '📋' },
+                    { name: 'Optimizing prompt', icon: '✨' },
+                    { name: 'Generating ' + state.thumbnailVariations + ' image' + (state.thumbnailVariations > 1 ? 's' : ''), icon: '🎨' },
+                    { name: 'Finalizing', icon: '🖼️' }
+                ];
+                startLoadingProgress();
+                render();
+
+                // Build request payload
+                var payload = {
+                    title: title,
+                    customPrompt: customPrompt,
+                    style: state.thumbnailStyle,
+                    mode: state.thumbnailMode,
+                    category: state.thumbnailCategory,
+                    variations: state.thumbnailVariations
+                };
+
+                // Add reference image if in reference mode
+                if (state.thumbnailMode === 'reference' && state.thumbnailReference) {
+                    // Extract base64 data from data URL
+                    var dataUrl = state.thumbnailReference.dataUrl;
+                    var base64 = dataUrl.split(',')[1];
+                    payload.referenceImage = {
+                        base64: base64,
+                        mimeType: state.thumbnailReference.mimeType
+                    };
+                }
+
+                functions.httpsCallable('generateThumbnailPro')(payload)
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.loading = false;
+
+                        if (result.data.success) {
+                            state.generatedThumbnails = result.data.images || [];
+                            state.thumbnailImage = result.data.imageUrl;
+                            state.thumbnailTokenBalance = result.data.remainingBalance;
+                            state.selectedThumbnailIndex = 0;
+
+                            // Show success toast
+                            if (typeof showToast === 'function') {
+                                showToast('Generated ' + state.generatedThumbnails.length + ' thumbnail(s)! (-' + result.data.tokenCost + ' tokens)', 'success');
+                            }
+                        } else {
+                            state.error = { message: result.data.message || 'Generation failed' };
+                        }
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.loading = false;
+                        state.error = { message: 'Generation failed: ' + e.message };
+                        render();
+                    });
+            },
+
+            downloadThumbnail: function(url, index) {
+                var link = document.createElement('a');
+                link.href = url;
+                link.download = 'thumbnail-' + (index + 1) + '.png';
+                link.target = '_blank';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
+
+            resetThumbnailGenerator: function() {
+                state.thumbnailImage = null;
+                state.generatedThumbnails = [];
+                state.selectedThumbnailIndex = 0;
+                state.error = null;
+                render();
             },
 
             /* ------------------------------------------
@@ -7104,7 +7332,8 @@
         }
 
         /* ------------------------------------------
-           4.6.11 Thumbnail Generator View (ADVANCED)
+           4.6.11 Thumbnail Generator Pro View
+           Multi-model support with reference images
            ------------------------------------------ */
         function renderThumbnail() {
             var html = '';
@@ -7113,35 +7342,42 @@
             var optimizedTitles = hasVideoContext ? (state.lastOptimization.titles || []) : [];
             var suggestedTitle = optimizedTitles[0] || videoInfo.title || '';
 
+            // Calculate cost
+            var modeCosts = { quick: 2, reference: 4, premium: 6 };
+            var currentCost = (modeCosts[state.thumbnailMode] || 2) * state.thumbnailVariations;
+
             html += '<div class="min-h-screen mobile-full-screen py-8 px-4 mobile-wide-container">';
             html += '<div class="max-w-5xl mx-auto">';
 
-            // Navigation buttons
-            html += '<div class="flex flex-wrap gap-3 mb-6">';
+            // Navigation buttons with token balance
+            html += '<div class="flex flex-wrap items-center justify-between gap-3 mb-6">';
+            html += '<div class="flex flex-wrap gap-3">';
             if (hasVideoContext) {
                 html += '<button onclick="app.goToResults()" class="btn-secondary">← Back to Results</button>';
             } else {
                 html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
             }
-            html += '<button onclick="app.goToHistory(\'thumbnail\')" class="btn-secondary">📜 View History</button>';
+            html += '<button onclick="app.goToHistory(\'thumbnail\')" class="btn-secondary">📜 History</button>';
+            html += '</div>';
+            // Token Balance Display
+            html += '<div class="flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full">';
+            html += '<span class="text-2xl">🪙</span>';
+            html += '<span class="text-white font-bold">' + state.thumbnailTokenBalance + ' tokens</span>';
+            html += '</div>';
             html += '</div>';
 
             // Header
             html += '<div class="text-center mb-8 fade-in">';
             html += '<div class="w-20 h-20 bg-gradient-to-br from-pink-500 to-rose-600 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-4 shadow-xl">🎨</div>';
-            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">AI Thumbnail Generator</h1>';
-            if (hasVideoContext) {
-                html += '<p class="text-white/80 text-lg">Create a thumbnail for your optimized video</p>';
-            } else {
-                html += '<p class="text-white/80 text-lg">Generate click-worthy thumbnails with AI</p>';
-            }
+            html += '<h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">AI Thumbnail Generator Pro</h1>';
+            html += '<p class="text-white/80 text-lg">Create stunning thumbnails with AI • Upload your own reference images</p>';
             html += '</div>';
 
-            // Loading Section - Show at TOP when generating
-            if (state.loading && !state.thumbnailImage) {
+            // Loading Section
+            if (state.loading && state.generatedThumbnails.length === 0) {
                 html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mobile-padding mb-6 fade-in">';
                 html += '<div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">';
-                html += '<div class="flex items-center gap-4"><div class="loading-emoji">🎨</div><div><h3 class="text-xl font-bold text-gray-800">Creating Your Thumbnail</h3><p class="text-gray-500">AI is generating your image...</p></div></div>';
+                html += '<div class="flex items-center gap-4"><div class="loading-emoji">🎨</div><div><h3 class="text-xl font-bold text-gray-800">Creating Your Thumbnail' + (state.thumbnailVariations > 1 ? 's' : '') + '</h3><p class="text-gray-500">AI is generating ' + state.thumbnailVariations + ' image' + (state.thumbnailVariations > 1 ? 's' : '') + '...</p></div></div>';
                 html += '<div class="progress-percentage">' + Math.round(state.loadingProgress) + '%</div>';
                 html += '</div>';
                 html += '<div class="progress-bar-container mb-6"><div class="progress-bar-fill" style="width:' + state.loadingProgress + '%"></div></div>';
@@ -7157,7 +7393,7 @@
                 html += '</div></div>';
             }
 
-            // Video Context Card (if from optimizer) - show when not loading
+            // Video Context Card
             if (hasVideoContext && videoInfo.thumbnail && !state.loading) {
                 html += '<div class="bg-white/10 backdrop-blur rounded-2xl p-4 mb-6 fade-in">';
                 html += '<div class="flex items-center gap-4">';
@@ -7176,33 +7412,124 @@
                 html += '<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">' + utils.escapeHtml(state.error.message) + '</div>';
             }
 
-            if (!state.thumbnailImage) {
-                // Feature Description Section - Collapsible on mobile
+            // Show results if we have generated thumbnails
+            if (state.generatedThumbnails && state.generatedThumbnails.length > 0) {
+                // Results Section
+                html += '<div class="text-center mb-6">';
+                html += '<div class="inline-block bg-gradient-to-r from-green-400 to-emerald-500 text-white px-4 py-2 rounded-full mb-4 font-semibold">✨ ' + state.generatedThumbnails.length + ' Thumbnail' + (state.generatedThumbnails.length > 1 ? 's' : '') + ' Generated!</div>';
+                html += '</div>';
+
+                // Main selected thumbnail
+                var selectedImg = state.generatedThumbnails[state.selectedThumbnailIndex];
+                if (selectedImg) {
+                    html += '<div class="relative mb-6">';
+                    html += '<img src="' + utils.escapeHtml(selectedImg.url) + '" class="w-full max-w-3xl mx-auto rounded-xl shadow-2xl" alt="Generated Thumbnail" />';
+                    html += '<div class="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">1280 × 720</div>';
+                    html += '<div class="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">' + (selectedImg.model || 'AI Generated') + '</div>';
+                    html += '</div>';
+                }
+
+                // Thumbnail variations grid (if multiple)
+                if (state.generatedThumbnails.length > 1) {
+                    html += '<div class="mb-6">';
+                    html += '<p class="text-gray-600 text-sm mb-3 text-center">Click to select a variation:</p>';
+                    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                    for (var ti = 0; ti < state.generatedThumbnails.length; ti++) {
+                        var thumb = state.generatedThumbnails[ti];
+                        var isSelected = ti === state.selectedThumbnailIndex;
+                        html += '<div onclick="app.selectThumbnail(' + ti + ')" class="cursor-pointer relative rounded-lg overflow-hidden border-2 ' + (isSelected ? 'border-pink-500 ring-2 ring-pink-300' : 'border-gray-200 hover:border-pink-300') + ' transition-all">';
+                        html += '<img src="' + utils.escapeHtml(thumb.url) + '" class="w-full aspect-video object-cover" />';
+                        if (isSelected) {
+                            html += '<div class="absolute top-1 right-1 bg-pink-500 text-white text-xs px-2 py-0.5 rounded-full">✓</div>';
+                        }
+                        html += '<div class="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">#' + (ti + 1) + '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Action buttons
+                html += '<div class="flex flex-col sm:flex-row justify-center gap-4">';
+                if (selectedImg) {
+                    html += '<a href="' + utils.escapeHtml(selectedImg.url) + '" download="thumbnail-' + (state.selectedThumbnailIndex + 1) + '.png" class="btn-primary bg-gradient-to-r from-green-500 to-emerald-600 inline-flex items-center justify-center gap-2"><span>📥</span> Download Selected</a>';
+                }
+                html += '<button onclick="app.toggleYouTubePreview()" class="btn-secondary inline-flex items-center justify-center gap-2"><span>👁️</span> YouTube Preview</button>';
+                html += '<button onclick="app.resetThumbnailGenerator()" class="btn-secondary">🔄 Create New</button>';
+                html += '</div>';
+
+            } else if (!state.loading) {
+                // Form Section
+                html += '<form onsubmit="app.generateThumbnailPro(event)">';
+
+                // ========== MODE SELECTOR ==========
                 html += '<div class="mb-6">';
-                html += '<div class="bg-gradient-to-r from-pink-50 via-rose-50 to-fuchsia-50 rounded-xl overflow-hidden border border-pink-100">';
+                html += '<label class="block text-gray-700 font-semibold mb-3">Generation Mode</label>';
+                html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
 
-                // Collapsible header - VISIBLE ON ALL SCREENS
-                html += '<button type="button" onclick="this.parentElement.classList.toggle(\'expanded\'); this.querySelector(\'.chevron\').classList.toggle(\'rotate-180\')" class="w-full p-4 flex items-center justify-between text-left">';
-                html += '<span class="flex items-center gap-2 font-semibold text-gray-800"><span class="text-lg">🎨</span> What makes great thumbnails?</span>';
-                html += '<svg class="chevron w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
-                html += '</button>';
+                var modes = [
+                    { id: 'quick', name: 'Quick Mode', icon: '⚡', desc: 'Imagen 4 - Fast & crisp', cost: 2, badge: '', features: ['~5 seconds', 'No reference'] },
+                    { id: 'reference', name: 'Reference Mode', icon: '📷', desc: 'Include your image', cost: 4, badge: 'Popular', features: ['~10 seconds', 'Upload your face/product'] },
+                    { id: 'premium', name: 'Premium Mode', icon: '💎', desc: 'DALL-E 3 - Max detail', cost: 6, badge: 'Best Quality', features: ['~8 seconds', 'Exceptional detail'] }
+                ];
 
-                // Content area - CSS handles visibility
-                html += '<div class="feature-info-content">';
-                html += '<p class="text-gray-700 mb-3 leading-relaxed">Create scroll-stopping thumbnails with our AI image generator. Get professional-quality visuals that match your video\'s content and maximize click-through rates.</p>';
-                html += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">';
-                html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>AI-Generated Art</strong> – Unique visuals tailored to your title</span></div>';
-                html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Multiple Styles</strong> – Professional, dramatic, minimal, bold</span></div>';
-                html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Optimized Format</strong> – Perfect 16:9 YouTube dimensions</span></div>';
-                html += '<div class="flex items-start gap-2"><span class="text-pink-500 mt-0.5">✓</span><span class="text-gray-600"><strong>Instant Download</strong> – High-resolution image ready to use</span></div>';
-                html += '</div>';
-                html += '</div>';
-                html += '</div>';
-                html += '</div>';
+                modes.forEach(function(m) {
+                    var isActive = state.thumbnailMode === m.id;
+                    var borderClass = isActive ? 'border-pink-500 bg-pink-50 shadow-lg' : 'border-gray-200 hover:border-pink-300';
+                    html += '<div onclick="app.setThumbnailMode(\'' + m.id + '\')" class="cursor-pointer p-4 border-2 ' + borderClass + ' rounded-xl transition-all relative">';
+                    if (m.badge) {
+                        html += '<div class="absolute -top-2 -right-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-xs px-2 py-0.5 rounded-full">' + m.badge + '</div>';
+                    }
+                    html += '<div class="flex items-start gap-3">';
+                    html += '<div class="text-3xl">' + m.icon + '</div>';
+                    html += '<div class="flex-1">';
+                    html += '<p class="font-bold text-gray-800">' + m.name + '</p>';
+                    html += '<p class="text-sm text-gray-500 mb-2">' + m.desc + '</p>';
+                    html += '<div class="flex flex-wrap gap-1">';
+                    m.features.forEach(function(f) {
+                        html += '<span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">' + f + '</span>';
+                    });
+                    html += '</div>';
+                    html += '<p class="text-pink-600 font-bold mt-2">' + m.cost + ' tokens/image</p>';
+                    html += '</div>';
+                    if (isActive) {
+                        html += '<div class="text-pink-500 text-xl">✓</div>';
+                    }
+                    html += '</div></div>';
+                });
+                html += '</div></div>';
 
-                html += '<form onsubmit="app.generateThumbnail(event)">';
+                // ========== REFERENCE IMAGE UPLOAD (only for reference mode) ==========
+                if (state.thumbnailMode === 'reference') {
+                    html += '<div class="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-200">';
+                    html += '<label class="block text-gray-700 font-semibold mb-3">📷 Reference Image</label>';
 
-                // Title Input (pre-filled if from optimizer)
+                    if (state.thumbnailReference) {
+                        // Show uploaded image preview
+                        html += '<div class="flex items-center gap-4">';
+                        html += '<div class="relative">';
+                        html += '<img src="' + state.thumbnailReference.dataUrl + '" class="w-24 h-24 object-cover rounded-lg border-2 border-purple-300" />';
+                        html += '<button type="button" onclick="app.removeReference()" class="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-sm hover:bg-red-600">×</button>';
+                        html += '</div>';
+                        html += '<div>';
+                        html += '<p class="font-medium text-gray-800">' + utils.escapeHtml(state.thumbnailReference.name) + '</p>';
+                        html += '<p class="text-sm text-green-600">✓ Image ready - AI will incorporate this into your thumbnail</p>';
+                        html += '</div>';
+                        html += '</div>';
+                    } else {
+                        // Show upload zone
+                        html += '<div class="border-2 border-dashed border-purple-300 rounded-xl p-6 text-center hover:border-purple-500 transition-all cursor-pointer" onclick="document.getElementById(\'reference-upload\').click()">';
+                        html += '<input type="file" id="reference-upload" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="app.handleReferenceUpload(event)" />';
+                        html += '<div class="text-4xl mb-2">📤</div>';
+                        html += '<p class="font-medium text-gray-700">Click to upload your reference image</p>';
+                        html += '<p class="text-sm text-gray-500 mt-1">Your face, product, or any image to include in the thumbnail</p>';
+                        html += '<p class="text-xs text-gray-400 mt-2">JPG, PNG, WebP • Max 5MB</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // ========== TITLE INPUT ==========
                 html += '<div class="mb-6">';
                 html += '<label class="block text-gray-700 font-semibold mb-2">Video Title</label>';
                 html += '<input type="text" id="thumbnail-title" value="' + utils.escapeHtml(suggestedTitle) + '" placeholder="Enter your video title..." class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none text-lg" required />';
@@ -7211,121 +7538,169 @@
                 }
                 html += '</div>';
 
-                // Style Selection
+                // ========== CONTENT CATEGORY ==========
                 html += '<div class="mb-6">';
-                html += '<label class="block text-gray-700 font-semibold mb-3">Thumbnail Style</label>';
+                html += '<label class="block text-gray-700 font-semibold mb-3">Content Category</label>';
+                html += '<div class="flex flex-wrap gap-2">';
+
+                var categories = [
+                    { id: 'general', name: 'General', icon: '🎯' },
+                    { id: 'gaming', name: 'Gaming', icon: '🎮' },
+                    { id: 'tutorial', name: 'Tutorial', icon: '📚' },
+                    { id: 'vlog', name: 'Vlog', icon: '📹' },
+                    { id: 'review', name: 'Review', icon: '📦' },
+                    { id: 'news', name: 'News', icon: '📰' },
+                    { id: 'entertainment', name: 'Entertainment', icon: '🎬' }
+                ];
+
+                categories.forEach(function(c) {
+                    var isActive = state.thumbnailCategory === c.id;
+                    var btnClass = isActive ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-pink-100';
+                    html += '<button type="button" onclick="app.setThumbnailCategory(\'' + c.id + '\')" class="px-4 py-2 rounded-full font-medium transition-all ' + btnClass + '">';
+                    html += c.icon + ' ' + c.name;
+                    html += '</button>';
+                });
+                html += '</div></div>';
+
+                // ========== STYLE SELECTION ==========
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-3">Visual Style</label>';
                 html += '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">';
 
                 var styles = [
-                    { id: 'professional', name: 'Professional', icon: '💼', desc: 'Clean & sharp', color: 'blue' },
-                    { id: 'dramatic', name: 'Dramatic', icon: '🎭', desc: 'Bold & intense', color: 'purple' },
-                    { id: 'minimal', name: 'Minimal', icon: '✨', desc: 'Simple & elegant', color: 'gray' },
-                    { id: 'bold', name: 'Bold', icon: '🔥', desc: 'Eye-catching', color: 'orange' }
+                    { id: 'professional', name: 'Professional', icon: '💼', desc: 'Clean & sharp' },
+                    { id: 'dramatic', name: 'Dramatic', icon: '🎭', desc: 'Bold & intense' },
+                    { id: 'minimal', name: 'Minimal', icon: '✨', desc: 'Simple & elegant' },
+                    { id: 'bold', name: 'Bold', icon: '🔥', desc: 'Eye-catching' }
                 ];
 
                 styles.forEach(function(s) {
                     var isActive = state.thumbnailStyle === s.id;
                     var borderClass = isActive ? 'border-pink-500 bg-pink-50' : 'border-gray-200 hover:border-pink-300';
-                    html += '<div onclick="app.setThumbnailStyle(\'' + s.id + '\')" class="cursor-pointer p-4 border-2 ' + borderClass + ' rounded-xl text-center transition-all">';
-                    html += '<div class="text-3xl mb-1">' + s.icon + '</div>';
-                    html += '<p class="font-semibold text-gray-800">' + s.name + '</p>';
+                    html += '<div onclick="app.setThumbnailStyle(\'' + s.id + '\')" class="cursor-pointer p-3 border-2 ' + borderClass + ' rounded-xl text-center transition-all">';
+                    html += '<div class="text-2xl mb-1">' + s.icon + '</div>';
+                    html += '<p class="font-semibold text-gray-800 text-sm">' + s.name + '</p>';
                     html += '<p class="text-xs text-gray-500">' + s.desc + '</p>';
-                    if (isActive) html += '<span class="inline-block mt-2 text-pink-600 text-xs font-medium">✓ Selected</span>';
                     html += '</div>';
                 });
                 html += '</div></div>';
 
-                // Custom Prompt
+                // ========== VARIATIONS SELECTOR ==========
+                html += '<div class="mb-6">';
+                html += '<label class="block text-gray-700 font-semibold mb-3">Number of Variations</label>';
+                html += '<div class="flex items-center gap-4">';
+                html += '<div class="flex gap-2">';
+                for (var v = 1; v <= 4; v++) {
+                    var isActive = state.thumbnailVariations === v;
+                    var btnClass = isActive ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-pink-100';
+                    html += '<button type="button" onclick="app.setThumbnailVariations(' + v + ')" class="w-12 h-12 rounded-xl font-bold text-lg transition-all ' + btnClass + '">' + v + '</button>';
+                }
+                html += '</div>';
+                html += '<div class="text-sm text-gray-500">';
+                html += '<span class="font-medium">Cost:</span> ' + modeCosts[state.thumbnailMode] + ' × ' + state.thumbnailVariations + ' = <span class="font-bold text-pink-600">' + currentCost + ' tokens</span>';
+                html += '</div>';
+                html += '</div></div>';
+
+                // ========== CUSTOM PROMPT ==========
                 html += '<div class="mb-6">';
                 html += '<label class="block text-gray-700 font-semibold mb-2">Additional Details <span class="text-gray-400 font-normal">(Optional)</span></label>';
                 html += '<textarea id="thumbnail-prompt" placeholder="e.g., Include a person looking surprised, bright red arrow pointing right, space for text on the left side..." class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none h-20"></textarea>';
                 html += '</div>';
 
-                // Tips Section
+                // ========== COST SUMMARY & SUBMIT ==========
                 html += '<div class="bg-gradient-to-r from-pink-50 to-purple-50 p-4 rounded-xl mb-6">';
-                html += '<h4 class="font-semibold text-gray-800 mb-2">💡 Pro Tips for Better Thumbnails</h4>';
-                html += '<ul class="text-sm text-gray-600 space-y-1">';
-                html += '<li>• Use faces with emotions - they get 38% more clicks</li>';
-                html += '<li>• Keep text minimal - the AI will leave space for overlay</li>';
-                html += '<li>• High contrast colors stand out in YouTube feed</li>';
-                html += '</ul></div>';
+                html += '<div class="flex items-center justify-between">';
+                html += '<div>';
+                html += '<p class="font-semibold text-gray-800">Generation Cost</p>';
+                html += '<p class="text-sm text-gray-600">' + state.thumbnailVariations + ' image' + (state.thumbnailVariations > 1 ? 's' : '') + ' × ' + modeCosts[state.thumbnailMode] + ' tokens</p>';
+                html += '</div>';
+                html += '<div class="text-right">';
+                html += '<p class="text-3xl font-bold text-pink-600">' + currentCost + '</p>';
+                html += '<p class="text-sm text-gray-500">tokens</p>';
+                html += '</div>';
+                html += '</div>';
+                if (state.thumbnailTokenBalance < currentCost) {
+                    html += '<div class="mt-3 p-2 bg-red-100 border border-red-200 rounded-lg text-red-700 text-sm">';
+                    html += '⚠️ Insufficient tokens. You have ' + state.thumbnailTokenBalance + ' but need ' + currentCost + '.';
+                    html += '</div>';
+                }
+                html += '</div>';
 
                 // Submit Button
-                html += '<button type="submit" class="btn-primary bg-gradient-to-r from-pink-500 to-rose-600 text-lg py-4" ' + (state.loading ? 'disabled' : '') + '>';
-                html += state.loading ? '⏳ Generating...' : '🎨 Generate AI Thumbnail';
+                var canSubmit = !state.loading && state.thumbnailTokenBalance >= currentCost;
+                if (state.thumbnailMode === 'reference' && !state.thumbnailReference) {
+                    canSubmit = false;
+                }
+
+                html += '<button type="submit" class="w-full btn-primary bg-gradient-to-r from-pink-500 to-rose-600 text-lg py-4 disabled:opacity-50 disabled:cursor-not-allowed" ' + (!canSubmit ? 'disabled' : '') + '>';
+                if (state.loading) {
+                    html += '⏳ Generating...';
+                } else if (state.thumbnailMode === 'reference' && !state.thumbnailReference) {
+                    html += '📷 Upload Reference Image First';
+                } else if (state.thumbnailTokenBalance < currentCost) {
+                    html += '🪙 Insufficient Tokens';
+                } else {
+                    html += '🎨 Generate ' + state.thumbnailVariations + ' Thumbnail' + (state.thumbnailVariations > 1 ? 's' : '') + ' (' + currentCost + ' tokens)';
+                }
                 html += '</button>';
                 html += '</form>';
-            } else {
-                // Show generated thumbnail
-                html += '<div class="text-center">';
-
-                // Parse output - handle various RunPod response formats
-                var imgSrc = '';
-                var outputData = state.thumbnailImage;
-                var hasError = false;
-                var errorMsg = '';
-
-                // Check for error in response
-                if (outputData && (outputData.message || outputData.error)) {
-                    hasError = true;
-                    errorMsg = outputData.message || outputData.error || 'Unknown error';
-                }
-
-                if (!hasError) {
-                    // Try to extract image from various formats
-                    if (typeof outputData === 'string' && (outputData.startsWith('http') || outputData.startsWith('data:'))) {
-                        imgSrc = outputData;
-                    } else if (outputData) {
-                        // Common RunPod output formats
-                        if (outputData.image_url) imgSrc = outputData.image_url;
-                        else if (outputData.image && typeof outputData.image === 'string') {
-                            imgSrc = outputData.image.startsWith('http') || outputData.image.startsWith('data:')
-                                ? outputData.image
-                                : 'data:image/png;base64,' + outputData.image;
-                        }
-                        else if (outputData.images && outputData.images[0]) imgSrc = outputData.images[0];
-                        else if (outputData.result) {
-                            imgSrc = outputData.result.startsWith && (outputData.result.startsWith('http') || outputData.result.startsWith('data:'))
-                                ? outputData.result
-                                : 'data:image/png;base64,' + outputData.result;
-                        }
-                        else if (outputData.output && typeof outputData.output === 'string') imgSrc = outputData.output;
-                        else if (outputData.url) imgSrc = outputData.url;
-                    }
-                }
-
-                if (hasError) {
-                    // Show error message
-                    html += '<div class="inline-block bg-gradient-to-r from-red-400 to-rose-500 text-white px-4 py-2 rounded-full mb-4 font-semibold">⚠️ Generation Issue</div>';
-                    html += '<div class="bg-red-50 border border-red-200 p-6 rounded-xl mb-6 max-w-2xl mx-auto">';
-                    html += '<p class="text-red-700 font-medium mb-2">The AI service returned an error:</p>';
-                    html += '<p class="text-red-600">' + utils.escapeHtml(errorMsg) + '</p>';
-                    html += '</div>';
-                } else if (imgSrc) {
-                    html += '<div class="inline-block bg-gradient-to-r from-green-400 to-emerald-500 text-white px-4 py-2 rounded-full mb-4 font-semibold">✨ Thumbnail Generated!</div>';
-                    html += '<div class="relative inline-block">';
-                    html += '<img src="' + utils.escapeHtml(imgSrc) + '" class="w-full max-w-2xl mx-auto rounded-xl shadow-2xl mb-6" alt="Generated Thumbnail" />';
-                    html += '<div class="absolute bottom-8 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">1280 × 720</div>';
-                    html += '</div>';
-                } else {
-                    // Unknown format - show debug info
-                    html += '<div class="inline-block bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 rounded-full mb-4 font-semibold">⚠️ Check Output Format</div>';
-                    html += '<div class="bg-yellow-50 border border-yellow-200 p-6 rounded-xl mb-6 max-w-2xl mx-auto text-left">';
-                    html += '<p class="text-yellow-700 font-medium mb-2">Thumbnail generated but format not recognized:</p>';
-                    html += '<pre class="text-xs overflow-auto bg-yellow-100 p-4 rounded max-h-40">' + JSON.stringify(outputData, null, 2) + '</pre>';
-                    html += '<p class="text-yellow-600 text-sm mt-2">Please share this with support to fix the integration.</p>';
-                    html += '</div>';
-                }
-
-                html += '<div class="flex flex-col sm:flex-row justify-center gap-4 mt-6">';
-                if (imgSrc && !hasError) {
-                    html += '<a href="' + imgSrc + '" download="thumbnail.png" class="btn-primary bg-gradient-to-r from-green-500 to-emerald-600 inline-flex items-center justify-center gap-2"><span>📥</span> Download Thumbnail</a>';
-                }
-                html += '<button onclick="state.thumbnailImage=null;state.thumbnailJob=null;render();" class="btn-secondary">🔄 Try Again</button>';
-                html += '</div></div>';
             }
 
-            html += '</div></div></div>';
+            html += '</div>'; // End main card
+
+            // YouTube Preview Modal
+            if (state.showYouTubePreview && state.generatedThumbnails.length > 0) {
+                var previewImg = state.generatedThumbnails[state.selectedThumbnailIndex];
+                html += '<div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="app.toggleYouTubePreview()">';
+                html += '<div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-auto p-6" onclick="event.stopPropagation()">';
+                html += '<div class="flex items-center justify-between mb-6">';
+                html += '<h3 class="text-xl font-bold text-gray-800">👁️ YouTube Preview</h3>';
+                html += '<button onclick="app.toggleYouTubePreview()" class="text-gray-500 hover:text-gray-700 text-2xl">×</button>';
+                html += '</div>';
+
+                // Search Results Preview
+                html += '<div class="mb-6">';
+                html += '<p class="text-sm text-gray-500 mb-2 font-medium">Search Results</p>';
+                html += '<div class="flex gap-4 p-4 bg-gray-50 rounded-xl">';
+                html += '<img src="' + utils.escapeHtml(previewImg.url) + '" class="w-40 h-24 object-cover rounded-lg flex-shrink-0" />';
+                html += '<div>';
+                html += '<p class="font-semibold text-gray-900 line-clamp-2">Your Video Title Here...</p>';
+                html += '<p class="text-sm text-gray-600">Your Channel • 1.2M views • 2 days ago</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Suggested Sidebar Preview
+                html += '<div class="mb-6">';
+                html += '<p class="text-sm text-gray-500 mb-2 font-medium">Suggested Videos Sidebar</p>';
+                html += '<div class="flex gap-3 p-3 bg-gray-50 rounded-xl">';
+                html += '<img src="' + utils.escapeHtml(previewImg.url) + '" class="w-28 h-16 object-cover rounded flex-shrink-0" />';
+                html += '<div class="text-sm">';
+                html += '<p class="font-medium text-gray-900 line-clamp-2">Your Video Title...</p>';
+                html += '<p class="text-xs text-gray-600">Your Channel</p>';
+                html += '<p class="text-xs text-gray-500">500K views</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Mobile Preview
+                html += '<div class="mb-6">';
+                html += '<p class="text-sm text-gray-500 mb-2 font-medium">📱 Mobile Feed</p>';
+                html += '<div class="max-w-xs mx-auto bg-gray-50 rounded-xl overflow-hidden">';
+                html += '<img src="' + utils.escapeHtml(previewImg.url) + '" class="w-full aspect-video object-cover" />';
+                html += '<div class="p-3">';
+                html += '<p class="font-medium text-gray-900 text-sm">Your Video Title Here...</p>';
+                html += '<p class="text-xs text-gray-600">Your Channel • 500K views</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                html += '<button onclick="app.toggleYouTubePreview()" class="w-full btn-secondary">Close Preview</button>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div></div>';
             return html;
         }
 
