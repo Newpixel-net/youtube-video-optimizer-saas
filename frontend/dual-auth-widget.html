@@ -2559,7 +2559,7 @@
             thumbnailCategory: 'general', // general | gaming | tutorial | vlog | review | news | entertainment
             thumbnailVariations: 1, // 1-4 variations
             thumbnailReference: null, // { dataUrl, file, mimeType, name }
-            thumbnailTokenBalance: 0, // Token balance from creativeTokens
+            thumbnailTokenBalance: 50, // Token balance from creativeTokens (default like Creative Studio)
             thumbnailTokenPlan: 'free', // User's subscription plan
             thumbnailTokenRollover: 0, // Rollover tokens from previous month
             thumbnailTokenCost: 2, // Calculated cost
@@ -4587,35 +4587,52 @@
             },
 
             loadThumbnailTokenBalance: function() {
+                // Check for auth like Creative Studio does
+                if (!auth.currentUser) {
+                    console.log('No auth user, skipping token load');
+                    return;
+                }
+
+                // Helper to safely parse balance (handles string, number, undefined)
+                function parseBalance(val) {
+                    var num = Number(val);
+                    return isNaN(num) || num < 0 ? 50 : num;
+                }
+
                 // Use same function as Creative Studio (already deployed and working)
                 var getCreativeTokens = functions.httpsCallable('getCreativeTokens');
                 getCreativeTokens({})
                     .then(function(result) {
                         if (result.data) {
-                            state.thumbnailTokenBalance = result.data.balance || 0;
+                            // Parse balance properly - handles strings like "44" as well as numbers
+                            state.thumbnailTokenBalance = parseBalance(result.data.balance);
                             state.thumbnailTokenPlan = result.data.plan || 'free';
-                            state.thumbnailTokenRollover = result.data.rollover || 0;
+                            state.thumbnailTokenRollover = Number(result.data.rollover) || 0;
+                            console.log('Token balance loaded:', state.thumbnailTokenBalance, 'Plan:', state.thumbnailTokenPlan);
                             render();
                         }
                     })
                     .catch(function(e) {
                         console.error('Failed to load token balance:', e);
                         // Fallback to direct Firestore read
-                        if (auth.currentUser) {
-                            db.collection('creativeTokens').doc(auth.currentUser.uid).get()
-                                .then(function(doc) {
-                                    if (doc.exists) {
-                                        var data = doc.data();
-                                        state.thumbnailTokenBalance = data.balance || 0;
-                                        state.thumbnailTokenPlan = data.plan || 'free';
-                                        state.thumbnailTokenRollover = data.rollover || 0;
-                                        render();
-                                    }
-                                })
-                                .catch(function(err) {
-                                    console.error('Firestore fallback failed:', err);
-                                });
-                        }
+                        db.collection('creativeTokens').doc(auth.currentUser.uid).get()
+                            .then(function(doc) {
+                                if (doc.exists) {
+                                    var data = doc.data();
+                                    state.thumbnailTokenBalance = parseBalance(data.balance);
+                                    state.thumbnailTokenPlan = data.plan || 'free';
+                                    state.thumbnailTokenRollover = Number(data.rollover) || 0;
+                                    console.log('Token balance loaded from Firestore fallback:', state.thumbnailTokenBalance);
+                                    render();
+                                } else {
+                                    console.log('No token document found, using defaults');
+                                    state.thumbnailTokenBalance = 50;
+                                    render();
+                                }
+                            })
+                            .catch(function(err) {
+                                console.error('Firestore fallback failed:', err);
+                            });
                     });
             },
 
@@ -4752,7 +4769,9 @@
                         if (result.data.success) {
                             state.generatedThumbnails = result.data.images || [];
                             state.thumbnailImage = result.data.imageUrl;
-                            state.thumbnailTokenBalance = result.data.remainingBalance;
+                            // Parse remaining balance as number (handles strings)
+                            var remaining = Number(result.data.remainingBalance);
+                            state.thumbnailTokenBalance = isNaN(remaining) ? 0 : remaining;
                             state.selectedThumbnailIndex = 0;
 
                             // Show success toast

@@ -8201,9 +8201,10 @@
                 getCreativeTokens({})
                     .then(function(result) {
                         if (result.data) {
+                            // Use explicit checks to handle balance of 0 correctly
                             state.tokens = {
-                                balance: result.data.balance || 50,
-                                rollover: result.data.rollover || 0,
+                                balance: typeof result.data.balance === 'number' ? result.data.balance : 50,
+                                rollover: typeof result.data.rollover === 'number' ? result.data.rollover : 0,
                                 plan: result.data.plan || 'free',
                                 lastRefresh: result.data.lastRefresh
                             };
@@ -8218,8 +8219,8 @@
                                 if (doc.exists) {
                                     var data = doc.data();
                                     state.tokens = {
-                                        balance: data.balance || 50,
-                                        rollover: data.rollover || 0,
+                                        balance: typeof data.balance === 'number' ? data.balance : 50,
+                                        rollover: typeof data.rollover === 'number' ? data.rollover : 0,
                                         plan: data.plan || 'free',
                                         lastRefresh: data.lastRefresh
                                     };
