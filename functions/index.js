@@ -2048,6 +2048,10 @@ exports.adminUpdateUserPlan = functions.https.onCall(async (data, context) => {
     });
 
     await logUsage(userId, 'plan_changed_by_admin', { plan: targetPlan, changedBy: context.auth.uid });
+
+    // Log activity
+    await logUserActivity(userId, 'subscription_change', { action: 'set_plan', plan: targetPlan }, context.auth.uid);
+
     return { success: true, message: 'User plan updated to ' + targetPlan };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
@@ -2238,6 +2242,9 @@ exports.adminSetClientAlias = functions.https.onCall(async (data, context) => {
     clientAlias: sanitizedAlias
   });
 
+  // Log activity
+  await logUserActivity(userId, 'profile_update', { field: 'alias', value: sanitizedAlias }, context.auth.uid);
+
   return { success: true, message: 'Client alias updated' };
 });
 
@@ -2259,6 +2266,9 @@ exports.adminSetFiverrVerified = functions.https.onCall(async (data, context) =>
   await db.collection('users').doc(userId).update({
     isFiverrVerified: verified
   });
+
+  // Log activity
+  await logUserActivity(userId, 'profile_update', { field: 'fiverr_verified', value: verified }, context.auth.uid);
 
   return { success: true, message: verified ? 'User marked as Fiverr verified' : 'Fiverr verification removed' };
 });
@@ -2333,6 +2343,9 @@ exports.adminExtendSubscription = functions.https.onCall(async (data, context) =
     newEndDate: newEndDate.toISOString(),
     extendedBy: adminUid
   });
+
+  // Log activity
+  await logUserActivity(userId, 'subscription_change', { action: 'extend', days: extensionDays, newEndDate: newEndDate.toISOString() }, adminUid);
 
   return {
     success: true,
