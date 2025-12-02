@@ -13141,3 +13141,123 @@ Respond in JSON format:
     throw new functions.https.HttpsError('internal', 'Failed to get coaching. Please try again.');
   }
 });
+
+// ==========================================
+// GET AI TOOLS HISTORY
+// ==========================================
+exports.getAIToolsHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'getAIToolsHistory', 10);
+
+  const { limit = 10, type = 'all' } = data || {};
+  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 50);
+
+  // Safe query helper
+  const safeQuery = async (collectionName) => {
+    try {
+      return await db.collection(collectionName)
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(safeLimit)
+        .get();
+    } catch (e) {
+      console.warn(`Query failed for ${collectionName}:`, e.message);
+      return { forEach: () => {}, size: 0 };
+    }
+  };
+
+  // Safe timestamp handler
+  const getTimestamp = (field) => {
+    if (!field) return Date.now();
+    if (typeof field === 'number') return field;
+    if (typeof field.toMillis === 'function') return field.toMillis();
+    if (field._seconds) return field._seconds * 1000;
+    if (field instanceof Date) return field.getTime();
+    return Date.now();
+  };
+
+  // Safe serialization
+  const sanitize = (obj) => {
+    if (obj === null || obj === undefined) return null;
+    try {
+      return JSON.parse(JSON.stringify(obj));
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const formatHistory = (snap, historyType) => {
+    const items = [];
+    snap.forEach(doc => {
+      try {
+        const data = doc.data();
+        const timestamp = getTimestamp(data.createdAt);
+
+        const item = {
+          id: doc.id,
+          type: historyType,
+          timestamp,
+          createdAt: new Date(timestamp).toISOString()
+        };
+
+        Object.keys(data).forEach(key => {
+          if (key !== 'createdAt' && key !== 'userId') {
+            item[key] = sanitize(data[key]) ?? data[key];
+          }
+        });
+
+        items.push(item);
+      } catch (docError) {
+        console.error('Error processing history doc:', doc.id, docError);
+      }
+    });
+    return items;
+  };
+
+  try {
+    // Define collection mappings
+    const collections = {
+      script: 'scriptHistory',
+      hooks: 'hookHistory',
+      multiplier: 'contentMultiplierHistory',
+      thumbnail: 'thumbnailTestHistory',
+      trends: 'trendHistory',
+      gaps: 'contentGapHistory',
+      audience: 'audienceHistory',
+      collab: 'collabHistory',
+      revenue: 'revenueHistory',
+      coach: 'coachHistory'
+    };
+
+    let results = {};
+
+    if (type === 'all') {
+      // Fetch all types in parallel
+      const queries = Object.entries(collections).map(async ([key, collection]) => {
+        const snap = await safeQuery(collection);
+        return { key, items: formatHistory(snap, key) };
+      });
+
+      const allResults = await Promise.all(queries);
+      allResults.forEach(({ key, items }) => {
+        results[key] = items;
+      });
+    } else if (collections[type]) {
+      // Fetch single type
+      const snap = await safeQuery(collections[type]);
+      results[type] = formatHistory(snap, type);
+    } else {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid history type');
+    }
+
+    return {
+      success: true,
+      history: results
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Get AI tools history error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to retrieve history.');
+  }
+});
