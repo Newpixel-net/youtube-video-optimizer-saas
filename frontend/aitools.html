@@ -327,7 +327,414 @@
         }
 
         /* ------------------------------------------
-           2.6 TOOL CARDS - GLASSMORPHISM
+           2.6 HUB SEARCH & HEADER
+           ------------------------------------------ */
+        .hub-header {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 1.5rem 1rem 1rem;
+        }
+
+        .hub-search-bar {
+            position: relative;
+            max-width: 500px;
+            margin: 0 auto 1.5rem;
+        }
+
+        .hub-search-input {
+            width: 100%;
+            padding: 0.875rem 1rem 0.875rem 3rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .hub-search-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .hub-search-input:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(99, 102, 241, 0.5);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+        }
+
+        .hub-search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            pointer-events: none;
+        }
+
+        .hub-top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .hub-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* ------------------------------------------
+           2.7 QUICK ACCESS ROW
+           ------------------------------------------ */
+        .quick-access-section {
+            margin-bottom: 2rem;
+            padding: 0 1rem;
+            max-width: 1800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .quick-access-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .quick-access-header h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .quick-access-row {
+            display: flex;
+            gap: 0.75rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .quick-access-row::-webkit-scrollbar {
+            display: none;
+        }
+
+        .quick-access-item {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            padding: 0.625rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quick-access-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .quick-access-icon {
+            font-size: 1.25rem;
+        }
+
+        .quick-access-name {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: white;
+            white-space: nowrap;
+        }
+
+        /* ------------------------------------------
+           2.8 CATEGORY STREAMS (Netflix-style)
+           ------------------------------------------ */
+        .category-stream {
+            margin-bottom: 2.5rem;
+            max-width: 1800px;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 0 1rem;
+        }
+
+        .category-stream-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-right: 0.5rem;
+        }
+
+        .category-stream-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .category-stream-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .category-stream-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .category-stream-count {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-left: 0.5rem;
+        }
+
+        .category-see-all {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.625rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .category-see-all:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .stream-scroll-container {
+            position: relative;
+        }
+
+        .stream-tools-row {
+            display: flex;
+            gap: 1rem;
+            overflow-x: auto;
+            padding-bottom: 1rem;
+            scroll-behavior: smooth;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .stream-tools-row::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Stream tool cards - compact version */
+        .stream-tool-card {
+            flex-shrink: 0;
+            width: 220px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stream-tool-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--card-gradient);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .stream-tool-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .stream-tool-card:hover::before {
+            opacity: 1;
+        }
+
+        .stream-tool-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 0.875rem;
+        }
+
+        .stream-tool-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.375rem;
+        }
+
+        .stream-tool-desc {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.4;
+            margin-bottom: 0.75rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .stream-tool-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .stream-tool-tokens {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .stream-tool-badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        /* Coming Soon Cards */
+        .stream-tool-card.coming-soon {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        .stream-tool-card.coming-soon:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .coming-soon-badge {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.65rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        /* Category expand view (when See All is clicked) */
+        .category-expanded-view {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 1.5rem 1rem;
+        }
+
+        .category-expanded-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .category-back-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.625rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .category-back-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        /* Search results highlight */
+        .search-results-info {
+            text-align: center;
+            padding: 1rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+
+        .no-results-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .no-results-text {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1rem;
+        }
+
+        /* Responsive adjustments for streams */
+        @media (max-width: 768px) {
+            .stream-tool-card {
+                width: 180px;
+                padding: 1rem;
+            }
+
+            .stream-tool-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 1.25rem;
+            }
+
+            .stream-tool-name {
+                font-size: 0.9rem;
+            }
+
+            .category-stream-name {
+                font-size: 1.1rem;
+            }
+
+            .quick-access-section {
+                margin-bottom: 1.5rem;
+            }
+        }
+
+        /* ------------------------------------------
+           2.9 TOOL CARDS - GLASSMORPHISM (Original Grid)
            ------------------------------------------ */
         .tools-grid {
             display: grid;
@@ -1035,6 +1442,11 @@
                 rollover: 0
             },
 
+            // Hub state
+            searchQuery: '',
+            recentTools: [], // Track recently used tools
+            expandedCategory: null, // For "See All" view
+
             // Tool-specific state
             // AI Script Studio
             script: {
@@ -1339,18 +1751,86 @@
         function renderHub() {
             var html = '';
 
-            // Header
-            html += '<div class="hero-section relative z-10">';
-            html += '<div style="max-width: 1800px; margin: 0 auto;">';
-            html += '<div class="flex items-center justify-between mb-4">';
+            // Define all tools data for search and categories
+            var allTools = {
+                youtube: [
+                    { id: 'script', icon: '🎬', name: 'AI Script Studio', desc: 'From idea to full video script in 60 seconds with hooks & CTAs.', tokens: 5, badge: 'Popular', gradStart: '#f59e0b', gradEnd: '#ef4444' },
+                    { id: 'hooks', icon: '🎣', name: 'Viral Hook Lab', desc: 'Win the first 3 seconds. Generate winning hooks with AI prediction.', tokens: 3, badge: 'Impact', gradStart: '#ec4899', gradEnd: '#8b5cf6' },
+                    { id: 'multiplier', icon: '🔄', name: 'Content Multiplier', desc: 'One video becomes 30 pieces. Extract Shorts, threads & more.', tokens: 8, badge: '10x', gradStart: '#10b981', gradEnd: '#3b82f6' },
+                    { id: 'thumbnail', icon: '📊', name: 'Thumbnail A/B Arena', desc: 'Never guess which thumbnail wins. AI predicts CTR instantly.', tokens: 4, badge: 'CTR+', gradStart: '#6366f1', gradEnd: '#a855f7' },
+                    { id: 'trends', icon: '🎯', name: 'Trend Hijacker', desc: 'Catch trending topics before they peak. Early-mover advantage.', tokens: 6, badge: 'Hot', gradStart: '#f97316', gradEnd: '#eab308' },
+                    { id: 'gaps', icon: '🗺️', name: 'Content Gap Finder', desc: 'Discover untapped opportunities competitors missed.', tokens: 6, badge: 'Opportunity', gradStart: '#14b8a6', gradEnd: '#06b6d4' },
+                    { id: 'audience', icon: '🧬', name: 'Audience DNA', desc: 'Decode your audience psychology. Deep demographic insights.', tokens: 7, badge: 'Deep', gradStart: '#8b5cf6', gradEnd: '#d946ef' },
+                    { id: 'collab', icon: '🤝', name: 'Collab Matchmaker', desc: 'Find perfect collaboration partners with audience overlap.', tokens: 5, badge: 'Growth', gradStart: '#0ea5e9', gradEnd: '#6366f1' },
+                    { id: 'revenue', icon: '💰', name: 'Revenue Maximizer', desc: 'Unlock hidden revenue streams with pricing guides & pitches.', tokens: 8, badge: '💵', gradStart: '#22c55e', gradEnd: '#eab308' },
+                    { id: 'coach', icon: '🧠', name: 'AI Video Coach', desc: 'Personal YouTube mentor for retention, engagement & growth.', tokens: 10, badge: 'Premium', gradStart: '#f43f5e', gradEnd: '#fb923c' }
+                ],
+                social: [
+                    { id: 'instagram', icon: '📸', name: 'Instagram Caption AI', desc: 'Create engaging captions that drive likes and comments.', tokens: 3, badge: 'Soon', gradStart: '#E1306C', gradEnd: '#F77737', comingSoon: true },
+                    { id: 'tiktok', icon: '🎵', name: 'TikTok Script Writer', desc: 'Viral TikTok scripts optimized for the algorithm.', tokens: 4, badge: 'Soon', gradStart: '#00f2ea', gradEnd: '#ff0050', comingSoon: true },
+                    { id: 'twitter', icon: '🐦', name: 'Twitter Thread Generator', desc: 'Turn ideas into engaging Twitter/X threads.', tokens: 4, badge: 'Soon', gradStart: '#1DA1F2', gradEnd: '#14171A', comingSoon: true },
+                    { id: 'linkedin', icon: '💼', name: 'LinkedIn Post Optimizer', desc: 'Professional posts that drive engagement.', tokens: 4, badge: 'Soon', gradStart: '#0077B5', gradEnd: '#00A0DC', comingSoon: true },
+                    { id: 'threads', icon: '📝', name: 'Threads Content Creator', desc: 'Create content for Meta Threads platform.', tokens: 3, badge: 'Soon', gradStart: '#000000', gradEnd: '#333333', comingSoon: true }
+                ],
+                websites: [
+                    { id: 'blog', icon: '📝', name: 'Blog Post Generator', desc: 'SEO-optimized blog posts in minutes.', tokens: 8, badge: 'Soon', gradStart: '#4CAF50', gradEnd: '#8BC34A', comingSoon: true },
+                    { id: 'seo', icon: '🔍', name: 'SEO Content Analyzer', desc: 'Optimize your content for search engines.', tokens: 5, badge: 'Soon', gradStart: '#FF9800', gradEnd: '#F44336', comingSoon: true },
+                    { id: 'landing', icon: '🚀', name: 'Landing Page Copy', desc: 'High-converting landing page copy.', tokens: 6, badge: 'Soon', gradStart: '#9C27B0', gradEnd: '#E91E63', comingSoon: true },
+                    { id: 'meta', icon: '🏷️', name: 'Meta Tags Generator', desc: 'Perfect meta titles and descriptions.', tokens: 2, badge: 'Soon', gradStart: '#3F51B5', gradEnd: '#2196F3', comingSoon: true }
+                ],
+                ecommerce: [
+                    { id: 'product', icon: '🛍️', name: 'Product Description AI', desc: 'Compelling product descriptions that sell.', tokens: 4, badge: 'Soon', gradStart: '#FF6B6B', gradEnd: '#4ECDC4', comingSoon: true },
+                    { id: 'adcopy', icon: '📢', name: 'Ad Copy Generator', desc: 'High-converting Facebook & Google ads.', tokens: 5, badge: 'Soon', gradStart: '#f59e0b', gradEnd: '#ef4444', comingSoon: true },
+                    { id: 'email', icon: '📧', name: 'Email Campaign Writer', desc: 'Email sequences that convert subscribers.', tokens: 6, badge: 'Soon', gradStart: '#06b6d4', gradEnd: '#8b5cf6', comingSoon: true },
+                    { id: 'review', icon: '⭐', name: 'Review Response AI', desc: 'Professional responses to customer reviews.', tokens: 2, badge: 'Soon', gradStart: '#fbbf24', gradEnd: '#f97316', comingSoon: true }
+                ],
+                email: [
+                    { id: 'subject', icon: '✉️', name: 'Subject Line Optimizer', desc: 'Subject lines that boost open rates.', tokens: 2, badge: 'Soon', gradStart: '#EC4899', gradEnd: '#8B5CF6', comingSoon: true },
+                    { id: 'newsletter', icon: '📰', name: 'Newsletter Generator', desc: 'Engaging newsletters your subscribers love.', tokens: 6, badge: 'Soon', gradStart: '#10B981', gradEnd: '#3B82F6', comingSoon: true },
+                    { id: 'sequence', icon: '🔄', name: 'Email Sequence Builder', desc: 'Automated email sequences that convert.', tokens: 8, badge: 'Soon', gradStart: '#F59E0B', gradEnd: '#EF4444', comingSoon: true }
+                ],
+                business: [
+                    { id: 'presentation', icon: '📊', name: 'Presentation Outline', desc: 'Professional presentation structures.', tokens: 5, badge: 'Soon', gradStart: '#6366F1', gradEnd: '#A855F7', comingSoon: true },
+                    { id: 'proposal', icon: '📋', name: 'Proposal Generator', desc: 'Winning business proposals.', tokens: 7, badge: 'Soon', gradStart: '#14B8A6', gradEnd: '#06B6D4', comingSoon: true },
+                    { id: 'brainstorm', icon: '💡', name: 'AI Brainstormer', desc: 'Generate creative ideas for any project.', tokens: 4, badge: 'Soon', gradStart: '#FBBF24', gradEnd: '#F97316', comingSoon: true }
+                ]
+            };
+
+            // Category definitions
+            var categories = [
+                { id: 'youtube', name: 'YouTube', icon: '📺', gradient: 'linear-gradient(135deg, #ff0000 0%, #cc0000 100%)', tools: allTools.youtube },
+                { id: 'social', name: 'Social Networks', icon: '📱', gradient: 'linear-gradient(135deg, #E1306C 0%, #1DA1F2 100%)', tools: allTools.social },
+                { id: 'websites', name: 'Websites & SEO', icon: '🌐', gradient: 'linear-gradient(135deg, #4CAF50 0%, #2196F3 100%)', tools: allTools.websites },
+                { id: 'ecommerce', name: 'E-Commerce', icon: '🛒', gradient: 'linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%)', tools: allTools.ecommerce },
+                { id: 'email', name: 'Email Marketing', icon: '✉️', gradient: 'linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%)', tools: allTools.email },
+                { id: 'business', name: 'Business', icon: '💼', gradient: 'linear-gradient(135deg, #6366F1 0%, #14B8A6 100%)', tools: allTools.business }
+            ];
+
+            // Filter tools based on search
+            var searchQuery = state.searchQuery.toLowerCase().trim();
+            var filteredCategories = categories;
+            if (searchQuery) {
+                filteredCategories = categories.map(function(cat) {
+                    return {
+                        ...cat,
+                        tools: cat.tools.filter(function(tool) {
+                            return tool.name.toLowerCase().includes(searchQuery) ||
+                                   tool.desc.toLowerCase().includes(searchQuery);
+                        })
+                    };
+                }).filter(function(cat) { return cat.tools.length > 0; });
+            }
+
+            // Header with search
+            html += '<div class="hub-header">';
+            html += '<div class="hub-top-bar">';
             html += '<a href="/video-optimizer" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm">';
             html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
             html += '<span>Back to Dashboard</span>';
             html += '</a>';
-            html += '<div class="flex items-center gap-3">';
+            html += '<div class="hub-actions">';
             html += '<button onclick="app.navigateTo(\'history\')" class="flex items-center gap-2 px-3 py-1.5 bg-gray-800/60 hover:bg-gray-700/60 border border-gray-700 rounded-lg text-gray-300 hover:text-white transition-all text-sm">';
-            html += '<span>📜</span>';
-            html += '<span class="font-medium">History</span>';
+            html += '<span>📜</span><span class="font-medium">History</span>';
             html += '</button>';
             html += '<div class="token-display">';
             html += '<span class="text-lg">🪙</span>';
@@ -1361,93 +1841,117 @@
             html += '</div>';
 
             // Title
-            html += '<div class="text-center mb-4">';
+            html += '<div class="text-center mb-6">';
             html += '<h1 class="text-3xl md:text-4xl font-bold text-white mb-2">';
             html += '<span class="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">AI Tools Hub</span>';
             html += '</h1>';
-            html += '<p class="text-gray-400">Powerful AI tools to supercharge your YouTube content</p>';
+            html += '<p class="text-gray-400 mb-4">Powerful AI tools to supercharge your content creation</p>';
             html += '</div>';
 
-            // Stats Bar
-            html += '<div class="stats-bar">';
-            html += '<div class="stat-item"><span class="stat-icon">🛠️</span><span class="stat-value">10</span><span class="stat-label">Tools</span></div>';
-            html += '<div class="stat-item"><span class="stat-icon">🪙</span><span class="stat-value">' + state.tokens.balance + '</span><span class="stat-label">Available</span></div>';
-            html += '<div class="stat-item"><span class="stat-icon">⭐</span><span class="stat-value">Script Studio</span><span class="stat-label">Popular</span></div>';
-            html += '<div class="stat-item"><span class="stat-icon">⚡</span><span class="stat-value">3-10</span><span class="stat-label">Token Range</span></div>';
+            // Search Bar
+            html += '<div class="hub-search-bar">';
+            html += '<svg class="hub-search-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
+            html += '<input type="text" class="hub-search-input" placeholder="Search all tools..." value="' + utils.escapeHtml(state.searchQuery) + '" oninput="app.handleSearch(this.value)">';
             html += '</div>';
 
-            html += '</div></div>';
+            html += '</div>'; // End hub-header
 
-            // Main Content
-            html += '<div style="max-width: 1800px; margin: 0 auto; padding: 1.5rem 1rem;">';
+            // Quick Access Row (only show if not searching)
+            if (!searchQuery) {
+                html += '<div class="quick-access-section">';
+                html += '<div class="quick-access-header">';
+                html += '<span>⚡</span>';
+                html += '<h3>Quick Access</h3>';
+                html += '</div>';
+                html += '<div class="quick-access-row">';
 
-            // Category 1: Content Creation (expanded by default on mobile)
-            html += '<div class="category-section expanded" data-category="1">';
-            html += '<div class="category-header" onclick="app.toggleCategory(1)">';
-            html += '<div class="category-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);">✏️</div>';
-            html += '<span class="category-title">Content Creation</span>';
-            html += '<span class="category-count">3 tools</span>';
-            html += '<span class="category-toggle"></span>';
-            html += '</div>';
-            html += '<div class="category-content">';
-            html += '<div class="tools-grid">';
-            html += renderToolCard('script', 'script-studio', '🎬', 'AI Script Studio', 'From idea to full video script in 60 seconds with hooks & CTAs.', 5, '~60s', 'Popular', '#f59e0b', '#ef4444', 'text-amber-400');
-            html += renderToolCard('hooks', 'hook-lab', '🎣', 'Viral Hook Lab', 'Win the first 3 seconds. Generate winning hooks with AI prediction.', 3, '~30s', 'Impact', '#ec4899', '#8b5cf6', 'text-pink-400');
-            html += renderToolCard('multiplier', 'content-multiplier', '🔄', 'Content Multiplier', 'One video becomes 30 pieces. Extract Shorts, threads & more.', 8, '~2m', '10x', '#10b981', '#3b82f6', 'text-emerald-400');
-            html += '</div>';
-            html += '</div>';
-            html += '</div>';
+                // Show recent tools or default popular ones
+                var quickTools = state.recentTools.length > 0 ?
+                    state.recentTools.slice(0, 5).map(function(id) {
+                        return allTools.youtube.find(function(t) { return t.id === id; });
+                    }).filter(Boolean) :
+                    [allTools.youtube[0], allTools.youtube[1], allTools.youtube[4], allTools.youtube[9]]; // Script, Hooks, Trends, Coach
 
-            // Category 2: Visual & CTR (collapsed by default on mobile)
-            html += '<div class="category-section" data-category="2">';
-            html += '<div class="category-header" onclick="app.toggleCategory(2)">';
-            html += '<div class="category-icon" style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);">🎨</div>';
-            html += '<span class="category-title">Visual & CTR</span>';
-            html += '<span class="category-count">1 tool</span>';
-            html += '<span class="category-toggle"></span>';
-            html += '</div>';
-            html += '<div class="category-content">';
-            html += '<div class="tools-grid">';
-            html += renderToolCard('thumbnail', 'thumbnail-arena', '📊', 'Thumbnail A/B Arena', 'Never guess which thumbnail wins. AI predicts CTR instantly.', 4, '~45s', 'CTR+', '#6366f1', '#a855f7', 'text-indigo-400');
-            html += '</div>';
-            html += '</div>';
-            html += '</div>';
+                quickTools.forEach(function(tool) {
+                    html += '<div class="quick-access-item" onclick="app.navigateTo(\'' + tool.id + '\')">';
+                    html += '<span class="quick-access-icon">' + tool.icon + '</span>';
+                    html += '<span class="quick-access-name">' + tool.name + '</span>';
+                    html += '</div>';
+                });
 
-            // Category 3: Research & Discovery (collapsed by default on mobile)
-            html += '<div class="category-section" data-category="3">';
-            html += '<div class="category-header" onclick="app.toggleCategory(3)">';
-            html += '<div class="category-icon" style="background: linear-gradient(135deg, #f97316 0%, #14b8a6 100%);">🔍</div>';
-            html += '<span class="category-title">Research & Discovery</span>';
-            html += '<span class="category-count">3 tools</span>';
-            html += '<span class="category-toggle"></span>';
-            html += '</div>';
-            html += '<div class="category-content">';
-            html += '<div class="tools-grid">';
-            html += renderToolCard('trends', 'trend-hijacker', '🎯', 'Trend Hijacker', 'Catch trending topics before they peak. Early-mover advantage.', 6, '~90s', '🔥 Hot', '#f97316', '#eab308', 'text-orange-400');
-            html += renderToolCard('gaps', 'gap-finder', '🗺️', 'Content Gap Finder', 'Discover untapped opportunities competitors missed.', 6, '~90s', 'Opportunity', '#14b8a6', '#06b6d4', 'text-teal-400');
-            html += renderToolCard('audience', 'audience-dna', '🧬', 'Audience DNA', 'Decode your audience psychology. Deep demographic insights.', 7, '~2m', 'Deep', '#8b5cf6', '#d946ef', 'text-purple-400');
-            html += '</div>';
-            html += '</div>';
-            html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
 
-            // Category 4: Growth & Revenue (collapsed by default on mobile)
-            html += '<div class="category-section" data-category="4">';
-            html += '<div class="category-header" onclick="app.toggleCategory(4)">';
-            html += '<div class="category-icon" style="background: linear-gradient(135deg, #22c55e 0%, #f43f5e 100%);">📈</div>';
-            html += '<span class="category-title">Growth & Revenue</span>';
-            html += '<span class="category-count">3 tools</span>';
-            html += '<span class="category-toggle"></span>';
-            html += '</div>';
-            html += '<div class="category-content">';
-            html += '<div class="tools-grid">';
-            html += renderToolCard('collab', 'collab-match', '🤝', 'Collab Matchmaker', 'Find perfect collaboration partners with audience overlap.', 5, '~60s', 'Growth', '#0ea5e9', '#6366f1', 'text-sky-400');
-            html += renderToolCard('revenue', 'revenue-max', '💰', 'Revenue Maximizer', 'Unlock hidden revenue streams with pricing guides & pitches.', 8, '~2m', '💵', '#22c55e', '#eab308', 'text-green-400');
-            html += renderToolCard('coach', 'ai-coach', '🧠', 'AI Video Coach', 'Personal YouTube mentor for retention, engagement & growth.', 10, '~3m', 'Premium', '#f43f5e', '#fb923c', 'text-rose-400');
-            html += '</div>';
-            html += '</div>';
-            html += '</div>';
+            // Search results info
+            if (searchQuery) {
+                var totalResults = filteredCategories.reduce(function(sum, cat) { return sum + cat.tools.length; }, 0);
+                if (totalResults === 0) {
+                    html += '<div class="no-results">';
+                    html += '<div class="no-results-icon">🔍</div>';
+                    html += '<p class="no-results-text">No tools found for "' + utils.escapeHtml(searchQuery) + '"</p>';
+                    html += '</div>';
+                } else {
+                    html += '<div class="search-results-info">';
+                    html += 'Found ' + totalResults + ' tool' + (totalResults !== 1 ? 's' : '') + ' matching "' + utils.escapeHtml(searchQuery) + '"';
+                    html += '</div>';
+                }
+            }
 
-            html += '</div>'; // End container
+            // Category Streams
+            filteredCategories.forEach(function(category) {
+                html += '<div class="category-stream">';
+                html += '<div class="category-stream-header">';
+                html += '<div class="category-stream-title">';
+                html += '<div class="category-stream-icon" style="background: ' + category.gradient + ';">' + category.icon + '</div>';
+                html += '<span class="category-stream-name">' + category.name + '</span>';
+                html += '<span class="category-stream-count">' + category.tools.length + ' tools</span>';
+                html += '</div>';
+                if (category.tools.length > 4) {
+                    html += '<button class="category-see-all" onclick="app.expandCategory(\'' + category.id + '\')">';
+                    html += '<span>See All</span>';
+                    html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>';
+                    html += '</button>';
+                }
+                html += '</div>';
+
+                html += '<div class="stream-scroll-container">';
+                html += '<div class="stream-tools-row">';
+
+                category.tools.forEach(function(tool) {
+                    html += renderStreamToolCard(tool);
+                });
+
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            });
+
+            return html;
+        }
+
+        // Render a compact tool card for the stream
+        function renderStreamToolCard(tool) {
+            var html = '';
+            var comingSoonClass = tool.comingSoon ? ' coming-soon' : '';
+            var clickHandler = tool.comingSoon ? '' : 'onclick="app.navigateTo(\'' + tool.id + '\')"';
+
+            html += '<div class="stream-tool-card' + comingSoonClass + '" style="--card-gradient: linear-gradient(135deg, ' + tool.gradStart + ' 0%, ' + tool.gradEnd + ' 100%);" ' + clickHandler + '>';
+
+            if (tool.comingSoon) {
+                html += '<div class="coming-soon-badge">Coming Soon</div>';
+            }
+
+            html += '<div class="stream-tool-icon" style="background: linear-gradient(135deg, ' + tool.gradStart + ' 0%, ' + tool.gradEnd + ' 100%);">' + tool.icon + '</div>';
+            html += '<div class="stream-tool-name">' + tool.name + '</div>';
+            html += '<div class="stream-tool-desc">' + tool.desc + '</div>';
+            html += '<div class="stream-tool-meta">';
+            html += '<div class="stream-tool-tokens" style="color: ' + tool.gradStart + ';"><span>🪙</span><span>' + tool.tokens + '</span></div>';
+            if (!tool.comingSoon) {
+                html += '<div class="stream-tool-badge" style="background: linear-gradient(135deg, ' + tool.gradStart + ' 0%, ' + tool.gradEnd + ' 100%); color: white;">' + tool.badge + '</div>';
+            }
+            html += '</div>';
+            html += '</div>';
 
             return html;
         }
@@ -3167,13 +3671,46 @@
             navigateTo: function(view) {
                 state.currentView = view;
 
+                // Track recent tools for Quick Access
+                var toolViews = ['script', 'hooks', 'multiplier', 'thumbnail', 'trends', 'gaps', 'audience', 'collab', 'revenue', 'coach'];
+                if (toolViews.includes(view)) {
+                    // Remove if already exists, then add to front
+                    state.recentTools = state.recentTools.filter(function(t) { return t !== view; });
+                    state.recentTools.unshift(view);
+                    // Keep only last 10
+                    state.recentTools = state.recentTools.slice(0, 10);
+                }
+
                 // Load history data when navigating to history view
                 if (view === 'history') {
                     this.loadAllHistory();
                 }
 
+                // Clear search when navigating away from hub
+                if (view !== 'hub') {
+                    state.searchQuery = '';
+                }
+
                 render();
                 window.scrollTo(0, 0);
+            },
+
+            // Handle search input
+            handleSearch: function(query) {
+                state.searchQuery = query;
+                render();
+                // Keep focus on search input
+                var searchInput = document.querySelector('.hub-search-input');
+                if (searchInput) {
+                    searchInput.focus();
+                    searchInput.setSelectionRange(query.length, query.length);
+                }
+            },
+
+            // Expand a category to show all tools (for "See All" button)
+            expandCategory: function(categoryId) {
+                // For now, just scroll to show all - could implement a modal view later
+                utils.showToast('Showing all ' + categoryId + ' tools', 'info');
             },
 
             // Toggle category for mobile collapsible sections
