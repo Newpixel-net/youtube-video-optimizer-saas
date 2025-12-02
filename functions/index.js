@@ -2856,6 +2856,144 @@ exports.adminAdjustUserTokens = functions.https.onCall(async (data, context) => 
   }
 });
 
+// Add/Remove creative tokens from a user (for Thumbnail Generator Pro / Creative Studio)
+exports.adminAdjustCreativeTokens = functions.https.onCall(async (data, context) => {
+  try {
+    const adminId = await requireAdmin(context);
+
+    const { userId, amount, reason } = data || {};
+
+    if (!userId || typeof userId !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'Valid user ID is required');
+    }
+
+    const tokenAmount = parseInt(amount);
+    if (isNaN(tokenAmount) || tokenAmount === 0) {
+      throw new functions.https.HttpsError('invalid-argument', 'Token amount must be a non-zero number');
+    }
+
+    // Check if user exists
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'User not found');
+    }
+
+    const userPlan = userDoc.data().subscription?.plan || 'free';
+
+    // Get or create creativeTokens document
+    const tokenRef = db.collection('creativeTokens').doc(userId);
+    const tokenDoc = await tokenRef.get();
+
+    let currentBalance = 0;
+    if (tokenDoc.exists) {
+      currentBalance = tokenDoc.data().balance || 0;
+    }
+
+    const newBalance = Math.max(0, currentBalance + tokenAmount);
+
+    // Update or create creativeTokens document
+    await tokenRef.set({
+      balance: newBalance,
+      plan: userPlan,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    // Log the transaction
+    await db.collection('tokenTransactions').add({
+      userId,
+      type: tokenAmount > 0 ? 'admin_creative_credit' : 'admin_creative_debit',
+      amount: tokenAmount,
+      balanceAfter: newBalance,
+      reason: reason || 'Manual creative token adjustment by admin',
+      performedBy: adminId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      message: `${tokenAmount > 0 ? 'Added' : 'Removed'} ${Math.abs(tokenAmount)} creative tokens`,
+      newBalance
+    };
+  } catch (error) {
+    console.error('adminAdjustCreativeTokens error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to adjust creative tokens'));
+  }
+});
+
+// Reset a user's creative tokens to their plan allocation
+exports.adminResetCreativeTokens = functions.https.onCall(async (data, context) => {
+  try {
+    const adminId = await requireAdmin(context);
+
+    const { userId } = data || {};
+
+    if (!userId || typeof userId !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'Valid user ID is required');
+    }
+
+    // Get user's plan
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'User not found');
+    }
+
+    const userPlan = userDoc.data().subscription?.plan || 'free';
+
+    // Get admin-configured token settings
+    const tokenConfigDoc = await db.collection('settings').doc('tokenConfig').get();
+    const defaultTokenConfig = {
+      free: { monthlyTokens: 5, rolloverPercent: 0 },
+      lite: { monthlyTokens: 10, rolloverPercent: 25 },
+      pro: { monthlyTokens: 50, rolloverPercent: 50 },
+      enterprise: { monthlyTokens: 100, rolloverPercent: 100 }
+    };
+
+    const tokenConfig = tokenConfigDoc.exists
+      ? { ...defaultTokenConfig, ...tokenConfigDoc.data().plans }
+      : defaultTokenConfig;
+
+    const planConfig = tokenConfig[userPlan] || tokenConfig.free;
+    const monthlyAllocation = planConfig.monthlyTokens || 5;
+    const rolloverPercent = planConfig.rolloverPercent || 0;
+
+    // Reset creative tokens to plan allocation
+    const tokenRef = db.collection('creativeTokens').doc(userId);
+    await tokenRef.set({
+      balance: monthlyAllocation,
+      rollover: 0,
+      plan: userPlan,
+      monthlyAllocation: monthlyAllocation,
+      rolloverPercent: rolloverPercent,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      resetBy: adminId,
+      resetAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    // Log the transaction
+    await db.collection('tokenTransactions').add({
+      userId,
+      type: 'admin_creative_reset',
+      amount: monthlyAllocation,
+      balanceAfter: monthlyAllocation,
+      reason: `Reset to ${userPlan} plan allocation by admin`,
+      performedBy: adminId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      message: `Reset creative tokens to ${monthlyAllocation} (${userPlan} plan)`,
+      newBalance: monthlyAllocation,
+      plan: userPlan
+    };
+  } catch (error) {
+    console.error('adminResetCreativeTokens error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to reset creative tokens'));
+  }
+});
+
 // Get user token balance and history
 exports.getUserTokenInfo = functions.https.onCall(async (data, context) => {
   try {
@@ -5110,32 +5248,106 @@ Provide ONLY the image generation prompt, no explanations. Be specific and detai
 });
 
 // Get user's creative token balance (for Thumbnail Pro)
+// Syncs with admin token configuration and user subscription plan
 exports.getThumbnailTokenBalance = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
 
   try {
+    // Get user's subscription plan
+    const userDoc = await db.collection('users').doc(uid).get();
+    const userPlan = userDoc.exists ? (userDoc.data().subscription?.plan || 'free') : 'free';
+
+    // Get admin-configured token settings
+    const tokenConfigDoc = await db.collection('settings').doc('tokenConfig').get();
+    const defaultTokenConfig = {
+      free: { monthlyTokens: 5, rolloverPercent: 0 },
+      lite: { monthlyTokens: 10, rolloverPercent: 25 },
+      pro: { monthlyTokens: 50, rolloverPercent: 50 },
+      enterprise: { monthlyTokens: 100, rolloverPercent: 100 }
+    };
+
+    const tokenConfig = tokenConfigDoc.exists
+      ? { ...defaultTokenConfig, ...tokenConfigDoc.data().plans }
+      : defaultTokenConfig;
+
+    // Get plan-specific allocation
+    const planConfig = tokenConfig[userPlan] || tokenConfig.free;
+    const monthlyAllocation = planConfig.monthlyTokens || 5;
+    const rolloverPercent = planConfig.rolloverPercent || 0;
+
+    // Get or create user's token balance
     const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
 
     if (!tokenDoc.exists) {
-      // Initialize new user
+      // Initialize new user with plan-appropriate tokens
       const initialTokens = {
-        balance: 50,
+        balance: monthlyAllocation,
         rollover: 0,
-        plan: 'free',
-        monthlyAllocation: 50,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rolloverPercent: rolloverPercent,
         lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       };
       await db.collection('creativeTokens').doc(uid).set(initialTokens);
-      return { success: true, balance: 50, plan: 'free' };
+      return {
+        success: true,
+        balance: monthlyAllocation,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation
+      };
     }
 
-    const data = tokenDoc.data();
+    const tokenData = tokenDoc.data();
+
+    // Check if plan has changed - sync if needed
+    if (tokenData.plan !== userPlan) {
+      const updatedTokens = {
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rolloverPercent: rolloverPercent
+      };
+      await db.collection('creativeTokens').doc(uid).update(updatedTokens);
+      tokenData.plan = userPlan;
+      tokenData.monthlyAllocation = monthlyAllocation;
+    }
+
+    // Check if monthly refresh is needed
+    const now = new Date();
+    const lastRefresh = tokenData.lastRefresh?.toDate() || new Date(0);
+    const monthsSinceRefresh = (now.getFullYear() - lastRefresh.getFullYear()) * 12 +
+                               (now.getMonth() - lastRefresh.getMonth());
+
+    if (monthsSinceRefresh >= 1) {
+      // Calculate rollover based on plan's rollover percent
+      const maxRollover = Math.floor(tokenData.balance * (rolloverPercent / 100));
+      const newBalance = monthlyAllocation + maxRollover;
+
+      const refreshedTokens = {
+        balance: newBalance,
+        rollover: maxRollover,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rolloverPercent: rolloverPercent,
+        lastRefresh: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      await db.collection('creativeTokens').doc(uid).update(refreshedTokens);
+
+      return {
+        success: true,
+        balance: newBalance,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rollover: maxRollover
+      };
+    }
+
     return {
       success: true,
-      balance: data.balance || 0,
-      plan: data.plan || 'free',
-      monthlyAllocation: data.monthlyAllocation || 50
+      balance: tokenData.balance || 0,
+      plan: userPlan,
+      monthlyAllocation: monthlyAllocation
     };
   } catch (error) {
     console.error('Get token balance error:', error);
@@ -7581,48 +7793,73 @@ IMPORTANT: Write naturally as if speaking to camera. Include:
  * Token rollover: Unused tokens roll over to next month (max 500)
  */
 
-// Helper: Get monthly token allocation by plan
-function getMonthlyAllocation(plan) {
-  const allocations = {
-    free: 50,
-    lite: 200,
-    pro: 500,
-    business: 1500
+// Helper: Get token configuration from admin settings
+async function getTokenConfigFromAdmin() {
+  const tokenConfigDoc = await db.collection('settings').doc('tokenConfig').get();
+  const defaultTokenConfig = {
+    free: { monthlyTokens: 5, rolloverPercent: 0 },
+    lite: { monthlyTokens: 10, rolloverPercent: 25 },
+    pro: { monthlyTokens: 50, rolloverPercent: 50 },
+    enterprise: { monthlyTokens: 100, rolloverPercent: 100 }
   };
-  return allocations[plan] || 50;
+
+  return tokenConfigDoc.exists
+    ? { ...defaultTokenConfig, ...tokenConfigDoc.data().plans }
+    : defaultTokenConfig;
 }
 
-// Get user's creative tokens balance
+// Get user's creative tokens balance (synced with admin settings)
 exports.getCreativeTokens = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
 
   try {
+    // Get user's subscription plan
+    const userDoc = await db.collection('users').doc(uid).get();
+    const userPlan = userDoc.exists ? (userDoc.data().subscription?.plan || 'free') : 'free';
+
+    // Get admin-configured token settings
+    const tokenConfig = await getTokenConfigFromAdmin();
+    const planConfig = tokenConfig[userPlan] || tokenConfig.free;
+    const monthlyAllocation = planConfig.monthlyTokens || 5;
+    const rolloverPercent = planConfig.rolloverPercent || 0;
+
     const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
 
     if (!tokenDoc.exists) {
-      // Initialize new user with free tier tokens
+      // Initialize new user with plan-appropriate tokens
       const now = new Date();
       const initialTokens = {
-        balance: 50,
+        balance: monthlyAllocation,
         rollover: 0,
-        plan: 'free',
-        monthlyAllocation: 50,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rolloverPercent: rolloverPercent,
         lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       };
       await db.collection('creativeTokens').doc(uid).set(initialTokens);
-      // Return serializable data (FieldValue.serverTimestamp() doesn't serialize well)
       return {
-        balance: 50,
+        balance: monthlyAllocation,
         rollover: 0,
-        plan: 'free',
-        monthlyAllocation: 50,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
         lastRefresh: now.toISOString(),
         createdAt: now.toISOString()
       };
     }
 
     const tokenData = tokenDoc.data();
+
+    // Check if plan has changed - sync if needed
+    if (tokenData.plan !== userPlan) {
+      await db.collection('creativeTokens').doc(uid).update({
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rolloverPercent: rolloverPercent
+      });
+      tokenData.plan = userPlan;
+      tokenData.monthlyAllocation = monthlyAllocation;
+    }
 
     // Check if monthly refresh is needed
     const now = new Date();
@@ -7631,13 +7868,16 @@ exports.getCreativeTokens = functions.https.onCall(async (data, context) => {
                                (now.getMonth() - lastRefresh.getMonth());
 
     if (monthsSinceRefresh >= 1) {
-      // Calculate rollover (max 500 tokens)
-      const rollover = Math.min(tokenData.balance, 500);
-      const monthlyAllocation = getMonthlyAllocation(tokenData.plan);
+      // Calculate rollover based on plan's rollover percent
+      const maxRollover = Math.floor(tokenData.balance * (rolloverPercent / 100));
+      const newBalance = monthlyAllocation + maxRollover;
 
       const updatedTokens = {
-        balance: monthlyAllocation + rollover,
-        rollover: rollover,
+        balance: newBalance,
+        rollover: maxRollover,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rolloverPercent: rolloverPercent,
         lastRefresh: admin.firestore.FieldValue.serverTimestamp()
       };
 
@@ -7646,7 +7886,7 @@ exports.getCreativeTokens = functions.https.onCall(async (data, context) => {
       return {
         ...tokenData,
         ...updatedTokens,
-        balance: monthlyAllocation + rollover
+        balance: newBalance
       };
     }
 
