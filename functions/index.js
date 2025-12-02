@@ -12109,3 +12109,357 @@ Respond in JSON format:
     throw new functions.https.HttpsError('internal', 'Failed to analyze thumbnails. Please try again.');
   }
 });
+
+// ==============================================================================
+// TREND HIJACKER - Find trending topics in your niche
+// ==============================================================================
+exports.generateTrendReport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'generateTrendReport', 10);
+
+  const { niche, region = 'US', timeframe = 'week' } = data;
+
+  if (!niche || niche.trim().length < 2) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a valid niche or topic area');
+  }
+
+  // Token cost: 6 tokens per trend analysis
+  const tokenCost = 6;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  try {
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'AI service not configured');
+    }
+
+    const timeframeText = timeframe === 'day' ? 'today (last 24 hours)' :
+                          timeframe === 'week' ? 'this week (last 7 days)' :
+                          'this month (last 30 days)';
+
+    const regionText = region === 'GLOBAL' ? 'globally' : `in ${region}`;
+
+    const prompt = `You are a trend analysis expert specializing in YouTube content strategy. Analyze current trends ${regionText} for the "${niche}" niche ${timeframeText}.
+
+Identify 5-7 trending topics that a YouTube creator in this niche should create content about RIGHT NOW to capitalize on rising interest.
+
+For each trend, provide:
+1. The specific trending topic
+2. A trend score (0-100) based on current momentum
+3. Urgency level (high/medium/low) - how quickly they need to act
+4. A brief description of why this is trending
+5. 2-3 content angles they could take
+6. A suggested video title that would perform well
+
+Consider:
+- Current news and events
+- Seasonal relevance
+- Platform-specific trends (YouTube, TikTok, Twitter discussions)
+- Search volume patterns
+- Competitor content gaps
+
+Respond in JSON format:
+{
+  "trends": [
+    {
+      "topic": "Topic name",
+      "score": 85,
+      "urgency": "high",
+      "description": "Why this is trending now",
+      "angles": ["Angle 1", "Angle 2", "Angle 3"],
+      "suggestedTitle": "A clickable video title"
+    }
+  ],
+  "insights": "Overall market insight about the niche right now"
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a YouTube trend analyst who identifies emerging trends and viral opportunities. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.8,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error:', errorText);
+      throw new Error('AI service error');
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+
+    let trendData;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        trendData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (parseError) {
+      // Fallback structure if parsing fails
+      trendData = {
+        trends: [
+          {
+            topic: niche + ' trends',
+            score: 75,
+            urgency: 'medium',
+            description: 'Current trending topic in your niche',
+            angles: ['Educational breakdown', 'News reaction', 'How-to guide'],
+            suggestedTitle: `The ${niche} Trend Everyone Is Talking About Right Now`
+          }
+        ],
+        insights: content
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('trendHistory').add({
+      userId: uid,
+      niche: niche.trim(),
+      region,
+      timeframe,
+      trends: trendData.trends,
+      insights: trendData.insights,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      trends: trendData.trends,
+      insights: trendData.insights,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Trend analysis error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze trends. Please try again.');
+  }
+});
+
+// ==============================================================================
+// CONTENT GAP FINDER - Discover untapped content opportunities
+// ==============================================================================
+exports.findContentGaps = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'findContentGaps', 10);
+
+  const { niche, competitors = '', depth = 'moderate' } = data;
+
+  if (!niche || niche.trim().length < 2) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a valid niche or topic area');
+  }
+
+  // Token cost: 6 tokens per gap analysis
+  const tokenCost = 6;
+
+  // Check token balance
+  const tokenRef = db.collection('creativeTokens').doc(uid);
+  let tokenDoc = await tokenRef.get();
+  let balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 50;
+
+  if (!tokenDoc.exists) {
+    await tokenRef.set({
+      balance: 50,
+      rollover: 0,
+      plan: 'free',
+      monthlyAllocation: 50,
+      lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    balance = 50;
+  }
+
+  if (balance < tokenCost) {
+    throw new functions.https.HttpsError('resource-exhausted',
+      `Insufficient tokens. Need ${tokenCost}, have ${balance}.`);
+  }
+
+  try {
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'AI service not configured');
+    }
+
+    const depthText = depth === 'quick' ? 'top 4-5 opportunities' :
+                      depth === 'deep' ? 'comprehensive analysis with 8-10 opportunities' :
+                      '5-7 balanced opportunities';
+
+    const competitorText = competitors.trim()
+      ? `\n\nCompetitors to analyze for gaps: ${competitors}`
+      : '';
+
+    const prompt = `You are a YouTube content strategy expert specializing in finding untapped content opportunities. Analyze the "${niche}" niche and identify ${depthText}.${competitorText}
+
+Find content gaps - topics that have:
+- High search interest but low quality existing content
+- Underserved audience segments
+- Questions that aren't being answered well
+- Emerging subtopics with growth potential
+- Unique angles competitors haven't explored
+
+For each gap opportunity, provide:
+1. The topic/gap opportunity
+2. Difficulty level (easy/medium/hard) to rank for
+3. Potential score (0-100) based on opportunity size
+4. Why this is a gap (what's missing in current content)
+5. Description of the opportunity
+6. 2-3 specific video title ideas
+
+Respond in JSON format:
+{
+  "gaps": [
+    {
+      "topic": "Gap topic name",
+      "difficulty": "easy",
+      "potential": 85,
+      "reason": "Why this content gap exists",
+      "description": "What kind of content would fill this gap",
+      "suggestedTitles": [
+        "Video Title Idea 1",
+        "Video Title Idea 2",
+        "Video Title Idea 3"
+      ]
+    }
+  ],
+  "summary": "Overall market summary and strategy recommendation"
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a YouTube content strategist who identifies underserved topics and content gaps. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.8,
+        max_tokens: 2500
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error:', errorText);
+      throw new Error('AI service error');
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+
+    let gapData;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        gapData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch (parseError) {
+      // Fallback structure if parsing fails
+      gapData = {
+        gaps: [
+          {
+            topic: 'Beginner-friendly ' + niche + ' content',
+            difficulty: 'easy',
+            potential: 80,
+            reason: 'Most content assumes prior knowledge',
+            description: 'Create truly beginner-friendly content for newcomers',
+            suggestedTitles: [
+              `${niche} for Complete Beginners - Everything You Need to Know`,
+              `I Tried Learning ${niche} From Scratch - Here's What Happened`,
+              `The ${niche} Beginner's Guide Everyone Wishes They Had`
+            ]
+          }
+        ],
+        summary: content
+      };
+    }
+
+    // Deduct tokens
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-tokenCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    await db.collection('contentGapHistory').add({
+      userId: uid,
+      niche: niche.trim(),
+      competitors: competitors.trim(),
+      depth,
+      gaps: gapData.gaps,
+      summary: gapData.summary,
+      tokenCost,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      gaps: gapData.gaps,
+      summary: gapData.summary,
+      tokenCost,
+      remainingBalance: balance - tokenCost
+    };
+
+  } catch (error) {
+    console.error('Content gap analysis error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to find content gaps. Please try again.');
+  }
+});

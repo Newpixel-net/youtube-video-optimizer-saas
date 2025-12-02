@@ -565,7 +565,7 @@
            ========================================== */
 
         const state = {
-            currentView: 'initializing', // initializing | hub | script | hooks | multiplier | thumbnail | history
+            currentView: 'initializing', // initializing | hub | script | hooks | multiplier | thumbnail | trends | gaps | history
             user: null,
             profile: null,
             loading: false,
@@ -616,8 +616,26 @@
                 history: []
             },
 
+            // Trend Hijacker
+            trends: {
+                niche: '',
+                region: 'US',
+                timeframe: 'week',
+                result: null,
+                history: []
+            },
+
+            // Content Gap Finder
+            gaps: {
+                niche: '',
+                competitors: '',
+                depth: 'moderate',
+                result: null,
+                history: []
+            },
+
             // History view
-            historyType: 'script' // script | hooks | multiplier | thumbnail
+            historyType: 'script' // script | hooks | multiplier | thumbnail | trends | gaps
         };
 
         /* ==========================================
@@ -709,6 +727,12 @@
                     break;
                 case 'history':
                     html += renderHistory();
+                    break;
+                case 'trends':
+                    html += renderTrendHijacker();
+                    break;
+                case 'gaps':
+                    html += renderContentGapFinder();
                     break;
                 default:
                     html += renderHub();
@@ -835,6 +859,32 @@
             html += '<span class="text-indigo-400"><span class="font-bold">4</span> tokens</span>';
             html += '<span class="text-gray-500">|</span>';
             html += '<span class="text-gray-400">~45 seconds</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Trend Hijacker Card
+            html += '<div class="tool-card trend-hijacker" onclick="app.navigateTo(\'trends\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #f97316 0%, #eab308 100%);">🔥 Hot</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #f97316 0%, #eab308 100%);">🎯</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">Trend Hijacker</h3>';
+            html += '<p class="text-gray-400 mb-4">Catch trending topics before they peak. Get early-mover advantage with AI-powered trend detection.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-orange-400"><span class="font-bold">6</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~90 seconds</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Content Gap Finder Card
+            html += '<div class="tool-card gap-finder" onclick="app.navigateTo(\'gaps\')">';
+            html += '<div class="tool-badge" style="background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);">Opportunity</div>';
+            html += '<div class="tool-icon" style="background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);">🗺️</div>';
+            html += '<h3 class="text-xl font-bold text-white mb-2">Content Gap Finder</h3>';
+            html += '<p class="text-gray-400 mb-4">Discover untapped content opportunities your competitors missed. Find high-potential topics with low competition.</p>';
+            html += '<div class="flex items-center gap-4 text-sm">';
+            html += '<span class="text-teal-400"><span class="font-bold">6</span> tokens</span>';
+            html += '<span class="text-gray-500">|</span>';
+            html += '<span class="text-gray-400">~90 seconds</span>';
             html += '</div>';
             html += '</div>';
 
@@ -1357,6 +1407,317 @@
             return html;
         }
 
+        // ==========================================
+        // TREND HIJACKER RENDERER
+        // ==========================================
+        function renderTrendHijacker() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('Trend Hijacker', '🎯', 'trend-hijacker', '6 tokens per analysis');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.trends.result) {
+                // Show results
+                html += renderTrendResults();
+            } else {
+                // Show form
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                // Niche input
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Your Niche / Topic Area</label>';
+                html += '<input type="text" id="trend-niche" class="input-field" placeholder="e.g., productivity, fitness, tech reviews, cooking, gaming..." value="' + utils.escapeHtml(state.trends.niche) + '">';
+                html += '<p class="text-gray-500 text-sm mt-1">Enter your content niche to find relevant trending topics</p>';
+                html += '</div>';
+
+                // Region selection
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Target Region</label>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                var regions = [
+                    { id: 'US', name: 'United States', icon: '🇺🇸' },
+                    { id: 'GB', name: 'United Kingdom', icon: '🇬🇧' },
+                    { id: 'CA', name: 'Canada', icon: '🇨🇦' },
+                    { id: 'AU', name: 'Australia', icon: '🇦🇺' },
+                    { id: 'DE', name: 'Germany', icon: '🇩🇪' },
+                    { id: 'FR', name: 'France', icon: '🇫🇷' },
+                    { id: 'IN', name: 'India', icon: '🇮🇳' },
+                    { id: 'GLOBAL', name: 'Global', icon: '🌍' }
+                ];
+                regions.forEach(function(region) {
+                    var selected = state.trends.region === region.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setTrendRegion(\'' + region.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + region.icon + '</div>';
+                    html += '<div class="font-medium text-white text-sm">' + region.name + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Timeframe selection
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Trend Timeframe</label>';
+                html += '<div class="grid grid-cols-3 gap-3">';
+                var timeframes = [
+                    { id: 'day', name: 'Today', desc: 'Last 24 hours', icon: '⚡' },
+                    { id: 'week', name: 'This Week', desc: 'Last 7 days', icon: '📅' },
+                    { id: 'month', name: 'This Month', desc: 'Last 30 days', icon: '📆' }
+                ];
+                timeframes.forEach(function(tf) {
+                    var selected = state.trends.timeframe === tf.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setTrendTimeframe(\'' + tf.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + tf.icon + '</div>';
+                    html += '<div class="font-medium text-white">' + tf.name + '</div>';
+                    html += '<div class="text-gray-500 text-xs">' + tf.desc + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Generate button
+                html += '<button onclick="app.generateTrends()" class="btn-primary w-full">';
+                html += '<span class="mr-2">🎯</span> Find Trending Topics';
+                html += '</button>';
+
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderTrendResults() {
+            var html = '';
+            var result = state.trends.result;
+
+            // Success header
+            html += '<div class="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 border border-orange-500/30 rounded-2xl p-6 mb-6">';
+            html += '<div class="flex items-center justify-between">';
+            html += '<div>';
+            html += '<h3 class="text-xl font-bold text-white mb-1">🔥 Trending Topics Found!</h3>';
+            html += '<p class="text-gray-400">Based on ' + utils.escapeHtml(state.trends.niche) + ' in ' + state.trends.region + '</p>';
+            html += '</div>';
+            html += '<button onclick="app.resetTrends()" class="btn-secondary">New Search</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Trending topics
+            if (result.trends && result.trends.length > 0) {
+                html += '<div class="space-y-4">';
+                result.trends.forEach(function(trend, index) {
+                    var urgencyColor = trend.urgency === 'high' ? 'text-red-400' : trend.urgency === 'medium' ? 'text-yellow-400' : 'text-green-400';
+                    var urgencyBg = trend.urgency === 'high' ? 'bg-red-500/20' : trend.urgency === 'medium' ? 'bg-yellow-500/20' : 'bg-green-500/20';
+
+                    html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:border-orange-500/50 transition-all">';
+                    html += '<div class="flex items-start justify-between mb-3">';
+                    html += '<div class="flex items-center gap-3">';
+                    html += '<span class="text-2xl font-bold text-orange-400">#' + (index + 1) + '</span>';
+                    html += '<div>';
+                    html += '<h4 class="text-lg font-bold text-white">' + utils.escapeHtml(trend.topic) + '</h4>';
+                    html += '<div class="flex items-center gap-2 mt-1">';
+                    html += '<span class="px-2 py-0.5 rounded text-xs font-medium ' + urgencyBg + ' ' + urgencyColor + '">' + (trend.urgency || 'medium').toUpperCase() + ' URGENCY</span>';
+                    html += '<span class="text-gray-500 text-sm">Score: ' + (trend.score || 85) + '/100</span>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    // Trend details
+                    html += '<p class="text-gray-400 mb-3">' + utils.escapeHtml(trend.description || 'Emerging trend with high potential') + '</p>';
+
+                    // Suggested angles
+                    if (trend.angles && trend.angles.length > 0) {
+                        html += '<div class="mb-3">';
+                        html += '<p class="text-sm font-medium text-gray-300 mb-2">💡 Content Angles:</p>';
+                        html += '<div class="flex flex-wrap gap-2">';
+                        trend.angles.forEach(function(angle) {
+                            html += '<span class="px-3 py-1 bg-gray-700/50 rounded-full text-sm text-gray-300">' + utils.escapeHtml(angle) + '</span>';
+                        });
+                        html += '</div>';
+                        html += '</div>';
+                    }
+
+                    // Suggested title
+                    if (trend.suggestedTitle) {
+                        html += '<div class="bg-gray-900/50 rounded-lg p-3 mt-3">';
+                        html += '<p class="text-sm text-gray-400 mb-1">📝 Suggested Video Title:</p>';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(trend.suggestedTitle) + '</p>';
+                        html += '<button onclick="utils.copyToClipboard(\'' + utils.escapeHtml(trend.suggestedTitle).replace(/'/g, "\\'") + '\', this)" class="text-orange-400 hover:text-orange-300 text-sm mt-2">Copy Title</button>';
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+
+            // Insights section
+            if (result.insights) {
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-xl p-5 mt-6">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">📊 Market Insights</h4>';
+                html += '<p class="text-gray-400">' + utils.escapeHtml(result.insights) + '</p>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        // ==========================================
+        // CONTENT GAP FINDER RENDERER
+        // ==========================================
+        function renderContentGapFinder() {
+            var html = '';
+
+            // Header
+            html += renderToolHeader('Content Gap Finder', '🗺️', 'gap-finder', '6 tokens per analysis');
+
+            // Main content
+            html += '<div class="max-w-4xl mx-auto px-4 py-6">';
+
+            if (state.gaps.result) {
+                // Show results
+                html += renderGapResults();
+            } else {
+                // Show form
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-2xl p-6">';
+
+                // Niche input
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Your Niche / Topic Area</label>';
+                html += '<input type="text" id="gap-niche" class="input-field" placeholder="e.g., personal finance, home workouts, Python programming..." value="' + utils.escapeHtml(state.gaps.niche) + '">';
+                html += '<p class="text-gray-500 text-sm mt-1">Enter your niche to discover content opportunities</p>';
+                html += '</div>';
+
+                // Competitors input
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-2">Competitor Channels (Optional)</label>';
+                html += '<textarea id="gap-competitors" class="input-field h-20" placeholder="Enter competitor channel names or URLs, one per line (optional)...">' + utils.escapeHtml(state.gaps.competitors) + '</textarea>';
+                html += '<p class="text-gray-500 text-sm mt-1">List competitors to analyze their content gaps</p>';
+                html += '</div>';
+
+                // Analysis depth
+                html += '<div class="mb-6">';
+                html += '<label class="block text-white font-semibold mb-3">Analysis Depth</label>';
+                html += '<div class="grid grid-cols-3 gap-3">';
+                var depths = [
+                    { id: 'quick', name: 'Quick Scan', desc: 'Top opportunities', icon: '⚡' },
+                    { id: 'moderate', name: 'Moderate', desc: 'Balanced analysis', icon: '📊' },
+                    { id: 'deep', name: 'Deep Dive', desc: 'Comprehensive', icon: '🔬' }
+                ];
+                depths.forEach(function(depth) {
+                    var selected = state.gaps.depth === depth.id ? 'selected' : '';
+                    html += '<div class="option-card ' + selected + '" onclick="app.setGapDepth(\'' + depth.id + '\')">';
+                    html += '<div class="text-2xl mb-1">' + depth.icon + '</div>';
+                    html += '<div class="font-medium text-white">' + depth.name + '</div>';
+                    html += '<div class="text-gray-500 text-xs">' + depth.desc + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Generate button
+                html += '<button onclick="app.findGaps()" class="btn-primary w-full">';
+                html += '<span class="mr-2">🗺️</span> Find Content Gaps';
+                html += '</button>';
+
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderGapResults() {
+            var html = '';
+            var result = state.gaps.result;
+
+            // Success header
+            html += '<div class="bg-gradient-to-r from-teal-500/20 to-cyan-500/20 border border-teal-500/30 rounded-2xl p-6 mb-6">';
+            html += '<div class="flex items-center justify-between">';
+            html += '<div>';
+            html += '<h3 class="text-xl font-bold text-white mb-1">🎯 Content Opportunities Found!</h3>';
+            html += '<p class="text-gray-400">Analysis of ' + utils.escapeHtml(state.gaps.niche) + '</p>';
+            html += '</div>';
+            html += '<button onclick="app.resetGaps()" class="btn-secondary">New Analysis</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Gap opportunities
+            if (result.gaps && result.gaps.length > 0) {
+                html += '<div class="space-y-4">';
+                result.gaps.forEach(function(gap, index) {
+                    var difficultyColor = gap.difficulty === 'easy' ? 'text-green-400' : gap.difficulty === 'medium' ? 'text-yellow-400' : 'text-red-400';
+                    var difficultyBg = gap.difficulty === 'easy' ? 'bg-green-500/20' : gap.difficulty === 'medium' ? 'bg-yellow-500/20' : 'bg-red-500/20';
+                    var potentialWidth = (gap.potential || 75) + '%';
+
+                    html += '<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:border-teal-500/50 transition-all">';
+
+                    // Header with ranking
+                    html += '<div class="flex items-start justify-between mb-3">';
+                    html += '<div class="flex items-center gap-3">';
+                    html += '<span class="text-2xl font-bold text-teal-400">#' + (index + 1) + '</span>';
+                    html += '<div>';
+                    html += '<h4 class="text-lg font-bold text-white">' + utils.escapeHtml(gap.topic) + '</h4>';
+                    html += '<div class="flex items-center gap-2 mt-1">';
+                    html += '<span class="px-2 py-0.5 rounded text-xs font-medium ' + difficultyBg + ' ' + difficultyColor + '">' + (gap.difficulty || 'medium').toUpperCase() + '</span>';
+                    html += '<span class="text-gray-500 text-sm">Opportunity Score: ' + (gap.potential || 75) + '/100</span>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    // Description
+                    html += '<p class="text-gray-400 mb-3">' + utils.escapeHtml(gap.description || 'Untapped content opportunity in your niche') + '</p>';
+
+                    // Why it\'s a gap
+                    if (gap.reason) {
+                        html += '<div class="bg-teal-500/10 rounded-lg p-3 mb-3">';
+                        html += '<p class="text-sm text-teal-300"><strong>Why this is a gap:</strong> ' + utils.escapeHtml(gap.reason) + '</p>';
+                        html += '</div>';
+                    }
+
+                    // Potential bar
+                    html += '<div class="mb-3">';
+                    html += '<div class="flex justify-between text-sm mb-1">';
+                    html += '<span class="text-gray-400">Potential</span>';
+                    html += '<span class="text-teal-400">' + (gap.potential || 75) + '%</span>';
+                    html += '</div>';
+                    html += '<div class="w-full bg-gray-700 rounded-full h-2">';
+                    html += '<div class="bg-gradient-to-r from-teal-500 to-cyan-500 h-2 rounded-full" style="width: ' + potentialWidth + '"></div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    // Suggested titles
+                    if (gap.suggestedTitles && gap.suggestedTitles.length > 0) {
+                        html += '<div class="bg-gray-900/50 rounded-lg p-3">';
+                        html += '<p class="text-sm text-gray-400 mb-2">📝 Video Ideas:</p>';
+                        html += '<ul class="space-y-1">';
+                        gap.suggestedTitles.forEach(function(title) {
+                            html += '<li class="flex items-center justify-between">';
+                            html += '<span class="text-white text-sm">' + utils.escapeHtml(title) + '</span>';
+                            html += '<button onclick="utils.copyToClipboard(\'' + utils.escapeHtml(title).replace(/'/g, "\\'") + '\', this)" class="text-teal-400 hover:text-teal-300 text-xs">Copy</button>';
+                            html += '</li>';
+                        });
+                        html += '</ul>';
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+
+            // Market summary
+            if (result.summary) {
+                html += '<div class="bg-gray-800/30 border border-gray-700 rounded-xl p-5 mt-6">';
+                html += '<h4 class="text-lg font-bold text-white mb-3">📈 Market Summary</h4>';
+                html += '<p class="text-gray-400">' + utils.escapeHtml(result.summary) + '</p>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
         function renderHistory() {
             var html = '';
 
@@ -1374,12 +1735,14 @@
 
             // History tabs
             html += '<div class="max-w-4xl mx-auto px-4 py-6">';
-            html += '<div class="tab-container">';
+            html += '<div class="tab-container flex-wrap">';
             var historyTypes = [
                 { id: 'script', name: 'Scripts', icon: '🎬' },
                 { id: 'hooks', name: 'Hooks', icon: '🎣' },
                 { id: 'multiplier', name: 'Content', icon: '🔄' },
-                { id: 'thumbnail', name: 'Thumbnails', icon: '📊' }
+                { id: 'thumbnail', name: 'Thumbnails', icon: '📊' },
+                { id: 'trends', name: 'Trends', icon: '🎯' },
+                { id: 'gaps', name: 'Gaps', icon: '🗺️' }
             ];
             historyTypes.forEach(function(type) {
                 var active = state.historyType === type.id ? 'active' : '';
@@ -1395,6 +1758,8 @@
                 case 'hooks': historyData = state.hooks.history; break;
                 case 'multiplier': historyData = state.multiplier.history; break;
                 case 'thumbnail': historyData = state.thumbnailArena.history; break;
+                case 'trends': historyData = state.trends.history; break;
+                case 'gaps': historyData = state.gaps.history; break;
             }
 
             if (historyData.length === 0) {
@@ -1714,6 +2079,99 @@
                 render();
             },
 
+            // Trend Hijacker methods
+            setTrendRegion: function(region) {
+                state.trends.region = region;
+                render();
+            },
+
+            setTrendTimeframe: function(timeframe) {
+                state.trends.timeframe = timeframe;
+                render();
+            },
+
+            generateTrends: function() {
+                var niche = document.getElementById('trend-niche').value.trim();
+                if (!niche) {
+                    utils.showToast('Please enter your niche or topic area', 'error');
+                    return;
+                }
+
+                state.trends.niche = niche;
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('generateTrendReport')({
+                    niche: niche,
+                    region: state.trends.region,
+                    timeframe: state.trends.timeframe
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.trends.result = result.data;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Trending topics found!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to find trends', 'error');
+                    render();
+                });
+            },
+
+            resetTrends: function() {
+                state.trends.result = null;
+                state.trends.niche = '';
+                render();
+            },
+
+            // Content Gap Finder methods
+            setGapDepth: function(depth) {
+                state.gaps.depth = depth;
+                render();
+            },
+
+            findGaps: function() {
+                var niche = document.getElementById('gap-niche').value.trim();
+                if (!niche) {
+                    utils.showToast('Please enter your niche or topic area', 'error');
+                    return;
+                }
+
+                var competitors = document.getElementById('gap-competitors').value.trim();
+
+                state.gaps.niche = niche;
+                state.gaps.competitors = competitors;
+                state.loading = true;
+                render();
+
+                functions.httpsCallable('findContentGaps')({
+                    niche: niche,
+                    competitors: competitors,
+                    depth: state.gaps.depth
+                })
+                .then(function(result) {
+                    state.loading = false;
+                    state.gaps.result = result.data;
+                    state.tokens.balance = result.data.remainingBalance || state.tokens.balance;
+                    utils.showToast('Content gaps discovered!', 'success');
+                    render();
+                })
+                .catch(function(error) {
+                    state.loading = false;
+                    utils.showToast(error.message || 'Failed to find content gaps', 'error');
+                    render();
+                });
+            },
+
+            resetGaps: function() {
+                state.gaps.result = null;
+                state.gaps.niche = '';
+                state.gaps.competitors = '';
+                render();
+            },
+
             // History methods
             setHistoryType: function(type) {
                 state.historyType = type;
@@ -1729,6 +2187,8 @@
                     case 'hooks': collectionName = 'hookHistory'; break;
                     case 'multiplier': collectionName = 'contentMultiplierHistory'; break;
                     case 'thumbnail': collectionName = 'thumbnailTestHistory'; break;
+                    case 'trends': collectionName = 'trendHistory'; break;
+                    case 'gaps': collectionName = 'contentGapHistory'; break;
                 }
 
                 db.collection(collectionName)
@@ -1747,6 +2207,8 @@
                             case 'hooks': state.hooks.history = history; break;
                             case 'multiplier': state.multiplier.history = history; break;
                             case 'thumbnail': state.thumbnailArena.history = history; break;
+                            case 'trends': state.trends.history = history; break;
+                            case 'gaps': state.gaps.history = history; break;
                         }
                         render();
                     })
