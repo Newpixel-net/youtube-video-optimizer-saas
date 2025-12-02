@@ -1981,16 +1981,20 @@
             flex: 0 0 auto;
             min-width: 180px;
             max-width: 200px;
-            background: white;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 1rem;
             padding: 1rem 1.25rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             transition: all 0.2s ease;
         }
 
         .compact-usage-cell:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3), 0 0 20px rgba(236, 72, 153, 0.15);
+            border-color: rgba(236, 72, 153, 0.2);
         }
 
         .compact-cell-header {
@@ -2019,7 +2023,7 @@
         .compact-cell-name {
             font-weight: 700;
             font-size: 0.875rem;
-            color: #1f2937;
+            color: #ffffff;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -2027,23 +2031,23 @@
 
         .compact-cell-usage {
             font-size: 0.75rem;
-            color: #6b7280;
+            color: rgba(255, 255, 255, 0.6);
         }
 
         .compact-cell-usage strong {
             font-size: 1rem;
-            color: #1f2937;
+            color: #ffffff;
         }
 
         .compact-cell-bonus {
-            color: #10b981;
+            color: #34d399;
             font-weight: 700;
         }
 
         .compact-progress-bar {
             width: 100%;
             height: 6px;
-            background: #e5e7eb;
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
             overflow: hidden;
             margin-bottom: 0.5rem;
@@ -2057,17 +2061,17 @@
 
         .compact-cell-footer {
             font-size: 0.75rem;
-            color: #6b7280;
+            color: rgba(255, 255, 255, 0.6);
         }
 
         .compact-cell-footer.exhausted {
-            color: #ef4444;
+            color: #f87171;
             font-weight: 600;
         }
 
         .compact-cell-countdown {
             font-weight: 700;
-            color: #dc2626;
+            color: #f87171;
         }
 
         /* Small phones (up to 375px) */
@@ -9540,65 +9544,77 @@
             var isViewChange = previousView !== null && previousView !== state.currentView;
             previousView = state.currentView;
 
+            // Helper function to run post-render tasks
+            function postRenderTasks() {
+                // Render global header (notification bell) for authenticated views
+                var existingHeader = document.getElementById('global-header-container');
+                var headerHtml = renderGlobalHeader();
+                if (headerHtml) {
+                    if (!existingHeader) {
+                        existingHeader = document.createElement('div');
+                        existingHeader.id = 'global-header-container';
+                        document.body.appendChild(existingHeader);
+                    }
+                    existingHeader.innerHTML = headerHtml;
+                } else if (existingHeader) {
+                    existingHeader.remove();
+                }
+
+                // Initialize mobile swipe dots and desktop carousel after DOM update (dashboard only)
+                if (state.currentView === 'dashboard') {
+                    var carouselEl = document.getElementById('desktopUsageCarousel');
+                    var swipeEl = document.getElementById('usageSwipeContainer');
+
+                    // Initialize without flash
+                    app.initSwipeDots();
+                    app.initDesktopCarousel();
+                    updateAuroraTheme();
+
+                    // Show carousel elements
+                    if (carouselEl) carouselEl.classList.add('carousel-ready');
+                    if (swipeEl) swipeEl.classList.add('carousel-ready');
+                }
+            }
+
             // Apply smooth transition for view changes
             if (isViewChange) {
-                root.classList.add('view-transitioning');
-                root.innerHTML = html;
-                // Invalidate cached DOM references after DOM change
-                cachedCountdownElements = null;
-                // Use requestAnimationFrame for smoother transition
+                // OPTIMIZATION: Hide content FIRST, then replace DOM, then animate in
+                // This prevents the flash/flicker by ensuring opacity:0 is applied before DOM change
+                root.style.opacity = '0';
+                root.style.transform = 'translateY(8px)';
+
+                // Use double rAF to ensure the style is painted before DOM replacement
                 requestAnimationFrame(function() {
-                    root.classList.remove('view-transitioning');
-                    root.classList.add('view-entering');
-                    // Remove animation class after it completes
-                    setTimeout(function() {
-                        root.classList.remove('view-entering');
-                    }, 250);
+                    requestAnimationFrame(function() {
+                        // Now replace DOM while hidden
+                        root.innerHTML = html;
+                        // Invalidate cached DOM references after DOM change
+                        cachedCountdownElements = null;
+
+                        // Run post-render tasks while still hidden
+                        postRenderTasks();
+
+                        // Animate in after a micro-delay
+                        requestAnimationFrame(function() {
+                            root.style.transition = 'opacity 0.2s ease-out, transform 0.2s ease-out';
+                            root.style.opacity = '1';
+                            root.style.transform = 'translateY(0)';
+
+                            // Clean up inline styles after animation
+                            setTimeout(function() {
+                                root.style.transition = '';
+                                root.style.opacity = '';
+                                root.style.transform = '';
+                            }, 220);
+                        });
+                    });
                 });
             } else {
                 root.innerHTML = html;
                 // Invalidate cached DOM references after DOM change
                 cachedCountdownElements = null;
-            }
-
-            // Render global header (notification bell) for authenticated views
-            var existingHeader = document.getElementById('global-header-container');
-            var headerHtml = renderGlobalHeader();
-            if (headerHtml) {
-                if (!existingHeader) {
-                    existingHeader = document.createElement('div');
-                    existingHeader.id = 'global-header-container';
-                    document.body.appendChild(existingHeader);
-                }
-                existingHeader.innerHTML = headerHtml;
-            } else if (existingHeader) {
-                existingHeader.remove();
-            }
-
-            // Initialize mobile swipe dots and desktop carousel after DOM update (dashboard only)
-            if (state.currentView === 'dashboard') {
-                // Pre-hide carousel elements to prevent flash
-                var carouselEl = document.getElementById('desktopUsageCarousel');
-                var swipeEl = document.getElementById('usageSwipeContainer');
-                if (carouselEl) carouselEl.classList.add('carousel-initializing');
-                if (swipeEl) swipeEl.classList.add('carousel-initializing');
-
-                // Use requestAnimationFrame instead of setTimeout for smoother init
-                requestAnimationFrame(function() {
-                    app.initSwipeDots();
-                    app.initDesktopCarousel();
-                    // Update aurora theme for time-aware colors
-                    updateAuroraTheme();
-                    // Show carousel elements after init
-                    if (carouselEl) {
-                        carouselEl.classList.remove('carousel-initializing');
-                        carouselEl.classList.add('carousel-ready');
-                    }
-                    if (swipeEl) {
-                        swipeEl.classList.remove('carousel-initializing');
-                        swipeEl.classList.add('carousel-ready');
-                    }
-                });
+                // Run post-render tasks immediately for same-view updates
+                postRenderTasks();
             }
 
             // Render lightbox overlay if open
