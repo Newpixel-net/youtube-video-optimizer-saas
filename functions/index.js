@@ -10164,44 +10164,49 @@ exports.userMarkNotificationRead = functions.https.onCall(async (data, context) 
 exports.adminGetRenewalRequests = functions.https.onCall(async (data, context) => {
   await requireAdmin(context);
 
-  const { status = 'pending', limit: limitCount = 50 } = data || {};
+  try {
+    const { status = 'pending', limit: limitCount = 50 } = data || {};
 
-  let query = db.collection('renewalRequests');
+    let query = db.collection('renewalRequests');
 
-  // where clause must come before orderBy in Firestore
-  if (status && status !== 'all') {
-    query = query.where('status', '==', status);
-  }
-
-  query = query.orderBy('createdAt', 'desc').limit(limitCount);
-
-  const snapshot = await query.get();
-  const requests = [];
-
-  snapshot.forEach(doc => {
-    const d = doc.data();
-    requests.push({
-      id: doc.id,
-      ...d,
-      createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
-      processedAt: d.processedAt?.toDate?.()?.toISOString() || null,
-      previousEndDate: d.previousEndDate?.toDate?.()?.toISOString() || null
-    });
-  });
-
-  // Get counts by status
-  const pendingSnapshot = await db.collection('renewalRequests').where('status', '==', 'pending').get();
-  const approvedSnapshot = await db.collection('renewalRequests').where('status', '==', 'approved').get();
-  const deniedSnapshot = await db.collection('renewalRequests').where('status', '==', 'denied').get();
-
-  return {
-    requests,
-    counts: {
-      pending: pendingSnapshot.size,
-      approved: approvedSnapshot.size,
-      denied: deniedSnapshot.size
+    // where clause must come before orderBy in Firestore
+    if (status && status !== 'all') {
+      query = query.where('status', '==', status);
     }
-  };
+
+    query = query.orderBy('createdAt', 'desc').limit(limitCount);
+
+    const snapshot = await query.get();
+    const requests = [];
+
+    snapshot.forEach(doc => {
+      const d = doc.data();
+      requests.push({
+        id: doc.id,
+        ...d,
+        createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
+        processedAt: d.processedAt?.toDate?.()?.toISOString() || null,
+        previousEndDate: d.previousEndDate?.toDate?.()?.toISOString() || null
+      });
+    });
+
+    // Get counts by status
+    const pendingSnapshot = await db.collection('renewalRequests').where('status', '==', 'pending').get();
+    const approvedSnapshot = await db.collection('renewalRequests').where('status', '==', 'approved').get();
+    const deniedSnapshot = await db.collection('renewalRequests').where('status', '==', 'denied').get();
+
+    return {
+      requests,
+      counts: {
+        pending: pendingSnapshot.size,
+        approved: approvedSnapshot.size,
+        denied: deniedSnapshot.size
+      }
+    };
+  } catch (error) {
+    console.error('adminGetRenewalRequests error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get renewal requests: ' + error.message);
+  }
 });
 
 // Admin: Process (approve/deny) a renewal request
