@@ -2581,6 +2581,21 @@
             unreadCount: 0,              // Unread notification count
             showNotifications: false,    // Notification dropdown visibility
 
+            // User notifications (from backend)
+            userNotifications: null,      // { notifications: [], unreadCount: 0 }
+            showUserNotifications: false, // Notification panel visibility
+            userNotificationsLoading: false,
+
+            // Renewal Request state
+            showRenewalModal: false,      // Renewal request modal visibility
+            renewalForm: {                // Form data for renewal request
+                preferredPlan: 'pro',
+                preferredDuration: 'month',
+                message: ''
+            },
+            renewalRequests: [],          // User's renewal requests
+            renewalSubmitting: false,     // Submitting state
+
             // Report modals
             sendModalReportId: null,     // Report ID for send modal
 
@@ -3056,6 +3071,9 @@
 
                     // Load notifications
                     this.loadNotifications();
+
+                    // Load user notifications (from backend)
+                    this.loadUserNotifications();
                 }
             },
 
@@ -3513,6 +3531,150 @@
 
             signOut: function() {
                 auth.signOut();
+            },
+
+            /* ------------------------------------------
+               4.5.2b User Notifications Actions
+               ------------------------------------------ */
+
+            loadUserNotifications: function() {
+                state.userNotificationsLoading = true;
+                render();
+
+                functions.httpsCallable('userGetNotifications')({ limit: 20 })
+                    .then(function(result) {
+                        state.userNotifications = {
+                            notifications: result.data.notifications || [],
+                            unreadCount: result.data.unreadCount || 0
+                        };
+                        state.userNotificationsLoading = false;
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading notifications:', error);
+                        state.userNotificationsLoading = false;
+                        render();
+                    });
+            },
+
+            toggleUserNotifications: function() {
+                state.showUserNotifications = !state.showUserNotifications;
+                if (state.showUserNotifications && !state.userNotifications) {
+                    this.loadUserNotifications();
+                }
+                render();
+            },
+
+            markNotificationRead: function(notificationId) {
+                functions.httpsCallable('userMarkNotificationRead')({ notificationId: notificationId })
+                    .then(function() {
+                        // Update local state
+                        if (state.userNotifications) {
+                            var notif = state.userNotifications.notifications.find(function(n) { return n.id === notificationId; });
+                            if (notif && !notif.read) {
+                                notif.read = true;
+                                state.userNotifications.unreadCount = Math.max(0, state.userNotifications.unreadCount - 1);
+                            }
+                        }
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error marking notification read:', error);
+                    });
+            },
+
+            markAllNotificationsRead: function() {
+                functions.httpsCallable('userMarkNotificationRead')({ markAllRead: true })
+                    .then(function() {
+                        if (state.userNotifications) {
+                            state.userNotifications.notifications.forEach(function(n) { n.read = true; });
+                            state.userNotifications.unreadCount = 0;
+                        }
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error marking all read:', error);
+                    });
+            },
+
+            /* ------------------------------------------
+               4.5.2c Renewal Request Actions
+               ------------------------------------------ */
+
+            openRenewalModal: function() {
+                // Set default plan based on previous subscription
+                var p = state.profile;
+                if (p && p.subscription && p.subscription.plan && p.subscription.plan !== 'free') {
+                    state.renewalForm.preferredPlan = p.subscription.plan;
+                }
+                state.showRenewalModal = true;
+                this.loadRenewalRequests();
+                render();
+            },
+
+            closeRenewalModal: function() {
+                state.showRenewalModal = false;
+                render();
+            },
+
+            updateRenewalForm: function(field, value) {
+                state.renewalForm[field] = value;
+                render();
+            },
+
+            submitRenewalRequest: function() {
+                if (state.renewalSubmitting) return;
+
+                var form = state.renewalForm;
+                if (!form.preferredPlan) {
+                    alert('Please select a plan');
+                    return;
+                }
+
+                state.renewalSubmitting = true;
+                render();
+
+                functions.httpsCallable('userSubmitRenewalRequest')({
+                    preferredPlan: form.preferredPlan,
+                    preferredDuration: form.preferredDuration,
+                    message: form.message
+                })
+                    .then(function(result) {
+                        state.renewalSubmitting = false;
+                        state.renewalForm.message = '';
+                        alert('Renewal request submitted! We will review it shortly.');
+                        app.loadRenewalRequests();
+                        app.loadUserNotifications();
+                        render();
+                    })
+                    .catch(function(error) {
+                        state.renewalSubmitting = false;
+                        alert('Failed to submit request: ' + error.message);
+                        render();
+                    });
+            },
+
+            loadRenewalRequests: function() {
+                functions.httpsCallable('userGetRenewalRequests')()
+                    .then(function(result) {
+                        state.renewalRequests = result.data.requests || [];
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading renewal requests:', error);
+                    });
+            },
+
+            cancelRenewalRequest: function(requestId) {
+                if (!confirm('Cancel this renewal request?')) return;
+
+                functions.httpsCallable('userCancelRenewalRequest')({ requestId: requestId })
+                    .then(function() {
+                        app.loadRenewalRequests();
+                    })
+                    .catch(function(error) {
+                        alert('Failed to cancel: ' + error.message);
+                    });
             },
 
             /* ------------------------------------------
@@ -5169,6 +5331,177 @@
         }
 
         /* ------------------------------------------
+           4.6.3b User Notification Panel
+           ------------------------------------------ */
+        function renderUserNotificationPanel() {
+            var html = '<div class="absolute right-0 top-12 w-80 max-h-96 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50">';
+
+            // Header
+            html += '<div class="flex justify-between items-center px-4 py-3 border-b border-gray-700">';
+            html += '<span class="font-semibold text-white">Notifications</span>';
+            if (state.userNotifications && state.userNotifications.unreadCount > 0) {
+                html += '<button onclick="app.markAllNotificationsRead()" class="text-xs text-blue-400 hover:text-blue-300">Mark all read</button>';
+            }
+            html += '</div>';
+
+            // Content
+            html += '<div class="max-h-72 overflow-y-auto">';
+
+            if (state.userNotificationsLoading) {
+                html += '<div class="flex items-center justify-center py-8"><div class="spinner w-6 h-6"></div></div>';
+            } else if (!state.userNotifications || state.userNotifications.notifications.length === 0) {
+                html += '<div class="text-center py-8 text-gray-400">';
+                html += '<div class="text-3xl mb-2">✨</div>';
+                html += '<div>No notifications yet</div>';
+                html += '</div>';
+            } else {
+                state.userNotifications.notifications.forEach(function(n) {
+                    var bgColor = n.read ? 'bg-gray-800/50' : 'bg-gray-800';
+                    var icon = '📢';
+                    if (n.type === 'request_submitted') icon = '📝';
+                    else if (n.type === 'request_approved') icon = '🎉';
+                    else if (n.type === 'request_denied') icon = '❌';
+                    else if (n.type === 'subscription_expiring') icon = '⏰';
+
+                    html += '<div class="' + bgColor + ' px-4 py-3 border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/50" onclick="app.markNotificationRead(\'' + n.id + '\')">';
+                    html += '<div class="flex items-start gap-3">';
+                    html += '<span class="text-lg">' + icon + '</span>';
+                    html += '<div class="flex-1 min-w-0">';
+                    html += '<div class="font-medium text-white text-sm">' + utils.escapeHtml(n.title || 'Notification') + '</div>';
+                    html += '<div class="text-gray-400 text-xs mt-1 line-clamp-2">' + utils.escapeHtml(n.message || '') + '</div>';
+                    if (n.createdAt) {
+                        var date = new Date(n.createdAt);
+                        html += '<div class="text-gray-500 text-xs mt-1">' + date.toLocaleDateString() + '</div>';
+                    }
+                    html += '</div>';
+                    if (!n.read) {
+                        html += '<span class="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></span>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                });
+            }
+
+            html += '</div>';
+            html += '</div>';
+            return html;
+        }
+
+        /* ------------------------------------------
+           4.6.3c Renewal Request Modal
+           ------------------------------------------ */
+        function renderRenewalModal() {
+            if (!state.showRenewalModal) return '';
+
+            var form = state.renewalForm;
+            var requests = state.renewalRequests || [];
+            var hasPendingRequest = requests.some(function(r) { return r.status === 'pending'; });
+
+            var html = '<div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onclick="app.closeRenewalModal()">';
+            html += '<div class="bg-gray-900 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl" onclick="event.stopPropagation()">';
+
+            // Header
+            html += '<div class="px-6 py-4 border-b border-gray-700">';
+            html += '<h2 class="text-xl font-bold text-white">🔄 Request Subscription Renewal</h2>';
+            html += '<p class="text-gray-400 text-sm mt-1">Submit a request and we\'ll review it shortly</p>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="p-6">';
+
+            if (hasPendingRequest) {
+                html += '<div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6">';
+                html += '<div class="flex items-center gap-2 text-amber-400 font-medium"><span>⏳</span> You have a pending request</div>';
+                html += '<p class="text-gray-400 text-sm mt-1">Please wait for your current request to be reviewed.</p>';
+                html += '</div>';
+            } else {
+                // Form
+                html += '<div class="space-y-4">';
+
+                // Plan selection
+                html += '<div>';
+                html += '<label class="block text-gray-300 text-sm font-medium mb-2">Preferred Plan</label>';
+                html += '<div class="grid grid-cols-3 gap-2">';
+
+                ['lite', 'pro', 'enterprise'].forEach(function(planOption) {
+                    var isSelected = form.preferredPlan === planOption;
+                    var bgClass = isSelected ? 'bg-gradient-to-r from-purple-500 to-indigo-500 border-transparent' : 'bg-gray-800 border-gray-700 hover:border-gray-600';
+                    html += '<button onclick="app.updateRenewalForm(\'preferredPlan\', \'' + planOption + '\')" class="' + bgClass + ' border rounded-xl py-3 px-4 text-center transition-all">';
+                    html += '<div class="font-semibold text-white">' + planOption.charAt(0).toUpperCase() + planOption.slice(1) + '</div>';
+                    html += '</button>';
+                });
+
+                html += '</div>';
+                html += '</div>';
+
+                // Duration selection
+                html += '<div>';
+                html += '<label class="block text-gray-300 text-sm font-medium mb-2">Preferred Duration</label>';
+                html += '<select onchange="app.updateRenewalForm(\'preferredDuration\', this.value)" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 px-4 text-white">';
+                ['week', 'month', '3months', 'year'].forEach(function(dur) {
+                    var labels = { week: '1 Week', month: '1 Month', '3months': '3 Months', year: '1 Year' };
+                    var selected = form.preferredDuration === dur ? ' selected' : '';
+                    html += '<option value="' + dur + '"' + selected + '>' + labels[dur] + '</option>';
+                });
+                html += '</select>';
+                html += '</div>';
+
+                // Message
+                html += '<div>';
+                html += '<label class="block text-gray-300 text-sm font-medium mb-2">Message (optional)</label>';
+                html += '<textarea onchange="app.updateRenewalForm(\'message\', this.value)" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 px-4 text-white h-24 resize-none" placeholder="Any additional notes for the admin...">' + utils.escapeHtml(form.message || '') + '</textarea>';
+                html += '</div>';
+
+                html += '</div>';
+            }
+
+            // Previous requests
+            if (requests.length > 0) {
+                html += '<div class="mt-6 pt-6 border-t border-gray-700">';
+                html += '<h3 class="text-gray-300 font-medium mb-3">Previous Requests</h3>';
+                html += '<div class="space-y-2 max-h-40 overflow-y-auto">';
+
+                requests.slice(0, 5).forEach(function(req) {
+                    var statusColor = req.status === 'approved' ? 'text-green-400' : req.status === 'denied' ? 'text-red-400' : req.status === 'pending' ? 'text-amber-400' : 'text-gray-400';
+                    var statusIcon = req.status === 'approved' ? '✅' : req.status === 'denied' ? '❌' : req.status === 'pending' ? '⏳' : '🚫';
+                    var date = req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '';
+
+                    html += '<div class="bg-gray-800/50 rounded-lg px-3 py-2 flex items-center justify-between">';
+                    html += '<div>';
+                    html += '<span class="text-white text-sm">' + (req.preferredPlan || '').toUpperCase() + '</span>';
+                    html += '<span class="text-gray-500 text-xs ml-2">' + date + '</span>';
+                    html += '</div>';
+                    html += '<div class="flex items-center gap-2">';
+                    html += '<span class="' + statusColor + ' text-sm">' + statusIcon + ' ' + (req.status || '').charAt(0).toUpperCase() + (req.status || '').slice(1) + '</span>';
+                    if (req.status === 'pending') {
+                        html += '<button onclick="app.cancelRenewalRequest(\'' + req.id + '\')" class="text-red-400 hover:text-red-300 text-xs">Cancel</button>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                });
+
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            // Footer
+            html += '<div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">';
+            html += '<button onclick="app.closeRenewalModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-xl transition-all">Cancel</button>';
+            if (!hasPendingRequest) {
+                var submitDisabled = state.renewalSubmitting ? ' disabled' : '';
+                var submitText = state.renewalSubmitting ? '<span class="spinner w-4 h-4 mr-2"></span>Submitting...' : 'Submit Request';
+                html += '<button onclick="app.submitRenewalRequest()"' + submitDisabled + ' class="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white rounded-xl transition-all font-semibold">' + submitText + '</button>';
+            }
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+            return html;
+        }
+
+        /* ------------------------------------------
            4.6.4 Dashboard View
            ------------------------------------------ */
         function renderDashboard() {
@@ -5186,17 +5519,58 @@
             html += '<div class="min-h-screen mobile-full-screen py-8 px-4 lg:py-12 mobile-wide-container">';
             html += '<div class="max-w-6xl mx-auto">';
 
+            // Check subscription status
+            var subEndDate = p.subscription && p.subscription.endDate ? new Date(p.subscription.endDate) : null;
+            var isExpired = subEndDate && subEndDate < new Date() && plan !== 'free';
+            var isExpiringSoon = subEndDate && !isExpired && (subEndDate - new Date()) < 7 * 24 * 60 * 60 * 1000 && plan !== 'free';
+
             // Header - larger and more prominent
             html += '<div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 fade-in gap-6">';
             html += '<div>';
             html += '<h1 class="text-4xl lg:text-5xl font-bold text-white mb-3">Welcome back!</h1>';
-            html += '<div class="flex flex-wrap gap-4 text-white/90">';
+            html += '<div class="flex flex-wrap gap-3 text-white/90">';
             html += '<span class="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full backdrop-blur"><span class="text-lg">📧</span> ' + utils.escapeHtml(p.email || '') + '</span>';
             html += '<span class="flex items-center gap-2 bg-gradient-to-r from-purple-500/30 to-indigo-500/30 px-4 py-2 rounded-full backdrop-blur font-semibold"><span class="text-lg">⭐</span> ' + planName + ' Plan</span>';
+
+            // Fiverr Verified Badge
+            if (p.isFiverrVerified) {
+                html += '<span class="flex items-center gap-2 bg-gradient-to-r from-green-500/30 to-emerald-500/30 px-4 py-2 rounded-full backdrop-blur font-semibold border border-green-500/30" title="Fiverr Verified Client"><span class="text-lg">✅</span> Fiverr Verified</span>';
+            }
+
             html += '</div>';
+
+            // Subscription expiry warning
+            if (isExpired) {
+                html += '<div class="mt-3 flex items-center gap-3">';
+                html += '<span class="text-red-400 text-sm">⚠️ Your subscription has expired</span>';
+                html += '<button onclick="app.openRenewalModal()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold px-4 py-2 rounded-full text-sm transition-all shadow-lg hover:shadow-xl">🔄 Renew Subscription</button>';
+                html += '</div>';
+            } else if (isExpiringSoon) {
+                var daysLeft = Math.ceil((subEndDate - new Date()) / (1000 * 60 * 60 * 24));
+                html += '<div class="mt-3 flex items-center gap-3">';
+                html += '<span class="text-amber-400 text-sm">⏰ Subscription expires in ' + daysLeft + ' day' + (daysLeft > 1 ? 's' : '') + '</span>';
+                html += '<button onclick="app.openRenewalModal()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold px-4 py-2 rounded-full text-sm transition-all shadow-lg hover:shadow-xl">🔄 Renew Early</button>';
+                html += '</div>';
+            }
+
             html += '</div>';
             html += '<div class="flex items-center gap-4">';
-            // Note: Notification bell is now rendered globally via renderGlobalHeader()
+
+            // User notification bell
+            html += '<div class="relative">';
+            html += '<button onclick="app.toggleUserNotifications()" class="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all" title="Notifications">';
+            html += '<span class="text-xl">🔔</span>';
+            if (state.userNotifications && state.userNotifications.unreadCount > 0) {
+                html += '<span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">' + (state.userNotifications.unreadCount > 9 ? '9+' : state.userNotifications.unreadCount) + '</span>';
+            }
+            html += '</button>';
+
+            // Notification dropdown
+            if (state.showUserNotifications) {
+                html += renderUserNotificationPanel();
+            }
+            html += '</div>';
+
             html += '<button onclick="app.signOut()" class="btn-secondary">Sign Out</button>';
             html += '</div>';
             html += '</div>';
@@ -8393,6 +8767,21 @@
                 var existingLightbox = document.getElementById('lightbox-container');
                 if (existingLightbox) existingLightbox.remove();
                 document.onkeydown = null;
+            }
+
+            // Render renewal modal if open
+            if (state.showRenewalModal) {
+                var renewalModalHtml = renderRenewalModal();
+                var renewalDiv = document.getElementById('renewal-modal-container');
+                if (!renewalDiv) {
+                    renewalDiv = document.createElement('div');
+                    renewalDiv.id = 'renewal-modal-container';
+                    document.body.appendChild(renewalDiv);
+                }
+                renewalDiv.innerHTML = renewalModalHtml;
+            } else {
+                var existingRenewalModal = document.getElementById('renewal-modal-container');
+                if (existingRenewalModal) existingRenewalModal.remove();
             }
         }
 
