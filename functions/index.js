@@ -8848,3 +8848,60 @@ exports.makeFilePublic = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', 'Failed to make file public');
   }
 });
+
+// =====================================================
+// ADMIN: Set CORS Configuration on Storage Bucket
+// Run this ONCE after deployment to enable cross-origin access
+// Call from browser console: firebase.functions().httpsCallable('adminSetBucketCors')()
+// Added: 2025-12-02 - Fixes CORS errors for images on custom domain
+// =====================================================
+exports.adminSetBucketCors = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  try {
+    const bucket = admin.storage().bucket();
+
+    // Define CORS configuration
+    const corsConfiguration = [
+      {
+        origin: [
+          'https://ytseo.siteuo.com',
+          'https://ytseo-6d1b0.web.app',
+          'https://ytseo-6d1b0.firebaseapp.com',
+          'http://localhost:5000',
+          'http://localhost:5001',
+          'http://127.0.0.1:5000',
+          'http://127.0.0.1:5001'
+        ],
+        method: ['GET', 'HEAD', 'OPTIONS'],
+        maxAgeSeconds: 3600,
+        responseHeader: [
+          'Content-Type',
+          'Access-Control-Allow-Origin',
+          'Access-Control-Allow-Methods',
+          'Access-Control-Allow-Headers',
+          'Content-Length',
+          'Content-Encoding'
+        ]
+      }
+    ];
+
+    // Set CORS on the bucket
+    await bucket.setCorsConfiguration(corsConfiguration);
+
+    // Verify it was set
+    const [metadata] = await bucket.getMetadata();
+
+    return {
+      success: true,
+      message: 'CORS configuration applied successfully!',
+      bucketName: bucket.name,
+      corsConfig: metadata.cors || 'Configuration applied'
+    };
+
+  } catch (error) {
+    console.error('Set CORS error:', error);
+    throw new functions.https.HttpsError('internal',
+      'Failed to set CORS: ' + error.message);
+  }
+});
