@@ -2592,6 +2592,10 @@
             unreadCount: 0,              // Unread notification count
             showNotifications: false,    // Notification dropdown visibility
 
+            // Dashboard Recent Activity
+            dashboardRecentActivity: null, // Recent activity items for dashboard widget
+            dashboardActivityLoading: false, // Loading state for recent activity
+
             // User notifications (from backend)
             userNotifications: null,      // { notifications: [], unreadCount: 0 }
             showUserNotifications: false, // Notification panel visibility
@@ -2887,6 +2891,30 @@
                     date: date.toLocaleDateString(),
                     time: date.toLocaleTimeString()
                 };
+            },
+
+            /**
+             * Format timestamp as relative time (e.g., "2 hours ago")
+             */
+            formatTimeAgo: function(timestamp) {
+                if (!timestamp) return 'Recently';
+                const now = Date.now();
+                const time = typeof timestamp === 'number' ? timestamp : new Date(timestamp).getTime();
+                const diff = now - time;
+
+                const seconds = Math.floor(diff / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.floor(minutes / 60);
+                const days = Math.floor(hours / 24);
+                const weeks = Math.floor(days / 7);
+                const months = Math.floor(days / 30);
+
+                if (months > 0) return months === 1 ? '1 month ago' : months + ' months ago';
+                if (weeks > 0) return weeks === 1 ? '1 week ago' : weeks + ' weeks ago';
+                if (days > 0) return days === 1 ? 'Yesterday' : days + ' days ago';
+                if (hours > 0) return hours === 1 ? '1 hour ago' : hours + ' hours ago';
+                if (minutes > 0) return minutes === 1 ? '1 min ago' : minutes + ' mins ago';
+                return 'Just now';
             }
         };
 
@@ -3085,7 +3113,26 @@
 
                     // Load user notifications (from backend)
                     this.loadUserNotifications();
+
+                    // Load recent activity for dashboard widget
+                    this.loadDashboardActivity();
                 }
+            },
+
+            loadDashboardActivity: function() {
+                state.dashboardActivityLoading = true;
+                functions.httpsCallable('getAllHistory')({ limit: 5 })
+                    .then(function(result) {
+                        var data = result.data;
+                        state.dashboardRecentActivity = (data.history.all || []).slice(0, 5);
+                        state.dashboardActivityLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        console.warn('Failed to load recent activity:', e);
+                        state.dashboardActivityLoading = false;
+                        state.dashboardRecentActivity = [];
+                    });
             },
 
             goToOptimizer: function() {
@@ -6141,15 +6188,79 @@
             html += '<span>Audit Channel</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
-            // History Card
-            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100" onclick="app.goToHistory()">';
-            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">📜</div>';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">History</h3>';
-            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">View all your past optimizations</p>';
-            html += '<div class="flex items-center text-purple-600 font-bold group">';
-            html += '<span>View</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
-            html += '</div></div>';
+            html += '</div>';
 
+            // ========== RECENT ACTIVITY SECTION ==========
+            html += '<div class="mt-8 fade-in">';
+            html += '<div class="flex items-center justify-between mb-4">';
+            html += '<h2 class="text-xl lg:text-2xl font-bold text-white">📋 Recent Activity</h2>';
+            html += '<button onclick="app.goToHistory()" class="text-white/80 hover:text-white font-medium flex items-center gap-1 transition-colors">';
+            html += '<span>View All</span><span>→</span>';
+            html += '</button>';
+            html += '</div>';
+
+            html += '<div class="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 overflow-hidden">';
+
+            if (state.dashboardActivityLoading) {
+                // Loading state
+                html += '<div class="p-6 text-center">';
+                html += '<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>';
+                html += '<p class="text-white/60 mt-2 text-sm">Loading activity...</p>';
+                html += '</div>';
+            } else if (!state.dashboardRecentActivity || state.dashboardRecentActivity.length === 0) {
+                // Empty state
+                html += '<div class="p-6 text-center">';
+                html += '<p class="text-white/60">No recent activity yet. Start using the tools above!</p>';
+                html += '</div>';
+            } else {
+                // Activity items
+                html += '<div class="divide-y divide-white/10">';
+                var typeIcons = {
+                    optimization: '🚀',
+                    competitor: '🎯',
+                    trend: '📈',
+                    thumbnail: '🎨',
+                    channelAudit: '🔍',
+                    placement: '🎬'
+                };
+                var typeColors = {
+                    optimization: 'from-blue-500 to-purple-600',
+                    competitor: 'from-red-500 to-orange-600',
+                    trend: 'from-cyan-500 to-blue-600',
+                    thumbnail: 'from-pink-500 to-rose-600',
+                    channelAudit: 'from-emerald-500 to-teal-600',
+                    placement: 'from-purple-500 to-violet-600'
+                };
+                var typeLabels = {
+                    optimization: 'Video Optimization',
+                    competitor: 'Competitor Analysis',
+                    trend: 'Trend Prediction',
+                    thumbnail: 'Thumbnail Generated',
+                    channelAudit: 'Channel Audit',
+                    placement: 'Placement Search'
+                };
+
+                for (var ai = 0; ai < state.dashboardRecentActivity.length; ai++) {
+                    var activity = state.dashboardRecentActivity[ai];
+                    var icon = typeIcons[activity.type] || '📄';
+                    var color = typeColors[activity.type] || 'from-gray-500 to-gray-600';
+                    var label = typeLabels[activity.type] || activity.type;
+                    var title = activity.title || activity.videoTitle || activity.niche || activity.channelName || 'Untitled';
+                    var timeAgo = utils.formatTimeAgo ? utils.formatTimeAgo(activity.timestamp) : 'Recently';
+
+                    html += '<div class="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors cursor-pointer" onclick="app.goToHistory(\'' + activity.type + '\')">';
+                    html += '<div class="w-10 h-10 bg-gradient-to-br ' + color + ' rounded-xl flex items-center justify-center text-lg flex-shrink-0">' + icon + '</div>';
+                    html += '<div class="flex-1 min-w-0">';
+                    html += '<p class="text-white font-medium truncate">' + utils.escapeHtml(title) + '</p>';
+                    html += '<p class="text-white/50 text-sm">' + label + '</p>';
+                    html += '</div>';
+                    html += '<div class="text-white/40 text-sm flex-shrink-0">' + timeAgo + '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+
+            html += '</div>';
             html += '</div>';
 
             // Admin Section (only for admins)
@@ -7917,6 +8028,7 @@
             // Navigation buttons
             html += '<div class="flex flex-wrap gap-3 mb-6">';
             html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
+            html += '<button onclick="app.goToHistory(\'channelAudit\')" class="btn-secondary">📜 View History</button>';
             html += '</div>';
 
             // Header
