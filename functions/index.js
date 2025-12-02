@@ -4688,6 +4688,462 @@ exports.checkThumbnailStatus = functions.https.onCall(async (data, context) => {
 });
 
 // ==============================================
+// THUMBNAIL PRO - Multi-Model AI Thumbnail Generator
+// Supports: Imagen 4, Gemini (Nano Banana Pro), DALL-E 3
+// Features: Reference images, multiple variations, content categories
+// ==============================================
+
+exports.generateThumbnailPro = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'generateThumbnailPro', 5); // 5 per minute for pro generation
+
+  const {
+    title,
+    style = 'professional',
+    customPrompt = '',
+    mode = 'quick', // quick | reference | premium
+    category = 'general', // general | gaming | tutorial | vlog | review | news | entertainment
+    variations = 1, // 1-4
+    referenceImage = null // { base64, mimeType }
+  } = data;
+
+  if (!title || title.trim().length < 3) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video title is required (min 3 characters)');
+  }
+
+  // Validate variations
+  const imageCount = Math.min(Math.max(parseInt(variations) || 1, 1), 4);
+
+  // Model configuration based on mode
+  const modeConfig = {
+    quick: { model: 'imagen-4', tokenCost: 2, supportsReference: false },
+    reference: { model: 'nano-banana-pro', tokenCost: 4, supportsReference: true },
+    premium: { model: 'dall-e-3', tokenCost: 6, supportsReference: false }
+  };
+
+  const config = modeConfig[mode] || modeConfig.quick;
+  const totalCost = config.tokenCost * imageCount;
+
+  // Validate reference image for reference mode
+  if (mode === 'reference' && !referenceImage?.base64) {
+    throw new functions.https.HttpsError('invalid-argument', 'Reference mode requires a reference image');
+  }
+
+  // Category-specific prompt enhancements
+  const categoryPrompts = {
+    general: 'Professional YouTube thumbnail with eye-catching design',
+    gaming: 'Gaming YouTube thumbnail with vibrant neon colors, action-packed composition, dramatic lighting, game-style effects, energetic feel',
+    tutorial: 'Tutorial/How-to YouTube thumbnail with clean layout, professional look, clear visual hierarchy, trust-building design, step indicator elements',
+    vlog: 'Vlog YouTube thumbnail with warm personal aesthetic, lifestyle feel, authentic expression, relatable mood, natural lighting',
+    review: 'Product review YouTube thumbnail with professional product showcase, comparison elements, trust signals, clean background, expert feel',
+    news: 'News/Commentary YouTube thumbnail with bold impactful design, serious professional tone, headline-worthy composition, current events aesthetic',
+    entertainment: 'Entertainment YouTube thumbnail with dramatic expressive composition, high energy, bold colors, maximum engagement appeal'
+  };
+
+  // Style-specific prompt additions
+  const stylePrompts = {
+    professional: 'Clean, professional look with sharp focus, studio lighting, high contrast, polished finish',
+    dramatic: 'Dramatic lighting, intense colors, bold shadows, cinematic feel, movie-poster quality',
+    minimal: 'Minimalist design, soft colors, clean background, elegant simplicity, breathing room',
+    bold: 'Vibrant saturated colors, eye-catching, bold graphics, high energy, dynamic composition, maximum impact'
+  };
+
+  try {
+    // Check and deduct tokens
+    const tokenRef = db.collection('creativeTokens').doc(uid);
+    let tokenDoc = await tokenRef.get();
+    let balance = 0;
+
+    if (!tokenDoc.exists) {
+      // Initialize new user with free tier tokens
+      const initialTokens = {
+        balance: 50,
+        rollover: 0,
+        plan: 'free',
+        monthlyAllocation: 50,
+        lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      await tokenRef.set(initialTokens);
+      balance = 50;
+    } else {
+      balance = tokenDoc.data().balance || 0;
+    }
+
+    if (balance < totalCost) {
+      throw new functions.https.HttpsError('resource-exhausted',
+        `Insufficient tokens. Need ${totalCost}, have ${balance}. Please upgrade your plan.`);
+    }
+
+    // Build the enhanced prompt
+    const categoryEnhancement = categoryPrompts[category] || categoryPrompts.general;
+    const styleEnhancement = stylePrompts[style] || stylePrompts.professional;
+
+    let imagePrompt;
+    try {
+      // Use GPT-4 to create an optimized prompt
+      const promptGeneratorResponse = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [{
+          role: 'user',
+          content: `Create a detailed image generation prompt for a YouTube thumbnail.
+
+Video Title: "${title}"
+Category: ${category}
+Style: ${style}
+
+Category Guidelines: ${categoryEnhancement}
+Style Guidelines: ${styleEnhancement}
+
+${customPrompt ? `Additional Requirements: ${customPrompt}` : ''}
+
+IMPORTANT RULES:
+- Thumbnail must be eye-catching and click-worthy
+- Design should leave space for text overlay
+- Use bold colors and high contrast
+- Perfect for 16:9 YouTube thumbnail format (1280x720)
+- Should stand out in YouTube search results and suggested videos
+${mode === 'reference' ? '- The user will provide a reference image - incorporate elements from it naturally' : ''}
+
+Provide ONLY the image generation prompt, no explanations. Be specific and detailed for best AI generation results.`
+        }],
+        temperature: 0.7,
+        max_tokens: 400
+      });
+
+      imagePrompt = promptGeneratorResponse?.choices?.[0]?.message?.content?.trim();
+    } catch (openaiError) {
+      console.error('OpenAI prompt generation failed:', openaiError.message);
+      // Fallback prompt
+      imagePrompt = `${categoryEnhancement}. ${styleEnhancement}. Video title: "${title}". ${customPrompt || ''} High quality, 4K resolution, perfect for YouTube.`;
+    }
+
+    // Ensure prompt is valid
+    if (!imagePrompt || imagePrompt.length < 20) {
+      imagePrompt = `Professional YouTube thumbnail for "${title}". ${categoryEnhancement}. ${styleEnhancement}. Eye-catching design, bold colors, high contrast, 4K quality.`;
+    }
+
+    const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, excessive text, cluttered, amateur";
+    const storage = admin.storage().bucket();
+    const timestamp = Date.now();
+    const generatedImages = [];
+    let usedModel = config.model;
+
+    // ==========================================
+    // MODEL-SPECIFIC GENERATION
+    // ==========================================
+
+    if (config.model === 'nano-banana-pro') {
+      // Gemini Image Generation with Reference Support
+      const geminiApiKey = functions.config().gemini?.key;
+      if (!geminiApiKey) {
+        throw new functions.https.HttpsError('failed-precondition', 'Gemini API key not configured');
+      }
+
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const geminiModelId = 'gemini-2.0-flash-exp-image-generation';
+
+      console.log(`Generating ${imageCount} thumbnail(s) with Gemini: ${geminiModelId}`);
+
+      for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
+        try {
+          // Build content parts with reference image
+          const contentParts = [];
+
+          if (referenceImage && referenceImage.base64) {
+            contentParts.push({
+              inlineData: {
+                mimeType: referenceImage.mimeType || 'image/png',
+                data: referenceImage.base64
+              }
+            });
+          }
+
+          // Build prompt with reference instruction
+          let finalPrompt = referenceImage
+            ? `Using the provided reference image as inspiration (incorporate the person/subject/style from it), create a YouTube thumbnail: ${imagePrompt}`
+            : imagePrompt;
+
+          finalPrompt += `\n\nIMPORTANT: Avoid: ${negativePrompt}`;
+          finalPrompt += '\nFormat: 16:9 aspect ratio (1280x720), YouTube thumbnail optimized.';
+
+          contentParts.push({ text: finalPrompt });
+
+          const result = await ai.models.generateContent({
+            model: geminiModelId,
+            contents: [{ role: 'user', parts: contentParts }],
+            config: {
+              responseModalities: ['image', 'text']
+            }
+          });
+
+          // Extract image from response
+          const candidates = result.candidates || (result.response && result.response.candidates);
+          if (candidates && candidates.length > 0) {
+            const parts = candidates[0].content?.parts || [];
+            for (const part of parts) {
+              const inlineData = part.inlineData || part.inline_data;
+              if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
+                const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
+                const mimeType = inlineData.mimeType || 'image/png';
+                const extension = mimeType.includes('jpeg') ? 'jpg' : 'png';
+
+                const fileName = `thumbnails-pro/${uid}/${timestamp}-gemini-${imgIdx + 1}.${extension}`;
+                const file = storage.file(fileName);
+
+                const buffer = Buffer.from(imageBytes, 'base64');
+                await file.save(buffer, {
+                  metadata: {
+                    contentType: mimeType,
+                    metadata: {
+                      prompt: imagePrompt.substring(0, 500),
+                      model: geminiModelId,
+                      category,
+                      style
+                    }
+                  }
+                });
+
+                await file.makePublic();
+                const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+                generatedImages.push({
+                  url: publicUrl,
+                  fileName,
+                  seed: Math.floor(Math.random() * 1000000),
+                  model: 'nano-banana-pro'
+                });
+
+                console.log(`Gemini thumbnail ${imgIdx + 1} saved: ${fileName}`);
+                break;
+              }
+            }
+          }
+        } catch (genError) {
+          console.error(`Gemini generation error for image ${imgIdx + 1}:`, genError.message);
+        }
+      }
+
+      usedModel = geminiModelId;
+
+    } else if (config.model === 'dall-e-3') {
+      // DALL-E 3 Premium Generation
+      console.log(`Generating ${imageCount} thumbnail(s) with DALL-E 3`);
+
+      for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
+        try {
+          const dalleResponse = await openai.images.generate({
+            model: 'dall-e-3',
+            prompt: `${imagePrompt}\n\nStyle: YouTube thumbnail, 16:9 aspect ratio, eye-catching, professional quality.`,
+            n: 1,
+            size: '1792x1024', // Closest to 16:9 for DALL-E 3
+            quality: 'hd',
+            response_format: 'b64_json'
+          });
+
+          if (dalleResponse.data && dalleResponse.data[0]) {
+            const imageData = dalleResponse.data[0];
+            const imageBytes = imageData.b64_json;
+
+            const fileName = `thumbnails-pro/${uid}/${timestamp}-dalle-${imgIdx + 1}.png`;
+            const file = storage.file(fileName);
+
+            const buffer = Buffer.from(imageBytes, 'base64');
+            await file.save(buffer, {
+              metadata: {
+                contentType: 'image/png',
+                metadata: {
+                  prompt: imagePrompt.substring(0, 500),
+                  model: 'dall-e-3',
+                  category,
+                  style,
+                  revisedPrompt: imageData.revised_prompt || ''
+                }
+              }
+            });
+
+            await file.makePublic();
+            const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+            generatedImages.push({
+              url: publicUrl,
+              fileName,
+              seed: Math.floor(Math.random() * 1000000),
+              model: 'dall-e-3',
+              revisedPrompt: imageData.revised_prompt
+            });
+
+            console.log(`DALL-E thumbnail ${imgIdx + 1} saved: ${fileName}`);
+          }
+        } catch (dalleError) {
+          console.error(`DALL-E generation error for image ${imgIdx + 1}:`, dalleError.message);
+        }
+      }
+
+      usedModel = 'dall-e-3';
+
+    } else {
+      // Imagen 4 Quick Generation (Default)
+      const geminiApiKey = functions.config().gemini?.key;
+      if (!geminiApiKey) {
+        throw new functions.https.HttpsError('failed-precondition', 'Image generation service not configured');
+      }
+
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const imagenModelId = 'imagen-4.0-generate-001';
+
+      console.log(`Generating ${imageCount} thumbnail(s) with Imagen 4`);
+
+      try {
+        const result = await ai.models.generateImages({
+          model: imagenModelId,
+          prompt: imagePrompt,
+          config: {
+            numberOfImages: imageCount,
+            aspectRatio: '16:9',
+            negativePrompt: negativePrompt,
+            includeRaiReason: true,
+            personGeneration: 'allow_adult'
+          }
+        });
+
+        if (result.generatedImages && result.generatedImages.length > 0) {
+          for (let imgIdx = 0; imgIdx < result.generatedImages.length; imgIdx++) {
+            const genImage = result.generatedImages[imgIdx];
+            const imageBytes = genImage.image?.bytesBase64Encoded || genImage.bytesBase64Encoded;
+
+            if (imageBytes) {
+              const fileName = `thumbnails-pro/${uid}/${timestamp}-imagen-${imgIdx + 1}.png`;
+              const file = storage.file(fileName);
+
+              const buffer = Buffer.from(imageBytes, 'base64');
+              await file.save(buffer, {
+                metadata: {
+                  contentType: 'image/png',
+                  metadata: {
+                    prompt: imagePrompt.substring(0, 500),
+                    model: imagenModelId,
+                    category,
+                    style
+                  }
+                }
+              });
+
+              await file.makePublic();
+              const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+              generatedImages.push({
+                url: publicUrl,
+                fileName,
+                seed: Math.floor(Math.random() * 1000000),
+                model: 'imagen-4'
+              });
+
+              console.log(`Imagen thumbnail ${imgIdx + 1} saved: ${fileName}`);
+            }
+          }
+        }
+      } catch (imagenError) {
+        console.error('Imagen generation error:', imagenError.message);
+        throw new functions.https.HttpsError('internal', 'Image generation failed. Please try again.');
+      }
+
+      usedModel = imagenModelId;
+    }
+
+    // Check if any images were generated
+    if (generatedImages.length === 0) {
+      throw new functions.https.HttpsError('internal', 'No images were generated. Please try again with different settings.');
+    }
+
+    // Deduct tokens
+    const actualCost = config.tokenCost * generatedImages.length;
+    await tokenRef.update({
+      balance: admin.firestore.FieldValue.increment(-actualCost),
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Save to history
+    const historyRef = await db.collection('thumbnailHistory').add({
+      userId: uid,
+      title,
+      style,
+      category,
+      mode,
+      customPrompt: customPrompt || null,
+      prompt: imagePrompt,
+      images: generatedImages,
+      imageUrl: generatedImages[0]?.url, // Primary image for backward compatibility
+      model: usedModel,
+      tokenCost: actualCost,
+      hasReference: !!referenceImage,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Log usage
+    await logUsage(uid, 'thumbnail_pro_generation', {
+      title,
+      mode,
+      category,
+      model: usedModel,
+      imageCount: generatedImages.length,
+      tokenCost: actualCost
+    });
+
+    return {
+      success: true,
+      historyId: historyRef.id,
+      images: generatedImages,
+      imageUrl: generatedImages[0]?.url,
+      prompt: imagePrompt,
+      model: usedModel,
+      tokenCost: actualCost,
+      remainingBalance: balance - actualCost,
+      message: `Generated ${generatedImages.length} thumbnail(s) successfully`
+    };
+
+  } catch (error) {
+    console.error('Thumbnail Pro generation error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Thumbnail generation failed. Please try again.'));
+  }
+});
+
+// Get user's creative token balance (for Thumbnail Pro)
+exports.getThumbnailTokenBalance = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  try {
+    const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+
+    if (!tokenDoc.exists) {
+      // Initialize new user
+      const initialTokens = {
+        balance: 50,
+        rollover: 0,
+        plan: 'free',
+        monthlyAllocation: 50,
+        lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      await db.collection('creativeTokens').doc(uid).set(initialTokens);
+      return { success: true, balance: 50, plan: 'free' };
+    }
+
+    const data = tokenDoc.data();
+    return {
+      success: true,
+      balance: data.balance || 0,
+      plan: data.plan || 'free',
+      monthlyAllocation: data.monthlyAllocation || 50
+    };
+  } catch (error) {
+    console.error('Get token balance error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get token balance');
+  }
+});
+
+// ==============================================
 // HISTORY RETRIEVAL & MANAGEMENT FUNCTIONS
 // ==============================================
 
