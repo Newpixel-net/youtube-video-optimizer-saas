@@ -2560,7 +2560,10 @@
             thumbnailVariations: 1, // 1-4 variations
             thumbnailReference: null, // { dataUrl, file, mimeType, name }
             thumbnailTokenBalance: 0, // Token balance from creativeTokens
+            thumbnailTokenPlan: 'free', // User's subscription plan
+            thumbnailTokenRollover: 0, // Rollover tokens from previous month
             thumbnailTokenCost: 2, // Calculated cost
+            showTokenModal: false, // Token usage modal visibility
             generatedThumbnails: [], // Array of generated thumbnails for multi-variation
             selectedThumbnailIndex: 0, // Currently selected thumbnail from variations
             showYouTubePreview: false, // YouTube preview modal visibility
@@ -4584,16 +4587,46 @@
             },
 
             loadThumbnailTokenBalance: function() {
-                functions.httpsCallable('getThumbnailTokenBalance')({})
+                // Use same function as Creative Studio (already deployed and working)
+                var getCreativeTokens = functions.httpsCallable('getCreativeTokens');
+                getCreativeTokens({})
                     .then(function(result) {
-                        if (result.data.success) {
-                            state.thumbnailTokenBalance = result.data.balance;
+                        if (result.data) {
+                            state.thumbnailTokenBalance = result.data.balance || 0;
+                            state.thumbnailTokenPlan = result.data.plan || 'free';
+                            state.thumbnailTokenRollover = result.data.rollover || 0;
                             render();
                         }
                     })
                     .catch(function(e) {
                         console.error('Failed to load token balance:', e);
+                        // Fallback to direct Firestore read
+                        if (auth.currentUser) {
+                            db.collection('creativeTokens').doc(auth.currentUser.uid).get()
+                                .then(function(doc) {
+                                    if (doc.exists) {
+                                        var data = doc.data();
+                                        state.thumbnailTokenBalance = data.balance || 0;
+                                        state.thumbnailTokenPlan = data.plan || 'free';
+                                        state.thumbnailTokenRollover = data.rollover || 0;
+                                        render();
+                                    }
+                                })
+                                .catch(function(err) {
+                                    console.error('Firestore fallback failed:', err);
+                                });
+                        }
                     });
+            },
+
+            showTokenUsageModal: function() {
+                state.showTokenModal = true;
+                render();
+            },
+
+            hideTokenUsageModal: function() {
+                state.showTokenModal = false;
+                render();
             },
 
             handleReferenceUpload: function(e) {
@@ -7604,12 +7637,61 @@
             }
             html += '<button onclick="app.goToHistory(\'thumbnail\')" class="px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30">📜 History</button>';
             html += '</div>';
-            // Token Balance Display
-            html += '<div class="flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full">';
+            // Token Balance Display (Clickable)
+            html += '<button onclick="app.showTokenUsageModal()" class="flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full hover:bg-white/30 transition-all cursor-pointer">';
             html += '<span class="text-2xl">🪙</span>';
             html += '<span class="text-white font-bold">' + state.thumbnailTokenBalance + ' tokens</span>';
+            html += '<svg class="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>';
+            html += '</button>';
             html += '</div>';
-            html += '</div>';
+
+            // Token Usage Modal
+            if (state.showTokenModal) {
+                html += '<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="app.hideTokenUsageModal()">';
+                html += '<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative" onclick="event.stopPropagation()">';
+                html += '<button onclick="app.hideTokenUsageModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl">&times;</button>';
+                html += '<div class="text-center mb-6">';
+                html += '<div class="w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3 shadow-lg">🪙</div>';
+                html += '<h3 class="text-2xl font-bold text-gray-800">Your Creative Tokens</h3>';
+                html += '<p class="text-gray-500">Used for AI Thumbnails & Creative Studio</p>';
+                html += '</div>';
+
+                // Token Stats
+                html += '<div class="bg-gray-50 rounded-xl p-4 mb-4">';
+                html += '<div class="flex justify-between items-center mb-3">';
+                html += '<span class="text-gray-600">Current Balance</span>';
+                html += '<span class="text-2xl font-bold text-gray-800">🪙 ' + state.thumbnailTokenBalance + '</span>';
+                html += '</div>';
+                html += '<div class="flex justify-between items-center mb-3">';
+                html += '<span class="text-gray-600">Subscription Plan</span>';
+                html += '<span class="font-semibold text-gray-800 capitalize">' + state.thumbnailTokenPlan + '</span>';
+                html += '</div>';
+                if (state.thumbnailTokenRollover > 0) {
+                    html += '<div class="flex justify-between items-center">';
+                    html += '<span class="text-gray-600">Rollover from last month</span>';
+                    html += '<span class="font-semibold text-green-600">+' + state.thumbnailTokenRollover + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                // Token Costs Info
+                html += '<div class="border border-gray-200 rounded-xl p-4 mb-4">';
+                html += '<h4 class="font-semibold text-gray-800 mb-3">Token Costs</h4>';
+                html += '<div class="space-y-2 text-sm">';
+                html += '<div class="flex justify-between"><span class="text-gray-600">Quick Mode (Imagen 4)</span><span class="font-semibold">2 tokens/image</span></div>';
+                html += '<div class="flex justify-between"><span class="text-gray-600">Reference Mode</span><span class="font-semibold">4 tokens/image</span></div>';
+                html += '<div class="flex justify-between"><span class="text-gray-600">Premium Mode (DALL-E 3)</span><span class="font-semibold">6 tokens/image</span></div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Go to Creative Studio button
+                html += '<a href="/creative-studio" class="block w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold rounded-xl text-center hover:from-purple-600 hover:to-indigo-700 transition-all">';
+                html += '🎨 Open Creative Studio';
+                html += '</a>';
+                html += '<p class="text-center text-gray-500 text-sm mt-3">More token options & advanced features</p>';
+
+                html += '</div></div>';
+            }
 
             // Loading Section
             if (state.loading && state.generatedThumbnails.length === 0) {
