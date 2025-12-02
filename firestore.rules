@@ -213,5 +213,99 @@ service cloud.firestore {
       // Users can delete their own history
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
+
+    // ============================================
+    // CREATIVE GALLERY (Community Gallery)
+    // ============================================
+
+    match /creativeGallery/{galleryId} {
+      // Anyone can read public gallery items (for community gallery display)
+      allow read: if true;
+
+      // Cloud Functions handle all writes (via Admin SDK)
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
+    // COMPETITOR HISTORY
+    // ============================================
+
+    match /competitorHistory/{historyId} {
+      // Users can read their own competitor analysis history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // TREND HISTORY
+    // ============================================
+
+    match /trendHistory/{historyId} {
+      // Users can read their own trend analysis history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // THUMBNAIL HISTORY
+    // ============================================
+
+    match /thumbnailHistory/{historyId} {
+      // Users can read their own thumbnail history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // CHANNEL AUDIT HISTORY
+    // ============================================
+
+    match /channelAuditHistory/{historyId} {
+      // Users can read their own channel audit history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // TOKEN TRANSACTIONS
+    // ============================================
+
+    match /tokenTransactions/{transactionId} {
+      // Users can read their own transactions, admins can read all
+      allow read: if isAuthenticated() &&
+                    (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Cloud Functions create transactions (via Admin SDK)
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
+    // PROMO CODES
+    // ============================================
+
+    match /promoCodes/{codeId} {
+      // Only admins can read/write promo codes
+      allow read, write: if isAdmin();
+    }
   }
 }
