@@ -3969,7 +3969,9 @@
                 return;
             }
 
-            functions.httpsCallable('adminAdjustUserTokens')({ userId: userId, amount: amount, reason: reason })
+            // Use adminAdjustCreativeTokens which updates the creativeTokens collection
+            // (adminAdjustUserTokens was incorrectly updating users.tokens instead)
+            functions.httpsCallable('adminAdjustCreativeTokens')({ userId: userId, amount: amount, reason: reason })
                 .then(function(result) {
                     showToast(result.data.message, 'success');
                     document.getElementById('token-amount-input').value = '';
