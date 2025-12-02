@@ -10097,13 +10097,14 @@ exports.userGetNotifications = functions.https.onCall(async (data, context) => {
   const userId = context.auth.uid;
   const { limit: limitCount = 20, unreadOnly = false } = data || {};
 
-  let query = db.collection('users').doc(userId).collection('notifications')
-    .orderBy('createdAt', 'desc')
-    .limit(limitCount);
+  let query = db.collection('users').doc(userId).collection('notifications');
 
+  // where clause must come before orderBy in Firestore
   if (unreadOnly) {
     query = query.where('read', '==', false);
   }
+
+  query = query.orderBy('createdAt', 'desc').limit(limitCount);
 
   const snapshot = await query.get();
   const notifications = [];
@@ -10165,13 +10166,14 @@ exports.adminGetRenewalRequests = functions.https.onCall(async (data, context) =
 
   const { status = 'pending', limit: limitCount = 50 } = data || {};
 
-  let query = db.collection('renewalRequests')
-    .orderBy('createdAt', 'desc')
-    .limit(limitCount);
+  let query = db.collection('renewalRequests');
 
+  // where clause must come before orderBy in Firestore
   if (status && status !== 'all') {
     query = query.where('status', '==', status);
   }
+
+  query = query.orderBy('createdAt', 'desc').limit(limitCount);
 
   const snapshot = await query.get();
   const requests = [];
