@@ -4592,7 +4592,8 @@
                 getCreativeTokens({})
                     .then(function(result) {
                         if (result.data) {
-                            state.thumbnailTokenBalance = result.data.balance || 0;
+                            // Match Creative Studio's fallback behavior
+                            state.thumbnailTokenBalance = result.data.balance || 50;
                             state.thumbnailTokenPlan = result.data.plan || 'free';
                             state.thumbnailTokenRollover = result.data.rollover || 0;
                             render();
@@ -4606,7 +4607,7 @@
                                 .then(function(doc) {
                                     if (doc.exists) {
                                         var data = doc.data();
-                                        state.thumbnailTokenBalance = data.balance || 0;
+                                        state.thumbnailTokenBalance = data.balance || 50;
                                         state.thumbnailTokenPlan = data.plan || 'free';
                                         state.thumbnailTokenRollover = data.rollover || 0;
                                         render();
