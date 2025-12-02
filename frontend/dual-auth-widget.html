@@ -3236,6 +3236,16 @@
                 render();
             },
 
+            goToMoreTools: function() {
+                // Placeholder for future "More AI Tools" page
+                // For now, show a coming soon toast or navigate to a placeholder
+                if (typeof showToast === 'function') {
+                    showToast('More AI Tools coming soon! Stay tuned for exciting new features.', 'info');
+                } else {
+                    alert('More AI Tools coming soon! Stay tuned for exciting new features.');
+                }
+            },
+
             runChannelAudit: function(e) {
                 e.preventDefault();
                 var channelUrl = document.getElementById('audit-channel-url').value.trim();
@@ -4416,26 +4426,150 @@
             /* ------------------------------------------
                4.5.7b Thumbnail Pro Actions
                ------------------------------------------ */
+
+            // Targeted UI update functions to avoid full re-renders
+            updateThumbnailModeUI: function(mode) {
+                var modeCards = document.querySelectorAll('[data-mode-card]');
+                modeCards.forEach(function(card) {
+                    var cardMode = card.getAttribute('data-mode-card');
+                    if (cardMode === mode) {
+                        card.classList.remove('border-gray-200', 'hover:border-pink-300');
+                        card.classList.add('border-pink-500', 'bg-pink-50', 'shadow-lg');
+                        var check = card.querySelector('.mode-check');
+                        if (check) check.classList.remove('hidden');
+                    } else {
+                        card.classList.remove('border-pink-500', 'bg-pink-50', 'shadow-lg');
+                        card.classList.add('border-gray-200', 'hover:border-pink-300');
+                        var check = card.querySelector('.mode-check');
+                        if (check) check.classList.add('hidden');
+                    }
+                });
+            },
+
+            updateThumbnailStyleUI: function(style) {
+                var styleCards = document.querySelectorAll('[data-style-card]');
+                styleCards.forEach(function(card) {
+                    var cardStyle = card.getAttribute('data-style-card');
+                    if (cardStyle === style) {
+                        card.classList.remove('border-gray-200', 'hover:border-pink-300');
+                        card.classList.add('border-pink-500', 'bg-pink-50');
+                    } else {
+                        card.classList.remove('border-pink-500', 'bg-pink-50');
+                        card.classList.add('border-gray-200', 'hover:border-pink-300');
+                    }
+                });
+            },
+
+            updateThumbnailCategoryUI: function(category) {
+                var categoryBtns = document.querySelectorAll('[data-category-btn]');
+                categoryBtns.forEach(function(btn) {
+                    var btnCategory = btn.getAttribute('data-category-btn');
+                    if (btnCategory === category) {
+                        btn.classList.remove('bg-gray-100', 'text-gray-700', 'hover:bg-pink-100');
+                        btn.classList.add('bg-pink-500', 'text-white');
+                    } else {
+                        btn.classList.remove('bg-pink-500', 'text-white');
+                        btn.classList.add('bg-gray-100', 'text-gray-700', 'hover:bg-pink-100');
+                    }
+                });
+            },
+
+            updateThumbnailVariationsUI: function(variations) {
+                var variationBtns = document.querySelectorAll('[data-variation-btn]');
+                variationBtns.forEach(function(btn) {
+                    var btnVariation = parseInt(btn.getAttribute('data-variation-btn'));
+                    if (btnVariation === variations) {
+                        btn.classList.remove('bg-gray-100', 'text-gray-700', 'hover:bg-pink-100');
+                        btn.classList.add('bg-pink-500', 'text-white');
+                    } else {
+                        btn.classList.remove('bg-pink-500', 'text-white');
+                        btn.classList.add('bg-gray-100', 'text-gray-700', 'hover:bg-pink-100');
+                    }
+                });
+            },
+
+            updateThumbnailCostUI: function() {
+                var modeCosts = { quick: 2, reference: 4, premium: 6 };
+                var baseCost = modeCosts[state.thumbnailMode] || 2;
+                var totalCost = baseCost * state.thumbnailVariations;
+
+                // Update cost displays
+                var costDisplay = document.getElementById('thumbnail-cost-display');
+                if (costDisplay) costDisplay.textContent = totalCost;
+
+                var costCalc = document.getElementById('thumbnail-cost-calc');
+                if (costCalc) costCalc.textContent = baseCost + ' × ' + state.thumbnailVariations + ' = ';
+
+                var costTotal = document.getElementById('thumbnail-cost-total');
+                if (costTotal) costTotal.textContent = totalCost;
+
+                var imageCount = document.getElementById('thumbnail-image-count');
+                if (imageCount) imageCount.textContent = state.thumbnailVariations + ' image' + (state.thumbnailVariations > 1 ? 's' : '');
+
+                // Update submit button text
+                var submitBtn = document.getElementById('thumbnail-submit-btn');
+                if (submitBtn && !state.loading) {
+                    var canSubmit = state.thumbnailTokenBalance >= totalCost;
+                    if (state.thumbnailMode === 'reference' && !state.thumbnailReference) {
+                        submitBtn.textContent = '📷 Upload Reference Image First';
+                        submitBtn.disabled = true;
+                    } else if (!canSubmit) {
+                        submitBtn.textContent = '🪙 Insufficient Tokens';
+                        submitBtn.disabled = true;
+                    } else {
+                        submitBtn.textContent = '🎨 Generate ' + state.thumbnailVariations + ' Thumbnail' + (state.thumbnailVariations > 1 ? 's' : '') + ' (' + totalCost + ' tokens)';
+                        submitBtn.disabled = false;
+                    }
+                }
+
+                // Update insufficient tokens warning
+                var tokenWarning = document.getElementById('thumbnail-token-warning');
+                if (tokenWarning) {
+                    if (state.thumbnailTokenBalance < totalCost) {
+                        tokenWarning.classList.remove('hidden');
+                        tokenWarning.innerHTML = '⚠️ Insufficient tokens. You have ' + state.thumbnailTokenBalance + ' but need ' + totalCost + '.';
+                    } else {
+                        tokenWarning.classList.add('hidden');
+                    }
+                }
+            },
+
             setThumbnailMode: function(mode) {
+                var previousMode = state.thumbnailMode;
                 state.thumbnailMode = mode;
-                // Auto-calculate cost when mode changes
                 app.calculateThumbnailCost();
+
                 // If switching away from reference mode, clear reference
                 if (mode !== 'reference') {
                     state.thumbnailReference = null;
                 }
-                render();
+
+                // If switching to/from reference mode, we need full re-render
+                // because the reference upload section appears/disappears
+                if ((previousMode === 'reference') !== (mode === 'reference')) {
+                    render();
+                } else {
+                    // Just update the UI elements
+                    app.updateThumbnailModeUI(mode);
+                    app.updateThumbnailCostUI();
+                }
+            },
+
+            setThumbnailStyle: function(style) {
+                state.thumbnailStyle = style;
+                app.updateThumbnailStyleUI(style);
             },
 
             setThumbnailCategory: function(category) {
                 state.thumbnailCategory = category;
-                render();
+                app.updateThumbnailCategoryUI(category);
             },
 
             setThumbnailVariations: function(count) {
                 state.thumbnailVariations = Math.min(Math.max(parseInt(count) || 1, 1), 4);
                 app.calculateThumbnailCost();
-                render();
+                app.updateThumbnailVariationsUI(state.thumbnailVariations);
+                app.updateThumbnailCostUI();
             },
 
             calculateThumbnailCost: function() {
@@ -6188,6 +6322,16 @@
             html += '<span>Audit Channel</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
             html += '</div></div>';
 
+            // More AI Tools Card - Links to expanded tools page
+            html += '<div class="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer border border-gray-100 relative overflow-hidden" onclick="app.goToMoreTools()">';
+            html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-purple-400 to-indigo-500 text-white text-xs font-bold px-2 py-1 rounded-full">EXPLORE</div>';
+            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-xl mb-5">🧰</div>';
+            html += '<h3 class="text-xl lg:text-2xl font-bold text-gray-800 mb-2">More AI Tools</h3>';
+            html += '<p class="text-gray-600 mb-4 text-sm lg:text-base">Discover additional AI-powered tools</p>';
+            html += '<div class="flex items-center text-purple-600 font-bold group">';
+            html += '<span>Explore</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            html += '</div></div>';
+
             html += '</div>';
 
             // ========== RECENT ACTIVITY SECTION ==========
@@ -7587,7 +7731,7 @@
                 modes.forEach(function(m) {
                     var isActive = state.thumbnailMode === m.id;
                     var borderClass = isActive ? 'border-pink-500 bg-pink-50 shadow-lg' : 'border-gray-200 hover:border-pink-300';
-                    html += '<div onclick="app.setThumbnailMode(\'' + m.id + '\')" class="cursor-pointer p-4 border-2 ' + borderClass + ' rounded-xl transition-all relative">';
+                    html += '<div data-mode-card="' + m.id + '" onclick="app.setThumbnailMode(\'' + m.id + '\')" class="cursor-pointer p-4 border-2 ' + borderClass + ' rounded-xl transition-all relative">';
                     if (m.badge) {
                         html += '<div class="absolute -top-2 -right-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-xs px-2 py-0.5 rounded-full">' + m.badge + '</div>';
                     }
@@ -7603,9 +7747,7 @@
                     html += '</div>';
                     html += '<p class="text-pink-600 font-bold mt-2">' + m.cost + ' tokens/image</p>';
                     html += '</div>';
-                    if (isActive) {
-                        html += '<div class="text-pink-500 text-xl">✓</div>';
-                    }
+                    html += '<div class="mode-check text-pink-500 text-xl ' + (isActive ? '' : 'hidden') + '">✓</div>';
                     html += '</div></div>';
                 });
                 html += '</div></div>';
@@ -7667,7 +7809,7 @@
                 categories.forEach(function(c) {
                     var isActive = state.thumbnailCategory === c.id;
                     var btnClass = isActive ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-pink-100';
-                    html += '<button type="button" onclick="app.setThumbnailCategory(\'' + c.id + '\')" class="px-4 py-2 rounded-full font-medium transition-all ' + btnClass + '">';
+                    html += '<button type="button" data-category-btn="' + c.id + '" onclick="app.setThumbnailCategory(\'' + c.id + '\')" class="px-4 py-2 rounded-full font-medium transition-all ' + btnClass + '">';
                     html += c.icon + ' ' + c.name;
                     html += '</button>';
                 });
@@ -7688,7 +7830,7 @@
                 styles.forEach(function(s) {
                     var isActive = state.thumbnailStyle === s.id;
                     var borderClass = isActive ? 'border-pink-500 bg-pink-50' : 'border-gray-200 hover:border-pink-300';
-                    html += '<div onclick="app.setThumbnailStyle(\'' + s.id + '\')" class="cursor-pointer p-3 border-2 ' + borderClass + ' rounded-xl text-center transition-all">';
+                    html += '<div data-style-card="' + s.id + '" onclick="app.setThumbnailStyle(\'' + s.id + '\')" class="cursor-pointer p-3 border-2 ' + borderClass + ' rounded-xl text-center transition-all">';
                     html += '<div class="text-2xl mb-1">' + s.icon + '</div>';
                     html += '<p class="font-semibold text-gray-800 text-sm">' + s.name + '</p>';
                     html += '<p class="text-xs text-gray-500">' + s.desc + '</p>';
@@ -7704,11 +7846,11 @@
                 for (var v = 1; v <= 4; v++) {
                     var isActive = state.thumbnailVariations === v;
                     var btnClass = isActive ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-pink-100';
-                    html += '<button type="button" onclick="app.setThumbnailVariations(' + v + ')" class="w-12 h-12 rounded-xl font-bold text-lg transition-all ' + btnClass + '">' + v + '</button>';
+                    html += '<button type="button" data-variation-btn="' + v + '" onclick="app.setThumbnailVariations(' + v + ')" class="w-12 h-12 rounded-xl font-bold text-lg transition-all ' + btnClass + '">' + v + '</button>';
                 }
                 html += '</div>';
                 html += '<div class="text-sm text-gray-500">';
-                html += '<span class="font-medium">Cost:</span> ' + modeCosts[state.thumbnailMode] + ' × ' + state.thumbnailVariations + ' = <span class="font-bold text-pink-600">' + currentCost + ' tokens</span>';
+                html += '<span class="font-medium">Cost:</span> <span id="thumbnail-cost-calc">' + modeCosts[state.thumbnailMode] + ' × ' + state.thumbnailVariations + ' = </span><span id="thumbnail-cost-display" class="font-bold text-pink-600">' + currentCost + '</span><span class="font-bold text-pink-600"> tokens</span>';
                 html += '</div>';
                 html += '</div></div>';
 
@@ -7723,18 +7865,16 @@
                 html += '<div class="flex items-center justify-between">';
                 html += '<div>';
                 html += '<p class="font-semibold text-gray-800">Generation Cost</p>';
-                html += '<p class="text-sm text-gray-600">' + state.thumbnailVariations + ' image' + (state.thumbnailVariations > 1 ? 's' : '') + ' × ' + modeCosts[state.thumbnailMode] + ' tokens</p>';
+                html += '<p class="text-sm text-gray-600"><span id="thumbnail-image-count">' + state.thumbnailVariations + ' image' + (state.thumbnailVariations > 1 ? 's' : '') + '</span> × ' + modeCosts[state.thumbnailMode] + ' tokens</p>';
                 html += '</div>';
                 html += '<div class="text-right">';
-                html += '<p class="text-3xl font-bold text-pink-600">' + currentCost + '</p>';
+                html += '<p id="thumbnail-cost-total" class="text-3xl font-bold text-pink-600">' + currentCost + '</p>';
                 html += '<p class="text-sm text-gray-500">tokens</p>';
                 html += '</div>';
                 html += '</div>';
-                if (state.thumbnailTokenBalance < currentCost) {
-                    html += '<div class="mt-3 p-2 bg-red-100 border border-red-200 rounded-lg text-red-700 text-sm">';
-                    html += '⚠️ Insufficient tokens. You have ' + state.thumbnailTokenBalance + ' but need ' + currentCost + '.';
-                    html += '</div>';
-                }
+                html += '<div id="thumbnail-token-warning" class="mt-3 p-2 bg-red-100 border border-red-200 rounded-lg text-red-700 text-sm ' + (state.thumbnailTokenBalance < currentCost ? '' : 'hidden') + '">';
+                html += '⚠️ Insufficient tokens. You have ' + state.thumbnailTokenBalance + ' but need ' + currentCost + '.';
+                html += '</div>';
                 html += '</div>';
 
                 // Submit Button
@@ -7743,7 +7883,7 @@
                     canSubmit = false;
                 }
 
-                html += '<button type="submit" class="w-full btn-primary bg-gradient-to-r from-pink-500 to-rose-600 text-lg py-4 disabled:opacity-50 disabled:cursor-not-allowed" ' + (!canSubmit ? 'disabled' : '') + '>';
+                html += '<button type="submit" id="thumbnail-submit-btn" class="w-full btn-primary bg-gradient-to-r from-pink-500 to-rose-600 text-lg py-4 disabled:opacity-50 disabled:cursor-not-allowed" ' + (!canSubmit ? 'disabled' : '') + '>';
                 if (state.loading) {
                     html += '⏳ Generating...';
                 } else if (state.thumbnailMode === 'reference' && !state.thumbnailReference) {
