@@ -735,16 +735,50 @@
                 state.loadingProgress += 0.5;
 
                 var newStep = Math.floor(state.loadingProgress / progressPerStep);
+                var stepChanged = false;
                 if (newStep > state.loadingStep && newStep < state.loadingSteps.length) {
                     state.loadingStep = newStep;
+                    stepChanged = true;
                 }
 
                 if (state.loadingProgress >= 95) {
                     state.loadingProgress = 95;
                 }
 
-                render();
+                // OPTIMIZATION: Targeted DOM update instead of full render
+                // This prevents page shaking by only updating progress elements
+                updateProgressDisplay(stepChanged);
             }, 150);
+        }
+
+        // Targeted progress update to prevent page shaking
+        function updateProgressDisplay(stepChanged) {
+            var progressPercent = document.getElementById('progress-percent');
+            var progressFill = document.getElementById('progress-fill');
+
+            if (progressPercent) {
+                progressPercent.textContent = Math.round(state.loadingProgress) + '%';
+            }
+            if (progressFill) {
+                progressFill.style.width = state.loadingProgress + '%';
+            }
+
+            // Only update step indicators if step changed
+            if (stepChanged) {
+                var stepContainer = document.getElementById('loading-steps');
+                if (stepContainer) {
+                    var stepHtml = '';
+                    for (var i = 0; i < state.loadingSteps.length; i++) {
+                        var step = state.loadingSteps[i];
+                        var stepClass = i < state.loadingStep ? 'text-green-400' : i === state.loadingStep ? 'text-yellow-400' : 'text-white/40';
+                        stepHtml += '<div class="flex items-center gap-2 ' + stepClass + '">';
+                        stepHtml += '<span>' + (i < state.loadingStep ? '✓' : step.icon) + '</span>';
+                        stepHtml += '<span class="text-sm">' + step.name + '</span>';
+                        stepHtml += '</div>';
+                    }
+                    stepContainer.innerHTML = stepHtml;
+                }
+            }
         }
 
         function stopLoadingProgress() {
@@ -1481,13 +1515,13 @@
                 html += '<p class="text-white/60">Analyzing your channel and finding matches...</p>';
                 html += '</div>';
                 html += '</div>';
-                html += '<span class="text-2xl font-bold text-yellow-400">' + Math.round(state.loadingProgress) + '%</span>';
+                html += '<span id="progress-percent" class="text-2xl font-bold text-yellow-400">' + Math.round(state.loadingProgress) + '%</span>';
                 html += '</div>';
                 html += '<div class="progress-container mb-6">';
-                html += '<div class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
                 html += '</div>';
 
-                html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">';
+                html += '<div id="loading-steps" class="grid grid-cols-2 md:grid-cols-3 gap-3">';
                 for (var i = 0; i < state.loadingSteps.length; i++) {
                     var step = state.loadingSteps[i];
                     var stepClass = i < state.loadingStep ? 'text-green-400' : i === state.loadingStep ? 'text-yellow-400' : 'text-white/40';
@@ -1637,7 +1671,7 @@
                 html += '<div class="loading-emoji mb-4">🔮</div>';
                 html += '<p class="text-white text-lg mb-4">Analyzing viral potential...</p>';
                 html += '<div class="progress-container max-w-md mx-auto">';
-                html += '<div class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
                 html += '</div>';
                 html += '</div>';
                 return html;
@@ -1754,7 +1788,7 @@
                 html += '<div class="loading-emoji mb-4">💰</div>';
                 html += '<p class="text-white text-lg mb-4">Analyzing monetization data...</p>';
                 html += '<div class="progress-container max-w-md mx-auto">';
-                html += '<div class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
                 html += '</div>';
                 html += '</div>';
                 return html;
@@ -1894,7 +1928,7 @@
                 html += '<div class="loading-emoji mb-4">✍️</div>';
                 html += '<p class="text-white text-lg mb-4">Writing your script...</p>';
                 html += '<div class="progress-container max-w-md mx-auto">';
-                html += '<div class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
                 html += '</div>';
                 html += '</div>';
                 return html;
