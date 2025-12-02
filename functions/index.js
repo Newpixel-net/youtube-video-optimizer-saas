@@ -8853,6 +8853,7 @@ exports.makeFilePublic = functions.https.onCall(async (data, context) => {
 // ADMIN: Set CORS Configuration on Storage Bucket
 // Run this ONCE after deployment to enable cross-origin access
 // Call from browser console: firebase.functions().httpsCallable('adminSetBucketCors')()
+// Added: 2025-12-02 - Fixes CORS errors for images on custom domain
 // =====================================================
 exports.adminSetBucketCors = functions.https.onCall(async (data, context) => {
   await requireAdmin(context);
