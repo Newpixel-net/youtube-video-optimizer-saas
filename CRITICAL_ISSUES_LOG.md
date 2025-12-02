@@ -431,6 +431,126 @@ Always verify model names against Google AI Studio (aistudio.google.com) before 
 
 ---
 
+## Issue #6: Missing Firestore Security Rules for 7 Collections
+
+**Date**: 2025-12-02
+
+**Symptom**:
+- Console errors showing permission denied for certain operations
+- Gallery features not loading
+- Some history features failing
+- Token transactions not accessible
+
+**What DID NOT fix it**:
+- Checking storage rules (they were correct)
+- Looking at CORS configuration (separate issue)
+- Reviewing admin dashboard code
+
+**Root Cause**:
+Seven Firestore collections were being used in the backend code but **had no security rules defined**. Without explicit rules, Firestore **denies all access by default**.
+
+Missing collections:
+1. `creativeGallery` - Community gallery (public read needed!)
+2. `competitorHistory` - User history
+3. `trendHistory` - User history
+4. `thumbnailHistory` - User history
+5. `channelAuditHistory` - User history
+6. `tokenTransactions` - User transactions
+7. `promoCodes` - Admin only
+
+**The ACTUAL fix**:
+Add rules for each collection to `firestore.rules`:
+
+```javascript
+// Example for creativeGallery (public read)
+match /creativeGallery/{galleryId} {
+  allow read: if true;
+  allow create, update, delete: if false; // Admin SDK only
+}
+
+// Example for history collections (user's own data)
+match /competitorHistory/{historyId} {
+  allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+  allow create, update: if false;
+  allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+}
+```
+
+**File location**: `firestore.rules`
+
+**Deployment Command**:
+```bash
+firebase deploy --only firestore:rules
+```
+
+**Time wasted**: ~2 hours
+
+---
+
+## Issue #7: CORS Not Applied to Firebase Storage Bucket
+
+**Date**: 2025-12-02
+
+**Symptom**:
+- Console shows "Access to image blocked by CORS policy"
+- Images fail to load from `storage.googleapis.com`
+- Error: "No 'Access-Control-Allow-Origin' header is present"
+
+**What DID NOT fix it**:
+- Creating `cors.json` file (it existed but wasn't applied!)
+- Updating storage.rules (doesn't affect CORS)
+- Changing URL format (URLs were correct)
+
+**Root Cause**:
+The `cors.json` file existed with correct domains BUT was **never applied** to the Google Cloud Storage bucket. Firebase Storage requires you to manually apply CORS configuration using gsutil.
+
+**The ACTUAL fix**:
+Apply the CORS configuration to the bucket:
+
+```bash
+# Install gsutil if not already installed (part of gcloud SDK)
+# gcloud components install gsutil
+
+# Apply CORS configuration
+gsutil cors set cors.json gs://ytseo-6d1b0.firebasestorage.app
+
+# Verify it was applied
+gsutil cors get gs://ytseo-6d1b0.firebasestorage.app
+```
+
+The `cors.json` file should contain:
+```json
+[
+  {
+    "origin": [
+      "https://ytseo.siteuo.com",
+      "https://ytseo-6d1b0.web.app",
+      "https://ytseo-6d1b0.firebaseapp.com",
+      "http://localhost:5000"
+    ],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": [
+      "Content-Type",
+      "Access-Control-Allow-Origin",
+      "Access-Control-Allow-Methods",
+      "Access-Control-Allow-Headers",
+      "Content-Length",
+      "Content-Encoding"
+    ]
+  }
+]
+```
+
+**Key Lesson**:
+Creating `cors.json` is NOT enough! You MUST apply it to the bucket using gsutil. This is a one-time setup step that's easy to miss.
+
+**File location**: `cors.json` + bucket configuration
+
+**Time wasted**: ~3 hours
+
+---
+
 ## Template for Future Issues
 
 ### Issue #X: [Title]

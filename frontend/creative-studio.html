@@ -6384,6 +6384,8 @@
             order: [],
 
             // Preload an image and cache it
+            // NOTE: CORS must be configured on the storage bucket for blob caching to work
+            // Run: gsutil cors set cors.json gs://ytseo-6d1b0.firebasestorage.app
             preload: function(url) {
                 if (!url || imageCache.cache[url] || imageCache.loading[url]) {
                     return imageCache.loading[url] || Promise.resolve(imageCache.cache[url]);
@@ -6391,10 +6393,44 @@
 
                 imageCache.loading[url] = new Promise(function(resolve, reject) {
                     var img = new Image();
-                    img.crossOrigin = 'anonymous';
 
-                    img.onload = function() {
-                        // Create canvas to convert to blob
+                    // Try with CORS first for blob caching capability
+                    // If CORS fails, we'll retry without it
+                    var triedWithoutCors = false;
+
+                    function loadWithCors() {
+                        img.crossOrigin = 'anonymous';
+                        img.onload = handleLoad;
+                        img.onerror = function() {
+                            // CORS failed - try without crossOrigin (image will display but can't be cached as blob)
+                            if (!triedWithoutCors) {
+                                triedWithoutCors = true;
+                                loadWithoutCors();
+                            } else {
+                                delete imageCache.loading[url];
+                                resolve(url);
+                            }
+                        };
+                        img.src = url;
+                    }
+
+                    function loadWithoutCors() {
+                        var img2 = new Image();
+                        img2.onload = function() {
+                            // Image loaded without CORS - just cache the URL, can't create blob
+                            imageCache.set(url, url);
+                            resolve(url);
+                            delete imageCache.loading[url];
+                        };
+                        img2.onerror = function() {
+                            delete imageCache.loading[url];
+                            resolve(url);
+                        };
+                        img2.src = url;
+                    }
+
+                    function handleLoad() {
+                        // Create canvas to convert to blob (only works with CORS)
                         try {
                             var canvas = document.createElement('canvas');
                             canvas.width = img.naturalWidth;
@@ -6408,26 +6444,21 @@
                                     imageCache.set(url, blobUrl);
                                     resolve(blobUrl);
                                 } else {
-                                    // Fallback to original URL
                                     imageCache.set(url, url);
                                     resolve(url);
                                 }
                                 delete imageCache.loading[url];
                             }, 'image/webp', 0.85);
                         } catch (e) {
-                            // Canvas operations might fail due to CORS
+                            // Canvas operations failed (tainted canvas due to CORS)
                             imageCache.set(url, url);
                             resolve(url);
                             delete imageCache.loading[url];
                         }
-                    };
+                    }
 
-                    img.onerror = function() {
-                        delete imageCache.loading[url];
-                        resolve(url); // Return original URL on error
-                    };
-
-                    img.src = url;
+                    // Start loading with CORS
+                    loadWithCors();
                 });
 
                 return imageCache.loading[url];
