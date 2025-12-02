@@ -1953,8 +1953,10 @@ exports.adminGetUsers = functions.https.onCall(async (data, context) => {
 
     const snapshot = await query.get();
     let users = [];
+    const userIds = [];
 
     snapshot.forEach(doc => {
+      userIds.push(doc.id);
       const userData = doc.data();
 
       // Calculate subscription status
@@ -1999,9 +2001,40 @@ exports.adminGetUsers = functions.https.onCall(async (data, context) => {
         bonusUses: userData.bonusUses || {},
         isAdmin: userData.isAdmin || false,
         createdAt: userData.createdAt?.toDate?.()?.toISOString() || null,
-        lastLoginAt: userData.lastLoginAt?.toDate?.()?.toISOString() || null
+        lastLoginAt: userData.lastLoginAt?.toDate?.()?.toISOString() || null,
+        tokens: null // Will be populated below
       });
     });
+
+    // Fetch token balances from creativeTokens collection for all users
+    if (userIds.length > 0) {
+      // Batch fetch in chunks of 10 (Firestore limit for 'in' queries)
+      const tokenMap = {};
+      for (let i = 0; i < userIds.length; i += 10) {
+        const chunk = userIds.slice(i, i + 10);
+        const tokenDocs = await Promise.all(
+          chunk.map(uid => db.collection('creativeTokens').doc(uid).get())
+        );
+        tokenDocs.forEach((doc, index) => {
+          if (doc.exists) {
+            const tokenData = doc.data();
+            tokenMap[chunk[index]] = {
+              balance: tokenData.balance || 0,
+              rollover: tokenData.rollover || 0,
+              plan: tokenData.plan || 'free',
+              monthlyAllocation: tokenData.monthlyAllocation || 0,
+              lastRefresh: tokenData.lastRefresh?.toDate?.()?.toISOString() || null
+            };
+          }
+        });
+      }
+
+      // Attach token data to users
+      users = users.map(user => ({
+        ...user,
+        tokens: tokenMap[user.uid] || { balance: 0, rollover: 0, plan: 'free' }
+      }));
+    }
 
     // Apply client-side filters (search and verified)
     if (searchQuery && searchQuery.trim()) {
