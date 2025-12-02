@@ -533,16 +533,81 @@
             scroll-behavior: smooth;
             scrollbar-width: none;
             -ms-overflow-style: none;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .stream-tools-row:active {
+            cursor: grabbing;
+        }
+
+        .stream-tools-row.dragging {
+            cursor: grabbing;
+            scroll-behavior: auto;
+        }
+
+        .stream-tools-row.dragging .stream-tool-card {
+            pointer-events: none;
         }
 
         .stream-tools-row::-webkit-scrollbar {
             display: none;
         }
 
+        /* Scroll arrows */
+        .stream-scroll-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.2s ease;
+            opacity: 0;
+        }
+
+        .stream-scroll-container:hover .stream-scroll-btn {
+            opacity: 1;
+        }
+
+        .stream-scroll-btn:hover {
+            background: rgba(99, 102, 241, 0.8);
+            border-color: rgba(99, 102, 241, 0.5);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .stream-scroll-btn.left {
+            left: -20px;
+        }
+
+        .stream-scroll-btn.right {
+            right: -20px;
+        }
+
+        .stream-scroll-btn.hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .stream-scroll-btn {
+                display: none;
+            }
+        }
+
         /* Stream tool cards - compact version */
         .stream-tool-card {
             flex-shrink: 0;
-            width: 220px;
+            width: calc((100% - 5rem) / 6); /* 6 cards with 1rem gaps */
+            min-width: 200px;
+            max-width: 240px;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 1rem;
@@ -551,6 +616,31 @@
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
+        }
+
+        @media (max-width: 1400px) {
+            .stream-tool-card {
+                width: calc((100% - 4rem) / 5); /* 5 cards */
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .stream-tool-card {
+                width: calc((100% - 3rem) / 4); /* 4 cards */
+            }
+        }
+
+        @media (max-width: 900px) {
+            .stream-tool-card {
+                width: calc((100% - 2rem) / 3); /* 3 cards */
+            }
+        }
+
+        @media (max-width: 600px) {
+            .stream-tool-card {
+                width: calc((100% - 1rem) / 2); /* 2 cards */
+                min-width: 160px;
+            }
         }
 
         .stream-tool-card::before {
@@ -1907,22 +1997,27 @@
                 html += '<span class="category-stream-name">' + category.name + '</span>';
                 html += '<span class="category-stream-count">' + category.tools.length + ' tools</span>';
                 html += '</div>';
-                if (category.tools.length > 4) {
-                    html += '<button class="category-see-all" onclick="app.expandCategory(\'' + category.id + '\')">';
-                    html += '<span>See All</span>';
-                    html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>';
-                    html += '</button>';
-                }
                 html += '</div>';
 
-                html += '<div class="stream-scroll-container">';
-                html += '<div class="stream-tools-row">';
+                html += '<div class="stream-scroll-container" data-category="' + category.id + '">';
+                // Left scroll button
+                html += '<button class="stream-scroll-btn left hidden" onclick="app.scrollStream(\'' + category.id + '\', -1)">';
+                html += '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
+                html += '</button>';
+
+                html += '<div class="stream-tools-row" data-stream="' + category.id + '">';
 
                 category.tools.forEach(function(tool) {
                     html += renderStreamToolCard(tool);
                 });
 
                 html += '</div>';
+
+                // Right scroll button
+                html += '<button class="stream-scroll-btn right" onclick="app.scrollStream(\'' + category.id + '\', 1)">';
+                html += '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>';
+                html += '</button>';
+
                 html += '</div>';
                 html += '</div>';
             });
@@ -3707,10 +3802,122 @@
                 }
             },
 
-            // Expand a category to show all tools (for "See All" button)
-            expandCategory: function(categoryId) {
-                // For now, just scroll to show all - could implement a modal view later
-                utils.showToast('Showing all ' + categoryId + ' tools', 'info');
+            // Scroll stream by clicking arrow buttons
+            scrollStream: function(categoryId, direction) {
+                var row = document.querySelector('[data-stream="' + categoryId + '"]');
+                if (!row) return;
+
+                var cardWidth = row.querySelector('.stream-tool-card')?.offsetWidth || 220;
+                var scrollAmount = (cardWidth + 16) * 2; // Scroll 2 cards at a time (card + gap)
+
+                row.scrollBy({
+                    left: scrollAmount * direction,
+                    behavior: 'smooth'
+                });
+
+                // Update button visibility after scroll
+                setTimeout(function() {
+                    app.updateScrollButtons(categoryId);
+                }, 300);
+            },
+
+            // Update scroll button visibility based on scroll position
+            updateScrollButtons: function(categoryId) {
+                var container = document.querySelector('.stream-scroll-container[data-category="' + categoryId + '"]');
+                var row = document.querySelector('[data-stream="' + categoryId + '"]');
+                if (!container || !row) return;
+
+                var leftBtn = container.querySelector('.stream-scroll-btn.left');
+                var rightBtn = container.querySelector('.stream-scroll-btn.right');
+
+                if (leftBtn) {
+                    if (row.scrollLeft <= 0) {
+                        leftBtn.classList.add('hidden');
+                    } else {
+                        leftBtn.classList.remove('hidden');
+                    }
+                }
+
+                if (rightBtn) {
+                    var maxScroll = row.scrollWidth - row.clientWidth;
+                    if (row.scrollLeft >= maxScroll - 5) {
+                        rightBtn.classList.add('hidden');
+                    } else {
+                        rightBtn.classList.remove('hidden');
+                    }
+                }
+            },
+
+            // Initialize carousel drag functionality
+            initCarousels: function() {
+                var rows = document.querySelectorAll('.stream-tools-row');
+
+                rows.forEach(function(row) {
+                    var isDown = false;
+                    var startX;
+                    var scrollLeft;
+                    var hasMoved = false;
+
+                    row.addEventListener('mousedown', function(e) {
+                        isDown = true;
+                        hasMoved = false;
+                        row.classList.add('dragging');
+                        startX = e.pageX - row.offsetLeft;
+                        scrollLeft = row.scrollLeft;
+                    });
+
+                    row.addEventListener('mouseleave', function() {
+                        isDown = false;
+                        row.classList.remove('dragging');
+                    });
+
+                    row.addEventListener('mouseup', function(e) {
+                        isDown = false;
+                        row.classList.remove('dragging');
+
+                        // Update scroll buttons after drag
+                        var categoryId = row.getAttribute('data-stream');
+                        if (categoryId) {
+                            app.updateScrollButtons(categoryId);
+                        }
+                    });
+
+                    row.addEventListener('mousemove', function(e) {
+                        if (!isDown) return;
+                        e.preventDefault();
+                        hasMoved = true;
+                        var x = e.pageX - row.offsetLeft;
+                        var walk = (x - startX) * 1.5; // Scroll speed multiplier
+                        row.scrollLeft = scrollLeft - walk;
+                    });
+
+                    // Touch events for mobile
+                    row.addEventListener('touchstart', function(e) {
+                        startX = e.touches[0].pageX - row.offsetLeft;
+                        scrollLeft = row.scrollLeft;
+                    }, { passive: true });
+
+                    row.addEventListener('touchmove', function(e) {
+                        var x = e.touches[0].pageX - row.offsetLeft;
+                        var walk = (x - startX) * 1.5;
+                        row.scrollLeft = scrollLeft - walk;
+                    }, { passive: true });
+
+                    row.addEventListener('touchend', function() {
+                        var categoryId = row.getAttribute('data-stream');
+                        if (categoryId) {
+                            app.updateScrollButtons(categoryId);
+                        }
+                    });
+
+                    // Update buttons on scroll
+                    row.addEventListener('scroll', function() {
+                        var categoryId = row.getAttribute('data-stream');
+                        if (categoryId) {
+                            app.updateScrollButtons(categoryId);
+                        }
+                    });
+                });
             },
 
             // Toggle category for mobile collapsible sections
@@ -4596,7 +4803,10 @@
            ========================================== */
 
         function attachEventListeners() {
-            // Add any dynamic event listeners here
+            // Initialize carousels when on hub view
+            if (state.currentView === 'hub') {
+                app.initCarousels();
+            }
         }
 
         /* ==========================================
