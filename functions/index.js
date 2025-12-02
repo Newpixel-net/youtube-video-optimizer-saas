@@ -287,6 +287,26 @@ async function logUsage(uid, action, metadata = {}) {
 }
 
 /**
+ * Helper: Get token configuration from admin settings
+ * Default values MUST match admin panel defaults in admin-plans.html
+ * This function is used across multiple token-related Cloud Functions
+ */
+async function getTokenConfigFromAdmin() {
+  const tokenConfigDoc = await db.collection('settings').doc('tokenConfig').get();
+  // These defaults match the admin panel UI defaults
+  const defaultTokenConfig = {
+    free: { monthlyTokens: 10, rolloverPercent: 0 },
+    lite: { monthlyTokens: 50, rolloverPercent: 25 },
+    pro: { monthlyTokens: 200, rolloverPercent: 50 },
+    enterprise: { monthlyTokens: 1000, rolloverPercent: 100 }
+  };
+
+  return tokenConfigDoc.exists
+    ? { ...defaultTokenConfig, ...tokenConfigDoc.data().plans }
+    : defaultTokenConfig;
+}
+
+/**
  * SECURITY: Sanitize error messages to prevent information disclosure
  * Removes sensitive details like file paths, API keys, and internal structure
  */
@@ -2940,21 +2960,10 @@ exports.adminResetCreativeTokens = functions.https.onCall(async (data, context) 
 
     const userPlan = userDoc.data().subscription?.plan || 'free';
 
-    // Get admin-configured token settings
-    const tokenConfigDoc = await db.collection('settings').doc('tokenConfig').get();
-    const defaultTokenConfig = {
-      free: { monthlyTokens: 5, rolloverPercent: 0 },
-      lite: { monthlyTokens: 10, rolloverPercent: 25 },
-      pro: { monthlyTokens: 50, rolloverPercent: 50 },
-      enterprise: { monthlyTokens: 100, rolloverPercent: 100 }
-    };
-
-    const tokenConfig = tokenConfigDoc.exists
-      ? { ...defaultTokenConfig, ...tokenConfigDoc.data().plans }
-      : defaultTokenConfig;
-
+    // Get admin-configured token settings (use shared helper for consistency)
+    const tokenConfig = await getTokenConfigFromAdmin();
     const planConfig = tokenConfig[userPlan] || tokenConfig.free;
-    const monthlyAllocation = planConfig.monthlyTokens || 5;
+    const monthlyAllocation = planConfig.monthlyTokens || 10;
     const rolloverPercent = planConfig.rolloverPercent || 0;
 
     // Reset creative tokens to plan allocation
@@ -5257,22 +5266,12 @@ exports.getThumbnailTokenBalance = functions.https.onCall(async (data, context) 
     const userDoc = await db.collection('users').doc(uid).get();
     const userPlan = userDoc.exists ? (userDoc.data().subscription?.plan || 'free') : 'free';
 
-    // Get admin-configured token settings
-    const tokenConfigDoc = await db.collection('settings').doc('tokenConfig').get();
-    const defaultTokenConfig = {
-      free: { monthlyTokens: 5, rolloverPercent: 0 },
-      lite: { monthlyTokens: 10, rolloverPercent: 25 },
-      pro: { monthlyTokens: 50, rolloverPercent: 50 },
-      enterprise: { monthlyTokens: 100, rolloverPercent: 100 }
-    };
-
-    const tokenConfig = tokenConfigDoc.exists
-      ? { ...defaultTokenConfig, ...tokenConfigDoc.data().plans }
-      : defaultTokenConfig;
+    // Get admin-configured token settings (use shared helper for consistency)
+    const tokenConfig = await getTokenConfigFromAdmin();
 
     // Get plan-specific allocation
     const planConfig = tokenConfig[userPlan] || tokenConfig.free;
-    const monthlyAllocation = planConfig.monthlyTokens || 5;
+    const monthlyAllocation = planConfig.monthlyTokens || 10;
     const rolloverPercent = planConfig.rolloverPercent || 0;
 
     // Get or create user's token balance
@@ -7793,21 +7792,6 @@ IMPORTANT: Write naturally as if speaking to camera. Include:
  * Token rollover: Unused tokens roll over to next month (max 500)
  */
 
-// Helper: Get token configuration from admin settings
-async function getTokenConfigFromAdmin() {
-  const tokenConfigDoc = await db.collection('settings').doc('tokenConfig').get();
-  const defaultTokenConfig = {
-    free: { monthlyTokens: 5, rolloverPercent: 0 },
-    lite: { monthlyTokens: 10, rolloverPercent: 25 },
-    pro: { monthlyTokens: 50, rolloverPercent: 50 },
-    enterprise: { monthlyTokens: 100, rolloverPercent: 100 }
-  };
-
-  return tokenConfigDoc.exists
-    ? { ...defaultTokenConfig, ...tokenConfigDoc.data().plans }
-    : defaultTokenConfig;
-}
-
 // Get user's creative tokens balance (synced with admin settings)
 exports.getCreativeTokens = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
@@ -7817,10 +7801,10 @@ exports.getCreativeTokens = functions.https.onCall(async (data, context) => {
     const userDoc = await db.collection('users').doc(uid).get();
     const userPlan = userDoc.exists ? (userDoc.data().subscription?.plan || 'free') : 'free';
 
-    // Get admin-configured token settings
+    // Get admin-configured token settings (use shared helper for consistency)
     const tokenConfig = await getTokenConfigFromAdmin();
     const planConfig = tokenConfig[userPlan] || tokenConfig.free;
-    const monthlyAllocation = planConfig.monthlyTokens || 5;
+    const monthlyAllocation = planConfig.monthlyTokens || 10;
     const rolloverPercent = planConfig.rolloverPercent || 0;
 
     const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
