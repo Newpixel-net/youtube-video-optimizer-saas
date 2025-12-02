@@ -1190,10 +1190,61 @@
         };
 
         /* ==========================================
-           4.4 RENDER FUNCTION
+           4.4 INPUT SYNC & RENDER FUNCTIONS
            ========================================== */
 
+        // Sync current input values to state before re-render
+        // This prevents losing user input when state changes trigger a render
+        function syncInputsToState() {
+            // Script Studio
+            var scriptTopic = document.getElementById('script-topic');
+            if (scriptTopic) state.script.topic = scriptTopic.value;
+
+            // Hook Lab
+            var hookTopic = document.getElementById('hook-topic');
+            if (hookTopic) state.hooks.topic = hookTopic.value;
+
+            // Content Multiplier
+            var multiplierTranscript = document.getElementById('multiplier-transcript');
+            if (multiplierTranscript) state.multiplier.transcript = multiplierTranscript.value;
+
+            // Trend Hijacker
+            var trendNiche = document.getElementById('trend-niche');
+            if (trendNiche) state.trends.niche = trendNiche.value;
+
+            // Content Gap Finder
+            var gapNiche = document.getElementById('gap-niche');
+            var gapCompetitors = document.getElementById('gap-competitors');
+            if (gapNiche) state.gaps.niche = gapNiche.value;
+            if (gapCompetitors) state.gaps.competitors = gapCompetitors.value;
+
+            // Audience DNA
+            var audienceNiche = document.getElementById('audience-niche');
+            var audienceChannel = document.getElementById('audience-channel');
+            if (audienceNiche) state.audience.niche = audienceNiche.value;
+            if (audienceChannel) state.audience.channelUrl = audienceChannel.value;
+
+            // Collab Matchmaker
+            var collabNiche = document.getElementById('collab-niche');
+            if (collabNiche) state.collab.niche = collabNiche.value;
+
+            // Revenue Maximizer
+            var revenueNiche = document.getElementById('revenue-niche');
+            if (revenueNiche) state.revenue.niche = revenueNiche.value;
+
+            // AI Video Coach
+            var coachVideo = document.getElementById('coach-video');
+            var coachTranscript = document.getElementById('coach-transcript');
+            var coachChallenge = document.getElementById('coach-challenge');
+            if (coachVideo) state.coach.videoUrl = coachVideo.value;
+            if (coachTranscript) state.coach.transcript = coachTranscript.value;
+            if (coachChallenge) state.coach.challenge = coachChallenge.value;
+        }
+
         function render() {
+            // Sync input values to state before re-rendering
+            syncInputsToState();
+
             const root = document.getElementById('app-root');
             let html = '';
 
