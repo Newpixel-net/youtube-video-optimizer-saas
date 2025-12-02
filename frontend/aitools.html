@@ -206,7 +206,7 @@
            2.5 CATEGORY SECTIONS
            ------------------------------------------ */
         .category-section {
-            margin-bottom: 2.5rem;
+            margin-bottom: 2rem;
         }
 
         .category-header {
@@ -241,28 +241,122 @@
             margin-left: auto;
         }
 
+        .category-toggle {
+            display: none;
+        }
+
+        /* Mobile collapsible categories */
+        @media (max-width: 768px) {
+            .category-header {
+                cursor: pointer;
+                user-select: none;
+                padding: 0.875rem 1rem;
+                margin-bottom: 0;
+                background: rgba(255, 255, 255, 0.02);
+                border-radius: 0.75rem;
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                transition: all 0.3s ease;
+            }
+
+            .category-header:hover {
+                background: rgba(255, 255, 255, 0.04);
+            }
+
+            .category-toggle {
+                display: block;
+                width: 20px;
+                height: 20px;
+                margin-left: auto;
+                position: relative;
+            }
+
+            .category-toggle::before,
+            .category-toggle::after {
+                content: '';
+                position: absolute;
+                background: rgba(255, 255, 255, 0.5);
+                transition: transform 0.3s ease;
+            }
+
+            .category-toggle::before {
+                width: 12px;
+                height: 2px;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+            }
+
+            .category-toggle::after {
+                width: 2px;
+                height: 12px;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+            }
+
+            .category-section.expanded .category-toggle::after {
+                transform: translate(-50%, -50%) rotate(90deg);
+                opacity: 0;
+            }
+
+            .category-content {
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
+                opacity: 0;
+            }
+
+            .category-section.expanded .category-content {
+                max-height: 2000px;
+                opacity: 1;
+                padding-top: 1rem;
+            }
+
+            .category-section {
+                margin-bottom: 0.75rem;
+            }
+
+            .category-count {
+                margin-left: 0;
+                margin-right: 0.5rem;
+            }
+        }
+
         /* ------------------------------------------
            2.6 TOOL CARDS - GLASSMORPHISM
            ------------------------------------------ */
         .tools-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 1rem;
         }
 
-        @media (max-width: 1200px) {
+        @media (max-width: 1600px) {
+            .tools-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .tools-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 1100px) {
             .tools-grid {
                 grid-template-columns: repeat(3, 1fr);
             }
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 768px) {
             .tools-grid {
                 grid-template-columns: repeat(2, 1fr);
+                gap: 0.75rem;
             }
         }
 
-        @media (max-width: 600px) {
+        @media (max-width: 480px) {
             .tools-grid {
                 grid-template-columns: 1fr;
             }
@@ -1023,7 +1117,7 @@
 
             // Header
             html += '<div class="hero-section relative z-10">';
-            html += '<div class="max-w-7xl mx-auto">';
+            html += '<div style="max-width: 1800px; margin: 0 auto;">';
             html += '<div class="flex items-center justify-between mb-4">';
             html += '<a href="/video-optimizer" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm">';
             html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
@@ -1055,87 +1149,79 @@
             html += '<div class="stat-item"><span class="stat-icon">🛠️</span><span class="stat-value">10</span><span class="stat-label">Tools</span></div>';
             html += '<div class="stat-item"><span class="stat-icon">🪙</span><span class="stat-value">' + state.tokens.balance + '</span><span class="stat-label">Available</span></div>';
             html += '<div class="stat-item"><span class="stat-icon">⭐</span><span class="stat-value">Script Studio</span><span class="stat-label">Popular</span></div>';
-            html += '<div class="stat-item"><span class="stat-icon">⚡</span><span class="stat-value">3-62</span><span class="stat-label">Token Range</span></div>';
+            html += '<div class="stat-item"><span class="stat-icon">⚡</span><span class="stat-value">3-10</span><span class="stat-label">Token Range</span></div>';
             html += '</div>';
 
             html += '</div></div>';
 
             // Main Content
-            html += '<div class="max-w-7xl mx-auto px-4 py-6">';
+            html += '<div style="max-width: 1800px; margin: 0 auto; padding: 1.5rem 1rem;">';
 
-            // Category 1: Content Creation
-            html += '<div class="category-section">';
-            html += '<div class="category-header">';
+            // Category 1: Content Creation (expanded by default on mobile)
+            html += '<div class="category-section expanded" data-category="1">';
+            html += '<div class="category-header" onclick="app.toggleCategory(1)">';
             html += '<div class="category-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);">✏️</div>';
             html += '<span class="category-title">Content Creation</span>';
             html += '<span class="category-count">3 tools</span>';
+            html += '<span class="category-toggle"></span>';
             html += '</div>';
+            html += '<div class="category-content">';
             html += '<div class="tools-grid">';
-
-            // AI Script Studio
             html += renderToolCard('script', 'script-studio', '🎬', 'AI Script Studio', 'From idea to full video script in 60 seconds with hooks & CTAs.', 5, '~60s', 'Popular', '#f59e0b', '#ef4444', 'text-amber-400');
-
-            // Viral Hook Laboratory
             html += renderToolCard('hooks', 'hook-lab', '🎣', 'Viral Hook Lab', 'Win the first 3 seconds. Generate winning hooks with AI prediction.', 3, '~30s', 'Impact', '#ec4899', '#8b5cf6', 'text-pink-400');
-
-            // Content Multiplier
             html += renderToolCard('multiplier', 'content-multiplier', '🔄', 'Content Multiplier', 'One video becomes 30 pieces. Extract Shorts, threads & more.', 8, '~2m', '10x', '#10b981', '#3b82f6', 'text-emerald-400');
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
 
-            html += '</div></div>';
-
-            // Category 2: Visual & CTR
-            html += '<div class="category-section">';
-            html += '<div class="category-header">';
+            // Category 2: Visual & CTR (collapsed by default on mobile)
+            html += '<div class="category-section" data-category="2">';
+            html += '<div class="category-header" onclick="app.toggleCategory(2)">';
             html += '<div class="category-icon" style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);">🎨</div>';
             html += '<span class="category-title">Visual & CTR</span>';
             html += '<span class="category-count">1 tool</span>';
+            html += '<span class="category-toggle"></span>';
             html += '</div>';
+            html += '<div class="category-content">';
             html += '<div class="tools-grid">';
-
-            // Thumbnail A/B Arena
             html += renderToolCard('thumbnail', 'thumbnail-arena', '📊', 'Thumbnail A/B Arena', 'Never guess which thumbnail wins. AI predicts CTR instantly.', 4, '~45s', 'CTR+', '#6366f1', '#a855f7', 'text-indigo-400');
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
 
-            html += '</div></div>';
-
-            // Category 3: Research & Discovery
-            html += '<div class="category-section">';
-            html += '<div class="category-header">';
+            // Category 3: Research & Discovery (collapsed by default on mobile)
+            html += '<div class="category-section" data-category="3">';
+            html += '<div class="category-header" onclick="app.toggleCategory(3)">';
             html += '<div class="category-icon" style="background: linear-gradient(135deg, #f97316 0%, #14b8a6 100%);">🔍</div>';
             html += '<span class="category-title">Research & Discovery</span>';
             html += '<span class="category-count">3 tools</span>';
+            html += '<span class="category-toggle"></span>';
             html += '</div>';
+            html += '<div class="category-content">';
             html += '<div class="tools-grid">';
-
-            // Trend Hijacker
             html += renderToolCard('trends', 'trend-hijacker', '🎯', 'Trend Hijacker', 'Catch trending topics before they peak. Early-mover advantage.', 6, '~90s', '🔥 Hot', '#f97316', '#eab308', 'text-orange-400');
-
-            // Content Gap Finder
             html += renderToolCard('gaps', 'gap-finder', '🗺️', 'Content Gap Finder', 'Discover untapped opportunities competitors missed.', 6, '~90s', 'Opportunity', '#14b8a6', '#06b6d4', 'text-teal-400');
-
-            // Audience DNA Analyzer
             html += renderToolCard('audience', 'audience-dna', '🧬', 'Audience DNA', 'Decode your audience psychology. Deep demographic insights.', 7, '~2m', 'Deep', '#8b5cf6', '#d946ef', 'text-purple-400');
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
 
-            html += '</div></div>';
-
-            // Category 4: Growth & Revenue
-            html += '<div class="category-section">';
-            html += '<div class="category-header">';
+            // Category 4: Growth & Revenue (collapsed by default on mobile)
+            html += '<div class="category-section" data-category="4">';
+            html += '<div class="category-header" onclick="app.toggleCategory(4)">';
             html += '<div class="category-icon" style="background: linear-gradient(135deg, #22c55e 0%, #f43f5e 100%);">📈</div>';
             html += '<span class="category-title">Growth & Revenue</span>';
             html += '<span class="category-count">3 tools</span>';
+            html += '<span class="category-toggle"></span>';
             html += '</div>';
+            html += '<div class="category-content">';
             html += '<div class="tools-grid">';
-
-            // Collab Matchmaker
             html += renderToolCard('collab', 'collab-match', '🤝', 'Collab Matchmaker', 'Find perfect collaboration partners with audience overlap.', 5, '~60s', 'Growth', '#0ea5e9', '#6366f1', 'text-sky-400');
-
-            // Revenue Maximizer Pro
             html += renderToolCard('revenue', 'revenue-max', '💰', 'Revenue Maximizer', 'Unlock hidden revenue streams with pricing guides & pitches.', 8, '~2m', '💵', '#22c55e', '#eab308', 'text-green-400');
-
-            // AI Video Coach
             html += renderToolCard('coach', 'ai-coach', '🧠', 'AI Video Coach', 'Personal YouTube mentor for retention, engagement & growth.', 10, '~3m', 'Premium', '#f43f5e', '#fb923c', 'text-rose-400');
-
-            html += '</div></div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
 
             html += '</div>'; // End container
 
@@ -2774,6 +2860,14 @@
                 state.currentView = view;
                 render();
                 window.scrollTo(0, 0);
+            },
+
+            // Toggle category for mobile collapsible sections
+            toggleCategory: function(categoryId) {
+                var section = document.querySelector('[data-category="' + categoryId + '"]');
+                if (section) {
+                    section.classList.toggle('expanded');
+                }
             },
 
             // Token loading
