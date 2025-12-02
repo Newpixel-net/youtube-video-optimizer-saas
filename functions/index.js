@@ -5351,15 +5351,132 @@ Output ONLY the prompt, no explanations or preamble.`
       }
 
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-      const geminiModelId = 'gemini-2.0-flash-exp-image-generation';
+      // Use imagen-3 for better image generation quality
+      // gemini-2.0-flash-exp works but imagen-3 has better face handling
+      const geminiModelId = 'gemini-2.0-flash-preview-image-generation';
 
       console.log(`Generating ${imageCount} thumbnail(s) with Gemini: ${geminiModelId}`);
 
       for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
         try {
-          // Build content parts with reference image
+          // Build content parts - TEXT FIRST, then reference image
+          // This order helps the model understand what to do with the image
           const contentParts = [];
 
+          // Build prompt with ENHANCED reference instruction based on detected type
+          let finalPrompt;
+
+          if (referenceImage && referenceImage.base64) {
+
+            // ============================================================
+            // FACE MODE: Use SIMPLIFIED, DIRECT prompt for better results
+            // Complex prompts confuse the model - simplicity is key for faces
+            // ============================================================
+            if (effectiveReferenceType === 'face' || mode === 'faceHero') {
+              // Extract key info from the GPT-generated prompt (just the scene/concept)
+              const sceneDescription = imagePrompt.length > 200
+                ? imagePrompt.substring(0, 200) + '...'
+                : imagePrompt;
+
+              // SIMPLIFIED face preservation prompt - this is the KEY FIX
+              finalPrompt = `IMPORTANT: Generate a YouTube thumbnail featuring the EXACT SAME PERSON from the reference photo.
+
+FACE IDENTITY REQUIREMENTS (CRITICAL - MUST MATCH EXACTLY):
+- Keep the EXACT same face: same eyes, nose, mouth, jaw shape
+- Keep the EXACT same hair: color, style, length, texture
+- Keep any facial hair exactly as shown (beard, stubble, etc.)
+- Keep the same skin tone and complexion
+- The person must be clearly recognizable as the same individual
+
+THUMBNAIL SCENE:
+${sceneDescription}
+
+COMPOSITION:
+- Position the person on the right side of the frame
+- Leave the left 40% clear for text overlay
+- Face should be prominent (35-45% of frame height)
+- Professional lighting, sharp focus on face
+
+FORMAT: 16:9 YouTube thumbnail, photorealistic, high quality`;
+
+              // Add expression modifier if specified
+              if (expressionModifier && expressionModifier !== 'keep') {
+                const expressionDesc = {
+                  'excited': 'Show an excited, enthusiastic expression with bright eyes and a genuine smile',
+                  'serious': 'Show a serious, authoritative expression with confident gaze',
+                  'surprised': 'Show a surprised expression with widened eyes and raised eyebrows',
+                  'curious': 'Show a curious, intrigued expression',
+                  'confident': 'Show a confident, knowing expression'
+                };
+                finalPrompt += `\n\nEXPRESSION: ${expressionDesc[expressionModifier] || 'Natural expression'}`;
+              }
+
+            // ============================================================
+            // PRODUCT MODE: Simplified product-focused prompt
+            // ============================================================
+            } else if (effectiveReferenceType === 'product') {
+              finalPrompt = `Create a YouTube thumbnail showcasing the EXACT product from the reference image.
+
+PRODUCT REQUIREMENTS:
+- Show the same product with accurate shape, colors, and details
+- Professional product photography lighting
+- Clean background (gradient or contextual)
+- Product as the hero/center focus
+
+THUMBNAIL CONCEPT:
+${imagePrompt}
+
+COMPOSITION: ${compositionGuide.prompt}
+FORMAT: 16:9 YouTube thumbnail, commercial quality, sharp focus`;
+
+            // ============================================================
+            // STYLE MODE: Transfer visual style to new content
+            // ============================================================
+            } else if (effectiveReferenceType === 'style') {
+              finalPrompt = `Create a YouTube thumbnail matching the VISUAL STYLE of the reference image.
+
+STYLE ELEMENTS TO MATCH:
+- Color palette and color grading
+- Lighting style and mood
+- Overall aesthetic and feel
+- Composition approach
+
+NEW THUMBNAIL CONTENT:
+${imagePrompt}
+
+COMPOSITION: ${compositionGuide.prompt}
+FORMAT: 16:9 YouTube thumbnail, high quality`;
+
+            // ============================================================
+            // BACKGROUND MODE: Use reference as scene/environment
+            // ============================================================
+            } else {
+              finalPrompt = `Use the reference image as the BACKGROUND/ENVIRONMENT for this YouTube thumbnail.
+
+SCENE: ${imagePrompt}
+
+Place new elements into this environment while maintaining consistent lighting and perspective.
+
+COMPOSITION: ${compositionGuide.prompt}
+FORMAT: 16:9 YouTube thumbnail, photorealistic`;
+            }
+
+          } else {
+            // No reference image - use full enhanced prompt
+            finalPrompt = `${imagePrompt}
+
+COMPOSITION: ${compositionGuide.prompt}
+Text overlay space: ${compositionGuide.textSpace}
+
+FORMAT: 16:9 YouTube thumbnail (1280x720), 4K photorealistic quality, professional photography, vibrant YouTube-optimized colors.
+
+AVOID: ${negativePrompt}`;
+          }
+
+          // Add text prompt FIRST
+          contentParts.push({ text: finalPrompt });
+
+          // Add reference image AFTER the instruction (helps model understand context)
           if (referenceImage && referenceImage.base64) {
             contentParts.push({
               inlineData: {
@@ -5368,85 +5485,6 @@ Output ONLY the prompt, no explanations or preamble.`
               }
             });
           }
-
-          // Build prompt with ENHANCED reference instruction based on detected type
-          let finalPrompt;
-
-          if (referenceImage && referenceImage.base64) {
-            // Get the specialized reference prompt based on type
-            const refTypePrompt = referenceTypePrompts[effectiveReferenceType] || referenceTypePrompts.style;
-
-            // Build enhanced reference-based prompt
-            finalPrompt = `REFERENCE IMAGE GENERATION - Type: ${effectiveReferenceType.toUpperCase()}
-
-═══════════════════════════════════════════════════════════════
-REFERENCE PROCESSING INSTRUCTIONS (CRITICAL)
-═══════════════════════════════════════════════════════════════
-${refTypePrompt}
-
-═══════════════════════════════════════════════════════════════
-THUMBNAIL GENERATION PROMPT
-═══════════════════════════════════════════════════════════════
-${imagePrompt}
-
-═══════════════════════════════════════════════════════════════
-COMPOSITION GUIDANCE
-═══════════════════════════════════════════════════════════════
-${compositionGuide.prompt}
-Text overlay space: ${compositionGuide.textSpace}
-
-═══════════════════════════════════════════════════════════════
-TECHNICAL SPECIFICATIONS
-═══════════════════════════════════════════════════════════════
-• Aspect Ratio: 16:9 (1280x720 pixels)
-• Quality: 4K photorealistic, professional photography
-• Focus: Sharp on main subject, appropriate background treatment
-• Colors: Vibrant, high contrast, YouTube-optimized
-• Lighting: Professional, flattering, depth-creating`;
-
-            // Add expression modifier if face-based
-            if ((effectiveReferenceType === 'face' || mode === 'faceHero') && expressionGuide) {
-              finalPrompt += `\n\n═══════════════════════════════════════════════════════════════
-EXPRESSION GUIDANCE
-═══════════════════════════════════════════════════════════════
-${expressionGuide}`;
-            }
-
-            // Add face strength guidance
-            if (effectiveReferenceType === 'face') {
-              finalPrompt += `\n\nFACE PRESERVATION STRENGTH: ${faceStrength * 100}% - ${faceStrength >= 0.9 ? 'EXACT match required' : faceStrength >= 0.7 ? 'Strong likeness required' : 'Inspired by reference'}`;
-            }
-
-            // Add style strength guidance
-            if (effectiveReferenceType === 'style') {
-              finalPrompt += `\n\nSTYLE TRANSFER STRENGTH: ${styleStrength * 100}% - ${styleStrength >= 0.9 ? 'EXACT style match' : styleStrength >= 0.7 ? 'Strong style influence' : 'Subtle style hints'}`;
-            }
-
-          } else {
-            // No reference image - use enhanced prompt directly
-            finalPrompt = `${imagePrompt}
-
-═══════════════════════════════════════════════════════════════
-COMPOSITION
-═══════════════════════════════════════════════════════════════
-${compositionGuide.prompt}
-Text overlay space: ${compositionGuide.textSpace}
-
-═══════════════════════════════════════════════════════════════
-TECHNICAL SPECIFICATIONS
-═══════════════════════════════════════════════════════════════
-• Aspect Ratio: 16:9 (1280x720 pixels)
-• Quality: 4K photorealistic, professional photography
-• YouTube thumbnail optimized`;
-          }
-
-          // Add negative prompt and format
-          finalPrompt += `\n\n═══════════════════════════════════════════════════════════════
-AVOID (NEGATIVE PROMPT)
-═══════════════════════════════════════════════════════════════
-${negativePrompt}`;
-
-          contentParts.push({ text: finalPrompt });
 
           const result = await ai.models.generateContent({
             model: geminiModelId,
