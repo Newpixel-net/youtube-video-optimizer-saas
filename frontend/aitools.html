@@ -523,13 +523,16 @@
 
         .stream-scroll-container {
             position: relative;
+            overflow: visible;
         }
 
         .stream-tools-row {
             display: flex;
             gap: 1rem;
             overflow-x: auto;
-            padding-bottom: 1rem;
+            overflow-y: visible;
+            padding: 0.5rem 0 1rem 0; /* Top padding for hover effect */
+            margin-top: -0.5rem; /* Compensate for padding */
             scroll-behavior: smooth;
             scrollbar-width: none;
             -ms-overflow-style: none;
@@ -544,10 +547,6 @@
         .stream-tools-row.dragging {
             cursor: grabbing;
             scroll-behavior: auto;
-        }
-
-        .stream-tools-row.dragging .stream-tool-card {
-            pointer-events: none;
         }
 
         .stream-tools-row::-webkit-scrollbar {
@@ -3856,24 +3855,30 @@
                     var isDown = false;
                     var startX;
                     var scrollLeft;
-                    var hasMoved = false;
+                    var startY;
+                    var dragThreshold = 5; // Pixels of movement before considering it a drag
 
                     row.addEventListener('mousedown', function(e) {
+                        // Only start drag if clicking on the row itself or empty space
                         isDown = true;
-                        hasMoved = false;
-                        row.classList.add('dragging');
-                        startX = e.pageX - row.offsetLeft;
+                        row.dataset.dragging = 'false';
+                        startX = e.pageX;
+                        startY = e.pageY;
                         scrollLeft = row.scrollLeft;
                     });
 
                     row.addEventListener('mouseleave', function() {
+                        if (isDown && row.dataset.dragging === 'true') {
+                            row.classList.remove('dragging');
+                        }
                         isDown = false;
-                        row.classList.remove('dragging');
                     });
 
                     row.addEventListener('mouseup', function(e) {
+                        var wasDragging = row.dataset.dragging === 'true';
                         isDown = false;
                         row.classList.remove('dragging');
+                        row.dataset.dragging = 'false';
 
                         // Update scroll buttons after drag
                         var categoryId = row.getAttribute('data-stream');
@@ -3884,23 +3889,43 @@
 
                     row.addEventListener('mousemove', function(e) {
                         if (!isDown) return;
-                        e.preventDefault();
-                        hasMoved = true;
-                        var x = e.pageX - row.offsetLeft;
-                        var walk = (x - startX) * 1.5; // Scroll speed multiplier
-                        row.scrollLeft = scrollLeft - walk;
+
+                        var deltaX = Math.abs(e.pageX - startX);
+                        var deltaY = Math.abs(e.pageY - startY);
+
+                        // Only start dragging if moved more than threshold horizontally
+                        if (deltaX > dragThreshold && deltaX > deltaY) {
+                            row.dataset.dragging = 'true';
+                            row.classList.add('dragging');
+                            e.preventDefault();
+
+                            var x = e.pageX - row.offsetLeft;
+                            var walk = (e.pageX - startX);
+                            row.scrollLeft = scrollLeft - walk;
+                        }
                     });
 
+                    // Prevent click on cards if we were dragging
+                    row.addEventListener('click', function(e) {
+                        if (row.dataset.dragging === 'true') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                    }, true);
+
                     // Touch events for mobile
+                    var touchStartX;
+                    var touchScrollLeft;
+
                     row.addEventListener('touchstart', function(e) {
-                        startX = e.touches[0].pageX - row.offsetLeft;
-                        scrollLeft = row.scrollLeft;
+                        touchStartX = e.touches[0].pageX;
+                        touchScrollLeft = row.scrollLeft;
                     }, { passive: true });
 
                     row.addEventListener('touchmove', function(e) {
-                        var x = e.touches[0].pageX - row.offsetLeft;
-                        var walk = (x - startX) * 1.5;
-                        row.scrollLeft = scrollLeft - walk;
+                        var x = e.touches[0].pageX;
+                        var walk = (x - touchStartX);
+                        row.scrollLeft = touchScrollLeft - walk;
                     }, { passive: true });
 
                     row.addEventListener('touchend', function() {
