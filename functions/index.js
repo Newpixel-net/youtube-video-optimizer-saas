@@ -1967,8 +1967,10 @@ exports.adminGetUsers = functions.https.onCall(async (data, context) => {
         clientAlias: userData.clientAlias || '',
         isFiverrVerified: userData.isFiverrVerified || false,
         adminNotes: userData.adminNotes || '',
+        tags: userData.tags || [],
         subscription: {
           ...(userData.subscription || { plan: 'free' }),
+          duration: userData.subscription?.duration || null,
           endDate: userData.subscription?.endDate?.toDate?.()?.toISOString() || null,
           startDate: userData.subscription?.startDate?.toDate?.()?.toISOString() || null
         },
