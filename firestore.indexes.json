@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "adminNotifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dismissed", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "renewalRequests",
       "queryScope": "COLLECTION",
       "fields": [
