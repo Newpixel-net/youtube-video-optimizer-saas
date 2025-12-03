@@ -2769,9 +2769,8 @@
             html += '<div class="plan-badge"><span>👑</span><span>' + planName + '</span></div>';
             html += '<div class="notification-bell" onclick="event.stopPropagation(); app.toggleNotifications()">';
             html += '<span style="font-size:1.25rem;">🔔</span>';
-            if (totalUnread > 0) {
-                html += '<span class="notification-badge">' + (totalUnread > 99 ? '99+' : totalUnread) + '</span>';
-            }
+            // Always render badge element for real-time updates (hidden when count is 0)
+            html += '<span class="notification-badge" style="' + (totalUnread > 0 ? '' : 'display:none') + '">' + (totalUnread > 99 ? '99+' : totalUnread) + '</span>';
             if (state.showNotifications) {
                 html += '<div class="notification-dropdown" onclick="event.stopPropagation()">';
                 html += '<div class="notification-tabs">';
@@ -5667,8 +5666,7 @@
                 if (notificationUnsubscribe) notificationUnsubscribe();
                 notificationUnsubscribe = db.collection('userNotifications')
                     .where('userId', '==', user.uid)
-                    .where('type', '==', 'new_report')
-                    .where('read', '==', false)
+                    .where('isRead', '==', false)
                     .orderBy('createdAt', 'desc')
                     .limit(20)
                     .onSnapshot(function(snapshot) {

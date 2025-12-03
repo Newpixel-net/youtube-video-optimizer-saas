@@ -9571,9 +9571,8 @@
             // Unified Notification Bell
             html += '<div class="notification-bell relative" onclick="event.stopPropagation(); app.toggleNotifications()">';
             html += '<span class="text-2xl">🔔</span>';
-            if (totalUnread > 0) {
-                html += '<span class="notification-badge">' + (totalUnread > 99 ? '99+' : totalUnread) + '</span>';
-            }
+            // Always render badge element for real-time updates (hidden when count is 0)
+            html += '<span class="notification-badge" style="' + (totalUnread > 0 ? '' : 'display:none') + '">' + (totalUnread > 99 ? '99+' : totalUnread) + '</span>';
 
             // Unified Notification Dropdown with Tabs
             if (state.showNotifications) {
