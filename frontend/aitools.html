@@ -410,6 +410,49 @@
             gap: 0.75rem;
         }
 
+        .header-history-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.875rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-history-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .header-token-display {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 0.875rem;
+            background: linear-gradient(135deg, rgba(234, 179, 8, 0.15) 0%, rgba(251, 191, 36, 0.1) 100%);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-token-display .token-value {
+            font-weight: 700;
+            color: white;
+        }
+
+        .header-token-display .token-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.75rem;
+        }
+
         .plan-badge {
             display: flex;
             align-items: center;
@@ -576,6 +619,75 @@
 
         .user-menu-btn:hover {
             background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Global header mobile responsive */
+        @media (max-width: 768px) {
+            .global-header {
+                padding: 0.75rem 1rem;
+            }
+
+            .global-header-content {
+                gap: 0.5rem;
+            }
+
+            .header-history-btn {
+                padding: 0.4rem 0.6rem;
+                font-size: 0.75rem;
+            }
+
+            .header-history-btn span:last-child {
+                display: none;
+            }
+
+            .header-token-display {
+                padding: 0.4rem 0.6rem;
+                font-size: 0.75rem;
+            }
+
+            .header-token-display .token-label {
+                display: none;
+            }
+
+            .plan-badge {
+                padding: 0.4rem 0.6rem;
+                font-size: 0.7rem;
+            }
+
+            .plan-badge span:last-child {
+                display: none;
+            }
+
+            .notification-bell {
+                width: 36px;
+                height: 36px;
+            }
+
+            .user-menu-btn {
+                padding: 0.4rem 0.75rem;
+                font-size: 0.75rem;
+            }
+
+            .notification-dropdown {
+                width: 300px;
+                right: -40px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .global-header {
+                padding: 0.5rem 0.75rem;
+            }
+
+            .header-history-btn,
+            .plan-badge span:first-child {
+                font-size: 1rem;
+            }
+
+            .notification-dropdown {
+                width: 280px;
+                right: -60px;
+            }
         }
 
         /* ------------------------------------------
@@ -2068,6 +2180,18 @@
             html += '<div class="global-header">';
             html += '<div class="global-header-content">';
 
+            // History Button (AI Tools specific)
+            html += '<button onclick="app.navigateTo(\'history\')" class="header-history-btn">';
+            html += '<span>📜</span><span>History</span>';
+            html += '</button>';
+
+            // Token Display
+            html += '<div class="header-token-display">';
+            html += '<span>🪙</span>';
+            html += '<span class="token-value">' + state.tokens.balance + '</span>';
+            html += '<span class="token-label">tokens</span>';
+            html += '</div>';
+
             // Plan Badge
             html += '<div class="plan-badge">';
             html += '<span>⭐</span>';
@@ -2274,16 +2398,6 @@
             html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
             html += '<span>Back to Dashboard</span>';
             html += '</a>';
-            html += '<div class="hub-actions">';
-            html += '<button onclick="app.navigateTo(\'history\')" class="flex items-center gap-2 px-3 py-1.5 bg-gray-800/60 hover:bg-gray-700/60 border border-gray-700 rounded-lg text-gray-300 hover:text-white transition-all text-sm">';
-            html += '<span>📜</span><span class="font-medium">History</span>';
-            html += '</button>';
-            html += '<div class="token-display">';
-            html += '<span class="text-lg">🪙</span>';
-            html += '<span class="font-bold text-white">' + state.tokens.balance + '</span>';
-            html += '<span class="text-gray-400 text-sm">tokens</span>';
-            html += '</div>';
-            html += '</div>';
             html += '</div>';
 
             // Title
