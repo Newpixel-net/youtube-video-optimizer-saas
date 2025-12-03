@@ -5608,11 +5608,22 @@
             // Load Reports
             loadAdminReports: async function() {
                 try {
+                    // Load reports and users in parallel
                     var getAdminReports = firebase.functions().httpsCallable('getAdminReports');
-                    var result = await getAdminReports({});
+                    var adminGetUsers = firebase.functions().httpsCallable('adminGetUsers');
 
-                    if (result.data.success) {
-                        state.campaignReports = result.data.reports;
+                    var [reportsResult, usersResult] = await Promise.all([
+                        getAdminReports({}),
+                        adminGetUsers({})
+                    ]);
+
+                    if (reportsResult.data.success) {
+                        state.campaignReports = reportsResult.data.reports;
+                    }
+
+                    // Load users for the "Send to Client" dropdown
+                    if (usersResult.data && usersResult.data.users) {
+                        state.adminUsers = usersResult.data.users;
                     }
                 } catch (err) {
                     console.error('Load admin reports error:', err);
