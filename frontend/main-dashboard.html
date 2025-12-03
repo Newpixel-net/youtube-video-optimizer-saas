@@ -1,6 +1,9 @@
 <!-- ================================================================
-     YOUTUBE VIDEO OPTIMIZER - MAIN WIDGET
+     YOUTUBE VIDEO OPTIMIZER - MAIN DASHBOARD
      ================================================================
+
+     This is the primary Single Page Application (SPA) for the platform.
+     All core functionality is contained within this file.
 
      Structure:
      - SECTION 1: External Dependencies (CDN)
@@ -8,9 +11,16 @@
      - SECTION 3: HTML Views
      - SECTION 4: Scripts (JavaScript)
 
-     Views: login, register, forgot-password, dashboard, optimizer, results, history
+     Views:
+     - Authentication: login, register, forgot-password
+     - Main: dashboard, optimizer, results, history
+     - Tools: competitor, trends, thumbnail, placement, channelAudit
+     - Admin: admin, admin-reports, report-editor
+     - Reports: client-reports, view-report
 
-     Last Updated: 2024
+     Main Dashboard URL: https://ytseo.siteuo.com/video-optimizer
+
+     Last Updated: December 2025
      ================================================================ -->
 <!DOCTYPE html>
 <html lang="en">
@@ -322,27 +332,197 @@
             position: absolute;
             top: 100%;
             right: 0;
-            width: 320px;
-            max-height: 400px;
-            background: white;
+            width: 360px;
+            max-height: 480px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 16px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
             overflow: hidden;
             z-index: 1001;
             margin-top: 8px;
             animation: fadeIn 0.2s ease-out;
         }
 
+        .notification-tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .notification-tab {
+            flex: 1;
+            padding: 0.875rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.5);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            position: relative;
+        }
+
+        .notification-tab:hover {
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .notification-tab.active {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .notification-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #8b5cf6, #ec4899);
+        }
+
+        .notification-tab-badge {
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            font-size: 10px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .notification-header {
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .notification-header-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .notification-mark-read {
+            font-size: 0.75rem;
+            color: #8b5cf6;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .notification-mark-read:hover {
+            color: #a78bfa;
+        }
+
+        .notification-list {
+            max-height: 320px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.2) transparent;
+        }
+
+        .notification-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .notification-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .notification-list::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+        }
+
+        .notification-item {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .notification-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .notification-item.unread {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .notification-item-content {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-start;
+        }
+
+        .notification-item-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .notification-item-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .notification-item-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.25rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .notification-item-message {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.4;
+        }
+
+        .notification-item-time {
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 0.25rem;
+        }
+
         .notification-empty {
-            padding: 2rem;
+            padding: 2.5rem 1.5rem;
             text-align: center;
-            color: #94a3b8;
+            color: rgba(255, 255, 255, 0.5);
         }
 
         .notification-empty-icon {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
+            font-size: 2.5rem;
+            margin-bottom: 0.75rem;
             opacity: 0.5;
+        }
+
+        .notification-empty-text {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .notification-empty-subtext {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 0.25rem;
         }
 
         /* Click-outside overlay for notifications */
@@ -2606,19 +2786,17 @@
             reportLoading: false,        // Loading state for report operations
             editingReport: null,         // Report being edited
 
-            // Notifications
-            notifications: [],           // User's notifications
-            unreadCount: 0,              // Unread notification count
-            showNotifications: false,    // Notification dropdown visibility
+            // Unified Notifications System
+            notifications: [],           // Campaign report notifications (from Firestore listener)
+            unreadCount: 0,              // Unread report notification count
+            userNotifications: null,      // User notifications { notifications: [], unreadCount: 0 }
+            userNotificationsLoading: false, // Loading state for user notifications
+            showNotifications: false,    // Unified notification dropdown visibility
+            notificationTab: 'reports',  // Current tab: 'reports' | 'alerts'
 
             // Dashboard Recent Activity
             dashboardRecentActivity: null, // Recent activity items for dashboard widget
             dashboardActivityLoading: false, // Loading state for recent activity
-
-            // User notifications (from backend)
-            userNotifications: null,      // { notifications: [], unreadCount: 0 }
-            showUserNotifications: false, // Notification panel visibility
-            userNotificationsLoading: false,
 
             // Renewal Request state
             showRenewalModal: false,      // Renewal request modal visibility
@@ -3623,67 +3801,12 @@
             },
 
             /* ------------------------------------------
-               4.5.2b User Notifications Actions
+               4.5.2b User Notifications Actions (Legacy - now handled in Unified Notifications)
                ------------------------------------------ */
 
-            loadUserNotifications: function() {
-                state.userNotificationsLoading = true;
-                render();
-
-                functions.httpsCallable('userGetNotifications')({ limit: 20 })
-                    .then(function(result) {
-                        state.userNotifications = {
-                            notifications: result.data.notifications || [],
-                            unreadCount: result.data.unreadCount || 0
-                        };
-                        state.userNotificationsLoading = false;
-                        render();
-                    })
-                    .catch(function(error) {
-                        console.error('Error loading notifications:', error);
-                        state.userNotificationsLoading = false;
-                        render();
-                    });
-            },
-
-            toggleUserNotifications: function() {
-                state.showUserNotifications = !state.showUserNotifications;
-                if (state.showUserNotifications && !state.userNotifications) {
-                    this.loadUserNotifications();
-                }
-                render();
-            },
-
+            // Legacy function - now redirects to handleAlertNotificationClick
             markNotificationRead: function(notificationId) {
-                functions.httpsCallable('userMarkNotificationRead')({ notificationId: notificationId })
-                    .then(function() {
-                        // Update local state
-                        if (state.userNotifications) {
-                            var notif = state.userNotifications.notifications.find(function(n) { return n.id === notificationId; });
-                            if (notif && !notif.read) {
-                                notif.read = true;
-                                state.userNotifications.unreadCount = Math.max(0, state.userNotifications.unreadCount - 1);
-                            }
-                        }
-                        render();
-                    })
-                    .catch(function(error) {
-                        console.error('Error marking notification read:', error);
-                    });
-            },
-
-            markAllNotificationsRead: function() {
-                functions.httpsCallable('userMarkNotificationRead')({ markAllRead: true })
-                    .then(function() {
-                        if (state.userNotifications) {
-                            state.userNotifications.notifications.forEach(function(n) { n.read = true; });
-                            state.userNotifications.unreadCount = 0;
-                        }
-                        render();
-                    })
-                    .catch(function(error) {
-                        console.error('Error marking all read:', error);
-                    });
+                this.handleAlertNotificationClick(notificationId);
             },
 
             /* ------------------------------------------
@@ -5569,7 +5692,7 @@
                 render();
             },
 
-            // Notifications
+            // Unified Notifications System
             loadNotifications: async function() {
                 try {
                     var getUnreadNotifications = firebase.functions().httpsCallable('getUnreadNotifications');
@@ -5585,8 +5708,32 @@
                 render();
             },
 
+            loadUserNotifications: function() {
+                state.userNotificationsLoading = true;
+                render();
+
+                functions.httpsCallable('userGetNotifications')({ limit: 20 })
+                    .then(function(result) {
+                        state.userNotifications = {
+                            notifications: result.data.notifications || [],
+                            unreadCount: result.data.unreadCount || 0
+                        };
+                        state.userNotificationsLoading = false;
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading user notifications:', error);
+                        state.userNotificationsLoading = false;
+                        render();
+                    });
+            },
+
             toggleNotifications: function() {
                 state.showNotifications = !state.showNotifications;
+                // Load user notifications when opening if not already loaded
+                if (state.showNotifications && !state.userNotifications) {
+                    this.loadUserNotifications();
+                }
                 render();
             },
 
@@ -5597,17 +5744,65 @@
                 }
             },
 
-            markAllNotificationsRead: async function() {
+            setNotificationTab: function(tab) {
+                state.notificationTab = tab;
+                // Load user notifications when switching to alerts tab if not loaded
+                if (tab === 'alerts' && !state.userNotifications && !state.userNotificationsLoading) {
+                    this.loadUserNotifications();
+                }
+                render();
+            },
+
+            // Mark all report notifications as read
+            markAllReportNotificationsRead: async function() {
                 try {
                     var markNotificationRead = firebase.functions().httpsCallable('markNotificationRead');
                     await markNotificationRead({ markAll: true });
                     state.notifications = [];
                     state.unreadCount = 0;
-                    state.showNotifications = false;
                 } catch (err) {
-                    console.error('Mark notifications error:', err);
+                    console.error('Mark report notifications error:', err);
                 }
                 render();
+            },
+
+            // Mark all alert/user notifications as read
+            markAllAlertNotificationsRead: function() {
+                functions.httpsCallable('userMarkNotificationRead')({ markAllRead: true })
+                    .then(function() {
+                        if (state.userNotifications) {
+                            state.userNotifications.notifications.forEach(function(n) { n.read = true; });
+                            state.userNotifications.unreadCount = 0;
+                        }
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error marking all alerts read:', error);
+                    });
+            },
+
+            // Legacy function for backwards compatibility
+            markAllNotificationsRead: async function() {
+                await this.markAllReportNotificationsRead();
+            },
+
+            // Handle clicking on an alert notification
+            handleAlertNotificationClick: function(notificationId) {
+                // Mark as read
+                functions.httpsCallable('userMarkNotificationRead')({ notificationId: notificationId })
+                    .then(function() {
+                        if (state.userNotifications) {
+                            var notif = state.userNotifications.notifications.find(function(n) { return n.id === notificationId; });
+                            if (notif && !notif.read) {
+                                notif.read = true;
+                                state.userNotifications.unreadCount = Math.max(0, state.userNotifications.unreadCount - 1);
+                            }
+                        }
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error marking alert read:', error);
+                    });
             },
 
             openNotificationReport: async function(reportId, notificationId) {
@@ -5615,6 +5810,9 @@
                 try {
                     var markNotificationRead = firebase.functions().httpsCallable('markNotificationRead');
                     await markNotificationRead({ notificationId: notificationId });
+                    // Update local state
+                    state.notifications = state.notifications.filter(function(n) { return n.id !== notificationId; });
+                    state.unreadCount = Math.max(0, state.unreadCount - 1);
                 } catch (err) {
                     console.error('Mark notification error:', err);
                 }
@@ -5848,60 +6046,14 @@
         }
 
         /* ------------------------------------------
-           4.6.3b User Notification Panel
+           4.6.3b User Notification Panel (DEPRECATED)
+           Now handled by the unified notification system in renderGlobalHeader()
            ------------------------------------------ */
+        // Legacy function - kept for backwards compatibility
         function renderUserNotificationPanel() {
-            var html = '<div class="absolute right-0 top-12 w-80 max-h-96 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50">';
-
-            // Header
-            html += '<div class="flex justify-between items-center px-4 py-3 border-b border-gray-700">';
-            html += '<span class="font-semibold text-white">Notifications</span>';
-            if (state.userNotifications && state.userNotifications.unreadCount > 0) {
-                html += '<button onclick="app.markAllNotificationsRead()" class="text-xs text-blue-400 hover:text-blue-300">Mark all read</button>';
-            }
-            html += '</div>';
-
-            // Content
-            html += '<div class="max-h-72 overflow-y-auto">';
-
-            if (state.userNotificationsLoading) {
-                html += '<div class="flex items-center justify-center py-8"><div class="spinner w-6 h-6"></div></div>';
-            } else if (!state.userNotifications || state.userNotifications.notifications.length === 0) {
-                html += '<div class="text-center py-8 text-gray-400">';
-                html += '<div class="text-3xl mb-2">✨</div>';
-                html += '<div>No notifications yet</div>';
-                html += '</div>';
-            } else {
-                state.userNotifications.notifications.forEach(function(n) {
-                    var bgColor = n.read ? 'bg-gray-800/50' : 'bg-gray-800';
-                    var icon = '📢';
-                    if (n.type === 'request_submitted') icon = '📝';
-                    else if (n.type === 'request_approved') icon = '🎉';
-                    else if (n.type === 'request_denied') icon = '❌';
-                    else if (n.type === 'subscription_expiring') icon = '⏰';
-
-                    html += '<div class="' + bgColor + ' px-4 py-3 border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/50" onclick="app.markNotificationRead(\'' + n.id + '\')">';
-                    html += '<div class="flex items-start gap-3">';
-                    html += '<span class="text-lg">' + icon + '</span>';
-                    html += '<div class="flex-1 min-w-0">';
-                    html += '<div class="font-medium text-white text-sm">' + utils.escapeHtml(n.title || 'Notification') + '</div>';
-                    html += '<div class="text-gray-400 text-xs mt-1 line-clamp-2">' + utils.escapeHtml(n.message || '') + '</div>';
-                    if (n.createdAt) {
-                        var date = new Date(n.createdAt);
-                        html += '<div class="text-gray-500 text-xs mt-1">' + date.toLocaleDateString() + '</div>';
-                    }
-                    html += '</div>';
-                    if (!n.read) {
-                        html += '<span class="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></span>';
-                    }
-                    html += '</div>';
-                    html += '</div>';
-                });
-            }
-
-            html += '</div>';
-            html += '</div>';
-            return html;
+            // This function is now deprecated. User notifications are handled
+            // in the unified notification dropdown via renderAlertNotifications()
+            return '';
         }
 
         /* ------------------------------------------
@@ -6071,23 +6223,7 @@
             }
 
             html += '</div>';
-            html += '<div class="flex items-center gap-4">';
-
-            // User notification bell
-            html += '<div class="relative">';
-            html += '<button onclick="app.toggleUserNotifications()" class="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all" title="Notifications">';
-            html += '<span class="text-xl">🔔</span>';
-            if (state.userNotifications && state.userNotifications.unreadCount > 0) {
-                html += '<span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">' + (state.userNotifications.unreadCount > 9 ? '9+' : state.userNotifications.unreadCount) + '</span>';
-            }
-            html += '</button>';
-
-            // Notification dropdown
-            if (state.showUserNotifications) {
-                html += renderUserNotificationPanel();
-            }
-            html += '</div>';
-
+            html += '<div class="flex items-center gap-3">';
             html += '<button onclick="app.signOut()" class="btn-secondary">Sign Out</button>';
             html += '</div>';
             html += '</div>';
@@ -9390,7 +9526,7 @@
         }
 
         /* ==========================================
-           4.7 GLOBAL HEADER (Notification Bell)
+           4.7 GLOBAL HEADER (Unified Notification Bell)
            ========================================== */
 
         function renderGlobalHeader() {
@@ -9412,51 +9548,50 @@
                 html += '<div class="notification-overlay" onclick="app.closeNotifications()"></div>';
             }
 
+            // Calculate total unread count from both notification sources
+            var reportUnread = state.unreadCount || 0;
+            var alertUnread = (state.userNotifications && state.userNotifications.unreadCount) || 0;
+            var totalUnread = reportUnread + alertUnread;
+
             // Global header
             html += '<div class="global-header">';
             html += '<div class="global-header-content">';
 
-            // Notification Bell (always visible when logged in)
+            // Unified Notification Bell
             html += '<div class="notification-bell relative" onclick="event.stopPropagation(); app.toggleNotifications()">';
             html += '<span class="text-2xl">🔔</span>';
-            if (state.unreadCount > 0) {
-                html += '<span class="notification-badge">' + state.unreadCount + '</span>';
+            if (totalUnread > 0) {
+                html += '<span class="notification-badge">' + (totalUnread > 99 ? '99+' : totalUnread) + '</span>';
             }
 
-            // Notification Dropdown
+            // Unified Notification Dropdown with Tabs
             if (state.showNotifications) {
                 html += '<div class="notification-dropdown" onclick="event.stopPropagation()">';
-                html += '<div class="p-4 border-b border-gray-100 flex justify-between items-center">';
-                html += '<h4 class="font-bold text-gray-800">Notifications</h4>';
-                if (state.notifications.length > 0) {
-                    html += '<button onclick="app.markAllNotificationsRead()" class="text-sm text-blue-600 hover:underline">Mark all read</button>';
+
+                // Tabs
+                html += '<div class="notification-tabs">';
+                html += '<button onclick="app.setNotificationTab(\'reports\')" class="notification-tab ' + (state.notificationTab === 'reports' ? 'active' : '') + '">';
+                html += '<span>📊</span> Reports';
+                if (reportUnread > 0) {
+                    html += '<span class="notification-tab-badge">' + (reportUnread > 99 ? '99+' : reportUnread) + '</span>';
                 }
+                html += '</button>';
+                html += '<button onclick="app.setNotificationTab(\'alerts\')" class="notification-tab ' + (state.notificationTab === 'alerts' ? 'active' : '') + '">';
+                html += '<span>🔔</span> Alerts';
+                if (alertUnread > 0) {
+                    html += '<span class="notification-tab-badge">' + (alertUnread > 99 ? '99+' : alertUnread) + '</span>';
+                }
+                html += '</button>';
                 html += '</div>';
 
-                if (state.notifications.length > 0) {
-                    html += '<div class="max-h-64 overflow-y-auto">';
-                    for (var n = 0; n < state.notifications.length; n++) {
-                        var notif = state.notifications[n];
-                        html += '<div class="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50" onclick="app.openNotificationReport(\'' + notif.reportId + '\', \'' + notif.id + '\')">';
-                        html += '<div class="flex items-start gap-3">';
-                        html += '<span class="text-2xl">📊</span>';
-                        html += '<div>';
-                        html += '<p class="font-semibold text-gray-800 text-sm">' + utils.escapeHtml(notif.title) + '</p>';
-                        html += '<p class="text-gray-500 text-xs mt-1">' + utils.escapeHtml(notif.message) + '</p>';
-                        html += '</div>';
-                        html += '</div>';
-                        html += '</div>';
-                    }
-                    html += '</div>';
+                // Tab Content
+                if (state.notificationTab === 'reports') {
+                    html += renderReportNotifications();
                 } else {
-                    // Empty state
-                    html += '<div class="notification-empty">';
-                    html += '<div class="notification-empty-icon">🔔</div>';
-                    html += '<p class="font-medium text-gray-600">No new notifications</p>';
-                    html += '<p class="text-sm mt-1">You\'re all caught up!</p>';
-                    html += '</div>';
+                    html += renderAlertNotifications();
                 }
-                html += '</div>';
+
+                html += '</div>'; // End dropdown
             }
 
             html += '</div>'; // End notification-bell
@@ -9464,6 +9599,111 @@
             html += '</div>'; // End global-header-content
             html += '</div>'; // End global-header
 
+            return html;
+        }
+
+        // Render Report Notifications (Campaign Reports from Admin)
+        function renderReportNotifications() {
+            var html = '';
+            var notifications = state.notifications || [];
+
+            // Header with mark all read
+            if (notifications.length > 0) {
+                html += '<div class="notification-header">';
+                html += '<span class="notification-header-title">Campaign Reports</span>';
+                html += '<button onclick="app.markAllReportNotificationsRead()" class="notification-mark-read">Mark all read</button>';
+                html += '</div>';
+            }
+
+            // Notification list
+            html += '<div class="notification-list">';
+
+            if (notifications.length > 0) {
+                for (var n = 0; n < notifications.length; n++) {
+                    var notif = notifications[n];
+                    html += '<div class="notification-item" onclick="app.openNotificationReport(\'' + notif.reportId + '\', \'' + notif.id + '\')">';
+                    html += '<div class="notification-item-content">';
+                    html += '<span class="notification-item-icon">📊</span>';
+                    html += '<div class="notification-item-text">';
+                    html += '<div class="notification-item-title">' + utils.escapeHtml(notif.title || 'New Report') + '</div>';
+                    html += '<div class="notification-item-message">' + utils.escapeHtml(notif.message || 'A new campaign report is available') + '</div>';
+                    if (notif.createdAt) {
+                        html += '<div class="notification-item-time">' + utils.formatTimeAgo(notif.createdAt) + '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+            } else {
+                html += '<div class="notification-empty">';
+                html += '<div class="notification-empty-icon">📊</div>';
+                html += '<p class="notification-empty-text">No campaign reports</p>';
+                html += '<p class="notification-empty-subtext">Reports from your admin will appear here</p>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Render Alert Notifications (Subscription, Renewal, System alerts)
+        function renderAlertNotifications() {
+            var html = '';
+            var userNotifs = state.userNotifications;
+            var notifications = (userNotifs && userNotifs.notifications) || [];
+            var isLoading = state.userNotificationsLoading;
+
+            // Header with mark all read
+            if (notifications.length > 0) {
+                html += '<div class="notification-header">';
+                html += '<span class="notification-header-title">System Alerts</span>';
+                html += '<button onclick="app.markAllAlertNotificationsRead()" class="notification-mark-read">Mark all read</button>';
+                html += '</div>';
+            }
+
+            // Notification list
+            html += '<div class="notification-list">';
+
+            if (isLoading) {
+                html += '<div class="notification-empty">';
+                html += '<div class="spinner" style="width:24px;height:24px;margin:0 auto 0.5rem;"></div>';
+                html += '<p class="notification-empty-text">Loading alerts...</p>';
+                html += '</div>';
+            } else if (notifications.length > 0) {
+                for (var n = 0; n < notifications.length; n++) {
+                    var notif = notifications[n];
+                    var icon = '📢';
+                    if (notif.type === 'request_submitted') icon = '📝';
+                    else if (notif.type === 'request_approved') icon = '🎉';
+                    else if (notif.type === 'request_denied') icon = '❌';
+                    else if (notif.type === 'subscription_expiring') icon = '⏰';
+                    else if (notif.type === 'subscription_expired') icon = '⚠️';
+                    else if (notif.type === 'bonus_granted') icon = '🎁';
+                    else if (notif.type === 'plan_upgraded') icon = '⭐';
+
+                    var itemClass = notif.read ? 'notification-item' : 'notification-item unread';
+                    html += '<div class="' + itemClass + '" onclick="app.handleAlertNotificationClick(\'' + notif.id + '\')">';
+                    html += '<div class="notification-item-content">';
+                    html += '<span class="notification-item-icon">' + icon + '</span>';
+                    html += '<div class="notification-item-text">';
+                    html += '<div class="notification-item-title">' + utils.escapeHtml(notif.title || 'Notification') + '</div>';
+                    html += '<div class="notification-item-message">' + utils.escapeHtml(notif.message || '') + '</div>';
+                    if (notif.createdAt) {
+                        html += '<div class="notification-item-time">' + utils.formatTimeAgo(notif.createdAt) + '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+            } else {
+                html += '<div class="notification-empty">';
+                html += '<div class="notification-empty-icon">✨</div>';
+                html += '<p class="notification-empty-text">No alerts</p>';
+                html += '<p class="notification-empty-subtext">You\'re all caught up!</p>';
+                html += '</div>';
+            }
+
+            html += '</div>';
             return html;
         }
 

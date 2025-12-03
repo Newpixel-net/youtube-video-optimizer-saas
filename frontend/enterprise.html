@@ -527,6 +527,31 @@
         }
 
         /* ------------------------------------------
+           2.11b GLOBAL HEADER (Fixed Top-Right)
+           ------------------------------------------ */
+        .global-header { position: fixed; top: 0; right: 0; padding: 1rem 1.5rem; z-index: 1000; display: flex; align-items: center; gap: 0.75rem; pointer-events: none; }
+        .global-header > * { pointer-events: auto; }
+        .global-header-content { display: flex; align-items: center; gap: 0.75rem; }
+        .plan-badge { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 165, 0, 0.2) 100%); border: 1px solid rgba(255, 215, 0, 0.3); border-radius: 9999px; font-size: 0.8rem; font-weight: 600; color: #ffd700; backdrop-filter: blur(10px); }
+        .notification-bell { position: relative; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.1); border-radius: 50%; transition: all 0.2s ease; }
+        .notification-bell:hover { background: rgba(255, 255, 255, 0.2); }
+        .notification-badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; font-size: 10px; font-weight: 700; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
+        .notification-dropdown { position: absolute; top: 100%; right: 0; width: 360px; max-height: 480px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4); overflow: hidden; z-index: 1001; margin-top: 8px; }
+        .notification-tabs { display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.2); }
+        .notification-tab { flex: 1; padding: 0.875rem 1rem; font-size: 0.85rem; font-weight: 600; color: rgba(255, 255, 255, 0.5); background: transparent; border: none; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 0.5rem; position: relative; }
+        .notification-tab:hover { color: rgba(255, 255, 255, 0.8); }
+        .notification-tab.active { color: white; background: rgba(255, 255, 255, 0.1); }
+        .notification-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #ffd700, #ff8c00); }
+        .notification-tab-badge { min-width: 18px; height: 18px; padding: 0 5px; font-size: 10px; font-weight: 700; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+        .notification-list { max-height: 320px; overflow-y: auto; }
+        .notification-item { padding: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; transition: background 0.2s; }
+        .notification-item:hover { background: rgba(255, 255, 255, 0.05); }
+        .notification-empty { padding: 2.5rem 1.5rem; text-align: center; color: rgba(255, 255, 255, 0.5); }
+        .notification-overlay { position: fixed; inset: 0; z-index: 999; }
+        .user-menu-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 9999px; color: white; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+        .user-menu-btn:hover { background: rgba(255, 255, 255, 0.15); }
+
+        /* ------------------------------------------
            2.12 TOAST NOTIFICATIONS
            ------------------------------------------ */
         .toast {
@@ -1037,6 +1062,14 @@
             userPlan: null, // free | lite | pro | enterprise
             hasPremiumAccess: false, // true if pro or enterprise
             showUpgradeModal: false, // show upgrade popup
+
+            // Unified Notifications System
+            notifications: [],
+            unreadCount: 0,
+            userNotifications: null,
+            userNotificationsLoading: false,
+            showNotifications: false,
+            notificationTab: 'reports',
 
             // UI state
             loading: false,
