@@ -9490,13 +9490,89 @@
 
             // AI Analysis Results
             if (state.reportAnalysis) {
+                var analysis = state.reportAnalysis;
+
+                // YouTube Performance Hero Section (beautiful version)
+                if (analysis.youtubeMetrics) {
+                    var ytMetrics = analysis.youtubeMetrics;
+                    if (ytMetrics.publicViews || ytMetrics.impressions) {
+                        html += '<div class="youtube-hero fade-in mb-8">';
+                        html += '<div class="youtube-hero-title"><span>🎬</span> YouTube Campaign Performance</div>';
+
+                        // Main Views Card
+                        if (ytMetrics.publicViews) {
+                            var viewRate = 0;
+                            if (ytMetrics.publicViews && ytMetrics.impressions) {
+                                viewRate = Math.round((parseInt(String(ytMetrics.publicViews).replace(/,/g, '')) / parseInt(String(ytMetrics.impressions).replace(/,/g, ''))) * 1000) / 10;
+                            }
+                            html += '<div class="youtube-hero-main">';
+                            html += '<div class="youtube-views-label"><span>👁️</span> YouTube Public Views</div>';
+                            html += '<div class="youtube-views-value">' + utils.escapeHtml(String(ytMetrics.publicViews)) + '</div>';
+                            if (viewRate > 0) {
+                                html += '<div class="youtube-view-rate">';
+                                html += '<div class="view-rate-bar"><div class="view-rate-fill" style="width:' + Math.min(viewRate, 100) + '%"></div></div>';
+                                html += '<span class="view-rate-text">' + viewRate + '% View Rate</span>';
+                                html += '</div>';
+                            }
+                            html += '</div>';
+                        }
+
+                        // Supporting Metrics Grid
+                        html += '<div class="youtube-metrics-grid">';
+                        if (ytMetrics.impressions) {
+                            html += '<div class="youtube-metric-card">';
+                            html += '<div class="youtube-metric-icon">📊</div>';
+                            html += '<div class="youtube-metric-value">' + utils.escapeHtml(String(ytMetrics.impressions)) + '</div>';
+                            html += '<div class="youtube-metric-label">Impressions</div>';
+                            html += '</div>';
+                        }
+                        if (ytMetrics.publicViews) {
+                            var viewRateCalc = ytMetrics.impressions ? Math.round((parseInt(String(ytMetrics.publicViews).replace(/,/g, '')) / parseInt(String(ytMetrics.impressions).replace(/,/g, ''))) * 1000) / 10 : 0;
+                            html += '<div class="youtube-metric-card">';
+                            html += '<div class="youtube-metric-icon">📈</div>';
+                            html += '<div class="youtube-metric-value">' + viewRateCalc + '%</div>';
+                            html += '<div class="youtube-metric-label">View Rate</div>';
+                            html += '</div>';
+                        }
+                        if (ytMetrics.status) {
+                            html += '<div class="youtube-metric-card">';
+                            html += '<div class="youtube-metric-icon">✅</div>';
+                            html += '<div class="youtube-metric-value" style="font-size:1rem;">' + utils.escapeHtml(ytMetrics.status) + '</div>';
+                            html += '<div class="youtube-metric-label">Status</div>';
+                            html += '</div>';
+                        }
+                        html += '</div>';
+
+                        // Video Info
+                        if (ytMetrics.videoTitle || ytMetrics.adType) {
+                            html += '<div class="youtube-video-info">';
+                            if (ytMetrics.videoTitle) {
+                                html += '<div class="youtube-video-title"><span>🎥</span> ' + utils.escapeHtml(ytMetrics.videoTitle) + '</div>';
+                            }
+                            html += '<div class="youtube-video-meta">';
+                            if (ytMetrics.adType) {
+                                html += '<span class="youtube-video-tag"><span>📺</span> ' + utils.escapeHtml(ytMetrics.adType) + '</span>';
+                            }
+                            if (ytMetrics.adGroup) {
+                                html += '<span class="youtube-video-tag"><span>📁</span> ' + utils.escapeHtml(ytMetrics.adGroup) + '</span>';
+                            }
+                            if (ytMetrics.status) {
+                                html += '<span class="youtube-video-tag status-eligible"><span>✓</span> ' + utils.escapeHtml(ytMetrics.status) + '</span>';
+                            }
+                            html += '</div>';
+                            html += '</div>';
+                        }
+
+                        html += '</div>';
+                    }
+                }
+
+                // AI Analysis Card (summary and other analysis)
                 html += '<div class="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mb-8 fade-in">';
                 html += '<div class="flex justify-between items-center mb-6">';
                 html += '<h2 class="text-2xl font-bold text-gray-800">🤖 AI Analysis</h2>';
                 html += '<span class="status-badge status-ready">Analysis Complete</span>';
                 html += '</div>';
-
-                var analysis = state.reportAnalysis;
 
                 // Summary
                 if (analysis.summary) {
@@ -9505,48 +9581,9 @@
                     html += '</div>';
                 }
 
-                // YouTube Metrics Section
-                if (analysis.youtubeMetrics) {
-                    var ytMetrics = analysis.youtubeMetrics;
-                    var hasYoutubeMetrics = ytMetrics.publicViews || ytMetrics.impressions || ytMetrics.videoTitle || ytMetrics.adType || ytMetrics.adGroup || ytMetrics.status;
-
-                    if (hasYoutubeMetrics) {
-                        html += '<h3 class="font-bold text-gray-800 mb-3">📈 Extracted Metrics</h3>';
-                        html += '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">';
-
-                        // YouTube-specific metrics with labels
-                        var youtubeMetricLabels = {
-                            publicViews: 'Public Views',
-                            impressions: 'Impressions',
-                            videoTitle: 'Video Title',
-                            adType: 'Ad Type',
-                            adGroup: 'Ad Group',
-                            status: 'Status'
-                        };
-
-                        for (var ytKey in youtubeMetricLabels) {
-                            if (ytMetrics[ytKey] !== null && ytMetrics[ytKey] !== undefined && ytMetrics[ytKey] !== '') {
-                                html += '<div class="metric-card">';
-                                // For longer text values like videoTitle, truncate if needed
-                                var displayValue = String(ytMetrics[ytKey]);
-                                if (ytKey === 'videoTitle' && displayValue.length > 30) {
-                                    displayValue = displayValue.substring(0, 30) + '...';
-                                }
-                                html += '<div class="metric-value" title="' + utils.escapeHtml(String(ytMetrics[ytKey])) + '">' + utils.escapeHtml(displayValue) + '</div>';
-                                html += '<div class="metric-label">' + youtubeMetricLabels[ytKey] + '</div>';
-                                html += '</div>';
-                            }
-                        }
-                        html += '</div>';
-                    }
-                }
-
-                // Standard Metrics Grid (Google Ads metrics)
-                if (analysis.metrics) {
-                    // Only show header if we didn't already show YouTube metrics header
-                    if (!analysis.youtubeMetrics || !(analysis.youtubeMetrics.publicViews || analysis.youtubeMetrics.impressions || analysis.youtubeMetrics.videoTitle || analysis.youtubeMetrics.adType || analysis.youtubeMetrics.adGroup || analysis.youtubeMetrics.status)) {
-                        html += '<h3 class="font-bold text-gray-800 mb-3">📈 Extracted Metrics</h3>';
-                    }
+                // Standard Metrics Grid (Google Ads metrics - only if no YouTube metrics shown)
+                if (analysis.metrics && (!analysis.youtubeMetrics || !(analysis.youtubeMetrics.publicViews || analysis.youtubeMetrics.impressions))) {
+                    html += '<h3 class="font-bold text-gray-800 mb-3">📈 Extracted Metrics</h3>';
                     html += '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">';
                     var metricLabels = {
                         impressions: 'Impressions',
