@@ -9705,6 +9705,209 @@
                 html += '</div>';
 
                 html += '</div>';
+
+                // ========== STRATEGIC GROWTH DASHBOARD (Admin Preview) ==========
+                var adminHasMetrics = analysis.metrics && Object.keys(analysis.metrics).length > 0;
+                var adminHasRecommendations = analysis.recommendations && analysis.recommendations.length > 0;
+
+                if (adminHasMetrics || adminHasRecommendations) {
+                    // Calculate health score based on recommendations
+                    var adminHealthScore = 72;
+                    var adminHighPriority = 0;
+                    var adminMediumPriority = 0;
+                    var adminLowPriority = 0;
+
+                    if (adminHasRecommendations) {
+                        for (var hs = 0; hs < analysis.recommendations.length; hs++) {
+                            var hsRec = analysis.recommendations[hs];
+                            var hsPriority = (hsRec.priority || 'medium').toLowerCase();
+                            if (hsPriority === 'high') adminHighPriority++;
+                            else if (hsPriority === 'medium') adminMediumPriority++;
+                            else adminLowPriority++;
+                        }
+                        adminHealthScore = Math.max(45, Math.min(92, 85 - (adminHighPriority * 8) - (adminMediumPriority * 3) + (adminLowPriority * 2)));
+                    }
+
+                    var adminScoreColor = adminHealthScore >= 80 ? '#22c55e' : adminHealthScore >= 60 ? '#f59e0b' : '#ef4444';
+                    var adminScoreGrade = adminHealthScore >= 85 ? 'Excellent' : adminHealthScore >= 70 ? 'Good' : adminHealthScore >= 55 ? 'Fair' : 'Needs Work';
+
+                    // Category scores
+                    var adminThumbScore = 75, adminTitleScore = 70, adminContentScore = 80, adminEngageScore = 65;
+                    if (adminHasRecommendations) {
+                        for (var ac = 0; ac < analysis.recommendations.length; ac++) {
+                            var acRec = analysis.recommendations[ac];
+                            var acCat = (acRec.category || '').toLowerCase();
+                            var acPri = (acRec.priority || 'medium').toLowerCase();
+                            var acPenalty = acPri === 'high' ? 15 : acPri === 'medium' ? 8 : 3;
+                            if (acCat.includes('thumbnail')) adminThumbScore = Math.max(40, adminThumbScore - acPenalty);
+                            else if (acCat.includes('title')) adminTitleScore = Math.max(40, adminTitleScore - acPenalty);
+                            else if (acCat.includes('content')) adminContentScore = Math.max(40, adminContentScore - acPenalty);
+                            else if (acCat.includes('engagement')) adminEngageScore = Math.max(40, adminEngageScore - acPenalty);
+                        }
+                    }
+
+                    // Channel Health Score Section
+                    html += '<div class="strategic-section mb-8">';
+                    html += '<div class="strategic-section-header">';
+                    html += '<div class="strategic-section-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);">🎯</div>';
+                    html += '<div>';
+                    html += '<div class="strategic-section-title">Channel Health Score</div>';
+                    html += '<div class="strategic-section-subtitle">Overall performance assessment based on analysis</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    html += '<div class="health-score-container">';
+                    var adminCircum = 2 * Math.PI * 54;
+                    var adminDashoff = adminCircum - (adminHealthScore / 100) * adminCircum;
+                    html += '<div class="health-score-ring">';
+                    html += '<svg width="140" height="140" viewBox="0 0 140 140">';
+                    html += '<circle class="bg-ring" cx="70" cy="70" r="54"></circle>';
+                    html += '<circle class="score-ring" cx="70" cy="70" r="54" stroke="' + adminScoreColor + '" stroke-dasharray="' + adminCircum + '" stroke-dashoffset="' + adminDashoff + '"></circle>';
+                    html += '</svg>';
+                    html += '<div class="health-score-value">';
+                    html += '<div class="health-score-number">' + adminHealthScore + '</div>';
+                    html += '<div class="health-score-label">' + adminScoreGrade + '</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    html += '<div class="health-score-breakdown">';
+                    var adminCats = [
+                        { name: 'Thumbnails', icon: '🖼️', score: adminThumbScore, color: '#f59e0b' },
+                        { name: 'Titles & SEO', icon: '✏️', score: adminTitleScore, color: '#8b5cf6' },
+                        { name: 'Content Quality', icon: '🎥', score: adminContentScore, color: '#22c55e' },
+                        { name: 'Engagement', icon: '💬', score: adminEngageScore, color: '#3b82f6' }
+                    ];
+                    for (var acat = 0; acat < adminCats.length; acat++) {
+                        var catItem = adminCats[acat];
+                        html += '<div class="score-category">';
+                        html += '<span class="score-category-name">' + catItem.icon + ' ' + catItem.name + '</span>';
+                        html += '<div class="score-category-bar"><div class="score-category-fill" style="width:' + catItem.score + '%;background:' + catItem.color + ';"></div></div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Campaign Performance Metrics Dashboard
+                if (adminHasMetrics) {
+                    html += '<div class="strategic-section mb-8">';
+                    html += '<div class="strategic-section-header">';
+                    html += '<div class="strategic-section-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">📊</div>';
+                    html += '<div>';
+                    html += '<div class="strategic-section-title">Campaign Performance Metrics</div>';
+                    html += '<div class="strategic-section-subtitle">Key performance indicators from your campaign</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    html += '<div class="metrics-dashboard">';
+                    var adminMetricCfg = {
+                        impressions: { label: 'Impressions', icon: '👁️', color: '#8b5cf6' },
+                        clicks: { label: 'Clicks', icon: '👆', color: '#3b82f6' },
+                        ctr: { label: 'CTR', icon: '📈', color: '#22c55e' },
+                        avgCpc: { label: 'Avg CPC', icon: '💰', color: '#f59e0b' },
+                        cost: { label: 'Total Cost', icon: '💵', color: '#ef4444' },
+                        conversions: { label: 'Conversions', icon: '🎯', color: '#10b981' },
+                        conversionRate: { label: 'Conv Rate', icon: '📊', color: '#6366f1' },
+                        costPerConversion: { label: 'Cost/Conv', icon: '⚡', color: '#ec4899' }
+                    };
+                    for (var amKey in adminMetricCfg) {
+                        if (analysis.metrics[amKey] !== null && analysis.metrics[amKey] !== undefined) {
+                            var amCfg = adminMetricCfg[amKey];
+                            html += '<div class="metric-tile" style="--metric-color:' + amCfg.color + ';">';
+                            html += '<div class="metric-tile-icon">' + amCfg.icon + '</div>';
+                            html += '<div class="metric-tile-value">' + utils.escapeHtml(String(analysis.metrics[amKey])) + '</div>';
+                            html += '<div class="metric-tile-label">' + amCfg.label + '</div>';
+                            html += '<div class="metric-tile-trend neutral">—</div>';
+                            html += '</div>';
+                        }
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Strategic Action Plan
+                if (adminHasRecommendations) {
+                    html += '<div class="strategic-section mb-8">';
+                    html += '<div class="strategic-section-header">';
+                    html += '<div class="strategic-section-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">🚀</div>';
+                    html += '<div>';
+                    html += '<div class="strategic-section-title">Strategic Action Plan</div>';
+                    html += '<div class="strategic-section-subtitle">' + analysis.recommendations.length + ' recommendations to accelerate your channel growth</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    html += '<div class="action-cards-grid">';
+                    for (var ar = 0; ar < analysis.recommendations.length; ar++) {
+                        var arRec = analysis.recommendations[ar];
+                        var arTitle = arRec.title || 'Recommendation ' + (ar + 1);
+                        var arDesc = arRec.description || '';
+                        var arPriority = (arRec.priority || 'medium').toLowerCase();
+                        var arCategory = arRec.category || '';
+                        var arImpact = arRec.expectedImpact || '';
+
+                        var arCatIcon = '💡';
+                        var arCatLabel = 'General';
+                        if (arCategory.toLowerCase().includes('thumbnail')) { arCatIcon = '🖼️'; arCatLabel = 'Thumbnail'; }
+                        else if (arCategory.toLowerCase().includes('title')) { arCatIcon = '✏️'; arCatLabel = 'Title & SEO'; }
+                        else if (arCategory.toLowerCase().includes('description')) { arCatIcon = '📝'; arCatLabel = 'Description'; }
+                        else if (arCategory.toLowerCase().includes('content')) { arCatIcon = '🎥'; arCatLabel = 'Content'; }
+                        else if (arCategory.toLowerCase().includes('schedule') || arCategory.toLowerCase().includes('posting')) { arCatIcon = '📅'; arCatLabel = 'Schedule'; }
+                        else if (arCategory.toLowerCase().includes('engagement')) { arCatIcon = '💬'; arCatLabel = 'Engagement'; }
+                        else if (arCategory.toLowerCase().includes('seo') || arCategory.toLowerCase().includes('tag')) { arCatIcon = '🔍'; arCatLabel = 'SEO'; }
+                        else if (arCategory.toLowerCase().includes('brand')) { arCatIcon = '🎨'; arCatLabel = 'Branding'; }
+
+                        var arImpactPct = 0;
+                        if (arImpact) {
+                            var arImpactMatch = arImpact.match(/(\d+)/);
+                            arImpactPct = arImpactMatch ? Math.min(parseInt(arImpactMatch[1]), 100) : (arPriority === 'high' ? 75 : arPriority === 'medium' ? 50 : 30);
+                        } else {
+                            arImpactPct = arPriority === 'high' ? 75 : arPriority === 'medium' ? 50 : 30;
+                        }
+
+                        html += '<div class="action-card">';
+                        html += '<div class="action-card-header">';
+                        html += '<div class="action-card-icon ' + arPriority + '">' + arCatIcon + '</div>';
+                        html += '<div class="action-card-title-area">';
+                        html += '<div class="action-card-title">' + utils.escapeHtml(arTitle) + '</div>';
+                        html += '<div class="action-card-category">' + arCatLabel + '</div>';
+                        html += '</div>';
+                        html += '<div class="action-card-badges">';
+                        html += '<span class="action-badge priority-' + arPriority + '">' + (arPriority === 'high' ? 'High Priority' : arPriority === 'medium' ? 'Medium' : 'Quick Win') + '</span>';
+                        html += '</div>';
+                        html += '</div>';
+
+                        if (arDesc) {
+                            html += '<div class="action-card-description">' + utils.escapeHtml(arDesc) + '</div>';
+                        }
+
+                        html += '<div class="action-card-impact">';
+                        html += '<div class="impact-header">';
+                        html += '<span class="impact-label">💪 Expected Impact</span>';
+                        html += '<span class="impact-value">' + (arImpact ? utils.escapeHtml(arImpact) : (arImpactPct + '% improvement')) + '</span>';
+                        html += '</div>';
+                        html += '<div class="impact-bar"><div class="impact-bar-fill" style="width:' + arImpactPct + '%;"></div></div>';
+                        html += '</div>';
+
+                        html += '</div>';
+                    }
+                    html += '</div>';
+
+                    // Growth Projection
+                    var adminGrowth = Math.min(95, 15 + (adminHighPriority * 12) + (adminMediumPriority * 6) + (adminLowPriority * 3));
+                    html += '<div class="growth-projection" style="margin-top: 1.5rem;">';
+                    html += '<div class="growth-projection-content">';
+                    html += '<div class="growth-projection-title">📈 Growth Projection</div>';
+                    html += '<div class="growth-projection-text">Estimated improvement potential if all ' + analysis.recommendations.length + ' recommendations are implemented</div>';
+                    html += '</div>';
+                    html += '<div class="growth-projection-value">';
+                    html += '<div class="growth-value-number">+' + adminGrowth + '%</div>';
+                    html += '<div class="growth-value-label">Potential Growth</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    html += '</div>';
+                }
             }
 
             // Existing Reports Table
