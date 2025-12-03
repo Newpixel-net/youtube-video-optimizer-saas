@@ -31,6 +31,10 @@
     <meta name="mobile-web-app-capable" content="yes">
     <title>YouTube Video Optimizer</title>
 
+    <!-- PWA Manifest & Theme -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#7c3aed">
+
     <!-- ============================================
          SECTION 1: EXTERNAL DEPENDENCIES
          ============================================ -->
@@ -3094,6 +3098,57 @@
             .aurora-orb,
             .living-aurora::before {
                 animation: none !important;
+            }
+        }
+
+        /* ------------------------------------------
+           PWA Install Button - Add to Home Screen
+           ------------------------------------------ */
+        .a2hs-native-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            color: white;
+            border: none;
+            padding: 16px 28px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .a2hs-native-button.show {
+            display: flex;
+        }
+
+        .a2hs-native-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
+        }
+
+        .a2hs-native-button:active {
+            transform: translateY(0);
+        }
+
+        .a2hs-icon {
+            font-size: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .a2hs-native-button {
+                bottom: 15px;
+                right: 15px;
+                left: 15px;
+                justify-content: center;
+                padding: 18px 24px;
             }
         }
     </style>
@@ -11022,6 +11077,91 @@
         // Initial render
         render();
 
+    })();
+    </script>
+
+    <!-- ============================================
+         PWA INSTALL BUTTON - Add to Home Screen
+         Triggers native browser install dialog
+         ============================================ -->
+    <button class="a2hs-native-button" id="a2hsNativeBtn">
+        <span class="a2hs-icon">📱</span>
+        <span>Install App</span>
+    </button>
+
+    <script>
+    // Service Worker Registration
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js')
+                .then(function(registration) {
+                    console.log('ServiceWorker registered:', registration.scope);
+                })
+                .catch(function(err) {
+                    console.log('ServiceWorker registration failed:', err);
+                });
+        });
+    }
+
+    // PWA Install Prompt Handler
+    (function() {
+        let deferredPrompt = null;
+        const button = document.getElementById('a2hsNativeBtn');
+
+        // Check if already installed
+        const isInstalled = window.matchMedia('(display-mode: standalone)').matches ||
+                           window.navigator.standalone === true;
+
+        if (isInstalled) {
+            console.log('App already installed - button will not show');
+            return;
+        }
+
+        // Capture the beforeinstallprompt event
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+
+            // Show button ONLY when prompt is available
+            button.classList.add('show');
+            console.log('Native install prompt ready - button now visible');
+        });
+
+        // Handle button click - trigger native prompt
+        button.addEventListener('click', async () => {
+            if (!deferredPrompt) {
+                console.log('Install prompt not available');
+                return;
+            }
+
+            try {
+                await deferredPrompt.prompt();
+                const result = await deferredPrompt.userChoice;
+
+                if (result.outcome === 'accepted') {
+                    console.log('User installed the app');
+                    button.classList.remove('show');
+                } else {
+                    console.log('User dismissed install prompt');
+                }
+
+                deferredPrompt = null;
+            } catch (err) {
+                console.log('Error showing install prompt:', err);
+            }
+        });
+
+        // Hide button after successful install
+        window.addEventListener('appinstalled', () => {
+            console.log('App successfully installed');
+            button.classList.remove('show');
+        });
+
+        // Debug: Check PWA requirements
+        console.log('=== PWA Status ===');
+        console.log('HTTPS:', window.location.protocol === 'https:');
+        console.log('Service Worker Support:', 'serviceWorker' in navigator);
+        console.log('Already Installed:', isInstalled);
     })();
     </script>
 </body>

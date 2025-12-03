@@ -1,0 +1,27 @@
+{
+  "name": "YouTube Video Optimizer",
+  "short_name": "YT Optimizer",
+  "description": "AI-powered YouTube video optimization and campaign analysis platform",
+  "start_url": "/main-dashboard.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://ytseo.siteuo.com/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://ytseo.siteuo.com/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business", "utilities"],
+  "lang": "en",
+  "dir": "ltr"
+}

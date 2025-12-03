@@ -26,6 +26,10 @@
     <meta name="mobile-web-app-capable" content="yes">
     <title>Creative Studio - YouTube Video Optimizer</title>
 
+    <!-- PWA Manifest & Theme -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#7c3aed">
+
     <!-- ============================================
          SECTION 1: EXTERNAL DEPENDENCIES
          ============================================ -->
@@ -5565,6 +5569,21 @@
             font-size: 0.7rem;
             cursor: pointer;
         }
+
+        /* PWA Install Button */
+        .a2hs-native-button {
+            position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            color: white; border: none; padding: 16px 28px; border-radius: 50px;
+            font-size: 16px; font-weight: 600; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+            display: none; align-items: center; gap: 10px; transition: all 0.3s ease;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .a2hs-native-button.show { display: flex; }
+        .a2hs-native-button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5); }
+        .a2hs-icon { font-size: 20px; }
+        @media (max-width: 768px) { .a2hs-native-button { bottom: 15px; right: 15px; left: 15px; justify-content: center; } }
     </style>
 </head>
 <body>
@@ -11240,6 +11259,19 @@
                 }
             });
         });
+    </script>
+
+    <!-- PWA Install Button -->
+    <button class="a2hs-native-button" id="a2hsNativeBtn"><span class="a2hs-icon">📱</span><span>Install App</span></button>
+    <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(function(err) { console.log('SW failed:', err); }); }
+    (function() {
+        let deferredPrompt = null; const button = document.getElementById('a2hsNativeBtn');
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
+        window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; button.classList.add('show'); });
+        button.addEventListener('click', async () => { if (!deferredPrompt) return; try { await deferredPrompt.prompt(); const r = await deferredPrompt.userChoice; if (r.outcome === 'accepted') button.classList.remove('show'); deferredPrompt = null; } catch (e) {} });
+        window.addEventListener('appinstalled', () => { button.classList.remove('show'); });
+    })();
     </script>
 </body>
 </html>
