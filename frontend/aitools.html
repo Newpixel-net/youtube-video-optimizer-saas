@@ -391,8 +391,8 @@
         .global-header {
             position: fixed;
             top: 0;
-            right: 0;
-            padding: 1rem 1.5rem;
+            right: 1.5rem;
+            padding: 1rem 0;
             z-index: 1000;
             display: flex;
             align-items: center;
@@ -624,7 +624,7 @@
         /* Global header mobile responsive */
         @media (max-width: 768px) {
             .global-header {
-                padding: 0.75rem 1rem;
+                right: 1rem;
             }
 
             .global-header-content {
@@ -1442,19 +1442,6 @@
 
         .copy-btn:hover {
             background: rgba(99, 102, 241, 0.3);
-        }
-
-        /* ------------------------------------------
-           2.7 TOKEN DISPLAY
-           ------------------------------------------ */
-        .token-display {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-radius: 0.75rem;
-            padding: 0.5rem 1rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
         }
 
         /* ------------------------------------------
@@ -4211,10 +4198,6 @@
             html += '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
             html += '<span>Back to Tools</span>';
             html += '</a>';
-            html += '<div class="token-display">';
-            html += '<span class="text-2xl">🪙</span>';
-            html += '<span class="font-bold text-white">' + state.tokens.balance + '</span>';
-            html += '</div>';
             html += '</div>';
             html += '<div class="flex items-center gap-4">';
             html += '<div class="text-5xl">' + icon + '</div>';
