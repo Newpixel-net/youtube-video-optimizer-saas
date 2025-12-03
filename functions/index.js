@@ -6129,7 +6129,8 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
     // Fetch from all history collections in parallel (including enterprise tools)
     const [
       optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap,
-      placementSnap, channelAuditSnap, viralSnap, monetizationSnap, scriptSnap
+      placementSnap, channelAuditSnap, viralSnap, monetizationSnap, scriptSnap,
+      sponsorshipSnap, diversificationSnap, cpmBoosterSnap, audienceProfileSnap
     ] = await Promise.all([
       safeQuery('optimizations'),
       safeQuery('competitorHistory'),
@@ -6140,7 +6141,12 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       // Enterprise tools
       safeQuery('viralPredictorHistory'),
       safeQuery('monetizationHistory'),
-      safeQuery('scriptWriterHistory')
+      safeQuery('scriptWriterHistory'),
+      // New enterprise monetization tools
+      safeQuery('sponsorshipHistory'),
+      safeQuery('diversificationHistory'),
+      safeQuery('cpmBoosterHistory'),
+      safeQuery('audienceProfileHistory')
     ]);
 
     // Safe timestamp handler - handles various Firestore timestamp formats
@@ -6203,7 +6209,12 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       // Enterprise tools
       ...formatHistory(viralSnap, 'viral'),
       ...formatHistory(monetizationSnap, 'monetization'),
-      ...formatHistory(scriptSnap, 'script')
+      ...formatHistory(scriptSnap, 'script'),
+      // New enterprise monetization tools
+      ...formatHistory(sponsorshipSnap, 'sponsorship'),
+      ...formatHistory(diversificationSnap, 'diversification'),
+      ...formatHistory(cpmBoosterSnap, 'cpmbooster'),
+      ...formatHistory(audienceProfileSnap, 'audienceprofile')
     ];
 
     // Sort by timestamp descending
@@ -6222,7 +6233,12 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
         // Enterprise tools
         viral: formatHistory(viralSnap, 'viral'),
         monetization: formatHistory(monetizationSnap, 'monetization'),
-        scripts: formatHistory(scriptSnap, 'script')
+        scripts: formatHistory(scriptSnap, 'script'),
+        // New enterprise monetization tools
+        sponsorship: formatHistory(sponsorshipSnap, 'sponsorship'),
+        diversification: formatHistory(diversificationSnap, 'diversification'),
+        cpmbooster: formatHistory(cpmBoosterSnap, 'cpmbooster'),
+        audienceprofile: formatHistory(audienceProfileSnap, 'audienceprofile')
       },
       counts: {
         optimizations: optimizationsSnap.size,
@@ -6234,7 +6250,12 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
         // Enterprise tools
         viral: viralSnap.size,
         monetization: monetizationSnap.size,
-        scripts: scriptSnap.size
+        scripts: scriptSnap.size,
+        // New enterprise monetization tools
+        sponsorship: sponsorshipSnap.size,
+        diversification: diversificationSnap.size,
+        cpmbooster: cpmBoosterSnap.size,
+        audienceprofile: audienceProfileSnap.size
       }
     };
   } catch (error) {
@@ -13259,5 +13280,863 @@ exports.getAIToolsHistory = functions.https.onCall(async (data, context) => {
     if (error instanceof functions.https.HttpsError) throw error;
     console.error('Get AI tools history error:', error);
     throw new functions.https.HttpsError('internal', 'Failed to retrieve history.');
+  }
+});
+
+// ==========================================
+// SPONSORSHIP RATE CALCULATOR
+// ==========================================
+/**
+ * Calculates sponsorship rates for a YouTube channel
+ * Analyzes channel metrics, engagement, and niche to generate professional rate cards
+ */
+exports.calculateSponsorshipRates = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'calculateSponsorshipRates', 5);
+  await checkUsageLimit(uid, 'sponsorshipCalculator');
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required');
+  }
+
+  try {
+    // Extract channel info
+    const channelInfo = extractChannelInfo(channelUrl);
+
+    // Get channel details
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
+
+    if (!channelResponse.data.items?.length) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
+    const channelName = channel.snippet.title;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const viewCount = parseInt(channel.statistics.viewCount) || 0;
+    const videoCount = parseInt(channel.statistics.videoCount) || 0;
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Get recent videos for engagement analysis
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'date',
+      maxResults: 20
+    });
+
+    const recentVideoIds = videosResponse.data.items?.map(v => v.id.videoId).filter(Boolean) || [];
+
+    let avgViews = 0;
+    let avgEngagement = 0;
+    if (recentVideoIds.length > 0) {
+      const videoDetailsResponse = await youtube.videos.list({
+        part: 'statistics',
+        id: recentVideoIds.slice(0, 15).join(',')
+      });
+
+      const recentStats = videoDetailsResponse.data.items || [];
+      const totalViews = recentStats.reduce((sum, v) => sum + parseInt(v.statistics.viewCount || 0), 0);
+      const totalLikes = recentStats.reduce((sum, v) => sum + parseInt(v.statistics.likeCount || 0), 0);
+      const totalComments = recentStats.reduce((sum, v) => sum + parseInt(v.statistics.commentCount || 0), 0);
+
+      avgViews = Math.round(totalViews / Math.max(recentStats.length, 1));
+      avgEngagement = totalViews > 0 ? ((totalLikes + totalComments) / totalViews * 100).toFixed(2) : 0;
+    }
+
+    // Determine niche from topics
+    const nicheMap = {
+      'Finance': 'Finance',
+      'Business': 'Finance',
+      'Technology': 'Technology',
+      'Gaming': 'Gaming',
+      'Entertainment': 'Entertainment',
+      'Education': 'Education',
+      'Lifestyle': 'Lifestyle',
+      'Beauty': 'Beauty',
+      'Fashion': 'Beauty',
+      'Health': 'Health',
+      'Fitness': 'Health',
+      'Food': 'Food',
+      'Travel': 'Travel'
+    };
+
+    let detectedNiche = 'General';
+    for (const topic of topicCategories) {
+      for (const [key, niche] of Object.entries(nicheMap)) {
+        if (topic.toLowerCase().includes(key.toLowerCase())) {
+          detectedNiche = niche;
+          break;
+        }
+      }
+    }
+
+    // Calculate sponsorship rates based on industry standards
+    // Base rate: $20-50 per 1,000 subscribers for integration
+    // Adjusted by engagement rate and niche multipliers
+    const nicheMultipliers = {
+      'Finance': 2.5,
+      'Technology': 2.0,
+      'Business': 2.0,
+      'Health': 1.8,
+      'Beauty': 1.6,
+      'Education': 1.5,
+      'Food': 1.4,
+      'Travel': 1.4,
+      'Lifestyle': 1.3,
+      'Gaming': 1.2,
+      'Entertainment': 1.0,
+      'General': 1.0
+    };
+
+    const nicheMultiplier = nicheMultipliers[detectedNiche] || 1.0;
+    const engagementBonus = parseFloat(avgEngagement) > 5 ? 1.5 : parseFloat(avgEngagement) > 3 ? 1.2 : 1.0;
+
+    // Base rate per 1000 subscribers
+    const baseRatePer1K = 30;
+    const baseIntegrationRate = (subscriberCount / 1000) * baseRatePer1K * nicheMultiplier * engagementBonus;
+
+    // Calculate different rate tiers
+    const integrationRate = Math.max(100, Math.round(baseIntegrationRate / 50) * 50);
+    const dedicatedVideoRate = Math.round(integrationRate * 2.5);
+    const shoutoutRate = Math.round(integrationRate * 0.4);
+
+    // Industry averages for comparison
+    const industryAverage = Math.round((subscriberCount / 1000) * 25);
+    const topCreatorRate = Math.round((subscriberCount / 1000) * 60);
+
+    // Determine position relative to industry
+    let position = 'average';
+    let insight = 'Your rates are in line with industry averages.';
+    if (integrationRate > industryAverage * 1.2) {
+      position = 'above';
+      insight = 'Your strong engagement justifies premium rates above industry average.';
+    } else if (integrationRate < industryAverage * 0.8) {
+      position = 'below';
+      insight = 'Consider increasing your rates - your content quality may warrant higher pricing.';
+    }
+
+    // Use AI to generate negotiation tips
+    const prompt = `You are a YouTube sponsorship expert. A creator with ${subscriberCount.toLocaleString()} subscribers in the ${detectedNiche} niche has an average of ${avgViews.toLocaleString()} views per video and ${avgEngagement}% engagement rate.
+
+Generate 4 negotiation strategies to help them get higher sponsorship rates. Each tip should be specific and actionable.
+
+Return as JSON:
+{
+  "tips": [
+    { "title": "Short title", "description": "Detailed strategy explanation" }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 800
+    });
+
+    let negotiationTips = [];
+    try {
+      const parsed = JSON.parse(aiResponse.choices[0].message.content);
+      negotiationTips = parsed.tips || [];
+    } catch (e) {
+      negotiationTips = [
+        { title: 'Highlight Your Engagement', description: 'Brands value engagement over raw subscriber counts. Emphasize your like-to-view and comment ratios.' },
+        { title: 'Create a Media Kit', description: 'A professional media kit with demographics, case studies, and past results can justify higher rates.' },
+        { title: 'Bundle Services', description: 'Offer packages that include social media posts, stories, and community posts for added value.' },
+        { title: 'Show ROI', description: 'Track and share click-through rates and conversion data from previous sponsorships.' }
+      ];
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'sponsorship',
+      channelUrl,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche: detectedNiche,
+      avgViews,
+      avgEngagement: parseFloat(avgEngagement),
+      rates: {
+        dedicatedVideo: '$' + dedicatedVideoRate.toLocaleString(),
+        integration: '$' + integrationRate.toLocaleString(),
+        shoutout: '$' + shoutoutRate.toLocaleString()
+      },
+      comparison: {
+        average: '$' + industryAverage.toLocaleString(),
+        top: '$' + topCreatorRate.toLocaleString(),
+        position,
+        insight
+      },
+      negotiationTips,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('sponsorshipHistory').add(historyData);
+    await incrementUsage(uid, 'sponsorshipCalculator');
+    await logUsage(uid, 'sponsorship_calculator', { channelUrl, subscribers: subscriberCount });
+
+    return {
+      success: true,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche: detectedNiche,
+      avgViews,
+      avgEngagement: parseFloat(avgEngagement),
+      rates: {
+        dedicatedVideo: '$' + dedicatedVideoRate.toLocaleString(),
+        integration: '$' + integrationRate.toLocaleString(),
+        shoutout: '$' + shoutoutRate.toLocaleString()
+      },
+      comparison: {
+        average: '$' + industryAverage.toLocaleString(),
+        top: '$' + topCreatorRate.toLocaleString(),
+        position,
+        insight
+      },
+      negotiationTips
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Sponsorship calculator error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to calculate sponsorship rates.');
+  }
+});
+
+// ==========================================
+// REVENUE DIVERSIFICATION ANALYZER
+// ==========================================
+/**
+ * Analyzes a channel's current revenue sources and identifies gaps
+ * Provides recommendations for new income streams
+ */
+exports.analyzeRevenueDiversification = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'analyzeRevenueDiversification', 5);
+  await checkUsageLimit(uid, 'revenueDiversification');
+
+  const { channelUrl, currentSources = [] } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required');
+  }
+
+  try {
+    // Extract and fetch channel info
+    const channelInfo = extractChannelInfo(channelUrl);
+
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
+
+    if (!channelResponse.data.items?.length) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelName = channel.snippet.title;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Determine niche
+    let niche = 'General';
+    const nicheKeywords = ['Finance', 'Technology', 'Gaming', 'Education', 'Lifestyle', 'Beauty', 'Health', 'Food', 'Travel', 'Entertainment'];
+    for (const topic of topicCategories) {
+      for (const keyword of nicheKeywords) {
+        if (topic.toLowerCase().includes(keyword.toLowerCase())) {
+          niche = keyword;
+          break;
+        }
+      }
+    }
+
+    // Define all possible revenue sources with icons
+    const allSources = [
+      { id: 'adsense', name: 'AdSense', icon: '💰' },
+      { id: 'sponsors', name: 'Sponsorships', icon: '🤝' },
+      { id: 'merch', name: 'Merchandise', icon: '👕' },
+      { id: 'courses', name: 'Courses', icon: '📚' },
+      { id: 'affiliate', name: 'Affiliates', icon: '🔗' },
+      { id: 'memberships', name: 'Memberships', icon: '⭐' },
+      { id: 'consulting', name: 'Consulting', icon: '💼' },
+      { id: 'digital', name: 'Digital Products', icon: '📦' }
+    ];
+
+    // Mark active/inactive sources
+    const currentSourcesData = allSources.map(source => ({
+      ...source,
+      active: currentSources.includes(source.id),
+      estimated: source.active ? estimateRevenueForSource(source.id, subscriberCount, niche) : null
+    }));
+
+    // Calculate diversification score
+    const activeCount = currentSources.length;
+    const diversificationScore = Math.round((activeCount / allSources.length) * 100);
+
+    // Use AI to generate personalized recommendations
+    const prompt = `You are a YouTube monetization expert. Analyze this channel:
+- Subscribers: ${subscriberCount.toLocaleString()}
+- Niche: ${niche}
+- Current revenue sources: ${currentSources.length > 0 ? currentSources.join(', ') : 'Only AdSense'}
+- Missing sources: ${allSources.filter(s => !currentSources.includes(s.id)).map(s => s.name).join(', ')}
+
+Generate:
+1. An estimate of monthly revenue they're missing (format: "$X,XXX")
+2. Top 4 revenue stream recommendations with potential monthly earnings
+3. A 5-step prioritized action plan
+
+Return as JSON:
+{
+  "missingRevenue": "$X,XXX",
+  "recommendations": [
+    {
+      "icon": "emoji",
+      "name": "Revenue Stream Name",
+      "potential": "$X,XXX",
+      "description": "Why this is good for them",
+      "effort": "Low/Medium/High",
+      "roi": "High/Medium/Low"
+    }
+  ],
+  "actionPlan": [
+    { "task": "Action item", "impact": "Expected result" }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 1200
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      aiData = {
+        missingRevenue: '$' + Math.round(subscriberCount / 100) + '/mo',
+        recommendations: [
+          { icon: '🤝', name: 'Brand Sponsorships', potential: '$' + Math.round(subscriberCount / 50), description: 'Partner with brands in your niche', effort: 'Medium', roi: 'High' }
+        ],
+        actionPlan: [
+          { task: 'Create a media kit', impact: 'Professional outreach to brands' }
+        ]
+      };
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'diversification',
+      channelUrl,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      currentSources: currentSourcesData,
+      diversificationScore,
+      missingRevenue: aiData.missingRevenue,
+      recommendations: aiData.recommendations,
+      actionPlan: aiData.actionPlan,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('diversificationHistory').add(historyData);
+    await incrementUsage(uid, 'revenueDiversification');
+    await logUsage(uid, 'revenue_diversification', { channelUrl, subscribers: subscriberCount });
+
+    return {
+      success: true,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      diversificationScore,
+      currentSources: currentSourcesData,
+      missingRevenue: aiData.missingRevenue,
+      recommendations: aiData.recommendations,
+      actionPlan: aiData.actionPlan
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Revenue diversification error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze revenue diversification.');
+  }
+});
+
+// Helper function for revenue estimation
+function estimateRevenueForSource(sourceId, subscribers, niche) {
+  const baseRates = {
+    adsense: subscribers * 0.002,
+    sponsors: subscribers * 0.01,
+    merch: subscribers * 0.001,
+    courses: subscribers * 0.005,
+    affiliate: subscribers * 0.003,
+    memberships: subscribers * 0.002,
+    consulting: subscribers * 0.001,
+    digital: subscribers * 0.004
+  };
+
+  const nicheMultipliers = {
+    Finance: 2.0,
+    Technology: 1.5,
+    Education: 1.3,
+    Health: 1.4,
+    General: 1.0
+  };
+
+  const multiplier = nicheMultipliers[niche] || 1.0;
+  const estimate = Math.round((baseRates[sourceId] || 0) * multiplier);
+  return '$' + estimate.toLocaleString();
+}
+
+// ==========================================
+// CPM BOOSTER STRATEGIST
+// ==========================================
+/**
+ * Analyzes a channel and provides strategies to increase CPM
+ * Identifies high-CPM keywords, topics, and optimal video lengths
+ */
+exports.analyzeCpmBooster = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'analyzeCpmBooster', 5);
+  await checkUsageLimit(uid, 'cpmBooster');
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required');
+  }
+
+  try {
+    // Extract and fetch channel info
+    const channelInfo = extractChannelInfo(channelUrl);
+
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
+
+    if (!channelResponse.data.items?.length) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
+    const channelName = channel.snippet.title;
+    const channelDescription = channel.snippet.description || '';
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Determine current niche and CPM
+    const nicheCPMRates = {
+      'Finance': { current: 12, potential: 18 },
+      'Insurance': { current: 15, potential: 22 },
+      'Legal': { current: 14, potential: 20 },
+      'Technology': { current: 8, potential: 12 },
+      'Business': { current: 10, potential: 15 },
+      'Education': { current: 6, potential: 10 },
+      'Health': { current: 7, potential: 11 },
+      'Gaming': { current: 4, potential: 6 },
+      'Entertainment': { current: 3, potential: 5 },
+      'Lifestyle': { current: 5, potential: 8 },
+      'General': { current: 4, potential: 7 }
+    };
+
+    let detectedNiche = 'General';
+    for (const topic of topicCategories) {
+      for (const niche of Object.keys(nicheCPMRates)) {
+        if (topic.toLowerCase().includes(niche.toLowerCase())) {
+          detectedNiche = niche;
+          break;
+        }
+      }
+    }
+
+    const cpmData = nicheCPMRates[detectedNiche] || nicheCPMRates.General;
+
+    // Use AI to generate CPM optimization strategies
+    const prompt = `You are a YouTube CPM optimization expert. Analyze this channel:
+- Channel: ${channelName}
+- Niche: ${detectedNiche}
+- Description: ${channelDescription.slice(0, 500)}
+- Current estimated CPM: $${cpmData.current}
+
+Generate:
+1. 8 high-CPM keywords relevant to their niche (with CPM estimates)
+2. 5 video topic ideas that would attract higher-paying advertisers
+3. Optimal video length recommendation with reasoning
+4. Quarterly content calendar showing CPM multipliers
+
+Return as JSON:
+{
+  "highCpmKeywords": [
+    { "keyword": "keyword phrase", "cpm": 15 }
+  ],
+  "topicIdeas": [
+    { "title": "Video title idea", "estimatedCpm": 12, "description": "Why this attracts premium advertisers" }
+  ],
+  "optimalLength": "8-12 minutes",
+  "lengthReason": "Allows 2-3 mid-roll ad placements",
+  "contentCalendar": [
+    { "period": "Q1", "cpmMultiplier": 0.8, "tip": "Post-holiday dip" },
+    { "period": "Q4", "cpmMultiplier": 1.8, "tip": "Holiday ad spend peak" }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 1500
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      aiData = {
+        highCpmKeywords: [
+          { keyword: 'best investment strategies', cpm: 15 },
+          { keyword: 'how to save money', cpm: 12 }
+        ],
+        topicIdeas: [
+          { title: 'Complete Guide to [Topic]', estimatedCpm: 10, description: 'Educational content attracts premium brands' }
+        ],
+        optimalLength: '8-12 minutes',
+        lengthReason: 'Optimal for mid-roll ad placements',
+        contentCalendar: [
+          { period: 'Q1', cpmMultiplier: 0.8, tip: 'Lower ad spend' },
+          { period: 'Q4', cpmMultiplier: 1.8, tip: 'Holiday peak' }
+        ]
+      };
+    }
+
+    const cpmIncrease = Math.round(((cpmData.potential - cpmData.current) / cpmData.current) * 100) + '%';
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'cpmbooster',
+      channelUrl,
+      channelName,
+      niche: detectedNiche,
+      currentCPM: '$' + cpmData.current,
+      potentialCPM: '$' + cpmData.potential,
+      cpmIncrease,
+      highCpmKeywords: aiData.highCpmKeywords,
+      topicIdeas: aiData.topicIdeas,
+      optimalLength: aiData.optimalLength,
+      lengthReason: aiData.lengthReason,
+      contentCalendar: aiData.contentCalendar,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('cpmBoosterHistory').add(historyData);
+    await incrementUsage(uid, 'cpmBooster');
+    await logUsage(uid, 'cpm_booster', { channelUrl, niche: detectedNiche });
+
+    return {
+      success: true,
+      channelName,
+      niche: detectedNiche,
+      currentCPM: '$' + cpmData.current,
+      potentialCPM: '$' + cpmData.potential,
+      cpmIncrease,
+      highCpmKeywords: aiData.highCpmKeywords,
+      topicIdeas: aiData.topicIdeas,
+      optimalLength: aiData.optimalLength,
+      lengthReason: aiData.lengthReason,
+      contentCalendar: aiData.contentCalendar
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('CPM booster error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze CPM opportunities.');
+  }
+});
+
+// ==========================================
+// AUDIENCE MONETIZATION PROFILER
+// ==========================================
+/**
+ * Analyzes a channel's audience demographics and spending behavior
+ * Provides segmentation and targeted offer recommendations
+ */
+exports.analyzeAudienceProfile = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'analyzeAudienceProfile', 5);
+  await checkUsageLimit(uid, 'audienceProfiler');
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required');
+  }
+
+  try {
+    // Extract and fetch channel info
+    const channelInfo = extractChannelInfo(channelUrl);
+
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
+
+    if (!channelResponse.data.items?.length) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
+    const channelName = channel.snippet.title;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+    const channelDescription = channel.snippet.description || '';
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Get recent videos for content analysis
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'viewCount',
+      maxResults: 10
+    });
+
+    const topVideoTitles = videosResponse.data.items?.map(v => v.snippet.title).join(', ') || '';
+
+    // Determine niche
+    let niche = 'General';
+    const nicheKeywords = ['Finance', 'Technology', 'Gaming', 'Education', 'Lifestyle', 'Beauty', 'Health', 'Food', 'Travel', 'Entertainment', 'Business'];
+    for (const topic of topicCategories) {
+      for (const keyword of nicheKeywords) {
+        if (topic.toLowerCase().includes(keyword.toLowerCase())) {
+          niche = keyword;
+          break;
+        }
+      }
+    }
+
+    // Use AI to generate audience profile
+    const prompt = `You are an audience monetization expert. Analyze this YouTube channel:
+- Channel: ${channelName}
+- Subscribers: ${subscriberCount.toLocaleString()}
+- Niche: ${niche}
+- Description: ${channelDescription.slice(0, 300)}
+- Top videos: ${topVideoTitles.slice(0, 400)}
+
+Create a detailed monetization profile:
+1. 4 audience segments with purchasing power analysis
+2. 5 products/services this audience would likely buy
+3. 4 content recommendations to attract higher-value viewers
+4. 3 targeted offer ideas for different segments
+
+Return as JSON:
+{
+  "segments": [
+    {
+      "icon": "emoji",
+      "name": "Segment Name",
+      "percentage": 30,
+      "value": "$150",
+      "description": "Description of this segment's characteristics and spending habits"
+    }
+  ],
+  "productRecommendations": [
+    {
+      "icon": "emoji",
+      "name": "Product category",
+      "reason": "Why they'd buy this",
+      "conversionRate": 3.5
+    }
+  ],
+  "contentRecommendations": [
+    {
+      "title": "Content strategy",
+      "impact": "Expected result on audience value"
+    }
+  ],
+  "targetedOffers": [
+    {
+      "name": "Offer name",
+      "segment": "Target segment",
+      "description": "Offer details",
+      "expectedRevenue": "$X,XXX/month"
+    }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 1500
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      aiData = {
+        segments: [
+          { icon: '💼', name: 'Professionals', percentage: 40, value: '$200', description: 'Working professionals interested in career growth' }
+        ],
+        productRecommendations: [
+          { icon: '📚', name: 'Online Courses', reason: 'Educational content viewers value learning', conversionRate: 3.2 }
+        ],
+        contentRecommendations: [
+          { title: 'Create premium tutorials', impact: 'Attracts higher-income viewers' }
+        ],
+        targetedOffers: [
+          { name: 'Premium Course Bundle', segment: 'Professionals', description: 'Advanced training package', expectedRevenue: '$2,000/month' }
+        ]
+      };
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'audienceprofile',
+      channelUrl,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      segments: aiData.segments,
+      productRecommendations: aiData.productRecommendations,
+      contentRecommendations: aiData.contentRecommendations,
+      targetedOffers: aiData.targetedOffers,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('audienceProfileHistory').add(historyData);
+    await incrementUsage(uid, 'audienceProfiler');
+    await logUsage(uid, 'audience_profiler', { channelUrl, subscribers: subscriberCount });
+
+    return {
+      success: true,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      segments: aiData.segments,
+      productRecommendations: aiData.productRecommendations,
+      contentRecommendations: aiData.contentRecommendations,
+      targetedOffers: aiData.targetedOffers
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Audience profiler error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to profile audience.');
   }
 });

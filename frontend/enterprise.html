@@ -722,13 +722,33 @@
             scriptLoading: false,
             scriptStyle: 'engaging', // engaging | educational | storytelling | listicle
 
+            // Sponsorship Rate Calculator
+            sponsorshipResults: null,
+            sponsorshipLoading: false,
+
+            // Revenue Diversification Analyzer
+            diversificationResults: null,
+            diversificationLoading: false,
+
+            // CPM Booster Strategist
+            cpmBoosterResults: null,
+            cpmBoosterLoading: false,
+
+            // Audience Monetization Profiler
+            audienceProfileResults: null,
+            audienceProfileLoading: false,
+
             // History state
-            historyTab: 'all', // all | placement | viral | monetization | script
+            historyTab: 'all', // all | placement | viral | monetization | script | sponsorship | diversification | cpmbooster | audienceprofile
             allHistory: null,
             placementHistory: null,
             viralHistory: null,
             monetizationHistory: null,
             scriptHistory: null,
+            sponsorshipHistory: null,
+            diversificationHistory: null,
+            cpmBoosterHistory: null,
+            audienceProfileHistory: null,
             historyCounts: null
         };
 
@@ -923,6 +943,10 @@
                 if (state.viralHistory) allItems = allItems.concat(state.viralHistory);
                 if (state.monetizationHistory) allItems = allItems.concat(state.monetizationHistory);
                 if (state.scriptHistory) allItems = allItems.concat(state.scriptHistory);
+                if (state.sponsorshipHistory) allItems = allItems.concat(state.sponsorshipHistory);
+                if (state.diversificationHistory) allItems = allItems.concat(state.diversificationHistory);
+                if (state.cpmBoosterHistory) allItems = allItems.concat(state.cpmBoosterHistory);
+                if (state.audienceProfileHistory) allItems = allItems.concat(state.audienceProfileHistory);
 
                 // Find the item by ID
                 for (var i = 0; i < allItems.length; i++) {
@@ -985,6 +1009,56 @@
                         style: item.style || 'engaging'
                     };
                     state.activeTool = 'script';
+                } else if (type === 'sponsorship') {
+                    // Map history item to sponsorshipResults format
+                    state.sponsorshipResults = {
+                        channelName: item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel',
+                        channelThumbnail: item.channelThumbnail || (item.channelInfo && item.channelInfo.thumbnail) || '',
+                        subscribers: item.subscribers || (item.channelInfo && item.channelInfo.subscribers) || 0,
+                        niche: item.niche || '',
+                        rates: item.rates || {},
+                        comparison: item.comparison || {},
+                        negotiationTips: item.negotiationTips || []
+                    };
+                    state.activeTool = 'sponsorship';
+                } else if (type === 'diversification') {
+                    // Map history item to diversificationResults format
+                    state.diversificationResults = {
+                        channelName: item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel',
+                        channelThumbnail: item.channelThumbnail || (item.channelInfo && item.channelInfo.thumbnail) || '',
+                        subscribers: item.subscribers || (item.channelInfo && item.channelInfo.subscribers) || 0,
+                        diversificationScore: item.diversificationScore || 0,
+                        currentSources: item.currentSources || [],
+                        missingRevenue: item.missingRevenue || '$0',
+                        recommendations: item.recommendations || [],
+                        actionPlan: item.actionPlan || []
+                    };
+                    state.activeTool = 'diversification';
+                } else if (type === 'cpmbooster') {
+                    // Map history item to cpmBoosterResults format
+                    state.cpmBoosterResults = {
+                        currentCPM: item.currentCPM || '$0',
+                        potentialCPM: item.potentialCPM || '$0',
+                        cpmIncrease: item.cpmIncrease || '0%',
+                        highCpmKeywords: item.highCpmKeywords || [],
+                        topicIdeas: item.topicIdeas || [],
+                        optimalLength: item.optimalLength || '',
+                        lengthReason: item.lengthReason || '',
+                        contentCalendar: item.contentCalendar || []
+                    };
+                    state.activeTool = 'cpmbooster';
+                } else if (type === 'audienceprofile') {
+                    // Map history item to audienceProfileResults format
+                    state.audienceProfileResults = {
+                        channelName: item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel',
+                        channelThumbnail: item.channelThumbnail || (item.channelInfo && item.channelInfo.thumbnail) || '',
+                        subscribers: item.subscribers || (item.channelInfo && item.channelInfo.subscribers) || 0,
+                        segments: item.segments || [],
+                        productRecommendations: item.productRecommendations || [],
+                        contentRecommendations: item.contentRecommendations || [],
+                        targetedOffers: item.targetedOffers || []
+                    };
+                    state.activeTool = 'audienceprofile';
                 }
 
                 render();
@@ -1380,6 +1454,203 @@
                 render();
             },
 
+            // ==========================================
+            // SPONSORSHIP RATE CALCULATOR
+            // ==========================================
+            calculateSponsorship: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var channelUrl = document.getElementById('sponsorship-channel-url').value.trim();
+                if (!channelUrl) {
+                    state.error = 'Please enter a YouTube channel URL';
+                    render();
+                    return;
+                }
+
+                state.sponsorshipLoading = true;
+                state.loadingSteps = [
+                    { name: 'Fetching channel data', icon: '📺' },
+                    { name: 'Analyzing engagement', icon: '📊' },
+                    { name: 'Determining niche CPM', icon: '💰' },
+                    { name: 'Calculating rates', icon: '💎' },
+                    { name: 'Industry comparison', icon: '📈' },
+                    { name: 'Generating tips', icon: '🎯' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('calculateSponsorshipRates')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.sponsorshipResults = result.data;
+                        state.sponsorshipLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.sponsorshipLoading = false;
+                        state.error = 'Error calculating rates: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetSponsorship: function() {
+                state.sponsorshipResults = null;
+                state.error = null;
+                render();
+            },
+
+            // ==========================================
+            // REVENUE DIVERSIFICATION ANALYZER
+            // ==========================================
+            analyzeDiversification: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var channelUrl = document.getElementById('diversification-channel-url').value.trim();
+                if (!channelUrl) {
+                    state.error = 'Please enter a YouTube channel URL';
+                    render();
+                    return;
+                }
+
+                // Gather current revenue sources
+                var currentSources = [];
+                if (document.getElementById('rev-adsense') && document.getElementById('rev-adsense').checked) currentSources.push('adsense');
+                if (document.getElementById('rev-sponsors') && document.getElementById('rev-sponsors').checked) currentSources.push('sponsors');
+                if (document.getElementById('rev-merch') && document.getElementById('rev-merch').checked) currentSources.push('merch');
+                if (document.getElementById('rev-courses') && document.getElementById('rev-courses').checked) currentSources.push('courses');
+                if (document.getElementById('rev-affiliate') && document.getElementById('rev-affiliate').checked) currentSources.push('affiliate');
+                if (document.getElementById('rev-memberships') && document.getElementById('rev-memberships').checked) currentSources.push('memberships');
+
+                state.diversificationLoading = true;
+                state.loadingSteps = [
+                    { name: 'Analyzing channel', icon: '📺' },
+                    { name: 'Auditing revenue', icon: '💰' },
+                    { name: 'Identifying gaps', icon: '🔍' },
+                    { name: 'Calculating potential', icon: '📊' },
+                    { name: 'Building action plan', icon: '📋' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeRevenueDiversification')({
+                    channelUrl: channelUrl,
+                    currentSources: currentSources
+                })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.diversificationResults = result.data;
+                        state.diversificationLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.diversificationLoading = false;
+                        state.error = 'Error analyzing diversification: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetDiversification: function() {
+                state.diversificationResults = null;
+                state.error = null;
+                render();
+            },
+
+            // ==========================================
+            // CPM BOOSTER STRATEGIST
+            // ==========================================
+            analyzeCpmBooster: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var channelUrl = document.getElementById('cpmbooster-channel-url').value.trim();
+                if (!channelUrl) {
+                    state.error = 'Please enter a YouTube channel URL';
+                    render();
+                    return;
+                }
+
+                state.cpmBoosterLoading = true;
+                state.loadingSteps = [
+                    { name: 'Analyzing niche', icon: '📺' },
+                    { name: 'Checking CPM trends', icon: '📈' },
+                    { name: 'Finding high-CPM keywords', icon: '🔑' },
+                    { name: 'Generating video ideas', icon: '🎬' },
+                    { name: 'Building calendar', icon: '📅' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeCpmBooster')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.cpmBoosterResults = result.data;
+                        state.cpmBoosterLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.cpmBoosterLoading = false;
+                        state.error = 'Error analyzing CPM: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetCpmBooster: function() {
+                state.cpmBoosterResults = null;
+                state.error = null;
+                render();
+            },
+
+            // ==========================================
+            // AUDIENCE MONETIZATION PROFILER
+            // ==========================================
+            analyzeAudienceProfile: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var channelUrl = document.getElementById('audienceprofile-channel-url').value.trim();
+                if (!channelUrl) {
+                    state.error = 'Please enter a YouTube channel URL';
+                    render();
+                    return;
+                }
+
+                state.audienceProfileLoading = true;
+                state.loadingSteps = [
+                    { name: 'Fetching channel data', icon: '📺' },
+                    { name: 'Analyzing demographics', icon: '👥' },
+                    { name: 'Profiling segments', icon: '📊' },
+                    { name: 'Finding products', icon: '🛍️' },
+                    { name: 'Creating offers', icon: '💡' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeAudienceProfile')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.audienceProfileResults = result.data;
+                        state.audienceProfileLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.audienceProfileLoading = false;
+                        state.error = 'Error profiling audience: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetAudienceProfile: function() {
+                state.audienceProfileResults = null;
+                state.error = null;
+                render();
+            },
+
             // PDF Download functionality
             downloadPDF: function(toolType) {
                 var element = document.getElementById('pdf-content-' + toolType);
@@ -1595,7 +1866,11 @@
                 { key: 'placement', icon: '🎬', name: 'Placement Finder' },
                 { key: 'viral', icon: '🔮', name: 'Viral Predictor' },
                 { key: 'monetization', icon: '💰', name: 'Monetization' },
-                { key: 'script', icon: '📝', name: 'Script Writer' }
+                { key: 'script', icon: '📝', name: 'Script Writer' },
+                { key: 'sponsorship', icon: '💎', name: 'Sponsorship Rates' },
+                { key: 'diversification', icon: '📊', name: 'Revenue Diversify' },
+                { key: 'cpmbooster', icon: '💰', name: 'CPM Booster' },
+                { key: 'audienceprofile', icon: '📱', name: 'Audience Profile' }
             ];
 
             for (var i = 0; i < tools.length; i++) {
@@ -1629,6 +1904,14 @@
                 html += renderMonetization();
             } else if (state.activeTool === 'script') {
                 html += renderScriptWriter();
+            } else if (state.activeTool === 'sponsorship') {
+                html += renderSponsorshipCalculator();
+            } else if (state.activeTool === 'diversification') {
+                html += renderRevenueDiversification();
+            } else if (state.activeTool === 'cpmbooster') {
+                html += renderCpmBooster();
+            } else if (state.activeTool === 'audienceprofile') {
+                html += renderAudienceProfile();
             }
 
             html += '</div>';
@@ -2331,6 +2614,651 @@
             return html;
         }
 
+        // ==========================================
+        // SPONSORSHIP RATE CALCULATOR
+        // ==========================================
+        function renderSponsorshipCalculator() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center text-2xl">💎</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Sponsorship Rate Calculator</h2>';
+            html += '<p class="text-white/60">Calculate your true market value for brand deals</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.sponsorshipLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">💎</div>';
+                html += '<p class="text-white text-lg mb-4">Calculating your sponsorship rates...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += '<div id="loading-steps" class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">';
+                for (var i = 0; i < state.loadingSteps.length; i++) {
+                    var step = state.loadingSteps[i];
+                    var stepClass = i < state.loadingStep ? 'text-green-400' : i === state.loadingStep ? 'text-yellow-400' : 'text-white/40';
+                    html += '<div class="flex items-center gap-2 ' + stepClass + '">';
+                    html += '<span>' + (i < state.loadingStep ? '✓' : step.icon) + '</span>';
+                    html += '<span class="text-sm">' + step.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Results view
+            if (state.sponsorshipResults) {
+                var results = state.sponsorshipResults;
+
+                // Action buttons
+                html += '<div class="flex justify-end gap-3 mb-6">';
+                html += '<button onclick="app.downloadPDF(\'sponsorship\')" class="btn-pdf">📥 Download PDF</button>';
+                html += '</div>';
+
+                // PDF content wrapper
+                html += '<div id="pdf-content-sponsorship">';
+
+                // Channel info card
+                html += '<div class="result-card mb-6">';
+                html += '<div class="flex items-center gap-4">';
+                if (results.channelThumbnail) {
+                    html += '<img src="' + utils.escapeHtml(results.channelThumbnail) + '" class="w-16 h-16 rounded-full" />';
+                }
+                html += '<div>';
+                html += '<h3 class="text-xl font-bold text-white">' + utils.escapeHtml(results.channelName || 'Your Channel') + '</h3>';
+                html += '<p class="text-white/60">' + utils.formatNumber(results.subscribers || 0) + ' subscribers • ' + utils.escapeHtml(results.niche || 'General') + '</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Rate cards
+                html += '<h3 class="text-lg font-bold text-white mb-4">💰 Your Sponsorship Rates</h3>';
+                html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">';
+
+                // Dedicated Video Rate
+                html += '<div class="result-card text-center">';
+                html += '<div class="text-3xl font-bold text-green-400 mb-2">' + utils.escapeHtml(results.rates.dedicatedVideo || '$0') + '</div>';
+                html += '<p class="text-white font-medium">Dedicated Video</p>';
+                html += '<p class="text-white/60 text-sm">Full video about brand</p>';
+                html += '</div>';
+
+                // Integration Rate
+                html += '<div class="result-card text-center">';
+                html += '<div class="text-3xl font-bold text-blue-400 mb-2">' + utils.escapeHtml(results.rates.integration || '$0') + '</div>';
+                html += '<p class="text-white font-medium">Integration</p>';
+                html += '<p class="text-white/60 text-sm">60-90 sec mention</p>';
+                html += '</div>';
+
+                // Shoutout Rate
+                html += '<div class="result-card text-center">';
+                html += '<div class="text-3xl font-bold text-purple-400 mb-2">' + utils.escapeHtml(results.rates.shoutout || '$0') + '</div>';
+                html += '<p class="text-white font-medium">Shoutout</p>';
+                html += '<p class="text-white/60 text-sm">15-30 sec mention</p>';
+                html += '</div>';
+                html += '</div>';
+
+                // Industry comparison
+                html += '<h3 class="text-lg font-bold text-white mb-4">📊 Industry Comparison</h3>';
+                html += '<div class="result-card mb-6">';
+                html += '<div class="space-y-4">';
+                if (results.comparison) {
+                    html += '<div class="flex justify-between items-center">';
+                    html += '<span class="text-white/80">Your Rate</span>';
+                    html += '<span class="text-white font-bold">' + utils.escapeHtml(results.rates.integration) + '</span>';
+                    html += '</div>';
+                    html += '<div class="flex justify-between items-center">';
+                    html += '<span class="text-white/80">Industry Average</span>';
+                    html += '<span class="text-white font-bold">' + utils.escapeHtml(results.comparison.average) + '</span>';
+                    html += '</div>';
+                    html += '<div class="flex justify-between items-center">';
+                    html += '<span class="text-white/80">Top Creators (' + utils.escapeHtml(results.niche) + ')</span>';
+                    html += '<span class="text-white font-bold">' + utils.escapeHtml(results.comparison.top) + '</span>';
+                    html += '</div>';
+                    html += '<div class="mt-4 p-3 rounded-lg ' + (results.comparison.position === 'above' ? 'bg-green-500/20' : results.comparison.position === 'below' ? 'bg-yellow-500/20' : 'bg-blue-500/20') + '">';
+                    html += '<p class="text-white text-sm">' + utils.escapeHtml(results.comparison.insight) + '</p>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+
+                // Negotiation tips
+                if (results.negotiationTips && results.negotiationTips.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🎯 Negotiation Strategies</h3>';
+                    html += '<div class="space-y-3 mb-6">';
+                    for (var i = 0; i < results.negotiationTips.length; i++) {
+                        var tip = results.negotiationTips[i];
+                        html += '<div class="result-card">';
+                        html += '<h4 class="text-white font-medium mb-1">' + utils.escapeHtml(tip.title) + '</h4>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(tip.description) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetSponsorship()" class="btn-secondary w-full mt-6">Calculate for Another Channel</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.calculateSponsorship(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL *</label>';
+            html += '<input type="text" id="sponsorship-channel-url" class="input-field" placeholder="https://youtube.com/@yourchannel" required />';
+            html += '<p class="text-white/40 text-sm mt-2">We\'ll analyze your channel metrics and niche to calculate rates</p>';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '💎 Calculate My Rates';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
+        // ==========================================
+        // REVENUE DIVERSIFICATION ANALYZER
+        // ==========================================
+        function renderRevenueDiversification() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center text-2xl">📊</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Revenue Diversification Analyzer</h2>';
+            html += '<p class="text-white/60">Identify untapped income streams for your channel</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.diversificationLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">📊</div>';
+                html += '<p class="text-white text-lg mb-4">Analyzing your revenue opportunities...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += '<div id="loading-steps" class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">';
+                for (var i = 0; i < state.loadingSteps.length; i++) {
+                    var step = state.loadingSteps[i];
+                    var stepClass = i < state.loadingStep ? 'text-green-400' : i === state.loadingStep ? 'text-yellow-400' : 'text-white/40';
+                    html += '<div class="flex items-center gap-2 ' + stepClass + '">';
+                    html += '<span>' + (i < state.loadingStep ? '✓' : step.icon) + '</span>';
+                    html += '<span class="text-sm">' + step.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Results view
+            if (state.diversificationResults) {
+                var results = state.diversificationResults;
+
+                // Action buttons
+                html += '<div class="flex justify-end gap-3 mb-6">';
+                html += '<button onclick="app.downloadPDF(\'diversification\')" class="btn-pdf">📥 Download PDF</button>';
+                html += '</div>';
+
+                // PDF content wrapper
+                html += '<div id="pdf-content-diversification">';
+
+                // Channel info
+                html += '<div class="result-card mb-6">';
+                html += '<div class="flex items-center gap-4">';
+                if (results.channelThumbnail) {
+                    html += '<img src="' + utils.escapeHtml(results.channelThumbnail) + '" class="w-16 h-16 rounded-full" />';
+                }
+                html += '<div class="flex-1">';
+                html += '<h3 class="text-xl font-bold text-white">' + utils.escapeHtml(results.channelName || 'Your Channel') + '</h3>';
+                html += '<p class="text-white/60">' + utils.formatNumber(results.subscribers || 0) + ' subscribers</p>';
+                html += '</div>';
+                html += '<div class="text-right">';
+                html += '<div class="text-2xl font-bold text-yellow-400">' + (results.diversificationScore || 0) + '%</div>';
+                html += '<p class="text-white/60 text-sm">Diversification Score</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Current revenue sources
+                html += '<h3 class="text-lg font-bold text-white mb-4">💰 Current Revenue Sources</h3>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">';
+                if (results.currentSources) {
+                    for (var i = 0; i < results.currentSources.length; i++) {
+                        var source = results.currentSources[i];
+                        html += '<div class="result-card text-center">';
+                        html += '<div class="text-2xl mb-2">' + source.icon + '</div>';
+                        html += '<p class="text-white font-medium text-sm">' + utils.escapeHtml(source.name) + '</p>';
+                        html += '<p class="text-white/60 text-xs">' + (source.active ? '✅ Active' : '❌ Not Active') + '</p>';
+                        if (source.estimated) {
+                            html += '<p class="text-green-400 text-sm font-bold mt-1">' + utils.escapeHtml(source.estimated) + '/mo</p>';
+                        }
+                        html += '</div>';
+                    }
+                }
+                html += '</div>';
+
+                // Missing revenue gap
+                html += '<div class="result-card mb-6 bg-gradient-to-r from-red-500/20 to-orange-500/20 border-red-500/30">';
+                html += '<div class="flex items-center gap-4">';
+                html += '<div class="text-4xl">⚠️</div>';
+                html += '<div>';
+                html += '<h4 class="text-xl font-bold text-white">Missing Revenue Potential</h4>';
+                html += '<p class="text-white/80">You\'re leaving approximately <span class="text-yellow-400 font-bold">' + utils.escapeHtml(results.missingRevenue || '$0') + '</span> on the table each month</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Recommended revenue streams
+                if (results.recommendations && results.recommendations.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🚀 Recommended Revenue Streams</h3>';
+                    html += '<div class="space-y-4 mb-6">';
+                    for (var i = 0; i < results.recommendations.length; i++) {
+                        var rec = results.recommendations[i];
+                        html += '<div class="result-card">';
+                        html += '<div class="flex items-start gap-4">';
+                        html += '<div class="text-3xl">' + rec.icon + '</div>';
+                        html += '<div class="flex-1">';
+                        html += '<div class="flex justify-between items-start mb-2">';
+                        html += '<h4 class="text-white font-bold">' + utils.escapeHtml(rec.name) + '</h4>';
+                        html += '<span class="text-green-400 font-bold">' + utils.escapeHtml(rec.potential) + '/mo</span>';
+                        html += '</div>';
+                        html += '<p class="text-white/60 text-sm mb-2">' + utils.escapeHtml(rec.description) + '</p>';
+                        html += '<div class="flex gap-2">';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300">Effort: ' + utils.escapeHtml(rec.effort) + '</span>';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-300">ROI: ' + utils.escapeHtml(rec.roi) + '</span>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Action plan
+                if (results.actionPlan && results.actionPlan.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">📋 Prioritized Action Plan</h3>';
+                    html += '<div class="space-y-3 mb-6">';
+                    for (var i = 0; i < results.actionPlan.length; i++) {
+                        var action = results.actionPlan[i];
+                        html += '<div class="result-card flex items-center gap-4">';
+                        html += '<div class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">' + (i + 1) + '</div>';
+                        html += '<div class="flex-1">';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(action.task) + '</p>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(action.impact) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetDiversification()" class="btn-secondary w-full mt-6">Analyze Another Channel</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.analyzeDiversification(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL *</label>';
+            html += '<input type="text" id="diversification-channel-url" class="input-field" placeholder="https://youtube.com/@yourchannel" required />';
+            html += '</div>';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">Current Revenue Sources (select all that apply)</label>';
+            html += '<div class="grid grid-cols-2 gap-3">';
+            html += '<label class="flex items-center gap-2 p-3 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:border-white/20">';
+            html += '<input type="checkbox" id="rev-adsense" class="rounded" /> <span class="text-white/80">AdSense</span>';
+            html += '</label>';
+            html += '<label class="flex items-center gap-2 p-3 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:border-white/20">';
+            html += '<input type="checkbox" id="rev-sponsors" class="rounded" /> <span class="text-white/80">Sponsorships</span>';
+            html += '</label>';
+            html += '<label class="flex items-center gap-2 p-3 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:border-white/20">';
+            html += '<input type="checkbox" id="rev-merch" class="rounded" /> <span class="text-white/80">Merchandise</span>';
+            html += '</label>';
+            html += '<label class="flex items-center gap-2 p-3 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:border-white/20">';
+            html += '<input type="checkbox" id="rev-courses" class="rounded" /> <span class="text-white/80">Courses</span>';
+            html += '</label>';
+            html += '<label class="flex items-center gap-2 p-3 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:border-white/20">';
+            html += '<input type="checkbox" id="rev-affiliate" class="rounded" /> <span class="text-white/80">Affiliates</span>';
+            html += '</label>';
+            html += '<label class="flex items-center gap-2 p-3 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:border-white/20">';
+            html += '<input type="checkbox" id="rev-memberships" class="rounded" /> <span class="text-white/80">Memberships</span>';
+            html += '</label>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '📊 Analyze Revenue Gaps';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
+        // ==========================================
+        // CPM BOOSTER STRATEGIST
+        // ==========================================
+        function renderCpmBooster() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center text-2xl">💰</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">CPM Booster Strategist</h2>';
+            html += '<p class="text-white/60">Optimize content for higher-paying advertisers</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.cpmBoosterLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">💰</div>';
+                html += '<p class="text-white text-lg mb-4">Analyzing CPM optimization strategies...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += '<div id="loading-steps" class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">';
+                for (var i = 0; i < state.loadingSteps.length; i++) {
+                    var step = state.loadingSteps[i];
+                    var stepClass = i < state.loadingStep ? 'text-green-400' : i === state.loadingStep ? 'text-yellow-400' : 'text-white/40';
+                    html += '<div class="flex items-center gap-2 ' + stepClass + '">';
+                    html += '<span>' + (i < state.loadingStep ? '✓' : step.icon) + '</span>';
+                    html += '<span class="text-sm">' + step.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Results view
+            if (state.cpmBoosterResults) {
+                var results = state.cpmBoosterResults;
+
+                // Action buttons
+                html += '<div class="flex justify-end gap-3 mb-6">';
+                html += '<button onclick="app.downloadPDF(\'cpmbooster\')" class="btn-pdf">📥 Download PDF</button>';
+                html += '</div>';
+
+                // PDF content wrapper
+                html += '<div id="pdf-content-cpmbooster">';
+
+                // Current vs potential CPM
+                html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">';
+                html += '<div class="result-card text-center">';
+                html += '<p class="text-white/60 text-sm mb-2">Current Estimated CPM</p>';
+                html += '<div class="text-4xl font-bold text-white">' + utils.escapeHtml(results.currentCPM || '$0') + '</div>';
+                html += '<p class="text-white/60 text-sm">per 1,000 views</p>';
+                html += '</div>';
+                html += '<div class="result-card text-center bg-gradient-to-br from-green-500/20 to-emerald-500/20">';
+                html += '<p class="text-white/60 text-sm mb-2">Potential CPM</p>';
+                html += '<div class="text-4xl font-bold text-green-400">' + utils.escapeHtml(results.potentialCPM || '$0') + '</div>';
+                html += '<p class="text-green-400 text-sm">+' + utils.escapeHtml(results.cpmIncrease || '0%') + ' increase possible</p>';
+                html += '</div>';
+                html += '</div>';
+
+                // High CPM keywords
+                if (results.highCpmKeywords && results.highCpmKeywords.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🔑 High-CPM Keywords for Your Niche</h3>';
+                    html += '<div class="result-card mb-6">';
+                    html += '<div class="flex flex-wrap gap-2">';
+                    for (var i = 0; i < results.highCpmKeywords.length; i++) {
+                        var kw = results.highCpmKeywords[i];
+                        html += '<span class="px-3 py-2 rounded-lg bg-green-500/20 text-green-300 text-sm">';
+                        html += utils.escapeHtml(kw.keyword) + ' <span class="text-green-400 font-bold">$' + kw.cpm + '</span>';
+                        html += '</span>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Video topic ideas
+                if (results.topicIdeas && results.topicIdeas.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🎬 High-CPM Video Ideas</h3>';
+                    html += '<div class="space-y-3 mb-6">';
+                    for (var i = 0; i < results.topicIdeas.length; i++) {
+                        var topic = results.topicIdeas[i];
+                        html += '<div class="result-card">';
+                        html += '<div class="flex justify-between items-start mb-2">';
+                        html += '<h4 class="text-white font-medium">' + utils.escapeHtml(topic.title) + '</h4>';
+                        html += '<span class="text-green-400 font-bold text-sm">$' + topic.estimatedCpm + ' CPM</span>';
+                        html += '</div>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(topic.description) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Optimal video length
+                html += '<h3 class="text-lg font-bold text-white mb-4">⏱️ Optimal Video Length</h3>';
+                html += '<div class="result-card mb-6">';
+                html += '<div class="flex items-center gap-4">';
+                html += '<div class="text-4xl">🎯</div>';
+                html += '<div>';
+                html += '<p class="text-white font-bold text-lg">' + utils.escapeHtml(results.optimalLength || '8-12 minutes') + '</p>';
+                html += '<p class="text-white/60">' + utils.escapeHtml(results.lengthReason || 'Optimal for mid-roll ads placement') + '</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Content calendar (Q4, peak times)
+                if (results.contentCalendar && results.contentCalendar.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">📅 Revenue Peak Calendar</h3>';
+                    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">';
+                    for (var i = 0; i < results.contentCalendar.length; i++) {
+                        var period = results.contentCalendar[i];
+                        html += '<div class="result-card text-center">';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(period.period) + '</p>';
+                        html += '<p class="text-' + (period.cpmMultiplier > 1.5 ? 'green' : period.cpmMultiplier > 1 ? 'yellow' : 'white') + '-400 font-bold">' + period.cpmMultiplier + 'x CPM</p>';
+                        html += '<p class="text-white/60 text-xs">' + utils.escapeHtml(period.tip) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetCpmBooster()" class="btn-secondary w-full mt-6">Analyze Another Channel</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.analyzeCpmBooster(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL *</label>';
+            html += '<input type="text" id="cpmbooster-channel-url" class="input-field" placeholder="https://youtube.com/@yourchannel" required />';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '💰 Find CPM Opportunities';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
+        // ==========================================
+        // AUDIENCE MONETIZATION PROFILER
+        // ==========================================
+        function renderAudienceProfile() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center text-2xl">📱</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Audience Monetization Profiler</h2>';
+            html += '<p class="text-white/60">Deep analysis of your audience\'s spending behavior</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.audienceProfileLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">📱</div>';
+                html += '<p class="text-white text-lg mb-4">Profiling your audience...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += '<div id="loading-steps" class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">';
+                for (var i = 0; i < state.loadingSteps.length; i++) {
+                    var step = state.loadingSteps[i];
+                    var stepClass = i < state.loadingStep ? 'text-green-400' : i === state.loadingStep ? 'text-yellow-400' : 'text-white/40';
+                    html += '<div class="flex items-center gap-2 ' + stepClass + '">';
+                    html += '<span>' + (i < state.loadingStep ? '✓' : step.icon) + '</span>';
+                    html += '<span class="text-sm">' + step.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Results view
+            if (state.audienceProfileResults) {
+                var results = state.audienceProfileResults;
+
+                // Action buttons
+                html += '<div class="flex justify-end gap-3 mb-6">';
+                html += '<button onclick="app.downloadPDF(\'audienceprofile\')" class="btn-pdf">📥 Download PDF</button>';
+                html += '</div>';
+
+                // PDF content wrapper
+                html += '<div id="pdf-content-audienceprofile">';
+
+                // Channel info
+                html += '<div class="result-card mb-6">';
+                html += '<div class="flex items-center gap-4">';
+                if (results.channelThumbnail) {
+                    html += '<img src="' + utils.escapeHtml(results.channelThumbnail) + '" class="w-16 h-16 rounded-full" />';
+                }
+                html += '<div>';
+                html += '<h3 class="text-xl font-bold text-white">' + utils.escapeHtml(results.channelName || 'Your Channel') + '</h3>';
+                html += '<p class="text-white/60">' + utils.formatNumber(results.subscribers || 0) + ' subscribers</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Audience segments
+                if (results.segments && results.segments.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">👥 Audience Segments by Value</h3>';
+                    html += '<div class="space-y-4 mb-6">';
+                    for (var i = 0; i < results.segments.length; i++) {
+                        var seg = results.segments[i];
+                        html += '<div class="result-card">';
+                        html += '<div class="flex items-center gap-4 mb-3">';
+                        html += '<div class="text-3xl">' + seg.icon + '</div>';
+                        html += '<div class="flex-1">';
+                        html += '<div class="flex justify-between items-center">';
+                        html += '<h4 class="text-white font-bold">' + utils.escapeHtml(seg.name) + '</h4>';
+                        html += '<span class="text-white/60">' + seg.percentage + '% of audience</span>';
+                        html += '</div>';
+                        html += '<div class="w-full bg-white/10 rounded-full h-2 mt-2">';
+                        html += '<div class="bg-gradient-to-r from-purple-500 to-pink-500 rounded-full h-2" style="width:' + seg.percentage + '%"></div>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '<div class="text-right">';
+                        html += '<span class="text-green-400 font-bold">' + utils.escapeHtml(seg.value) + '</span>';
+                        html += '<p class="text-white/60 text-xs">lifetime value</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(seg.description) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Product recommendations
+                if (results.productRecommendations && results.productRecommendations.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🛍️ Products Your Audience Will Buy</h3>';
+                    html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">';
+                    for (var i = 0; i < results.productRecommendations.length; i++) {
+                        var prod = results.productRecommendations[i];
+                        html += '<div class="result-card">';
+                        html += '<div class="flex items-start gap-3">';
+                        html += '<div class="text-2xl">' + prod.icon + '</div>';
+                        html += '<div>';
+                        html += '<h4 class="text-white font-medium">' + utils.escapeHtml(prod.name) + '</h4>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(prod.reason) + '</p>';
+                        html += '<p class="text-green-400 text-sm font-bold mt-1">Conversion potential: ' + prod.conversionRate + '%</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Content recommendations
+                if (results.contentRecommendations && results.contentRecommendations.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🎯 Content to Attract Higher-Value Viewers</h3>';
+                    html += '<div class="space-y-3 mb-6">';
+                    for (var i = 0; i < results.contentRecommendations.length; i++) {
+                        var rec = results.contentRecommendations[i];
+                        html += '<div class="result-card flex items-center gap-4">';
+                        html += '<div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">' + (i + 1) + '</div>';
+                        html += '<div>';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(rec.title) + '</p>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(rec.impact) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Targeted offers
+                if (results.targetedOffers && results.targetedOffers.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">💡 Targeted Offer Ideas</h3>';
+                    html += '<div class="space-y-3 mb-6">';
+                    for (var i = 0; i < results.targetedOffers.length; i++) {
+                        var offer = results.targetedOffers[i];
+                        html += '<div class="result-card">';
+                        html += '<div class="flex justify-between items-start mb-2">';
+                        html += '<h4 class="text-white font-bold">' + utils.escapeHtml(offer.name) + '</h4>';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-purple-500/20 text-purple-300">For: ' + utils.escapeHtml(offer.segment) + '</span>';
+                        html += '</div>';
+                        html += '<p class="text-white/60 text-sm mb-2">' + utils.escapeHtml(offer.description) + '</p>';
+                        html += '<p class="text-green-400 text-sm">Expected revenue: ' + utils.escapeHtml(offer.expectedRevenue) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetAudienceProfile()" class="btn-secondary w-full mt-6">Analyze Another Channel</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.analyzeAudienceProfile(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL *</label>';
+            html += '<input type="text" id="audienceprofile-channel-url" class="input-field" placeholder="https://youtube.com/@yourchannel" required />';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '📱 Profile My Audience';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
         // History view
         function renderHistory() {
             var html = '';
@@ -2461,6 +3389,26 @@
             } else if (item.type === 'script') {
                 html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(item.title || item.topic || 'Script') + '</h3>';
                 html += '<p class="text-white/60 text-sm">' + (item.wordCount || 0) + ' words • ' + (item.style || 'engaging') + ' style</p>';
+            } else if (item.type === 'sponsorship') {
+                var channelName = item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel';
+                var integrationRate = (item.rates && item.rates.integration) || 'N/A';
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelName) + '</h3>';
+                html += '<p class="text-white/60 text-sm">Integration Rate: ' + utils.escapeHtml(integrationRate) + '</p>';
+            } else if (item.type === 'diversification') {
+                var channelName = item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel';
+                var score = item.diversificationScore || 0;
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelName) + '</h3>';
+                html += '<p class="text-white/60 text-sm">Diversification Score: ' + score + '%</p>';
+            } else if (item.type === 'cpmbooster') {
+                var currentCPM = item.currentCPM || '$0';
+                var potentialCPM = item.potentialCPM || '$0';
+                html += '<h3 class="text-white font-medium mb-2">CPM Analysis</h3>';
+                html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(currentCPM) + ' → ' + utils.escapeHtml(potentialCPM) + ' potential</p>';
+            } else if (item.type === 'audienceprofile') {
+                var channelName = item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel';
+                var segmentCount = (item.segments && item.segments.length) || 0;
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelName) + '</h3>';
+                html += '<p class="text-white/60 text-sm">' + segmentCount + ' audience segments identified</p>';
             }
 
             html += '</div>';
@@ -2473,7 +3421,11 @@
                 'placement': { icon: '📍', name: 'Placement', bgClass: 'bg-purple-500/20 text-purple-300' },
                 'viral': { icon: '📈', name: 'Viral Score', bgClass: 'bg-orange-500/20 text-orange-300' },
                 'monetization': { icon: '💰', name: 'Monetization', bgClass: 'bg-green-500/20 text-green-300' },
-                'script': { icon: '📝', name: 'Script', bgClass: 'bg-blue-500/20 text-blue-300' }
+                'script': { icon: '📝', name: 'Script', bgClass: 'bg-blue-500/20 text-blue-300' },
+                'sponsorship': { icon: '💎', name: 'Sponsorship', bgClass: 'bg-pink-500/20 text-pink-300' },
+                'diversification': { icon: '📊', name: 'Revenue Diversify', bgClass: 'bg-cyan-500/20 text-cyan-300' },
+                'cpmbooster': { icon: '💰', name: 'CPM Booster', bgClass: 'bg-emerald-500/20 text-emerald-300' },
+                'audienceprofile': { icon: '📱', name: 'Audience Profile', bgClass: 'bg-red-500/20 text-red-300' }
             };
             return types[type] || { icon: '📋', name: type, bgClass: 'bg-gray-500/20 text-gray-300' };
         }
