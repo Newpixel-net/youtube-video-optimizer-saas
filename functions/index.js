@@ -5591,7 +5591,14 @@ AVOID: ${negativePrompt}`;
         if (result.generatedImages && result.generatedImages.length > 0) {
           for (let imgIdx = 0; imgIdx < result.generatedImages.length; imgIdx++) {
             const genImage = result.generatedImages[imgIdx];
-            const imageBytes = genImage.image?.bytesBase64Encoded || genImage.bytesBase64Encoded;
+
+            // Check if image was filtered by safety
+            if (genImage.raiFilteredReason) {
+              console.warn(`Thumbnail ${imgIdx + 1} filtered: ${genImage.raiFilteredReason}`);
+              continue;
+            }
+
+            const imageBytes = genImage.image?.imageBytes;
 
             if (imageBytes) {
               const fileName = `thumbnails-pro/${uid}/${timestamp}-imagen-${imgIdx + 1}.png`;
