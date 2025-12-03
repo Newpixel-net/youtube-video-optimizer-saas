@@ -589,6 +589,25 @@
             gap: 0.75rem;
         }
 
+        /* Anti-Flicker Optimizations */
+        #app-root {
+            /* Prevent layout shifts and improve rendering performance */
+            contain: layout style;
+            will-change: opacity, transform;
+        }
+
+        /* Prevent image flicker during re-renders */
+        img {
+            content-visibility: auto;
+        }
+
+        /* Smooth re-renders for common interactive elements */
+        .card, .metric-card, .btn-primary, .btn-secondary,
+        .notification-dropdown, .dropdown-menu {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
         /* View Transitions */
         .view-transitioning {
             opacity: 0;
@@ -9985,11 +10004,29 @@
                     });
                 });
             } else {
-                root.innerHTML = html;
-                // Invalidate cached DOM references after DOM change
-                cachedCountdownElements = null;
-                // Run post-render tasks immediately for same-view updates
-                postRenderTasks();
+                // OPTIMIZATION: For same-view updates, use a micro-fade to reduce perceived flicker
+                // Only apply if not in rapid succession (debounce visual effect)
+                var now = Date.now();
+                var timeSinceLastRender = now - (window._lastRenderTime || 0);
+                window._lastRenderTime = now;
+
+                if (timeSinceLastRender > 50) {
+                    // Apply subtle opacity change to mask DOM replacement
+                    root.style.opacity = '0.97';
+                    requestAnimationFrame(function() {
+                        root.innerHTML = html;
+                        cachedCountdownElements = null;
+                        postRenderTasks();
+                        requestAnimationFrame(function() {
+                            root.style.opacity = '1';
+                        });
+                    });
+                } else {
+                    // Rapid updates - skip animation to prevent stacking
+                    root.innerHTML = html;
+                    cachedCountdownElements = null;
+                    postRenderTasks();
+                }
             }
 
             // Render lightbox overlay if open
