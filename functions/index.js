@@ -6130,7 +6130,8 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
     const [
       optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap,
       placementSnap, channelAuditSnap, viralSnap, monetizationSnap, scriptSnap,
-      sponsorshipSnap, diversificationSnap, cpmBoosterSnap, audienceProfileSnap
+      sponsorshipSnap, diversificationSnap, cpmBoosterSnap, audienceProfileSnap,
+      digitalProductSnap, affiliateSnap, multiIncomeSnap
     ] = await Promise.all([
       safeQuery('optimizations'),
       safeQuery('competitorHistory'),
@@ -6142,11 +6143,15 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       safeQuery('viralPredictorHistory'),
       safeQuery('monetizationHistory'),
       safeQuery('scriptWriterHistory'),
-      // New enterprise monetization tools
+      // Enterprise monetization tools - Phase 1
       safeQuery('sponsorshipHistory'),
       safeQuery('diversificationHistory'),
       safeQuery('cpmBoosterHistory'),
-      safeQuery('audienceProfileHistory')
+      safeQuery('audienceProfileHistory'),
+      // Enterprise monetization tools - Phase 2
+      safeQuery('digitalProductHistory'),
+      safeQuery('affiliateHistory'),
+      safeQuery('multiIncomeHistory')
     ]);
 
     // Safe timestamp handler - handles various Firestore timestamp formats
@@ -6210,11 +6215,15 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       ...formatHistory(viralSnap, 'viral'),
       ...formatHistory(monetizationSnap, 'monetization'),
       ...formatHistory(scriptSnap, 'script'),
-      // New enterprise monetization tools
+      // Enterprise monetization tools - Phase 1
       ...formatHistory(sponsorshipSnap, 'sponsorship'),
       ...formatHistory(diversificationSnap, 'diversification'),
       ...formatHistory(cpmBoosterSnap, 'cpmbooster'),
-      ...formatHistory(audienceProfileSnap, 'audienceprofile')
+      ...formatHistory(audienceProfileSnap, 'audienceprofile'),
+      // Enterprise monetization tools - Phase 2
+      ...formatHistory(digitalProductSnap, 'digitalproduct'),
+      ...formatHistory(affiliateSnap, 'affiliate'),
+      ...formatHistory(multiIncomeSnap, 'multiincome')
     ];
 
     // Sort by timestamp descending
@@ -14138,5 +14147,578 @@ Return as JSON:
     if (error instanceof functions.https.HttpsError) throw error;
     console.error('Audience profiler error:', error);
     throw new functions.https.HttpsError('internal', 'Failed to profile audience.');
+  }
+});
+
+// ============================================================
+// DIGITAL PRODUCT ARCHITECT
+// Analyzes channel to suggest digital products the creator can sell
+// ============================================================
+exports.analyzeDigitalProduct = functions.https.onCall(async (data, context) => {
+  // Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
+  const uid = context.auth.uid;
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required.');
+  }
+
+  try {
+    // Extract channel ID
+    const channelId = await extractChannelId(channelUrl);
+    if (!channelId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
+    }
+
+    // Fetch channel data
+    const channelResponse = await youtube.channels.list({
+      part: 'snippet,statistics,topicDetails',
+      id: channelId
+    });
+
+    if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found.');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelName = channel.snippet.title;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+    const channelDescription = channel.snippet.description || '';
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Get popular videos for content analysis
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'viewCount',
+      maxResults: 15
+    });
+
+    const videoTitles = videosResponse.data.items?.map(v => v.snippet.title).join(', ') || '';
+
+    // Determine niche
+    let niche = 'General';
+    const nicheKeywords = ['Finance', 'Technology', 'Gaming', 'Education', 'Lifestyle', 'Beauty', 'Health', 'Food', 'Travel', 'Entertainment', 'Business', 'Fitness', 'Music'];
+    for (const topic of topicCategories) {
+      for (const keyword of nicheKeywords) {
+        if (topic.toLowerCase().includes(keyword.toLowerCase())) {
+          niche = keyword;
+          break;
+        }
+      }
+    }
+
+    // Use AI to generate digital product ideas
+    const prompt = `You are a digital product strategist. Analyze this YouTube channel and create a comprehensive product plan:
+
+Channel: ${channelName}
+Subscribers: ${subscriberCount.toLocaleString()}
+Niche: ${niche}
+Description: ${channelDescription.slice(0, 300)}
+Popular videos: ${videoTitles.slice(0, 500)}
+
+Create a digital product strategy with:
+1. 5 digital product ideas ranked by potential revenue
+2. Pricing strategy with tier recommendations
+3. A 90-day launch timeline
+4. Skills/expertise this creator can monetize
+
+Return as JSON:
+{
+  "productIdeas": [
+    {
+      "icon": "emoji",
+      "name": "Product name",
+      "type": "Course/Ebook/Template/Community/Tool",
+      "description": "What this product offers",
+      "targetAudience": "Who would buy this",
+      "estimatedPrice": "$XX-$XXX",
+      "estimatedMonthlyRevenue": "$X,XXX",
+      "difficulty": "Easy/Medium/Hard",
+      "priority": 1
+    }
+  ],
+  "pricingStrategy": {
+    "tiers": [
+      {
+        "name": "Tier name",
+        "price": "$XX",
+        "features": ["Feature 1", "Feature 2"],
+        "targetBuyer": "Description of who buys this tier"
+      }
+    ],
+    "recommendation": "Strategic recommendation for pricing"
+  },
+  "launchTimeline": [
+    {
+      "week": "Week 1-2",
+      "phase": "Phase name",
+      "tasks": ["Task 1", "Task 2", "Task 3"],
+      "milestone": "Key milestone to achieve"
+    }
+  ],
+  "expertise": [
+    {
+      "skill": "Skill name",
+      "monetizationPotential": "High/Medium/Low",
+      "productType": "How to monetize this skill"
+    }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 2000
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      aiData = {
+        productIdeas: [
+          { icon: '📚', name: 'Comprehensive Course', type: 'Course', description: 'Full training program', targetAudience: 'Beginners', estimatedPrice: '$97-$297', estimatedMonthlyRevenue: '$5,000', difficulty: 'Medium', priority: 1 }
+        ],
+        pricingStrategy: {
+          tiers: [{ name: 'Basic', price: '$47', features: ['Core content'], targetBuyer: 'Budget-conscious learners' }],
+          recommendation: 'Start with a low-tier product and upsell'
+        },
+        launchTimeline: [
+          { week: 'Week 1-2', phase: 'Planning', tasks: ['Define product scope', 'Create outline'], milestone: 'Product plan complete' }
+        ],
+        expertise: [
+          { skill: 'Content Creation', monetizationPotential: 'High', productType: 'Online course' }
+        ]
+      };
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'digitalproduct',
+      channelUrl,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      productIdeas: aiData.productIdeas,
+      pricingStrategy: aiData.pricingStrategy,
+      launchTimeline: aiData.launchTimeline,
+      expertise: aiData.expertise,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('digitalProductHistory').add(historyData);
+    await incrementUsage(uid, 'digitalProductArchitect');
+    await logUsage(uid, 'digital_product_architect', { channelUrl, subscribers: subscriberCount });
+
+    return {
+      success: true,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      productIdeas: aiData.productIdeas,
+      pricingStrategy: aiData.pricingStrategy,
+      launchTimeline: aiData.launchTimeline,
+      expertise: aiData.expertise
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Digital product architect error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze digital products.');
+  }
+});
+
+// ============================================================
+// AFFILIATE GOLDMINE FINDER
+// Finds affiliate programs matching channel's niche
+// ============================================================
+exports.analyzeAffiliate = functions.https.onCall(async (data, context) => {
+  // Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
+  const uid = context.auth.uid;
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required.');
+  }
+
+  try {
+    // Extract channel ID
+    const channelId = await extractChannelId(channelUrl);
+    if (!channelId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
+    }
+
+    // Fetch channel data
+    const channelResponse = await youtube.channels.list({
+      part: 'snippet,statistics,topicDetails',
+      id: channelId
+    });
+
+    if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found.');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelName = channel.snippet.title;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+    const channelDescription = channel.snippet.description || '';
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const viewCount = parseInt(channel.statistics.viewCount) || 0;
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Get popular videos
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'viewCount',
+      maxResults: 15
+    });
+
+    const videoTitles = videosResponse.data.items?.map(v => v.snippet.title).join(', ') || '';
+
+    // Determine niche
+    let niche = 'General';
+    const nicheKeywords = ['Finance', 'Technology', 'Gaming', 'Education', 'Lifestyle', 'Beauty', 'Health', 'Food', 'Travel', 'Entertainment', 'Business', 'Fitness'];
+    for (const topic of topicCategories) {
+      for (const keyword of nicheKeywords) {
+        if (topic.toLowerCase().includes(keyword.toLowerCase())) {
+          niche = keyword;
+          break;
+        }
+      }
+    }
+
+    // Use AI to find affiliate opportunities
+    const prompt = `You are an affiliate marketing expert. Analyze this YouTube channel and find the best affiliate opportunities:
+
+Channel: ${channelName}
+Subscribers: ${subscriberCount.toLocaleString()}
+Total Views: ${viewCount.toLocaleString()}
+Niche: ${niche}
+Description: ${channelDescription.slice(0, 300)}
+Popular videos: ${videoTitles.slice(0, 500)}
+
+Create a comprehensive affiliate strategy:
+1. 6 affiliate programs perfectly matched to this channel
+2. Scripts for naturally mentioning affiliate products
+3. Earnings breakdown projection
+4. Best placement strategies
+
+Return as JSON:
+{
+  "affiliatePrograms": [
+    {
+      "icon": "emoji",
+      "name": "Program/Company name",
+      "network": "Amazon/ShareASale/Impact/Direct/etc",
+      "commission": "X% or $XX per sale",
+      "cookieDuration": "XX days",
+      "avgOrderValue": "$XXX",
+      "estimatedEarnings": "$X,XXX/month",
+      "fitScore": 95,
+      "signupUrl": "General signup info",
+      "whyItFits": "Why this is perfect for this channel"
+    }
+  ],
+  "placementScripts": [
+    {
+      "type": "Intro/Mid-roll/Outro/Description",
+      "script": "Natural-sounding script to mention the product",
+      "duration": "XX seconds",
+      "tips": "How to make it more effective"
+    }
+  ],
+  "earningsBreakdown": {
+    "monthly": {
+      "conservative": "$X,XXX",
+      "moderate": "$X,XXX",
+      "optimistic": "$XX,XXX"
+    },
+    "perVideo": {
+      "conservative": "$XXX",
+      "moderate": "$XXX",
+      "optimistic": "$X,XXX"
+    },
+    "assumptions": "What these projections are based on"
+  },
+  "placementStrategy": [
+    {
+      "location": "Where in video",
+      "effectiveness": "High/Medium/Low",
+      "conversionRate": "X.X%",
+      "tips": "Best practices"
+    }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 2000
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      aiData = {
+        affiliatePrograms: [
+          { icon: '🛒', name: 'Amazon Associates', network: 'Amazon', commission: '1-10%', cookieDuration: '24 hours', avgOrderValue: '$50', estimatedEarnings: '$500/month', fitScore: 85, signupUrl: 'affiliate-program.amazon.com', whyItFits: 'Universal appeal for any niche' }
+        ],
+        placementScripts: [
+          { type: 'Mid-roll', script: 'Speaking of which, I use [Product] for this and you can check it out in the description below.', duration: '10 seconds', tips: 'Keep it natural and brief' }
+        ],
+        earningsBreakdown: {
+          monthly: { conservative: '$300', moderate: '$800', optimistic: '$2,000' },
+          perVideo: { conservative: '$30', moderate: '$80', optimistic: '$200' },
+          assumptions: 'Based on current subscriber count and typical conversion rates'
+        },
+        placementStrategy: [
+          { location: 'Video description', effectiveness: 'High', conversionRate: '2.5%', tips: 'Put link above the fold' }
+        ]
+      };
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'affiliate',
+      channelUrl,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      affiliatePrograms: aiData.affiliatePrograms,
+      placementScripts: aiData.placementScripts,
+      earningsBreakdown: aiData.earningsBreakdown,
+      placementStrategy: aiData.placementStrategy,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('affiliateHistory').add(historyData);
+    await incrementUsage(uid, 'affiliateFinder');
+    await logUsage(uid, 'affiliate_finder', { channelUrl, subscribers: subscriberCount });
+
+    return {
+      success: true,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      affiliatePrograms: aiData.affiliatePrograms,
+      placementScripts: aiData.placementScripts,
+      earningsBreakdown: aiData.earningsBreakdown,
+      placementStrategy: aiData.placementStrategy
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Affiliate finder error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to find affiliate opportunities.');
+  }
+});
+
+// ============================================================
+// VIDEO-TO-MULTI-INCOME CONVERTER
+// Analyzes a video to create multiple content pieces for various platforms
+// ============================================================
+exports.analyzeMultiIncome = functions.https.onCall(async (data, context) => {
+  // Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
+  const uid = context.auth.uid;
+
+  const { videoUrl } = data;
+  if (!videoUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video URL is required.');
+  }
+
+  try {
+    // Extract video ID
+    const videoId = extractVideoId(videoUrl);
+    if (!videoId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube video URL.');
+    }
+
+    // Fetch video data
+    const videoResponse = await youtube.videos.list({
+      part: 'snippet,statistics,contentDetails',
+      id: videoId
+    });
+
+    if (!videoResponse.data.items || videoResponse.data.items.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'Video not found.');
+    }
+
+    const video = videoResponse.data.items[0];
+    const videoTitle = video.snippet.title;
+    const videoThumbnail = video.snippet.thumbnails?.maxres?.url || video.snippet.thumbnails?.high?.url || video.snippet.thumbnails?.medium?.url;
+    const videoDescription = video.snippet.description || '';
+    const viewCount = parseInt(video.statistics.viewCount) || 0;
+    const likeCount = parseInt(video.statistics.likeCount) || 0;
+    const channelTitle = video.snippet.channelTitle;
+    const duration = video.contentDetails.duration;
+    const tags = video.snippet.tags?.slice(0, 10).join(', ') || '';
+
+    // Parse duration
+    const durationMatch = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    const hours = parseInt(durationMatch?.[1] || 0);
+    const minutes = parseInt(durationMatch?.[2] || 0);
+    const seconds = parseInt(durationMatch?.[3] || 0);
+    const totalMinutes = hours * 60 + minutes + Math.round(seconds / 60);
+
+    // Use AI to create multi-platform content strategy
+    const prompt = `You are a content repurposing expert. Analyze this YouTube video and create a comprehensive multi-platform income strategy:
+
+Video: ${videoTitle}
+Channel: ${channelTitle}
+Views: ${viewCount.toLocaleString()}
+Likes: ${likeCount.toLocaleString()}
+Duration: ${totalMinutes} minutes
+Description: ${videoDescription.slice(0, 400)}
+Tags: ${tags}
+
+Create a strategy to repurpose this video into multiple income streams:
+1. 6 content pieces for different platforms
+2. Distribution strategy across platforms
+3. Revenue potential for each platform
+4. Step-by-step action items
+
+Return as JSON:
+{
+  "contentPieces": [
+    {
+      "icon": "emoji",
+      "platform": "Platform name",
+      "contentType": "Short/Article/Thread/Post/etc",
+      "title": "Suggested title or hook",
+      "description": "What this content would be",
+      "estimatedReach": "X,XXX-XX,XXX",
+      "timeToCreate": "X hours",
+      "monetization": "How to monetize this"
+    }
+  ],
+  "distributionStrategy": {
+    "immediate": ["Platform 1", "Platform 2"],
+    "within24Hours": ["Platform 3", "Platform 4"],
+    "withinWeek": ["Platform 5", "Platform 6"],
+    "schedule": "Recommended posting schedule"
+  },
+  "revenuePotential": [
+    {
+      "platform": "Platform name",
+      "monthlyPotential": "$XXX-$X,XXX",
+      "revenueType": "Ads/Affiliate/Sponsorship/etc",
+      "requirements": "What's needed to monetize"
+    }
+  ],
+  "actionItems": [
+    {
+      "step": 1,
+      "action": "What to do",
+      "timeRequired": "X hours",
+      "tools": "Tools needed",
+      "priority": "High/Medium/Low"
+    }
+  ],
+  "summary": {
+    "totalPotentialRevenue": "$X,XXX/month",
+    "totalTimeInvestment": "X hours",
+    "quickestWin": "Platform/content that can generate income fastest"
+  }
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 2000
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      aiData = {
+        contentPieces: [
+          { icon: '📱', platform: 'TikTok', contentType: 'Short', title: 'Key moment highlight', description: 'Extract the most engaging 60 seconds', estimatedReach: '5,000-50,000', timeToCreate: '1 hour', monetization: 'Creator fund + affiliate links' }
+        ],
+        distributionStrategy: {
+          immediate: ['YouTube Shorts', 'TikTok'],
+          within24Hours: ['Instagram Reels', 'Twitter'],
+          withinWeek: ['LinkedIn Article', 'Blog Post'],
+          schedule: 'Post shorts immediately, long-form content within a week'
+        },
+        revenuePotential: [
+          { platform: 'TikTok', monthlyPotential: '$100-$500', revenueType: 'Creator Fund', requirements: '10K followers' }
+        ],
+        actionItems: [
+          { step: 1, action: 'Extract key clips', timeRequired: '2 hours', tools: 'Video editor', priority: 'High' }
+        ],
+        summary: {
+          totalPotentialRevenue: '$500-$2,000/month',
+          totalTimeInvestment: '10 hours',
+          quickestWin: 'YouTube Shorts from existing content'
+        }
+      };
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'multiincome',
+      videoUrl,
+      videoId,
+      videoTitle,
+      videoThumbnail,
+      channelTitle,
+      views: viewCount,
+      duration: totalMinutes,
+      contentPieces: aiData.contentPieces,
+      distributionStrategy: aiData.distributionStrategy,
+      revenuePotential: aiData.revenuePotential,
+      actionItems: aiData.actionItems,
+      summary: aiData.summary,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('multiIncomeHistory').add(historyData);
+    await incrementUsage(uid, 'multiIncomeConverter');
+    await logUsage(uid, 'multi_income_converter', { videoUrl, views: viewCount });
+
+    return {
+      success: true,
+      videoTitle,
+      videoThumbnail,
+      channelTitle,
+      views: viewCount,
+      duration: totalMinutes,
+      contentPieces: aiData.contentPieces,
+      distributionStrategy: aiData.distributionStrategy,
+      revenuePotential: aiData.revenuePotential,
+      actionItems: aiData.actionItems,
+      summary: aiData.summary
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Multi-income converter error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze video for income streams.');
   }
 });

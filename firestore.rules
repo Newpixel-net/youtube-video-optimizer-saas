@@ -527,6 +527,51 @@ service cloud.firestore {
     }
 
     // ============================================
+    // ENTERPRISE SUITE - DIGITAL PRODUCT HISTORY
+    // ============================================
+
+    match /digitalProductHistory/{historyId} {
+      // Users can read their own digital product history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // ENTERPRISE SUITE - AFFILIATE HISTORY
+    // ============================================
+
+    match /affiliateHistory/{historyId} {
+      // Users can read their own affiliate finder history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // ENTERPRISE SUITE - MULTI-INCOME HISTORY
+    // ============================================
+
+    match /multiIncomeHistory/{historyId} {
+      // Users can read their own multi-income converter history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
     // TOKEN TRANSACTIONS
     // ============================================
 
