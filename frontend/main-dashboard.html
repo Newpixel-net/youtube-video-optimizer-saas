@@ -3276,6 +3276,40 @@
         });
 
         /* ==========================================
+           4.4.1 Toast Notifications
+           ========================================== */
+        function showToast(message, type) {
+            type = type || 'info';
+            var toast = document.createElement('div');
+            toast.className = 'toast-notification toast-' + type;
+            toast.textContent = message;
+
+            // Apply styles inline for simplicity
+            toast.style.cssText = 'position:fixed;bottom:20px;right:20px;padding:12px 24px;border-radius:8px;color:#fff;font-size:14px;font-weight:500;z-index:100000;opacity:0;transition:opacity 0.3s ease;box-shadow:0 4px 12px rgba(0,0,0,0.3);max-width:350px;';
+
+            if (type === 'success') {
+                toast.style.backgroundColor = '#10b981';
+            } else if (type === 'error') {
+                toast.style.backgroundColor = '#ef4444';
+            } else {
+                toast.style.backgroundColor = '#6366f1';
+            }
+
+            document.body.appendChild(toast);
+
+            // Trigger animation
+            setTimeout(function() { toast.style.opacity = '1'; }, 10);
+
+            // Auto remove
+            setTimeout(function() {
+                toast.style.opacity = '0';
+                setTimeout(function() {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                }, 300);
+            }, type === 'error' ? 5000 : 3000);
+        }
+
+        /* ==========================================
            4.5 APP ACTIONS (Global)
            ========================================== */
 
