@@ -31,8 +31,8 @@
     <meta name="mobile-web-app-capable" content="yes">
     <title>YouTube Video Optimizer</title>
 
-    <!-- PWA Manifest & Theme -->
-    <link rel="manifest" href="/manifest.json">
+    <!-- PWA Manifest & Theme (Inline - no external file needed) -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"YouTube Video Optimizer","short_name":"YT Optimizer","description":"AI-powered YouTube video optimization and campaign analysis platform","start_url":"/main-dashboard.html","display":"standalone","background_color":"#0f172a","theme_color":"#7c3aed","orientation":"portrait-primary","icons":[{"src":"https://ytseo.siteuo.com/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"https://ytseo.siteuo.com/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}],"categories":["productivity","business","utilities"],"lang":"en","dir":"ltr"}'>
     <meta name="theme-color" content="#7c3aed">
 
     <!-- ============================================
@@ -11090,15 +11090,71 @@
     </button>
 
     <script>
-    // Service Worker Registration
+    // Service Worker Registration (Inline - no external file needed)
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js')
+            // Inline service worker code
+            const swCode = `
+                const CACHE_NAME = 'yt-optimizer-v1';
+
+                self.addEventListener('install', (event) => {
+                    console.log('Service Worker: Installing...');
+                    self.skipWaiting();
+                });
+
+                self.addEventListener('activate', (event) => {
+                    console.log('Service Worker: Activated');
+                    event.waitUntil(
+                        caches.keys().then((cacheNames) => {
+                            return Promise.all(
+                                cacheNames.map((cache) => {
+                                    if (cache !== CACHE_NAME) {
+                                        return caches.delete(cache);
+                                    }
+                                })
+                            );
+                        })
+                    );
+                    return self.clients.claim();
+                });
+
+                self.addEventListener('fetch', (event) => {
+                    if (event.request.method !== 'GET' ||
+                        event.request.url.startsWith('chrome-extension://')) {
+                        return;
+                    }
+                    event.respondWith(
+                        fetch(event.request)
+                            .then((response) => {
+                                const responseClone = response.clone();
+                                caches.open(CACHE_NAME).then((cache) => {
+                                    cache.put(event.request, responseClone);
+                                });
+                                return response;
+                            })
+                            .catch(() => caches.match(event.request))
+                    );
+                });
+            `;
+
+            // Create blob and register service worker
+            const blob = new Blob([swCode], { type: 'application/javascript' });
+            const swUrl = URL.createObjectURL(blob);
+
+            navigator.serviceWorker.register(swUrl, { scope: '/' })
                 .then(function(registration) {
                     console.log('ServiceWorker registered:', registration.scope);
                 })
                 .catch(function(err) {
                     console.log('ServiceWorker registration failed:', err);
+                    // Fallback: Try registering from /sw.js if blob fails
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(function(reg) {
+                            console.log('ServiceWorker fallback registered:', reg.scope);
+                        })
+                        .catch(function(e) {
+                            console.log('ServiceWorker fallback also failed:', e);
+                        });
                 });
         });
     }
