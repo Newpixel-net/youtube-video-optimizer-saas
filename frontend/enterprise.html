@@ -179,7 +179,6 @@
             padding: 1rem;
             background: rgba(0, 0, 0, 0.3);
             border-radius: 1rem;
-            margin-bottom: 1.5rem;
         }
 
         .tool-tab {
@@ -552,14 +551,75 @@
         }
 
         /* ------------------------------------------
-           2.13 RESPONSIVE - MOBILE 2-COLUMN GRID
+           2.13 RESPONSIVE - MOBILE SCROLLABLE GRID
            ------------------------------------------ */
+
+        /* Container for scrollable tool tabs - Desktop (no constraints) */
+        .tool-tabs-container {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+
+        .tool-tabs-fade {
+            display: none;
+        }
+
+        /* Mobile: Scrollable 2-column grid */
         @media (max-width: 768px) {
+            .tool-tabs-container {
+                position: relative;
+                margin-bottom: 1rem;
+            }
+
             .tool-tabs {
                 display: grid;
                 grid-template-columns: repeat(2, 1fr);
                 gap: 0.5rem;
                 padding: 0.75rem;
+                padding-bottom: 1rem;
+
+                /* Scrollable container */
+                max-height: 280px;
+                overflow-y: auto;
+                overflow-x: hidden;
+                scroll-behavior: smooth;
+                -webkit-overflow-scrolling: touch;
+
+                /* Modern scrollbar styling */
+                scrollbar-width: thin;
+                scrollbar-color: rgba(255, 215, 0, 0.3) transparent;
+            }
+
+            /* Webkit scrollbar styling */
+            .tool-tabs::-webkit-scrollbar {
+                width: 4px;
+            }
+
+            .tool-tabs::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            .tool-tabs::-webkit-scrollbar-thumb {
+                background: rgba(255, 215, 0, 0.3);
+                border-radius: 4px;
+            }
+
+            .tool-tabs::-webkit-scrollbar-thumb:hover {
+                background: rgba(255, 215, 0, 0.5);
+            }
+
+            /* Fade gradient at bottom to indicate more content */
+            .tool-tabs-fade {
+                display: block;
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 40px;
+                background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+                pointer-events: none;
+                border-radius: 0 0 1rem 1rem;
+                z-index: 5;
             }
 
             .tool-tab {
@@ -591,8 +651,10 @@
         /* Extra small screens - even more compact */
         @media (max-width: 380px) {
             .tool-tabs {
+                max-height: 240px;
                 gap: 0.35rem;
                 padding: 0.5rem;
+                padding-bottom: 0.75rem;
             }
 
             .tool-tab {
@@ -605,6 +667,10 @@
 
             .tool-tab-name {
                 font-size: 0.65rem;
+            }
+
+            .tool-tabs-fade {
+                height: 30px;
             }
         }
 
@@ -2861,8 +2927,9 @@
             html += '</button>';
             html += '</div>';
 
-            // Tool tabs
-            html += '<div class="tool-tabs fade-in">';
+            // Tool tabs with scrollable container
+            html += '<div class="tool-tabs-container fade-in">';
+            html += '<div class="tool-tabs">';
 
             var tools = [
                 { key: 'bulk', icon: '🎯', name: 'Bulk Optimizer' },
@@ -2891,6 +2958,8 @@
                 html += '</div>';
             }
 
+            html += '</div>';
+            html += '<div class="tool-tabs-fade"></div>';
             html += '</div>';
 
             // Error message
