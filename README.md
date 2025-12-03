@@ -426,3 +426,70 @@ If you encounter issues:
 4. Check OpenAI account has available credits
 
 **Ready to test?** Let's run a test deployment next! 🚀
+
+---
+
+## 📱 PWA Install Button (Add to Home Screen)
+
+The platform includes a PWA install button for adding the app to the home screen. The manifest and service worker are inlined directly in the HTML files for compatibility with website builders that don't allow file uploads.
+
+### If using Firebase Hosting (optional enhancement)
+
+If you want better PWA support and have access to upload files, you can optionally add:
+
+1. **Upload `sw.js` to your website root** - This enables proper caching and the native install prompt:
+
+```javascript
+// sw.js - place at root of your domain (e.g., https://yourdomain.com/sw.js)
+const CACHE_NAME = 'yt-optimizer-v1';
+
+self.addEventListener('install', (event) => {
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        caches.keys().then((cacheNames) => {
+            return Promise.all(
+                cacheNames.map((cache) => {
+                    if (cache !== CACHE_NAME) {
+                        return caches.delete(cache);
+                    }
+                })
+            );
+        })
+    );
+    return self.clients.claim();
+});
+
+self.addEventListener('fetch', (event) => {
+    if (event.request.method !== 'GET' ||
+        event.request.url.startsWith('chrome-extension://')) {
+        return;
+    }
+    event.respondWith(
+        fetch(event.request)
+            .then((response) => {
+                const responseClone = response.clone();
+                caches.open(CACHE_NAME).then((cache) => {
+                    cache.put(event.request, responseClone);
+                });
+                return response;
+            })
+            .catch(() => caches.match(event.request))
+    );
+});
+```
+
+2. **PWA Install Button Requirements**:
+   - Service worker must be at root level (`/sw.js`) for full functionality
+   - The inline code in HTML files will try to register the sw.js as a fallback
+   - The install button only appears when Chrome's `beforeinstallprompt` event fires
+
+### Troubleshooting PWA Install Button
+
+If the install button doesn't appear:
+- Ensure your site is served over HTTPS
+- Check DevTools → Application → Service Workers for registration status
+- The service worker file (`sw.js`) must be accessible at the root of your domain
+- Try incognito mode to avoid cached service worker issues
