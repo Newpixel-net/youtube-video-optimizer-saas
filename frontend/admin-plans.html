@@ -706,6 +706,27 @@
         .user-menu-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 9999px; color: white; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
         .user-menu-btn:hover { background: rgba(255, 255, 255, 0.15); }
 
+        /* Global header mobile responsive */
+        @media (max-width: 768px) {
+            .global-header { right: 1rem; top: 0.5rem; }
+            .global-header-content { gap: 0.4rem; }
+            .plan-badge { padding: 0.35rem 0.5rem; font-size: 0.7rem; gap: 0.25rem; }
+            .plan-badge span:last-child { display: none; }
+            .notification-bell { width: 32px; height: 32px; }
+            .notification-bell span { font-size: 1rem !important; }
+            .user-menu-btn { padding: 0.35rem 0.6rem; font-size: 0.7rem; }
+            .notification-dropdown { position: fixed; top: 50px; right: 0.5rem; left: 0.5rem; width: auto; max-width: 360px; margin-left: auto; }
+        }
+        @media (max-width: 480px) {
+            .global-header { right: 0.5rem; top: 0.35rem; }
+            .global-header-content { gap: 0.3rem; }
+            .plan-badge { padding: 0.25rem 0.4rem; }
+            .notification-bell { width: 28px; height: 28px; }
+            .user-menu-btn { width: 28px; height: 28px; padding: 0; justify-content: center; border-radius: 50%; font-size: 0; }
+            .user-menu-btn::before { content: '⏻'; font-size: 0.85rem; }
+            .notification-dropdown { top: 45px; }
+        }
+
         /* Toast Notifications */
         .toast {
             position: fixed;
