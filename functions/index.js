@@ -5568,11 +5568,14 @@ ${negativePrompt}`;
       console.log(`Generating ${imageCount} thumbnail(s) with Imagen 4`);
 
       // Build enhanced Imagen prompt with composition and quality guidance
+      // Note: Imagen 4 doesn't support negativePrompt parameter, so we include it in the prompt text
       const imagenEnhancedPrompt = `${imagePrompt}
 
 COMPOSITION: ${compositionGuide.prompt}
 STYLE: ${styleEnhancement}
-FORMAT: YouTube thumbnail, 16:9 aspect ratio, 4K quality, professional photography, high contrast, vibrant colors optimized for small preview sizes.`;
+FORMAT: YouTube thumbnail, 16:9 aspect ratio, 4K quality, professional photography, high contrast, vibrant colors optimized for small preview sizes.
+
+AVOID: ${negativePrompt}`;
 
       try {
         const result = await ai.models.generateImages({
@@ -5581,8 +5584,6 @@ FORMAT: YouTube thumbnail, 16:9 aspect ratio, 4K quality, professional photograp
           config: {
             numberOfImages: imageCount,
             aspectRatio: '16:9',
-            negativePrompt: negativePrompt,
-            includeRaiReason: true,
             personGeneration: 'allow_adult'
           }
         });
