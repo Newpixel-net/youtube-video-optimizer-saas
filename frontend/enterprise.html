@@ -1300,6 +1300,111 @@
                 window.location.href = 'https://ytseo.siteuo.com/video-optimizer';
             },
 
+            signOut: function() {
+                auth.signOut().then(function() {
+                    window.location.href = '/video-optimizer';
+                });
+            },
+
+            // Unified Notifications
+            loadUserNotifications: function() {
+                state.userNotificationsLoading = true;
+                render();
+                functions.httpsCallable('userGetNotifications')({ limit: 20 })
+                    .then(function(result) {
+                        state.userNotifications = {
+                            notifications: result.data.notifications || [],
+                            unreadCount: result.data.unreadCount || 0
+                        };
+                        state.userNotificationsLoading = false;
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading notifications:', error);
+                        state.userNotificationsLoading = false;
+                        render();
+                    });
+            },
+
+            toggleNotifications: function() {
+                state.showNotifications = !state.showNotifications;
+                if (state.showNotifications && !state.userNotifications) {
+                    this.loadUserNotifications();
+                }
+                render();
+            },
+
+            closeNotifications: function() {
+                if (state.showNotifications) {
+                    state.showNotifications = false;
+                    render();
+                }
+            },
+
+            setNotificationTab: function(tab) {
+                state.notificationTab = tab;
+                if (tab === 'alerts' && !state.userNotifications && !state.userNotificationsLoading) {
+                    this.loadUserNotifications();
+                }
+                render();
+            },
+
+            markAllReportNotificationsRead: function() {
+                functions.httpsCallable('markNotificationRead')({ markAll: true })
+                    .then(function() {
+                        state.notifications = [];
+                        state.unreadCount = 0;
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error marking reports read:', error);
+                    });
+            },
+
+            markAllAlertNotificationsRead: function() {
+                functions.httpsCallable('userMarkNotificationRead')({ markAllRead: true })
+                    .then(function() {
+                        if (state.userNotifications) {
+                            state.userNotifications.notifications.forEach(function(n) { n.read = true; });
+                            state.userNotifications.unreadCount = 0;
+                        }
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error marking alerts read:', error);
+                    });
+            },
+
+            handleAlertNotificationClick: function(notificationId) {
+                functions.httpsCallable('userMarkNotificationRead')({ notificationId: notificationId })
+                    .then(function() {
+                        if (state.userNotifications) {
+                            var notif = state.userNotifications.notifications.find(function(n) { return n.id === notificationId; });
+                            if (notif && !notif.read) {
+                                notif.read = true;
+                                state.userNotifications.unreadCount = Math.max(0, state.userNotifications.unreadCount - 1);
+                            }
+                        }
+                        render();
+                    })
+                    .catch(function(error) {
+                        console.error('Error marking alert read:', error);
+                    });
+            },
+
+            openNotificationReport: function(reportId, notificationId) {
+                functions.httpsCallable('markNotificationRead')({ notificationId: notificationId })
+                    .then(function() {
+                        state.notifications = state.notifications.filter(function(n) { return n.id !== notificationId; });
+                        state.unreadCount = Math.max(0, state.unreadCount - 1);
+                        state.showNotifications = false;
+                        window.location.href = '/video-optimizer?view=report&id=' + reportId;
+                    })
+                    .catch(function(error) {
+                        console.error('Error opening report:', error);
+                    });
+            },
+
             setActiveTool: function(tool) {
                 state.activeTool = tool;
                 state.toolViewMode = 'grid'; // Switch to grid mode when selecting a tool
@@ -2645,18 +2750,79 @@
            4.6 RENDER FUNCTIONS
            ========================================== */
 
+        // Global Header render function (Enterprise Gold Theme)
+        function renderGlobalHeader() {
+            if (!state.user) return '';
+
+            var html = '';
+            if (state.showNotifications) {
+                html += '<div class="notification-overlay" onclick="app.closeNotifications()"></div>';
+            }
+
+            var reportUnread = state.unreadCount || 0;
+            var alertUnread = (state.userNotifications && state.userNotifications.unreadCount) || 0;
+            var totalUnread = reportUnread + alertUnread;
+            var planName = (state.userPlan || 'free').charAt(0).toUpperCase() + (state.userPlan || 'free').slice(1);
+
+            html += '<div class="global-header">';
+            html += '<div class="global-header-content">';
+            html += '<div class="plan-badge"><span>👑</span><span>' + planName + '</span></div>';
+            html += '<div class="notification-bell" onclick="event.stopPropagation(); app.toggleNotifications()">';
+            html += '<span style="font-size:1.25rem;">🔔</span>';
+            if (totalUnread > 0) {
+                html += '<span class="notification-badge">' + (totalUnread > 99 ? '99+' : totalUnread) + '</span>';
+            }
+            if (state.showNotifications) {
+                html += '<div class="notification-dropdown" onclick="event.stopPropagation()">';
+                html += '<div class="notification-tabs">';
+                html += '<button onclick="app.setNotificationTab(\'reports\')" class="notification-tab ' + (state.notificationTab === 'reports' ? 'active' : '') + '"><span>📊</span> Reports' + (reportUnread > 0 ? '<span class="notification-tab-badge">' + reportUnread + '</span>' : '') + '</button>';
+                html += '<button onclick="app.setNotificationTab(\'alerts\')" class="notification-tab ' + (state.notificationTab === 'alerts' ? 'active' : '') + '"><span>🔔</span> Alerts' + (alertUnread > 0 ? '<span class="notification-tab-badge">' + alertUnread + '</span>' : '') + '</button>';
+                html += '</div>';
+                html += '<div class="notification-list">';
+                if (state.notificationTab === 'reports') {
+                    if (state.notifications.length > 0) {
+                        state.notifications.forEach(function(n) {
+                            html += '<div class="notification-item" onclick="app.openNotificationReport(\'' + n.reportId + '\', \'' + n.id + '\')"><div style="display:flex;gap:0.75rem;"><span style="font-size:1.5rem;">📊</span><div><div style="font-weight:600;color:white;font-size:0.875rem;">' + (n.title || 'New Report') + '</div><div style="font-size:0.75rem;color:rgba(255,255,255,0.6);">' + (n.message || '') + '</div></div></div></div>';
+                        });
+                    } else {
+                        html += '<div class="notification-empty"><div style="font-size:2.5rem;opacity:0.5;">📊</div><p style="color:rgba(255,255,255,0.6);font-size:0.875rem;">No campaign reports</p></div>';
+                    }
+                } else {
+                    var alerts = (state.userNotifications && state.userNotifications.notifications) || [];
+                    if (state.userNotificationsLoading) {
+                        html += '<div class="notification-empty"><div class="loading-spinner" style="width:24px;height:24px;margin:0 auto 0.5rem;"></div><p style="color:rgba(255,255,255,0.6);">Loading...</p></div>';
+                    } else if (alerts.length > 0) {
+                        alerts.forEach(function(n) {
+                            var icon = n.type === 'request_approved' ? '🎉' : n.type === 'request_denied' ? '❌' : '📢';
+                            html += '<div class="notification-item" style="' + (n.read ? '' : 'background:rgba(255,215,0,0.1);') + '" onclick="app.handleAlertNotificationClick(\'' + n.id + '\')"><div style="display:flex;gap:0.75rem;"><span style="font-size:1.5rem;">' + icon + '</span><div><div style="font-weight:600;color:white;font-size:0.875rem;">' + (n.title || 'Alert') + '</div><div style="font-size:0.75rem;color:rgba(255,255,255,0.6);">' + (n.message || '') + '</div></div></div></div>';
+                        });
+                    } else {
+                        html += '<div class="notification-empty"><div style="font-size:2.5rem;opacity:0.5;">✨</div><p style="color:rgba(255,255,255,0.6);font-size:0.875rem;">No alerts</p></div>';
+                    }
+                }
+                html += '</div></div>';
+            }
+            html += '</div>';
+            html += '<button onclick="app.signOut()" class="user-menu-btn">Sign Out</button>';
+            html += '</div></div>';
+            return html;
+        }
+
         // Main render dispatcher
         function render() {
             var root = document.getElementById('app-root');
+            var html = '';
 
             if (state.currentView === 'loading') {
-                root.innerHTML = renderLoading();
+                html = renderLoading();
             } else if (state.currentView === 'history') {
-                root.innerHTML = renderHistory() + renderUpgradeModal() + renderCommandPalette();
+                html = renderHistory() + renderUpgradeModal() + renderCommandPalette() + renderGlobalHeader();
             } else {
-                // Always show tools, add upgrade modal, command palette, and FAB
-                root.innerHTML = renderTools() + renderUpgradeModal() + renderCommandPalette() + renderFloatingSearchButton();
+                // Always show tools, add upgrade modal, command palette, FAB, and global header
+                html = renderTools() + renderUpgradeModal() + renderCommandPalette() + renderFloatingSearchButton() + renderGlobalHeader();
             }
+
+            root.innerHTML = html;
         }
 
         // Loading view
@@ -5477,10 +5643,18 @@
            4.7 AUTHENTICATION & INITIALIZATION
            ========================================== */
 
+        // Notification listener reference
+        var notificationUnsubscribe = null;
+
         // Check user access
         function checkAccess() {
             auth.onAuthStateChanged(function(user) {
                 if (!user) {
+                    // Cleanup notification listener
+                    if (notificationUnsubscribe) {
+                        notificationUnsubscribe();
+                        notificationUnsubscribe = null;
+                    }
                     // Not logged in - redirect to dashboard
                     window.location.href = 'https://ytseo.siteuo.com/video-optimizer';
                     return;
@@ -5488,8 +5662,28 @@
 
                 state.user = user;
 
-                // Get user profile to check plan
+                // Setup real-time notification listener
                 var db = firebase.firestore();
+                if (notificationUnsubscribe) notificationUnsubscribe();
+                notificationUnsubscribe = db.collection('userNotifications')
+                    .where('userId', '==', user.uid)
+                    .where('type', '==', 'new_report')
+                    .where('read', '==', false)
+                    .orderBy('createdAt', 'desc')
+                    .limit(20)
+                    .onSnapshot(function(snapshot) {
+                        state.notifications = [];
+                        state.unreadCount = 0;
+                        snapshot.forEach(function(doc) {
+                            state.notifications.push({ id: doc.id, ...doc.data() });
+                            state.unreadCount++;
+                        });
+                        render();
+                    }, function(error) {
+                        console.error('Notification listener error:', error);
+                    });
+
+                // Get user profile to check plan
                 db.collection('users').doc(user.uid).get()
                     .then(function(doc) {
                         if (doc.exists) {
