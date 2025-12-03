@@ -572,6 +572,51 @@ service cloud.firestore {
     }
 
     // ============================================
+    // ENTERPRISE SUITE - BRAND DEAL HISTORY
+    // ============================================
+
+    match /brandDealHistory/{historyId} {
+      // Users can read their own brand deal history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // ENTERPRISE SUITE - LICENSING HISTORY
+    // ============================================
+
+    match /licensingHistory/{historyId} {
+      // Users can read their own licensing scout history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // ENTERPRISE SUITE - AUTOMATION HISTORY
+    // ============================================
+
+    match /automationHistory/{historyId} {
+      // Users can read their own automation pipeline history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
     // TOKEN TRANSACTIONS
     // ============================================
 

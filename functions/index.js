@@ -6131,7 +6131,8 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       optimizationsSnap, competitorSnap, trendSnap, thumbnailSnap,
       placementSnap, channelAuditSnap, viralSnap, monetizationSnap, scriptSnap,
       sponsorshipSnap, diversificationSnap, cpmBoosterSnap, audienceProfileSnap,
-      digitalProductSnap, affiliateSnap, multiIncomeSnap
+      digitalProductSnap, affiliateSnap, multiIncomeSnap,
+      brandDealSnap, licensingSnap, automationSnap
     ] = await Promise.all([
       safeQuery('optimizations'),
       safeQuery('competitorHistory'),
@@ -6151,7 +6152,11 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       // Enterprise monetization tools - Phase 2
       safeQuery('digitalProductHistory'),
       safeQuery('affiliateHistory'),
-      safeQuery('multiIncomeHistory')
+      safeQuery('multiIncomeHistory'),
+      // Enterprise monetization tools - Phase 3
+      safeQuery('brandDealHistory'),
+      safeQuery('licensingHistory'),
+      safeQuery('automationHistory')
     ]);
 
     // Safe timestamp handler - handles various Firestore timestamp formats
@@ -6223,7 +6228,11 @@ exports.getAllHistory = functions.https.onCall(async (data, context) => {
       // Enterprise monetization tools - Phase 2
       ...formatHistory(digitalProductSnap, 'digitalproduct'),
       ...formatHistory(affiliateSnap, 'affiliate'),
-      ...formatHistory(multiIncomeSnap, 'multiincome')
+      ...formatHistory(multiIncomeSnap, 'multiincome'),
+      // Enterprise monetization tools - Phase 3
+      ...formatHistory(brandDealSnap, 'branddeal'),
+      ...formatHistory(licensingSnap, 'licensing'),
+      ...formatHistory(automationSnap, 'automation')
     ];
 
     // Sort by timestamp descending
@@ -14720,5 +14729,533 @@ Return as JSON:
     if (error instanceof functions.https.HttpsError) throw error;
     console.error('Multi-income converter error:', error);
     throw new functions.https.HttpsError('internal', 'Failed to analyze video for income streams.');
+  }
+});
+
+// ============================================================
+// BRAND DEAL MATCHMAKER
+// Finds brand partnership opportunities for creators
+// ============================================================
+exports.analyzeBrandDeal = functions.https.onCall(async (data, context) => {
+  // Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
+  const uid = context.auth.uid;
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required.');
+  }
+
+  try {
+    // Extract channel ID
+    const channelId = await extractChannelId(channelUrl);
+    if (!channelId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
+    }
+
+    // Fetch channel data
+    const channelResponse = await youtube.channels.list({
+      part: 'snippet,statistics,topicDetails',
+      id: channelId
+    });
+
+    if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found.');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelName = channel.snippet.title;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+    const channelDescription = channel.snippet.description || '';
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const viewCount = parseInt(channel.statistics.viewCount) || 0;
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Get popular videos
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'viewCount',
+      maxResults: 15
+    });
+
+    const videoTitles = videosResponse.data.items?.map(v => v.snippet.title).join(', ') || '';
+
+    // Determine niche
+    let niche = 'General';
+    const nicheKeywords = ['Finance', 'Technology', 'Gaming', 'Education', 'Lifestyle', 'Beauty', 'Health', 'Food', 'Travel', 'Entertainment', 'Business', 'Fitness', 'Fashion'];
+    for (const topic of topicCategories) {
+      for (const keyword of nicheKeywords) {
+        if (topic.toLowerCase().includes(keyword.toLowerCase())) {
+          niche = keyword;
+          break;
+        }
+      }
+    }
+
+    // Use AI to find brand matches
+    const prompt = `You are a brand partnership expert. Analyze this YouTube channel and find ideal brand partners:
+
+Channel: ${channelName}
+Subscribers: ${subscriberCount.toLocaleString()}
+Total Views: ${viewCount.toLocaleString()}
+Niche: ${niche}
+Description: ${channelDescription.slice(0, 300)}
+Popular videos: ${videoTitles.slice(0, 500)}
+
+Create a comprehensive brand deal strategy:
+1. 6 brands that would be perfect partners for this channel
+2. Pitch templates for outreach
+3. Negotiation tips specific to this creator's level
+
+Return as JSON:
+{
+  "matchedBrands": [
+    {
+      "icon": "emoji",
+      "name": "Brand name",
+      "industry": "Industry category",
+      "matchScore": 95,
+      "whyMatch": "Why this brand is perfect for this channel",
+      "dealRange": "$X,XXX - $XX,XXX",
+      "contactMethod": "How to reach out"
+    }
+  ],
+  "pitchTemplates": [
+    {
+      "icon": "emoji",
+      "type": "Email/DM/Cold Outreach",
+      "template": "Full pitch template text with placeholders"
+    }
+  ],
+  "negotiationTips": [
+    {
+      "title": "Tip title",
+      "description": "Detailed negotiation advice"
+    }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 2000
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      aiData = {
+        matchedBrands: [
+          { icon: '🏢', name: 'Sample Brand', industry: 'Technology', matchScore: 85, whyMatch: 'Aligned audience demographics', dealRange: '$500 - $2,000', contactMethod: 'Email marketing team' }
+        ],
+        pitchTemplates: [
+          { icon: '📧', type: 'Email', template: 'Hi [Brand],\n\nI run [Channel Name] with [X] subscribers...' }
+        ],
+        negotiationTips: [
+          { title: 'Know Your Worth', description: 'Research industry rates before negotiating' }
+        ]
+      };
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'branddeal',
+      channelUrl,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      matchedBrands: aiData.matchedBrands,
+      pitchTemplates: aiData.pitchTemplates,
+      negotiationTips: aiData.negotiationTips,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('brandDealHistory').add(historyData);
+    await incrementUsage(uid, 'brandDealMatchmaker');
+    await logUsage(uid, 'brand_deal_matchmaker', { channelUrl, subscribers: subscriberCount });
+
+    return {
+      success: true,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      matchedBrands: aiData.matchedBrands,
+      pitchTemplates: aiData.pitchTemplates,
+      negotiationTips: aiData.negotiationTips
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Brand deal matchmaker error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to find brand deals.');
+  }
+});
+
+// ============================================================
+// LICENSING & SYNDICATION SCOUT
+// Finds licensing and syndication opportunities for content
+// ============================================================
+exports.analyzeLicensing = functions.https.onCall(async (data, context) => {
+  // Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
+  const uid = context.auth.uid;
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required.');
+  }
+
+  try {
+    // Extract channel ID
+    const channelId = await extractChannelId(channelUrl);
+    if (!channelId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
+    }
+
+    // Fetch channel data
+    const channelResponse = await youtube.channels.list({
+      part: 'snippet,statistics,topicDetails',
+      id: channelId
+    });
+
+    if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found.');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelName = channel.snippet.title;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+    const channelDescription = channel.snippet.description || '';
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const videoCount = parseInt(channel.statistics.videoCount) || 0;
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Get popular videos
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'viewCount',
+      maxResults: 15
+    });
+
+    const videoTitles = videosResponse.data.items?.map(v => v.snippet.title).join(', ') || '';
+
+    // Determine niche
+    let niche = 'General';
+    const nicheKeywords = ['Finance', 'Technology', 'Gaming', 'Education', 'Lifestyle', 'Beauty', 'Health', 'Food', 'Travel', 'Entertainment', 'Business', 'News', 'Sports'];
+    for (const topic of topicCategories) {
+      for (const keyword of nicheKeywords) {
+        if (topic.toLowerCase().includes(keyword.toLowerCase())) {
+          niche = keyword;
+          break;
+        }
+      }
+    }
+
+    // Use AI to find licensing opportunities
+    const prompt = `You are a content licensing expert. Analyze this YouTube channel and find licensing/syndication opportunities:
+
+Channel: ${channelName}
+Subscribers: ${subscriberCount.toLocaleString()}
+Videos: ${videoCount}
+Niche: ${niche}
+Description: ${channelDescription.slice(0, 300)}
+Popular videos: ${videoTitles.slice(0, 500)}
+
+Create a comprehensive licensing strategy:
+1. 5 licensing opportunities for this content
+2. 4 syndication networks to join
+3. Step-by-step action plan
+
+Return as JSON:
+{
+  "opportunities": [
+    {
+      "icon": "emoji",
+      "platform": "Platform/Company name",
+      "type": "Licensing/Syndication/Compilation/Stock",
+      "description": "What this opportunity involves",
+      "potentialRevenue": "$X,XXX/month",
+      "requirements": "What's needed to qualify"
+    }
+  ],
+  "syndicationNetworks": [
+    {
+      "icon": "emoji",
+      "name": "Network name",
+      "description": "What this network does",
+      "revenueModel": "How you earn money"
+    }
+  ],
+  "actionSteps": [
+    {
+      "action": "What to do",
+      "details": "How to do it"
+    }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 2000
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      aiData = {
+        opportunities: [
+          { icon: '📺', platform: 'TV Networks', type: 'Licensing', description: 'License clips to news channels', potentialRevenue: '$500/month', requirements: 'High-quality original content' }
+        ],
+        syndicationNetworks: [
+          { icon: '🌐', name: 'Jukin Media', description: 'Viral video licensing network', revenueModel: 'Revenue share on licensed content' }
+        ],
+        actionSteps: [
+          { action: 'Register content with ID systems', details: 'Sign up for Content ID to track usage' }
+        ]
+      };
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'licensing',
+      channelUrl,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      opportunities: aiData.opportunities,
+      syndicationNetworks: aiData.syndicationNetworks,
+      actionSteps: aiData.actionSteps,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('licensingHistory').add(historyData);
+    await incrementUsage(uid, 'licensingScout');
+    await logUsage(uid, 'licensing_scout', { channelUrl, subscribers: subscriberCount });
+
+    return {
+      success: true,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      opportunities: aiData.opportunities,
+      syndicationNetworks: aiData.syndicationNetworks,
+      actionSteps: aiData.actionSteps
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Licensing scout error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to find licensing opportunities.');
+  }
+});
+
+// ============================================================
+// REVENUE AUTOMATION PIPELINE
+// Creates automated revenue systems for creators
+// ============================================================
+exports.analyzeAutomation = functions.https.onCall(async (data, context) => {
+  // Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
+  const uid = context.auth.uid;
+
+  const { channelUrl } = data;
+  if (!channelUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Channel URL is required.');
+  }
+
+  try {
+    // Extract channel ID
+    const channelId = await extractChannelId(channelUrl);
+    if (!channelId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
+    }
+
+    // Fetch channel data
+    const channelResponse = await youtube.channels.list({
+      part: 'snippet,statistics,topicDetails',
+      id: channelId
+    });
+
+    if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'Channel not found.');
+    }
+
+    const channel = channelResponse.data.items[0];
+    const channelName = channel.snippet.title;
+    const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
+    const channelDescription = channel.snippet.description || '';
+    const subscriberCount = parseInt(channel.statistics.subscriberCount) || 0;
+    const videoCount = parseInt(channel.statistics.videoCount) || 0;
+    const topicCategories = channel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
+
+    // Get recent videos
+    const videosResponse = await youtube.search.list({
+      part: 'snippet',
+      channelId: channelId,
+      type: 'video',
+      order: 'date',
+      maxResults: 10
+    });
+
+    const videoTitles = videosResponse.data.items?.map(v => v.snippet.title).join(', ') || '';
+
+    // Determine niche
+    let niche = 'General';
+    const nicheKeywords = ['Finance', 'Technology', 'Gaming', 'Education', 'Lifestyle', 'Beauty', 'Health', 'Food', 'Travel', 'Entertainment', 'Business'];
+    for (const topic of topicCategories) {
+      for (const keyword of nicheKeywords) {
+        if (topic.toLowerCase().includes(keyword.toLowerCase())) {
+          niche = keyword;
+          break;
+        }
+      }
+    }
+
+    // Calculate automation score based on channel size
+    let automationScore = 50;
+    if (subscriberCount > 100000) automationScore = 90;
+    else if (subscriberCount > 50000) automationScore = 80;
+    else if (subscriberCount > 10000) automationScore = 70;
+    else if (subscriberCount > 1000) automationScore = 60;
+
+    // Use AI to create automation pipeline
+    const prompt = `You are a revenue automation expert for content creators. Analyze this YouTube channel and create an automation pipeline:
+
+Channel: ${channelName}
+Subscribers: ${subscriberCount.toLocaleString()}
+Videos: ${videoCount}
+Niche: ${niche}
+Description: ${channelDescription.slice(0, 300)}
+Recent videos: ${videoTitles.slice(0, 400)}
+
+Create a comprehensive automation strategy:
+1. Revenue summary (current vs automated potential)
+2. 5 automation workflows to implement
+3. Recommended tool stack
+4. Implementation timeline
+
+Return as JSON:
+{
+  "revenueSummary": {
+    "currentManual": "$X,XXX/month",
+    "afterAutomation": "$XX,XXX/month",
+    "timeSaved": "XX hours/week"
+  },
+  "workflows": [
+    {
+      "icon": "emoji",
+      "name": "Workflow name",
+      "category": "Content/Sales/Marketing/Admin",
+      "description": "What this workflow automates",
+      "difficulty": "Easy/Medium/Hard",
+      "revenueImpact": "+$X,XXX/month",
+      "tools": "Tools needed"
+    }
+  ],
+  "toolStack": [
+    {
+      "icon": "emoji",
+      "name": "Tool name",
+      "purpose": "What it does",
+      "pricing": "Free/$XX/month"
+    }
+  ],
+  "timeline": [
+    {
+      "week": "Week 1-2",
+      "focus": "What to focus on",
+      "tasks": "Specific tasks to complete"
+    }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 2000
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      aiData = {
+        revenueSummary: {
+          currentManual: '$1,000/month',
+          afterAutomation: '$3,000/month',
+          timeSaved: '15 hours/week'
+        },
+        workflows: [
+          { icon: '📧', name: 'Email Automation', category: 'Marketing', description: 'Automated email sequences', difficulty: 'Easy', revenueImpact: '+$500/month', tools: 'ConvertKit' }
+        ],
+        toolStack: [
+          { icon: '📧', name: 'ConvertKit', purpose: 'Email marketing automation', pricing: '$29/month' }
+        ],
+        timeline: [
+          { week: 'Week 1-2', focus: 'Set up foundation', tasks: 'Create accounts, connect integrations' }
+        ]
+      };
+    }
+
+    // Save to history
+    const historyData = {
+      userId: uid,
+      type: 'automation',
+      channelUrl,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      automationScore,
+      revenueSummary: aiData.revenueSummary,
+      workflows: aiData.workflows,
+      toolStack: aiData.toolStack,
+      timeline: aiData.timeline,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('automationHistory').add(historyData);
+    await incrementUsage(uid, 'automationPipeline');
+    await logUsage(uid, 'automation_pipeline', { channelUrl, subscribers: subscriberCount });
+
+    return {
+      success: true,
+      channelName,
+      channelThumbnail,
+      subscribers: subscriberCount,
+      niche,
+      automationScore,
+      revenueSummary: aiData.revenueSummary,
+      workflows: aiData.workflows,
+      toolStack: aiData.toolStack,
+      timeline: aiData.timeline
+    };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Automation pipeline error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to build automation pipeline.');
   }
 });
