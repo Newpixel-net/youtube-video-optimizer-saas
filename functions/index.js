@@ -14176,23 +14176,46 @@ exports.analyzeDigitalProduct = functions.https.onCall(async (data, context) => 
   }
 
   try {
-    // Extract channel ID
-    const channelId = await extractChannelId(channelUrl);
-    if (!channelId) {
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
-    }
+    // Extract channel info from URL
+    const channelInfo = extractChannelInfo(channelUrl);
 
-    // Fetch channel data
-    const channelResponse = await youtube.channels.list({
-      part: 'snippet,statistics,topicDetails',
-      id: channelId
-    });
+    // Get channel details based on URL type
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      // Search for custom/user URLs
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found.');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
 
     if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
       throw new functions.https.HttpsError('not-found', 'Channel not found.');
     }
 
     const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
     const channelName = channel.snippet.title;
     const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
     const channelDescription = channel.snippet.description || '';
@@ -14364,23 +14387,46 @@ exports.analyzeAffiliate = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    // Extract channel ID
-    const channelId = await extractChannelId(channelUrl);
-    if (!channelId) {
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
-    }
+    // Extract channel info from URL
+    const channelInfo = extractChannelInfo(channelUrl);
 
-    // Fetch channel data
-    const channelResponse = await youtube.channels.list({
-      part: 'snippet,statistics,topicDetails',
-      id: channelId
-    });
+    // Get channel details based on URL type
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      // Search for custom/user URLs
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found.');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
 
     if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
       throw new functions.https.HttpsError('not-found', 'Channel not found.');
     }
 
     const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
     const channelName = channel.snippet.title;
     const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
     const channelDescription = channel.snippet.description || '';
@@ -14749,23 +14795,46 @@ exports.analyzeBrandDeal = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    // Extract channel ID
-    const channelId = await extractChannelId(channelUrl);
-    if (!channelId) {
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
-    }
+    // Extract channel info from URL
+    const channelInfo = extractChannelInfo(channelUrl);
 
-    // Fetch channel data
-    const channelResponse = await youtube.channels.list({
-      part: 'snippet,statistics,topicDetails',
-      id: channelId
-    });
+    // Get channel details based on URL type
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      // Search for custom/user URLs
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found.');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
 
     if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
       throw new functions.https.HttpsError('not-found', 'Channel not found.');
     }
 
     const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
     const channelName = channel.snippet.title;
     const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
     const channelDescription = channel.snippet.description || '';
@@ -14917,23 +14986,46 @@ exports.analyzeLicensing = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    // Extract channel ID
-    const channelId = await extractChannelId(channelUrl);
-    if (!channelId) {
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
-    }
+    // Extract channel info from URL
+    const channelInfo = extractChannelInfo(channelUrl);
 
-    // Fetch channel data
-    const channelResponse = await youtube.channels.list({
-      part: 'snippet,statistics,topicDetails',
-      id: channelId
-    });
+    // Get channel details based on URL type
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      // Search for custom/user URLs
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found.');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
 
     if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
       throw new functions.https.HttpsError('not-found', 'Channel not found.');
     }
 
     const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
     const channelName = channel.snippet.title;
     const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
     const channelDescription = channel.snippet.description || '';
@@ -15085,23 +15177,46 @@ exports.analyzeAutomation = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    // Extract channel ID
-    const channelId = await extractChannelId(channelUrl);
-    if (!channelId) {
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube channel URL.');
-    }
+    // Extract channel info from URL
+    const channelInfo = extractChannelInfo(channelUrl);
 
-    // Fetch channel data
-    const channelResponse = await youtube.channels.list({
-      part: 'snippet,statistics,topicDetails',
-      id: channelId
-    });
+    // Get channel details based on URL type
+    let channelResponse;
+    if (channelInfo.type === 'id') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: channelInfo.value
+      });
+    } else if (channelInfo.type === 'handle') {
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        forHandle: channelInfo.value
+      });
+    } else {
+      // Search for custom/user URLs
+      const searchResponse = await youtube.search.list({
+        part: 'snippet',
+        q: channelInfo.value,
+        type: 'channel',
+        maxResults: 1
+      });
+
+      if (!searchResponse.data.items?.length) {
+        throw new functions.https.HttpsError('not-found', 'Channel not found.');
+      }
+
+      channelResponse = await youtube.channels.list({
+        part: 'snippet,statistics,topicDetails',
+        id: searchResponse.data.items[0].snippet.channelId
+      });
+    }
 
     if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
       throw new functions.https.HttpsError('not-found', 'Channel not found.');
     }
 
     const channel = channelResponse.data.items[0];
+    const channelId = channel.id;
     const channelName = channel.snippet.title;
     const channelThumbnail = channel.snippet.thumbnails?.medium?.url || channel.snippet.thumbnails?.default?.url;
     const channelDescription = channel.snippet.description || '';
