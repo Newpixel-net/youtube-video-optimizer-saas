@@ -3871,35 +3871,83 @@
                 state.currentView = 'dashboard';
                 state.error = null;
                 state.showNotifications = false;
+
+                // Show dashboard immediately with cached/loading state
                 render();
 
-                // Refresh profile data unless explicitly skipped
+                // Refresh all data in parallel unless explicitly skipped
                 if (!skipRefresh && state.user) {
-                    functions.httpsCallable('getUserProfile')()
-                        .then(function(result) {
-                            state.profile = result.data.profile;
-                            state.quotaInfo = result.data.quotaInfo || null;
-                            state.resetTimeMinutes = result.data.resetTimeMinutes || 1440;
+                    // Set loading states (no render - will be picked up by batched render)
+                    state.dashboardActivityLoading = true;
+                    state.userNotificationsLoading = true;
+
+                    // Batch all API calls with Promise.all to prevent multiple renders
+                    Promise.all([
+                        functions.httpsCallable('getUserProfile')().catch(function(e) {
+                            console.warn('Failed to refresh profile:', e);
+                            return null;
+                        }),
+                        functions.httpsCallable('getAllHistory')({ limit: 5 }).catch(function(e) {
+                            console.warn('Failed to load recent activity:', e);
+                            return null;
+                        }),
+                        functions.httpsCallable('userGetNotifications')({ limit: 20 }).catch(function(e) {
+                            console.warn('Failed to load user notifications:', e);
+                            return null;
+                        }),
+                        functions.httpsCallable('getUnreadNotifications')({}).catch(function(e) {
+                            console.warn('Failed to load notifications:', e);
+                            return null;
+                        })
+                    ]).then(function(results) {
+                        // Update all state at once from batched results
+                        var profileResult = results[0];
+                        var historyResult = results[1];
+                        var userNotifResult = results[2];
+                        var notifResult = results[3];
+
+                        // Profile data
+                        if (profileResult && profileResult.data) {
+                            state.profile = profileResult.data.profile;
+                            state.quotaInfo = profileResult.data.quotaInfo || null;
+                            state.resetTimeMinutes = profileResult.data.resetTimeMinutes || 1440;
                             state.isAdmin = state.profile.isAdmin === true;
                             startCountdownTimer();
-                            render();
-                        })
-                        .catch(function(e) {
-                            // Silently fail - keep showing cached data
-                            console.warn('Failed to refresh profile:', e);
-                        });
+                        }
 
-                    // Load notifications
-                    this.loadNotifications();
+                        // Recent activity
+                        if (historyResult && historyResult.data) {
+                            state.dashboardRecentActivity = (historyResult.data.history.all || []).slice(0, 5);
+                        } else {
+                            state.dashboardRecentActivity = [];
+                        }
+                        state.dashboardActivityLoading = false;
 
-                    // Load user notifications (from backend)
-                    this.loadUserNotifications();
+                        // User notifications (backend)
+                        if (userNotifResult && userNotifResult.data) {
+                            state.userNotifications = {
+                                notifications: userNotifResult.data.notifications || [],
+                                unreadCount: userNotifResult.data.unreadCount || 0
+                            };
+                        }
+                        state.userNotificationsLoading = false;
 
-                    // Load recent activity for dashboard widget
-                    this.loadDashboardActivity();
+                        // Unread notifications (for badge - but real-time listener handles this too)
+                        if (notifResult && notifResult.data && notifResult.data.success) {
+                            // Only update if real-time listener hasn't already
+                            if (state.notifications.length === 0) {
+                                state.notifications = notifResult.data.notifications || [];
+                                state.unreadCount = notifResult.data.unreadCount || 0;
+                            }
+                        }
+
+                        // Single render after all data is loaded
+                        render();
+                    });
                 }
             },
 
+            // Standalone loader for when dashboard is already visible
             loadDashboardActivity: function() {
                 state.dashboardActivityLoading = true;
                 functions.httpsCallable('getAllHistory')({ limit: 5 })
@@ -6450,7 +6498,8 @@
 
             loadUserNotifications: function() {
                 state.userNotificationsLoading = true;
-                render();
+                // Don't render here - debounced system will batch with other state changes
+                // Render only when data arrives
 
                 functions.httpsCallable('userGetNotifications')({ limit: 20 })
                     .then(function(result) {
@@ -6934,7 +6983,7 @@
             var isExpiringSoon = subEndDate && !isExpired && (subEndDate - new Date()) < 7 * 24 * 60 * 60 * 1000 && plan !== 'free';
 
             // Header - larger and more prominent
-            html += '<div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 fade-in gap-6">';
+            html += '<div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 ' + fadeClass() + ' gap-6">';
             html += '<div>';
             html += '<h1 class="text-4xl lg:text-5xl font-bold text-white mb-3">Welcome back!</h1>';
             html += '<div class="flex flex-wrap gap-3 text-white/90">';
@@ -7115,21 +7164,21 @@
             }
 
             // Desktop Carousel (hidden on mobile) - compact horizontal strip
-            html += '<div class="desktop-usage-carousel fade-in" id="desktopUsageCarousel">';
+            html += '<div class="desktop-usage-carousel ' + fadeClass() + '" id="desktopUsageCarousel">';
             for (var i = 0; i < tools.length; i++) {
                 html += generateCompactUsageCell(tools[i]);
             }
             html += '</div>';
 
             // Desktop Grid - kept for fallback but hidden by CSS
-            html += '<div class="desktop-usage-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 dashboard-grid-4 gap-5 lg:gap-6 mb-10 fade-in">';
+            html += '<div class="desktop-usage-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 dashboard-grid-4 gap-5 lg:gap-6 mb-10 ' + fadeClass() + '">';
             for (var i = 0; i < tools.length; i++) {
                 html += generateUsageCard(tools[i], '');
             }
             html += '</div>';
 
             // Mobile Swipeable Container (hidden on desktop)
-            html += '<div class="mobile-swipe-container mb-2 fade-in" id="usageSwipeContainer">';
+            html += '<div class="mobile-swipe-container mb-2 ' + fadeClass() + '" id="usageSwipeContainer">';
             for (var i = 0; i < tools.length; i++) {
                 html += generateUsageCard(tools[i], 'mobile-swipe-card');
             }
@@ -7163,7 +7212,7 @@
             }
 
             // My Campaign Reports & Enterprise Suite Cards - Side by Side
-            html += '<div class="grid grid-cols-2 gap-4 lg:gap-6 mb-8 fade-in dashboard-cards-grid">';
+            html += '<div class="grid grid-cols-2 gap-4 lg:gap-6 mb-8 ' + fadeClass() + ' dashboard-cards-grid">';
 
             // My Campaign Reports Card - with Living Aurora effect
             html += '<div class="living-aurora aurora-emerald rounded-2xl shadow-xl p-5 lg:p-8 dashboard-card cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.02] relative overflow-hidden" onclick="app.goToClientReports()">';
@@ -7252,10 +7301,10 @@
             html += '</a>';
 
             // Main Tools Section Title
-            html += '<h2 class="text-2xl lg:text-3xl font-bold text-white mb-6 fade-in">🛠️ AI Tools</h2>';
+            html += '<h2 class="text-2xl lg:text-3xl font-bold text-white mb-6 ' + fadeClass() + '">🛠️ AI Tools</h2>';
 
             // Action Cards - 5 tools in responsive grid
-            html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 fade-in">';
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 ' + fadeClass() + '">';
 
             // Optimizer Card
             html += '<div class="rounded-3xl shadow-xl p-6 lg:p-8 tool-card cursor-pointer" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08);" onclick="app.goToOptimizer()">';
@@ -7319,7 +7368,7 @@
             html += '</div>';
 
             // ========== RECENT ACTIVITY SECTION ==========
-            html += '<div class="mt-8 fade-in">';
+            html += '<div class="mt-8 ' + fadeClass() + '">';
             html += '<div class="flex items-center justify-between mb-4">';
             html += '<h2 class="text-xl lg:text-2xl font-bold text-white">📋 Recent Activity</h2>';
             html += '<button onclick="app.goToHistory()" class="text-white/80 hover:text-white font-medium flex items-center gap-1 transition-colors">';
@@ -7393,7 +7442,7 @@
 
             // Admin Section (only for admins)
             if (state.isAdmin) {
-                html += '<div class="mt-8 fade-in">';
+                html += '<div class="mt-8 ' + fadeClass() + '">';
                 html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">';
 
                 // Admin Dashboard Card
@@ -10831,9 +10880,59 @@
         // Track previous view for transitions
         var previousView = null;
 
+        // ========== DEBOUNCED RENDER SYSTEM ==========
+        // Prevents multiple rapid renders that cause flickering
+        var renderPending = false;
+        var renderScheduled = false;
+        var lastRenderView = null;
+
+        // Track if current render is a view change (for conditional animations)
+        // This is set to true on view change, false on same-view re-renders
+        var isViewChangeRender = false;
+
+        // Helper function for templates - returns 'fade-in' only on view changes
+        function fadeClass() {
+            return isViewChangeRender ? 'fade-in' : '';
+        }
+
+        // The public render function - debounces multiple calls
         function render() {
+            // Mark that a render is needed
+            renderPending = true;
+
+            // If already scheduled, the pending render will pick up changes
+            if (renderScheduled) return;
+
+            renderScheduled = true;
+
+            // Use requestAnimationFrame to batch multiple state changes
+            requestAnimationFrame(function() {
+                // Double RAF ensures styles are applied before DOM changes
+                requestAnimationFrame(function() {
+                    renderScheduled = false;
+                    if (renderPending) {
+                        renderPending = false;
+                        doRender();
+                    }
+                });
+            });
+        }
+
+        // Force immediate render (use sparingly - for critical updates)
+        function renderNow() {
+            renderPending = false;
+            renderScheduled = false;
+            doRender();
+        }
+
+        // The actual render implementation
+        function doRender() {
             const root = document.getElementById('app-root');
             if (!root) return;
+
+            // Determine if this is a view change (for conditional animations)
+            isViewChangeRender = (lastRenderView !== state.currentView);
+            lastRenderView = state.currentView;
 
             var html = '';
 
