@@ -738,8 +738,32 @@
             audienceProfileResults: null,
             audienceProfileLoading: false,
 
+            // Digital Product Architect
+            digitalProductResults: null,
+            digitalProductLoading: false,
+
+            // Affiliate Goldmine Finder
+            affiliateResults: null,
+            affiliateLoading: false,
+
+            // Video-to-Multi-Income Converter
+            multiIncomeResults: null,
+            multiIncomeLoading: false,
+
+            // Brand Deal Matchmaker
+            brandDealResults: null,
+            brandDealLoading: false,
+
+            // Licensing & Syndication Scout
+            licensingResults: null,
+            licensingLoading: false,
+
+            // Revenue Automation Pipeline
+            automationResults: null,
+            automationLoading: false,
+
             // History state
-            historyTab: 'all', // all | placement | viral | monetization | script | sponsorship | diversification | cpmbooster | audienceprofile
+            historyTab: 'all', // all | placement | viral | monetization | script | sponsorship | diversification | cpmbooster | audienceprofile | digitalproduct | affiliate | multiincome | branddeal | licensing | automation
             allHistory: null,
             placementHistory: null,
             viralHistory: null,
@@ -749,6 +773,12 @@
             diversificationHistory: null,
             cpmBoosterHistory: null,
             audienceProfileHistory: null,
+            digitalProductHistory: null,
+            affiliateHistory: null,
+            multiIncomeHistory: null,
+            brandDealHistory: null,
+            licensingHistory: null,
+            automationHistory: null,
             historyCounts: null
         };
 
@@ -947,6 +977,12 @@
                 if (state.diversificationHistory) allItems = allItems.concat(state.diversificationHistory);
                 if (state.cpmBoosterHistory) allItems = allItems.concat(state.cpmBoosterHistory);
                 if (state.audienceProfileHistory) allItems = allItems.concat(state.audienceProfileHistory);
+                if (state.digitalProductHistory) allItems = allItems.concat(state.digitalProductHistory);
+                if (state.affiliateHistory) allItems = allItems.concat(state.affiliateHistory);
+                if (state.multiIncomeHistory) allItems = allItems.concat(state.multiIncomeHistory);
+                if (state.brandDealHistory) allItems = allItems.concat(state.brandDealHistory);
+                if (state.licensingHistory) allItems = allItems.concat(state.licensingHistory);
+                if (state.automationHistory) allItems = allItems.concat(state.automationHistory);
 
                 // Find the item by ID
                 for (var i = 0; i < allItems.length; i++) {
@@ -1059,6 +1095,85 @@
                         targetedOffers: item.targetedOffers || []
                     };
                     state.activeTool = 'audienceprofile';
+                } else if (type === 'digitalproduct') {
+                    // Map history item to digitalProductResults format
+                    state.digitalProductResults = {
+                        channelName: item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel',
+                        channelThumbnail: item.channelThumbnail || (item.channelInfo && item.channelInfo.thumbnail) || '',
+                        subscribers: item.subscribers || (item.channelInfo && item.channelInfo.subscribers) || 0,
+                        niche: item.niche || '',
+                        productIdeas: item.productIdeas || [],
+                        pricingStrategy: item.pricingStrategy || {},
+                        launchTimeline: item.launchTimeline || [],
+                        expertise: item.expertise || []
+                    };
+                    state.activeTool = 'digitalproduct';
+                } else if (type === 'affiliate') {
+                    // Map history item to affiliateResults format
+                    state.affiliateResults = {
+                        channelName: item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel',
+                        channelThumbnail: item.channelThumbnail || (item.channelInfo && item.channelInfo.thumbnail) || '',
+                        subscribers: item.subscribers || (item.channelInfo && item.channelInfo.subscribers) || 0,
+                        niche: item.niche || '',
+                        affiliatePrograms: item.affiliatePrograms || [],
+                        placementScripts: item.placementScripts || [],
+                        earningsBreakdown: item.earningsBreakdown || {},
+                        placementStrategy: item.placementStrategy || []
+                    };
+                    state.activeTool = 'affiliate';
+                } else if (type === 'multiincome') {
+                    // Map history item to multiIncomeResults format
+                    state.multiIncomeResults = {
+                        videoTitle: item.videoTitle || item.title || 'Video',
+                        videoThumbnail: item.videoThumbnail || item.thumbnail || '',
+                        channelTitle: item.channelTitle || item.channelName || '',
+                        views: item.views || 0,
+                        duration: item.duration || 0,
+                        contentPieces: item.contentPieces || [],
+                        distributionStrategy: item.distributionStrategy || {},
+                        revenuePotential: item.revenuePotential || [],
+                        actionItems: item.actionItems || [],
+                        summary: item.summary || {}
+                    };
+                    state.activeTool = 'multiincome';
+                } else if (type === 'branddeal') {
+                    // Map history item to brandDealResults format
+                    state.brandDealResults = {
+                        channelName: item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel',
+                        channelThumbnail: item.channelThumbnail || (item.channelInfo && item.channelInfo.thumbnail) || '',
+                        subscribers: item.subscribers || (item.channelInfo && item.channelInfo.subscribers) || 0,
+                        niche: item.niche || '',
+                        matchedBrands: item.matchedBrands || [],
+                        pitchTemplates: item.pitchTemplates || [],
+                        negotiationTips: item.negotiationTips || []
+                    };
+                    state.activeTool = 'branddeal';
+                } else if (type === 'licensing') {
+                    // Map history item to licensingResults format
+                    state.licensingResults = {
+                        channelName: item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel',
+                        channelThumbnail: item.channelThumbnail || (item.channelInfo && item.channelInfo.thumbnail) || '',
+                        subscribers: item.subscribers || (item.channelInfo && item.channelInfo.subscribers) || 0,
+                        niche: item.niche || '',
+                        opportunities: item.opportunities || [],
+                        syndicationNetworks: item.syndicationNetworks || [],
+                        actionSteps: item.actionSteps || []
+                    };
+                    state.activeTool = 'licensing';
+                } else if (type === 'automation') {
+                    // Map history item to automationResults format
+                    state.automationResults = {
+                        channelName: item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel',
+                        channelThumbnail: item.channelThumbnail || (item.channelInfo && item.channelInfo.thumbnail) || '',
+                        subscribers: item.subscribers || (item.channelInfo && item.channelInfo.subscribers) || 0,
+                        niche: item.niche || '',
+                        automationScore: item.automationScore || 0,
+                        revenueSummary: item.revenueSummary || {},
+                        workflows: item.workflows || [],
+                        toolStack: item.toolStack || [],
+                        timeline: item.timeline || []
+                    };
+                    state.activeTool = 'automation';
                 }
 
                 render();
@@ -1651,6 +1766,282 @@
                 render();
             },
 
+            // ==========================================
+            // DIGITAL PRODUCT ARCHITECT
+            // ==========================================
+            analyzeDigitalProduct: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var channelUrl = document.getElementById('digitalproduct-channel-url').value.trim();
+                if (!channelUrl) {
+                    state.error = 'Please enter a YouTube channel URL';
+                    render();
+                    return;
+                }
+
+                state.digitalProductLoading = true;
+                state.loadingSteps = [
+                    { name: 'Analyzing content', icon: '📺' },
+                    { name: 'Identifying expertise', icon: '🎓' },
+                    { name: 'Finding product gaps', icon: '🔍' },
+                    { name: 'Generating product ideas', icon: '💡' },
+                    { name: 'Building launch plan', icon: '🚀' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeDigitalProduct')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.digitalProductResults = result.data;
+                        state.digitalProductLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.digitalProductLoading = false;
+                        state.error = 'Error analyzing products: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetDigitalProduct: function() {
+                state.digitalProductResults = null;
+                state.error = null;
+                render();
+            },
+
+            // ==========================================
+            // AFFILIATE GOLDMINE FINDER
+            // ==========================================
+            analyzeAffiliate: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var channelUrl = document.getElementById('affiliate-channel-url').value.trim();
+                if (!channelUrl) {
+                    state.error = 'Please enter a YouTube channel URL';
+                    render();
+                    return;
+                }
+
+                state.affiliateLoading = true;
+                state.loadingSteps = [
+                    { name: 'Analyzing niche', icon: '🎯' },
+                    { name: 'Scanning affiliate networks', icon: '🌐' },
+                    { name: 'Finding programs', icon: '🔍' },
+                    { name: 'Matching products', icon: '📦' },
+                    { name: 'Generating scripts', icon: '📝' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeAffiliate')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.affiliateResults = result.data;
+                        state.affiliateLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.affiliateLoading = false;
+                        state.error = 'Error finding affiliates: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetAffiliate: function() {
+                state.affiliateResults = null;
+                state.error = null;
+                render();
+            },
+
+            // ==========================================
+            // VIDEO-TO-MULTI-INCOME CONVERTER
+            // ==========================================
+            analyzeMultiIncome: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var videoUrl = document.getElementById('multiincome-video-url').value.trim();
+                if (!videoUrl) {
+                    state.error = 'Please enter a YouTube video URL';
+                    render();
+                    return;
+                }
+
+                state.multiIncomeLoading = true;
+                state.loadingSteps = [
+                    { name: 'Analyzing video content', icon: '🎬' },
+                    { name: 'Extracting key points', icon: '📋' },
+                    { name: 'Finding platforms', icon: '🌐' },
+                    { name: 'Creating content pieces', icon: '✂️' },
+                    { name: 'Building strategy', icon: '📊' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeMultiIncome')({ videoUrl: videoUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.multiIncomeResults = result.data;
+                        state.multiIncomeLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.multiIncomeLoading = false;
+                        state.error = 'Error analyzing income streams: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetMultiIncome: function() {
+                state.multiIncomeResults = null;
+                state.error = null;
+                render();
+            },
+
+            // ==========================================
+            // BRAND DEAL MATCHMAKER
+            // ==========================================
+            analyzeBrandDeal: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var channelUrl = document.getElementById('branddeal-channel-url').value.trim();
+                if (!channelUrl) {
+                    state.error = 'Please enter a YouTube channel URL';
+                    render();
+                    return;
+                }
+
+                state.brandDealLoading = true;
+                state.loadingSteps = [
+                    { name: 'Analyzing channel', icon: '📺' },
+                    { name: 'Identifying niche', icon: '🎯' },
+                    { name: 'Matching brands', icon: '🤝' },
+                    { name: 'Creating pitches', icon: '📝' },
+                    { name: 'Building strategy', icon: '💡' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeBrandDeal')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.brandDealResults = result.data;
+                        state.brandDealLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.brandDealLoading = false;
+                        state.error = 'Error finding brand deals: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetBrandDeal: function() {
+                state.brandDealResults = null;
+                state.error = null;
+                render();
+            },
+
+            // ==========================================
+            // LICENSING & SYNDICATION SCOUT
+            // ==========================================
+            analyzeLicensing: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var channelUrl = document.getElementById('licensing-channel-url').value.trim();
+                if (!channelUrl) {
+                    state.error = 'Please enter a YouTube channel URL';
+                    render();
+                    return;
+                }
+
+                state.licensingLoading = true;
+                state.loadingSteps = [
+                    { name: 'Analyzing content', icon: '📺' },
+                    { name: 'Scanning platforms', icon: '🌐' },
+                    { name: 'Finding opportunities', icon: '🔍' },
+                    { name: 'Evaluating networks', icon: '📡' },
+                    { name: 'Creating action plan', icon: '📋' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeLicensing')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.licensingResults = result.data;
+                        state.licensingLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.licensingLoading = false;
+                        state.error = 'Error scouting licensing: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetLicensing: function() {
+                state.licensingResults = null;
+                state.error = null;
+                render();
+            },
+
+            // ==========================================
+            // REVENUE AUTOMATION PIPELINE
+            // ==========================================
+            analyzeAutomation: function(e) {
+                e.preventDefault();
+                if (!requirePremiumAccess()) return;
+
+                var channelUrl = document.getElementById('automation-channel-url').value.trim();
+                if (!channelUrl) {
+                    state.error = 'Please enter a YouTube channel URL';
+                    render();
+                    return;
+                }
+
+                state.automationLoading = true;
+                state.loadingSteps = [
+                    { name: 'Analyzing channel', icon: '📺' },
+                    { name: 'Mapping revenue streams', icon: '💰' },
+                    { name: 'Finding automations', icon: '🔄' },
+                    { name: 'Building tool stack', icon: '🛠️' },
+                    { name: 'Creating timeline', icon: '📅' }
+                ];
+                startLoadingProgress();
+                render();
+
+                functions.httpsCallable('analyzeAutomation')({ channelUrl: channelUrl })
+                    .then(function(result) {
+                        stopLoadingProgress();
+                        state.automationResults = result.data;
+                        state.automationLoading = false;
+                        render();
+                    })
+                    .catch(function(e) {
+                        stopLoadingProgress();
+                        state.automationLoading = false;
+                        state.error = 'Error building automation: ' + (e.message || 'Unknown error');
+                        render();
+                    });
+            },
+
+            resetAutomation: function() {
+                state.automationResults = null;
+                state.error = null;
+                render();
+            },
+
             // PDF Download functionality
             downloadPDF: function(toolType) {
                 var element = document.getElementById('pdf-content-' + toolType);
@@ -1870,7 +2261,13 @@
                 { key: 'sponsorship', icon: '💎', name: 'Sponsorship Rates' },
                 { key: 'diversification', icon: '📊', name: 'Revenue Diversify' },
                 { key: 'cpmbooster', icon: '💰', name: 'CPM Booster' },
-                { key: 'audienceprofile', icon: '📱', name: 'Audience Profile' }
+                { key: 'audienceprofile', icon: '📱', name: 'Audience Profile' },
+                { key: 'digitalproduct', icon: '🛒', name: 'Product Architect' },
+                { key: 'affiliate', icon: '📈', name: 'Affiliate Finder' },
+                { key: 'multiincome', icon: '🎬', name: 'Multi-Income' },
+                { key: 'branddeal', icon: '🤝', name: 'Brand Deals' },
+                { key: 'licensing', icon: '📜', name: 'Licensing Scout' },
+                { key: 'automation', icon: '⚙️', name: 'Revenue Auto' }
             ];
 
             for (var i = 0; i < tools.length; i++) {
@@ -1912,6 +2309,18 @@
                 html += renderCpmBooster();
             } else if (state.activeTool === 'audienceprofile') {
                 html += renderAudienceProfile();
+            } else if (state.activeTool === 'digitalproduct') {
+                html += renderDigitalProductArchitect();
+            } else if (state.activeTool === 'affiliate') {
+                html += renderAffiliateFinder();
+            } else if (state.activeTool === 'multiincome') {
+                html += renderMultiIncomeConverter();
+            } else if (state.activeTool === 'branddeal') {
+                html += renderBrandDealMatchmaker();
+            } else if (state.activeTool === 'licensing') {
+                html += renderLicensingScout();
+            } else if (state.activeTool === 'automation') {
+                html += renderRevenueAutomation();
             }
 
             html += '</div>';
@@ -3259,6 +3668,875 @@
             return html;
         }
 
+        // ==========================================
+        // DIGITAL PRODUCT ARCHITECT
+        // ==========================================
+        function renderDigitalProductArchitect() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-2xl">🛒</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Digital Product Architect</h2>';
+            html += '<p class="text-white/60">Design and price digital products for your audience</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.digitalProductLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">🛒</div>';
+                html += '<p class="text-white text-lg mb-4">Designing your digital products...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += '<div id="loading-steps" class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">';
+                for (var i = 0; i < state.loadingSteps.length; i++) {
+                    var step = state.loadingSteps[i];
+                    var stepClass = i < state.loadingStep ? 'text-green-400' : i === state.loadingStep ? 'text-yellow-400' : 'text-white/40';
+                    html += '<div class="flex items-center gap-2 ' + stepClass + '">';
+                    html += '<span>' + (i < state.loadingStep ? '✓' : step.icon) + '</span>';
+                    html += '<span class="text-sm">' + step.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Results view
+            if (state.digitalProductResults) {
+                var results = state.digitalProductResults;
+
+                // Action buttons
+                html += '<div class="flex justify-end gap-3 mb-6">';
+                html += '<button onclick="app.downloadPDF(\'digitalproduct\')" class="btn-pdf">📥 Download PDF</button>';
+                html += '</div>';
+
+                // PDF content wrapper
+                html += '<div id="pdf-content-digitalproduct">';
+
+                // Channel info
+                html += '<div class="result-card mb-6">';
+                html += '<div class="flex items-center gap-4">';
+                if (results.channelThumbnail) {
+                    html += '<img src="' + utils.escapeHtml(results.channelThumbnail) + '" class="w-16 h-16 rounded-full" />';
+                }
+                html += '<div>';
+                html += '<h3 class="text-xl font-bold text-white">' + utils.escapeHtml(results.channelName || 'Your Channel') + '</h3>';
+                html += '<p class="text-white/60">' + utils.formatNumber(results.subscribers || 0) + ' subscribers • ' + utils.escapeHtml(results.niche || 'General') + '</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Product ideas
+                if (results.productIdeas && results.productIdeas.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🎯 Recommended Digital Products</h3>';
+                    html += '<div class="space-y-4 mb-6">';
+                    for (var i = 0; i < results.productIdeas.length; i++) {
+                        var product = results.productIdeas[i];
+                        html += '<div class="result-card">';
+                        html += '<div class="flex items-start gap-4">';
+                        html += '<div class="text-3xl">' + product.icon + '</div>';
+                        html += '<div class="flex-1">';
+                        html += '<div class="flex justify-between items-start mb-2">';
+                        html += '<h4 class="text-white font-bold">' + utils.escapeHtml(product.name) + '</h4>';
+                        html += '<span class="text-green-400 font-bold">' + utils.escapeHtml(product.price) + '</span>';
+                        html += '</div>';
+                        html += '<p class="text-white/60 text-sm mb-3">' + utils.escapeHtml(product.description) + '</p>';
+                        if (product.outline && product.outline.length > 0) {
+                            html += '<div class="bg-white/5 rounded-lg p-3">';
+                            html += '<p class="text-white/80 text-sm font-medium mb-2">Product Outline:</p>';
+                            html += '<ul class="text-white/60 text-sm space-y-1">';
+                            for (var j = 0; j < product.outline.length; j++) {
+                                html += '<li>• ' + utils.escapeHtml(product.outline[j]) + '</li>';
+                            }
+                            html += '</ul>';
+                            html += '</div>';
+                        }
+                        html += '<div class="flex gap-2 mt-3">';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300">Est. Sales: ' + utils.escapeHtml(product.estimatedSales) + '/mo</span>';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-300">Profit: ' + utils.escapeHtml(product.profitMargin) + '</span>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Pricing strategy
+                if (results.pricingStrategy) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">💰 Pricing Strategy</h3>';
+                    html += '<div class="result-card mb-6">';
+                    html += '<p class="text-white/80 mb-4">' + utils.escapeHtml(results.pricingStrategy.rationale) + '</p>';
+                    html += '<div class="grid grid-cols-3 gap-4">';
+                    html += '<div class="text-center">';
+                    html += '<p class="text-white/60 text-sm">Budget Tier</p>';
+                    html += '<p class="text-white font-bold">' + utils.escapeHtml(results.pricingStrategy.budget) + '</p>';
+                    html += '</div>';
+                    html += '<div class="text-center">';
+                    html += '<p class="text-white/60 text-sm">Standard Tier</p>';
+                    html += '<p class="text-white font-bold">' + utils.escapeHtml(results.pricingStrategy.standard) + '</p>';
+                    html += '</div>';
+                    html += '<div class="text-center">';
+                    html += '<p class="text-white/60 text-sm">Premium Tier</p>';
+                    html += '<p class="text-white font-bold">' + utils.escapeHtml(results.pricingStrategy.premium) + '</p>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Launch timeline
+                if (results.launchTimeline && results.launchTimeline.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">📅 Launch Strategy Timeline</h3>';
+                    html += '<div class="space-y-3 mb-6">';
+                    for (var i = 0; i < results.launchTimeline.length; i++) {
+                        var phase = results.launchTimeline[i];
+                        html += '<div class="result-card flex items-center gap-4">';
+                        html += '<div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">' + phase.week + '</div>';
+                        html += '<div class="flex-1">';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(phase.task) + '</p>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(phase.details) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetDigitalProduct()" class="btn-secondary w-full mt-6">Analyze Another Channel</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.analyzeDigitalProduct(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL *</label>';
+            html += '<input type="text" id="digitalproduct-channel-url" class="input-field" placeholder="https://youtube.com/@yourchannel" required />';
+            html += '<p class="text-white/40 text-sm mt-2">We\'ll analyze your content to suggest digital products your audience would buy</p>';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '🛒 Design My Products';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
+        // ==========================================
+        // AFFILIATE GOLDMINE FINDER
+        // ==========================================
+        function renderAffiliateFinder() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-xl flex items-center justify-center text-2xl">📈</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Affiliate Goldmine Finder</h2>';
+            html += '<p class="text-white/60">Discover high-paying affiliate opportunities in your niche</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.affiliateLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">📈</div>';
+                html += '<p class="text-white text-lg mb-4">Finding affiliate opportunities...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += '<div id="loading-steps" class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">';
+                for (var i = 0; i < state.loadingSteps.length; i++) {
+                    var step = state.loadingSteps[i];
+                    var stepClass = i < state.loadingStep ? 'text-green-400' : i === state.loadingStep ? 'text-yellow-400' : 'text-white/40';
+                    html += '<div class="flex items-center gap-2 ' + stepClass + '">';
+                    html += '<span>' + (i < state.loadingStep ? '✓' : step.icon) + '</span>';
+                    html += '<span class="text-sm">' + step.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Results view
+            if (state.affiliateResults) {
+                var results = state.affiliateResults;
+
+                // Action buttons
+                html += '<div class="flex justify-end gap-3 mb-6">';
+                html += '<button onclick="app.downloadPDF(\'affiliate\')" class="btn-pdf">📥 Download PDF</button>';
+                html += '</div>';
+
+                // PDF content wrapper
+                html += '<div id="pdf-content-affiliate">';
+
+                // Summary card
+                html += '<div class="result-card mb-6 bg-gradient-to-r from-yellow-500/20 to-orange-500/20">';
+                html += '<div class="flex items-center justify-between">';
+                html += '<div>';
+                html += '<h3 class="text-xl font-bold text-white">Potential Monthly Earnings</h3>';
+                html += '<p class="text-white/60">From affiliate marketing</p>';
+                html += '</div>';
+                html += '<div class="text-3xl font-bold text-yellow-400">' + utils.escapeHtml(results.potentialEarnings || '$0') + '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Affiliate programs
+                if (results.affiliatePrograms && results.affiliatePrograms.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">💰 Top Affiliate Programs for You</h3>';
+                    html += '<div class="space-y-4 mb-6">';
+                    for (var i = 0; i < results.affiliatePrograms.length; i++) {
+                        var program = results.affiliatePrograms[i];
+                        html += '<div class="result-card">';
+                        html += '<div class="flex items-start gap-4">';
+                        html += '<div class="text-3xl">' + program.icon + '</div>';
+                        html += '<div class="flex-1">';
+                        html += '<div class="flex justify-between items-start mb-2">';
+                        html += '<h4 class="text-white font-bold">' + utils.escapeHtml(program.name) + '</h4>';
+                        html += '<span class="text-green-400 font-bold">' + utils.escapeHtml(program.commission) + ' commission</span>';
+                        html += '</div>';
+                        html += '<p class="text-white/60 text-sm mb-2">' + utils.escapeHtml(program.description) + '</p>';
+                        html += '<div class="flex flex-wrap gap-2">';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300">Cookie: ' + utils.escapeHtml(program.cookieDuration) + '</span>';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-300">Avg. Payout: ' + utils.escapeHtml(program.avgPayout) + '</span>';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-purple-500/20 text-purple-300">Fit Score: ' + program.fitScore + '/10</span>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Product placement scripts
+                if (results.placementScripts && results.placementScripts.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">📝 Natural Placement Scripts</h3>';
+                    html += '<div class="space-y-3 mb-6">';
+                    for (var i = 0; i < results.placementScripts.length; i++) {
+                        var script = results.placementScripts[i];
+                        html += '<div class="result-card">';
+                        html += '<h4 class="text-white font-medium mb-2">' + utils.escapeHtml(script.product) + '</h4>';
+                        html += '<p class="text-white/80 text-sm italic bg-white/5 rounded-lg p-3">"' + utils.escapeHtml(script.script) + '"</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Earnings calculator
+                if (results.earningsBreakdown) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">📊 Earnings Breakdown (per 1,000 views)</h3>';
+                    html += '<div class="result-card mb-6">';
+                    html += '<div class="space-y-3">';
+                    if (results.earningsBreakdown.products) {
+                        for (var i = 0; i < results.earningsBreakdown.products.length; i++) {
+                            var prod = results.earningsBreakdown.products[i];
+                            html += '<div class="flex justify-between items-center">';
+                            html += '<span class="text-white/80">' + utils.escapeHtml(prod.name) + '</span>';
+                            html += '<span class="text-green-400 font-bold">' + utils.escapeHtml(prod.earnings) + '</span>';
+                            html += '</div>';
+                        }
+                    }
+                    html += '<div class="border-t border-white/10 pt-3 mt-3 flex justify-between items-center">';
+                    html += '<span class="text-white font-bold">Total per 1K views</span>';
+                    html += '<span class="text-yellow-400 font-bold">' + utils.escapeHtml(results.earningsBreakdown.total) + '</span>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetAffiliate()" class="btn-secondary w-full mt-6">Analyze Another Channel</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.analyzeAffiliate(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL *</label>';
+            html += '<input type="text" id="affiliate-channel-url" class="input-field" placeholder="https://youtube.com/@yourchannel" required />';
+            html += '<p class="text-white/40 text-sm mt-2">We\'ll find affiliate programs that match your content and audience</p>';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '📈 Find Affiliate Goldmines';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
+        // ==========================================
+        // VIDEO-TO-MULTI-INCOME CONVERTER
+        // ==========================================
+        function renderMultiIncomeConverter() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl flex items-center justify-center text-2xl">🎬</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Video-to-Multi-Income Converter</h2>';
+            html += '<p class="text-white/60">Turn one video into multiple revenue streams</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.multiIncomeLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">🎬</div>';
+                html += '<p class="text-white text-lg mb-4">Converting video to multiple income streams...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += '<div id="loading-steps" class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">';
+                for (var i = 0; i < state.loadingSteps.length; i++) {
+                    var step = state.loadingSteps[i];
+                    var stepClass = i < state.loadingStep ? 'text-green-400' : i === state.loadingStep ? 'text-yellow-400' : 'text-white/40';
+                    html += '<div class="flex items-center gap-2 ' + stepClass + '">';
+                    html += '<span>' + (i < state.loadingStep ? '✓' : step.icon) + '</span>';
+                    html += '<span class="text-sm">' + step.name + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Results view
+            if (state.multiIncomeResults) {
+                var results = state.multiIncomeResults;
+
+                // Action buttons
+                html += '<div class="flex justify-end gap-3 mb-6">';
+                html += '<button onclick="app.downloadPDF(\'multiincome\')" class="btn-pdf">📥 Download PDF</button>';
+                html += '</div>';
+
+                // PDF content wrapper
+                html += '<div id="pdf-content-multiincome">';
+
+                // Video info
+                html += '<div class="result-card mb-6">';
+                html += '<h3 class="text-lg font-bold text-white mb-2">' + utils.escapeHtml(results.videoTitle || 'Your Video') + '</h3>';
+                html += '<p class="text-white/60 text-sm">Original video analyzed for multi-platform repurposing</p>';
+                html += '</div>';
+
+                // Revenue potential summary
+                html += '<div class="result-card mb-6 bg-gradient-to-r from-teal-500/20 to-cyan-500/20">';
+                html += '<div class="text-center">';
+                html += '<p class="text-white/60 text-sm mb-2">Combined Revenue Potential</p>';
+                html += '<div class="text-4xl font-bold text-teal-400">' + utils.escapeHtml(results.totalPotential || '$0') + '</div>';
+                html += '<p class="text-white/60 text-sm">from ' + (results.contentPieces ? results.contentPieces.length : 0) + ' content pieces</p>';
+                html += '</div>';
+                html += '</div>';
+
+                // Content pieces
+                if (results.contentPieces && results.contentPieces.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🚀 Generated Content Pieces</h3>';
+                    html += '<div class="space-y-4 mb-6">';
+                    for (var i = 0; i < results.contentPieces.length; i++) {
+                        var piece = results.contentPieces[i];
+                        html += '<div class="result-card">';
+                        html += '<div class="flex items-start gap-4">';
+                        html += '<div class="text-3xl">' + piece.icon + '</div>';
+                        html += '<div class="flex-1">';
+                        html += '<div class="flex justify-between items-start mb-2">';
+                        html += '<h4 class="text-white font-bold">' + utils.escapeHtml(piece.type) + '</h4>';
+                        html += '<span class="text-green-400 font-bold">' + utils.escapeHtml(piece.revenue) + '</span>';
+                        html += '</div>';
+                        html += '<p class="text-white/60 text-sm mb-3">' + utils.escapeHtml(piece.description) + '</p>';
+                        if (piece.content) {
+                            html += '<div class="bg-white/5 rounded-lg p-3 mb-3">';
+                            html += '<p class="text-white/80 text-sm whitespace-pre-line">' + utils.escapeHtml(piece.content.substring(0, 300)) + (piece.content.length > 300 ? '...' : '') + '</p>';
+                            html += '</div>';
+                        }
+                        html += '<div class="flex gap-2">';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300">Platform: ' + utils.escapeHtml(piece.platform) + '</span>';
+                        html += '<span class="px-2 py-1 text-xs rounded-full bg-purple-500/20 text-purple-300">Effort: ' + utils.escapeHtml(piece.effort) + '</span>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Distribution strategy
+                if (results.distributionStrategy && results.distributionStrategy.length > 0) {
+                    html += '<h3 class="text-lg font-bold text-white mb-4">📅 Distribution Timeline</h3>';
+                    html += '<div class="space-y-3 mb-6">';
+                    for (var i = 0; i < results.distributionStrategy.length; i++) {
+                        var dist = results.distributionStrategy[i];
+                        html += '<div class="result-card flex items-center gap-4">';
+                        html += '<div class="w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">' + dist.day + '</div>';
+                        html += '<div class="flex-1">';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(dist.action) + '</p>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(dist.platform) + '</p>';
+                        html += '</div>';
+                        html += '<span class="text-green-400 font-bold">' + utils.escapeHtml(dist.expectedReach) + '</span>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetMultiIncome()" class="btn-secondary w-full mt-6">Convert Another Video</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.analyzeMultiIncome(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Video URL *</label>';
+            html += '<input type="text" id="multiincome-video-url" class="input-field" placeholder="https://youtube.com/watch?v=..." required />';
+            html += '<p class="text-white/40 text-sm mt-2">Paste any YouTube video URL to generate multi-platform content</p>';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '🎬 Convert to Multi-Income';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
+        // ==========================================
+        // BRAND DEAL MATCHMAKER
+        // ==========================================
+        function renderBrandDealMatchmaker() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl flex items-center justify-center text-2xl">🤝</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Brand Deal Matchmaker</h2>';
+            html += '<p class="text-white/60">Find perfect brand partnerships for your channel</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.brandDealLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">🤝</div>';
+                html += '<p class="text-white text-lg mb-4">Finding brand partnerships...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += renderLoadingSteps();
+                html += '</div>';
+                return html;
+            }
+
+            // Results state
+            if (state.brandDealResults) {
+                var results = state.brandDealResults;
+
+                html += '<div id="pdf-content-branddeal" class="space-y-6">';
+
+                // Channel info header
+                html += '<div class="tool-card p-4 flex items-center gap-4">';
+                if (results.channelThumbnail) {
+                    html += '<img src="' + results.channelThumbnail + '" class="w-16 h-16 rounded-full" />';
+                }
+                html += '<div class="flex-1">';
+                html += '<h3 class="text-xl font-bold text-white">' + utils.escapeHtml(results.channelName || 'Channel') + '</h3>';
+                html += '<p class="text-white/60">' + (results.subscribers ? results.subscribers.toLocaleString() : '0') + ' subscribers • ' + utils.escapeHtml(results.niche || 'General') + '</p>';
+                html += '</div>';
+                html += '<button onclick="app.downloadPDF(\'branddeal\')" class="btn-secondary px-4 py-2">📥 Export PDF</button>';
+                html += '</div>';
+
+                // Matched Brands
+                if (results.matchedBrands && results.matchedBrands.length > 0) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🎯 Matched Brand Partners</h3>';
+                    html += '<div class="space-y-4">';
+                    for (var i = 0; i < results.matchedBrands.length; i++) {
+                        var brand = results.matchedBrands[i];
+                        html += '<div class="bg-white/5 rounded-lg p-4 border border-white/10">';
+                        html += '<div class="flex items-start justify-between mb-2">';
+                        html += '<div class="flex items-center gap-2">';
+                        html += '<span class="text-2xl">' + (brand.icon || '🏢') + '</span>';
+                        html += '<div>';
+                        html += '<h4 class="text-white font-semibold">' + utils.escapeHtml(brand.name) + '</h4>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(brand.industry) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '<span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">' + (brand.matchScore || 0) + '% Match</span>';
+                        html += '</div>';
+                        html += '<p class="text-white/70 text-sm mb-3">' + utils.escapeHtml(brand.whyMatch) + '</p>';
+                        html += '<div class="flex items-center gap-4 text-sm">';
+                        html += '<span class="text-yellow-400">💰 ' + utils.escapeHtml(brand.dealRange) + '</span>';
+                        html += '<span class="text-blue-400">📧 ' + utils.escapeHtml(brand.contactMethod) + '</span>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Pitch Templates
+                if (results.pitchTemplates && results.pitchTemplates.length > 0) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">📝 Pitch Templates</h3>';
+                    html += '<div class="space-y-4">';
+                    for (var j = 0; j < results.pitchTemplates.length; j++) {
+                        var pitch = results.pitchTemplates[j];
+                        html += '<div class="bg-white/5 rounded-lg p-4 border border-white/10">';
+                        html += '<div class="flex items-center gap-2 mb-2">';
+                        html += '<span class="text-xl">' + (pitch.icon || '📄') + '</span>';
+                        html += '<h4 class="text-white font-semibold">' + utils.escapeHtml(pitch.type) + '</h4>';
+                        html += '</div>';
+                        html += '<p class="text-white/70 text-sm bg-black/20 p-3 rounded font-mono whitespace-pre-wrap">' + utils.escapeHtml(pitch.template) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Negotiation Tips
+                if (results.negotiationTips && results.negotiationTips.length > 0) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">💡 Negotiation Tips</h3>';
+                    html += '<div class="grid md:grid-cols-2 gap-4">';
+                    for (var k = 0; k < results.negotiationTips.length; k++) {
+                        var tip = results.negotiationTips[k];
+                        html += '<div class="bg-white/5 rounded-lg p-4 border border-white/10">';
+                        html += '<h4 class="text-white font-medium mb-2">' + utils.escapeHtml(tip.title) + '</h4>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(tip.description) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetBrandDeal()" class="btn-secondary w-full mt-6">Find More Brand Deals</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.analyzeBrandDeal(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL *</label>';
+            html += '<input type="text" id="branddeal-channel-url" class="input-field" placeholder="https://youtube.com/@yourchannel" required />';
+            html += '<p class="text-white/40 text-sm mt-2">Enter your channel URL to find matching brand partners</p>';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '🤝 Find Brand Partners';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
+        // ==========================================
+        // LICENSING & SYNDICATION SCOUT
+        // ==========================================
+        function renderLicensingScout() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl flex items-center justify-center text-2xl">📜</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Licensing & Syndication Scout</h2>';
+            html += '<p class="text-white/60">Find licensing opportunities for your content</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.licensingLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">📜</div>';
+                html += '<p class="text-white text-lg mb-4">Scouting licensing opportunities...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += renderLoadingSteps();
+                html += '</div>';
+                return html;
+            }
+
+            // Results state
+            if (state.licensingResults) {
+                var results = state.licensingResults;
+
+                html += '<div id="pdf-content-licensing" class="space-y-6">';
+
+                // Channel/Video info header
+                html += '<div class="tool-card p-4 flex items-center gap-4">';
+                if (results.channelThumbnail) {
+                    html += '<img src="' + results.channelThumbnail + '" class="w-16 h-16 rounded-full" />';
+                }
+                html += '<div class="flex-1">';
+                html += '<h3 class="text-xl font-bold text-white">' + utils.escapeHtml(results.channelName || 'Channel') + '</h3>';
+                html += '<p class="text-white/60">' + utils.escapeHtml(results.niche || 'General') + ' content</p>';
+                html += '</div>';
+                html += '<button onclick="app.downloadPDF(\'licensing\')" class="btn-secondary px-4 py-2">📥 Export PDF</button>';
+                html += '</div>';
+
+                // Licensing Opportunities
+                if (results.opportunities && results.opportunities.length > 0) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🎯 Licensing Opportunities</h3>';
+                    html += '<div class="space-y-4">';
+                    for (var i = 0; i < results.opportunities.length; i++) {
+                        var opp = results.opportunities[i];
+                        html += '<div class="bg-white/5 rounded-lg p-4 border border-white/10">';
+                        html += '<div class="flex items-start justify-between mb-2">';
+                        html += '<div class="flex items-center gap-2">';
+                        html += '<span class="text-2xl">' + (opp.icon || '📺') + '</span>';
+                        html += '<div>';
+                        html += '<h4 class="text-white font-semibold">' + utils.escapeHtml(opp.platform) + '</h4>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(opp.type) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '<span class="text-green-400 font-bold">' + utils.escapeHtml(opp.potentialRevenue) + '</span>';
+                        html += '</div>';
+                        html += '<p class="text-white/70 text-sm mb-3">' + utils.escapeHtml(opp.description) + '</p>';
+                        html += '<div class="flex items-center gap-4 text-sm">';
+                        html += '<span class="text-blue-400">📋 ' + utils.escapeHtml(opp.requirements) + '</span>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Syndication Networks
+                if (results.syndicationNetworks && results.syndicationNetworks.length > 0) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🌐 Syndication Networks</h3>';
+                    html += '<div class="grid md:grid-cols-2 gap-4">';
+                    for (var j = 0; j < results.syndicationNetworks.length; j++) {
+                        var network = results.syndicationNetworks[j];
+                        html += '<div class="bg-white/5 rounded-lg p-4 border border-white/10">';
+                        html += '<div class="flex items-center gap-2 mb-2">';
+                        html += '<span class="text-xl">' + (network.icon || '🔗') + '</span>';
+                        html += '<h4 class="text-white font-semibold">' + utils.escapeHtml(network.name) + '</h4>';
+                        html += '</div>';
+                        html += '<p class="text-white/60 text-sm mb-2">' + utils.escapeHtml(network.description) + '</p>';
+                        html += '<p class="text-yellow-400 text-sm font-medium">' + utils.escapeHtml(network.revenueModel) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Action Steps
+                if (results.actionSteps && results.actionSteps.length > 0) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">📋 Action Steps</h3>';
+                    html += '<div class="space-y-3">';
+                    for (var k = 0; k < results.actionSteps.length; k++) {
+                        var step = results.actionSteps[k];
+                        html += '<div class="flex items-start gap-3 bg-white/5 rounded-lg p-3">';
+                        html += '<span class="w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-full flex items-center justify-center text-white font-bold text-sm">' + (k + 1) + '</span>';
+                        html += '<div class="flex-1">';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(step.action) + '</p>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(step.details) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetLicensing()" class="btn-secondary w-full mt-6">Scout More Opportunities</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.analyzeLicensing(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL *</label>';
+            html += '<input type="text" id="licensing-channel-url" class="input-field" placeholder="https://youtube.com/@yourchannel" required />';
+            html += '<p class="text-white/40 text-sm mt-2">Enter your channel URL to find licensing and syndication opportunities</p>';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '📜 Scout Opportunities';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
+        // ==========================================
+        // REVENUE AUTOMATION PIPELINE
+        // ==========================================
+        function renderRevenueAutomation() {
+            var html = '';
+
+            html += '<div class="flex items-center gap-3 mb-6">';
+            html += '<div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center text-2xl">⚙️</div>';
+            html += '<div>';
+            html += '<h2 class="text-2xl font-bold text-white">Revenue Automation Pipeline</h2>';
+            html += '<p class="text-white/60">Build automated revenue systems for your channel</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Loading state
+            if (state.automationLoading) {
+                html += '<div class="text-center py-8">';
+                html += '<div class="loading-emoji mb-4">⚙️</div>';
+                html += '<p class="text-white text-lg mb-4">Building your automation pipeline...</p>';
+                html += '<div class="progress-container max-w-md mx-auto">';
+                html += '<div id="progress-fill" class="progress-fill" style="width:' + state.loadingProgress + '%"></div>';
+                html += '</div>';
+                html += renderLoadingSteps();
+                html += '</div>';
+                return html;
+            }
+
+            // Results state
+            if (state.automationResults) {
+                var results = state.automationResults;
+
+                html += '<div id="pdf-content-automation" class="space-y-6">';
+
+                // Channel info header
+                html += '<div class="tool-card p-4 flex items-center gap-4">';
+                if (results.channelThumbnail) {
+                    html += '<img src="' + results.channelThumbnail + '" class="w-16 h-16 rounded-full" />';
+                }
+                html += '<div class="flex-1">';
+                html += '<h3 class="text-xl font-bold text-white">' + utils.escapeHtml(results.channelName || 'Channel') + '</h3>';
+                html += '<p class="text-white/60">Automation Potential: <span class="text-green-400 font-bold">' + utils.escapeHtml(results.automationScore || '0') + '%</span></p>';
+                html += '</div>';
+                html += '<button onclick="app.downloadPDF(\'automation\')" class="btn-secondary px-4 py-2">📥 Export PDF</button>';
+                html += '</div>';
+
+                // Revenue Summary
+                if (results.revenueSummary) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">💰 Revenue Automation Summary</h3>';
+                    html += '<div class="grid grid-cols-3 gap-4">';
+                    html += '<div class="bg-white/5 rounded-lg p-4 text-center">';
+                    html += '<p class="text-white/60 text-sm">Current Manual</p>';
+                    html += '<p class="text-2xl font-bold text-white">' + utils.escapeHtml(results.revenueSummary.currentManual) + '</p>';
+                    html += '</div>';
+                    html += '<div class="bg-white/5 rounded-lg p-4 text-center">';
+                    html += '<p class="text-white/60 text-sm">After Automation</p>';
+                    html += '<p class="text-2xl font-bold text-green-400">' + utils.escapeHtml(results.revenueSummary.afterAutomation) + '</p>';
+                    html += '</div>';
+                    html += '<div class="bg-white/5 rounded-lg p-4 text-center">';
+                    html += '<p class="text-white/60 text-sm">Time Saved</p>';
+                    html += '<p class="text-2xl font-bold text-blue-400">' + utils.escapeHtml(results.revenueSummary.timeSaved) + '</p>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Automation Workflows
+                if (results.workflows && results.workflows.length > 0) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🔄 Automation Workflows</h3>';
+                    html += '<div class="space-y-4">';
+                    for (var i = 0; i < results.workflows.length; i++) {
+                        var workflow = results.workflows[i];
+                        html += '<div class="bg-white/5 rounded-lg p-4 border border-white/10">';
+                        html += '<div class="flex items-start justify-between mb-3">';
+                        html += '<div class="flex items-center gap-2">';
+                        html += '<span class="text-2xl">' + (workflow.icon || '⚡') + '</span>';
+                        html += '<div>';
+                        html += '<h4 class="text-white font-semibold">' + utils.escapeHtml(workflow.name) + '</h4>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(workflow.category) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '<span class="px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-sm">' + utils.escapeHtml(workflow.difficulty) + '</span>';
+                        html += '</div>';
+                        html += '<p class="text-white/70 text-sm mb-3">' + utils.escapeHtml(workflow.description) + '</p>';
+                        html += '<div class="flex items-center justify-between text-sm">';
+                        html += '<span class="text-green-400">💰 ' + utils.escapeHtml(workflow.revenueImpact) + '</span>';
+                        html += '<span class="text-blue-400">🛠️ ' + utils.escapeHtml(workflow.tools) + '</span>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Tool Stack
+                if (results.toolStack && results.toolStack.length > 0) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">🛠️ Recommended Tool Stack</h3>';
+                    html += '<div class="grid md:grid-cols-2 gap-4">';
+                    for (var j = 0; j < results.toolStack.length; j++) {
+                        var tool = results.toolStack[j];
+                        html += '<div class="bg-white/5 rounded-lg p-4 border border-white/10">';
+                        html += '<div class="flex items-center gap-2 mb-2">';
+                        html += '<span class="text-xl">' + (tool.icon || '🔧') + '</span>';
+                        html += '<h4 class="text-white font-semibold">' + utils.escapeHtml(tool.name) + '</h4>';
+                        html += '</div>';
+                        html += '<p class="text-white/60 text-sm mb-2">' + utils.escapeHtml(tool.purpose) + '</p>';
+                        html += '<p class="text-yellow-400 text-sm">' + utils.escapeHtml(tool.pricing) + '</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Implementation Timeline
+                if (results.timeline && results.timeline.length > 0) {
+                    html += '<div class="tool-card p-6">';
+                    html += '<h3 class="text-lg font-bold text-white mb-4">📅 Implementation Timeline</h3>';
+                    html += '<div class="space-y-3">';
+                    for (var k = 0; k < results.timeline.length; k++) {
+                        var phase = results.timeline[k];
+                        html += '<div class="flex items-start gap-3 bg-white/5 rounded-lg p-3">';
+                        html += '<span class="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-600 rounded text-white font-bold text-sm">' + utils.escapeHtml(phase.week) + '</span>';
+                        html += '<div class="flex-1">';
+                        html += '<p class="text-white font-medium">' + utils.escapeHtml(phase.focus) + '</p>';
+                        html += '<p class="text-white/60 text-sm">' + utils.escapeHtml(phase.tasks) + '</p>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Close pdf-content
+
+                html += '<button onclick="app.resetAutomation()" class="btn-secondary w-full mt-6">Build Another Pipeline</button>';
+                return html;
+            }
+
+            // Input form
+            html += '<form onsubmit="app.analyzeAutomation(event)">';
+
+            html += '<div class="mb-6">';
+            html += '<label class="block text-white/80 font-medium mb-2">YouTube Channel URL *</label>';
+            html += '<input type="text" id="automation-channel-url" class="input-field" placeholder="https://youtube.com/@yourchannel" required />';
+            html += '<p class="text-white/40 text-sm mt-2">Enter your channel URL to build automated revenue pipelines</p>';
+            html += '</div>';
+
+            html += '<button type="submit" class="btn-primary w-full text-lg py-4">';
+            html += '⚙️ Build Automation Pipeline';
+            html += '</button>';
+
+            html += '</form>';
+
+            return html;
+        }
+
         // History view
         function renderHistory() {
             var html = '';
@@ -3409,6 +4687,36 @@
                 var segmentCount = (item.segments && item.segments.length) || 0;
                 html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelName) + '</h3>';
                 html += '<p class="text-white/60 text-sm">' + segmentCount + ' audience segments identified</p>';
+            } else if (item.type === 'digitalproduct') {
+                var channelName = item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel';
+                var productCount = (item.productIdeas && item.productIdeas.length) || 0;
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelName) + '</h3>';
+                html += '<p class="text-white/60 text-sm">' + productCount + ' product ideas generated</p>';
+            } else if (item.type === 'affiliate') {
+                var channelName = item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel';
+                var programCount = (item.affiliatePrograms && item.affiliatePrograms.length) || 0;
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelName) + '</h3>';
+                html += '<p class="text-white/60 text-sm">' + programCount + ' affiliate programs found</p>';
+            } else if (item.type === 'multiincome') {
+                var videoTitle = item.videoTitle || item.title || 'Video Analysis';
+                var pieceCount = (item.contentPieces && item.contentPieces.length) || 0;
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(videoTitle) + '</h3>';
+                html += '<p class="text-white/60 text-sm">' + pieceCount + ' content pieces identified</p>';
+            } else if (item.type === 'branddeal') {
+                var channelName = item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel';
+                var brandCount = (item.matchedBrands && item.matchedBrands.length) || 0;
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelName) + '</h3>';
+                html += '<p class="text-white/60 text-sm">' + brandCount + ' brand partners matched</p>';
+            } else if (item.type === 'licensing') {
+                var channelName = item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel';
+                var oppCount = (item.opportunities && item.opportunities.length) || 0;
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelName) + '</h3>';
+                html += '<p class="text-white/60 text-sm">' + oppCount + ' licensing opportunities found</p>';
+            } else if (item.type === 'automation') {
+                var channelName = item.channelName || (item.channelInfo && item.channelInfo.name) || 'Channel';
+                var automationScore = item.automationScore || 0;
+                html += '<h3 class="text-white font-medium mb-2">' + utils.escapeHtml(channelName) + '</h3>';
+                html += '<p class="text-white/60 text-sm">Automation potential: ' + automationScore + '%</p>';
             }
 
             html += '</div>';
@@ -3425,7 +4733,13 @@
                 'sponsorship': { icon: '💎', name: 'Sponsorship', bgClass: 'bg-pink-500/20 text-pink-300' },
                 'diversification': { icon: '📊', name: 'Revenue Diversify', bgClass: 'bg-cyan-500/20 text-cyan-300' },
                 'cpmbooster': { icon: '💰', name: 'CPM Booster', bgClass: 'bg-emerald-500/20 text-emerald-300' },
-                'audienceprofile': { icon: '📱', name: 'Audience Profile', bgClass: 'bg-red-500/20 text-red-300' }
+                'audienceprofile': { icon: '📱', name: 'Audience Profile', bgClass: 'bg-red-500/20 text-red-300' },
+                'digitalproduct': { icon: '🛒', name: 'Product Architect', bgClass: 'bg-violet-500/20 text-violet-300' },
+                'affiliate': { icon: '📈', name: 'Affiliate Finder', bgClass: 'bg-amber-500/20 text-amber-300' },
+                'multiincome': { icon: '🎬', name: 'Multi-Income', bgClass: 'bg-indigo-500/20 text-indigo-300' },
+                'branddeal': { icon: '🤝', name: 'Brand Deals', bgClass: 'bg-pink-500/20 text-pink-300' },
+                'licensing': { icon: '📜', name: 'Licensing', bgClass: 'bg-teal-500/20 text-teal-300' },
+                'automation': { icon: '⚙️', name: 'Automation', bgClass: 'bg-orange-500/20 text-orange-300' }
             };
             return types[type] || { icon: '📋', name: type, bgClass: 'bg-gray-500/20 text-gray-300' };
         }
