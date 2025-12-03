@@ -4471,7 +4471,7 @@
                 }
             },
 
-            // PDF Download functionality
+            // PDF Download functionality (optimized for smaller file sizes)
             downloadPDF: function(toolType) {
                 var element = document.getElementById('pdf-content-' + toolType);
                 if (!element) {
@@ -4504,7 +4504,7 @@
                 }
 
                 // Show loading state
-                utils.showNotification('Generating PDF...', 'info');
+                utils.showNotification('Generating PDF... This may take a moment.', 'info');
 
                 // Tool names mapping
                 var toolNames = {
@@ -4522,65 +4522,96 @@
 
                 var toolName = toolNames[toolType] || 'AI Report';
 
-                // Use html2canvas to capture the content
+                // Use html2canvas with optimized settings for smaller file size
                 html2canvas(element, {
                     backgroundColor: '#0f0f1a',
-                    scale: 2,
+                    scale: 1.5, // Reduced from 2 for smaller file size while maintaining good quality
                     useCORS: true,
                     logging: false,
                     allowTaint: true,
-                    foreignObjectRendering: false
+                    foreignObjectRendering: false,
+                    imageTimeout: 15000,
+                    removeContainer: true
                 }).then(function(canvas) {
                     try {
-                        var imgData = canvas.toDataURL('image/png');
                         var pdf = new jsPDFClass({
                             orientation: 'portrait',
                             unit: 'mm',
-                            format: 'a4'
+                            format: 'a4',
+                            compress: true // Enable compression
                         });
 
-                        // Calculate dimensions
+                        // Page dimensions
                         var pageWidth = pdf.internal.pageSize.getWidth();
                         var pageHeight = pdf.internal.pageSize.getHeight();
                         var margin = 10;
                         var contentWidth = pageWidth - (margin * 2);
+                        var headerHeight = 35;
+                        var footerHeight = 15;
+                        var usableHeight = pageHeight - headerHeight - footerHeight;
 
-                        // Add header
-                        pdf.setFillColor(15, 15, 26);
-                        pdf.rect(0, 0, pageWidth, 35, 'F');
-
-                        pdf.setFontSize(18);
-                        pdf.setTextColor(255, 255, 255);
-                        pdf.text(toolName + ' Report', margin, 15);
-
-                        pdf.setFontSize(10);
-                        pdf.setTextColor(156, 163, 175);
-                        pdf.text('Generated on ' + new Date().toLocaleDateString(), margin, 22);
-                        pdf.text('YouTube Video Optimizer', margin, 28);
-
-                        // Add the captured content
+                        // Calculate image dimensions to fit page width
                         var imgWidth = contentWidth;
                         var imgHeight = (canvas.height * imgWidth) / canvas.width;
-                        var yOffset = 40;
 
-                        // Handle multi-page if needed
-                        var heightLeft = imgHeight;
-                        var position = yOffset;
+                        // Calculate how many pages we need
+                        var totalPages = Math.ceil(imgHeight / usableHeight);
 
-                        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
-                        heightLeft -= (pageHeight - position);
+                        // Calculate the portion of the canvas for each page
+                        var canvasPageHeight = canvas.height / totalPages;
 
-                        while (heightLeft > 0) {
-                            position = heightLeft - imgHeight + 10;
-                            pdf.addPage();
-                            pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
-                            heightLeft -= pageHeight;
+                        for (var page = 0; page < totalPages; page++) {
+                            if (page > 0) {
+                                pdf.addPage();
+                            }
+
+                            // Add header on each page
+                            pdf.setFillColor(15, 15, 26);
+                            pdf.rect(0, 0, pageWidth, headerHeight, 'F');
+
+                            pdf.setFontSize(16);
+                            pdf.setTextColor(255, 255, 255);
+                            pdf.text(toolName + ' Report', margin, 14);
+
+                            pdf.setFontSize(9);
+                            pdf.setTextColor(156, 163, 175);
+                            pdf.text('Generated on ' + new Date().toLocaleDateString(), margin, 21);
+                            pdf.text('YouTube Video Optimizer', margin, 27);
+
+                            if (totalPages > 1) {
+                                pdf.setFontSize(8);
+                                pdf.text('Page ' + (page + 1) + ' of ' + totalPages, pageWidth - margin - 20, 27);
+                            }
+
+                            // Create a temporary canvas for this page's portion
+                            var pageCanvas = document.createElement('canvas');
+                            pageCanvas.width = canvas.width;
+                            pageCanvas.height = Math.min(canvasPageHeight, canvas.height - (page * canvasPageHeight));
+
+                            var ctx = pageCanvas.getContext('2d');
+                            // Draw the portion of the original canvas for this page
+                            ctx.drawImage(
+                                canvas,
+                                0, page * canvasPageHeight, // Source x, y
+                                canvas.width, pageCanvas.height, // Source width, height
+                                0, 0, // Destination x, y
+                                pageCanvas.width, pageCanvas.height // Destination width, height
+                            );
+
+                            // Convert to JPEG with quality setting (much smaller than PNG)
+                            var pageImgData = pageCanvas.toDataURL('image/jpeg', 0.85);
+
+                            // Calculate the height for this page's content
+                            var pageImgHeight = (pageCanvas.height * imgWidth) / pageCanvas.width;
+
+                            // Add this page's image portion
+                            pdf.addImage(pageImgData, 'JPEG', margin, headerHeight + 2, imgWidth, pageImgHeight);
+
+                            // Add footer
+                            pdf.setFontSize(7);
+                            pdf.setTextColor(107, 114, 128);
+                            pdf.text('Powered by YouTube Video Optimizer - ytseo.siteuo.com', margin, pageHeight - 8);
                         }
-
-                        // Add footer on last page
-                        pdf.setFontSize(8);
-                        pdf.setTextColor(107, 114, 128);
-                        pdf.text('Powered by YouTube Video Optimizer - ytseo.siteuo.com', margin, pageHeight - 10);
 
                         // Download the PDF
                         var filename = toolType + '-report-' + new Date().toISOString().slice(0, 10) + '.pdf';
