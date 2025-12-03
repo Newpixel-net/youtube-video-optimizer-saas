@@ -637,6 +637,258 @@
             max-height: 500px;
             overflow-y: auto;
         }
+
+        /* ------------------------------------------
+           2.17 SMART DASHBOARD
+           ------------------------------------------ */
+        .smart-dashboard {
+            padding: 1rem 0;
+        }
+
+        .dashboard-tool-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .dashboard-tool-card:hover {
+            background: rgba(255, 215, 0, 0.1);
+            border-color: rgba(255, 215, 0, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .dashboard-tool-card.recommended {
+            background: linear-gradient(145deg, rgba(255, 215, 0, 0.08) 0%, rgba(255, 165, 0, 0.05) 100%);
+            border-color: rgba(255, 215, 0, 0.2);
+        }
+
+        .tool-card-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .tool-card-name {
+            font-weight: 600;
+            color: white;
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .tool-card-desc {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.4;
+        }
+
+        /* ------------------------------------------
+           2.18 COMMAND PALETTE (SPOTLIGHT)
+           ------------------------------------------ */
+        .command-palette-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 10vh;
+        }
+
+        .command-palette {
+            width: 100%;
+            max-width: 580px;
+            margin: 0 1rem;
+            background: linear-gradient(180deg, rgba(30, 30, 40, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1.25rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+        }
+
+        .command-palette-header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .command-palette-header input {
+            font-size: 1.125rem;
+        }
+
+        .command-palette-body {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .command-section {
+            margin-bottom: 0.5rem;
+        }
+
+        .command-section-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: rgba(255, 255, 255, 0.4);
+            padding: 0.5rem 0.75rem;
+            font-weight: 600;
+        }
+
+        .command-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .command-item:hover {
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .command-item.recent {
+            border-left: 2px solid rgba(255, 215, 0, 0.4);
+        }
+
+        .command-item-icon {
+            font-size: 1.5rem;
+            width: 2.5rem;
+            height: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.5rem;
+        }
+
+        .command-item-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .command-item-name {
+            font-weight: 600;
+            color: white;
+            font-size: 0.95rem;
+        }
+
+        .command-item-desc {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .command-item-hint {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.8rem;
+        }
+
+        .command-palette-footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0.75rem 1rem;
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .command-palette-footer kbd {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: inherit;
+            margin-right: 0.25rem;
+        }
+
+        /* ------------------------------------------
+           2.19 FLOATING SEARCH BUTTON (FAB)
+           ------------------------------------------ */
+        .floating-search-btn {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #1a1a2e;
+            border: none;
+            border-radius: 50px;
+            padding: 0.875rem 1.25rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(251, 191, 36, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .floating-search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(251, 191, 36, 0.5);
+        }
+
+        .floating-search-btn .fab-icon {
+            font-size: 1.25rem;
+        }
+
+        /* Hide text on very small screens */
+        @media (max-width: 400px) {
+            .floating-search-btn {
+                border-radius: 50%;
+                padding: 1rem;
+            }
+            .floating-search-btn .fab-text {
+                display: none;
+            }
+        }
+
+        /* ------------------------------------------
+           2.20 SLIDE UP ANIMATION
+           ------------------------------------------ */
+        .slide-up {
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Mobile responsive adjustments */
+        @media (max-width: 768px) {
+            .dashboard-tool-card {
+                padding: 1rem;
+            }
+            .tool-card-icon {
+                font-size: 2rem;
+            }
+            .tool-card-name {
+                font-size: 0.85rem;
+            }
+            .command-palette {
+                max-width: 100%;
+                margin: 0 0.5rem;
+                border-radius: 1rem;
+            }
+            .command-palette-body {
+                max-height: 50vh;
+            }
+        }
     </style>
 </head>
 <body>
@@ -779,7 +1031,14 @@
             brandDealHistory: null,
             licensingHistory: null,
             automationHistory: null,
-            historyCounts: null
+            historyCounts: null,
+
+            // Smart Dashboard & Command Palette state
+            toolViewMode: 'dashboard', // dashboard | grid
+            showCommandPalette: false,
+            commandSearchQuery: '',
+            recentTools: [], // Array of recently used tool keys (max 4)
+            recommendedTools: [] // AI-recommended tools based on context
         };
 
         /* ==========================================
@@ -910,9 +1169,89 @@
 
             setActiveTool: function(tool) {
                 state.activeTool = tool;
+                state.toolViewMode = 'grid'; // Switch to grid mode when selecting a tool
+                state.error = null;
+                state.success = null;
+
+                // Track recent tools (max 4, no duplicates)
+                if (tool) {
+                    var recent = state.recentTools || [];
+                    var idx = recent.indexOf(tool);
+                    if (idx !== -1) {
+                        recent.splice(idx, 1);
+                    }
+                    recent.unshift(tool);
+                    state.recentTools = recent.slice(0, 4);
+
+                    // Save to localStorage for persistence
+                    try {
+                        localStorage.setItem('enterprise_recent_tools', JSON.stringify(state.recentTools));
+                    } catch (e) {}
+                }
+
+                render();
+            },
+
+            // Smart Dashboard Navigation
+            backToToolDashboard: function() {
+                state.activeTool = null;
+                state.toolViewMode = 'dashboard';
                 state.error = null;
                 state.success = null;
                 render();
+            },
+
+            showAllTools: function() {
+                state.toolViewMode = 'grid';
+                state.activeTool = 'bulk'; // Default to first tool
+                render();
+            },
+
+            clearRecentTools: function() {
+                state.recentTools = [];
+                try {
+                    localStorage.removeItem('enterprise_recent_tools');
+                } catch (e) {}
+                render();
+            },
+
+            // Command Palette Methods
+            openCommandPalette: function() {
+                state.showCommandPalette = true;
+                state.commandSearchQuery = '';
+                render();
+
+                // Focus the search input after render
+                setTimeout(function() {
+                    var input = document.getElementById('command-search-input');
+                    if (input) input.focus();
+                }, 50);
+            },
+
+            closeCommandPalette: function() {
+                state.showCommandPalette = false;
+                state.commandSearchQuery = '';
+                render();
+            },
+
+            updateCommandSearch: function(query) {
+                state.commandSearchQuery = query;
+                render();
+
+                // Re-focus input after render
+                setTimeout(function() {
+                    var input = document.getElementById('command-search-input');
+                    if (input) {
+                        input.focus();
+                        input.setSelectionRange(query.length, query.length);
+                    }
+                }, 10);
+            },
+
+            selectTool: function(toolKey) {
+                state.showCommandPalette = false;
+                state.commandSearchQuery = '';
+                this.setActiveTool(toolKey);
             },
 
             goToTools: function() {
@@ -2180,10 +2519,10 @@
             if (state.currentView === 'loading') {
                 root.innerHTML = renderLoading();
             } else if (state.currentView === 'history') {
-                root.innerHTML = renderHistory() + renderUpgradeModal();
+                root.innerHTML = renderHistory() + renderUpgradeModal() + renderCommandPalette();
             } else {
-                // Always show tools, add upgrade modal on top if needed
-                root.innerHTML = renderTools() + renderUpgradeModal();
+                // Always show tools, add upgrade modal, command palette, and FAB
+                root.innerHTML = renderTools() + renderUpgradeModal() + renderCommandPalette() + renderFloatingSearchButton();
             }
         }
 
@@ -2219,6 +2558,227 @@
             return html;
         }
 
+        // All tools data for Smart Dashboard and Command Palette
+        function getAllToolsData() {
+            return [
+                { key: 'bulk', icon: '🎯', name: 'Bulk Optimizer', desc: 'Optimize multiple videos at once', category: 'optimization' },
+                { key: 'placement', icon: '🎬', name: 'Placement Finder', desc: 'Find perfect video placements', category: 'optimization' },
+                { key: 'viral', icon: '🔮', name: 'Viral Predictor', desc: 'Predict viral potential', category: 'analytics' },
+                { key: 'monetization', icon: '💰', name: 'Monetization', desc: 'Analyze monetization potential', category: 'monetization' },
+                { key: 'script', icon: '📝', name: 'Script Writer', desc: 'AI-powered script creation', category: 'content' },
+                { key: 'sponsorship', icon: '💎', name: 'Sponsorship Rates', desc: 'Calculate sponsor pricing', category: 'monetization' },
+                { key: 'diversification', icon: '📊', name: 'Revenue Diversify', desc: 'Find new revenue streams', category: 'monetization' },
+                { key: 'cpmbooster', icon: '💰', name: 'CPM Booster', desc: 'Strategies to boost CPM', category: 'monetization' },
+                { key: 'audienceprofile', icon: '📱', name: 'Audience Profile', desc: 'Deep audience insights', category: 'analytics' },
+                { key: 'digitalproduct', icon: '🛒', name: 'Product Architect', desc: 'Design digital products', category: 'monetization' },
+                { key: 'affiliate', icon: '📈', name: 'Affiliate Finder', desc: 'Find affiliate opportunities', category: 'monetization' },
+                { key: 'multiincome', icon: '🎬', name: 'Multi-Income', desc: 'Convert videos to income', category: 'monetization' },
+                { key: 'branddeal', icon: '🤝', name: 'Brand Deals', desc: 'Match with brand partners', category: 'monetization' },
+                { key: 'licensing', icon: '📜', name: 'Licensing Scout', desc: 'Find licensing opportunities', category: 'monetization' },
+                { key: 'automation', icon: '⚙️', name: 'Revenue Auto', desc: 'Automate revenue pipelines', category: 'monetization' }
+            ];
+        }
+
+        // Get recommended tools based on recent usage
+        function getRecommendedTools() {
+            var allTools = getAllToolsData();
+            var recent = state.recentTools || [];
+
+            // Simple recommendation: tools not recently used, prioritizing monetization
+            var recommended = allTools.filter(function(tool) {
+                return recent.indexOf(tool.key) === -1;
+            });
+
+            // Prioritize monetization tools
+            recommended.sort(function(a, b) {
+                if (a.category === 'monetization' && b.category !== 'monetization') return -1;
+                if (b.category === 'monetization' && a.category !== 'monetization') return 1;
+                return 0;
+            });
+
+            return recommended.slice(0, 4);
+        }
+
+        // Smart Dashboard View
+        function renderSmartDashboard() {
+            var html = '';
+            var recentTools = state.recentTools || [];
+            var allTools = getAllToolsData();
+            var recommendedTools = getRecommendedTools();
+
+            // Get recent tool objects
+            var recentToolObjects = recentTools.map(function(key) {
+                return allTools.find(function(t) { return t.key === key; });
+            }).filter(Boolean).slice(0, 4);
+
+            html += '<div class="smart-dashboard fade-in">';
+
+            // Quick Search Bar
+            html += '<div class="mb-8">';
+            html += '<div class="relative">';
+            html += '<input type="text" id="dashboard-search" placeholder="🔍 Search tools... (or press ⌘K)" ';
+            html += 'class="w-full px-5 py-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-white/50 text-lg focus:outline-none focus:border-yellow-400/50 focus:ring-2 focus:ring-yellow-400/20" ';
+            html += 'onfocus="app.openCommandPalette()" readonly>';
+            html += '</div>';
+            html += '</div>';
+
+            // Recent Tools Section
+            if (recentToolObjects.length > 0) {
+                html += '<div class="mb-8">';
+                html += '<div class="flex items-center justify-between mb-4">';
+                html += '<h3 class="text-lg font-semibold text-white flex items-center gap-2"><span>🕐</span> Recent Tools</h3>';
+                html += '<button onclick="app.clearRecentTools()" class="text-white/40 hover:text-white/60 text-sm">Clear</button>';
+                html += '</div>';
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+
+                for (var i = 0; i < recentToolObjects.length; i++) {
+                    var tool = recentToolObjects[i];
+                    html += '<div class="dashboard-tool-card" onclick="app.setActiveTool(\'' + tool.key + '\')">';
+                    html += '<div class="tool-card-icon">' + tool.icon + '</div>';
+                    html += '<div class="tool-card-name">' + tool.name + '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Recommended Tools Section
+            html += '<div class="mb-8">';
+            html += '<h3 class="text-lg font-semibold text-white flex items-center gap-2 mb-4"><span>✨</span> Recommended for You</h3>';
+            html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+
+            for (var i = 0; i < recommendedTools.length; i++) {
+                var tool = recommendedTools[i];
+                html += '<div class="dashboard-tool-card recommended" onclick="app.setActiveTool(\'' + tool.key + '\')">';
+                html += '<div class="tool-card-icon">' + tool.icon + '</div>';
+                html += '<div class="tool-card-name">' + tool.name + '</div>';
+                html += '<div class="tool-card-desc">' + tool.desc + '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+            html += '</div>';
+
+            // Browse All Tools Button
+            html += '<div class="text-center">';
+            html += '<button onclick="app.showAllTools()" class="btn-primary px-8 py-4 text-lg">';
+            html += '🔍 Browse All 15 Tools';
+            html += '</button>';
+            html += '</div>';
+
+            html += '</div>';
+
+            return html;
+        }
+
+        // Command Palette (Spotlight Search) Overlay
+        function renderCommandPalette() {
+            if (!state.showCommandPalette) return '';
+
+            var allTools = getAllToolsData();
+            var query = (state.commandSearchQuery || '').toLowerCase();
+            var recentTools = state.recentTools || [];
+
+            // Filter tools based on search
+            var filteredTools = allTools.filter(function(tool) {
+                if (!query) return true;
+                return tool.name.toLowerCase().indexOf(query) !== -1 ||
+                       tool.desc.toLowerCase().indexOf(query) !== -1 ||
+                       tool.key.toLowerCase().indexOf(query) !== -1;
+            });
+
+            // Get recent tool objects
+            var recentToolObjects = recentTools.map(function(key) {
+                return allTools.find(function(t) { return t.key === key; });
+            }).filter(Boolean).slice(0, 3);
+
+            var html = '';
+            html += '<div class="command-palette-overlay" onclick="app.closeCommandPalette()">';
+            html += '<div class="command-palette slide-up" onclick="event.stopPropagation()">';
+
+            // Search Input
+            html += '<div class="command-palette-header">';
+            html += '<div class="relative">';
+            html += '<span class="absolute left-4 top-1/2 -translate-y-1/2 text-xl">🔍</span>';
+            html += '<input type="text" id="command-search-input" placeholder="Search tools..." ';
+            html += 'value="' + utils.escapeHtml(state.commandSearchQuery || '') + '" ';
+            html += 'class="w-full pl-12 pr-12 py-4 bg-transparent border-none text-white text-lg placeholder-white/50 focus:outline-none" ';
+            html += 'oninput="app.updateCommandSearch(this.value)" autofocus>';
+            html += '<button onclick="app.closeCommandPalette()" class="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-sm bg-white/10 px-2 py-1 rounded">ESC</button>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="command-palette-body">';
+
+            // Recent section (only show if no search query)
+            if (!query && recentToolObjects.length > 0) {
+                html += '<div class="command-section">';
+                html += '<div class="command-section-title">Recent</div>';
+                for (var i = 0; i < recentToolObjects.length; i++) {
+                    var tool = recentToolObjects[i];
+                    html += '<div class="command-item" onclick="app.selectTool(\'' + tool.key + '\')">';
+                    html += '<span class="command-item-icon">' + tool.icon + '</span>';
+                    html += '<div class="command-item-content">';
+                    html += '<div class="command-item-name">' + tool.name + '</div>';
+                    html += '<div class="command-item-desc">' + tool.desc + '</div>';
+                    html += '</div>';
+                    html += '<span class="command-item-hint">↵</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+
+            // All/Filtered tools section
+            html += '<div class="command-section">';
+            html += '<div class="command-section-title">' + (query ? 'Results' : 'All Tools') + '</div>';
+
+            if (filteredTools.length === 0) {
+                html += '<div class="text-center py-8 text-white/50">No tools found for "' + utils.escapeHtml(query) + '"</div>';
+            } else {
+                for (var i = 0; i < filteredTools.length; i++) {
+                    var tool = filteredTools[i];
+                    var isRecent = recentTools.indexOf(tool.key) !== -1;
+                    html += '<div class="command-item' + (isRecent ? ' recent' : '') + '" onclick="app.selectTool(\'' + tool.key + '\')">';
+                    html += '<span class="command-item-icon">' + tool.icon + '</span>';
+                    html += '<div class="command-item-content">';
+                    html += '<div class="command-item-name">' + tool.name + '</div>';
+                    html += '<div class="command-item-desc">' + tool.desc + '</div>';
+                    html += '</div>';
+                    html += '<span class="command-item-hint">↵</span>';
+                    html += '</div>';
+                }
+            }
+
+            html += '</div>';
+            html += '</div>';
+
+            // Footer with keyboard hints
+            html += '<div class="command-palette-footer">';
+            html += '<span><kbd>↑↓</kbd> Navigate</span>';
+            html += '<span><kbd>↵</kbd> Select</span>';
+            html += '<span><kbd>ESC</kbd> Close</span>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
+        // Floating Action Button for Command Palette
+        function renderFloatingSearchButton() {
+            if (state.showCommandPalette) return '';
+            if (state.currentView !== 'tools') return '';
+
+            var html = '';
+            html += '<button class="floating-search-btn" onclick="app.openCommandPalette()" title="Search Tools (⌘K)">';
+            html += '<span class="fab-icon">🔍</span>';
+            html += '<span class="fab-text">Search</span>';
+            html += '</button>';
+            return html;
+        }
+
         // Main tools view
         function renderTools() {
             var html = '';
@@ -2247,6 +2807,24 @@
             html += '<button onclick="app.goToHistory()" class="btn-secondary">📜 View History</button>';
             html += '<button onclick="app.goToDashboard()" class="btn-secondary">← Back to Dashboard</button>';
             html += '</div>';
+            html += '</div>';
+
+            // Check if we should show Smart Dashboard or Grid view
+            var showDashboard = state.toolViewMode === 'dashboard' && !state.activeTool;
+
+            if (showDashboard) {
+                // Smart Dashboard Mode
+                html += renderSmartDashboard();
+                html += '</div></div>';
+                return html;
+            }
+
+            // Grid Mode - Show tool tabs and content
+            // Back to Dashboard button (when viewing a specific tool)
+            html += '<div class="mb-4 fade-in">';
+            html += '<button onclick="app.backToToolDashboard()" class="text-white/60 hover:text-white flex items-center gap-2 transition-colors">';
+            html += '<span>←</span> Back to Tool Dashboard';
+            html += '</button>';
             html += '</div>';
 
             // Tool tabs
@@ -4817,8 +5395,67 @@
             render();
         }
 
+        // Load recent tools from localStorage
+        function loadRecentTools() {
+            try {
+                var saved = localStorage.getItem('enterprise_recent_tools');
+                if (saved) {
+                    state.recentTools = JSON.parse(saved);
+                }
+            } catch (e) {}
+        }
+
+        // Set up keyboard shortcuts
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', function(e) {
+                // ⌘K or Ctrl+K to open command palette
+                if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                    e.preventDefault();
+                    if (state.showCommandPalette) {
+                        app.closeCommandPalette();
+                    } else {
+                        app.openCommandPalette();
+                    }
+                    return;
+                }
+
+                // ESC to close command palette
+                if (e.key === 'Escape' && state.showCommandPalette) {
+                    e.preventDefault();
+                    app.closeCommandPalette();
+                    return;
+                }
+
+                // Enter to select first matching tool when in command palette
+                if (e.key === 'Enter' && state.showCommandPalette) {
+                    e.preventDefault();
+                    var allTools = getAllToolsData();
+                    var query = (state.commandSearchQuery || '').toLowerCase();
+                    var filtered = allTools.filter(function(tool) {
+                        if (!query) return true;
+                        return tool.name.toLowerCase().indexOf(query) !== -1 ||
+                               tool.desc.toLowerCase().indexOf(query) !== -1;
+                    });
+                    if (filtered.length > 0) {
+                        app.selectTool(filtered[0].key);
+                    }
+                    return;
+                }
+            });
+        }
+
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
+            // Load saved recent tools
+            loadRecentTools();
+
+            // Set initial state to show dashboard
+            state.activeTool = null;
+            state.toolViewMode = 'dashboard';
+
+            // Set up keyboard shortcuts
+            setupKeyboardShortcuts();
+
             render();
             checkAccess();
         });
