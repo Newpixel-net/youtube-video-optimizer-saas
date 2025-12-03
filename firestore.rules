@@ -467,6 +467,66 @@ service cloud.firestore {
     }
 
     // ============================================
+    // ENTERPRISE SUITE - SPONSORSHIP HISTORY
+    // ============================================
+
+    match /sponsorshipHistory/{historyId} {
+      // Users can read their own sponsorship rate history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // ENTERPRISE SUITE - DIVERSIFICATION HISTORY
+    // ============================================
+
+    match /diversificationHistory/{historyId} {
+      // Users can read their own diversification analysis history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // ENTERPRISE SUITE - CPM BOOSTER HISTORY
+    // ============================================
+
+    match /cpmBoosterHistory/{historyId} {
+      // Users can read their own CPM booster history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // ENTERPRISE SUITE - AUDIENCE PROFILE HISTORY
+    // ============================================
+
+    match /audienceProfileHistory/{historyId} {
+      // Users can read their own audience profile history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Cloud Functions create history (via Admin SDK)
+      allow create, update: if false;
+
+      // Users can delete their own history
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
     // TOKEN TRANSACTIONS
     // ============================================
 
