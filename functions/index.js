@@ -5624,8 +5624,24 @@ FORMAT: YouTube thumbnail, 16:9 aspect ratio, 4K quality, professional photograp
           }
         }
       } catch (imagenError) {
-        console.error('Imagen generation error:', imagenError.message);
-        throw new functions.https.HttpsError('internal', 'Image generation failed. Please try again.');
+        console.error('Imagen generation error:', imagenError.message, imagenError.stack);
+        // Provide more detailed error message for debugging
+        const errMsg = imagenError.message?.toLowerCase() || '';
+        let userMessage = 'Image generation failed: ';
+        if (errMsg.includes('quota') || errMsg.includes('rate')) {
+          userMessage += 'API rate limit reached. Please wait a moment and try again.';
+        } else if (errMsg.includes('safety') || errMsg.includes('blocked') || errMsg.includes('policy')) {
+          userMessage += 'Content was blocked by safety filters. Try a different prompt.';
+        } else if (errMsg.includes('billing') || errMsg.includes('payment')) {
+          userMessage += 'Billing issue with the API. Please contact support.';
+        } else if (errMsg.includes('permission') || errMsg.includes('403') || errMsg.includes('denied')) {
+          userMessage += 'API permission denied. Please contact support.';
+        } else if (errMsg.includes('not found') || errMsg.includes('404')) {
+          userMessage += 'Imagen model not available. Please contact support.';
+        } else {
+          userMessage += imagenError.message || 'Unknown error. Please try again.';
+        }
+        throw new functions.https.HttpsError('internal', userMessage);
       }
 
       usedModel = imagenModelId;
