@@ -6406,8 +6406,8 @@ exports.findPlacements = functions.https.onCall(async (data, context) => {
     const recentVideoTitles = videosResponse.data.items?.map(v => v.snippet.title) || [];
     const topicCategories = userChannel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
 
-    // Step 4: Use AI to analyze channel and generate search criteria
-    const analysisPrompt = `You are a YouTube advertising expert. Analyze this channel to find similar channels for Google Ads Placement targeting.
+    // Step 4: Use AI to analyze channel and generate VIDEO search queries
+    const analysisPrompt = `You are a YouTube advertising expert. Analyze this channel to find SIMILAR channels for Google Ads Placement targeting.
 
 CHANNEL DATA:
 - Name: ${channelName}
@@ -6416,21 +6416,31 @@ CHANNEL DATA:
 - Topics: ${topicCategories.join(', ') || 'Not specified'}
 - Recent Videos: ${recentVideoTitles.slice(0, 10).join(' | ')}
 
+Generate search queries to find VIDEOS with SIMILAR content (not just the same topic name).
+Focus on the SPECIFIC content type and style, not generic category terms.
+
 Respond in this EXACT JSON format:
 {
-  "niche": "Primary content niche (2-4 words)",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "audienceDescription": "Brief description of the target audience (age, interests, demographics)",
-  "searchQueries": ["search query 1", "search query 2", "search query 3"],
+  "niche": "Specific content niche (2-5 words)",
+  "contentType": "Type of content: music/tutorial/review/vlog/documentary/entertainment/gaming/news/educational/etc",
+  "language": "Primary language detected from video titles",
+  "keywords": ["specific keyword 1", "specific keyword 2", "specific keyword 3", "specific keyword 4", "specific keyword 5"],
+  "audienceDescription": "Brief description of the target audience",
+  "videoSearchQueries": ["specific video search query 1", "specific video search query 2", "specific video search query 3", "specific video search query 4", "specific video search query 5"],
   "contentStyle": "Brief description of content style",
-  "channelCategories": ["category1", "category2"]
-}`;
+  "contentSignature": "10-15 word description capturing the unique essence of this channel's content"
+}
+
+IMPORTANT:
+- videoSearchQueries should find VIDEOS similar to "${recentVideoTitles[0] || channelName}"
+- Be SPECIFIC - if it's "indie rock music covers", don't just search "rock music"
+- Include the style/format, not just the topic`;
 
     const aiResponse = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [{ role: 'user', content: analysisPrompt }],
       temperature: 0.7,
-      max_tokens: 800
+      max_tokens: 1000
     });
 
     let analysis;
@@ -6441,40 +6451,56 @@ Respond in this EXACT JSON format:
     } catch (e) {
       analysis = {
         niche: 'General Content',
+        contentType: 'video',
+        language: 'en',
         keywords: [channelName],
         audienceDescription: 'General YouTube viewers',
-        searchQueries: [channelName, ...topicCategories],
+        videoSearchQueries: recentVideoTitles.slice(0, 3),
         contentStyle: 'Video content',
-        channelCategories: topicCategories
+        contentSignature: channelName + ' style content'
       };
     }
 
-    // Step 5: Search for similar channels using multiple queries
-    const allChannelIds = new Set();
-    const searchQueries = [...analysis.searchQueries, ...analysis.keywords.slice(0, 2)];
+    // Step 5: Search for VIDEOS first (not channels) - this finds actual similar content
+    const channelVideoMap = new Map(); // channelId -> {videos: [], channelName, etc}
+    const searchQueries = analysis.videoSearchQueries || analysis.searchQueries || [channelName];
 
-    for (const query of searchQueries.slice(0, 3)) {
+    for (const query of searchQueries.slice(0, 5)) {
       try {
+        // Search for VIDEOS, not channels
         const searchResponse = await youtube.search.list({
           part: 'snippet',
           q: query,
-          type: 'channel',
-          maxResults: 15,
-          relevanceLanguage: 'en'
+          type: 'video',
+          maxResults: 20,
+          relevanceLanguage: analysis.language || 'en',
+          order: 'relevance'
         });
 
+        // Collect videos and their channels
         searchResponse.data.items?.forEach(item => {
-          if (item.snippet.channelId !== channelId) {
-            allChannelIds.add(item.snippet.channelId);
+          const vidChannelId = item.snippet.channelId;
+          if (vidChannelId !== channelId) { // Exclude source channel
+            if (!channelVideoMap.has(vidChannelId)) {
+              channelVideoMap.set(vidChannelId, {
+                channelId: vidChannelId,
+                channelName: item.snippet.channelTitle,
+                foundVideos: []
+              });
+            }
+            channelVideoMap.get(vidChannelId).foundVideos.push({
+              title: item.snippet.title,
+              description: (item.snippet.description || '').substring(0, 200)
+            });
           }
         });
       } catch (e) {
-        console.log('Search query failed:', query, e.message);
+        console.log('Video search query failed:', query, e.message);
       }
     }
 
-    // Step 6: Get detailed info for found channels (batch request)
-    const channelIds = Array.from(allChannelIds).slice(0, 50);
+    // Step 6: Get detailed channel info for found channels
+    const channelIds = Array.from(channelVideoMap.keys()).slice(0, 50);
 
     if (channelIds.length === 0) {
       throw new functions.https.HttpsError('not-found', 'No similar channels found. Try a different channel.');
@@ -6486,45 +6512,155 @@ Respond in this EXACT JSON format:
       maxResults: 50
     });
 
-    // Step 7: Filter and score channels
-    const placements = detailsResponse.data.items
-      ?.map(ch => {
-        const subs = parseInt(ch.statistics.subscriberCount) || 0;
-        const views = parseInt(ch.statistics.viewCount) || 0;
-        const videos = parseInt(ch.statistics.videoCount) || 0;
+    // Step 7: Get recent videos from each found channel for content analysis
+    const channelsWithContent = [];
+    const channelDetailsMap = new Map();
 
-        // Calculate relevance score based on engagement metrics
-        let score = 50;
-        if (subs > 10000) score += 10;
-        if (subs > 100000) score += 10;
-        if (subs > 1000000) score += 10;
-        if (views > 1000000) score += 10;
-        if (videos > 50) score += 5;
-        if (videos > 200) score += 5;
+    detailsResponse.data.items?.forEach(ch => {
+      channelDetailsMap.set(ch.id, ch);
+    });
 
-        return {
-          channelId: ch.id,
-          channelName: ch.snippet.title,
-          channelUrl: `https://www.youtube.com/channel/${ch.id}`,
-          handle: ch.snippet.customUrl || null,
-          thumbnail: ch.snippet.thumbnails?.medium?.url || ch.snippet.thumbnails?.default?.url,
-          description: (ch.snippet.description || '').substring(0, 150),
-          subscribers: subs,
-          subscribersFormatted: formatNumber(subs),
-          totalViews: views,
-          videoCount: videos,
-          relevanceScore: Math.min(score, 100)
-        };
-      })
-      .filter(ch => ch.subscribers >= 1000) // Minimum 1K subscribers
-      .sort((a, b) => b.relevanceScore - a.relevanceScore || b.subscribers - a.subscribers)
-      .slice(0, 30);
+    // Batch fetch recent videos from top candidate channels (limit to save API quota)
+    const topCandidates = channelIds.slice(0, 25);
+
+    for (const candidateId of topCandidates) {
+      try {
+        const chDetails = channelDetailsMap.get(candidateId);
+        const foundData = channelVideoMap.get(candidateId);
+
+        if (!chDetails) continue;
+
+        // Get recent videos from this channel
+        const recentVidsResponse = await youtube.search.list({
+          part: 'snippet',
+          channelId: candidateId,
+          type: 'video',
+          order: 'date',
+          maxResults: 8
+        });
+
+        const candidateVideoTitles = recentVidsResponse.data.items?.map(v => v.snippet.title) || [];
+
+        channelsWithContent.push({
+          channelId: candidateId,
+          channelName: chDetails.snippet.title,
+          channelDescription: (chDetails.snippet.description || '').substring(0, 300),
+          handle: chDetails.snippet.customUrl || null,
+          thumbnail: chDetails.snippet.thumbnails?.medium?.url || chDetails.snippet.thumbnails?.default?.url,
+          subscribers: parseInt(chDetails.statistics.subscriberCount) || 0,
+          totalViews: parseInt(chDetails.statistics.viewCount) || 0,
+          videoCount: parseInt(chDetails.statistics.videoCount) || 0,
+          recentVideoTitles: candidateVideoTitles,
+          foundVideos: foundData?.foundVideos || []
+        });
+      } catch (e) {
+        console.log('Failed to get videos for channel:', candidateId, e.message);
+      }
+    }
+
+    if (channelsWithContent.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'No quality channels found. The analyzed channel may be too niche.');
+    }
+
+    // Step 8: Use AI to score content relevance for each channel
+    const scoringPrompt = `You are scoring YouTube channels for content RELEVANCE to a source channel for ad placement targeting.
+
+SOURCE CHANNEL:
+- Name: ${channelName}
+- Niche: ${analysis.niche}
+- Content Type: ${analysis.contentType || 'video'}
+- Language: ${analysis.language || 'en'}
+- Content Signature: ${analysis.contentSignature || analysis.contentStyle}
+- Recent Videos: ${recentVideoTitles.slice(0, 5).join(' | ')}
+
+CANDIDATE CHANNELS TO SCORE:
+${channelsWithContent.slice(0, 20).map((ch, i) => `
+[${i + 1}] ${ch.channelName}
+- Description: ${ch.channelDescription.substring(0, 150)}
+- Subscribers: ${formatNumber(ch.subscribers)}
+- Recent Videos: ${ch.recentVideoTitles.slice(0, 4).join(' | ')}
+`).join('\n')}
+
+Score each channel from 0-100 based on CONTENT SIMILARITY (not channel size!):
+- 90-100: Near identical content type, style, and audience
+- 70-89: Very similar content, same niche and style
+- 50-69: Related content, overlapping audience
+- 30-49: Loosely related, different style but some overlap
+- 0-29: Different content type or unrelated
+
+IMPORTANT SCORING RULES:
+- Score based on CONTENT MATCH, not subscriber count
+- Same language content should score higher
+- Same content TYPE (music/tutorial/review/etc) is critical
+- A small channel with identical content should score higher than a big channel with different content
+
+Respond with ONLY a JSON array of scores in order:
+[score1, score2, score3, ...]`;
+
+    let contentScores = [];
+    try {
+      const scoringResponse = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [{ role: 'user', content: scoringPrompt }],
+        temperature: 0.3,
+        max_tokens: 500
+      });
+
+      const scoresText = scoringResponse.choices[0].message.content.trim();
+      const scoresMatch = scoresText.match(/\[[\d,\s]+\]/);
+      if (scoresMatch) {
+        contentScores = JSON.parse(scoresMatch[0]);
+      }
+    } catch (e) {
+      console.log('AI scoring failed, using fallback:', e.message);
+    }
+
+    // Step 9: Build final placements with AI scores
+    const placements = channelsWithContent.slice(0, 20).map((ch, index) => {
+      // Get AI content score or calculate fallback
+      let contentScore = contentScores[index];
+
+      if (contentScore === undefined || contentScore === null) {
+        // Fallback: Basic keyword matching
+        const sourceKeywords = analysis.keywords.map(k => k.toLowerCase());
+        const channelText = (ch.channelName + ' ' + ch.channelDescription + ' ' + ch.recentVideoTitles.join(' ')).toLowerCase();
+        const matchCount = sourceKeywords.filter(k => channelText.includes(k)).length;
+        contentScore = 40 + (matchCount * 12); // Base 40 + up to 60 for keyword matches
+      }
+
+      // Small bonus for engagement (max 10 points), but content is primary
+      let engagementBonus = 0;
+      if (ch.subscribers > 5000) engagementBonus += 2;
+      if (ch.subscribers > 50000) engagementBonus += 3;
+      if (ch.videoCount > 30) engagementBonus += 2;
+      if (ch.videoCount > 100) engagementBonus += 3;
+
+      const finalScore = Math.min(Math.round(contentScore + engagementBonus), 100);
+
+      return {
+        channelId: ch.channelId,
+        channelName: ch.channelName,
+        channelUrl: `https://www.youtube.com/channel/${ch.channelId}`,
+        handle: ch.handle,
+        thumbnail: ch.thumbnail,
+        description: ch.channelDescription.substring(0, 150),
+        subscribers: ch.subscribers,
+        subscribersFormatted: formatNumber(ch.subscribers),
+        totalViews: ch.totalViews,
+        videoCount: ch.videoCount,
+        relevanceScore: finalScore,
+        sampleVideos: ch.recentVideoTitles.slice(0, 3)
+      };
+    })
+    .filter(ch => ch.subscribers >= 500) // Lower minimum for niche channels
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .slice(0, 30);
 
     if (placements.length === 0) {
       throw new functions.https.HttpsError('not-found', 'No quality channels found. The analyzed channel may be too niche.');
     }
 
-    // Step 8: Save to history
+    // Step 10: Save to history
     const historyData = {
       userId: uid,
       channelUrl,
@@ -6537,9 +6673,12 @@ Respond in this EXACT JSON format:
       },
       analysis: {
         niche: analysis.niche,
+        contentType: analysis.contentType || 'video',
+        language: analysis.language || 'en',
         keywords: analysis.keywords,
         audienceDescription: analysis.audienceDescription,
-        contentStyle: analysis.contentStyle
+        contentStyle: analysis.contentStyle,
+        contentSignature: analysis.contentSignature
       },
       placements,
       totalFound: placements.length,
@@ -6550,7 +6689,7 @@ Respond in this EXACT JSON format:
 
     const historyRef = await db.collection('placementFinderHistory').add(historyData);
 
-    // Step 9: Update usage
+    // Step 11: Update usage
     await incrementUsage(uid, 'placementFinder');
     await logUsage(uid, 'placement_finder', {
       channelId,
