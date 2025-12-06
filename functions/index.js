@@ -6517,19 +6517,46 @@ CRITICAL RULES:
       };
     }
 
-    // Step 5: Search for VIDEOS first (not channels) - this finds actual similar content
+    // Step 5: Search for VIDEOS using multiple strategies
     const channelVideoMap = new Map(); // channelId -> {videos: [], channelName, etc}
-    const searchQueries = analysis.videoSearchQueries || analysis.searchQueries || [channelName];
 
-    for (const query of searchQueries.slice(0, 5)) {
+    // Strategy 1: Use AI-generated search queries
+    const aiSearchQueries = analysis.videoSearchQueries || [];
+
+    // Strategy 2: Use actual video titles from source channel (most reliable!)
+    const titleBasedQueries = recentVideoTitles.slice(0, 3);
+
+    // Strategy 3: Use video tags
+    const tagBasedQueries = allTags.slice(0, 2).map(tag => `${tag} video`);
+
+    // Strategy 4: Channel name + content type
+    const fallbackQueries = [
+      `${channelName}`,
+      `${analysis.niche || channelName}`,
+      `${analysis.contentType || ''} ${analysis.subType || ''}`.trim()
+    ].filter(q => q.length > 2);
+
+    // Combine all strategies, prioritizing video titles
+    const allSearchQueries = [
+      ...titleBasedQueries,      // Most reliable - actual video titles
+      ...aiSearchQueries.slice(0, 3),  // AI suggestions
+      ...tagBasedQueries,        // Tag-based
+      ...fallbackQueries         // Fallback
+    ].filter(Boolean);
+
+    // Remove duplicates and limit
+    const searchQueries = [...new Set(allSearchQueries)].slice(0, 8);
+
+    console.log('Placement Finder search queries:', searchQueries);
+
+    for (const query of searchQueries) {
       try {
-        // Search for VIDEOS, not channels
+        // Search for VIDEOS (don't restrict language - let it find all relevant content)
         const searchResponse = await youtube.search.list({
           part: 'snippet',
           q: query,
           type: 'video',
-          maxResults: 20,
-          relevanceLanguage: analysis.language || 'en',
+          maxResults: 25,
           order: 'relevance'
         });
 
@@ -6550,13 +6577,48 @@ CRITICAL RULES:
             });
           }
         });
+
+        // If we found enough channels, we can stop early
+        if (channelVideoMap.size >= 40) break;
+
       } catch (e) {
         console.log('Video search query failed:', query, e.message);
       }
     }
 
+    // If video search failed, try channel search as fallback
+    if (channelVideoMap.size < 5) {
+      console.log('Video search found few results, trying channel search fallback');
+
+      for (const query of searchQueries.slice(0, 4)) {
+        try {
+          const channelSearchResponse = await youtube.search.list({
+            part: 'snippet',
+            q: query,
+            type: 'channel',
+            maxResults: 15
+          });
+
+          channelSearchResponse.data.items?.forEach(item => {
+            const chId = item.snippet.channelId;
+            if (chId !== channelId && !channelVideoMap.has(chId)) {
+              channelVideoMap.set(chId, {
+                channelId: chId,
+                channelName: item.snippet.channelTitle,
+                foundVideos: []
+              });
+            }
+          });
+        } catch (e) {
+          console.log('Channel search fallback failed:', query, e.message);
+        }
+      }
+    }
+
     // Step 6: Get detailed channel info for found channels
     const channelIds = Array.from(channelVideoMap.keys()).slice(0, 50);
+
+    console.log('Placement Finder found', channelIds.length, 'candidate channels');
 
     if (channelIds.length === 0) {
       throw new functions.https.HttpsError('not-found', 'No similar channels found. Try a different channel.');
