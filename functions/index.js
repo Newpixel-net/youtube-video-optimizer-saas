@@ -6433,63 +6433,64 @@ exports.findPlacements = functions.https.onCall(async (data, context) => {
     const allTags = [...new Set(sourceVideos.flatMap(v => v.tags))].slice(0, 20);
     const topicCategories = userChannel.topicDetails?.topicCategories?.map(t => t.split('/').pop()) || [];
 
-    // Step 4: Use AI to DEEPLY analyze channel content and generate search queries
-    const analysisPrompt = `You are a YouTube advertising expert. CAREFULLY analyze this channel's ACTUAL content to find SIMILAR channels for ad placement.
+    // Step 4: Use AI to identify PRIMARY TOPIC (audience interest) vs STYLE (presentation)
+    // This is CRITICAL for ad placement - we need to find the RIGHT AUDIENCE
+    const analysisPrompt = `You are a YouTube advertising expert. Your goal is to find channels with the SAME AUDIENCE for ad placement.
 
 === CHANNEL INFO ===
 Name: ${channelName}
 Description: ${channelDescription.substring(0, 500)}
 Subscribers: ${subscriberCount.toLocaleString()}
-YouTube Categories: ${topicCategories.join(', ') || 'Not specified'}
 
-=== CHANNEL'S VIDEOS (Analyze these carefully!) ===
+=== CHANNEL'S VIDEOS ===
 ${sourceVideos.slice(0, 8).map((v, i) => `
 VIDEO ${i + 1}: "${v.title}"
-- Description: ${v.description.substring(0, 200)}${v.description.length > 200 ? '...' : ''}
-- Views: ${v.views.toLocaleString()}
+- Description: ${v.description.substring(0, 150)}
 - Tags: ${v.tags.slice(0, 5).join(', ') || 'none'}
 `).join('\n')}
-
-=== MOST POPULAR VIDEOS ===
-${topVideos.map(v => `"${v.title}" (${v.views.toLocaleString()} views)`).join('\n')}
 
 === ALL VIDEO TAGS ===
 ${allTags.join(', ') || 'No tags found'}
 
-Based on the ACTUAL video content above, determine:
-1. What SPECIFIC type of content does this channel create? (e.g., "Christmas animated music videos", "indie rock covers", "tech unboxing")
-2. What makes this content unique?
-3. What search queries would find OTHER channels making SIMILAR content?
+CRITICAL: Distinguish between PRIMARY TOPIC and STYLE:
+
+PRIMARY TOPIC = What the content is ABOUT (determines the AUDIENCE)
+Examples: Christmas, cooking, gaming, fitness, kids content, meditation, travel, tech reviews
+
+STYLE = How the content is PRESENTED (just the format/genre)
+Examples: rock music, animation, vlog style, tutorial format, comedy
+
+For ad placement, we want to reach the SAME AUDIENCE. The audience for "Christmas rock music" is people who watch CHRISTMAS content, NOT rock music fans in general.
 
 Respond in this EXACT JSON format:
 {
-  "niche": "Very specific content niche based on actual videos (3-6 words)",
-  "contentType": "animation/music/tutorial/review/vlog/documentary/entertainment/gaming/educational/shorts/etc",
-  "subType": "More specific type like 'Christmas animation', 'cover songs', 'product reviews'",
-  "language": "Primary language detected",
-  "targetAudience": "Who watches this content (age group, interests)",
-  "keywords": ["very specific keyword from video content", "another specific keyword", "keyword3", "keyword4", "keyword5"],
-  "videoSearchQueries": [
-    "specific search to find similar videos",
-    "another specific search query",
-    "third search query based on video content",
-    "fourth search using actual video themes",
+  "primaryTopic": "The main subject/theme that defines the AUDIENCE (e.g., 'Christmas', 'Cooking', 'Gaming', 'Kids Entertainment')",
+  "style": "How the content is presented (e.g., 'rock music', 'animation', 'tutorial')",
+  "niche": "Combined description (e.g., 'Christmas Music')",
+  "audienceInterest": "What the audience is interested in (e.g., 'Christmas content', 'holiday music', 'seasonal entertainment')",
+  "language": "Primary language",
+  "primaryTopicKeywords": ["keyword directly related to PRIMARY TOPIC", "another primary keyword", "third primary keyword"],
+  "searchQueries": [
+    "search query focused on PRIMARY TOPIC",
+    "another PRIMARY TOPIC focused search",
+    "third search for PRIMARY TOPIC content",
+    "fourth PRIMARY TOPIC search",
     "fifth search query"
-  ],
-  "contentSignature": "15-20 word description capturing exactly what this channel creates"
+  ]
 }
 
-CRITICAL RULES:
-- Look at the ACTUAL VIDEO TITLES AND DESCRIPTIONS, not just the channel name
-- If videos are about Christmas animation, search for "Christmas animation" not just "animation"
-- If it's a specific music genre, use that genre in searches
-- The videoSearchQueries should find videos LIKE the ones listed above`;
+IMPORTANT EXAMPLES:
+- "Christmas rock song" → primaryTopic: "Christmas", style: "rock music", searchQueries should find Christmas content
+- "Animated cooking tutorial" → primaryTopic: "Cooking", style: "animation", searchQueries should find cooking content
+- "Kids nursery rhymes" → primaryTopic: "Kids Entertainment", style: "music", searchQueries should find kids content
+
+The searchQueries MUST focus on the PRIMARY TOPIC, not the style!`;
 
     const aiResponse = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [{ role: 'user', content: analysisPrompt }],
-      temperature: 0.7,
-      max_tokens: 1000
+      temperature: 0.5,
+      max_tokens: 800
     });
 
     let analysis;
@@ -6498,54 +6499,64 @@ CRITICAL RULES:
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       analysis = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
     } catch (e) {
-      // Fallback: use video titles and tags for search queries
-      const fallbackQueries = [
-        ...recentVideoTitles.slice(0, 2),
-        ...allTags.slice(0, 2),
-        channelName
-      ].filter(Boolean);
+      // Fallback: try to detect primary topic from content
+      const contentText = (channelName + ' ' + recentVideoTitles.join(' ') + ' ' + allTags.join(' ')).toLowerCase();
+
+      // Detect common primary topics
+      let detectedTopic = 'General';
+      const topicPatterns = {
+        'Christmas': ['christmas', 'xmas', 'holiday', 'santa', 'noel', 'festive'],
+        'Kids Entertainment': ['kids', 'children', 'nursery', 'cartoon', 'toddler'],
+        'Gaming': ['game', 'gaming', 'gameplay', 'playthrough', 'gamer'],
+        'Cooking': ['recipe', 'cooking', 'food', 'chef', 'kitchen'],
+        'Fitness': ['workout', 'fitness', 'exercise', 'gym', 'training'],
+        'Music': ['music', 'song', 'album', 'concert', 'band'],
+        'Tech': ['tech', 'review', 'unboxing', 'gadget', 'smartphone']
+      };
+
+      for (const [topic, keywords] of Object.entries(topicPatterns)) {
+        if (keywords.some(k => contentText.includes(k))) {
+          detectedTopic = topic;
+          break;
+        }
+      }
 
       analysis = {
-        niche: 'General Content',
-        contentType: 'video',
-        subType: 'general',
+        primaryTopic: detectedTopic,
+        style: 'video',
+        niche: detectedTopic,
+        audienceInterest: detectedTopic + ' content',
         language: 'en',
-        targetAudience: 'General YouTube viewers',
-        keywords: [...allTags.slice(0, 3), channelName].filter(Boolean),
-        videoSearchQueries: fallbackQueries.slice(0, 5),
-        contentSignature: `${channelName} - ${recentVideoTitles[0] || 'video content'}`
+        primaryTopicKeywords: allTags.slice(0, 3),
+        searchQueries: [...recentVideoTitles.slice(0, 2), ...allTags.slice(0, 2), channelName].filter(Boolean).slice(0, 5)
       };
     }
 
-    // Step 5: Search for VIDEOS using multiple strategies
-    const channelVideoMap = new Map(); // channelId -> {videos: [], channelName, etc}
+    console.log('Placement Finder - Primary Topic:', analysis.primaryTopic, '| Style:', analysis.style);
 
-    // Strategy 1: Use AI-generated search queries
-    const aiSearchQueries = analysis.videoSearchQueries || [];
+    // Step 5: Search for channels with the SAME PRIMARY TOPIC
+    const channelVideoMap = new Map();
 
-    // Strategy 2: Use actual video titles from source channel (most reliable!)
-    const titleBasedQueries = recentVideoTitles.slice(0, 3);
+    // Build search queries focused on PRIMARY TOPIC
+    const primaryTopicQueries = analysis.searchQueries || [];
+    const topicKeywordQueries = (analysis.primaryTopicKeywords || []).map(k => k + ' channel');
 
-    // Strategy 3: Use video tags
-    const tagBasedQueries = allTags.slice(0, 2).map(tag => `${tag} video`);
+    // Also search using primary topic directly
+    const directTopicQueries = [
+      analysis.primaryTopic,
+      analysis.primaryTopic + ' music',
+      analysis.primaryTopic + ' videos',
+      analysis.audienceInterest
+    ].filter(q => q && q.length > 2);
 
-    // Strategy 4: Channel name + content type
-    const fallbackQueries = [
-      `${channelName}`,
-      `${analysis.niche || channelName}`,
-      `${analysis.contentType || ''} ${analysis.subType || ''}`.trim()
-    ].filter(q => q.length > 2);
-
-    // Combine all strategies, prioritizing video titles
+    // Combine all queries, prioritizing topic-focused ones
     const allSearchQueries = [
-      ...titleBasedQueries,      // Most reliable - actual video titles
-      ...aiSearchQueries.slice(0, 3),  // AI suggestions
-      ...tagBasedQueries,        // Tag-based
-      ...fallbackQueries         // Fallback
+      ...primaryTopicQueries,
+      ...directTopicQueries,
+      ...topicKeywordQueries
     ].filter(Boolean);
 
-    // Remove duplicates and limit
-    const searchQueries = [...new Set(allSearchQueries)].slice(0, 8);
+    const searchQueries = [...new Set(allSearchQueries)].slice(0, 10);
 
     console.log('Placement Finder search queries:', searchQueries);
 
@@ -6680,39 +6691,52 @@ CRITICAL RULES:
       throw new functions.https.HttpsError('not-found', 'No quality channels found. The analyzed channel may be too niche.');
     }
 
-    // Step 8: Extract unique differentiators from source channel
-    // These are the KEY aspects that make this channel unique - not just genre
-    const uniqueDifferentiators = [];
-    const sourceText = (channelName + ' ' + channelDescription + ' ' + recentVideoTitles.join(' ') + ' ' + allTags.join(' ')).toLowerCase();
+    // Step 8: Build PRIMARY TOPIC keywords for strict matching
+    const primaryTopic = analysis.primaryTopic || 'General';
+    const primaryTopicLower = primaryTopic.toLowerCase();
 
-    // Check for seasonal/holiday content
-    const seasonalKeywords = ['christmas', 'holiday', 'xmas', 'easter', 'halloween', 'thanksgiving', 'new year', 'valentine', 'seasonal'];
-    const foundSeasonal = seasonalKeywords.filter(k => sourceText.includes(k));
-    if (foundSeasonal.length > 0) uniqueDifferentiators.push(...foundSeasonal);
+    // Build list of keywords that MUST be present for high scores
+    const primaryTopicKeywords = [];
 
-    // Check for specific content formats
-    const formatKeywords = ['animation', 'animated', 'cartoon', 'cover', 'remix', 'acoustic', 'live', 'tutorial', 'reaction', 'review', 'parody'];
-    const foundFormats = formatKeywords.filter(k => sourceText.includes(k));
-    if (foundFormats.length > 0) uniqueDifferentiators.push(...foundFormats);
-
-    // Add niche keywords from analysis
-    if (analysis.keywords) {
-      uniqueDifferentiators.push(...analysis.keywords.slice(0, 3));
+    // Add primary topic keywords from AI analysis
+    if (analysis.primaryTopicKeywords) {
+      primaryTopicKeywords.push(...analysis.primaryTopicKeywords);
     }
 
-    const uniqueKeywords = [...new Set(uniqueDifferentiators)].slice(0, 8);
-    console.log('Unique differentiators for scoring:', uniqueKeywords);
+    // Add the primary topic itself
+    primaryTopicKeywords.push(primaryTopic);
 
-    // Step 9: Use AI to score with STRICT focus on unique differentiators
-    const scoringPrompt = `You are scoring YouTube channels for ad placement. Be VERY STRICT about content matching.
+    // Detect specific topic patterns and add related keywords
+    const topicPatterns = {
+      'christmas': ['christmas', 'xmas', 'holiday', 'santa', 'noel', 'festive', 'carol'],
+      'halloween': ['halloween', 'spooky', 'scary', 'horror', 'trick or treat'],
+      'kids': ['kids', 'children', 'nursery', 'toddler', 'baby', 'educational'],
+      'gaming': ['gaming', 'game', 'gameplay', 'gamer', 'playthrough', 'lets play'],
+      'cooking': ['cooking', 'recipe', 'food', 'chef', 'kitchen', 'baking'],
+      'fitness': ['fitness', 'workout', 'exercise', 'gym', 'training', 'health']
+    };
+
+    // Check which topic patterns match and add their keywords
+    for (const [topic, keywords] of Object.entries(topicPatterns)) {
+      if (primaryTopicLower.includes(topic) || keywords.some(k => primaryTopicLower.includes(k))) {
+        primaryTopicKeywords.push(...keywords);
+        break;
+      }
+    }
+
+    const uniqueKeywords = [...new Set(primaryTopicKeywords.map(k => k.toLowerCase()))].slice(0, 10);
+    console.log('PRIMARY TOPIC keywords for scoring:', uniqueKeywords);
+
+    // Step 9: Use AI to score with STRICT focus on PRIMARY TOPIC (audience match)
+    const scoringPrompt = `You are scoring YouTube channels for Google Ads placement targeting.
+
+GOAL: Find channels with the SAME AUDIENCE as the source channel.
 
 === SOURCE CHANNEL ===
 Name: ${channelName}
+PRIMARY TOPIC (defines the audience): ${primaryTopic}
+Style: ${analysis.style || 'video'}
 Niche: ${analysis.niche}
-Content Type: ${analysis.contentType || 'video'}${analysis.subType ? ` - ${analysis.subType}` : ''}
-
-CRITICAL UNIQUE ASPECTS (channels MUST match these to score high):
-${uniqueKeywords.map(k => `- "${k}"`).join('\n')}
 
 Source Videos:
 ${topVideos.slice(0, 4).map(v => `- "${v.title}"`).join('\n')}
@@ -6723,19 +6747,20 @@ ${channelsWithContent.slice(0, 20).map((ch, i) => `
 Videos: ${ch.recentVideoTitles.slice(0, 3).join(' | ')}
 `).join('\n')}
 
-STRICT SCORING RULES:
-- 85-100: Channel creates SAME unique content (e.g., if source is "Christmas music", channel must also do Christmas/holiday music)
-- 60-84: Channel has SAME unique aspects (seasonal content, animation style, etc.)
-- 40-59: Channel is in same genre but MISSING the unique aspects (e.g., rock music but NOT Christmas)
-- 20-39: Loosely related genre, no unique aspect match
-- 0-19: Completely different content
+STRICT SCORING - Based on PRIMARY TOPIC match (audience match):
+- 80-100: Channel has SAME PRIMARY TOPIC (e.g., both are Christmas content, both are kids content)
+- 50-79: Channel is somewhat related to PRIMARY TOPIC
+- 0-49: Channel does NOT match PRIMARY TOPIC (wrong audience)
 
-EXAMPLES for "${analysis.niche}":
-- If source has "Christmas" content, a generic rock channel without Christmas = MAX 50 points
-- If source has "animation", a live-action music channel = MAX 50 points
-- A channel with BOTH the genre AND unique aspects = 80+ points
+CRITICAL RULE for "${primaryTopic}":
+${primaryTopic === 'Christmas' || primaryTopicLower.includes('christmas') ?
+  '- ONLY channels with Christmas/holiday content should score 60+\n- Regular music/rock/pop channels WITHOUT Christmas = MAX 40 points\n- Christmas Songs, Holiday Music, Carols = 80+ points' :
+  primaryTopic === 'Kids Entertainment' || primaryTopicLower.includes('kids') ?
+  '- ONLY channels with kids/children content should score 60+\n- Adult music or entertainment channels = MAX 40 points' :
+  `- ONLY channels about "${primaryTopic}" should score 60+\n- Channels about different topics = MAX 40 points`
+}
 
-Respond with ONLY a JSON array:
+Respond with ONLY a JSON array of ${Math.min(channelsWithContent.length, 20)} scores:
 [score1, score2, ...]`;
 
     let contentScores = [];
@@ -6756,45 +6781,42 @@ Respond with ONLY a JSON array:
       console.log('AI scoring failed, using fallback:', e.message);
     }
 
-    // Step 10: Build final placements with strict keyword-based scoring
+    // Step 10: Build final placements with STRICT PRIMARY TOPIC matching
     const placements = channelsWithContent.slice(0, 20).map((ch, index) => {
-      // Get AI content score
-      let contentScore = contentScores[index];
-
       // Build channel text for keyword matching
       const channelText = (ch.channelName + ' ' + ch.channelDescription + ' ' + ch.recentVideoTitles.join(' ')).toLowerCase();
 
-      // If AI didn't score, use strict keyword matching
+      // Check how many PRIMARY TOPIC keywords this channel matches
+      const topicMatches = uniqueKeywords.filter(k => channelText.includes(k)).length;
+      const hasPrimaryTopicMatch = topicMatches >= 1;
+
+      // Get AI content score
+      let contentScore = contentScores[index];
+
+      // If AI didn't score, calculate based on keyword matching
       if (contentScore === undefined || contentScore === null) {
-        // Start with base score
-        contentScore = 30;
-
-        // Check for unique differentiators (most important!)
-        const uniqueMatches = uniqueKeywords.filter(k => channelText.includes(k.toLowerCase())).length;
-        contentScore += uniqueMatches * 15; // +15 per unique match
-
-        // Check for general keyword matches
-        const generalMatches = (analysis.keywords || []).filter(k => channelText.includes(k.toLowerCase())).length;
-        contentScore += generalMatches * 5; // +5 per general match
+        if (hasPrimaryTopicMatch) {
+          // Channel matches PRIMARY TOPIC - score based on match strength
+          contentScore = 50 + (topicMatches * 15); // 65 for 1 match, 80 for 2, etc.
+        } else {
+          // Channel does NOT match PRIMARY TOPIC - very low score
+          contentScore = 25;
+        }
       } else {
-        // AI scored it, but apply keyword bonus/penalty
-        const uniqueMatches = uniqueKeywords.filter(k => channelText.includes(k.toLowerCase())).length;
-
-        // Boost channels that contain unique keywords
-        if (uniqueMatches >= 2) {
-          contentScore = Math.min(contentScore + 15, 100);
-        } else if (uniqueMatches === 1) {
-          contentScore = Math.min(contentScore + 8, 100);
-        } else if (uniqueKeywords.length > 0) {
-          // Penalize channels missing unique differentiators
-          contentScore = Math.min(contentScore, 55); // Cap at 55 if missing unique aspects
+        // AI scored it, but ENFORCE PRIMARY TOPIC requirement
+        if (!hasPrimaryTopicMatch && uniqueKeywords.length > 0) {
+          // Channel doesn't match PRIMARY TOPIC - cap at 40 regardless of AI score
+          contentScore = Math.min(contentScore, 40);
+        } else if (topicMatches >= 2) {
+          // Strong match - boost score
+          contentScore = Math.min(contentScore + 10, 100);
         }
       }
 
-      // Small engagement bonus (max 5 points)
+      // Very small engagement bonus (max 3 points) - content match is primary
       let engagementBonus = 0;
-      if (ch.subscribers > 10000) engagementBonus += 2;
-      if (ch.subscribers > 100000) engagementBonus += 3;
+      if (ch.subscribers > 50000) engagementBonus += 1;
+      if (ch.subscribers > 500000) engagementBonus += 2;
 
       const finalScore = Math.min(Math.round(contentScore + engagementBonus), 100);
 
@@ -6810,11 +6832,17 @@ Respond with ONLY a JSON array:
         totalViews: ch.totalViews,
         videoCount: ch.videoCount,
         relevanceScore: finalScore,
+        matchesPrimaryTopic: hasPrimaryTopicMatch,
         sampleVideos: ch.recentVideoTitles.slice(0, 3)
       };
     })
     .filter(ch => ch.subscribers >= 500)
-    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .sort((a, b) => {
+      // Sort by: primary topic match first, then by score
+      if (a.matchesPrimaryTopic && !b.matchesPrimaryTopic) return -1;
+      if (!a.matchesPrimaryTopic && b.matchesPrimaryTopic) return 1;
+      return b.relevanceScore - a.relevanceScore;
+    })
     .slice(0, 30);
 
     if (placements.length === 0) {
@@ -6838,14 +6866,13 @@ Respond with ONLY a JSON array:
         }))
       },
       analysis: {
+        primaryTopic: primaryTopic, // The main subject that defines the audience
+        style: analysis.style || 'video', // How content is presented
         niche: analysis.niche,
-        contentType: analysis.contentType || 'video',
-        subType: analysis.subType || null,
         language: analysis.language || 'en',
-        keywords: analysis.keywords,
-        uniqueDifferentiators: uniqueKeywords, // Critical aspects for matching
-        targetAudience: analysis.targetAudience || analysis.audienceDescription,
-        contentSignature: analysis.contentSignature
+        audienceInterest: analysis.audienceInterest,
+        primaryTopicKeywords: uniqueKeywords, // Keywords used for matching
+        targetAudience: analysis.targetAudience || analysis.audienceInterest
       },
       placements,
       totalFound: placements.length,
