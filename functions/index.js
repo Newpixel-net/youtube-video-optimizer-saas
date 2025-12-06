@@ -6680,49 +6680,70 @@ CRITICAL RULES:
       throw new functions.https.HttpsError('not-found', 'No quality channels found. The analyzed channel may be too niche.');
     }
 
-    // Step 8: Use AI to score content relevance for each channel
-    const scoringPrompt = `You are scoring YouTube channels for content RELEVANCE to a source channel for ad placement targeting.
+    // Step 8: Extract unique differentiators from source channel
+    // These are the KEY aspects that make this channel unique - not just genre
+    const uniqueDifferentiators = [];
+    const sourceText = (channelName + ' ' + channelDescription + ' ' + recentVideoTitles.join(' ') + ' ' + allTags.join(' ')).toLowerCase();
 
-=== SOURCE CHANNEL (Find channels similar to this) ===
+    // Check for seasonal/holiday content
+    const seasonalKeywords = ['christmas', 'holiday', 'xmas', 'easter', 'halloween', 'thanksgiving', 'new year', 'valentine', 'seasonal'];
+    const foundSeasonal = seasonalKeywords.filter(k => sourceText.includes(k));
+    if (foundSeasonal.length > 0) uniqueDifferentiators.push(...foundSeasonal);
+
+    // Check for specific content formats
+    const formatKeywords = ['animation', 'animated', 'cartoon', 'cover', 'remix', 'acoustic', 'live', 'tutorial', 'reaction', 'review', 'parody'];
+    const foundFormats = formatKeywords.filter(k => sourceText.includes(k));
+    if (foundFormats.length > 0) uniqueDifferentiators.push(...foundFormats);
+
+    // Add niche keywords from analysis
+    if (analysis.keywords) {
+      uniqueDifferentiators.push(...analysis.keywords.slice(0, 3));
+    }
+
+    const uniqueKeywords = [...new Set(uniqueDifferentiators)].slice(0, 8);
+    console.log('Unique differentiators for scoring:', uniqueKeywords);
+
+    // Step 9: Use AI to score with STRICT focus on unique differentiators
+    const scoringPrompt = `You are scoring YouTube channels for ad placement. Be VERY STRICT about content matching.
+
+=== SOURCE CHANNEL ===
 Name: ${channelName}
 Niche: ${analysis.niche}
-Content Type: ${analysis.contentType || 'video'}${analysis.subType ? ` (${analysis.subType})` : ''}
-Language: ${analysis.language || 'en'}
-Content Signature: ${analysis.contentSignature}
+Content Type: ${analysis.contentType || 'video'}${analysis.subType ? ` - ${analysis.subType}` : ''}
 
-Source Channel's Top Videos:
-${topVideos.slice(0, 4).map(v => `- "${v.title}" (${v.views.toLocaleString()} views)`).join('\n')}
+CRITICAL UNIQUE ASPECTS (channels MUST match these to score high):
+${uniqueKeywords.map(k => `- "${k}"`).join('\n')}
 
-=== CANDIDATE CHANNELS TO SCORE ===
+Source Videos:
+${topVideos.slice(0, 4).map(v => `- "${v.title}"`).join('\n')}
+
+=== CANDIDATE CHANNELS ===
 ${channelsWithContent.slice(0, 20).map((ch, i) => `
 [${i + 1}] ${ch.channelName}
-- Description: ${ch.channelDescription.substring(0, 150)}
-- Subscribers: ${formatNumber(ch.subscribers)}
-- Their Videos: ${ch.recentVideoTitles.slice(0, 4).join(' | ')}
+Videos: ${ch.recentVideoTitles.slice(0, 3).join(' | ')}
 `).join('\n')}
 
-Score each channel 0-100 based on how similar their CONTENT is to the source channel:
-- 90-100: Creates nearly identical content (same format, topic, style, audience)
-- 70-89: Very similar content creator (same niche, similar style)
-- 50-69: Related content (some overlap in topics or audience)
-- 30-49: Loosely related (different content but some audience overlap)
-- 0-29: Unrelated content (different topics, different audience)
+STRICT SCORING RULES:
+- 85-100: Channel creates SAME unique content (e.g., if source is "Christmas music", channel must also do Christmas/holiday music)
+- 60-84: Channel has SAME unique aspects (seasonal content, animation style, etc.)
+- 40-59: Channel is in same genre but MISSING the unique aspects (e.g., rock music but NOT Christmas)
+- 20-39: Loosely related genre, no unique aspect match
+- 0-19: Completely different content
 
-CRITICAL:
-- Compare VIDEO CONTENT, not channel size
-- If source is "Christmas animation music", a small Christmas animation channel scores higher than a large generic music channel
-- Same language = higher score
-- Same content format (animation/live-action/review/etc) = higher score
+EXAMPLES for "${analysis.niche}":
+- If source has "Christmas" content, a generic rock channel without Christmas = MAX 50 points
+- If source has "animation", a live-action music channel = MAX 50 points
+- A channel with BOTH the genre AND unique aspects = 80+ points
 
-Respond with ONLY a JSON array of ${Math.min(channelsWithContent.length, 20)} scores:
-[score1, score2, score3, ...]`;
+Respond with ONLY a JSON array:
+[score1, score2, ...]`;
 
     let contentScores = [];
     try {
       const scoringResponse = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [{ role: 'user', content: scoringPrompt }],
-        temperature: 0.3,
+        temperature: 0.2,
         max_tokens: 500
       });
 
@@ -6735,25 +6756,45 @@ Respond with ONLY a JSON array of ${Math.min(channelsWithContent.length, 20)} sc
       console.log('AI scoring failed, using fallback:', e.message);
     }
 
-    // Step 9: Build final placements with AI scores
+    // Step 10: Build final placements with strict keyword-based scoring
     const placements = channelsWithContent.slice(0, 20).map((ch, index) => {
-      // Get AI content score or calculate fallback
+      // Get AI content score
       let contentScore = contentScores[index];
 
+      // Build channel text for keyword matching
+      const channelText = (ch.channelName + ' ' + ch.channelDescription + ' ' + ch.recentVideoTitles.join(' ')).toLowerCase();
+
+      // If AI didn't score, use strict keyword matching
       if (contentScore === undefined || contentScore === null) {
-        // Fallback: Basic keyword matching
-        const sourceKeywords = analysis.keywords.map(k => k.toLowerCase());
-        const channelText = (ch.channelName + ' ' + ch.channelDescription + ' ' + ch.recentVideoTitles.join(' ')).toLowerCase();
-        const matchCount = sourceKeywords.filter(k => channelText.includes(k)).length;
-        contentScore = 40 + (matchCount * 12); // Base 40 + up to 60 for keyword matches
+        // Start with base score
+        contentScore = 30;
+
+        // Check for unique differentiators (most important!)
+        const uniqueMatches = uniqueKeywords.filter(k => channelText.includes(k.toLowerCase())).length;
+        contentScore += uniqueMatches * 15; // +15 per unique match
+
+        // Check for general keyword matches
+        const generalMatches = (analysis.keywords || []).filter(k => channelText.includes(k.toLowerCase())).length;
+        contentScore += generalMatches * 5; // +5 per general match
+      } else {
+        // AI scored it, but apply keyword bonus/penalty
+        const uniqueMatches = uniqueKeywords.filter(k => channelText.includes(k.toLowerCase())).length;
+
+        // Boost channels that contain unique keywords
+        if (uniqueMatches >= 2) {
+          contentScore = Math.min(contentScore + 15, 100);
+        } else if (uniqueMatches === 1) {
+          contentScore = Math.min(contentScore + 8, 100);
+        } else if (uniqueKeywords.length > 0) {
+          // Penalize channels missing unique differentiators
+          contentScore = Math.min(contentScore, 55); // Cap at 55 if missing unique aspects
+        }
       }
 
-      // Small bonus for engagement (max 10 points), but content is primary
+      // Small engagement bonus (max 5 points)
       let engagementBonus = 0;
-      if (ch.subscribers > 5000) engagementBonus += 2;
-      if (ch.subscribers > 50000) engagementBonus += 3;
-      if (ch.videoCount > 30) engagementBonus += 2;
-      if (ch.videoCount > 100) engagementBonus += 3;
+      if (ch.subscribers > 10000) engagementBonus += 2;
+      if (ch.subscribers > 100000) engagementBonus += 3;
 
       const finalScore = Math.min(Math.round(contentScore + engagementBonus), 100);
 
@@ -6772,7 +6813,7 @@ Respond with ONLY a JSON array of ${Math.min(channelsWithContent.length, 20)} sc
         sampleVideos: ch.recentVideoTitles.slice(0, 3)
       };
     })
-    .filter(ch => ch.subscribers >= 500) // Lower minimum for niche channels
+    .filter(ch => ch.subscribers >= 500)
     .sort((a, b) => b.relevanceScore - a.relevanceScore)
     .slice(0, 30);
 
@@ -6780,7 +6821,7 @@ Respond with ONLY a JSON array of ${Math.min(channelsWithContent.length, 20)} sc
       throw new functions.https.HttpsError('not-found', 'No quality channels found. The analyzed channel may be too niche.');
     }
 
-    // Step 10: Save to history
+    // Step 11: Save to history
     const historyData = {
       userId: uid,
       channelUrl,
@@ -6802,6 +6843,7 @@ Respond with ONLY a JSON array of ${Math.min(channelsWithContent.length, 20)} sc
         subType: analysis.subType || null,
         language: analysis.language || 'en',
         keywords: analysis.keywords,
+        uniqueDifferentiators: uniqueKeywords, // Critical aspects for matching
         targetAudience: analysis.targetAudience || analysis.audienceDescription,
         contentSignature: analysis.contentSignature
       },
@@ -6814,7 +6856,7 @@ Respond with ONLY a JSON array of ${Math.min(channelsWithContent.length, 20)} sc
 
     const historyRef = await db.collection('placementFinderHistory').add(historyData);
 
-    // Step 11: Update usage
+    // Step 12: Update usage
     await incrementUsage(uid, 'placementFinder');
     await logUsage(uid, 'placement_finder', {
       channelId,
