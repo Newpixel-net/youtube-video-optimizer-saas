@@ -90,13 +90,18 @@ app.post('/extract-frames', async (req, res) => {
  */
 app.post('/process', async (req, res) => {
   const startTime = Date.now();
-  const { jobId } = req.body;
+  const { jobId, youtubeAuth } = req.body;
 
   if (!jobId) {
     return res.status(400).json({ error: 'jobId is required' });
   }
 
   console.log(`[${jobId}] Starting video processing job`);
+
+  // Log if we have YouTube authentication
+  if (youtubeAuth?.accessToken) {
+    console.log(`[${jobId}] Received YouTube OAuth credentials`);
+  }
 
   try {
     // Get job details from Firestore
@@ -124,14 +129,15 @@ app.post('/process', async (req, res) => {
       updatedAt: Firestore.FieldValue.serverTimestamp()
     });
 
-    // Process the video
+    // Process the video with optional YouTube auth
     const result = await processVideo({
       jobId,
       jobRef,
       job,
       storage,
       bucketName: BUCKET_NAME,
-      tempDir: TEMP_DIR
+      tempDir: TEMP_DIR,
+      youtubeAuth // Pass YouTube OAuth credentials if available
     });
 
     // Update job with result
@@ -272,13 +278,32 @@ async function processJobAsync(jobId) {
       updatedAt: Firestore.FieldValue.serverTimestamp()
     });
 
+    // Try to fetch YouTube credentials from user if job indicates they have auth
+    let youtubeAuth = null;
+    if (job.hasYouTubeAuth && job.userId) {
+      try {
+        const userDoc = await firestore.collection('users').doc(job.userId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          const ytConn = userData.youtubeConnection;
+          if (ytConn?.status === 'connected' && ytConn?.accessToken) {
+            youtubeAuth = { accessToken: ytConn.accessToken };
+            console.log(`[${jobId}] Fetched YouTube credentials for async processing`);
+          }
+        }
+      } catch (authError) {
+        console.log(`[${jobId}] Could not fetch YouTube auth:`, authError.message);
+      }
+    }
+
     const result = await processVideo({
       jobId,
       jobRef,
       job,
       storage,
       bucketName: BUCKET_NAME,
-      tempDir: TEMP_DIR
+      tempDir: TEMP_DIR,
+      youtubeAuth
     });
 
     await jobRef.update({

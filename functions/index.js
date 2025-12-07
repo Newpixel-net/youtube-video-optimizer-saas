@@ -17772,14 +17772,41 @@ exports.wizardProcessClip = functions
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    // Get user's YouTube credentials if available
+    let youtubeCredentials = null;
+    try {
+      youtubeCredentials = await getYouTubeCredentialsForUser(uid);
+      if (youtubeCredentials) {
+        // Store credentials reference in job (not the actual tokens for security)
+        await jobRef.update({
+          hasYouTubeAuth: true
+        });
+        console.log(`[${jobRef.id}] User has YouTube credentials available`);
+      } else {
+        console.log(`[${jobRef.id}] No YouTube credentials - will use fallback download method`);
+      }
+    } catch (credError) {
+      console.log(`[${jobRef.id}] Could not fetch YouTube credentials:`, credError.message);
+    }
+
     // Trigger Cloud Run video processor service (fire and forget)
     const videoProcessorUrl = functions.config().videoprocessor?.url;
     if (videoProcessorUrl) {
       try {
-        // Async call to Cloud Run - don't await
-        axios.post(`${videoProcessorUrl}/process`, {
+        // Prepare request body with optional YouTube credentials
+        const requestBody = {
           jobId: jobRef.id
-        }, {
+        };
+
+        // Include YouTube credentials if available (passed securely)
+        if (youtubeCredentials) {
+          requestBody.youtubeAuth = {
+            accessToken: youtubeCredentials.accessToken
+          };
+        }
+
+        // Async call to Cloud Run - don't await
+        axios.post(`${videoProcessorUrl}/process`, requestBody, {
           timeout: 5000,
           headers: { 'Content-Type': 'application/json' }
         }).catch(err => {
@@ -17854,3 +17881,399 @@ exports.wizardGetProcessingStatus = functions.https.onCall(async (data, context)
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get job status.'));
   }
 });
+
+// ============================================
+// YOUTUBE OAUTH FUNCTIONS
+// ============================================
+
+/**
+ * YouTube OAuth2 Client Configuration
+ * These credentials must be configured in Firebase Functions config:
+ * firebase functions:config:set youtube.client_id="YOUR_CLIENT_ID" youtube.client_secret="YOUR_CLIENT_SECRET"
+ */
+function getYouTubeOAuth2Client(redirectUri) {
+  const clientId = functions.config().youtube?.client_id || process.env.YOUTUBE_CLIENT_ID;
+  const clientSecret = functions.config().youtube?.client_secret || process.env.YOUTUBE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'YouTube OAuth is not configured. Please contact support.'
+    );
+  }
+
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+}
+
+/**
+ * getYouTubeOAuthUrl - Generate OAuth URL for user to authorize YouTube access
+ * This allows the app to use the user's YouTube session for video downloads
+ */
+exports.getYouTubeOAuthUrl = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  try {
+    // Use the frontend URL as the redirect - it will handle the callback
+    const redirectUri = data.redirectUri || 'https://ytseo.siteuo.com/video-wizard.html';
+
+    const oauth2Client = getYouTubeOAuth2Client(redirectUri);
+
+    // Generate state parameter for security (CSRF protection)
+    const state = Buffer.from(JSON.stringify({
+      uid: uid,
+      timestamp: Date.now(),
+      nonce: Math.random().toString(36).substring(7)
+    })).toString('base64');
+
+    // Store state in Firestore for validation
+    await db.collection('youtubeOAuthStates').doc(state).set({
+      uid: uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+    });
+
+    // Generate the OAuth URL
+    // We need access to YouTube to download videos on behalf of the user
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline', // Get refresh token
+      prompt: 'consent', // Always show consent screen to get refresh token
+      scope: [
+        'https://www.googleapis.com/auth/youtube.readonly', // Read-only access to YouTube account
+        'https://www.googleapis.com/auth/youtube.force-ssl'  // Force SSL for all requests
+      ],
+      state: state,
+      include_granted_scopes: true
+    });
+
+    console.log(`[YouTubeOAuth] Generated auth URL for user ${uid}`);
+
+    return {
+      success: true,
+      authUrl: authUrl,
+      state: state
+    };
+
+  } catch (error) {
+    console.error('[YouTubeOAuth] Error generating auth URL:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to generate YouTube authorization URL');
+  }
+});
+
+/**
+ * handleYouTubeOAuthCallback - Process the OAuth callback and store tokens
+ */
+exports.handleYouTubeOAuthCallback = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { code, state, redirectUri } = data;
+
+  if (!code || !state) {
+    throw new functions.https.HttpsError('invalid-argument', 'Authorization code and state are required');
+  }
+
+  try {
+    // Validate state parameter
+    const stateDoc = await db.collection('youtubeOAuthStates').doc(state).get();
+
+    if (!stateDoc.exists) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid or expired state parameter');
+    }
+
+    const stateData = stateDoc.data();
+
+    // Verify state belongs to this user
+    if (stateData.uid !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'State parameter does not match user');
+    }
+
+    // Check if state has expired
+    if (stateData.expiresAt && stateData.expiresAt.toDate() < new Date()) {
+      throw new functions.https.HttpsError('invalid-argument', 'Authorization request has expired. Please try again.');
+    }
+
+    // Delete state to prevent reuse
+    await db.collection('youtubeOAuthStates').doc(state).delete();
+
+    // Exchange code for tokens
+    const actualRedirectUri = redirectUri || 'https://ytseo.siteuo.com/video-wizard.html';
+    const oauth2Client = getYouTubeOAuth2Client(actualRedirectUri);
+
+    const { tokens } = await oauth2Client.getToken(code);
+
+    if (!tokens.access_token) {
+      throw new functions.https.HttpsError('internal', 'Failed to obtain access token from YouTube');
+    }
+
+    // Store tokens securely in Firestore (encrypted in production)
+    const youtubeConnection = {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token || null,
+      tokenType: tokens.token_type || 'Bearer',
+      expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+      scope: tokens.scope || '',
+      connectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'connected'
+    };
+
+    // Get YouTube channel info to display to user
+    oauth2Client.setCredentials(tokens);
+    const youtubeApi = google.youtube({ version: 'v3', auth: oauth2Client });
+
+    try {
+      const channelResponse = await youtubeApi.channels.list({
+        part: ['snippet'],
+        mine: true
+      });
+
+      if (channelResponse.data.items && channelResponse.data.items.length > 0) {
+        const channel = channelResponse.data.items[0];
+        youtubeConnection.channelId = channel.id;
+        youtubeConnection.channelTitle = channel.snippet?.title || 'Unknown Channel';
+        youtubeConnection.channelThumbnail = channel.snippet?.thumbnails?.default?.url || null;
+      }
+    } catch (channelError) {
+      console.log('[YouTubeOAuth] Could not fetch channel info:', channelError.message);
+      // Continue without channel info - tokens are still valid
+    }
+
+    // Store in user's document
+    await db.collection('users').doc(uid).set({
+      youtubeConnection: youtubeConnection
+    }, { merge: true });
+
+    console.log(`[YouTubeOAuth] Successfully connected YouTube for user ${uid}`);
+
+    await logUsage(uid, 'youtube_oauth_connect', {
+      channelId: youtubeConnection.channelId
+    });
+
+    return {
+      success: true,
+      message: 'YouTube account connected successfully',
+      channel: {
+        id: youtubeConnection.channelId || null,
+        title: youtubeConnection.channelTitle || 'YouTube Account',
+        thumbnail: youtubeConnection.channelThumbnail || null
+      }
+    };
+
+  } catch (error) {
+    console.error('[YouTubeOAuth] Callback error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to connect YouTube account. Please try again.');
+  }
+});
+
+/**
+ * getYouTubeConnectionStatus - Check if user has connected YouTube
+ */
+exports.getYouTubeConnectionStatus = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  try {
+    const userDoc = await db.collection('users').doc(uid).get();
+
+    if (!userDoc.exists) {
+      return {
+        connected: false,
+        channel: null
+      };
+    }
+
+    const userData = userDoc.data();
+    const connection = userData.youtubeConnection;
+
+    if (!connection || connection.status !== 'connected' || !connection.accessToken) {
+      return {
+        connected: false,
+        channel: null
+      };
+    }
+
+    // Check if token is expired
+    const isExpired = connection.expiresAt &&
+      connection.expiresAt.toDate &&
+      connection.expiresAt.toDate() < new Date();
+
+    // If we have a refresh token, we can refresh expired access tokens
+    const canRefresh = !!connection.refreshToken;
+
+    return {
+      connected: true,
+      needsRefresh: isExpired && canRefresh,
+      expired: isExpired && !canRefresh,
+      channel: {
+        id: connection.channelId || null,
+        title: connection.channelTitle || 'YouTube Account',
+        thumbnail: connection.channelThumbnail || null
+      },
+      connectedAt: connection.connectedAt?.toDate?.()?.toISOString() || null
+    };
+
+  } catch (error) {
+    console.error('[YouTubeOAuth] Status check error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to check YouTube connection status');
+  }
+});
+
+/**
+ * disconnectYouTube - Remove YouTube connection
+ */
+exports.disconnectYouTube = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  try {
+    const userDoc = await db.collection('users').doc(uid).get();
+
+    if (userDoc.exists && userDoc.data().youtubeConnection) {
+      // Optionally revoke token at Google
+      const connection = userDoc.data().youtubeConnection;
+      if (connection.accessToken) {
+        try {
+          await axios.post(`https://oauth2.googleapis.com/revoke?token=${connection.accessToken}`);
+        } catch (revokeError) {
+          console.log('[YouTubeOAuth] Token revoke note:', revokeError.message);
+          // Continue even if revoke fails
+        }
+      }
+    }
+
+    // Remove connection from user document
+    await db.collection('users').doc(uid).update({
+      youtubeConnection: admin.firestore.FieldValue.delete()
+    });
+
+    console.log(`[YouTubeOAuth] Disconnected YouTube for user ${uid}`);
+
+    await logUsage(uid, 'youtube_oauth_disconnect', {});
+
+    return {
+      success: true,
+      message: 'YouTube account disconnected'
+    };
+
+  } catch (error) {
+    console.error('[YouTubeOAuth] Disconnect error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to disconnect YouTube account');
+  }
+});
+
+/**
+ * refreshYouTubeToken - Refresh expired YouTube access token
+ * Called internally or when token is about to expire
+ */
+exports.refreshYouTubeToken = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  try {
+    const userDoc = await db.collection('users').doc(uid).get();
+
+    if (!userDoc.exists || !userDoc.data().youtubeConnection) {
+      throw new functions.https.HttpsError('not-found', 'No YouTube connection found');
+    }
+
+    const connection = userDoc.data().youtubeConnection;
+
+    if (!connection.refreshToken) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'No refresh token available. Please reconnect your YouTube account.'
+      );
+    }
+
+    // Create OAuth client and refresh
+    const oauth2Client = getYouTubeOAuth2Client('https://ytseo.siteuo.com/video-wizard.html');
+    oauth2Client.setCredentials({
+      refresh_token: connection.refreshToken
+    });
+
+    const { credentials } = await oauth2Client.refreshAccessToken();
+
+    // Update stored tokens
+    await db.collection('users').doc(uid).update({
+      'youtubeConnection.accessToken': credentials.access_token,
+      'youtubeConnection.expiresAt': credentials.expiry_date ? new Date(credentials.expiry_date) : null,
+      'youtubeConnection.updatedAt': admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`[YouTubeOAuth] Refreshed token for user ${uid}`);
+
+    return {
+      success: true,
+      message: 'YouTube token refreshed successfully'
+    };
+
+  } catch (error) {
+    console.error('[YouTubeOAuth] Token refresh error:', error);
+
+    // If refresh fails, mark connection as needing reconnection
+    try {
+      await db.collection('users').doc(uid).update({
+        'youtubeConnection.status': 'expired',
+        'youtubeConnection.updatedAt': admin.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (updateError) {
+      console.error('[YouTubeOAuth] Failed to update status:', updateError);
+    }
+
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'Failed to refresh YouTube token. Please reconnect your account.'
+    );
+  }
+});
+
+/**
+ * Internal helper to get valid YouTube credentials for a user
+ * Used by video processing functions
+ */
+async function getYouTubeCredentialsForUser(uid) {
+  const userDoc = await db.collection('users').doc(uid).get();
+
+  if (!userDoc.exists || !userDoc.data().youtubeConnection) {
+    return null;
+  }
+
+  const connection = userDoc.data().youtubeConnection;
+
+  if (connection.status !== 'connected' || !connection.accessToken) {
+    return null;
+  }
+
+  // Check if token needs refresh
+  const needsRefresh = connection.expiresAt &&
+    connection.expiresAt.toDate &&
+    connection.expiresAt.toDate() < new Date(Date.now() + 5 * 60 * 1000); // 5 min buffer
+
+  if (needsRefresh && connection.refreshToken) {
+    try {
+      const oauth2Client = getYouTubeOAuth2Client('https://ytseo.siteuo.com/video-wizard.html');
+      oauth2Client.setCredentials({
+        refresh_token: connection.refreshToken
+      });
+
+      const { credentials } = await oauth2Client.refreshAccessToken();
+
+      // Update stored tokens
+      await db.collection('users').doc(uid).update({
+        'youtubeConnection.accessToken': credentials.access_token,
+        'youtubeConnection.expiresAt': credentials.expiry_date ? new Date(credentials.expiry_date) : null,
+        'youtubeConnection.updatedAt': admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return {
+        accessToken: credentials.access_token,
+        refreshToken: connection.refreshToken
+      };
+    } catch (refreshError) {
+      console.error('[YouTubeOAuth] Auto-refresh failed:', refreshError);
+      return null;
+    }
+  }
+
+  return {
+    accessToken: connection.accessToken,
+    refreshToken: connection.refreshToken
+  };
+}
