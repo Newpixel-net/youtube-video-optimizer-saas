@@ -421,74 +421,84 @@ async function downloadWithCobalt({ jobId, videoId, workDir, outputFile }) {
   console.log(`[${jobId}] Trying Cobalt API fallback...`);
 
   try {
-    // Cobalt API endpoint (using public instance - consider self-hosting for production)
-    const cobaltUrl = process.env.COBALT_API_URL || 'https://api.cobalt.tools';
+    // Try multiple Cobalt instances
+    const cobaltInstances = [
+      process.env.COBALT_API_URL,
+      'https://api.cobalt.tools',
+      'https://cobalt-api.kwiatekmiki.com'
+    ].filter(Boolean);
 
-    const response = await fetch(`${cobaltUrl}/api/json`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        vCodec: 'h264',
-        vQuality: '1080',
-        aFormat: 'mp3',
-        filenamePattern: 'basic',
-        isAudioOnly: false,
-        disableMetadata: true
-      })
-    });
+    let lastError = null;
+    let result = null;
 
-    if (!response.ok) {
-      throw new Error(`Cobalt API returned ${response.status}`);
-    }
+    for (const cobaltUrl of cobaltInstances) {
+      try {
+        console.log(`[${jobId}] Trying Cobalt instance: ${cobaltUrl}`);
 
-    const result = await response.json();
-
-    if (result.status === 'error') {
-      throw new Error(result.text || 'Cobalt API error');
-    }
-
-    if (result.status === 'redirect' || result.status === 'stream') {
-      const downloadUrl = result.url;
-
-      console.log(`[${jobId}] Cobalt provided download URL, downloading with FFmpeg...`);
-
-      // Download using FFmpeg
-      return new Promise((resolve, reject) => {
-        const ffmpegArgs = [
-          '-i', downloadUrl,
-          '-c', 'copy',
-          '-y',
-          outputFile
-        ];
-
-        const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
-        let stderr = '';
-
-        ffmpegProc.stderr.on('data', (data) => {
-          stderr += data.toString();
+        const response = await fetch(cobaltUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            videoQuality: '1080',
+            youtubeVideoCodec: 'h264',
+            filenameStyle: 'basic'
+          })
         });
 
-        ffmpegProc.on('close', (code) => {
-          if (code === 0 && fs.existsSync(outputFile)) {
-            console.log(`[${jobId}] Cobalt download complete`);
-            resolve(outputFile);
-          } else {
-            reject(new Error(`Cobalt FFmpeg failed: ${stderr.slice(-200)}`));
+        if (response.ok) {
+          result = await response.json();
+          if (result.status !== 'error' && result.url) {
+            console.log(`[${jobId}] Cobalt instance ${cobaltUrl} returned download URL`);
+            break;
           }
-        });
-
-        ffmpegProc.on('error', (error) => {
-          reject(new Error(`Cobalt FFmpeg error: ${error.message}`));
-        });
-      });
+        }
+        lastError = new Error(`Cobalt ${cobaltUrl} failed: ${response.status}`);
+      } catch (instanceError) {
+        lastError = instanceError;
+        console.log(`[${jobId}] Cobalt instance ${cobaltUrl} failed: ${instanceError.message}`);
+      }
     }
 
-    throw new Error('Cobalt returned unexpected response');
+    if (!result || result.status === 'error') {
+      throw lastError || new Error('All Cobalt instances failed');
+    }
 
+    const downloadUrl = result.url;
+    console.log(`[${jobId}] Cobalt provided download URL, downloading with FFmpeg...`);
+
+    // Download using FFmpeg
+    return new Promise((resolve, reject) => {
+      const ffmpegArgs = [
+        '-i', downloadUrl,
+        '-c', 'copy',
+        '-y',
+        outputFile
+      ];
+
+      const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+      let stderr = '';
+
+      ffmpegProc.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      ffmpegProc.on('close', (code) => {
+        if (code === 0 && fs.existsSync(outputFile)) {
+          console.log(`[${jobId}] Cobalt download complete`);
+          resolve(outputFile);
+        } else {
+          reject(new Error(`Cobalt FFmpeg failed: ${stderr.slice(-200)}`));
+        }
+      });
+
+      ffmpegProc.on('error', (error) => {
+        reject(new Error(`Cobalt FFmpeg error: ${error.message}`));
+      });
+    });
   } catch (error) {
     console.error(`[${jobId}] Cobalt fallback failed:`, error.message);
     throw error;

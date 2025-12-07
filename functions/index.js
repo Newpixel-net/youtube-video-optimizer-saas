@@ -16510,16 +16510,47 @@ exports.wizardGetProjects = functions.https.onCall(async (data, context) => {
   const { limit = 20 } = data || {};
 
   try {
-    const snapshot = await db.collection('wizardProjects')
-      .where('userId', '==', uid)
-      .orderBy('createdAt', 'desc')
-      .limit(Math.min(limit, 50))
-      .get();
+    let snapshot;
+    try {
+      // Try with orderBy (requires composite index)
+      snapshot = await db.collection('wizardProjects')
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(Math.min(limit, 50))
+        .get();
+    } catch (indexError) {
+      // Fallback: if index doesn't exist, query without orderBy and sort in memory
+      console.log('Index not available, using fallback query:', indexError.message);
+      snapshot = await db.collection('wizardProjects')
+        .where('userId', '==', uid)
+        .limit(Math.min(limit, 50))
+        .get();
+    }
 
-    const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let projects = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        videoTitle: data.videoData?.title || 'Untitled',
+        videoThumbnail: data.videoData?.thumbnail,
+        clipCount: data.clips?.length || 0,
+        status: data.status || 'draft',
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt
+      };
+    });
+
+    // Sort by createdAt in memory (fallback for when index isn't available)
+    projects.sort((a, b) => {
+      const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return timeB - timeA;
+    });
+
     return { success: true, projects, hasMore: projects.length === limit };
   } catch (error) {
-    throw new functions.https.HttpsError('internal', 'Failed to get projects.');
+    console.error('wizardGetProjects error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get projects: ' + error.message);
   }
 });
 
