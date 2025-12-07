@@ -1947,6 +1947,7 @@
             user: null,
             profile: null,
             loading: false,
+            projectId: null, // Firestore project ID
 
             // Token system
             tokens: {
@@ -1957,7 +1958,7 @@
             // Step 1: Video Input
             videoInput: {
                 url: '',
-                videoData: null, // { title, duration, thumbnail }
+                videoData: null, // { title, duration, thumbnail, videoId }
                 options: {
                     generateCaptions: true,
                     generateThumbnails: true,
@@ -1971,13 +1972,14 @@
                 status: 'idle', // idle | processing | done | error
                 progress: 0,
                 currentStep: 0,
+                error: null,
                 steps: [
-                    { name: 'Video downloaded', status: 'pending' },
-                    { name: 'Audio extracted', status: 'pending' },
-                    { name: 'Transcript generated', status: 'pending' },
+                    { name: 'Fetching video info', status: 'pending' },
+                    { name: 'Downloading video', status: 'pending' },
+                    { name: 'Extracting audio', status: 'pending' },
+                    { name: 'Generating transcript', status: 'pending' },
                     { name: 'Finding viral moments', status: 'pending' },
-                    { name: 'Scoring clips', status: 'pending' },
-                    { name: 'Detecting speakers', status: 'pending' }
+                    { name: 'Scoring clips', status: 'pending' }
                 ]
             },
 
@@ -1994,8 +1996,9 @@
             // Clip settings (per clip)
             clipSettings: {},
 
-            // Step 5: SEO
+            // Step 5: SEO & Thumbnails
             clipSEO: {},
+            clipThumbnails: {},
 
             // Step 6: Export
             exportStatus: {}
@@ -2013,13 +2016,14 @@
             { id: 'clip_008', startTime: 1450, endTime: 1498, duration: 48, score: 78, transcript: 'Revenue is vanity, profit is sanity, but cash flow is king. Remember that...', thumbnail: 'https://picsum.photos/seed/clip8/320/180', platforms: ['youtube', 'linkedin'] }
         ];
 
-        const MOCK_SEO = {
-            'clip_001': {
-                title: 'The #1 Mistake That Kills 90% of New Businesses',
-                description: 'Most entrepreneurs fail because they make this one critical mistake in their first year. Here\'s how to avoid it...\n\n🔔 Subscribe for more business tips!\n#entrepreneur #business #startup',
-                tags: ['entrepreneur', 'business tips', 'startup', 'mistakes', 'success']
-            }
-        };
+        // Default SEO template for clips without generated SEO
+        function getDefaultSEO(clip) {
+            return {
+                title: clip ? (clip.transcript || '').substring(0, 60) + '...' : 'Untitled Clip',
+                description: clip ? clip.transcript || '' : '',
+                tags: ['shorts', 'viral', 'clips']
+            };
+        }
 
         /* ==========================================
            4.3 UTILITY FUNCTIONS
@@ -2624,7 +2628,7 @@
                 return state.selectedClipIds.indexOf(c.id) !== -1;
             });
             var activeClip = selectedClips[state.customization.activeClipIndex] || selectedClips[0];
-            var seo = state.clipSEO[activeClip.id] || MOCK_SEO['clip_001'];
+            var seo = state.clipSEO[activeClip.id] || getDefaultSEO(activeClip);
 
             var html = '';
 
@@ -2735,7 +2739,7 @@
             // Export List
             html += '<div class="export-list">';
             selectedClips.forEach(function(clip, index) {
-                var seo = state.clipSEO[clip.id] || MOCK_SEO['clip_001'];
+                var seo = state.clipSEO[clip.id] || getDefaultSEO(clip);
                 html += '<div class="export-item">';
                 html += '<img src="' + clip.thumbnail + '" alt="Clip" class="export-item-thumbnail">';
                 html += '<div class="export-item-info">';
@@ -2831,28 +2835,90 @@
                 render();
             },
 
-            analyzeVideo: function() {
+            analyzeVideo: async function() {
                 var url = state.videoInput.url.trim();
                 if (!url) {
                     utils.showToast('Please enter a video URL', 'error');
                     return;
                 }
 
-                // Mock video data
-                state.videoInput.videoData = {
-                    title: 'How I Built a $10M Business in 2 Years',
-                    duration: 6330,
-                    thumbnail: 'https://picsum.photos/seed/mainvideo/320/180'
-                };
+                if (!state.user) {
+                    utils.showToast('Please sign in to analyze videos', 'error');
+                    return;
+                }
 
-                // Start analysis
+                // Reset analysis state
                 state.currentStep = 2;
                 state.analysis.status = 'processing';
                 state.analysis.progress = 0;
+                state.analysis.error = null;
+                state.analysis.steps.forEach(function(step) {
+                    step.status = 'pending';
+                });
                 render();
 
-                // Simulate progress
-                simulateAnalysis();
+                // Call Cloud Function with progress simulation
+                try {
+                    // Simulate progress steps during API call
+                    var progressInterval = setInterval(function() {
+                        var pendingSteps = state.analysis.steps.filter(function(s) { return s.status === 'pending'; });
+                        if (pendingSteps.length > 0 && state.analysis.status === 'processing') {
+                            var currentIdx = state.analysis.steps.length - pendingSteps.length;
+                            if (currentIdx < state.analysis.steps.length) {
+                                state.analysis.steps[currentIdx].status = 'processing';
+                                state.analysis.progress = Math.round((currentIdx / state.analysis.steps.length) * 80);
+                                render();
+                                setTimeout(function() {
+                                    if (state.analysis.status === 'processing') {
+                                        state.analysis.steps[currentIdx].status = 'done';
+                                        render();
+                                    }
+                                }, 2000);
+                            }
+                        }
+                    }, 3000);
+
+                    var wizardAnalyzeVideo = functions.httpsCallable('wizardAnalyzeVideo');
+                    var result = await wizardAnalyzeVideo({
+                        videoUrl: url,
+                        options: state.videoInput.options
+                    });
+
+                    clearInterval(progressInterval);
+
+                    if (result.data.success) {
+                        // Mark all steps as done
+                        state.analysis.steps.forEach(function(step) {
+                            step.status = 'done';
+                        });
+                        state.analysis.progress = 100;
+                        state.analysis.status = 'done';
+
+                        // Store project and video data
+                        state.projectId = result.data.projectId;
+                        state.videoInput.videoData = result.data.videoInfo;
+                        state.clips = result.data.clips || [];
+
+                        // Auto-select top 5 clips
+                        state.selectedClipIds = state.clips.slice(0, 5).map(function(c) { return c.id; });
+
+                        render();
+
+                        // Transition to clip selection after a moment
+                        setTimeout(function() {
+                            state.currentStep = 3;
+                            render();
+                        }, 1000);
+                    } else {
+                        throw new Error(result.data.error || 'Analysis failed');
+                    }
+                } catch (error) {
+                    console.error('Analysis error:', error);
+                    state.analysis.status = 'error';
+                    state.analysis.error = error.message || 'Failed to analyze video';
+                    utils.showToast('Error: ' + (error.message || 'Analysis failed'), 'error');
+                    render();
+                }
             },
 
             selectAllClips: function() {
@@ -2932,14 +2998,49 @@
                 });
                 var activeClip = selectedClips[state.customization.activeClipIndex];
                 if (!state.clipSEO[activeClip.id]) {
-                    state.clipSEO[activeClip.id] = { ...MOCK_SEO['clip_001'] };
+                    state.clipSEO[activeClip.id] = getDefaultSEO(activeClip);
                 }
                 state.clipSEO[activeClip.id][field] = value;
                 // Don't re-render on every keystroke
             },
 
-            regenerateSEO: function(field) {
+            regenerateSEO: async function(field) {
+                if (!state.projectId) {
+                    utils.showToast('No project loaded', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!activeClip) {
+                    utils.showToast('No clip selected', 'error');
+                    return;
+                }
+
                 utils.showToast('Regenerating ' + field + '...', 'info');
+
+                try {
+                    var wizardGenerateClipSEO = functions.httpsCallable('wizardGenerateClipSEO');
+                    var result = await wizardGenerateClipSEO({
+                        projectId: state.projectId,
+                        clipId: activeClip.id,
+                        regenerateField: field
+                    });
+
+                    if (result.data.success) {
+                        // Update local SEO data
+                        state.clipSEO[activeClip.id] = result.data.seo;
+                        render();
+                        utils.showToast(field.charAt(0).toUpperCase() + field.slice(1) + ' regenerated!', 'success');
+                    } else {
+                        throw new Error(result.data.error || 'Failed to regenerate');
+                    }
+                } catch (error) {
+                    console.error('SEO regeneration error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to regenerate'), 'error');
+                }
             },
 
             addTag: function() {
@@ -2950,7 +3051,7 @@
                     });
                     var activeClip = selectedClips[state.customization.activeClipIndex];
                     if (!state.clipSEO[activeClip.id]) {
-                        state.clipSEO[activeClip.id] = { ...MOCK_SEO['clip_001'] };
+                        state.clipSEO[activeClip.id] = getDefaultSEO(activeClip);
                     }
                     state.clipSEO[activeClip.id].tags.push(tag.trim());
                     render();
@@ -2972,8 +3073,42 @@
                 utils.showToast('Selected thumbnail ' + String.fromCharCode(65 + index), 'success');
             },
 
-            regenerateThumbnails: function() {
+            regenerateThumbnails: async function() {
+                if (!state.projectId) {
+                    utils.showToast('No project loaded', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!activeClip) {
+                    utils.showToast('No clip selected', 'error');
+                    return;
+                }
+
                 utils.showToast('Regenerating thumbnails...', 'info');
+
+                try {
+                    var wizardGenerateThumbnails = functions.httpsCallable('wizardGenerateThumbnails');
+                    var result = await wizardGenerateThumbnails({
+                        projectId: state.projectId,
+                        clipId: activeClip.id
+                    });
+
+                    if (result.data.success) {
+                        // Update local thumbnail data
+                        state.clipThumbnails[activeClip.id] = result.data.thumbnails;
+                        render();
+                        utils.showToast('Thumbnails regenerated!', 'success');
+                    } else {
+                        throw new Error(result.data.error || 'Failed to regenerate thumbnails');
+                    }
+                } catch (error) {
+                    console.error('Thumbnail regeneration error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to regenerate'), 'error');
+                }
             },
 
             downloadClip: function(clipId) {
@@ -2985,37 +3120,155 @@
             },
 
             copySEO: function(clipId) {
-                var seo = state.clipSEO[clipId] || MOCK_SEO['clip_001'];
+                var clip = state.clips.find(function(c) { return c.id === clipId; });
+                var seo = state.clipSEO[clipId] || getDefaultSEO(clip);
                 var text = 'Title: ' + seo.title + '\n\nDescription:\n' + seo.description + '\n\nTags: ' + seo.tags.join(', ');
                 navigator.clipboard.writeText(text);
                 utils.showToast('SEO copied to clipboard!', 'success');
             },
 
             downloadAllZip: function() {
-                utils.showToast('Preparing ZIP download...', 'info');
+                // Export all project data as JSON (ZIP would require server-side generation)
+                app.exportProject('json');
             },
 
             exportSEOSheet: function() {
-                utils.showToast('Exporting CSV...', 'info');
+                app.exportProject('csv');
             },
 
-            saveProject: function() {
-                utils.showToast('Project saved!', 'success');
+            saveProject: async function() {
+                if (!state.projectId) {
+                    utils.showToast('No project to save', 'error');
+                    return;
+                }
+
+                utils.showToast('Saving project...', 'info');
+
+                try {
+                    // Save settings for all selected clips
+                    var wizardSaveClipSettings = functions.httpsCallable('wizardSaveClipSettings');
+
+                    for (var i = 0; i < state.selectedClipIds.length; i++) {
+                        var clipId = state.selectedClipIds[i];
+                        var settings = state.clipSettings[clipId] || getDefaultSettings();
+                        var seo = state.clipSEO[clipId];
+
+                        await wizardSaveClipSettings({
+                            projectId: state.projectId,
+                            clipId: clipId,
+                            settings: settings,
+                            seo: seo
+                        });
+                    }
+
+                    utils.showToast('Project saved!', 'success');
+                } catch (error) {
+                    console.error('Save error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to save'), 'error');
+                }
             },
 
             startNewProject: function() {
                 if (confirm('Start a new project? Current progress will be lost.')) {
                     state.currentStep = 1;
+                    state.projectId = null;
                     state.videoInput.url = '';
                     state.videoInput.videoData = null;
                     state.clips = [];
                     state.selectedClipIds = [];
                     state.clipSettings = {};
                     state.clipSEO = {};
+                    state.clipThumbnails = {};
                     state.analysis.status = 'idle';
                     state.analysis.progress = 0;
+                    state.analysis.error = null;
+                    state.analysis.steps.forEach(function(step) {
+                        step.status = 'pending';
+                    });
                     render();
                 }
+            },
+
+            // Generate SEO for all selected clips at once
+            generateAllSEO: async function() {
+                if (!state.projectId) {
+                    utils.showToast('No project loaded', 'error');
+                    return;
+                }
+
+                utils.showToast('Generating SEO for all clips...', 'info');
+
+                try {
+                    var wizardGenerateAllSEO = functions.httpsCallable('wizardGenerateAllSEO');
+                    var result = await wizardGenerateAllSEO({
+                        projectId: state.projectId,
+                        clipIds: state.selectedClipIds
+                    });
+
+                    if (result.data.success) {
+                        // Update local SEO data for all clips
+                        Object.keys(result.data.seoData).forEach(function(clipId) {
+                            state.clipSEO[clipId] = result.data.seoData[clipId];
+                        });
+                        render();
+                        utils.showToast('SEO generated for all clips!', 'success');
+                    } else {
+                        throw new Error(result.data.error || 'Failed to generate SEO');
+                    }
+                } catch (error) {
+                    console.error('Batch SEO error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to generate SEO'), 'error');
+                }
+            },
+
+            // Export project with all data
+            exportProject: async function(format) {
+                if (!state.projectId) {
+                    utils.showToast('No project to export', 'error');
+                    return;
+                }
+
+                utils.showToast('Preparing export...', 'info');
+
+                try {
+                    var wizardExportProject = functions.httpsCallable('wizardExportProject');
+                    var result = await wizardExportProject({
+                        projectId: state.projectId,
+                        format: format || 'json',
+                        clipIds: state.selectedClipIds
+                    });
+
+                    if (result.data.success) {
+                        // Handle download based on format
+                        if (format === 'csv') {
+                            app.downloadCSV(result.data.data.csv, 'project-seo.csv');
+                        } else {
+                            app.downloadJSON(result.data.data, 'project-export.json');
+                        }
+                        utils.showToast('Export ready!', 'success');
+                    } else {
+                        throw new Error(result.data.error || 'Failed to export');
+                    }
+                } catch (error) {
+                    console.error('Export error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to export'), 'error');
+                }
+            },
+
+            downloadCSV: function(csvContent, filename) {
+                var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                var link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                link.click();
+            },
+
+            downloadJSON: function(jsonContent, filename) {
+                var blob = new Blob([JSON.stringify(jsonContent, null, 2)], { type: 'application/json' });
+                var link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                link.click();
             }
         };
 
@@ -3024,45 +3277,18 @@
         window.utils = utils;
 
         /* ==========================================
-           4.7 SIMULATION HELPERS
+           4.7 HELPER FUNCTIONS
            ========================================== */
 
-        function simulateAnalysis() {
-            var stepIndex = 0;
-            var progressPerStep = 100 / state.analysis.steps.length;
-
-            function processNextStep() {
-                if (stepIndex >= state.analysis.steps.length) {
-                    // Analysis complete
-                    state.analysis.status = 'done';
-                    state.analysis.progress = 100;
-                    state.clips = MOCK_CLIPS;
-                    state.selectedClipIds = MOCK_CLIPS.slice(0, 5).map(function(c) { return c.id; });
-                    render();
-
-                    setTimeout(function() {
-                        state.currentStep = 3;
-                        render();
-                    }, 1000);
-                    return;
-                }
-
-                // Mark current step as processing
-                state.analysis.steps[stepIndex].status = 'processing';
-                render();
-
-                // Simulate processing time
-                setTimeout(function() {
-                    state.analysis.steps[stepIndex].status = 'done';
-                    state.analysis.progress = Math.round((stepIndex + 1) * progressPerStep);
-                    stepIndex++;
-                    render();
-
-                    setTimeout(processNextStep, 300);
-                }, 800 + Math.random() * 500);
-            }
-
-            processNextStep();
+        // Get default clip settings
+        function getDefaultSettings() {
+            return {
+                captionStyle: 'karaoke',
+                reframeMode: 'auto',
+                normalizeAudio: true,
+                removeFillers: false,
+                addBackgroundMusic: false
+            };
         }
 
         /* ==========================================
