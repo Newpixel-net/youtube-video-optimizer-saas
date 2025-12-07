@@ -1784,6 +1784,56 @@
             color: white;
         }
 
+        .ai-btn-icon {
+            font-size: 1rem;
+        }
+
+        /* Transition Options */
+        .transition-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .transition-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.625rem 0.875rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 60px;
+        }
+
+        .transition-btn:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .transition-btn.selected {
+            background: rgba(236, 72, 153, 0.15);
+            border-color: #ec4899;
+            color: white;
+        }
+
+        .transition-icon {
+            font-size: 1.1rem;
+        }
+
+        .effect-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
         /* AI Modal Styles */
         .ai-modal-overlay {
             position: fixed;
@@ -2218,6 +2268,7 @@
         }
 
         .thumbnail-placeholder {
+            position: relative;
             width: 100%;
             height: 100%;
             display: flex;
@@ -2225,12 +2276,17 @@
             align-items: center;
             justify-content: center;
             background: rgba(255, 255, 255, 0.03);
-            color: rgba(255, 255, 255, 0.4);
+            color: rgba(255, 255, 255, 0.6);
             gap: 0.25rem;
+            overflow: hidden;
         }
 
-        .thumbnail-placeholder span:first-child {
-            font-size: 2rem;
+        .thumbnail-placeholder::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 0;
         }
 
         .thumbnail-download-btn {
@@ -2310,6 +2366,18 @@
             background: rgba(236, 72, 153, 0.1);
             border-color: rgba(236, 72, 153, 0.3);
             color: white;
+        }
+
+        .regenerate-thumbnails-btn.primary-action {
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border-color: transparent;
+            color: white;
+            font-weight: 600;
+        }
+
+        .regenerate-thumbnails-btn.primary-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
         }
 
         /* ------------------------------------------
@@ -3029,6 +3097,44 @@
 
         .download-modal-actions .btn-youtube:hover {
             background: #cc0000;
+        }
+
+        .download-modal-actions .btn-primary {
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border: none;
+            color: white;
+        }
+
+        .download-modal-actions .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
+        }
+
+        .download-processing-info {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .processing-info-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #10b981;
+            margin-bottom: 0.75rem;
+        }
+
+        .processing-features {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .processing-features li {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.85rem;
+            padding: 0.25rem 0;
         }
 
         /* ------------------------------------------
@@ -4365,14 +4471,94 @@
 
             html += '</div>';
 
+            // Transitions & Effects Panel
+            html += '<div class="customization-panel">';
+            html += '<div class="panel-header">';
+            html += '<span class="panel-icon">✨</span>';
+            html += '<span class="panel-title">TRANSITIONS & EFFECTS</span>';
+            html += '</div>';
+
+            // Intro transitions
+            html += '<div class="audio-section-title">Intro Transition</div>';
+            html += '<div class="transition-options">';
+            var introTransitions = [
+                { id: 'none', name: 'None', icon: '—' },
+                { id: 'fade', name: 'Fade In', icon: '◐' },
+                { id: 'zoom', name: 'Zoom In', icon: '⊕' },
+                { id: 'slide', name: 'Slide In', icon: '→' },
+                { id: 'glitch', name: 'Glitch', icon: '⚡' }
+            ];
+            var currentIntro = settings.introTransition || 'none';
+            introTransitions.forEach(function(t) {
+                var selectedClass = currentIntro === t.id ? ' selected' : '';
+                html += '<button class="transition-btn' + selectedClass + '" onclick="app.setTransition(\'intro\', \'' + t.id + '\')">';
+                html += '<span class="transition-icon">' + t.icon + '</span>';
+                html += '<span>' + t.name + '</span>';
+                html += '</button>';
+            });
+            html += '</div>';
+
+            // Outro transitions
+            html += '<div class="audio-section-title">Outro Transition</div>';
+            html += '<div class="transition-options">';
+            var outroTransitions = [
+                { id: 'none', name: 'None', icon: '—' },
+                { id: 'fade', name: 'Fade Out', icon: '◑' },
+                { id: 'zoom', name: 'Zoom Out', icon: '⊖' },
+                { id: 'slide', name: 'Slide Out', icon: '←' }
+            ];
+            var currentOutro = settings.outroTransition || 'none';
+            outroTransitions.forEach(function(t) {
+                var selectedClass = currentOutro === t.id ? ' selected' : '';
+                html += '<button class="transition-btn' + selectedClass + '" onclick="app.setTransition(\'outro\', \'' + t.id + '\')">';
+                html += '<span class="transition-icon">' + t.icon + '</span>';
+                html += '<span>' + t.name + '</span>';
+                html += '</button>';
+            });
+            html += '</div>';
+
+            // Visual effects
+            html += '<div class="audio-section-title">Visual Effects</div>';
+            html += '<div class="effect-options">';
+
+            var effectZoom = settings.autoZoom ? ' checked' : '';
+            html += '<label class="audio-option' + effectZoom + '">';
+            html += '<input type="checkbox" ' + (settings.autoZoom ? 'checked' : '') + ' onchange="app.toggleEffect(\'autoZoom\')">';
+            html += '<div class="audio-option-text">';
+            html += '<div class="audio-option-title">Auto Zoom on Key Moments</div>';
+            html += '<div class="audio-option-desc">Subtle zoom on emphasis points</div>';
+            html += '</div>';
+            html += '</label>';
+
+            var effectVignette = settings.vignette ? ' checked' : '';
+            html += '<label class="audio-option' + effectVignette + '">';
+            html += '<input type="checkbox" ' + (settings.vignette ? 'checked' : '') + ' onchange="app.toggleEffect(\'vignette\')">';
+            html += '<div class="audio-option-text">';
+            html += '<div class="audio-option-title">Cinematic Vignette</div>';
+            html += '<div class="audio-option-desc">Dark edges for focus effect</div>';
+            html += '</div>';
+            html += '</label>';
+
+            var effectCG = settings.colorGrade ? ' checked' : '';
+            html += '<label class="audio-option' + effectCG + '">';
+            html += '<input type="checkbox" ' + (settings.colorGrade ? 'checked' : '') + ' onchange="app.toggleEffect(\'colorGrade\')">';
+            html += '<div class="audio-option-text">';
+            html += '<div class="audio-option-title">Auto Color Grading</div>';
+            html += '<div class="audio-option-desc">Enhance colors for social media</div>';
+            html += '</div>';
+            html += '</label>';
+
+            html += '</div>';
+            html += '</div>';
+
             // AI Features Bar
             html += '<div class="ai-features-bar">';
-            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'clipping\')">✂️ AI clipping</button>';
-            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'captioning\')">💬 AI captioning</button>';
-            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'reframe\')">🔲 AI reframe</button>';
-            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'broll\')">🎨 AI B-Roll</button>';
-            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'audio\')">🔊 AI audio</button>';
-            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'hook\')">🪝 AI hook</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'clipping\')"><span class="ai-btn-icon">✂️</span> AI Clipping</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'captioning\')"><span class="ai-btn-icon">💬</span> AI Captions</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'reframe\')"><span class="ai-btn-icon">🔲</span> AI Reframe</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'broll\')"><span class="ai-btn-icon">🎨</span> AI B-Roll</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'audio\')"><span class="ai-btn-icon">🔊</span> AI Audio</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'hook\')"><span class="ai-btn-icon">🪝</span> AI Hook</button>';
             html += '</div>';
 
             html += '</div>'; // customization-panels
@@ -4394,17 +4580,33 @@
 
         function getDefaultSettings() {
             return {
+                // Caption settings
                 captionStyle: 'karaoke',
+
+                // Reframe settings
                 reframeMode: 'auto_center',
-                removeFiller: true,
+
+                // Timeline/trim settings
+                trimStart: 0,
+                trimEnd: null,
+
+                // Audio settings
+                removeFiller: false,
                 enhanceAudio: true,
-                audioDucking: false,
+                audioDucking: true,
                 voiceVolume: 100,
                 addMusic: false,
                 musicVolume: 30,
                 selectedTrack: null,
-                trimStart: 0,
-                trimEnd: null
+
+                // Transition settings
+                introTransition: 'none',
+                outroTransition: 'none',
+
+                // Visual effects
+                autoZoom: false,
+                vignette: false,
+                colorGrade: false
             };
         }
 
@@ -4476,38 +4678,68 @@
 
             // Right: Thumbnails
             html += '<div class="seo-panel thumbnails-panel">';
-            html += '<h3>THUMBNAILS (A/B Testing - 3 Options)</h3>';
+            html += '<h3>AI THUMBNAILS (A/B Testing)</h3>';
 
-            // Get generated thumbnails or use placeholders
-            var thumbnails = state.clipThumbnails[activeClip.id] || [];
+            // Get generated thumbnails - check for nested structure from backend
+            var thumbnailData = state.clipThumbnails[activeClip.id];
+            var thumbnails = [];
+            if (thumbnailData) {
+                // Handle both array and object with thumbnails property
+                thumbnails = Array.isArray(thumbnailData) ? thumbnailData :
+                    (thumbnailData.thumbnails || []);
+            }
+
             var selectedThumbnailIdx = state.selectedThumbnail && state.selectedThumbnail[activeClip.id] !== undefined
                 ? state.selectedThumbnail[activeClip.id] : 0;
+
+            var hasGeneratedThumbnails = thumbnails.length > 0 && thumbnails.some(function(t) {
+                var url = t ? (t.previewUrl || t.url || t) : null;
+                return url && typeof url === 'string' && !url.includes('picsum.photos');
+            });
 
             html += '<div class="thumbnails-grid">';
             for (var i = 0; i < 3; i++) {
                 var selectedClass = i === selectedThumbnailIdx ? ' selected' : '';
-                var thumbUrl = thumbnails[i] ? (thumbnails[i].previewUrl || thumbnails[i].url || thumbnails[i]) : null;
-                var isGenerated = !!thumbUrl && !thumbUrl.includes('picsum.photos');
+                var thumb = thumbnails[i];
+                var thumbUrl = null;
+
+                if (thumb) {
+                    thumbUrl = thumb.previewUrl || thumb.url || (typeof thumb === 'string' ? thumb : null);
+                }
+
+                var isValidThumbnail = thumbUrl && typeof thumbUrl === 'string' &&
+                    thumbUrl.startsWith('http') && !thumbUrl.includes('picsum.photos');
 
                 html += '<div class="thumbnail-option' + selectedClass + '" onclick="app.selectThumbnail(' + i + ')">';
 
-                if (isGenerated) {
-                    html += '<img src="' + thumbUrl + '" alt="Thumbnail ' + (i + 1) + '">';
-                    html += '<button class="thumbnail-download-btn" onclick="event.stopPropagation(); app.downloadThumbnail(\'' + activeClip.id + '\', ' + i + ')" title="Download thumbnail">⬇</button>';
+                if (isValidThumbnail) {
+                    html += '<img src="' + utils.escapeHtml(thumbUrl) + '" alt="Thumbnail Option ' + String.fromCharCode(65 + i) + '">';
+                    html += '<button class="thumbnail-download-btn" onclick="event.stopPropagation(); app.downloadThumbnail(\'' + activeClip.id + '\', ' + i + ')" title="Download">↓</button>';
                 } else {
+                    // Show placeholder with clip frame
                     html += '<div class="thumbnail-placeholder">';
-                    html += '<span>🖼️</span>';
-                    html += '<span style="font-size: 0.7rem;">Click Regenerate</span>';
+                    if (activeClip.thumbnail) {
+                        html += '<img src="' + utils.escapeHtml(activeClip.thumbnail) + '" alt="Frame" style="opacity: 0.3; width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0;">';
+                    }
+                    html += '<div style="position: relative; z-index: 1; text-align: center;">';
+                    html += '<span style="font-size: 1.5rem;">🎨</span>';
+                    html += '<span style="display: block; font-size: 0.65rem; margin-top: 0.25rem;">Not Generated</span>';
+                    html += '</div>';
                     html += '</div>';
                 }
 
-                html += '<span class="thumbnail-label">Option ' + String.fromCharCode(65 + i) + '</span>';
+                html += '<span class="thumbnail-label">' + String.fromCharCode(65 + i) + '</span>';
                 html += '<div class="thumbnail-radio"></div>';
                 html += '</div>';
             }
             html += '</div>';
 
-            html += '<button class="regenerate-thumbnails-btn" onclick="app.regenerateThumbnails()">🎨 Generate with AI (Nano Banana Pro)</button>';
+            // Generate button with status
+            if (hasGeneratedThumbnails) {
+                html += '<button class="regenerate-thumbnails-btn" onclick="app.regenerateThumbnails()">🔄 Regenerate Thumbnails</button>';
+            } else {
+                html += '<button class="regenerate-thumbnails-btn primary-action" onclick="app.regenerateThumbnails()">🎨 Generate AI Thumbnails</button>';
+            }
 
             html += '</div>'; // thumbnails-panel
 
@@ -5156,6 +5388,36 @@
                 utils.showToast('Track selected', 'success');
             },
 
+            // Transitions
+            setTransition: function(type, transitionId) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (type === 'intro') {
+                    state.clipSettings[activeClip.id].introTransition = transitionId;
+                } else {
+                    state.clipSettings[activeClip.id].outroTransition = transitionId;
+                }
+                render();
+            },
+
+            // Visual effects
+            toggleEffect: function(effectName) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id][effectName] = !state.clipSettings[activeClip.id][effectName];
+                render();
+            },
+
             // Timeline trimming
             adjustTrim: function(handle, delta) {
                 var selectedClips = state.clips.filter(function(c) {
@@ -5648,21 +5910,31 @@
                 modalHtml += '</div>';
                 modalHtml += '</div>';
 
-                // Coming soon notice
+                // Processing info
+                modalHtml += '<div class="download-processing-info">';
+                modalHtml += '<div class="processing-info-title">🎬 What you\'ll get:</div>';
+                modalHtml += '<ul class="processing-features">';
+                modalHtml += '<li>✓ Vertical 9:16 format (perfect for Shorts/Reels/TikTok)</li>';
+                modalHtml += '<li>✓ AI-powered smart reframing</li>';
+                modalHtml += '<li>✓ Enhanced audio quality</li>';
+                modalHtml += '<li>✓ All your customizations applied</li>';
+                modalHtml += '</ul>';
+                modalHtml += '</div>';
+
+                // Processing status notice
                 modalHtml += '<div class="download-coming-soon">';
-                modalHtml += '<div class="download-coming-soon-title">🚧 Video Processing Coming Soon</div>';
+                modalHtml += '<div class="download-coming-soon-title">⏳ Processing Queue</div>';
                 modalHtml += '<div class="download-coming-soon-text">';
-                modalHtml += 'Direct MP4 clip download with automatic cropping to 9:16 format is being developed. ';
-                modalHtml += 'You\'ll be able to download clips with AI captions, reframing, and all your customizations applied.';
+                modalHtml += 'Click "Start Processing" to queue your video for processing. ';
+                modalHtml += 'You\'ll be notified when it\'s ready for download (usually 2-5 minutes).';
                 modalHtml += '</div>';
                 modalHtml += '</div>';
 
                 // Alternative
                 modalHtml += '<div class="download-alternative">';
-                modalHtml += '<div class="download-alternative-title">📺 For now, use YouTube</div>';
+                modalHtml += '<div class="download-alternative-title">💡 Quick Alternative</div>';
                 modalHtml += '<div class="download-coming-soon-text">';
-                modalHtml += 'Click the button below to open this clip segment directly in YouTube. ';
-                modalHtml += 'Use your preferred downloader tool to save it.';
+                modalHtml += 'Open this exact clip segment in YouTube and use your preferred downloader.';
                 modalHtml += '</div>';
                 modalHtml += '</div>';
 
@@ -5670,8 +5942,8 @@
 
                 // Actions
                 modalHtml += '<div class="download-modal-actions">';
-                modalHtml += '<button class="btn-secondary" onclick="app.closeDownloadModal()">Cancel</button>';
-                modalHtml += '<button class="btn-youtube" onclick="app.openClipInYouTube()">▶ Open in YouTube</button>';
+                modalHtml += '<button class="btn-secondary" onclick="app.openClipInYouTube()">Open in YouTube</button>';
+                modalHtml += '<button class="btn-primary" onclick="app.startVideoProcessing()">🚀 Start Processing</button>';
                 modalHtml += '</div>';
 
                 modalHtml += '</div>'; // content end
@@ -5720,6 +5992,92 @@
 
                 app.closeDownloadModal();
                 utils.showToast('Opened in YouTube at ' + utils.formatDuration(info.startTime), 'success');
+            },
+
+            startVideoProcessing: async function() {
+                if (!state.downloadModal) return;
+                if (!state.projectId) {
+                    utils.showToast('No project loaded', 'error');
+                    return;
+                }
+
+                var info = state.downloadModal;
+                var clipId = info.clipId;
+                var quality = info.quality || '720p';
+
+                utils.showToast('Starting video processing...', 'info');
+
+                try {
+                    var wizardProcessClip = functions.httpsCallable('wizardProcessClip');
+                    var result = await wizardProcessClip({
+                        projectId: state.projectId,
+                        clipId: clipId,
+                        quality: quality,
+                        settings: state.clipSettings[clipId] || {}
+                    });
+
+                    if (result.data.success) {
+                        // Store job info
+                        if (!state.processingJobs) {
+                            state.processingJobs = {};
+                        }
+                        state.processingJobs[clipId] = {
+                            jobId: result.data.jobId,
+                            status: 'queued',
+                            quality: quality
+                        };
+
+                        app.closeDownloadModal();
+                        utils.showToast('Processing started! ' + result.data.estimatedTime, 'success');
+
+                        // Start polling for status
+                        app.pollProcessingStatus(clipId, result.data.jobId);
+                    } else {
+                        throw new Error(result.data.error || 'Failed to start processing');
+                    }
+                } catch (error) {
+                    console.error('Video processing error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to start processing'), 'error');
+                }
+            },
+
+            pollProcessingStatus: async function(clipId, jobId) {
+                // Poll every 10 seconds for status updates
+                var pollInterval = setInterval(async function() {
+                    try {
+                        var wizardGetProcessingStatus = functions.httpsCallable('wizardGetProcessingStatus');
+                        var result = await wizardGetProcessingStatus({ jobId: jobId });
+
+                        if (result.data.success) {
+                            var job = result.data.job;
+
+                            if (state.processingJobs && state.processingJobs[clipId]) {
+                                state.processingJobs[clipId].status = job.status;
+                                state.processingJobs[clipId].progress = job.progress;
+                            }
+
+                            if (job.status === 'completed') {
+                                clearInterval(pollInterval);
+                                if (job.outputUrl) {
+                                    utils.showToast('Video ready! Click to download.', 'success');
+                                    window.open(job.outputUrl, '_blank');
+                                } else {
+                                    utils.showToast('Video processed but download not available yet.', 'info');
+                                }
+                            } else if (job.status === 'failed') {
+                                clearInterval(pollInterval);
+                                utils.showToast('Processing failed: ' + (job.error || 'Unknown error'), 'error');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Poll status error:', error);
+                    }
+                }, 10000); // 10 second interval
+
+                // Stop polling after 10 minutes
+                setTimeout(function() {
+                    clearInterval(pollInterval);
+                }, 600000);
             },
 
             downloadThumbnail: function(clipId, index) {
@@ -6182,36 +6540,7 @@
            4.7 HELPER FUNCTIONS
            ========================================== */
 
-        // Get default clip settings
-        function getDefaultSettings() {
-            return {
-                // Caption settings
-                captionStyle: 'karaoke',
-
-                // Reframe settings
-                reframeMode: 'auto_center',
-
-                // Timeline/trim settings
-                trimStart: 0,
-                trimEnd: null, // Will be set to clip duration when used
-
-                // Audio settings
-                removeFiller: false,
-                enhanceAudio: true,
-                audioDucking: true,
-                voiceVolume: 100,
-
-                // Music settings
-                addMusic: false,
-                musicVolume: 30,
-                selectedTrack: null,
-
-                // Legacy fields (for compatibility)
-                normalizeAudio: true,
-                removeFillers: false,
-                addBackgroundMusic: false
-            };
-        }
+        // Note: getDefaultSettings is defined earlier in the code
 
         /* ==========================================
            4.8 INITIALIZATION

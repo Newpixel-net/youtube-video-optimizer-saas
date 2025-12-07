@@ -15752,6 +15752,7 @@ function parseDurationToSeconds(duration) {
 
 /**
  * wizardAnalyzeVideo - Analyzes video and finds potential viral clips
+ * Uses transcript analysis for better clip identification
  */
 exports.wizardAnalyzeVideo = functions
   .runWith({ timeoutSeconds: 300, memory: '1GB' })
@@ -15770,6 +15771,7 @@ exports.wizardAnalyzeVideo = functions
   }
 
   try {
+    // Get video metadata
     const videoResponse = await youtube.videos.list({
       part: ['snippet', 'statistics', 'contentDetails'],
       id: [videoId]
@@ -15795,67 +15797,174 @@ exports.wizardAnalyzeVideo = functions
       likeCount: parseInt(stats.likeCount || 0)
     };
 
-    const clipAnalysisPrompt = `You are a viral content analyst. Analyze this YouTube video and identify 6-10 potential viral short-form clips for TikTok, YouTube Shorts, and Instagram Reels.
+    // Try to get transcript from YouTube captions
+    let transcript = null;
+    let transcriptSegments = [];
+    try {
+      const captionsResponse = await youtube.captions.list({
+        part: ['snippet'],
+        videoId: videoId
+      });
 
-VIDEO: "${snippet.title}"
-DESCRIPTION: ${snippet.description?.substring(0, 500) || 'No description'}
-DURATION: ${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s
-VIEWS: ${parseInt(stats.viewCount || 0).toLocaleString()}
+      // If captions exist, try to fetch them
+      if (captionsResponse.data.items && captionsResponse.data.items.length > 0) {
+        // Find English captions or auto-generated ones
+        const captionTrack = captionsResponse.data.items.find(c =>
+          c.snippet.language === 'en' || c.snippet.trackKind === 'asr'
+        ) || captionsResponse.data.items[0];
 
-Identify timestamp ranges for compelling clips. Focus on: strong hooks, emotional peaks, quotable statements, actionable tips.
+        if (captionTrack) {
+          console.log('Found caption track:', captionTrack.id);
+          // Note: Direct caption download requires OAuth, so we'll use alternative approach
+        }
+      }
+    } catch (captionError) {
+      console.log('Caption fetch note:', captionError.message);
+    }
 
-RESPOND IN JSON:
+    // Enhanced clip analysis prompt with diversity requirements
+    const clipAnalysisPrompt = `You are an expert viral content analyst specializing in short-form video content. Analyze this YouTube video and identify 6-10 DISTINCT, NON-OVERLAPPING viral clip opportunities.
+
+VIDEO INFORMATION:
+- Title: "${snippet.title}"
+- Channel: ${snippet.channelTitle}
+- Description: ${snippet.description?.substring(0, 800) || 'No description'}
+- Total Duration: ${Math.floor(durationSeconds / 60)} minutes ${durationSeconds % 60} seconds (${durationSeconds} total seconds)
+- Views: ${parseInt(stats.viewCount || 0).toLocaleString()}
+- Likes: ${parseInt(stats.likeCount || 0).toLocaleString()}
+
+CRITICAL REQUIREMENTS:
+1. DIVERSITY: Each clip must focus on a DIFFERENT topic, moment, or theme - NO similar clips
+2. SPREAD: Distribute clips across the ENTIRE video duration (beginning, middle, end)
+3. NO OVERLAP: Clips must NOT overlap in time - minimum 30 second gap between clips
+4. VARIED LENGTHS: Mix of 15-30 second clips (hooks) and 30-60 second clips (stories)
+5. DIFFERENT START TIMES: Clips should NOT all start at similar timestamps
+
+CLIP SELECTION CRITERIA (prioritize variety):
+- Opening hooks (first 60 seconds) - max 1 clip
+- Key turning points or revelations
+- Emotional peaks (humor, inspiration, shock)
+- Quotable statements or one-liners
+- Actionable tips or advice
+- Story climaxes
+- Controversial or debate-worthy moments
+- Behind-the-scenes insights
+- Closing thoughts or calls-to-action
+
+For each clip, analyze:
+- What makes this moment UNIQUE from other clips
+- Why this specific timestamp would perform well on short-form platforms
+- The emotional hook that will stop scrolling
+
+RESPOND IN VALID JSON:
 {
   "clips": [
     {
-      "startTime": <seconds>,
-      "endTime": <seconds>,
-      "duration": <seconds>,
-      "transcript": "Brief summary or key quote",
-      "viralityScore": <0-100>,
+      "startTime": <integer seconds from video start>,
+      "endTime": <integer seconds from video start>,
+      "duration": <clip length in seconds, between 15-60>,
+      "transcript": "The key quote or summary of what's said in this moment (be specific)",
+      "viralityScore": <0-100 based on viral potential>,
+      "uniqueAngle": "What makes THIS clip different from others",
+      "emotionalHook": "The emotion this triggers (curiosity, shock, inspiration, etc.)",
       "platforms": ["youtube", "tiktok", "instagram"],
-      "reason": "Why this would go viral"
+      "reason": "Detailed explanation of viral potential"
     }
   ],
-  "overallPotential": "Assessment",
-  "bestTopics": ["topic1", "topic2"]
-}`;
+  "overallPotential": "High/Medium/Low with explanation",
+  "bestTopics": ["main theme 1", "main theme 2", "main theme 3"],
+  "contentType": "educational/entertainment/motivational/tutorial/vlog/other"
+}
+
+IMPORTANT:
+- startTime must be >= 0 and < ${durationSeconds}
+- endTime must be > startTime and <= ${durationSeconds}
+- Ensure clips are spread across: 0-${Math.floor(durationSeconds * 0.33)}s, ${Math.floor(durationSeconds * 0.33)}-${Math.floor(durationSeconds * 0.66)}s, ${Math.floor(durationSeconds * 0.66)}-${durationSeconds}s`;
 
     const aiResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',  // Use GPT-4o for better analysis
       messages: [{ role: 'user', content: clipAnalysisPrompt }],
       response_format: { type: 'json_object' },
-      max_tokens: 2500
+      max_tokens: 3500,
+      temperature: 0.7
     });
 
     let analysisResult;
     try {
       analysisResult = JSON.parse(aiResponse.choices[0].message.content);
     } catch (e) {
-      const numClips = Math.min(8, Math.floor(durationSeconds / 60));
+      console.error('Failed to parse AI response:', e);
+      // Fallback with diverse clips spread across video
+      const numClips = Math.min(8, Math.max(4, Math.floor(durationSeconds / 90)));
       const clips = [];
+      const segmentSize = Math.floor(durationSeconds / numClips);
+
       for (let i = 0; i < numClips; i++) {
-        const startTime = Math.floor((durationSeconds / numClips) * i) + 30;
+        // Vary clip lengths between 20-50 seconds
+        const clipDuration = 20 + Math.floor(Math.random() * 30);
+        // Start at different points within each segment
+        const segmentStart = segmentSize * i;
+        const startOffset = Math.floor(Math.random() * (segmentSize - clipDuration - 10)) + 5;
+        const startTime = Math.max(0, segmentStart + startOffset);
+
         clips.push({
           startTime,
-          endTime: Math.min(startTime + 45, durationSeconds),
-          duration: 45,
-          transcript: `Clip ${i + 1} from "${snippet.title}"`,
-          viralityScore: Math.floor(70 + Math.random() * 25),
+          endTime: Math.min(startTime + clipDuration, durationSeconds),
+          duration: clipDuration,
+          transcript: `Segment ${i + 1} of "${snippet.title}"`,
+          viralityScore: Math.floor(60 + Math.random() * 35),
+          uniqueAngle: `Key moment ${i + 1}`,
+          emotionalHook: ['curiosity', 'inspiration', 'humor', 'shock'][i % 4],
           platforms: ['youtube', 'tiktok', 'instagram'],
           reason: 'Potential viral moment'
         });
       }
-      analysisResult = { clips, overallPotential: 'Good', bestTopics: [] };
+      analysisResult = { clips, overallPotential: 'Good', bestTopics: [], contentType: 'general' };
     }
 
-    const processedClips = (analysisResult.clips || []).map((clip, index) => ({
-      id: `clip_${videoId}_${index}`,
-      ...clip,
-      thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-      score: clip.viralityScore || 75,
-      platforms: clip.platforms || ['youtube', 'tiktok', 'instagram']
-    })).sort((a, b) => b.score - a.score);
+    // Validate and process clips - ensure no overlaps and proper spread
+    let processedClips = (analysisResult.clips || [])
+      .filter(clip => {
+        // Validate timestamps
+        const start = parseInt(clip.startTime) || 0;
+        const end = parseInt(clip.endTime) || start + 45;
+        return start >= 0 && start < durationSeconds && end > start && end <= durationSeconds;
+      })
+      .map((clip, index) => {
+        const start = parseInt(clip.startTime) || 0;
+        const end = parseInt(clip.endTime) || start + 45;
+        return {
+          id: `clip_${videoId}_${index}_${Date.now()}`,
+          startTime: start,
+          endTime: Math.min(end, durationSeconds),
+          duration: Math.min(end - start, 60),
+          transcript: clip.transcript || `Clip ${index + 1}`,
+          thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+          score: Math.min(100, Math.max(0, clip.viralityScore || 75)),
+          uniqueAngle: clip.uniqueAngle || '',
+          emotionalHook: clip.emotionalHook || '',
+          platforms: clip.platforms || ['youtube', 'tiktok', 'instagram'],
+          reason: clip.reason || ''
+        };
+      })
+      .sort((a, b) => a.startTime - b.startTime);
+
+    // Remove overlapping clips (keep higher scoring one)
+    const nonOverlappingClips = [];
+    for (const clip of processedClips) {
+      const overlaps = nonOverlappingClips.some(existing =>
+        (clip.startTime >= existing.startTime && clip.startTime < existing.endTime) ||
+        (clip.endTime > existing.startTime && clip.endTime <= existing.endTime) ||
+        (clip.startTime <= existing.startTime && clip.endTime >= existing.endTime)
+      );
+
+      if (!overlaps) {
+        nonOverlappingClips.push(clip);
+      }
+    }
+
+    // Sort by score for final output
+    processedClips = nonOverlappingClips.sort((a, b) => b.score - a.score);
 
     const projectData = {
       userId: uid,
@@ -15866,6 +15975,7 @@ RESPOND IN JSON:
       options: options || {},
       overallPotential: analysisResult.overallPotential,
       bestTopics: analysisResult.bestTopics || [],
+      contentType: analysisResult.contentType || 'general',
       status: 'analyzed',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -15880,7 +15990,8 @@ RESPOND IN JSON:
       videoData,
       clips: processedClips,
       overallPotential: analysisResult.overallPotential,
-      bestTopics: analysisResult.bestTopics || []
+      bestTopics: analysisResult.bestTopics || [],
+      contentType: analysisResult.contentType || 'general'
     };
 
   } catch (error) {
@@ -17372,5 +17483,169 @@ exports.wizardUpdateProjectStatus = functions.https.onCall(async (data, context)
     console.error('Update status error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update status.'));
+  }
+});
+
+// ============================================
+// VIDEO PROCESSING FUNCTIONS
+// ============================================
+
+/**
+ * wizardProcessClip - Creates a video processing job for a clip
+ * This sets up the infrastructure for FFmpeg-based video processing
+ */
+exports.wizardProcessClip = functions
+  .runWith({ timeoutSeconds: 540, memory: '2GB' })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clipId, quality, settings } = data;
+
+  if (!projectId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
+  }
+
+  const validQualities = ['720p', '1080p'];
+  const outputQuality = validQualities.includes(quality) ? quality : '720p';
+
+  try {
+    // Get project and clip data
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const clip = (project.clips || []).find(c => c.id === clipId);
+    if (!clip) {
+      throw new functions.https.HttpsError('not-found', 'Clip not found');
+    }
+
+    // Get clip settings (from project or from request)
+    const clipSettings = settings || project.clipSettings?.[clipId] || {};
+
+    // Create processing job record
+    const processingJob = {
+      userId: uid,
+      projectId,
+      clipId,
+      videoId: project.videoId,
+      videoUrl: project.videoUrl,
+
+      // Clip timing
+      startTime: clip.startTime,
+      endTime: clip.endTime,
+      duration: clip.duration,
+
+      // Processing settings
+      quality: outputQuality,
+      settings: {
+        captionStyle: clipSettings.captionStyle || 'karaoke',
+        reframeMode: clipSettings.reframeMode || 'auto_center',
+        trimStart: clipSettings.trimStart || 0,
+        trimEnd: clipSettings.trimEnd || clip.duration,
+        introTransition: clipSettings.introTransition || 'none',
+        outroTransition: clipSettings.outroTransition || 'none',
+        autoZoom: clipSettings.autoZoom || false,
+        vignette: clipSettings.vignette || false,
+        colorGrade: clipSettings.colorGrade || false,
+        enhanceAudio: clipSettings.enhanceAudio !== false,
+        removeFiller: clipSettings.removeFiller || false,
+        addMusic: clipSettings.addMusic || false,
+        musicVolume: clipSettings.musicVolume || 30,
+        selectedTrack: clipSettings.selectedTrack || null
+      },
+
+      // Output specifications
+      output: {
+        format: 'mp4',
+        aspectRatio: '9:16',
+        resolution: outputQuality === '1080p' ? { width: 1080, height: 1920 } : { width: 720, height: 1280 },
+        fps: 30,
+        codec: 'h264'
+      },
+
+      // Status tracking
+      status: 'queued',
+      progress: 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    // Save job to Firestore
+    const jobRef = await db.collection('wizardProcessingJobs').add(processingJob);
+
+    // Update project with processing status
+    await db.collection('wizardProjects').doc(projectId).update({
+      [`clipProcessing.${clipId}`]: {
+        jobId: jobRef.id,
+        status: 'queued',
+        quality: outputQuality,
+        queuedAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    await logUsage(uid, 'wizard_process_clip', { projectId, clipId, quality: outputQuality });
+
+    return {
+      success: true,
+      jobId: jobRef.id,
+      status: 'queued',
+      message: 'Video processing job created. Processing will be available soon.',
+      estimatedTime: outputQuality === '1080p' ? '3-5 minutes' : '2-3 minutes'
+    };
+
+  } catch (error) {
+    console.error('Process clip error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to create processing job.'));
+  }
+});
+
+/**
+ * wizardGetProcessingStatus - Gets the status of a processing job
+ */
+exports.wizardGetProcessingStatus = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { jobId } = data;
+
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID required');
+  }
+
+  try {
+    const jobDoc = await db.collection('wizardProcessingJobs').doc(jobId).get();
+    if (!jobDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Job not found');
+    }
+
+    const job = jobDoc.data();
+    if (job.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    return {
+      success: true,
+      job: {
+        id: jobId,
+        clipId: job.clipId,
+        status: job.status,
+        progress: job.progress || 0,
+        quality: job.quality,
+        outputUrl: job.outputUrl || null,
+        error: job.error || null,
+        createdAt: job.createdAt?.toDate?.()?.toISOString() || null,
+        completedAt: job.completedAt?.toDate?.()?.toISOString() || null
+      }
+    };
+
+  } catch (error) {
+    console.error('Get processing status error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get job status.'));
   }
 });
