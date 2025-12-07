@@ -16896,3 +16896,355 @@ exports.wizardGenerateAICaptions = functions.https.onCall(async (data, context) 
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate captions.'));
   }
 });
+
+// ============================================
+// PHASE 5: EXPORT & INTEGRATION
+// ============================================
+
+/**
+ * wizardExportFullProject - Comprehensive export with all AI data
+ * Exports complete project data including settings, SEO, hooks, B-Roll, etc.
+ */
+exports.wizardExportFullProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, format = 'json', includeAIData = true } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const project = projectDoc.data();
+    const clips = project.clips || [];
+
+    // Build comprehensive export
+    const exportPackage = {
+      meta: {
+        exportVersion: '1.0',
+        exportedAt: new Date().toISOString(),
+        projectId: projectDoc.id
+      },
+      video: {
+        title: project.videoData?.title,
+        url: project.videoUrl,
+        duration: project.videoData?.duration,
+        thumbnail: project.videoData?.thumbnail
+      },
+      clips: clips.map(clip => {
+        const clipData = {
+          id: clip.id,
+          startTime: clip.startTime,
+          endTime: clip.endTime,
+          duration: clip.duration,
+          score: clip.score,
+          transcript: clip.transcript,
+          platforms: clip.platforms || [],
+          thumbnail: clip.thumbnail
+        };
+
+        // Add settings
+        if (project.clipSettings && project.clipSettings[clip.id]) {
+          clipData.settings = project.clipSettings[clip.id];
+        }
+
+        // Add SEO
+        if (project.clipSEO && project.clipSEO[clip.id]) {
+          clipData.seo = project.clipSEO[clip.id];
+        }
+
+        // Add AI data if requested
+        if (includeAIData) {
+          if (project.clipHooks && project.clipHooks[clip.id]) {
+            clipData.hooks = project.clipHooks[clip.id];
+          }
+          if (project.clipBRoll && project.clipBRoll[clip.id]) {
+            clipData.broll = project.clipBRoll[clip.id];
+          }
+          if (project.clipFillers && project.clipFillers[clip.id]) {
+            clipData.fillers = project.clipFillers[clip.id];
+          }
+          if (project.clipSpeakers && project.clipSpeakers[clip.id]) {
+            clipData.speakers = project.clipSpeakers[clip.id];
+          }
+          if (project.clipCaptions && project.clipCaptions[clip.id]) {
+            clipData.captions = project.clipCaptions[clip.id];
+          }
+        }
+
+        return clipData;
+      }),
+      summary: {
+        totalClips: clips.length,
+        totalDuration: clips.reduce((sum, c) => sum + (c.duration || 0), 0),
+        averageScore: clips.length > 0
+          ? Math.round(clips.reduce((sum, c) => sum + (c.score || 0), 0) / clips.length)
+          : 0,
+        platforms: [...new Set(clips.flatMap(c => c.platforms || []))]
+      }
+    };
+
+    let exportData, filename;
+
+    if (format === 'json') {
+      exportData = JSON.stringify(exportPackage, null, 2);
+      filename = `shorts-project-${projectDoc.id}.json`;
+    } else if (format === 'csv') {
+      // Multi-sheet style CSV with sections
+      let csvContent = '';
+
+      // Video Info
+      csvContent += '# VIDEO INFO\n';
+      csvContent += 'Title,URL,Duration\n';
+      csvContent += `"${exportPackage.video.title || ''}","${exportPackage.video.url || ''}",${exportPackage.video.duration || 0}\n\n`;
+
+      // Clips
+      csvContent += '# CLIPS\n';
+      csvContent += 'Clip ID,Start,End,Duration,Score,Platforms,SEO Title,SEO Description,Tags\n';
+      exportPackage.clips.forEach(clip => {
+        const seo = clip.seo || {};
+        csvContent += [
+          clip.id,
+          clip.startTime,
+          clip.endTime,
+          clip.duration,
+          clip.score,
+          `"${(clip.platforms || []).join('; ')}"`,
+          `"${(seo.title || '').replace(/"/g, '""')}"`,
+          `"${(seo.description || '').replace(/"/g, '""').substring(0, 200)}"`,
+          `"${(seo.tags || []).join('; ')}"`
+        ].join(',') + '\n';
+      });
+
+      // Hooks section
+      if (includeAIData) {
+        csvContent += '\n# AI HOOKS\n';
+        csvContent += 'Clip ID,Hook Text,Style,Duration,Trigger\n';
+        exportPackage.clips.forEach(clip => {
+          if (clip.hooks && clip.hooks.hooks) {
+            clip.hooks.hooks.forEach(hook => {
+              csvContent += [
+                clip.id,
+                `"${(hook.text || '').replace(/"/g, '""')}"`,
+                hook.style || '',
+                hook.speakingDuration || '',
+                hook.emotionalTrigger || ''
+              ].join(',') + '\n';
+            });
+          }
+        });
+      }
+
+      exportData = csvContent;
+      filename = `shorts-project-${projectDoc.id}.csv`;
+    }
+
+    return {
+      success: true,
+      data: exportData,
+      filename,
+      format,
+      summary: exportPackage.summary
+    };
+
+  } catch (error) {
+    console.error('Full export error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to export project.'));
+  }
+});
+
+/**
+ * wizardGetProjectsList - Gets list of user's wizard projects with summaries
+ */
+exports.wizardGetProjectsList = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { limit = 20, startAfter = null } = data;
+
+  try {
+    let query = db.collection('wizardProjects')
+      .where('userId', '==', uid)
+      .orderBy('updatedAt', 'desc')
+      .limit(Math.min(limit, 50));
+
+    if (startAfter) {
+      const startDoc = await db.collection('wizardProjects').doc(startAfter).get();
+      if (startDoc.exists) {
+        query = query.startAfter(startDoc);
+      }
+    }
+
+    const snapshot = await query.get();
+
+    const projects = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const clips = data.clips || [];
+
+      return {
+        id: doc.id,
+        videoTitle: data.videoData?.title || 'Untitled Project',
+        videoUrl: data.videoUrl,
+        videoThumbnail: data.videoData?.thumbnail,
+        clipCount: clips.length,
+        totalDuration: clips.reduce((sum, c) => sum + (c.duration || 0), 0),
+        averageScore: clips.length > 0
+          ? Math.round(clips.reduce((sum, c) => sum + (c.score || 0), 0) / clips.length)
+          : 0,
+        status: data.status || 'draft',
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null
+      };
+    });
+
+    return {
+      success: true,
+      projects,
+      hasMore: snapshot.docs.length === limit,
+      lastId: snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null
+    };
+
+  } catch (error) {
+    console.error('Get projects list error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get projects.'));
+  }
+});
+
+/**
+ * wizardLoadProject - Loads a complete project for editing
+ */
+exports.wizardLoadProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    return {
+      success: true,
+      project: {
+        id: projectDoc.id,
+        videoUrl: project.videoUrl,
+        videoData: project.videoData,
+        clips: project.clips || [],
+        clipSettings: project.clipSettings || {},
+        clipSEO: project.clipSEO || {},
+        clipThumbnails: project.clipThumbnails || {},
+        clipHooks: project.clipHooks || {},
+        clipBRoll: project.clipBRoll || {},
+        clipFillers: project.clipFillers || {},
+        clipSpeakers: project.clipSpeakers || {},
+        clipCaptions: project.clipCaptions || {},
+        status: project.status || 'draft',
+        createdAt: project.createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: project.updatedAt?.toDate?.()?.toISOString() || null
+      }
+    };
+
+  } catch (error) {
+    console.error('Load project error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to load project.'));
+  }
+});
+
+/**
+ * wizardDuplicateProject - Creates a copy of an existing project
+ */
+exports.wizardDuplicateProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Create duplicate with new ID
+    const newProject = {
+      ...project,
+      videoData: {
+        ...project.videoData,
+        title: `${project.videoData?.title || 'Project'} (Copy)`
+      },
+      status: 'draft',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const newDoc = await db.collection('wizardProjects').add(newProject);
+
+    return {
+      success: true,
+      newProjectId: newDoc.id,
+      message: 'Project duplicated successfully'
+    };
+
+  } catch (error) {
+    console.error('Duplicate project error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to duplicate project.'));
+  }
+});
+
+/**
+ * wizardUpdateProjectStatus - Updates project status (draft/complete/archived)
+ */
+exports.wizardUpdateProjectStatus = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, status } = data;
+
+  if (!projectId || !status) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and status required');
+  }
+
+  const validStatuses = ['draft', 'complete', 'archived'];
+  if (!validStatuses.includes(status)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid status');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    await db.collection('wizardProjects').doc(projectId).update({
+      status,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, status };
+
+  } catch (error) {
+    console.error('Update status error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update status.'));
+  }
+});

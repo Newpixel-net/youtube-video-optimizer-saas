@@ -2652,6 +2652,402 @@
         .toast.info {
             background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
         }
+
+        /* ------------------------------------------
+           2.16 MY PROJECTS SECTION (Step 1)
+           ------------------------------------------ */
+        .my-projects-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+        }
+
+        .my-projects-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+        }
+
+        .my-projects-header h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .my-projects-header .refresh-btn {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .my-projects-header .refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .projects-loading {
+            text-align: center;
+            padding: 2rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .projects-empty {
+            text-align: center;
+            padding: 2rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .project-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .project-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(236, 72, 153, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .project-card-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .project-thumbnail {
+            width: 80px;
+            height: 45px;
+            border-radius: 0.375rem;
+            object-fit: cover;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .project-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .project-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 0.25rem;
+        }
+
+        .project-meta {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .project-status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .project-status-badge.draft {
+            background: rgba(249, 115, 22, 0.15);
+            color: #f97316;
+        }
+
+        .project-status-badge.complete {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+
+        .project-status-badge.archived {
+            background: rgba(107, 114, 128, 0.15);
+            color: #9ca3af;
+        }
+
+        .project-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .project-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .project-action-btn {
+            flex: 1;
+            padding: 0.375rem 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .project-action-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .project-action-btn.primary {
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border: none;
+        }
+
+        .project-action-btn.primary:hover {
+            transform: scale(1.02);
+        }
+
+        /* ------------------------------------------
+           2.17 ENHANCED EXPORT UI (Step 6)
+           ------------------------------------------ */
+        .export-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 1000px) {
+            .export-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .export-main {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+
+        .export-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .export-panel {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            padding: 1.25rem;
+        }
+
+        .export-panel h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .export-option {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.625rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 0.5rem;
+        }
+
+        .export-option:last-child {
+            margin-bottom: 0;
+        }
+
+        .export-option:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(236, 72, 153, 0.3);
+        }
+
+        .export-option.selected {
+            background: rgba(236, 72, 153, 0.1);
+            border-color: rgba(236, 72, 153, 0.4);
+        }
+
+        .export-option-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .export-option-info {
+            flex: 1;
+        }
+
+        .export-option-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .export-option-desc {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .export-option-badge {
+            padding: 0.25rem 0.5rem;
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border-radius: 0.375rem;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .quick-links {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .quick-link {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.625rem;
+            color: white;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .quick-link:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(236, 72, 153, 0.3);
+        }
+
+        .quick-link-icon {
+            font-size: 1.1rem;
+        }
+
+        .export-summary {
+            padding: 1rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 0.625rem;
+            margin-bottom: 1rem;
+        }
+
+        .export-summary-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #10b981;
+            margin-bottom: 0.5rem;
+        }
+
+        .export-summary-list {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .export-summary-list li {
+            margin-bottom: 0.25rem;
+            list-style: none;
+            padding-left: 1rem;
+            position: relative;
+        }
+
+        .export-summary-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #10b981;
+        }
+
+        .export-actions-large {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .export-btn-large {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .export-btn-large:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-2px);
+        }
+
+        .export-btn-large.primary {
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border: none;
+        }
+
+        .export-btn-large.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(236, 72, 153, 0.3);
+        }
+
+        .export-btn-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .export-btn-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .export-btn-sublabel {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 0.25rem;
+        }
     </style>
 
     <!-- ============================================
@@ -2766,7 +3162,12 @@
             clipCaptions: {},   // Generated captions per clip
 
             // Step 6: Export
-            exportStatus: {}
+            exportStatus: {},
+
+            // Phase 5: My Projects
+            myProjects: [],           // List of user's saved projects
+            projectsLoading: false,   // Loading state for projects list
+            projectsLoaded: false     // Whether projects have been loaded
         };
 
         // Mock data for testing
@@ -2858,6 +3259,39 @@
                     twitter: 'X/Twitter'
                 };
                 return names[platform] || platform;
+            },
+
+            formatDate: function(dateInput) {
+                if (!dateInput) return 'Unknown';
+                var date;
+                if (dateInput._seconds) {
+                    // Firestore Timestamp
+                    date = new Date(dateInput._seconds * 1000);
+                } else if (dateInput.seconds) {
+                    date = new Date(dateInput.seconds * 1000);
+                } else if (typeof dateInput === 'string') {
+                    date = new Date(dateInput);
+                } else {
+                    date = dateInput;
+                }
+                var now = new Date();
+                var diff = now - date;
+                var seconds = Math.floor(diff / 1000);
+                var minutes = Math.floor(seconds / 60);
+                var hours = Math.floor(minutes / 60);
+                var days = Math.floor(hours / 24);
+
+                if (days > 7) {
+                    return date.toLocaleDateString();
+                } else if (days > 0) {
+                    return days + ' day' + (days > 1 ? 's' : '') + ' ago';
+                } else if (hours > 0) {
+                    return hours + ' hour' + (hours > 1 ? 's' : '') + ' ago';
+                } else if (minutes > 0) {
+                    return minutes + ' min' + (minutes > 1 ? 's' : '') + ' ago';
+                } else {
+                    return 'Just now';
+                }
             }
         };
 
@@ -3038,6 +3472,56 @@
                 html += '</label>';
             });
 
+            html += '</div>';
+
+            // My Projects Section
+            html += '<div class="my-projects-section">';
+            html += '<div class="my-projects-header">';
+            html += '<h3>📁 My Projects</h3>';
+            html += '<button class="refresh-btn" onclick="app.loadMyProjects()">🔄 Refresh</button>';
+            html += '</div>';
+
+            if (state.projectsLoading) {
+                html += '<div class="projects-loading">Loading your projects...</div>';
+            } else if (!state.projectsLoaded) {
+                html += '<div class="projects-empty">';
+                html += '<p>Click refresh to load your saved projects</p>';
+                html += '</div>';
+            } else if (state.myProjects.length === 0) {
+                html += '<div class="projects-empty">';
+                html += '<p>No saved projects yet. Create your first project above!</p>';
+                html += '</div>';
+            } else {
+                html += '<div class="projects-grid">';
+                state.myProjects.forEach(function(project) {
+                    var statusClass = project.status || 'draft';
+                    var lastUpdated = project.updatedAt ? utils.formatDate(project.updatedAt) : 'Unknown';
+
+                    html += '<div class="project-card">';
+                    html += '<div class="project-card-header">';
+                    html += '<img src="' + (project.thumbnail || 'https://picsum.photos/seed/' + project.id + '/80/45') + '" alt="Project" class="project-thumbnail">';
+                    html += '<div class="project-info">';
+                    html += '<div class="project-title">' + utils.escapeHtml(project.videoTitle || 'Untitled Project') + '</div>';
+                    html += '<div class="project-meta">' + lastUpdated + '</div>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">';
+                    html += '<span class="project-status-badge ' + statusClass + '">' + statusClass + '</span>';
+                    html += '<div class="project-stats">';
+                    html += '<span>🎬 ' + (project.clipCount || 0) + ' clips</span>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    html += '<div class="project-actions">';
+                    html += '<button class="project-action-btn primary" onclick="event.stopPropagation(); app.loadProject(\'' + project.id + '\')">📂 Open</button>';
+                    html += '<button class="project-action-btn" onclick="event.stopPropagation(); app.duplicateProject(\'' + project.id + '\')">📋 Duplicate</button>';
+                    html += '<button class="project-action-btn" onclick="event.stopPropagation(); app.archiveProject(\'' + project.id + '\')">📦 Archive</button>';
+                    html += '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
             html += '</div>';
 
             // Navigation
@@ -3652,12 +4136,40 @@
                 return state.selectedClipIds.indexOf(c.id) !== -1;
             });
 
+            // Count AI enhancements applied
+            var aiFeatureCount = 0;
+            selectedClips.forEach(function(clip) {
+                if (state.clipBRoll && state.clipBRoll[clip.id]) aiFeatureCount++;
+                if (state.clipHooks && state.clipHooks[clip.id]) aiFeatureCount++;
+                if (state.clipFillers && state.clipFillers[clip.id]) aiFeatureCount++;
+            });
+
             var html = '';
 
             // Header
             html += '<div class="export-header">';
-            html += '<h2>Export Ready: ' + selectedClips.length + ' Clips</h2>';
+            html += '<h2>🎉 Export Ready: ' + selectedClips.length + ' Clips</h2>';
             html += '<div class="export-ready-badge"><span>✅</span> All clips processed</div>';
+            html += '</div>';
+
+            // Main Container with two columns
+            html += '<div class="export-container">';
+
+            // Left: Export Main Panel
+            html += '<div class="export-main">';
+
+            // Summary
+            html += '<div class="export-summary">';
+            html += '<div class="export-summary-title">📦 Export Package Includes:</div>';
+            html += '<ul class="export-summary-list">';
+            html += '<li>' + selectedClips.length + ' optimized video clips</li>';
+            html += '<li>SEO metadata (titles, descriptions, tags)</li>';
+            html += '<li>AI-generated thumbnails (3 A/B variants each)</li>';
+            if (aiFeatureCount > 0) {
+                html += '<li>' + aiFeatureCount + ' AI enhancements (B-Roll, Hooks, Filler removal)</li>';
+            }
+            html += '<li>Platform-specific export settings</li>';
+            html += '</ul>';
             html += '</div>';
 
             // Export List
@@ -3680,21 +4192,99 @@
             });
             html += '</div>';
 
-            // Batch Actions
-            html += '<div class="batch-actions">';
-            html += '<button class="batch-action-btn primary" onclick="app.downloadAllZip()">📥 Download All (ZIP)</button>';
-            html += '<button class="batch-action-btn" onclick="app.exportSEOSheet()">📋 Export SEO Sheet (CSV)</button>';
-            html += '<button class="batch-action-btn" onclick="app.saveProject()">💾 Save Project</button>';
-            html += '<button class="batch-action-btn" onclick="app.startNewProject()">🔄 Start New Project</button>';
+            // Large Export Actions
+            html += '<div class="export-actions-large">';
+            html += '<button class="export-btn-large primary" onclick="app.exportFullProject(\'json\')">';
+            html += '<span class="export-btn-icon">📥</span>';
+            html += '<span class="export-btn-label">Download All (JSON)</span>';
+            html += '<span class="export-btn-sublabel">Complete project with all AI data</span>';
+            html += '</button>';
+            html += '<button class="export-btn-large" onclick="app.exportFullProject(\'csv\')">';
+            html += '<span class="export-btn-icon">📋</span>';
+            html += '<span class="export-btn-label">Export SEO Sheet</span>';
+            html += '<span class="export-btn-sublabel">CSV for spreadsheet apps</span>';
+            html += '</button>';
+            html += '<button class="export-btn-large" onclick="app.saveProject()">';
+            html += '<span class="export-btn-icon">💾</span>';
+            html += '<span class="export-btn-label">Save Project</span>';
+            html += '<span class="export-btn-sublabel">Continue editing later</span>';
+            html += '</button>';
+            html += '<button class="export-btn-large" onclick="app.startNewProject()">';
+            html += '<span class="export-btn-icon">🔄</span>';
+            html += '<span class="export-btn-label">Start New</span>';
+            html += '<span class="export-btn-sublabel">Begin a fresh project</span>';
+            html += '</button>';
             html += '</div>';
+
+            html += '</div>'; // export-main
+
+            // Right: Sidebar
+            html += '<div class="export-sidebar">';
+
+            // Export Format Options
+            html += '<div class="export-panel">';
+            html += '<h3>📁 Export Formats</h3>';
+
+            html += '<div class="export-option selected" onclick="app.selectExportFormat(\'full\')">';
+            html += '<div class="export-option-icon">📦</div>';
+            html += '<div class="export-option-info">';
+            html += '<div class="export-option-title">Full Project (JSON)</div>';
+            html += '<div class="export-option-desc">All data including AI features</div>';
+            html += '</div>';
+            html += '<span class="export-option-badge">Recommended</span>';
+            html += '</div>';
+
+            html += '<div class="export-option" onclick="app.selectExportFormat(\'seo\')">';
+            html += '<div class="export-option-icon">📋</div>';
+            html += '<div class="export-option-info">';
+            html += '<div class="export-option-title">SEO Only (CSV)</div>';
+            html += '<div class="export-option-desc">Titles, descriptions, tags</div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="export-option" onclick="app.selectExportFormat(\'captions\')">';
+            html += '<div class="export-option-icon">💬</div>';
+            html += '<div class="export-option-info">';
+            html += '<div class="export-option-title">Captions (SRT)</div>';
+            html += '<div class="export-option-desc">Subtitle files for each clip</div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>'; // export-panel
+
+            // Quick Links
+            html += '<div class="export-panel">';
+            html += '<h3>🔗 Quick Navigation</h3>';
+            html += '<div class="quick-links">';
+            html += '<a href="/video-optimizer" class="quick-link">';
+            html += '<span class="quick-link-icon">📊</span> Video Optimizer Dashboard';
+            html += '</a>';
+            html += '<a href="/aitools.html" class="quick-link">';
+            html += '<span class="quick-link-icon">🤖</span> AI Tools Suite';
+            html += '</a>';
+            html += '<a href="/main-dashboard.html" class="quick-link">';
+            html += '<span class="quick-link-icon">🏠</span> Main Dashboard';
+            html += '</a>';
+            html += '<a href="/placement-finder.html" class="quick-link">';
+            html += '<span class="quick-link-icon">🎯</span> Placement Finder';
+            html += '</a>';
+            html += '<a href="/campaign.html" class="quick-link">';
+            html += '<span class="quick-link-icon">📈</span> Campaign Analyzer';
+            html += '</a>';
+            html += '</div>';
+            html += '</div>'; // export-panel
+
+            html += '</div>'; // export-sidebar
+
+            html += '</div>'; // export-container
 
             // Navigation
             html += '<div class="wizard-nav">';
             html += '<div class="wizard-nav-left">';
-            html += '<button class="btn-secondary" onclick="app.goToStep(5)">← Back</button>';
+            html += '<button class="btn-secondary" onclick="app.goToStep(5)">← Back to SEO</button>';
             html += '</div>';
             html += '<div class="wizard-nav-right">';
-            html += '<a href="/aitools.html" class="btn-primary">Done - Go to AI Tools</a>';
+            html += '<a href="/video-optimizer" class="btn-primary">✅ Done - Go to Dashboard</a>';
             html += '</div>';
             html += '</div>';
 
@@ -4645,6 +5235,277 @@
                 link.href = URL.createObjectURL(blob);
                 link.download = filename;
                 link.click();
+            },
+
+            // Phase 5: Project Management Functions
+            loadMyProjects: async function() {
+                state.projectsLoading = true;
+                render();
+
+                try {
+                    var wizardGetProjectsList = functions.httpsCallable('wizardGetProjectsList');
+                    var result = await wizardGetProjectsList({
+                        limit: 20,
+                        status: null // Get all statuses except archived
+                    });
+
+                    if (result.data.success) {
+                        state.myProjects = result.data.projects;
+                        state.projectsLoaded = true;
+                        utils.showToast('Loaded ' + result.data.projects.length + ' projects', 'success');
+                    } else {
+                        throw new Error(result.data.error || 'Failed to load projects');
+                    }
+                } catch (error) {
+                    console.error('Load projects error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to load projects'), 'error');
+                    state.myProjects = [];
+                    state.projectsLoaded = true;
+                }
+
+                state.projectsLoading = false;
+                render();
+            },
+
+            loadProject: async function(projectId) {
+                if (!projectId) {
+                    utils.showToast('No project ID provided', 'error');
+                    return;
+                }
+
+                state.loading = true;
+                render();
+
+                try {
+                    var wizardLoadProject = functions.httpsCallable('wizardLoadProject');
+                    var result = await wizardLoadProject({
+                        projectId: projectId
+                    });
+
+                    if (result.data.success) {
+                        var project = result.data.project;
+
+                        // Restore state from loaded project
+                        state.projectId = project.id;
+                        state.videoInput.url = project.videoUrl || '';
+                        state.videoInput.videoData = {
+                            title: project.videoTitle,
+                            duration: project.videoDuration,
+                            thumbnail: project.videoThumbnail,
+                            videoId: project.videoId
+                        };
+
+                        // Load clips
+                        if (project.clips && project.clips.length > 0) {
+                            state.clips = project.clips;
+                            state.selectedClipIds = project.clips.map(function(c) { return c.id; });
+                        }
+
+                        // Load settings and SEO
+                        if (project.clipSettings) {
+                            state.clipSettings = project.clipSettings;
+                        }
+                        if (project.clipSEO) {
+                            state.clipSEO = project.clipSEO;
+                        }
+
+                        // Load AI data if available
+                        if (project.clipBRoll) state.clipBRoll = project.clipBRoll;
+                        if (project.clipHooks) state.clipHooks = project.clipHooks;
+                        if (project.clipFillers) state.clipFillers = project.clipFillers;
+                        if (project.clipSpeakers) state.clipSpeakers = project.clipSpeakers;
+                        if (project.clipCaptions) state.clipCaptions = project.clipCaptions;
+
+                        // Go to appropriate step based on progress
+                        if (project.clips && project.clips.length > 0) {
+                            state.currentStep = 3; // Start at clip selection
+                            state.analysis.status = 'done';
+                        }
+
+                        utils.showToast('Project loaded successfully!', 'success');
+                    } else {
+                        throw new Error(result.data.error || 'Failed to load project');
+                    }
+                } catch (error) {
+                    console.error('Load project error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to load project'), 'error');
+                }
+
+                state.loading = false;
+                render();
+            },
+
+            duplicateProject: async function(projectId) {
+                if (!projectId) {
+                    utils.showToast('No project ID provided', 'error');
+                    return;
+                }
+
+                if (!confirm('Create a copy of this project?')) {
+                    return;
+                }
+
+                utils.showToast('Duplicating project...', 'info');
+
+                try {
+                    var wizardDuplicateProject = functions.httpsCallable('wizardDuplicateProject');
+                    var result = await wizardDuplicateProject({
+                        projectId: projectId
+                    });
+
+                    if (result.data.success) {
+                        utils.showToast('Project duplicated! New ID: ' + result.data.newProjectId, 'success');
+                        // Reload projects list
+                        app.loadMyProjects();
+                    } else {
+                        throw new Error(result.data.error || 'Failed to duplicate project');
+                    }
+                } catch (error) {
+                    console.error('Duplicate project error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to duplicate project'), 'error');
+                }
+            },
+
+            archiveProject: async function(projectId) {
+                if (!projectId) {
+                    utils.showToast('No project ID provided', 'error');
+                    return;
+                }
+
+                if (!confirm('Archive this project? You can restore it later.')) {
+                    return;
+                }
+
+                utils.showToast('Archiving project...', 'info');
+
+                try {
+                    var wizardUpdateProjectStatus = functions.httpsCallable('wizardUpdateProjectStatus');
+                    var result = await wizardUpdateProjectStatus({
+                        projectId: projectId,
+                        status: 'archived'
+                    });
+
+                    if (result.data.success) {
+                        utils.showToast('Project archived!', 'success');
+                        // Remove from current list
+                        state.myProjects = state.myProjects.filter(function(p) {
+                            return p.id !== projectId;
+                        });
+                        render();
+                    } else {
+                        throw new Error(result.data.error || 'Failed to archive project');
+                    }
+                } catch (error) {
+                    console.error('Archive project error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to archive project'), 'error');
+                }
+            },
+
+            exportFullProject: async function(format) {
+                if (!state.projectId) {
+                    utils.showToast('No project to export', 'error');
+                    return;
+                }
+
+                utils.showToast('Preparing full export...', 'info');
+
+                try {
+                    var wizardExportFullProject = functions.httpsCallable('wizardExportFullProject');
+                    var result = await wizardExportFullProject({
+                        projectId: state.projectId,
+                        format: format || 'json',
+                        clipIds: state.selectedClipIds,
+                        includeAIData: true,
+                        includeThumbnails: true
+                    });
+
+                    if (result.data.success) {
+                        // Handle download based on format
+                        if (format === 'csv') {
+                            app.downloadCSV(result.data.data.csv, 'project-seo-export.csv');
+                        } else {
+                            app.downloadJSON(result.data.data, 'project-full-export.json');
+                        }
+                        utils.showToast('Export downloaded!', 'success');
+                    } else {
+                        throw new Error(result.data.error || 'Failed to export');
+                    }
+                } catch (error) {
+                    console.error('Export error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to export'), 'error');
+                }
+            },
+
+            selectExportFormat: function(format) {
+                // Update visual selection
+                var options = document.querySelectorAll('.export-option');
+                options.forEach(function(opt) {
+                    opt.classList.remove('selected');
+                });
+                event.currentTarget.classList.add('selected');
+
+                // Perform export based on format
+                switch (format) {
+                    case 'full':
+                        app.exportFullProject('json');
+                        break;
+                    case 'seo':
+                        app.exportFullProject('csv');
+                        break;
+                    case 'captions':
+                        app.exportCaptions();
+                        break;
+                }
+            },
+
+            exportCaptions: async function() {
+                if (!state.projectId) {
+                    utils.showToast('No project to export', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+
+                // Generate SRT content for each clip
+                var srtContent = '';
+                selectedClips.forEach(function(clip, clipIndex) {
+                    var captions = (state.clipCaptions || {})[clip.id];
+                    srtContent += '--- CLIP ' + (clipIndex + 1) + ': ' + (state.clipSEO[clip.id]?.title || clip.id) + ' ---\n\n';
+
+                    if (captions && captions.words) {
+                        captions.words.forEach(function(word, i) {
+                            srtContent += (i + 1) + '\n';
+                            srtContent += formatSRTTime(word.startTime) + ' --> ' + formatSRTTime(word.endTime) + '\n';
+                            srtContent += word.word + '\n\n';
+                        });
+                    } else {
+                        // Use transcript as fallback
+                        srtContent += '1\n';
+                        srtContent += '00:00:00,000 --> 00:00:' + clip.duration + ',000\n';
+                        srtContent += clip.transcript + '\n\n';
+                    }
+                    srtContent += '\n';
+                });
+
+                function formatSRTTime(seconds) {
+                    var h = Math.floor(seconds / 3600);
+                    var m = Math.floor((seconds % 3600) / 60);
+                    var s = Math.floor(seconds % 60);
+                    var ms = Math.round((seconds % 1) * 1000);
+                    return String(h).padStart(2, '0') + ':' +
+                           String(m).padStart(2, '0') + ':' +
+                           String(s).padStart(2, '0') + ',' +
+                           String(ms).padStart(3, '0');
+                }
+
+                var blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8;' });
+                var link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'project-captions.srt';
+                link.click();
+                utils.showToast('Captions exported!', 'success');
             }
         };
 
