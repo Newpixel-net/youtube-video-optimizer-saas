@@ -15719,3 +15719,521 @@ Return as JSON:
     throw new functions.https.HttpsError('internal', 'Failed to build automation pipeline.');
   }
 });
+
+// ==============================================
+// VIDEO-TO-SHORTS WIZARD FUNCTIONS
+// ==============================================
+
+/**
+ * Extract video ID from various YouTube URL formats
+ */
+function extractYouTubeVideoId(url) {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
+    /^([a-zA-Z0-9_-]{11})$/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/**
+ * Parse ISO 8601 duration to seconds
+ */
+function parseDurationToSeconds(duration) {
+  if (!duration) return 0;
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  return parseInt(match[1] || 0) * 3600 + parseInt(match[2] || 0) * 60 + parseInt(match[3] || 0);
+}
+
+/**
+ * wizardAnalyzeVideo - Analyzes video and finds potential viral clips
+ */
+exports.wizardAnalyzeVideo = functions
+  .runWith({ timeoutSeconds: 300, memory: '1GB' })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'wizardAnalyzeVideo', 3);
+
+  const { videoUrl, options } = data;
+  if (!videoUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video URL is required');
+  }
+
+  const videoId = extractYouTubeVideoId(videoUrl);
+  if (!videoId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube URL');
+  }
+
+  try {
+    const videoResponse = await youtube.videos.list({
+      part: ['snippet', 'statistics', 'contentDetails'],
+      id: [videoId]
+    });
+
+    if (!videoResponse.data.items || videoResponse.data.items.length === 0) {
+      throw new functions.https.HttpsError('not-found', 'Video not found');
+    }
+
+    const video = videoResponse.data.items[0];
+    const snippet = video.snippet;
+    const stats = video.statistics;
+    const durationSeconds = parseDurationToSeconds(video.contentDetails.duration);
+
+    const videoData = {
+      videoId,
+      title: snippet.title,
+      description: snippet.description?.substring(0, 1000) || '',
+      channelTitle: snippet.channelTitle,
+      thumbnail: snippet.thumbnails?.maxres?.url || snippet.thumbnails?.high?.url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+      duration: durationSeconds,
+      viewCount: parseInt(stats.viewCount || 0),
+      likeCount: parseInt(stats.likeCount || 0)
+    };
+
+    const clipAnalysisPrompt = `You are a viral content analyst. Analyze this YouTube video and identify 6-10 potential viral short-form clips for TikTok, YouTube Shorts, and Instagram Reels.
+
+VIDEO: "${snippet.title}"
+DESCRIPTION: ${snippet.description?.substring(0, 500) || 'No description'}
+DURATION: ${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s
+VIEWS: ${parseInt(stats.viewCount || 0).toLocaleString()}
+
+Identify timestamp ranges for compelling clips. Focus on: strong hooks, emotional peaks, quotable statements, actionable tips.
+
+RESPOND IN JSON:
+{
+  "clips": [
+    {
+      "startTime": <seconds>,
+      "endTime": <seconds>,
+      "duration": <seconds>,
+      "transcript": "Brief summary or key quote",
+      "viralityScore": <0-100>,
+      "platforms": ["youtube", "tiktok", "instagram"],
+      "reason": "Why this would go viral"
+    }
+  ],
+  "overallPotential": "Assessment",
+  "bestTopics": ["topic1", "topic2"]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: clipAnalysisPrompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 2500
+    });
+
+    let analysisResult;
+    try {
+      analysisResult = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      const numClips = Math.min(8, Math.floor(durationSeconds / 60));
+      const clips = [];
+      for (let i = 0; i < numClips; i++) {
+        const startTime = Math.floor((durationSeconds / numClips) * i) + 30;
+        clips.push({
+          startTime,
+          endTime: Math.min(startTime + 45, durationSeconds),
+          duration: 45,
+          transcript: `Clip ${i + 1} from "${snippet.title}"`,
+          viralityScore: Math.floor(70 + Math.random() * 25),
+          platforms: ['youtube', 'tiktok', 'instagram'],
+          reason: 'Potential viral moment'
+        });
+      }
+      analysisResult = { clips, overallPotential: 'Good', bestTopics: [] };
+    }
+
+    const processedClips = (analysisResult.clips || []).map((clip, index) => ({
+      id: `clip_${videoId}_${index}`,
+      ...clip,
+      thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+      score: clip.viralityScore || 75,
+      platforms: clip.platforms || ['youtube', 'tiktok', 'instagram']
+    })).sort((a, b) => b.score - a.score);
+
+    const projectData = {
+      userId: uid,
+      videoId,
+      videoUrl,
+      videoData,
+      clips: processedClips,
+      options: options || {},
+      overallPotential: analysisResult.overallPotential,
+      bestTopics: analysisResult.bestTopics || [],
+      status: 'analyzed',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const projectRef = await db.collection('wizardProjects').add(projectData);
+    await logUsage(uid, 'wizard_analyze_video', { videoId, clipCount: processedClips.length });
+
+    return {
+      success: true,
+      projectId: projectRef.id,
+      videoData,
+      clips: processedClips,
+      overallPotential: analysisResult.overallPotential,
+      bestTopics: analysisResult.bestTopics || []
+    };
+
+  } catch (error) {
+    console.error('Wizard analyze video error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to analyze video.'));
+  }
+});
+
+/**
+ * wizardGenerateClipSEO - Generates SEO for a clip
+ */
+exports.wizardGenerateClipSEO = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'wizardGenerateClipSEO', 10);
+
+  const { clipId, transcript, platform, projectId, videoTitle } = data;
+  if (!transcript) {
+    throw new functions.https.HttpsError('invalid-argument', 'Transcript is required');
+  }
+
+  try {
+    const seoPrompt = `Generate viral ${platform || 'YouTube Shorts'} metadata:
+"${transcript}"
+VIDEO: ${videoTitle || 'Not provided'}
+
+RESPOND IN JSON:
+{
+  "title": "Catchy title (max 100 chars)",
+  "description": "Engaging description with CTA and hashtags",
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3"]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: seoPrompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 1000
+    });
+
+    let seoData;
+    try {
+      seoData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      seoData = {
+        title: transcript.substring(0, 60) + '...',
+        description: transcript + '\n\n🔔 Follow for more!',
+        tags: ['shorts', 'viral', 'trending'],
+        hashtags: ['#shorts', '#viral', '#fyp']
+      };
+    }
+
+    if (projectId && clipId) {
+      await db.collection('wizardProjects').doc(projectId).update({
+        [`clipSEO.${clipId}`]: { ...seoData, platform: platform || 'youtube', generatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    await logUsage(uid, 'wizard_generate_seo', { platform, clipId });
+    return { success: true, ...seoData };
+
+  } catch (error) {
+    console.error('Wizard generate SEO error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate SEO.'));
+  }
+});
+
+/**
+ * wizardGenerateThumbnails - Generates 3 thumbnail concepts
+ */
+exports.wizardGenerateThumbnails = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'wizardGenerateThumbnails', 5);
+
+  const { clipId, transcript, projectId, videoTitle } = data;
+  if (!transcript) {
+    throw new functions.https.HttpsError('invalid-argument', 'Transcript is required');
+  }
+
+  try {
+    const thumbnailPrompt = `Create 3 distinct thumbnail concepts for A/B testing:
+"${transcript}"
+VIDEO: ${videoTitle || 'Not provided'}
+
+Approaches: 1. CURIOSITY GAP 2. EMOTIONAL IMPACT 3. VALUE PROPOSITION
+
+RESPOND IN JSON:
+{
+  "thumbnails": [
+    {
+      "concept": "Name",
+      "description": "Design description",
+      "textOverlay": "SHORT TEXT (max 5 words)",
+      "colorScheme": "Colors",
+      "emotion": "Emotion to convey"
+    }
+  ]
+}`;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: thumbnailPrompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 1500
+    });
+
+    let thumbnailData;
+    try {
+      thumbnailData = JSON.parse(aiResponse.choices[0].message.content);
+    } catch (e) {
+      thumbnailData = {
+        thumbnails: [
+          { concept: 'Option A', description: 'Clean design', textOverlay: 'WATCH THIS', colorScheme: 'Yellow/Black', emotion: 'Surprised' },
+          { concept: 'Option B', description: 'Bold text', textOverlay: 'YOU NEED THIS', colorScheme: 'Red/White', emotion: 'Urgent' },
+          { concept: 'Option C', description: 'Minimal', textOverlay: 'THE TRUTH', colorScheme: 'Blue/White', emotion: 'Serious' }
+        ]
+      };
+    }
+
+    const processedThumbnails = (thumbnailData.thumbnails || []).map((thumb, index) => ({
+      id: `thumb_${clipId}_${index}`,
+      ...thumb,
+      previewUrl: `https://picsum.photos/seed/${clipId}${index}/640/360`
+    }));
+
+    if (projectId && clipId) {
+      await db.collection('wizardProjects').doc(projectId).update({
+        [`clipThumbnails.${clipId}`]: { thumbnails: processedThumbnails, selectedIndex: 0, generatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    await logUsage(uid, 'wizard_generate_thumbnails', { clipId });
+    return { success: true, thumbnails: processedThumbnails };
+
+  } catch (error) {
+    console.error('Wizard generate thumbnails error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate thumbnails.'));
+  }
+});
+
+/**
+ * wizardSaveClipSettings - Saves customization settings
+ */
+exports.wizardSaveClipSettings = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clipId, settings } = data;
+
+  if (!projectId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    await db.collection('wizardProjects').doc(projectId).update({
+      [`clipSettings.${clipId}`]: { ...settings, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to save settings.');
+  }
+});
+
+/**
+ * wizardGetProject - Retrieves a project by ID
+ */
+exports.wizardGetProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+    if (projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    return { success: true, project: { id: projectDoc.id, ...projectDoc.data() } };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to get project.');
+  }
+});
+
+/**
+ * wizardGetProjects - Retrieves all projects for user
+ */
+exports.wizardGetProjects = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { limit = 20 } = data || {};
+
+  try {
+    const snapshot = await db.collection('wizardProjects')
+      .where('userId', '==', uid)
+      .orderBy('createdAt', 'desc')
+      .limit(Math.min(limit, 50))
+      .get();
+
+    const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return { success: true, projects, hasMore: projects.length === limit };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', 'Failed to get projects.');
+  }
+});
+
+/**
+ * wizardDeleteProject - Deletes a project
+ */
+exports.wizardDeleteProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    await db.collection('wizardProjects').doc(projectId).delete();
+    return { success: true };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to delete project.');
+  }
+});
+
+/**
+ * wizardGenerateAllSEO - Batch generates SEO for all clips
+ */
+exports.wizardGenerateAllSEO = functions
+  .runWith({ timeoutSeconds: 120 })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'wizardGenerateAllSEO', 3);
+
+  const { projectId, clipIds, platform } = data;
+  if (!projectId || !clipIds?.length) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and clip IDs required');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const clips = projectDoc.data().clips.filter(c => clipIds.includes(c.id));
+    const seoResults = {};
+
+    for (let i = 0; i < clips.length; i += 3) {
+      const batch = clips.slice(i, i + 3);
+      const promises = batch.map(async (clip) => {
+        const response = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: `Generate viral ${platform || 'YouTube Shorts'} metadata: "${clip.transcript}"\nRESPOND IN JSON: {"title":"","description":"","tags":[],"hashtags":[]}` }],
+          response_format: { type: 'json_object' },
+          max_tokens: 500
+        });
+        try {
+          return { clipId: clip.id, seo: JSON.parse(response.choices[0].message.content) };
+        } catch {
+          return { clipId: clip.id, seo: { title: clip.transcript.substring(0, 60), description: clip.transcript, tags: ['shorts'], hashtags: ['#shorts'] } };
+        }
+      });
+      const results = await Promise.all(promises);
+      results.forEach(r => { seoResults[r.clipId] = r.seo; });
+    }
+
+    const updateData = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    Object.entries(seoResults).forEach(([clipId, seo]) => {
+      updateData[`clipSEO.${clipId}`] = { ...seo, platform: platform || 'youtube', generatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    });
+    await db.collection('wizardProjects').doc(projectId).update(updateData);
+
+    await logUsage(uid, 'wizard_generate_all_seo', { projectId, clipCount: clipIds.length });
+    return { success: true, seoData: seoResults };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate SEO.'));
+  }
+});
+
+/**
+ * wizardExportProject - Exports project data as CSV/JSON
+ */
+exports.wizardExportProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, format = 'csv' } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const project = projectDoc.data();
+    const clips = project.clips || [];
+    const clipSEO = project.clipSEO || {};
+
+    let exportData, filename;
+
+    if (format === 'json') {
+      exportData = JSON.stringify({
+        videoTitle: project.videoData?.title,
+        videoUrl: project.videoUrl,
+        exportedAt: new Date().toISOString(),
+        clips: clips.map(clip => ({ ...clip, seo: clipSEO[clip.id] || {} }))
+      }, null, 2);
+      filename = `shorts-export-${projectDoc.id}.json`;
+    } else {
+      const headers = ['Clip ID', 'Start Time', 'End Time', 'Duration', 'Score', 'Title', 'Description', 'Tags', 'Platforms'];
+      const rows = clips.map(clip => {
+        const seo = clipSEO[clip.id] || {};
+        return [clip.id, clip.startTime, clip.endTime, clip.duration, clip.score,
+          `"${(seo.title || '').replace(/"/g, '""')}"`,
+          `"${(seo.description || '').replace(/"/g, '""').substring(0, 200)}"`,
+          `"${(seo.tags || []).join(', ')}"`,
+          `"${(clip.platforms || []).join(', ')}"`
+        ].join(',');
+      });
+      exportData = [headers.join(','), ...rows].join('\n');
+      filename = `shorts-export-${projectDoc.id}.csv`;
+    }
+
+    return { success: true, data: exportData, filename, format };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to export project.');
+  }
+});
