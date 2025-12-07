@@ -16109,7 +16109,8 @@ RESPOND IN VALID JSON:
 });
 
 /**
- * wizardGenerateThumbnails - Generates 3 thumbnail concepts
+ * wizardGenerateThumbnails - Generates 2 high-quality thumbnail concepts
+ * Uses main video context and video frames as reference for consistent style
  */
 exports.wizardGenerateThumbnails = functions
   .runWith({ timeoutSeconds: 180, memory: '1GB' })
@@ -16123,9 +16124,14 @@ exports.wizardGenerateThumbnails = functions
   }
 
   try {
-    // Get project data for video info
+    // Get FULL project data for comprehensive video context
     let videoId = null;
     let videoThumbnailUrl = null;
+    let mainVideoTitle = videoTitle || '';
+    let mainVideoDescription = '';
+    let channelName = '';
+    let clipStartTime = 0;
+    let clipEndTime = 0;
 
     if (projectId) {
       const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
@@ -16133,6 +16139,16 @@ exports.wizardGenerateThumbnails = functions
         const project = projectDoc.data();
         videoId = project.videoData?.videoId || project.videoId;
         videoThumbnailUrl = project.videoData?.thumbnail;
+        mainVideoTitle = project.videoData?.title || videoTitle || '';
+        mainVideoDescription = project.videoData?.description || '';
+        channelName = project.videoData?.channelTitle || '';
+
+        // Get clip timing for frame extraction
+        const clip = project.clips?.find(c => c.id === clipId);
+        if (clip) {
+          clipStartTime = clip.startTime || 0;
+          clipEndTime = clip.endTime || clipStartTime + 30;
+        }
       }
     }
 
@@ -16145,44 +16161,88 @@ exports.wizardGenerateThumbnails = functions
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
     const geminiModelId = 'gemini-3-pro-image-preview'; // Nano Banana Pro
 
-    // Fetch video thumbnail as reference image
-    let referenceImageBase64 = null;
-    if (videoThumbnailUrl || videoId) {
+    // Fetch multiple video frames as reference for style consistency
+    const referenceImages = [];
+
+    // Get video thumbnail (maxres first, then fallback to sd)
+    const thumbnailUrls = [
+      videoThumbnailUrl,
+      `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+      `https://img.youtube.com/vi/${videoId}/sddefault.jpg`,
+      `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+    ].filter(Boolean);
+
+    for (const url of thumbnailUrls) {
       try {
-        const thumbnailUrl = videoThumbnailUrl || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-        const imageResponse = await axios.get(thumbnailUrl, { responseType: 'arraybuffer' });
-        referenceImageBase64 = Buffer.from(imageResponse.data).toString('base64');
-        console.log('Fetched video thumbnail as reference');
+        const imageResponse = await axios.get(url, {
+          responseType: 'arraybuffer',
+          timeout: 5000,
+          validateStatus: (status) => status === 200
+        });
+        if (imageResponse.data && imageResponse.data.length > 1000) {
+          referenceImages.push({
+            base64: Buffer.from(imageResponse.data).toString('base64'),
+            type: 'video_frame'
+          });
+          console.log(`[wizardGenerateThumbnails] Fetched reference frame from: ${url.substring(0, 50)}...`);
+          break; // Only need one good reference
+        }
       } catch (imgError) {
-        console.log('Could not fetch video thumbnail, generating without reference');
+        console.log(`[wizardGenerateThumbnails] Could not fetch: ${url.substring(0, 50)}...`);
       }
     }
 
-    // Generate 3 thumbnail variations with different concepts
+    const hasReference = referenceImages.length > 0;
+    console.log(`[wizardGenerateThumbnails] Reference images available: ${hasReference}`);
+
+    // Build comprehensive context from main video
+    const videoContext = `
+MAIN VIDEO CONTEXT:
+- Title: "${mainVideoTitle}"
+- Channel: "${channelName}"
+- Description excerpt: "${mainVideoDescription.substring(0, 300)}"
+
+CLIP CONTENT (what this short is about):
+"${transcript.substring(0, 400)}"
+`.trim();
+
+    // Generate 2 thumbnail variations with different high-impact styles
     const thumbnailConcepts = [
       {
-        name: 'Curiosity Gap',
-        prompt: `Create a YouTube thumbnail for this video clip. The clip says: "${transcript.substring(0, 200)}".
+        name: 'Hero Shot',
+        prompt: `Generate a professional YouTube thumbnail that captures the essence of this video content.
 
-DESIGN: Create a CURIOSITY GAP thumbnail - show something intriguing or partially hidden that makes viewers want to click. Use dramatic lighting with bright highlights and deep shadows. Include space on the left side for text overlay.
+${videoContext}
 
-STYLE: Bold, high contrast, professional YouTube thumbnail, 16:9 aspect ratio, 4K quality. Eye-catching colors, dramatic composition.`
+DESIGN REQUIREMENTS:
+1. Create a HERO SHOT thumbnail - the most impactful, eye-catching frame that represents this content
+2. Feature a compelling focal point (person, object, or scene) that relates to the video topic
+3. Use dramatic lighting: bright highlights on the subject, darker background for contrast
+4. Composition: Subject positioned using rule of thirds (not dead center)
+5. Leave 30% space on one side for potential text overlay
+6. Colors: Vibrant, high saturation, complementary color scheme
+
+STYLE: Ultra high quality, photorealistic, cinematic lighting, 16:9 aspect ratio, 4K resolution, professional YouTube thumbnail that gets clicks. Magazine cover quality with depth and dimension.
+
+CRITICAL: The thumbnail must visually represent the VIDEO TOPIC, not just generic graphics. Make it specific to the content described above.`
       },
       {
-        name: 'Emotional Impact',
-        prompt: `Create a YouTube thumbnail for this video clip. The clip says: "${transcript.substring(0, 200)}".
+        name: 'Dynamic Action',
+        prompt: `Generate a professional YouTube thumbnail that creates intrigue and energy for this video content.
 
-DESIGN: Create an EMOTIONAL IMPACT thumbnail - convey strong emotion and energy. Show expressive elements, vibrant colors, and dynamic composition. Leave space for bold text overlay on one side.
+${videoContext}
 
-STYLE: Energetic, vibrant colors, high saturation, professional YouTube thumbnail, 16:9 aspect ratio, 4K quality. Magazine cover quality.`
-      },
-      {
-        name: 'Value Proposition',
-        prompt: `Create a YouTube thumbnail for this video clip. The clip says: "${transcript.substring(0, 200)}".
+DESIGN REQUIREMENTS:
+1. Create a DYNAMIC ACTION thumbnail - convey movement, energy, and excitement
+2. Use visual elements that create a sense of anticipation or reveal
+3. Dramatic perspective: slight angle, dynamic framing, not flat/static
+4. High contrast with bold colors that pop on both desktop and mobile
+5. Include visual elements specific to the topic (icons, objects, expressions related to the content)
+6. Background: either blurred/bokeh or gradient that makes subject pop
 
-DESIGN: Create a VALUE PROPOSITION thumbnail - clearly show what viewers will learn or gain. Use clean design with visual hierarchy. Include elements that represent the main benefit or topic. Space for text overlay.
+STYLE: High energy, bold contrast, vibrant colors, professional YouTube thumbnail, 16:9 aspect ratio, 4K resolution. The kind of thumbnail that stops scroll and demands attention.
 
-STYLE: Clean, professional, trustworthy, YouTube thumbnail, 16:9 aspect ratio, 4K quality. Clear focal point, balanced composition.`
+CRITICAL: The thumbnail must visually represent the VIDEO TOPIC with specific relevant imagery. Make viewers understand what the video is about at a glance.`
       }
     ];
 
@@ -16190,37 +16250,42 @@ STYLE: Clean, professional, trustworthy, YouTube thumbnail, 16:9 aspect ratio, 4
     const timestamp = Date.now();
     const generatedThumbnails = [];
 
+    // Generate only 2 thumbnails
     for (let i = 0; i < thumbnailConcepts.length; i++) {
       const concept = thumbnailConcepts[i];
 
       try {
-        // Build content parts
+        // Build content parts with reference image FIRST for better context
         const contentParts = [];
 
-        // Add reference image if available
-        if (referenceImageBase64) {
+        // Add reference image if available - this is crucial for style matching
+        if (hasReference && referenceImages[0]) {
           contentParts.push({
             inlineData: {
               mimeType: 'image/jpeg',
-              data: referenceImageBase64
+              data: referenceImages[0].base64
             }
           });
         }
 
-        // Build prompt with reference context
-        let finalPrompt = referenceImageBase64
-          ? `Using the provided video frame as style reference for color palette and visual tone, generate a YouTube thumbnail:\n\n${concept.prompt}`
-          : concept.prompt;
+        // Build enhanced prompt with reference instructions
+        let finalPrompt = hasReference
+          ? `REFERENCE IMAGE: I've provided a frame from the original video. Use this as a STYLE REFERENCE:
+- Match the color palette and lighting style
+- If there's a person visible, generate a thumbnail featuring a similar-looking person in a similar style
+- Maintain visual consistency with the original video's aesthetic
+- Use the same mood and energy level
 
-        if (videoTitle) {
-          finalPrompt += `\n\nVideo title for context: "${videoTitle}"`;
-        }
+Now generate a new YouTube thumbnail based on this style:
+
+${concept.prompt}`
+          : concept.prompt;
 
         contentParts.push({ text: finalPrompt });
 
         // Generate image - using exact same pattern as working generateThumbnailPro/generateCreativeImage
-        console.log(`[wizardGenerateThumbnails] Generating thumbnail ${i + 1}/3 with model: ${geminiModelId}`);
-        console.log(`[wizardGenerateThumbnails] Prompt length: ${finalPrompt.length}, hasReference: ${!!referenceImageBase64}`);
+        console.log(`[wizardGenerateThumbnails] Generating thumbnail ${i + 1}/2 with model: ${geminiModelId}`);
+        console.log(`[wizardGenerateThumbnails] Prompt length: ${finalPrompt.length}, hasReference: ${hasReference}`);
 
         const result = await ai.models.generateContent({
           model: geminiModelId,
@@ -16277,19 +16342,20 @@ STYLE: Clean, professional, trustworthy, YouTube thumbnail, 16:9 aspect ratio, 4
 
               console.log(`[wizardGenerateThumbnails] Saved thumbnail: ${publicUrl}`);
 
-              console.log(`Generated thumbnail ${i + 1}/3: ${concept.name}`);
+              console.log(`[wizardGenerateThumbnails] Generated thumbnail ${i + 1}/2: ${concept.name}`);
               break; // Only need first image from response
             }
           }
         }
       } catch (genError) {
-        console.error(`Error generating thumbnail ${i + 1}:`, genError.message);
-        // Add placeholder for failed generation
+        console.error(`[wizardGenerateThumbnails] Error generating thumbnail ${i + 1}/2:`, genError.message);
+        // Add placeholder for failed generation - use video thumbnail as fallback
+        const fallbackUrl = videoThumbnailUrl || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
         generatedThumbnails.push({
           id: `thumb_${clipId}_${i}`,
           concept: concept.name,
-          previewUrl: `https://picsum.photos/seed/${clipId}${i}/640/360`,
-          error: 'Generation failed',
+          previewUrl: fallbackUrl,
+          error: 'Generation failed - using video thumbnail',
           generatedAt: new Date().toISOString()
         });
       }

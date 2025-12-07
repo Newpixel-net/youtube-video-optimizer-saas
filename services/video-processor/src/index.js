@@ -3,11 +3,11 @@
  * Cloud Run service for processing YouTube clips into vertical shorts
  */
 
-const express = require('express');
-const { Firestore } = require('@google-cloud/firestore');
-const { Storage } = require('@google-cloud/storage');
-const { processVideo } = require('./processor');
-const { v4: uuidv4 } = require('uuid');
+import express from 'express';
+import { Firestore } from '@google-cloud/firestore';
+import { Storage } from '@google-cloud/storage';
+import { processVideo } from './processor.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
 app.use(express.json());
