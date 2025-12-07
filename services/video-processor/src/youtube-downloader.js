@@ -5,79 +5,103 @@
 
 import { Innertube, UniversalCache } from 'youtubei.js';
 import { JSDOM } from 'jsdom';
-import { BG } from 'bgutils-js';
+import * as BG from 'bgutils-js';
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 
 // Cache for the Innertube instance
 let innertubeInstance = null;
+let cachedPoToken = null;
+let cachedVisitorData = null;
 let innertubeExpiry = 0;
 const INNERTUBE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Initialize JSDOM environment for BotGuard
  */
-function initBotGuardEnvironment() {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+function createBotGuardEnvironment() {
+  const dom = new JSDOM('<!DOCTYPE html><html><head></head><body></body></html>', {
     url: 'https://www.youtube.com',
+    referrer: 'https://www.youtube.com',
+    contentType: 'text/html',
+    includeNodeLocations: true,
+    storageQuota: 10000000,
     pretendToBeVisual: true,
-    runScripts: 'dangerously'
+    runScripts: 'dangerously',
+    resources: 'usable',
+    beforeParse(window) {
+      // Polyfill missing APIs
+      window.TextEncoder = TextEncoder;
+      window.TextDecoder = TextDecoder;
+    }
   });
 
-  // Make DOM globals available
-  global.window = dom.window;
-  global.document = dom.window.document;
-  global.navigator = dom.window.navigator;
-  global.location = dom.window.location;
-
-  return dom;
+  return dom.window;
 }
 
 /**
  * Generate PO Token using BgUtils
  */
-async function generatePoToken(innertube) {
-  try {
-    console.log('[YouTubeDownloader] Generating PO Token...');
+async function generatePoToken(visitorData) {
+  console.log('[YouTubeDownloader] Generating PO Token with BgUtils...');
 
-    // Get attestation challenge
+  try {
+    // Create BotGuard environment
+    const bgWindow = createBotGuardEnvironment();
+
+    // Request key for YouTube
     const requestKey = 'O43z0dpjhgX20SCx4KAo';
+
+    // Create BG challenge config
     const bgConfig = {
       fetch: (url, options) => fetch(url, options),
-      globalObj: global,
-      identifier: innertube.session.context.client.visitorData,
+      globalObj: bgWindow,
+      identifier: visitorData,
       requestKey
     };
 
-    const bgChallenge = await BG.Challenge.create(bgConfig);
+    // Create challenge
+    const challenge = await BG.Challenge.create(bgConfig);
 
-    if (!bgChallenge) {
-      console.log('[YouTubeDownloader] No challenge required, proceeding without PO token');
+    if (!challenge) {
+      console.log('[YouTubeDownloader] No challenge returned');
       return null;
     }
 
-    const interpreterJavascript = bgChallenge.interpreterJavascript.privateDoNotAccessOrElseSafeScriptWrappedValue;
+    // Get interpreter script
+    const interpreterUrl = challenge.interpreterUrl;
+    if (interpreterUrl) {
+      const vmResponse = await fetch(interpreterUrl);
+      const vmCode = await vmResponse.text();
 
-    if (interpreterJavascript) {
-      // Execute the challenge in JSDOM environment
-      const dom = initBotGuardEnvironment();
+      // Execute in the window context
+      bgWindow.eval(vmCode);
+    }
 
-      new dom.window.Function(interpreterJavascript)();
+    // Get the interpreter JavaScript from challenge
+    const interpreterJs = challenge.interpreterJavascript?.privateDoNotAccessOrElseSafeScriptWrappedValue;
+    if (interpreterJs) {
+      bgWindow.eval(interpreterJs);
+    }
 
-      const poTokenResult = await BG.PoToken.generate({
-        program: bgChallenge.program,
-        globalName: bgChallenge.globalName,
-        bgConfig
-      });
+    // Generate the PoToken
+    const poTokenResult = await BG.PoToken.generate({
+      program: challenge.program,
+      globalName: challenge.globalName,
+      bgConfig
+    });
 
+    if (poTokenResult?.poToken) {
       console.log('[YouTubeDownloader] PO Token generated successfully');
       return poTokenResult.poToken;
     }
 
+    console.log('[YouTubeDownloader] Failed to generate PO Token');
     return null;
+
   } catch (error) {
-    console.error('[YouTubeDownloader] PO Token generation failed:', error.message);
+    console.error('[YouTubeDownloader] PO Token generation error:', error.message);
     return null;
   }
 }
@@ -88,32 +112,61 @@ async function generatePoToken(innertube) {
 async function getInnertube() {
   const now = Date.now();
 
-  if (innertubeInstance && now < innertubeExpiry) {
+  if (innertubeInstance && now < innertubeExpiry && cachedPoToken) {
     console.log('[YouTubeDownloader] Using cached Innertube instance');
     return innertubeInstance;
   }
 
   console.log('[YouTubeDownloader] Creating new Innertube instance...');
 
-  // Create Innertube with local session generation
-  innertubeInstance = await Innertube.create({
-    cache: new UniversalCache(false), // Don't use file cache in Cloud Run
-    generate_session_locally: true,
-    retrieve_player: true
-  });
-
-  // Try to generate PO token
   try {
-    const poToken = await generatePoToken(innertubeInstance);
-    if (poToken) {
-      innertubeInstance.session.po_token = poToken;
-    }
-  } catch (e) {
-    console.log('[YouTubeDownloader] Continuing without PO token:', e.message);
-  }
+    // First create a basic instance to get visitor data
+    const tempTube = await Innertube.create({
+      cache: new UniversalCache(false),
+      generate_session_locally: true
+    });
 
-  innertubeExpiry = now + INNERTUBE_TTL;
-  return innertubeInstance;
+    const visitorData = tempTube.session.context.client.visitorData;
+    console.log('[YouTubeDownloader] Got visitor data:', visitorData?.substring(0, 20) + '...');
+
+    // Try to generate PO token
+    let poToken = null;
+    try {
+      poToken = await generatePoToken(visitorData);
+    } catch (e) {
+      console.log('[YouTubeDownloader] PO Token generation skipped:', e.message);
+    }
+
+    // Create final instance with PO token if available
+    if (poToken) {
+      innertubeInstance = await Innertube.create({
+        cache: new UniversalCache(false),
+        generate_session_locally: true,
+        po_token: poToken,
+        visitor_data: visitorData
+      });
+      cachedPoToken = poToken;
+      cachedVisitorData = visitorData;
+      console.log('[YouTubeDownloader] Created Innertube with PO Token');
+    } else {
+      innertubeInstance = tempTube;
+      console.log('[YouTubeDownloader] Created Innertube without PO Token');
+    }
+
+    innertubeExpiry = now + INNERTUBE_TTL;
+    return innertubeInstance;
+
+  } catch (error) {
+    console.error('[YouTubeDownloader] Failed to create Innertube:', error.message);
+
+    // Create minimal instance as fallback
+    innertubeInstance = await Innertube.create({
+      cache: new UniversalCache(false),
+      generate_session_locally: true
+    });
+    innertubeExpiry = now + INNERTUBE_TTL;
+    return innertubeInstance;
+  }
 }
 
 /**
@@ -185,6 +238,8 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
     const videoUrl = videoFormat.decipher(innertube.session.player);
     const audioUrl = audioFormat?.decipher(innertube.session.player);
 
+    console.log(`[${jobId}] Got deciphered video URL`);
+
     // Download and trim using FFmpeg with input seeking for speed
     const bufferStart = Math.max(0, startTime - 1);
     const bufferDuration = (endTime - bufferStart) + 2;
@@ -224,11 +279,11 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
 
       console.log(`[${jobId}] FFmpeg download command starting...`);
 
-      const ffmpegProcess = spawn('ffmpeg', args);
+      const ffmpegDownload = spawn('ffmpeg', args);
 
       let stderr = '';
 
-      ffmpegProcess.stderr.on('data', (data) => {
+      ffmpegDownload.stderr.on('data', (data) => {
         stderr += data.toString();
         // Log progress
         const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
@@ -237,7 +292,7 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
         }
       });
 
-      ffmpegProcess.on('close', (code) => {
+      ffmpegDownload.on('close', (code) => {
         if (code === 0 && fs.existsSync(outputFile)) {
           const stats = fs.statSync(outputFile);
           console.log(`[${jobId}] Download completed: ${outputFile} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -249,7 +304,7 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
         }
       });
 
-      ffmpegProcess.on('error', (error) => {
+      ffmpegDownload.on('error', (error) => {
         reject(new Error(`Failed to start FFmpeg: ${error.message}`));
       });
     });
@@ -298,20 +353,20 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
 
     console.log(`[${jobId}] yt-dlp fallback starting...`);
 
-    const ytdlpProcess = spawn('yt-dlp', args);
+    const ytdlpProc = spawn('yt-dlp', args);
 
     let stdout = '';
     let stderr = '';
 
-    ytdlpProcess.stdout.on('data', (data) => {
+    ytdlpProc.stdout.on('data', (data) => {
       stdout += data.toString();
     });
 
-    ytdlpProcess.stderr.on('data', (data) => {
+    ytdlpProc.stderr.on('data', (data) => {
       stderr += data.toString();
     });
 
-    ytdlpProcess.on('close', (code) => {
+    ytdlpProc.on('close', (code) => {
       if (code === 0 && fs.existsSync(outputFile)) {
         console.log(`[${jobId}] yt-dlp download completed: ${outputFile}`);
         resolve(outputFile);
@@ -322,59 +377,136 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
       }
     });
 
-    ytdlpProcess.on('error', (error) => {
+    ytdlpProc.on('error', (error) => {
       reject(new Error(`Failed to start yt-dlp: ${error.message}`));
     });
   });
 }
 
 /**
- * Extract frames from a video for thumbnail reference
+ * Extract frames from video at specific timestamps
+ * Returns base64 encoded images
  */
-async function extractVideoFrames({ videoId, timestamps, workDir }) {
+async function extractFramesFromVideo(videoPath, timestamps, outputDir) {
+  const frames = [];
+
+  for (const timestamp of timestamps) {
+    const outputPath = path.join(outputDir, `frame_${timestamp}.jpg`);
+
+    await new Promise((resolve, reject) => {
+      const args = [
+        '-ss', timestamp.toString(),
+        '-i', videoPath,
+        '-vframes', '1',
+        '-q:v', '2',
+        '-y',
+        outputPath
+      ];
+
+      const ffmpegExtract = spawn('ffmpeg', args);
+
+      ffmpegExtract.on('close', (code) => {
+        if (code === 0 && fs.existsSync(outputPath)) {
+          const imageBuffer = fs.readFileSync(outputPath);
+          frames.push({
+            timestamp,
+            base64: imageBuffer.toString('base64'),
+            path: outputPath
+          });
+          resolve(true);
+        } else {
+          resolve(false); // Don't reject, just skip this frame
+        }
+      });
+
+      ffmpegExtract.on('error', () => resolve(false));
+    });
+  }
+
+  return frames;
+}
+
+/**
+ * Extract frames directly from YouTube video at specific timestamps
+ * Downloads a small segment and extracts frames
+ */
+async function extractYouTubeFrames({ videoId, timestamps, workDir }) {
+  console.log(`[FrameExtractor] Extracting ${timestamps.length} frames from video ${videoId}`);
+
   const frames = [];
 
   try {
     const innertube = await getInnertube();
     const info = await innertube.getInfo(videoId);
 
-    // Get video storyboard/thumbnails at specific times
-    if (info.storyboards?.length > 0) {
-      const storyboard = info.storyboards[0];
-      // Use storyboard images as frame references
-      for (const timestamp of timestamps) {
-        const thumbUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-        frames.push({
-          timestamp,
-          url: thumbUrl,
-          type: 'storyboard'
-        });
-      }
+    if (!info.streaming_data) {
+      throw new Error('No streaming data available');
     }
 
-    // Also get max resolution thumbnail
-    frames.push({
-      timestamp: 0,
-      url: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
-      type: 'maxres'
-    });
+    // Get a video stream URL
+    const formats = info.streaming_data.adaptive_formats || [];
+    const videoFormat = formats
+      .filter(f => f.has_video && !f.has_audio && f.height <= 720)
+      .sort((a, b) => (b.height || 0) - (a.height || 0))[0];
 
-    frames.push({
-      timestamp: 0,
-      url: `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`,
-      type: 'sd'
-    });
+    if (!videoFormat) {
+      throw new Error('No suitable video format');
+    }
+
+    const videoUrl = videoFormat.decipher(innertube.session.player);
+
+    // Extract frames directly from stream URL using FFmpeg
+    for (const timestamp of timestamps) {
+      const outputPath = path.join(workDir, `frame_${timestamp}.jpg`);
+
+      await new Promise((resolve, reject) => {
+        const args = [
+          '-ss', timestamp.toString(),
+          '-i', videoUrl,
+          '-vframes', '1',
+          '-q:v', '2',
+          '-y',
+          outputPath
+        ];
+
+        const ffmpegExtract = spawn('ffmpeg', args);
+        let stderr = '';
+
+        ffmpegExtract.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        ffmpegExtract.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outputPath)) {
+            const imageBuffer = fs.readFileSync(outputPath);
+            frames.push({
+              timestamp,
+              base64: imageBuffer.toString('base64'),
+              mimeType: 'image/jpeg'
+            });
+            console.log(`[FrameExtractor] Extracted frame at ${timestamp}s`);
+            // Clean up
+            try { fs.unlinkSync(outputPath); } catch (e) {}
+          }
+          resolve(true);
+        });
+
+        ffmpegExtract.on('error', () => resolve(false));
+      });
+    }
+
+    return frames;
 
   } catch (error) {
-    console.error('[YouTubeDownloader] Frame extraction failed:', error.message);
+    console.error('[FrameExtractor] Failed to extract frames:', error.message);
+    return frames;
   }
-
-  return frames;
 }
 
 export {
   downloadVideoSegment,
   getVideoInfo,
-  extractVideoFrames,
+  extractFramesFromVideo,
+  extractYouTubeFrames,
   getInnertube
 };

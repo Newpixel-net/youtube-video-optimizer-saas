@@ -2380,6 +2380,41 @@
             box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
         }
 
+        .regenerate-thumbnails-btn:disabled {
+            opacity: 0.8;
+            cursor: not-allowed;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border-color: transparent;
+            color: white;
+        }
+
+        .thumbnail-loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .thumbnail-loading-info {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+            text-align: center;
+        }
+
         /* ------------------------------------------
            2.11 EXPORT (Step 6)
            ------------------------------------------ */
@@ -3638,6 +3673,7 @@
             clipSEO: {},
             clipThumbnails: {},
             selectedThumbnail: {},  // Track selected thumbnail index per clip
+            thumbnailGenerating: false,  // Loading state for thumbnail generation
             downloadModal: null,     // Current download modal state
 
             // Phase 4: Advanced AI Features
@@ -4734,8 +4770,14 @@
             }
             html += '</div>';
 
-            // Generate button with status
-            if (hasGeneratedThumbnails) {
+            // Generate button with status and loading indicator
+            if (state.thumbnailGenerating) {
+                html += '<button class="regenerate-thumbnails-btn" disabled>';
+                html += '<span class="thumbnail-loading-spinner"></span>';
+                html += ' Extracting frames & generating...';
+                html += '</button>';
+                html += '<div class="thumbnail-loading-info">This may take 30-60 seconds as we extract actual frames from your video clip for reference.</div>';
+            } else if (hasGeneratedThumbnails) {
                 html += '<button class="regenerate-thumbnails-btn" onclick="app.regenerateThumbnails()">🔄 Regenerate Thumbnails</button>';
             } else {
                 html += '<button class="regenerate-thumbnails-btn primary-action" onclick="app.regenerateThumbnails()">🎨 Generate AI Thumbnails</button>';
@@ -5831,47 +5873,34 @@
                     return;
                 }
 
-                utils.showToast('Generating AI thumbnails...', 'info');
+                // Show loading state
+                state.thumbnailGenerating = true;
+                render();
+                utils.showToast('Generating AI thumbnails from video frames...', 'info');
 
                 try {
-                    // Use the working generateThumbnailPro function (same as main-dashboard)
-                    var generateThumbnailPro = functions.httpsCallable('generateThumbnailPro');
+                    // Use wizardGenerateThumbnails which extracts actual frames from the clip
+                    var wizardGenerateThumbnails = functions.httpsCallable('wizardGenerateThumbnails');
 
-                    // Build title from transcript or video title
-                    var thumbnailTitle = activeClip.transcript
-                        ? activeClip.transcript.substring(0, 100)
-                        : (state.videoInput.videoData ? state.videoInput.videoData.title : 'Video Clip');
-
-                    var result = await generateThumbnailPro({
-                        title: thumbnailTitle,
-                        customPrompt: 'Create a YouTube Shorts thumbnail for this clip: ' + (activeClip.transcript || '').substring(0, 200),
-                        style: 'professional',
-                        mode: 'quick',
-                        category: 'entertainment',
-                        variations: 3,
-                        compositionTemplate: 'auto',
-                        backgroundStyle: 'auto'
+                    var result = await wizardGenerateThumbnails({
+                        clipId: activeClip.id,
+                        transcript: activeClip.transcript || '',
+                        projectId: state.projectId,
+                        videoTitle: state.videoInput.videoData ? state.videoInput.videoData.title : ''
                     });
 
-                    if (result.data.success && result.data.images) {
-                        // Convert response format to wizard format
-                        var thumbnails = result.data.images.map(function(img, idx) {
-                            return {
-                                id: 'thumb_' + activeClip.id + '_' + idx,
-                                concept: ['Curiosity Gap', 'Emotional Impact', 'Value Proposition'][idx] || 'Variation ' + (idx + 1),
-                                previewUrl: img.url,
-                                generatedAt: new Date().toISOString()
-                            };
-                        });
-
-                        state.clipThumbnails[activeClip.id] = thumbnails;
+                    if (result.data.success && result.data.thumbnails) {
+                        state.clipThumbnails[activeClip.id] = result.data.thumbnails;
+                        state.thumbnailGenerating = false;
                         render();
-                        utils.showToast('Generated ' + thumbnails.length + ' thumbnails!', 'success');
+                        utils.showToast('Generated ' + result.data.thumbnails.length + ' thumbnails!', 'success');
                     } else {
                         throw new Error(result.data.message || 'Failed to generate thumbnails');
                     }
                 } catch (error) {
                     console.error('Thumbnail generation error:', error);
+                    state.thumbnailGenerating = false;
+                    render();
                     utils.showToast('Error: ' + (error.message || 'Failed to generate'), 'error');
                 }
             },

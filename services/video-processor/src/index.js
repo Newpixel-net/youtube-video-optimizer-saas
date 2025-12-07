@@ -7,7 +7,10 @@ import express from 'express';
 import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
 import { processVideo } from './processor.js';
+import { extractYouTubeFrames } from './youtube-downloader.js';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 
 const app = express();
 app.use(express.json());
@@ -25,6 +28,60 @@ const TEMP_DIR = process.env.TEMP_DIR || '/tmp/video-processing';
  */
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+/**
+ * Extract frames from a YouTube video at specific timestamps
+ * Used for thumbnail generation with actual video frames as reference
+ */
+app.post('/extract-frames', async (req, res) => {
+  const { videoId, timestamps, clipId } = req.body;
+
+  if (!videoId || !timestamps || !Array.isArray(timestamps)) {
+    return res.status(400).json({ error: 'videoId and timestamps array are required' });
+  }
+
+  console.log(`[FrameExtract] Extracting ${timestamps.length} frames from video ${videoId}`);
+
+  try {
+    // Create temp directory for this extraction
+    const workDir = path.join(TEMP_DIR, `frames_${clipId || Date.now()}`);
+    fs.mkdirSync(workDir, { recursive: true });
+
+    // Extract frames
+    const frames = await extractYouTubeFrames({
+      videoId,
+      timestamps,
+      workDir
+    });
+
+    // Clean up work directory
+    try {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    } catch (e) {
+      console.log('[FrameExtract] Cleanup warning:', e.message);
+    }
+
+    if (frames.length === 0) {
+      return res.status(500).json({ error: 'Failed to extract any frames' });
+    }
+
+    console.log(`[FrameExtract] Successfully extracted ${frames.length} frames`);
+
+    res.status(200).json({
+      success: true,
+      videoId,
+      frames: frames.map(f => ({
+        timestamp: f.timestamp,
+        base64: f.base64,
+        mimeType: f.mimeType || 'image/jpeg'
+      }))
+    });
+
+  } catch (error) {
+    console.error('[FrameExtract] Error:', error);
+    res.status(500).json({ error: error.message || 'Frame extraction failed' });
+  }
 });
 
 /**
