@@ -2123,6 +2123,108 @@
             text-transform: capitalize;
         }
 
+        /* Advanced Options Panel */
+        .advanced-options-panel {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(147, 51, 234, 0.05) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .panel-toggle-btn {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8rem;
+            cursor: pointer;
+            padding: 0.25rem;
+            transition: transform 0.2s;
+        }
+
+        .panel-toggle-btn:hover {
+            color: white;
+        }
+
+        .advanced-options-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .advanced-option-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .advanced-option-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .advanced-option-label {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .advanced-option-value {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+        }
+
+        .advanced-option-select {
+            flex: 1;
+            max-width: 250px;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.85rem;
+        }
+
+        .advanced-option-select option {
+            background: #1a1a2e;
+            color: white;
+        }
+
+        .crop-position-grid {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .crop-position-btn {
+            flex: 1;
+            padding: 0.625rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .crop-position-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .crop-position-btn.selected {
+            background: rgba(59, 130, 246, 0.3);
+            border-color: rgba(59, 130, 246, 0.5);
+            color: white;
+        }
+
+        .advanced-option-hint {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin: 0;
+        }
+
         /* Transition Options */
         .transition-options {
             display: flex;
@@ -4292,7 +4394,8 @@
             customization: {
                 activeClipIndex: 0,
                 batchMode: false,
-                showVideoPreview: false
+                showVideoPreview: false,
+                showAdvancedOptions: false
             },
 
             // Clip settings (per clip)
@@ -5124,6 +5227,99 @@
             html += '</div>';
 
             html += '</div>';
+            html += '</div>';
+
+            // Advanced Reframe Options Panel
+            html += '<div class="customization-panel advanced-options-panel">';
+            html += '<div class="panel-header">';
+            html += '<span class="panel-icon">⚙️</span>';
+            html += '<span class="panel-title">ADVANCED REFRAME</span>';
+            html += '<button class="panel-toggle-btn" onclick="app.toggleAdvancedOptions()">▼</button>';
+            html += '</div>';
+
+            if (state.customization.showAdvancedOptions) {
+                html += '<div class="advanced-options-content">';
+
+                // Source/Output aspect ratio
+                html += '<div class="advanced-option-group">';
+                html += '<div class="advanced-option-row">';
+                html += '<span class="advanced-option-label">Source Video</span>';
+                html += '<span class="advanced-option-value">16:9 (Landscape)</span>';
+                html += '</div>';
+                html += '<div class="advanced-option-row">';
+                html += '<span class="advanced-option-label">Output Format</span>';
+                html += '<select class="advanced-option-select" onchange="app.setOutputAspect(this.value)">';
+                var aspectOptions = [
+                    { value: '9:16', label: '9:16 Portrait (TikTok/Reels/Shorts)' },
+                    { value: '1:1', label: '1:1 Square (Instagram Feed)' },
+                    { value: '4:5', label: '4:5 Portrait (Instagram Post)' },
+                    { value: '16:9', label: '16:9 Landscape (YouTube)' }
+                ];
+                aspectOptions.forEach(function(opt) {
+                    var selected = (settings.outputAspect || '9:16') === opt.value ? ' selected' : '';
+                    html += '<option value="' + opt.value + '"' + selected + '>' + opt.label + '</option>';
+                });
+                html += '</select>';
+                html += '</div>';
+                html += '</div>';
+
+                // Crop position for auto_center
+                html += '<div class="advanced-option-group">';
+                html += '<div class="advanced-option-row">';
+                html += '<span class="advanced-option-label">Crop Position</span>';
+                html += '</div>';
+                html += '<div class="crop-position-grid">';
+                var positions = [
+                    { value: 'left', label: '◀ Left' },
+                    { value: 'center', label: '● Center' },
+                    { value: 'right', label: '▶ Right' }
+                ];
+                positions.forEach(function(pos) {
+                    var selected = (settings.cropPosition || 'center') === pos.value ? ' selected' : '';
+                    html += '<button class="crop-position-btn' + selected + '" onclick="app.setCropPosition(\'' + pos.value + '\')">' + pos.label + '</button>';
+                });
+                html += '</div>';
+                html += '<p class="advanced-option-hint">Choose where to focus when cropping horizontal video</p>';
+                html += '</div>';
+
+                // Output quality
+                html += '<div class="advanced-option-group">';
+                html += '<div class="advanced-option-row">';
+                html += '<span class="advanced-option-label">Output Quality</span>';
+                html += '<select class="advanced-option-select" onchange="app.setOutputQuality(this.value)">';
+                var qualityOptions = [
+                    { value: '720p', label: '720p HD (Faster)' },
+                    { value: '1080p', label: '1080p Full HD (Recommended)' }
+                ];
+                qualityOptions.forEach(function(opt) {
+                    var selected = (settings.outputQuality || '1080p') === opt.value ? ' selected' : '';
+                    html += '<option value="' + opt.value + '"' + selected + '>' + opt.label + '</option>';
+                });
+                html += '</select>';
+                html += '</div>';
+                html += '</div>';
+
+                // Frame rate
+                html += '<div class="advanced-option-group">';
+                html += '<div class="advanced-option-row">';
+                html += '<span class="advanced-option-label">Frame Rate</span>';
+                html += '<select class="advanced-option-select" onchange="app.setFrameRate(this.value)">';
+                var fpsOptions = [
+                    { value: '24', label: '24 fps (Cinematic)' },
+                    { value: '30', label: '30 fps (Standard)' },
+                    { value: '60', label: '60 fps (Smooth)' }
+                ];
+                fpsOptions.forEach(function(opt) {
+                    var selected = (settings.frameRate || '30') === opt.value ? ' selected' : '';
+                    html += '<option value="' + opt.value + '"' + selected + '>' + opt.label + '</option>';
+                });
+                html += '</select>';
+                html += '</div>';
+                html += '</div>';
+
+                html += '</div>'; // advanced-options-content
+            }
+
             html += '</div>';
 
             // Timeline Panel with waveform and draggable handles
@@ -6247,6 +6443,59 @@
                     state.clipSettings[activeClip.id] = getDefaultSettings();
                 }
                 state.clipSettings[activeClip.id].reframeMode = mode;
+                render();
+            },
+
+            toggleAdvancedOptions: function() {
+                state.customization.showAdvancedOptions = !state.customization.showAdvancedOptions;
+                render();
+            },
+
+            setOutputAspect: function(aspect) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].outputAspect = aspect;
+                render();
+            },
+
+            setCropPosition: function(position) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].cropPosition = position;
+                render();
+            },
+
+            setOutputQuality: function(quality) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].outputQuality = quality;
+                render();
+            },
+
+            setFrameRate: function(fps) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].frameRate = fps;
                 render();
             },
 

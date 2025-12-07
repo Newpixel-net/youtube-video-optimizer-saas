@@ -320,15 +320,85 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
           });
         });
       } catch (cobaltError) {
-        console.error(`[${jobId}] All download methods failed`);
-        // Return a more helpful error message
-        const errorMsg = ytdlpError.message.includes('Sign in to confirm')
-          ? 'YouTube requires authentication. Please ensure your YouTube account is connected and try again. If the issue persists, the video may have restrictions.'
-          : `Video download failed after trying multiple methods. Last error: ${cobaltError.message}`;
-        throw new Error(errorMsg);
+        console.log(`[${jobId}] Cobalt failed, trying Invidious...`);
+
+        try {
+          // Invidious downloads full video, we'll trim it
+          const invidiousOutput = path.join(workDir, 'invidious_source.mp4');
+          await downloadWithInvidious({ jobId, videoId, workDir, outputFile: invidiousOutput });
+
+          // Trim to desired segment
+          console.log(`[${jobId}] Trimming Invidious download to segment...`);
+          return await trimVideoSegment({ jobId, inputFile: invidiousOutput, outputFile, startTime, endTime });
+        } catch (invidiousError) {
+          console.log(`[${jobId}] Invidious failed, trying Piped...`);
+
+          try {
+            // Piped downloads full video, we'll trim it
+            const pipedOutput = path.join(workDir, 'piped_source.mp4');
+            await downloadWithPiped({ jobId, videoId, workDir, outputFile: pipedOutput });
+
+            // Trim to desired segment
+            console.log(`[${jobId}] Trimming Piped download to segment...`);
+            return await trimVideoSegment({ jobId, inputFile: pipedOutput, outputFile, startTime, endTime });
+          } catch (pipedError) {
+            console.error(`[${jobId}] All download methods failed`);
+            // Return a more helpful error message
+            const errorMsg = ytdlpError.message.includes('Sign in to confirm')
+              ? 'YouTube requires authentication. Please ensure your YouTube account is connected and try again. If the issue persists, the video may have restrictions.'
+              : `Video download failed after trying multiple methods (youtubei.js, yt-dlp, Cobalt, Invidious, Piped). The video may be restricted or geo-blocked.`;
+            throw new Error(errorMsg);
+          }
+        }
       }
     }
   }
+}
+
+/**
+ * Helper to trim video segment with FFmpeg
+ */
+async function trimVideoSegment({ jobId, inputFile, outputFile, startTime, endTime }) {
+  const bufferStart = Math.max(0, startTime - 1);
+  const segmentDuration = (endTime - startTime) + 2;
+
+  return new Promise((resolve, reject) => {
+    const ffmpegArgs = [
+      '-ss', bufferStart.toString(),
+      '-t', segmentDuration.toString(),
+      '-i', inputFile,
+      '-c', 'copy',
+      '-y',
+      outputFile
+    ];
+
+    const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+    let stderr = '';
+
+    ffmpegProc.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    ffmpegProc.on('close', (code) => {
+      // Cleanup source file
+      try {
+        if (fs.existsSync(inputFile)) {
+          fs.unlinkSync(inputFile);
+        }
+      } catch (e) {}
+
+      if (code === 0 && fs.existsSync(outputFile)) {
+        console.log(`[${jobId}] Segment trim complete`);
+        resolve(outputFile);
+      } else {
+        reject(new Error(`Segment trim failed: ${stderr.slice(-200)}`));
+      }
+    });
+
+    ffmpegProc.on('error', (error) => {
+      reject(new Error(`Trim FFmpeg error: ${error.message}`));
+    });
+  });
 }
 
 /**
@@ -503,6 +573,173 @@ async function downloadWithCobalt({ jobId, videoId, workDir, outputFile }) {
     console.error(`[${jobId}] Cobalt fallback failed:`, error.message);
     throw error;
   }
+}
+
+/**
+ * Fallback download using Invidious API
+ * Invidious is an open-source YouTube frontend with download capabilities
+ */
+async function downloadWithInvidious({ jobId, videoId, workDir, outputFile }) {
+  console.log(`[${jobId}] Trying Invidious API fallback...`);
+
+  // List of public Invidious instances
+  const invidiousInstances = [
+    'https://inv.nadeko.net',
+    'https://invidious.nerdvpn.de',
+    'https://invidious.private.coffee',
+    'https://invidious.protokolla.fi',
+    'https://iv.datura.network'
+  ];
+
+  for (const instance of invidiousInstances) {
+    try {
+      console.log(`[${jobId}] Trying Invidious instance: ${instance}`);
+
+      // Get video info from Invidious
+      const infoResponse = await fetch(`${instance}/api/v1/videos/${videoId}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!infoResponse.ok) continue;
+
+      const videoInfo = await infoResponse.json();
+
+      // Find best format (prefer 720p or 1080p mp4)
+      const formats = videoInfo.adaptiveFormats || videoInfo.formatStreams || [];
+      const videoFormat = formats
+        .filter(f => f.type?.includes('video/mp4') || f.container === 'mp4')
+        .filter(f => {
+          const quality = parseInt(f.qualityLabel) || parseInt(f.quality) || 0;
+          return quality <= 1080;
+        })
+        .sort((a, b) => {
+          const qualA = parseInt(a.qualityLabel) || parseInt(a.quality) || 0;
+          const qualB = parseInt(b.qualityLabel) || parseInt(b.quality) || 0;
+          return qualB - qualA;
+        })[0];
+
+      if (!videoFormat || !videoFormat.url) continue;
+
+      console.log(`[${jobId}] Found format: ${videoFormat.qualityLabel || videoFormat.quality}`);
+
+      // Download using FFmpeg
+      return new Promise((resolve, reject) => {
+        const ffmpegArgs = [
+          '-i', videoFormat.url,
+          '-c', 'copy',
+          '-y',
+          outputFile
+        ];
+
+        const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+        let stderr = '';
+
+        ffmpegProc.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        ffmpegProc.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outputFile)) {
+            console.log(`[${jobId}] Invidious download complete`);
+            resolve(outputFile);
+          } else {
+            reject(new Error(`Invidious FFmpeg failed: ${stderr.slice(-200)}`));
+          }
+        });
+
+        ffmpegProc.on('error', (error) => {
+          reject(new Error(`Invidious FFmpeg error: ${error.message}`));
+        });
+      });
+    } catch (instanceError) {
+      console.log(`[${jobId}] Invidious instance ${instance} failed: ${instanceError.message}`);
+    }
+  }
+
+  throw new Error('All Invidious instances failed');
+}
+
+/**
+ * Fallback download using Piped API
+ * Piped is another open-source YouTube frontend
+ */
+async function downloadWithPiped({ jobId, videoId, workDir, outputFile }) {
+  console.log(`[${jobId}] Trying Piped API fallback...`);
+
+  // List of public Piped instances
+  const pipedInstances = [
+    'https://pipedapi.kavin.rocks',
+    'https://pipedapi.adminforge.de',
+    'https://api.piped.privacydev.net',
+    'https://pipedapi.in.projectsegfau.lt'
+  ];
+
+  for (const instance of pipedInstances) {
+    try {
+      console.log(`[${jobId}] Trying Piped instance: ${instance}`);
+
+      // Get streams from Piped
+      const streamsResponse = await fetch(`${instance}/streams/${videoId}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!streamsResponse.ok) continue;
+
+      const streams = await streamsResponse.json();
+
+      // Find best video stream
+      const videoStreams = streams.videoStreams || [];
+      const videoStream = videoStreams
+        .filter(s => s.format === 'MPEG_4' || s.mimeType?.includes('video/mp4'))
+        .filter(s => {
+          const height = parseInt(s.quality) || s.height || 0;
+          return height <= 1080;
+        })
+        .sort((a, b) => {
+          const qualA = parseInt(a.quality) || a.height || 0;
+          const qualB = parseInt(b.quality) || b.height || 0;
+          return qualB - qualA;
+        })[0];
+
+      if (!videoStream || !videoStream.url) continue;
+
+      console.log(`[${jobId}] Found Piped stream: ${videoStream.quality}`);
+
+      // Download using FFmpeg
+      return new Promise((resolve, reject) => {
+        const ffmpegArgs = [
+          '-i', videoStream.url,
+          '-c', 'copy',
+          '-y',
+          outputFile
+        ];
+
+        const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+        let stderr = '';
+
+        ffmpegProc.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        ffmpegProc.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outputFile)) {
+            console.log(`[${jobId}] Piped download complete`);
+            resolve(outputFile);
+          } else {
+            reject(new Error(`Piped FFmpeg failed: ${stderr.slice(-200)}`));
+          }
+        });
+
+        ffmpegProc.on('error', (error) => {
+          reject(new Error(`Piped FFmpeg error: ${error.message}`));
+        });
+      });
+    } catch (instanceError) {
+      console.log(`[${jobId}] Piped instance ${instance} failed: ${instanceError.message}`);
+    }
+  }
+
+  throw new Error('All Piped instances failed');
 }
 
 /**

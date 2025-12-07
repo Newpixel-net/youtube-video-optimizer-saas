@@ -188,17 +188,65 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
   // Step 1: Reframe/Crop based on mode
   switch (reframeMode) {
     case 'split_screen':
-      // Create split screen effect (top and bottom)
-      filters.push(`split[top][bottom]`);
-      filters.push(`[top]crop=iw:ih/2:0:0,scale=${targetWidth}:${targetHeight/2}[t]`);
-      filters.push(`[bottom]crop=iw:ih/2:0:ih/2,scale=${targetWidth}:${targetHeight/2}[b]`);
-      filters.push(`[t][b]vstack`);
+      // Split screen: Show left and right speakers stacked vertically (for podcasts)
+      // Take left 1/3 and right 1/3 of the video, stack them
+      const splitCropW = Math.floor(inputWidth / 3);
+      const splitHalfH = Math.floor(targetHeight / 2);
+      filters.push(`split[left][right]`);
+      filters.push(`[left]crop=${splitCropW}:${inputHeight}:0:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[l]`);
+      filters.push(`[right]crop=${splitCropW}:${inputHeight}:${inputWidth - splitCropW}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[r]`);
+      filters.push(`[l][r]vstack`);
+      break;
+
+    case 'three_person':
+      // Three person: Show three speakers - top (center), bottom-left, bottom-right
+      const thirdW = Math.floor(inputWidth / 3);
+      const topH = Math.floor(targetHeight * 0.55);
+      const bottomH = targetHeight - topH;
+      const halfTargetW = Math.floor(targetWidth / 2);
+      filters.push(`split=3[center][bl][br]`);
+      filters.push(`[center]crop=${thirdW}:${inputHeight}:${thirdW}:0,scale=${targetWidth}:${topH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topH}[c]`);
+      filters.push(`[bl]crop=${thirdW}:${inputHeight}:0:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[left]`);
+      filters.push(`[br]crop=${thirdW}:${inputHeight}:${2 * thirdW}:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[right]`);
+      filters.push(`[left][right]hstack[bottom]`);
+      filters.push(`[c][bottom]vstack`);
       break;
 
     case 'gameplay':
-      // Gameplay mode: main content top, small cam area bottom
-      filters.push(`crop=ih*${targetAspect}:ih:(iw-ih*${targetAspect})/2:0`);
+      // Gameplay mode: Main video fills most, small facecam area in corner
+      // First crop to 9:16, then overlay facecam area
+      if (inputAspect > targetAspect) {
+        const gameCropW = Math.floor(inputHeight * targetAspect);
+        const gameCropX = Math.floor((inputWidth - gameCropW) / 2);
+        // Show more of the main game area, with a circle/facecam indicator
+        filters.push(`crop=${gameCropW}:${inputHeight}:${gameCropX}:0`);
+      } else {
+        const gameCropH = Math.floor(inputWidth / targetAspect);
+        const gameCropY = Math.floor((inputHeight - gameCropH) / 2);
+        filters.push(`crop=${inputWidth}:${gameCropH}:0:${gameCropY}`);
+      }
       filters.push(`scale=${targetWidth}:${targetHeight}`);
+      // Add a subtle border/glow to indicate facecam area at bottom-left
+      const camSize = Math.floor(targetWidth * 0.35);
+      const camPadding = 20;
+      filters.push(`drawbox=x=${camPadding}:y=${targetHeight - camSize - camPadding}:w=${camSize}:h=${camSize}:color=white@0.3:t=3`);
+      break;
+
+    case 'b_roll':
+      // B-roll mode: Currently same as auto_center (B-roll would need additional footage)
+      // Future: Could add picture-in-picture or overlay effects
+      if (inputAspect > targetAspect) {
+        const brollCropW = Math.floor(inputHeight * targetAspect);
+        const brollCropX = Math.floor((inputWidth - brollCropW) / 2);
+        filters.push(`crop=${brollCropW}:${inputHeight}:${brollCropX}:0`);
+      } else {
+        const brollCropH = Math.floor(inputWidth / targetAspect);
+        const brollCropY = Math.floor((inputHeight - brollCropH) / 2);
+        filters.push(`crop=${inputWidth}:${brollCropH}:0:${brollCropY}`);
+      }
+      filters.push(`scale=${targetWidth}:${targetHeight}`);
+      // Add subtle Ken Burns effect for B-roll feel
+      filters.push(`zoompan=z='if(eq(on,1),1,zoom+0.0003)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${targetWidth}x${targetHeight}:fps=${30}`);
       break;
 
     case 'auto_center':
@@ -220,21 +268,25 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       break;
   }
 
-  // Step 2: Apply visual effects
-  if (autoZoom) {
-    // Subtle zoom pulse effect
-    filters.push(`zoompan=z='1+0.02*sin(2*PI*t/5)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${targetWidth}x${targetHeight}`);
-  }
+  // Step 2: Apply visual effects (but not for complex filter chains)
+  const isComplexFilter = ['split_screen', 'three_person'].includes(reframeMode);
 
-  if (vignette) {
-    // Add vignette effect
-    filters.push(`vignette=angle=PI/4:mode=forward`);
-  }
+  if (!isComplexFilter) {
+    if (autoZoom && reframeMode !== 'b_roll') {
+      // Subtle zoom pulse effect
+      filters.push(`zoompan=z='1+0.02*sin(2*PI*t/5)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${targetWidth}x${targetHeight}`);
+    }
 
-  if (colorGrade) {
-    // Enhance colors for social media (slight saturation boost, contrast)
-    filters.push(`eq=saturation=1.15:contrast=1.05:brightness=0.02`);
-    filters.push(`unsharp=5:5:0.8:5:5:0`);
+    if (vignette) {
+      // Add vignette effect
+      filters.push(`vignette=angle=PI/4:mode=forward`);
+    }
+
+    if (colorGrade) {
+      // Enhance colors for social media (slight saturation boost, contrast)
+      filters.push(`eq=saturation=1.15:contrast=1.05:brightness=0.02`);
+      filters.push(`unsharp=5:5:0.8:5:5:0`);
+    }
   }
 
   return filters.join(',');
