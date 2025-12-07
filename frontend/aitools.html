@@ -2297,6 +2297,7 @@
             // Define all tools data for search and categories
             var allTools = {
                 youtube: [
+                    { id: 'wizard', icon: '✂️', name: 'Video-to-Shorts Wizard', desc: 'Transform long videos into viral shorts with AI clipping, captions & thumbnails.', tokens: 15, badge: 'NEW', gradStart: '#ec4899', gradEnd: '#f97316', externalUrl: '/video-wizard.html' },
                     { id: 'script', icon: '🎬', name: 'AI Script Studio', desc: 'From idea to full video script in 60 seconds with hooks & CTAs.', tokens: 5, badge: 'Popular', gradStart: '#f59e0b', gradEnd: '#ef4444' },
                     { id: 'hooks', icon: '🎣', name: 'Viral Hook Lab', desc: 'Win the first 3 seconds. Generate winning hooks with AI prediction.', tokens: 3, badge: 'Impact', gradStart: '#ec4899', gradEnd: '#8b5cf6' },
                     { id: 'multiplier', icon: '🔄', name: 'Content Multiplier', desc: 'One video becomes 30 pieces. Extract Shorts, threads & more.', tokens: 8, badge: '10x', gradStart: '#10b981', gradEnd: '#3b82f6' },
@@ -2403,10 +2404,13 @@
                     state.recentTools.slice(0, 5).map(function(id) {
                         return allTools.youtube.find(function(t) { return t.id === id; });
                     }).filter(Boolean) :
-                    [allTools.youtube[0], allTools.youtube[1], allTools.youtube[4], allTools.youtube[9]]; // Script, Hooks, Trends, Coach
+                    [allTools.youtube[0], allTools.youtube[1], allTools.youtube[2], allTools.youtube[5], allTools.youtube[10]]; // Wizard, Script, Hooks, Trends, Coach
 
                 quickTools.forEach(function(tool) {
-                    html += '<div class="quick-access-item" onclick="app.navigateTo(\'' + tool.id + '\')">';
+                    var quickClickHandler = tool.externalUrl ?
+                        'onclick="window.location.href=\'' + tool.externalUrl + '\'"' :
+                        'onclick="app.navigateTo(\'' + tool.id + '\')"';
+                    html += '<div class="quick-access-item" ' + quickClickHandler + '>';
                     html += '<span class="quick-access-icon">' + tool.icon + '</span>';
                     html += '<span class="quick-access-name">' + tool.name + '</span>';
                     html += '</div>';
@@ -2472,7 +2476,8 @@
         function renderStreamToolCard(tool) {
             var html = '';
             var comingSoonClass = tool.comingSoon ? ' coming-soon' : '';
-            var clickHandler = tool.comingSoon ? '' : 'onclick="app.navigateTo(\'' + tool.id + '\')"';
+            var clickHandler = tool.comingSoon ? '' :
+                (tool.externalUrl ? 'onclick="window.location.href=\'' + tool.externalUrl + '\'"' : 'onclick="app.navigateTo(\'' + tool.id + '\')"');
 
             html += '<div class="stream-tool-card' + comingSoonClass + '" style="--card-gradient: linear-gradient(135deg, ' + tool.gradStart + ' 0%, ' + tool.gradEnd + ' 100%);" ' + clickHandler + '>';
 
