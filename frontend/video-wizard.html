@@ -5545,28 +5545,43 @@
             // YouTube embed for video preview
             var embedStart = activeClip.startTime || 0;
             var videoId = state.videoInput.videoData?.videoId || '';
-            var videoContent = '';
 
-            if (videoId && state.customization.showVideoPreview) {
-                videoContent = '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:inherit"></iframe>';
-            } else {
-                videoContent = '<img src="' + activeClip.thumbnail + '" alt="Preview" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">';
-                videoContent += '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
-            }
+            // Different styles for different reframe modes
+            var getVideoContent = function(mode) {
+                // For modes that need CSS transforms, don't use position:absolute
+                var needsTransform = ['split_screen', 'three_person', 'broll_split'].indexOf(mode) !== -1;
+
+                if (videoId && state.customization.showVideoPreview) {
+                    if (needsTransform) {
+                        return '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+                    } else {
+                        return '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:inherit"></iframe>';
+                    }
+                } else {
+                    if (needsTransform) {
+                        return '<img src="' + activeClip.thumbnail + '" alt="Preview">';
+                    } else {
+                        return '<img src="' + activeClip.thumbnail + '" alt="Preview" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">' +
+                               '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
+                    }
+                }
+            };
+
+            var videoContent = getVideoContent(reframeMode);
 
             // Generate mode-specific HTML structure for CSS transform preview
             if (reframeMode === 'split_screen') {
-                // Split-screen: Two video sections stacked
+                // Split-screen: Two video sections stacked showing left/right of original
                 html += '<div class="' + videoAreaClasses + '">';
-                html += '<div class="split-preview-top">' + videoContent + '<span class="split-label">Speaker 1 (Left)</span></div>';
-                html += '<div class="split-preview-bottom">' + videoContent + '<span class="split-label">Speaker 2 (Right)</span></div>';
+                html += '<div class="split-preview-top">' + getVideoContent('split_screen') + '<div class="split-label">Left Speaker</div></div>';
+                html += '<div class="split-preview-bottom">' + getVideoContent('split_screen') + '<div class="split-label">Right Speaker</div></div>';
                 html += '</div>';
             } else if (reframeMode === 'three_person') {
                 // Three-person: Grid layout
                 html += '<div class="' + videoAreaClasses + '">';
-                html += '<div class="three-zone three-zone-main">' + videoContent + '<span class="zone-label">Main</span></div>';
-                html += '<div class="three-zone three-zone-left">' + videoContent + '<span class="zone-label">Left</span></div>';
-                html += '<div class="three-zone three-zone-right">' + videoContent + '<span class="zone-label">Right</span></div>';
+                html += '<div class="three-zone three-zone-main">' + getVideoContent('three_person') + '<div class="zone-label">Main</div></div>';
+                html += '<div class="three-zone three-zone-left">' + getVideoContent('three_person') + '<div class="zone-label">Left</div></div>';
+                html += '<div class="three-zone three-zone-right">' + getVideoContent('three_person') + '<div class="zone-label">Right</div></div>';
                 html += '</div>';
             } else if (reframeMode === 'gameplay') {
                 // Gameplay: Video with facecam overlay
@@ -5578,8 +5593,8 @@
             } else if (reframeMode === 'broll_split') {
                 // B-Roll: Main area with Ken Burns + speaker section
                 html += '<div class="' + videoAreaClasses + '">';
-                html += '<div class="broll-main">' + videoContent + '<span class="broll-label">B-Roll + Ken Burns</span></div>';
-                html += '<div class="broll-speaker">' + videoContent + '<span class="broll-label">Speaker</span></div>';
+                html += '<div class="broll-main">' + getVideoContent('broll_split') + '<div class="broll-label">B-Roll + Ken Burns</div></div>';
+                html += '<div class="broll-speaker">' + getVideoContent('broll_split') + '<div class="broll-label">Speaker</div></div>';
                 html += '</div>';
             } else {
                 // Auto-center: Simple crop with position
