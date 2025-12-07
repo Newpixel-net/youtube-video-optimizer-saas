@@ -2217,6 +2217,46 @@
             object-fit: cover;
         }
 
+        .thumbnail-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.03);
+            color: rgba(255, 255, 255, 0.4);
+            gap: 0.25rem;
+        }
+
+        .thumbnail-placeholder span:first-child {
+            font-size: 2rem;
+        }
+
+        .thumbnail-download-btn {
+            position: absolute;
+            top: 0.5rem;
+            left: 0.5rem;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 0.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+
+        .thumbnail-download-btn:hover {
+            background: #10b981;
+            border-color: #10b981;
+        }
+
         .thumbnail-label {
             position: absolute;
             bottom: 0.5rem;
@@ -2664,7 +2704,335 @@
         }
 
         /* ------------------------------------------
-           2.16 MY PROJECTS SECTION (Step 1)
+           2.16 VIDEO PREVIEW MODAL
+           ------------------------------------------ */
+        .video-preview-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            padding: 2rem;
+        }
+
+        .video-preview-content {
+            background: rgba(30, 30, 40, 0.95);
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 900px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .video-preview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .video-preview-header h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            margin: 0;
+        }
+
+        .video-preview-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .video-preview-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .video-preview-player {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+        }
+
+        .video-preview-player iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .video-preview-info {
+            padding: 1.25rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .video-preview-meta {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .video-preview-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .video-preview-transcript {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.5;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .video-preview-actions {
+            display: flex;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .video-preview-actions button {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .video-preview-actions .btn-select {
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border: none;
+            color: white;
+        }
+
+        .video-preview-actions .btn-select:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+        }
+
+        .video-preview-actions .btn-select.selected {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        /* Play button overlay on clip cards */
+        .clip-play-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            background: rgba(236, 72, 153, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .clip-play-btn::after {
+            content: '';
+            width: 0;
+            height: 0;
+            border-left: 14px solid white;
+            border-top: 9px solid transparent;
+            border-bottom: 9px solid transparent;
+            margin-left: 3px;
+        }
+
+        .clip-thumbnail:hover .clip-play-btn {
+            opacity: 1;
+        }
+
+        .clip-play-btn:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            background: rgba(236, 72, 153, 1);
+        }
+
+        /* ------------------------------------------
+           2.17 DOWNLOAD MODAL
+           ------------------------------------------ */
+        .download-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            padding: 2rem;
+        }
+
+        .download-modal-content {
+            background: rgba(30, 30, 40, 0.95);
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 500px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .download-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .download-modal-header h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            margin: 0;
+        }
+
+        .download-modal-body {
+            padding: 1.5rem;
+        }
+
+        .download-quality-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .quality-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1.25rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quality-option:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(236, 72, 153, 0.4);
+        }
+
+        .quality-option.selected {
+            background: rgba(236, 72, 153, 0.1);
+            border-color: #ec4899;
+        }
+
+        .quality-option-label {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.25rem;
+        }
+
+        .quality-option-size {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .download-coming-soon {
+            background: rgba(249, 115, 22, 0.1);
+            border: 1px solid rgba(249, 115, 22, 0.3);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .download-coming-soon-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #f97316;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .download-coming-soon-text {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+        }
+
+        .download-alternative {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .download-alternative-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #10b981;
+            margin-bottom: 0.5rem;
+        }
+
+        .download-modal-actions {
+            display: flex;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .download-modal-actions button {
+            flex: 1;
+            padding: 0.875rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .download-modal-actions .btn-youtube {
+            background: #ff0000;
+            border: none;
+            color: white;
+        }
+
+        .download-modal-actions .btn-youtube:hover {
+            background: #cc0000;
+        }
+
+        /* ------------------------------------------
+           2.18 MY PROJECTS SECTION (Step 1)
            ------------------------------------------ */
         .my-projects-section {
             margin-top: 2rem;
@@ -3163,6 +3531,8 @@
             // Step 5: SEO & Thumbnails
             clipSEO: {},
             clipThumbnails: {},
+            selectedThumbnail: {},  // Track selected thumbnail index per clip
+            downloadModal: null,     // Current download modal state
 
             // Phase 4: Advanced AI Features
             clipBRoll: {},      // AI B-Roll suggestions per clip
@@ -3627,11 +3997,12 @@
 
                 html += '<div class="' + cardClass + '" onclick="app.toggleClipSelection(\'' + clip.id + '\')">';
 
-                // Thumbnail
+                // Thumbnail with play button
                 html += '<div class="clip-thumbnail">';
                 html += '<img src="' + clip.thumbnail + '" alt="Clip thumbnail">';
                 html += '<span class="clip-duration">' + utils.formatDuration(clip.duration) + '</span>';
                 html += '<div class="clip-checkbox">' + (isSelected ? '✓' : '') + '</div>';
+                html += '<div class="clip-play-btn" onclick="event.stopPropagation(); app.previewClip(\'' + clip.id + '\')" title="Preview clip"></div>';
                 html += '</div>';
 
                 // Info
@@ -4107,18 +4478,36 @@
             html += '<div class="seo-panel thumbnails-panel">';
             html += '<h3>THUMBNAILS (A/B Testing - 3 Options)</h3>';
 
+            // Get generated thumbnails or use placeholders
+            var thumbnails = state.clipThumbnails[activeClip.id] || [];
+            var selectedThumbnailIdx = state.selectedThumbnail && state.selectedThumbnail[activeClip.id] !== undefined
+                ? state.selectedThumbnail[activeClip.id] : 0;
+
             html += '<div class="thumbnails-grid">';
             for (var i = 0; i < 3; i++) {
-                var selectedClass = i === 0 ? ' selected' : '';
+                var selectedClass = i === selectedThumbnailIdx ? ' selected' : '';
+                var thumbUrl = thumbnails[i] ? (thumbnails[i].previewUrl || thumbnails[i].url || thumbnails[i]) : null;
+                var isGenerated = !!thumbUrl && !thumbUrl.includes('picsum.photos');
+
                 html += '<div class="thumbnail-option' + selectedClass + '" onclick="app.selectThumbnail(' + i + ')">';
-                html += '<img src="https://picsum.photos/seed/thumb' + activeClip.id + i + '/320/180" alt="Thumbnail ' + (i + 1) + '">';
+
+                if (isGenerated) {
+                    html += '<img src="' + thumbUrl + '" alt="Thumbnail ' + (i + 1) + '">';
+                    html += '<button class="thumbnail-download-btn" onclick="event.stopPropagation(); app.downloadThumbnail(\'' + activeClip.id + '\', ' + i + ')" title="Download thumbnail">⬇</button>';
+                } else {
+                    html += '<div class="thumbnail-placeholder">';
+                    html += '<span>🖼️</span>';
+                    html += '<span style="font-size: 0.7rem;">Click Regenerate</span>';
+                    html += '</div>';
+                }
+
                 html += '<span class="thumbnail-label">Option ' + String.fromCharCode(65 + i) + '</span>';
                 html += '<div class="thumbnail-radio"></div>';
                 html += '</div>';
             }
             html += '</div>';
 
-            html += '<button class="regenerate-thumbnails-btn" onclick="app.regenerateThumbnails()">🔄 Regenerate All Thumbnails</button>';
+            html += '<button class="regenerate-thumbnails-btn" onclick="app.regenerateThumbnails()">🎨 Generate with AI (Nano Banana Pro)</button>';
 
             html += '</div>'; // thumbnails-panel
 
@@ -4580,6 +4969,103 @@
                 } else {
                     state.selectedClipIds.splice(index, 1);
                 }
+                render();
+            },
+
+            // Video Preview Functions
+            previewClip: function(clipId) {
+                var clip = state.clips.find(function(c) { return c.id === clipId; });
+                if (!clip) {
+                    utils.showToast('Clip not found', 'error');
+                    return;
+                }
+
+                var videoId = state.videoInput.videoData ? state.videoInput.videoData.videoId : null;
+                if (!videoId) {
+                    // Try to extract from clip thumbnail URL
+                    var match = clip.thumbnail.match(/\/vi\/([^\/]+)\//);
+                    if (match) {
+                        videoId = match[1];
+                    }
+                }
+
+                if (!videoId) {
+                    utils.showToast('Video ID not found', 'error');
+                    return;
+                }
+
+                var isSelected = state.selectedClipIds.indexOf(clipId) !== -1;
+                var startTime = Math.floor(clip.startTime || 0);
+                var endTime = Math.floor(clip.endTime || (startTime + clip.duration));
+
+                // Build YouTube embed URL with start and end times
+                var embedUrl = 'https://www.youtube.com/embed/' + videoId +
+                    '?start=' + startTime +
+                    '&end=' + endTime +
+                    '&autoplay=1&rel=0&modestbranding=1';
+
+                var modalHtml = '<div class="video-preview-modal" onclick="app.closeVideoPreview(event)">';
+                modalHtml += '<div class="video-preview-content" onclick="event.stopPropagation()">';
+
+                // Header
+                modalHtml += '<div class="video-preview-header">';
+                modalHtml += '<h3>Preview Clip - ' + utils.formatDuration(clip.duration) + '</h3>';
+                modalHtml += '<button class="video-preview-close" onclick="app.closeVideoPreview()">×</button>';
+                modalHtml += '</div>';
+
+                // Player
+                modalHtml += '<div class="video-preview-player">';
+                modalHtml += '<iframe src="' + embedUrl + '" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
+                modalHtml += '</div>';
+
+                // Info
+                modalHtml += '<div class="video-preview-info">';
+                modalHtml += '<div class="video-preview-meta">';
+                modalHtml += '<div class="video-preview-meta-item"><span>⏱️</span> ' + utils.formatDuration(startTime) + ' - ' + utils.formatDuration(endTime) + '</div>';
+                modalHtml += '<div class="video-preview-meta-item"><span>🔥</span> Virality: ' + clip.score + '%</div>';
+                modalHtml += '<div class="video-preview-meta-item"><span>📱</span> ' + clip.platforms.map(utils.getPlatformName).join(', ') + '</div>';
+                modalHtml += '</div>';
+                modalHtml += '<div class="video-preview-transcript">"' + utils.escapeHtml(clip.transcript) + '"</div>';
+                modalHtml += '</div>';
+
+                // Actions
+                modalHtml += '<div class="video-preview-actions">';
+                modalHtml += '<button class="btn-secondary" onclick="app.closeVideoPreview()">Close</button>';
+                if (isSelected) {
+                    modalHtml += '<button class="btn-select selected" onclick="app.toggleClipFromPreview(\'' + clipId + '\')">✓ Selected</button>';
+                } else {
+                    modalHtml += '<button class="btn-select" onclick="app.toggleClipFromPreview(\'' + clipId + '\')">+ Select Clip</button>';
+                }
+                modalHtml += '</div>';
+
+                modalHtml += '</div>'; // content
+                modalHtml += '</div>'; // modal
+
+                // Append modal to body
+                var modalContainer = document.createElement('div');
+                modalContainer.id = 'video-preview-container';
+                modalContainer.innerHTML = modalHtml;
+                document.body.appendChild(modalContainer);
+            },
+
+            closeVideoPreview: function(event) {
+                if (event && event.target !== event.currentTarget) return;
+                var container = document.getElementById('video-preview-container');
+                if (container) {
+                    container.remove();
+                }
+            },
+
+            toggleClipFromPreview: function(clipId) {
+                var index = state.selectedClipIds.indexOf(clipId);
+                if (index === -1) {
+                    state.selectedClipIds.push(clipId);
+                } else {
+                    state.selectedClipIds.splice(index, 1);
+                }
+                // Re-render the preview modal with updated button
+                app.closeVideoPreview();
+                app.previewClip(clipId);
                 render();
             },
 
@@ -5054,6 +5540,17 @@
             },
 
             selectThumbnail: function(index) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!activeClip) return;
+
+                if (!state.selectedThumbnail) {
+                    state.selectedThumbnail = {};
+                }
+                state.selectedThumbnail[activeClip.id] = index;
+                render();
                 utils.showToast('Selected thumbnail ' + String.fromCharCode(65 + index), 'success');
             },
 
@@ -5098,11 +5595,156 @@
             },
 
             downloadClip: function(clipId) {
-                utils.showToast('Downloading clip...', 'info');
+                var clip = state.clips.find(function(c) { return c.id === clipId; });
+                if (!clip) {
+                    utils.showToast('Clip not found', 'error');
+                    return;
+                }
+
+                var videoId = state.videoInput.videoData ? state.videoInput.videoData.videoId : null;
+                if (!videoId) {
+                    // Try to extract from clip thumbnail URL
+                    var match = clip.thumbnail.match(/\/vi\/([^\/]+)\//);
+                    if (match) {
+                        videoId = match[1];
+                    }
+                }
+
+                var startTime = Math.floor(clip.startTime || 0);
+                var endTime = Math.floor(clip.endTime || (startTime + clip.duration));
+
+                // Store current download info for modal
+                state.downloadModal = {
+                    clipId: clipId,
+                    clip: clip,
+                    videoId: videoId,
+                    startTime: startTime,
+                    endTime: endTime,
+                    quality: '720p'
+                };
+
+                var modalHtml = '<div class="download-modal" onclick="app.closeDownloadModal(event)">';
+                modalHtml += '<div class="download-modal-content" onclick="event.stopPropagation()">';
+
+                // Header
+                modalHtml += '<div class="download-modal-header">';
+                modalHtml += '<h3>Download Clip</h3>';
+                modalHtml += '<button class="video-preview-close" onclick="app.closeDownloadModal()">×</button>';
+                modalHtml += '</div>';
+
+                // Body
+                modalHtml += '<div class="download-modal-body">';
+
+                // Quality options
+                modalHtml += '<p style="color: rgba(255,255,255,0.7); margin-bottom: 1rem;">Select video quality:</p>';
+                modalHtml += '<div class="download-quality-options">';
+                modalHtml += '<div class="quality-option selected" onclick="app.selectDownloadQuality(\'720p\')" id="quality-720p">';
+                modalHtml += '<span class="quality-option-label">720p</span>';
+                modalHtml += '<span class="quality-option-size">HD • ~' + Math.round(clip.duration * 1.5) + ' MB</span>';
+                modalHtml += '</div>';
+                modalHtml += '<div class="quality-option" onclick="app.selectDownloadQuality(\'1080p\')" id="quality-1080p">';
+                modalHtml += '<span class="quality-option-label">1080p</span>';
+                modalHtml += '<span class="quality-option-size">Full HD • ~' + Math.round(clip.duration * 3) + ' MB</span>';
+                modalHtml += '</div>';
+                modalHtml += '</div>';
+
+                // Coming soon notice
+                modalHtml += '<div class="download-coming-soon">';
+                modalHtml += '<div class="download-coming-soon-title">🚧 Video Processing Coming Soon</div>';
+                modalHtml += '<div class="download-coming-soon-text">';
+                modalHtml += 'Direct MP4 clip download with automatic cropping to 9:16 format is being developed. ';
+                modalHtml += 'You\'ll be able to download clips with AI captions, reframing, and all your customizations applied.';
+                modalHtml += '</div>';
+                modalHtml += '</div>';
+
+                // Alternative
+                modalHtml += '<div class="download-alternative">';
+                modalHtml += '<div class="download-alternative-title">📺 For now, use YouTube</div>';
+                modalHtml += '<div class="download-coming-soon-text">';
+                modalHtml += 'Click the button below to open this clip segment directly in YouTube. ';
+                modalHtml += 'Use your preferred downloader tool to save it.';
+                modalHtml += '</div>';
+                modalHtml += '</div>';
+
+                modalHtml += '</div>'; // body end
+
+                // Actions
+                modalHtml += '<div class="download-modal-actions">';
+                modalHtml += '<button class="btn-secondary" onclick="app.closeDownloadModal()">Cancel</button>';
+                modalHtml += '<button class="btn-youtube" onclick="app.openClipInYouTube()">▶ Open in YouTube</button>';
+                modalHtml += '</div>';
+
+                modalHtml += '</div>'; // content end
+                modalHtml += '</div>'; // modal end
+
+                // Append modal to body
+                var modalContainer = document.createElement('div');
+                modalContainer.id = 'download-modal-container';
+                modalContainer.innerHTML = modalHtml;
+                document.body.appendChild(modalContainer);
             },
 
-            downloadThumbnail: function(clipId) {
-                utils.showToast('Downloading thumbnail...', 'info');
+            selectDownloadQuality: function(quality) {
+                state.downloadModal.quality = quality;
+                // Update UI
+                document.querySelectorAll('.quality-option').forEach(function(opt) {
+                    opt.classList.remove('selected');
+                });
+                var selected = document.getElementById('quality-' + quality);
+                if (selected) {
+                    selected.classList.add('selected');
+                }
+            },
+
+            closeDownloadModal: function(event) {
+                if (event && event.target !== event.currentTarget) return;
+                var container = document.getElementById('download-modal-container');
+                if (container) {
+                    container.remove();
+                }
+                state.downloadModal = null;
+            },
+
+            openClipInYouTube: function() {
+                if (!state.downloadModal) return;
+                var info = state.downloadModal;
+
+                if (!info.videoId) {
+                    utils.showToast('Video ID not found', 'error');
+                    return;
+                }
+
+                // Open YouTube at the specific timestamp
+                var youtubeUrl = 'https://www.youtube.com/watch?v=' + info.videoId + '&t=' + info.startTime;
+                window.open(youtubeUrl, '_blank');
+
+                app.closeDownloadModal();
+                utils.showToast('Opened in YouTube at ' + utils.formatDuration(info.startTime), 'success');
+            },
+
+            downloadThumbnail: function(clipId, index) {
+                var thumbnails = state.clipThumbnails[clipId];
+                if (!thumbnails || !thumbnails[index]) {
+                    utils.showToast('No thumbnail available. Click "Regenerate" to generate thumbnails.', 'info');
+                    return;
+                }
+
+                var thumbnail = thumbnails[index];
+                var url = thumbnail.previewUrl || thumbnail.url || thumbnail;
+
+                // If it's a Firebase Storage URL, download it directly
+                if (url && url.startsWith('http')) {
+                    var link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'thumbnail-' + clipId + '-' + (index + 1) + '.png';
+                    link.target = '_blank';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    utils.showToast('Downloading thumbnail...', 'success');
+                } else {
+                    utils.showToast('Thumbnail not ready for download', 'info');
+                }
             },
 
             copySEO: function(clipId) {

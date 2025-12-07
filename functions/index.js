@@ -15954,7 +15954,9 @@ RESPOND IN JSON:
 /**
  * wizardGenerateThumbnails - Generates 3 thumbnail concepts
  */
-exports.wizardGenerateThumbnails = functions.https.onCall(async (data, context) => {
+exports.wizardGenerateThumbnails = functions
+  .runWith({ timeoutSeconds: 180, memory: '1GB' })
+  .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'wizardGenerateThumbnails', 5);
 
@@ -15964,60 +15966,173 @@ exports.wizardGenerateThumbnails = functions.https.onCall(async (data, context) 
   }
 
   try {
-    const thumbnailPrompt = `Create 3 distinct thumbnail concepts for A/B testing:
-"${transcript}"
-VIDEO: ${videoTitle || 'Not provided'}
+    // Get project data for video info
+    let videoId = null;
+    let videoThumbnailUrl = null;
 
-Approaches: 1. CURIOSITY GAP 2. EMOTIONAL IMPACT 3. VALUE PROPOSITION
-
-RESPOND IN JSON:
-{
-  "thumbnails": [
-    {
-      "concept": "Name",
-      "description": "Design description",
-      "textOverlay": "SHORT TEXT (max 5 words)",
-      "colorScheme": "Colors",
-      "emotion": "Emotion to convey"
-    }
-  ]
-}`;
-
-    const aiResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: thumbnailPrompt }],
-      response_format: { type: 'json_object' },
-      max_tokens: 1500
-    });
-
-    let thumbnailData;
-    try {
-      thumbnailData = JSON.parse(aiResponse.choices[0].message.content);
-    } catch (e) {
-      thumbnailData = {
-        thumbnails: [
-          { concept: 'Option A', description: 'Clean design', textOverlay: 'WATCH THIS', colorScheme: 'Yellow/Black', emotion: 'Surprised' },
-          { concept: 'Option B', description: 'Bold text', textOverlay: 'YOU NEED THIS', colorScheme: 'Red/White', emotion: 'Urgent' },
-          { concept: 'Option C', description: 'Minimal', textOverlay: 'THE TRUTH', colorScheme: 'Blue/White', emotion: 'Serious' }
-        ]
-      };
+    if (projectId) {
+      const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+      if (projectDoc.exists) {
+        const project = projectDoc.data();
+        videoId = project.videoData?.videoId || project.videoId;
+        videoThumbnailUrl = project.videoData?.thumbnail;
+      }
     }
 
-    const processedThumbnails = (thumbnailData.thumbnails || []).map((thumb, index) => ({
-      id: `thumb_${clipId}_${index}`,
-      ...thumb,
-      previewUrl: `https://picsum.photos/seed/${clipId}${index}/640/360`
-    }));
+    // Use Gemini API key for Nano Banana Pro
+    const geminiApiKey = functions.config().gemini?.key;
+    if (!geminiApiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'Gemini API key not configured');
+    }
 
-    if (projectId && clipId) {
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const geminiModelId = 'gemini-3-pro-image-preview'; // Nano Banana Pro
+
+    // Fetch video thumbnail as reference image
+    let referenceImageBase64 = null;
+    if (videoThumbnailUrl || videoId) {
+      try {
+        const thumbnailUrl = videoThumbnailUrl || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+        const imageResponse = await axios.get(thumbnailUrl, { responseType: 'arraybuffer' });
+        referenceImageBase64 = Buffer.from(imageResponse.data).toString('base64');
+        console.log('Fetched video thumbnail as reference');
+      } catch (imgError) {
+        console.log('Could not fetch video thumbnail, generating without reference');
+      }
+    }
+
+    // Generate 3 thumbnail variations with different concepts
+    const thumbnailConcepts = [
+      {
+        name: 'Curiosity Gap',
+        prompt: `Create a YouTube thumbnail for this video clip. The clip says: "${transcript.substring(0, 200)}".
+
+DESIGN: Create a CURIOSITY GAP thumbnail - show something intriguing or partially hidden that makes viewers want to click. Use dramatic lighting with bright highlights and deep shadows. Include space on the left side for text overlay.
+
+STYLE: Bold, high contrast, professional YouTube thumbnail, 16:9 aspect ratio, 4K quality. Eye-catching colors, dramatic composition.`
+      },
+      {
+        name: 'Emotional Impact',
+        prompt: `Create a YouTube thumbnail for this video clip. The clip says: "${transcript.substring(0, 200)}".
+
+DESIGN: Create an EMOTIONAL IMPACT thumbnail - convey strong emotion and energy. Show expressive elements, vibrant colors, and dynamic composition. Leave space for bold text overlay on one side.
+
+STYLE: Energetic, vibrant colors, high saturation, professional YouTube thumbnail, 16:9 aspect ratio, 4K quality. Magazine cover quality.`
+      },
+      {
+        name: 'Value Proposition',
+        prompt: `Create a YouTube thumbnail for this video clip. The clip says: "${transcript.substring(0, 200)}".
+
+DESIGN: Create a VALUE PROPOSITION thumbnail - clearly show what viewers will learn or gain. Use clean design with visual hierarchy. Include elements that represent the main benefit or topic. Space for text overlay.
+
+STYLE: Clean, professional, trustworthy, YouTube thumbnail, 16:9 aspect ratio, 4K quality. Clear focal point, balanced composition.`
+      }
+    ];
+
+    const storage = admin.storage().bucket();
+    const timestamp = Date.now();
+    const generatedThumbnails = [];
+
+    for (let i = 0; i < thumbnailConcepts.length; i++) {
+      const concept = thumbnailConcepts[i];
+
+      try {
+        // Build content parts
+        const contentParts = [];
+
+        // Add reference image if available
+        if (referenceImageBase64) {
+          contentParts.push({
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: referenceImageBase64
+            }
+          });
+        }
+
+        // Build prompt with reference context
+        let finalPrompt = referenceImageBase64
+          ? `Using the provided video frame as style reference for color palette and visual tone, generate a YouTube thumbnail:\n\n${concept.prompt}`
+          : concept.prompt;
+
+        if (videoTitle) {
+          finalPrompt += `\n\nVideo title for context: "${videoTitle}"`;
+        }
+
+        contentParts.push({ text: finalPrompt });
+
+        // Generate image
+        const result = await ai.models.generateContent({
+          model: geminiModelId,
+          contents: [{ role: 'user', parts: contentParts }],
+          config: {
+            responseModalities: ['image', 'text']
+          }
+        });
+
+        // Extract image from response
+        const candidates = result.candidates || (result.response && result.response.candidates);
+        if (candidates && candidates.length > 0) {
+          const parts = candidates[0].content?.parts || [];
+          for (const part of parts) {
+            const inlineData = part.inlineData || part.inline_data;
+            if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
+              const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
+              const mimeType = inlineData.mimeType || 'image/png';
+              const extension = mimeType.includes('jpeg') ? 'jpg' : 'png';
+
+              // Upload to Firebase Storage
+              const fileName = `wizard-thumbnails/${uid}/${timestamp}-${clipId}-${i}.${extension}`;
+              const file = storage.file(fileName);
+
+              await file.save(Buffer.from(imageBytes, 'base64'), {
+                metadata: { contentType: mimeType },
+                public: true
+              });
+
+              const [metadata] = await file.getMetadata();
+              const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+              generatedThumbnails.push({
+                id: `thumb_${clipId}_${i}`,
+                concept: concept.name,
+                previewUrl: publicUrl,
+                storagePath: fileName,
+                generatedAt: new Date().toISOString()
+              });
+
+              console.log(`Generated thumbnail ${i + 1}/3: ${concept.name}`);
+              break; // Only need first image from response
+            }
+          }
+        }
+      } catch (genError) {
+        console.error(`Error generating thumbnail ${i + 1}:`, genError.message);
+        // Add placeholder for failed generation
+        generatedThumbnails.push({
+          id: `thumb_${clipId}_${i}`,
+          concept: concept.name,
+          previewUrl: `https://picsum.photos/seed/${clipId}${i}/640/360`,
+          error: 'Generation failed',
+          generatedAt: new Date().toISOString()
+        });
+      }
+    }
+
+    // Save to project
+    if (projectId && clipId && generatedThumbnails.length > 0) {
       await db.collection('wizardProjects').doc(projectId).update({
-        [`clipThumbnails.${clipId}`]: { thumbnails: processedThumbnails, selectedIndex: 0, generatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        [`clipThumbnails.${clipId}`]: {
+          thumbnails: generatedThumbnails,
+          selectedIndex: 0,
+          generatedAt: admin.firestore.FieldValue.serverTimestamp()
+        },
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
     }
 
-    await logUsage(uid, 'wizard_generate_thumbnails', { clipId });
-    return { success: true, thumbnails: processedThumbnails };
+    await logUsage(uid, 'wizard_generate_thumbnails', { clipId, count: generatedThumbnails.length });
+    return { success: true, thumbnails: generatedThumbnails };
 
   } catch (error) {
     console.error('Wizard generate thumbnails error:', error);
