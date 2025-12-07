@@ -1,0 +1,3091 @@
+<!-- ================================================================
+     YOUTUBE VIDEO OPTIMIZER - VIDEO-TO-SHORTS WIZARD
+     ================================================================
+
+     Structure:
+     - SECTION 1: External Dependencies (CDN)
+     - SECTION 2: Styles (CSS)
+     - SECTION 3: HTML Container
+     - SECTION 4: Scripts (JavaScript)
+
+     Wizard Steps:
+     1. Video Input - URL paste or drag/drop upload
+     2. AI Analysis - Processing with progress
+     3. Clip Selection - Grid with virality scores
+     4. Customization Studio - Captions, reframe, audio
+     5. SEO & Thumbnails - Title, description, tags, 3 thumbnails
+     6. Export & Download - Batch export options
+
+     Access: All authenticated users (with token system)
+
+     Main Dashboard URL: https://ytseo.siteuo.com/video-optimizer
+
+     Last Updated: 2024
+     ================================================================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Video-to-Shorts Wizard - YouTube Video Optimizer</title>
+
+    <!-- PWA Manifest & Theme -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"YouTube Video Optimizer","short_name":"YT Optimizer","description":"AI-powered YouTube video optimization and campaign analysis platform","start_url":"/main-dashboard.html","display":"standalone","background_color":"#0f172a","theme_color":"#7c3aed","orientation":"portrait-primary","icons":[{"src":"https://ytseo.siteuo.com/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"https://ytseo.siteuo.com/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}],"categories":["productivity","business","utilities"],"lang":"en","dir":"ltr"}'>
+    <meta name="theme-color" content="#7c3aed">
+
+    <!-- ============================================
+         SECTION 1: EXTERNAL DEPENDENCIES
+         ============================================ -->
+
+    <!-- 1.1 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 1.2 Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+
+    <!-- 1.3 PDF Generation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- ============================================
+         SECTION 2: STYLES
+         ============================================ -->
+    <style>
+        /* ------------------------------------------
+           2.1 BASE & RESET
+           ------------------------------------------ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 16px;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 1rem;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: white;
+        }
+
+        #app-root {
+            width: 100%;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+        }
+
+        /* ------------------------------------------
+           2.2 ANIMATIONS
+           ------------------------------------------ */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(236, 72, 153, 0.6); }
+        }
+
+        @keyframes borderGlow {
+            0%, 100% { border-color: rgba(236, 72, 153, 0.3); }
+            50% { border-color: rgba(236, 72, 153, 0.8); }
+        }
+
+        @keyframes progressPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        .animate-pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .animate-glow {
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        .animate-bounce {
+            animation: bounce 1s ease-in-out infinite;
+        }
+
+        /* ------------------------------------------
+           2.3 WIZARD LAYOUT
+           ------------------------------------------ */
+        .wizard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem;
+            min-height: 100vh;
+        }
+
+        .wizard-header {
+            text-align: center;
+            padding: 1.5rem 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .wizard-title {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 50%, #eab308 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .wizard-subtitle {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1rem;
+        }
+
+        /* ------------------------------------------
+           2.4 STEPPER
+           ------------------------------------------ */
+        .wizard-stepper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1.5rem 1rem;
+            margin-bottom: 2rem;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .wizard-stepper::-webkit-scrollbar {
+            display: none;
+        }
+
+        .wizard-step {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .wizard-step:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .wizard-step.active {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2) 0%, rgba(249, 115, 22, 0.2) 100%);
+            border-color: rgba(236, 72, 153, 0.5);
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.2);
+        }
+
+        .wizard-step.completed {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .wizard-step.completed .step-number {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .step-number {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .wizard-step.active .step-number {
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+        }
+
+        .step-label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .wizard-step.active .step-label {
+            color: white;
+        }
+
+        .wizard-step.completed .step-label {
+            color: #10b981;
+        }
+
+        .step-connector {
+            width: 30px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+        }
+
+        .step-connector.completed {
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+        }
+
+        @media (max-width: 900px) {
+            .wizard-step {
+                padding: 0.5rem 0.75rem;
+            }
+            .step-label {
+                display: none;
+            }
+            .step-connector {
+                width: 20px;
+            }
+        }
+
+        /* ------------------------------------------
+           2.5 WIZARD CONTENT AREA
+           ------------------------------------------ */
+        .wizard-content {
+            background: linear-gradient(145deg, rgba(30, 30, 50, 0.6) 0%, rgba(20, 20, 35, 0.8) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            min-height: 500px;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @media (max-width: 768px) {
+            .wizard-content {
+                padding: 1.25rem;
+                border-radius: 1rem;
+            }
+        }
+
+        /* ------------------------------------------
+           2.6 VIDEO DROPZONE (Step 1)
+           ------------------------------------------ */
+        .video-dropzone {
+            border: 2px dashed rgba(236, 72, 153, 0.3);
+            border-radius: 1.5rem;
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(236, 72, 153, 0.03);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .video-dropzone::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(249, 115, 22, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .video-dropzone:hover {
+            border-color: rgba(236, 72, 153, 0.6);
+            background: rgba(236, 72, 153, 0.05);
+        }
+
+        .video-dropzone:hover::before {
+            opacity: 1;
+        }
+
+        .video-dropzone.dragover {
+            border-color: #ec4899;
+            background: rgba(236, 72, 153, 0.1);
+            transform: scale(1.01);
+            animation: borderGlow 1s ease-in-out infinite;
+        }
+
+        .dropzone-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .dropzone-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.5rem;
+        }
+
+        .dropzone-subtitle {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .url-input-container {
+            display: flex;
+            gap: 0.75rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .url-input:focus {
+            border-color: rgba(236, 72, 153, 0.5);
+            box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1);
+        }
+
+        .url-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        @media (max-width: 600px) {
+            .url-input-container {
+                flex-direction: column;
+            }
+        }
+
+        /* Video Preview */
+        .video-preview-container {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .video-preview-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .video-thumbnail {
+            width: 160px;
+            height: 90px;
+            border-radius: 0.5rem;
+            object-fit: cover;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .video-details h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.25rem;
+        }
+
+        .video-details p {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Options Panel */
+        .options-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .option-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .option-checkbox:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .option-checkbox.checked {
+            background: rgba(236, 72, 153, 0.1);
+            border-color: rgba(236, 72, 153, 0.3);
+        }
+
+        .option-checkbox input {
+            width: 20px;
+            height: 20px;
+            accent-color: #ec4899;
+        }
+
+        .option-checkbox span {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* ------------------------------------------
+           2.7 PROGRESS/ANALYSIS (Step 2)
+           ------------------------------------------ */
+        .analysis-container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .analysis-video-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 1rem;
+        }
+
+        .analysis-video-info img {
+            width: 120px;
+            height: 68px;
+            border-radius: 0.5rem;
+            object-fit: cover;
+        }
+
+        .analysis-video-info .video-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            text-align: left;
+        }
+
+        .analysis-video-info .video-duration {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-align: left;
+        }
+
+        .progress-container {
+            margin-bottom: 2.5rem;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ec4899 0%, #f97316 50%, #eab308 100%);
+            background-size: 200% 100%;
+            border-radius: 6px;
+            transition: width 0.5s ease;
+            animation: gradientFlow 2s ease infinite;
+        }
+
+        .progress-percentage {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .analysis-steps {
+            text-align: left;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 1rem;
+        }
+
+        .analysis-step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.875rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .analysis-step:last-child {
+            border-bottom: none;
+        }
+
+        .analysis-step-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .analysis-step.done .analysis-step-icon {
+            background: rgba(16, 185, 129, 0.2);
+        }
+
+        .analysis-step.processing .analysis-step-icon {
+            background: rgba(236, 72, 153, 0.2);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .analysis-step.pending .analysis-step-icon {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .analysis-step-text {
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .analysis-step.done .analysis-step-text {
+            color: #10b981;
+        }
+
+        .analysis-step.processing .analysis-step-text {
+            color: white;
+            font-weight: 500;
+        }
+
+        /* ------------------------------------------
+           2.8 CLIP SELECTION GRID (Step 3)
+           ------------------------------------------ */
+        .clips-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .clips-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .clips-header-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .clip-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .clip-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .clip-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .clip-card.selected {
+            border-color: #ec4899;
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.2);
+        }
+
+        .clip-card.selected::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(249, 115, 22, 0.1) 100%);
+            pointer-events: none;
+        }
+
+        .clip-thumbnail {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .clip-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .clip-duration {
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .clip-checkbox {
+            position: absolute;
+            top: 0.5rem;
+            left: 0.5rem;
+            width: 24px;
+            height: 24px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.375rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .clip-card.selected .clip-checkbox {
+            background: #ec4899;
+            border-color: #ec4899;
+        }
+
+        .clip-info {
+            padding: 1rem;
+        }
+
+        .clip-score {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .virality-score {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .virality-score.high {
+            color: #10b981;
+        }
+
+        .virality-score.medium {
+            color: #f59e0b;
+        }
+
+        .virality-score.low {
+            color: #ef4444;
+        }
+
+        .score-bar {
+            width: 60px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .virality-score.high .score-bar-fill {
+            background: linear-gradient(90deg, #10b981, #059669);
+        }
+
+        .virality-score.medium .score-bar-fill {
+            background: linear-gradient(90deg, #f59e0b, #d97706);
+        }
+
+        .virality-score.low .score-bar-fill {
+            background: linear-gradient(90deg, #ef4444, #dc2626);
+        }
+
+        .clip-transcript {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+
+        .clip-platforms {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .platform-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.375rem;
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .platform-badge:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .platform-badge.active {
+            background: rgba(236, 72, 153, 0.2);
+            color: #ec4899;
+        }
+
+        /* Platform Legend */
+        .platform-legend {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* ------------------------------------------
+           2.9 CUSTOMIZATION STUDIO (Step 4)
+           ------------------------------------------ */
+        .customization-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .customization-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Phone Preview */
+        .phone-preview-container {
+            position: sticky;
+            top: 2rem;
+        }
+
+        .phone-frame {
+            background: #000;
+            border-radius: 2.5rem;
+            padding: 0.75rem;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            max-width: 280px;
+            margin: 0 auto;
+        }
+
+        .phone-screen {
+            background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+            border-radius: 2rem;
+            aspect-ratio: 9/16;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .phone-video-area {
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .phone-video-area img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .phone-caption-preview {
+            position: absolute;
+            bottom: 80px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            padding: 0 1rem;
+        }
+
+        .caption-text {
+            font-size: 1rem;
+            font-weight: 700;
+            line-height: 1.4;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Caption Styles */
+        .caption-karaoke .caption-text {
+            color: white;
+        }
+
+        .caption-karaoke .highlight {
+            color: #fbbf24;
+            transform: scale(1.1);
+            display: inline-block;
+        }
+
+        .caption-beasty .caption-text {
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            color: #fbbf24;
+            -webkit-text-stroke: 1px #000;
+        }
+
+        .caption-deepdiver .caption-text {
+            font-size: 0.9rem;
+            font-weight: 400;
+            text-transform: lowercase;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .caption-hormozi .caption-text {
+            font-size: 1.1rem;
+            color: white;
+        }
+
+        .caption-hormozi .highlight {
+            background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            padding: 0.125rem 0.375rem;
+            border-radius: 0.25rem;
+        }
+
+        .clip-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .clip-nav-btn {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .clip-nav-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .clip-nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .clip-counter {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Customization Panels */
+        .customization-panels {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .customization-panel {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            padding: 1.25rem;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .panel-icon {
+            font-size: 1.25rem;
+        }
+
+        .panel-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .panel-preset-label {
+            margin-left: auto;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            padding: 0.25rem 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.375rem;
+        }
+
+        /* Caption Style Cards */
+        .caption-styles-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+        }
+
+        @media (max-width: 600px) {
+            .caption-styles-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .caption-style-card {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .caption-style-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .caption-style-card.selected {
+            border-color: #ec4899;
+            background: rgba(236, 72, 153, 0.1);
+        }
+
+        .caption-style-preview {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .caption-style-name {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Reframe Layout Cards */
+        .reframe-layouts-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.75rem;
+        }
+
+        @media (max-width: 768px) {
+            .reframe-layouts-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .reframe-layout-card {
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .reframe-layout-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .reframe-layout-card.selected {
+            border-color: #ec4899;
+            background: rgba(236, 72, 153, 0.1);
+        }
+
+        .reframe-layout-icon {
+            width: 100%;
+            aspect-ratio: 9/16;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.375rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .reframe-layout-name {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Timeline Trimmer */
+        .timeline-container {
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 0.75rem;
+        }
+
+        .timeline-bar {
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .timeline-fill {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, rgba(236, 72, 153, 0.3) 0%, rgba(249, 115, 22, 0.3) 100%);
+            border-radius: 0.5rem;
+        }
+
+        .timeline-handle {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: #ec4899;
+            cursor: ew-resize;
+        }
+
+        .timeline-handle::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 24px;
+            background: #ec4899;
+            border-radius: 4px;
+        }
+
+        .timeline-times {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Audio Options */
+        .audio-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .audio-option {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.625rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .audio-option:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .audio-option.checked {
+            border-color: rgba(236, 72, 153, 0.3);
+            background: rgba(236, 72, 153, 0.05);
+        }
+
+        .audio-option input {
+            width: 18px;
+            height: 18px;
+            accent-color: #ec4899;
+        }
+
+        .audio-option-text {
+            flex: 1;
+        }
+
+        .audio-option-title {
+            font-size: 0.9rem;
+            color: white;
+            margin-bottom: 0.125rem;
+        }
+
+        .audio-option-desc {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* AI Features Bar */
+        .ai-features-bar {
+            display: flex;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.75rem;
+            overflow-x: auto;
+            margin-top: 1.5rem;
+        }
+
+        .ai-feature-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.8rem;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .ai-feature-btn:hover {
+            background: rgba(236, 72, 153, 0.1);
+            border-color: rgba(236, 72, 153, 0.3);
+            color: white;
+        }
+
+        /* ------------------------------------------
+           2.10 SEO & THUMBNAILS (Step 5)
+           ------------------------------------------ */
+        .seo-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .seo-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .seo-panel {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+
+        .seo-field {
+            margin-bottom: 1.5rem;
+        }
+
+        .seo-field:last-child {
+            margin-bottom: 0;
+        }
+
+        .seo-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.625rem;
+        }
+
+        .seo-label span {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .seo-label .char-count {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .seo-input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.625rem;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .seo-input:focus {
+            border-color: rgba(236, 72, 153, 0.5);
+            box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1);
+        }
+
+        .seo-textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .regenerate-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .regenerate-btn:hover {
+            background: rgba(236, 72, 153, 0.1);
+            border-color: rgba(236, 72, 153, 0.3);
+            color: white;
+        }
+
+        /* Tags */
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .tag {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            background: rgba(236, 72, 153, 0.1);
+            border: 1px solid rgba(236, 72, 153, 0.2);
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            color: #ec4899;
+        }
+
+        .tag-remove {
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .tag-remove:hover {
+            opacity: 1;
+        }
+
+        .add-tag-btn {
+            padding: 0.5rem 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .add-tag-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        /* Thumbnails */
+        .thumbnails-panel h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 1rem;
+        }
+
+        .thumbnails-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        @media (max-width: 600px) {
+            .thumbnails-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .thumbnail-option {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: rgba(255, 255, 255, 0.05);
+            border: 3px solid transparent;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .thumbnail-option:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .thumbnail-option.selected {
+            border-color: #ec4899;
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.3);
+        }
+
+        .thumbnail-option img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .thumbnail-label {
+            position: absolute;
+            bottom: 0.5rem;
+            left: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .thumbnail-radio {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .thumbnail-option.selected .thumbnail-radio {
+            border-color: #ec4899;
+            background: #ec4899;
+        }
+
+        .thumbnail-option.selected .thumbnail-radio::after {
+            content: '✓';
+            color: white;
+            font-size: 0.75rem;
+        }
+
+        .regenerate-thumbnails-btn {
+            margin-top: 1rem;
+            width: 100%;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.625rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .regenerate-thumbnails-btn:hover {
+            background: rgba(236, 72, 153, 0.1);
+            border-color: rgba(236, 72, 153, 0.3);
+            color: white;
+        }
+
+        /* ------------------------------------------
+           2.11 EXPORT (Step 6)
+           ------------------------------------------ */
+        .export-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .export-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .export-ready-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 9999px;
+            color: #10b981;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .export-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .export-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .export-item:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .export-item-thumbnail {
+            width: 80px;
+            height: 45px;
+            border-radius: 0.375rem;
+            object-fit: cover;
+            background: rgba(255, 255, 255, 0.05);
+            flex-shrink: 0;
+        }
+
+        .export-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .export-item-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .export-item-platforms {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .export-item-status {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: 9999px;
+            color: #10b981;
+            font-size: 0.75rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .export-item-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .export-action-btn {
+            padding: 0.5rem 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .export-action-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .export-item {
+                flex-wrap: wrap;
+            }
+            .export-item-actions {
+                width: 100%;
+                justify-content: flex-end;
+                margin-top: 0.75rem;
+            }
+        }
+
+        /* Batch Actions */
+        .batch-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+        }
+
+        .batch-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.625rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .batch-action-btn:hover {
+            background: rgba(236, 72, 153, 0.1);
+            border-color: rgba(236, 72, 153, 0.3);
+        }
+
+        .batch-action-btn.primary {
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border: none;
+        }
+
+        .batch-action-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(236, 72, 153, 0.3);
+        }
+
+        /* ------------------------------------------
+           2.12 BUTTONS
+           ------------------------------------------ */
+        .btn-primary {
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            color: white;
+            font-weight: 600;
+            padding: 0.875rem 1.5rem;
+            border-radius: 0.75rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(236, 72, 153, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-weight: 500;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Navigation Buttons */
+        .wizard-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .wizard-nav-left,
+        .wizard-nav-right {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        /* ------------------------------------------
+           2.13 GLOBAL HEADER
+           ------------------------------------------ */
+        .global-header {
+            position: fixed;
+            top: 0;
+            right: 1.5rem;
+            padding: 1rem 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            pointer-events: none;
+        }
+
+        .global-header > * {
+            pointer-events: auto;
+        }
+
+        .global-header-content {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-back-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.875rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+            text-decoration: none;
+        }
+
+        .header-back-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .header-token-display {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 0.875rem;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(249, 115, 22, 0.1) 100%);
+            border: 1px solid rgba(236, 72, 153, 0.3);
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-token-display .token-value {
+            font-weight: 700;
+            color: white;
+        }
+
+        .header-token-display .token-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.75rem;
+        }
+
+        @media (max-width: 768px) {
+            .global-header {
+                right: 1rem;
+            }
+            .header-token-display .token-label {
+                display: none;
+            }
+        }
+
+        /* ------------------------------------------
+           2.14 LOADING & MISC
+           ------------------------------------------ */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-card {
+            background: linear-gradient(145deg, rgba(30, 30, 50, 0.95) 0%, rgba(20, 20, 35, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #ec4899;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1.5rem;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            color: white;
+            font-weight: 500;
+            z-index: 2000;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .toast.success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .toast.error {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .toast.info {
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+        }
+    </style>
+
+    <!-- ============================================
+         SECTION 3: HTML CONTAINER
+         ============================================ -->
+</head>
+<body>
+    <div id="app-root"></div>
+
+    <!-- ============================================
+         SECTION 4: SCRIPTS
+         ============================================ -->
+    <script>
+    (function() {
+        'use strict';
+
+        /* ==========================================
+           4.1 FIREBASE CONFIGURATION
+           ========================================== */
+
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase SDK not loaded');
+            document.getElementById('app-root').innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">' +
+                '<div style="text-align:center;color:white;">' +
+                '<h2 style="color:#ef4444;margin-bottom:1rem;">Error Loading Page</h2>' +
+                '<p style="color:#9ca3af;">Failed to load Firebase. Please refresh the page.</p></div></div>';
+            return;
+        }
+
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyAGczY5ZEIJdTq25BpQdia3lv2I556wOZo",
+            authDomain: "ytseo-6d1b0.firebaseapp.com",
+            projectId: "ytseo-6d1b0",
+            storageBucket: "ytseo-6d1b0.firebasestorage.app",
+            messagingSenderId: "382790048044",
+            appId: "1:382790048044:web:cd427679ff72108c1f3489"
+        };
+
+        firebase.initializeApp(FIREBASE_CONFIG);
+        const auth = firebase.auth();
+        const functions = firebase.functions();
+        const db = firebase.firestore();
+
+        /* ==========================================
+           4.2 APPLICATION STATE
+           ========================================== */
+
+        const state = {
+            currentStep: 1,
+            user: null,
+            profile: null,
+            loading: false,
+
+            // Token system
+            tokens: {
+                balance: 0,
+                plan: 'free'
+            },
+
+            // Step 1: Video Input
+            videoInput: {
+                url: '',
+                videoData: null, // { title, duration, thumbnail }
+                options: {
+                    generateCaptions: true,
+                    generateThumbnails: true,
+                    seoOptimization: true,
+                    multiPlatform: true
+                }
+            },
+
+            // Step 2: Analysis
+            analysis: {
+                status: 'idle', // idle | processing | done | error
+                progress: 0,
+                currentStep: 0,
+                steps: [
+                    { name: 'Video downloaded', status: 'pending' },
+                    { name: 'Audio extracted', status: 'pending' },
+                    { name: 'Transcript generated', status: 'pending' },
+                    { name: 'Finding viral moments', status: 'pending' },
+                    { name: 'Scoring clips', status: 'pending' },
+                    { name: 'Detecting speakers', status: 'pending' }
+                ]
+            },
+
+            // Step 3: Clips
+            clips: [],
+            selectedClipIds: [],
+
+            // Step 4: Customization
+            customization: {
+                activeClipIndex: 0,
+                batchMode: false
+            },
+
+            // Clip settings (per clip)
+            clipSettings: {},
+
+            // Step 5: SEO
+            clipSEO: {},
+
+            // Step 6: Export
+            exportStatus: {}
+        };
+
+        // Mock data for testing
+        const MOCK_CLIPS = [
+            { id: 'clip_001', startTime: 120, endTime: 165, duration: 45, score: 98, transcript: 'The biggest mistake entrepreneurs make is thinking they need to have everything figured out before they start...', thumbnail: 'https://picsum.photos/seed/clip1/320/180', platforms: ['youtube', 'instagram', 'tiktok'] },
+            { id: 'clip_002', startTime: 340, endTime: 412, duration: 72, score: 95, transcript: 'When I started my first business, I had $500 in my bank account and zero connections...', thumbnail: 'https://picsum.photos/seed/clip2/320/180', platforms: ['youtube', 'tiktok'] },
+            { id: 'clip_003', startTime: 560, endTime: 618, duration: 58, score: 92, transcript: 'The secret to scaling is not working harder, it\'s building systems that work without you...', thumbnail: 'https://picsum.photos/seed/clip3/320/180', platforms: ['youtube', 'instagram', 'linkedin'] },
+            { id: 'clip_004', startTime: 780, endTime: 814, duration: 34, score: 89, transcript: 'Most people quit right before the breakthrough. That\'s why persistence is everything...', thumbnail: 'https://picsum.photos/seed/clip4/320/180', platforms: ['tiktok', 'facebook'] },
+            { id: 'clip_005', startTime: 920, endTime: 985, duration: 65, score: 87, transcript: 'I failed seven times before I built something that worked. Each failure taught me something crucial...', thumbnail: 'https://picsum.photos/seed/clip5/320/180', platforms: ['youtube', 'instagram'] },
+            { id: 'clip_006', startTime: 1100, endTime: 1142, duration: 42, score: 84, transcript: 'Your network is your net worth. The people you surround yourself with determine your success...', thumbnail: 'https://picsum.photos/seed/clip6/320/180', platforms: ['linkedin'] },
+            { id: 'clip_007', startTime: 1280, endTime: 1338, duration: 58, score: 81, transcript: 'Stop waiting for permission. Start before you\'re ready because you\'ll never feel ready...', thumbnail: 'https://picsum.photos/seed/clip7/320/180', platforms: ['youtube', 'tiktok'] },
+            { id: 'clip_008', startTime: 1450, endTime: 1498, duration: 48, score: 78, transcript: 'Revenue is vanity, profit is sanity, but cash flow is king. Remember that...', thumbnail: 'https://picsum.photos/seed/clip8/320/180', platforms: ['youtube', 'linkedin'] }
+        ];
+
+        const MOCK_SEO = {
+            'clip_001': {
+                title: 'The #1 Mistake That Kills 90% of New Businesses',
+                description: 'Most entrepreneurs fail because they make this one critical mistake in their first year. Here\'s how to avoid it...\n\n🔔 Subscribe for more business tips!\n#entrepreneur #business #startup',
+                tags: ['entrepreneur', 'business tips', 'startup', 'mistakes', 'success']
+            }
+        };
+
+        /* ==========================================
+           4.3 UTILITY FUNCTIONS
+           ========================================== */
+
+        const utils = {
+            escapeHtml: function(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            },
+
+            formatDuration: function(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return mins + ':' + (secs < 10 ? '0' : '') + secs;
+            },
+
+            formatFullDuration: function(seconds) {
+                const hours = Math.floor(seconds / 3600);
+                const mins = Math.floor((seconds % 3600) / 60);
+                const secs = seconds % 60;
+                if (hours > 0) {
+                    return hours + ':' + (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+                }
+                return mins + ':' + (secs < 10 ? '0' : '') + secs;
+            },
+
+            getScoreClass: function(score) {
+                if (score >= 80) return 'high';
+                if (score >= 50) return 'medium';
+                return 'low';
+            },
+
+            showToast: function(message, type) {
+                const toast = document.createElement('div');
+                toast.className = 'toast ' + (type || 'info');
+                toast.textContent = message;
+                document.body.appendChild(toast);
+                setTimeout(function() {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateY(10px)';
+                    setTimeout(function() { toast.remove(); }, 300);
+                }, 3000);
+            },
+
+            getPlatformIcon: function(platform) {
+                const icons = {
+                    youtube: '📺',
+                    instagram: '📸',
+                    tiktok: '🎵',
+                    linkedin: '💼',
+                    facebook: '📘',
+                    twitter: '✕'
+                };
+                return icons[platform] || '📱';
+            },
+
+            getPlatformName: function(platform) {
+                const names = {
+                    youtube: 'YouTube',
+                    instagram: 'Instagram',
+                    tiktok: 'TikTok',
+                    linkedin: 'LinkedIn',
+                    facebook: 'Facebook',
+                    twitter: 'X/Twitter'
+                };
+                return names[platform] || platform;
+            }
+        };
+
+        /* ==========================================
+           4.4 RENDER FUNCTIONS
+           ========================================== */
+
+        function render() {
+            const root = document.getElementById('app-root');
+            let html = '';
+
+            // Loading overlay
+            if (state.loading) {
+                html += renderLoading();
+            }
+
+            // Main wizard
+            html += '<div class="wizard-container">';
+            html += renderGlobalHeader();
+            html += renderWizardHeader();
+            html += renderStepper();
+            html += '<div class="wizard-content">';
+
+            switch (state.currentStep) {
+                case 1:
+                    html += renderStep1VideoInput();
+                    break;
+                case 2:
+                    html += renderStep2Analysis();
+                    break;
+                case 3:
+                    html += renderStep3ClipSelection();
+                    break;
+                case 4:
+                    html += renderStep4Customization();
+                    break;
+                case 5:
+                    html += renderStep5SEO();
+                    break;
+                case 6:
+                    html += renderStep6Export();
+                    break;
+            }
+
+            html += '</div>'; // wizard-content
+            html += '</div>'; // wizard-container
+
+            root.innerHTML = html;
+            attachEventListeners();
+        }
+
+        function renderLoading() {
+            return '<div class="loading-overlay">' +
+                '<div class="loading-card">' +
+                '<div class="spinner"></div>' +
+                '<h3 class="text-xl font-bold text-white mb-2">Processing...</h3>' +
+                '<p class="text-gray-400">AI is working its magic</p>' +
+                '</div></div>';
+        }
+
+        function renderGlobalHeader() {
+            var html = '<div class="global-header">';
+            html += '<div class="global-header-content">';
+
+            // Back to dashboard
+            html += '<a href="/video-optimizer" class="header-back-btn">';
+            html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>';
+            html += '<span>Dashboard</span>';
+            html += '</a>';
+
+            // Token display
+            html += '<div class="header-token-display">';
+            html += '<span>🪙</span>';
+            html += '<span class="token-value">' + state.tokens.balance + '</span>';
+            html += '<span class="token-label">tokens</span>';
+            html += '</div>';
+
+            html += '</div></div>';
+            return html;
+        }
+
+        function renderWizardHeader() {
+            var html = '<div class="wizard-header">';
+            html += '<h1 class="wizard-title">🎬 AI Video-to-Shorts Wizard</h1>';
+            html += '<p class="wizard-subtitle">Transform long videos into viral short-form clips with AI</p>';
+            html += '</div>';
+            return html;
+        }
+
+        function renderStepper() {
+            const steps = [
+                { num: 1, label: 'Video Input' },
+                { num: 2, label: 'AI Analysis' },
+                { num: 3, label: 'Select Clips' },
+                { num: 4, label: 'Customize' },
+                { num: 5, label: 'SEO & Thumbnails' },
+                { num: 6, label: 'Export' }
+            ];
+
+            var html = '<div class="wizard-stepper">';
+
+            steps.forEach(function(step, index) {
+                var stepClass = 'wizard-step';
+                if (step.num === state.currentStep) stepClass += ' active';
+                if (step.num < state.currentStep) stepClass += ' completed';
+
+                html += '<div class="' + stepClass + '" onclick="app.goToStep(' + step.num + ')">';
+                html += '<div class="step-number">';
+                if (step.num < state.currentStep) {
+                    html += '✓';
+                } else {
+                    html += step.num;
+                }
+                html += '</div>';
+                html += '<span class="step-label">' + step.label + '</span>';
+                html += '</div>';
+
+                if (index < steps.length - 1) {
+                    var connectorClass = step.num < state.currentStep ? 'step-connector completed' : 'step-connector';
+                    html += '<div class="' + connectorClass + '"></div>';
+                }
+            });
+
+            html += '</div>';
+            return html;
+        }
+
+        /* ==========================================
+           STEP 1: VIDEO INPUT
+           ========================================== */
+
+        function renderStep1VideoInput() {
+            var html = '';
+
+            // Dropzone
+            html += '<div class="video-dropzone" id="dropzone">';
+            html += '<div class="dropzone-icon">🎬</div>';
+            html += '<h3 class="dropzone-title">Drop a long video and get clips</h3>';
+            html += '<p class="dropzone-subtitle">Paste a YouTube URL or drag & drop a video file</p>';
+
+            // URL Input
+            html += '<div class="url-input-container">';
+            html += '<input type="text" class="url-input" id="video-url" placeholder="https://youtube.com/watch?v=..." value="' + utils.escapeHtml(state.videoInput.url) + '">';
+            html += '<button class="btn-primary" onclick="app.analyzeVideo()">Get Clips</button>';
+            html += '</div>';
+
+            html += '</div>';
+
+            // Video Preview (if URL entered)
+            if (state.videoInput.videoData) {
+                html += '<div class="video-preview-container">';
+                html += '<div class="video-preview-info">';
+                html += '<img src="' + state.videoInput.videoData.thumbnail + '" alt="Video thumbnail" class="video-thumbnail">';
+                html += '<div class="video-details">';
+                html += '<h4>' + utils.escapeHtml(state.videoInput.videoData.title) + '</h4>';
+                html += '<p>Duration: ' + utils.formatFullDuration(state.videoInput.videoData.duration) + '</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Options Panel
+            html += '<div class="options-panel">';
+
+            var options = [
+                { key: 'generateCaptions', label: 'Generate captions', icon: '💬' },
+                { key: 'generateThumbnails', label: 'Generate thumbnails (3 A/B)', icon: '🖼️' },
+                { key: 'seoOptimization', label: 'SEO optimization', icon: '🔍' },
+                { key: 'multiPlatform', label: 'Multi-platform export', icon: '📱' }
+            ];
+
+            options.forEach(function(opt) {
+                var checked = state.videoInput.options[opt.key];
+                var checkedClass = checked ? ' checked' : '';
+                html += '<label class="option-checkbox' + checkedClass + '">';
+                html += '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="app.toggleOption(\'' + opt.key + '\')">';
+                html += '<span>' + opt.icon + ' ' + opt.label + '</span>';
+                html += '</label>';
+            });
+
+            html += '</div>';
+
+            // Navigation
+            html += '<div class="wizard-nav">';
+            html += '<div class="wizard-nav-left"></div>';
+            html += '<div class="wizard-nav-right">';
+            html += '<button class="btn-primary" onclick="app.analyzeVideo()" ' + (!state.videoInput.url ? 'disabled' : '') + '>';
+            html += 'Analyze Video <span>→</span>';
+            html += '</button>';
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
+        /* ==========================================
+           STEP 2: AI ANALYSIS
+           ========================================== */
+
+        function renderStep2Analysis() {
+            var html = '<div class="analysis-container">';
+
+            // Video info
+            if (state.videoInput.videoData) {
+                html += '<div class="analysis-video-info">';
+                html += '<img src="' + state.videoInput.videoData.thumbnail + '" alt="Video">';
+                html += '<div>';
+                html += '<div class="video-title">' + utils.escapeHtml(state.videoInput.videoData.title) + '</div>';
+                html += '<div class="video-duration">' + utils.formatFullDuration(state.videoInput.videoData.duration) + '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Progress bar
+            html += '<div class="progress-container">';
+            html += '<div class="progress-bar-bg">';
+            html += '<div class="progress-bar-fill" style="width: ' + state.analysis.progress + '%"></div>';
+            html += '</div>';
+            html += '<div class="progress-percentage">' + state.analysis.progress + '%</div>';
+            html += '</div>';
+
+            // Steps list
+            html += '<div class="analysis-steps">';
+            state.analysis.steps.forEach(function(step) {
+                var stepClass = 'analysis-step ' + step.status;
+                var icon = step.status === 'done' ? '✅' : step.status === 'processing' ? '🔄' : '⏳';
+                html += '<div class="' + stepClass + '">';
+                html += '<div class="analysis-step-icon">' + icon + '</div>';
+                html += '<span class="analysis-step-text">' + step.name + '</span>';
+                html += '</div>';
+            });
+            html += '</div>';
+
+            html += '</div>';
+
+            // Navigation (hidden during processing)
+            if (state.analysis.status === 'done') {
+                html += '<div class="wizard-nav">';
+                html += '<div class="wizard-nav-left">';
+                html += '<button class="btn-secondary" onclick="app.goToStep(1)">← Back</button>';
+                html += '</div>';
+                html += '<div class="wizard-nav-right">';
+                html += '<button class="btn-primary" onclick="app.goToStep(3)">View Clips →</button>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        /* ==========================================
+           STEP 3: CLIP SELECTION
+           ========================================== */
+
+        function renderStep3ClipSelection() {
+            var html = '';
+
+            // Header
+            html += '<div class="clips-header">';
+            html += '<h2>Found ' + state.clips.length + ' Clips</h2>';
+            html += '<div class="clips-header-actions">';
+            html += '<button class="btn-secondary" onclick="app.selectAllClips()">Select All</button>';
+            html += '<button class="btn-secondary" onclick="app.deselectAllClips()">Deselect All</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Clip Grid
+            html += '<div class="clip-grid">';
+            state.clips.forEach(function(clip) {
+                var isSelected = state.selectedClipIds.indexOf(clip.id) !== -1;
+                var cardClass = isSelected ? 'clip-card selected' : 'clip-card';
+                var scoreClass = utils.getScoreClass(clip.score);
+
+                html += '<div class="' + cardClass + '" onclick="app.toggleClipSelection(\'' + clip.id + '\')">';
+
+                // Thumbnail
+                html += '<div class="clip-thumbnail">';
+                html += '<img src="' + clip.thumbnail + '" alt="Clip thumbnail">';
+                html += '<span class="clip-duration">' + utils.formatDuration(clip.duration) + '</span>';
+                html += '<div class="clip-checkbox">' + (isSelected ? '✓' : '') + '</div>';
+                html += '</div>';
+
+                // Info
+                html += '<div class="clip-info">';
+
+                // Score
+                html += '<div class="clip-score">';
+                html += '<div class="virality-score ' + scoreClass + '">';
+                html += '<span>🔥 ' + clip.score + '</span>';
+                html += '<div class="score-bar"><div class="score-bar-fill" style="width: ' + clip.score + '%"></div></div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Transcript preview
+                html += '<p class="clip-transcript">"' + utils.escapeHtml(clip.transcript) + '"</p>';
+
+                // Platforms
+                html += '<div class="clip-platforms">';
+                clip.platforms.forEach(function(platform) {
+                    html += '<span class="platform-badge active">' + utils.getPlatformIcon(platform) + '</span>';
+                });
+                html += '</div>';
+
+                html += '</div>'; // clip-info
+                html += '</div>'; // clip-card
+            });
+            html += '</div>';
+
+            // Platform Legend
+            html += '<div class="platform-legend">';
+            ['youtube', 'instagram', 'tiktok', 'linkedin', 'facebook', 'twitter'].forEach(function(platform) {
+                html += '<div class="legend-item">';
+                html += '<span>' + utils.getPlatformIcon(platform) + '</span>';
+                html += '<span>' + utils.getPlatformName(platform) + '</span>';
+                html += '</div>';
+            });
+            html += '</div>';
+
+            // Navigation
+            html += '<div class="wizard-nav">';
+            html += '<div class="wizard-nav-left">';
+            html += '<button class="btn-secondary" onclick="app.goToStep(1)">← Start Over</button>';
+            html += '</div>';
+            html += '<div class="wizard-nav-right">';
+            html += '<button class="btn-primary" onclick="app.goToStep(4)" ' + (state.selectedClipIds.length === 0 ? 'disabled' : '') + '>';
+            html += 'Customize Selected (' + state.selectedClipIds.length + ') →';
+            html += '</button>';
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
+        /* ==========================================
+           STEP 4: CUSTOMIZATION STUDIO
+           ========================================== */
+
+        function renderStep4Customization() {
+            var selectedClips = state.clips.filter(function(c) {
+                return state.selectedClipIds.indexOf(c.id) !== -1;
+            });
+            var activeClip = selectedClips[state.customization.activeClipIndex] || selectedClips[0];
+            var settings = state.clipSettings[activeClip.id] || getDefaultSettings();
+
+            var html = '<div class="customization-layout">';
+
+            // Left: Phone Preview
+            html += '<div class="phone-preview-container">';
+            html += '<div class="phone-frame">';
+            html += '<div class="phone-screen">';
+            html += '<div class="phone-video-area">';
+            html += '<img src="' + activeClip.thumbnail + '" alt="Preview">';
+            html += '</div>';
+
+            // Caption preview
+            if (settings.captionStyle !== 'none') {
+                html += '<div class="phone-caption-preview caption-' + settings.captionStyle + '">';
+                html += '<p class="caption-text">';
+                if (settings.captionStyle === 'karaoke') {
+                    html += 'The <span class="highlight">biggest</span> mistake...';
+                } else if (settings.captionStyle === 'hormozi') {
+                    html += 'The biggest <span class="highlight">mistake</span>...';
+                } else {
+                    html += 'The biggest mistake...';
+                }
+                html += '</p>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // phone-screen
+            html += '</div>'; // phone-frame
+
+            // Clip navigation
+            html += '<div class="clip-nav">';
+            html += '<button class="clip-nav-btn" onclick="app.prevClip()" ' + (state.customization.activeClipIndex === 0 ? 'disabled' : '') + '>← Prev</button>';
+            html += '<span class="clip-counter">Clip ' + (state.customization.activeClipIndex + 1) + ' of ' + selectedClips.length + '</span>';
+            html += '<button class="clip-nav-btn" onclick="app.nextClip()" ' + (state.customization.activeClipIndex >= selectedClips.length - 1 ? 'disabled' : '') + '>Next →</button>';
+            html += '</div>';
+
+            html += '</div>'; // phone-preview-container
+
+            // Right: Customization Panels
+            html += '<div class="customization-panels">';
+
+            // Captions Panel
+            html += '<div class="customization-panel">';
+            html += '<div class="panel-header">';
+            html += '<span class="panel-icon">💬</span>';
+            html += '<span class="panel-title">CAPTIONS</span>';
+            html += '<span class="panel-preset-label">Presets ▼</span>';
+            html += '</div>';
+
+            var captionStyles = [
+                { id: 'none', name: 'No captions', preview: '—' },
+                { id: 'karaoke', name: 'Karaoke', preview: '<span style="color:#fbbf24">word</span>' },
+                { id: 'beasty', name: 'Beasty', preview: '<span style="color:#fbbf24;font-weight:900;text-transform:uppercase">BOLD</span>' },
+                { id: 'deepdiver', name: 'Deep Diver', preview: '<span style="font-weight:400;font-size:0.7rem">minimal</span>' },
+                { id: 'podp', name: 'Pod P', preview: '<span style="font-weight:500">clean</span>' },
+                { id: 'hormozi', name: 'Hormozi', preview: '<span style="background:#22c55e;padding:2px 4px;border-radius:2px">high</span>' }
+            ];
+
+            html += '<div class="caption-styles-grid">';
+            captionStyles.forEach(function(style) {
+                var selectedClass = settings.captionStyle === style.id ? ' selected' : '';
+                html += '<div class="caption-style-card' + selectedClass + '" onclick="app.setCaptionStyle(\'' + style.id + '\')">';
+                html += '<div class="caption-style-preview">' + style.preview + '</div>';
+                html += '<div class="caption-style-name">' + style.name + '</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+            html += '</div>';
+
+            // Reframe Panel
+            html += '<div class="customization-panel">';
+            html += '<div class="panel-header">';
+            html += '<span class="panel-icon">🔲</span>';
+            html += '<span class="panel-title">REFRAME</span>';
+            html += '</div>';
+
+            var reframeLayouts = [
+                { id: 'auto_center', name: 'Auto-center', icon: '👤' },
+                { id: 'split_screen', name: 'Split', icon: '👥' },
+                { id: 'three_person', name: 'Three', icon: '👥👤' },
+                { id: 'gameplay', name: 'Gameplay', icon: '🎮' },
+                { id: 'broll_split', name: 'B-Roll', icon: '🎬' }
+            ];
+
+            html += '<div class="reframe-layouts-grid">';
+            reframeLayouts.forEach(function(layout) {
+                var selectedClass = settings.reframeMode === layout.id ? ' selected' : '';
+                html += '<div class="reframe-layout-card' + selectedClass + '" onclick="app.setReframeMode(\'' + layout.id + '\')">';
+                html += '<div class="reframe-layout-icon">' + layout.icon + '</div>';
+                html += '<div class="reframe-layout-name">' + layout.name + '</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+            html += '</div>';
+
+            // Timeline Panel
+            html += '<div class="customization-panel">';
+            html += '<div class="panel-header">';
+            html += '<span class="panel-icon">✂️</span>';
+            html += '<span class="panel-title">TRIM</span>';
+            html += '</div>';
+
+            html += '<div class="timeline-container">';
+            html += '<div class="timeline-bar">';
+            html += '<div class="timeline-fill" style="left: 5%; width: 90%"></div>';
+            html += '<div class="timeline-handle" style="left: 5%"></div>';
+            html += '<div class="timeline-handle" style="left: 95%"></div>';
+            html += '</div>';
+            html += '<div class="timeline-times">';
+            html += '<span>00:02</span>';
+            html += '<span>' + utils.formatDuration(activeClip.duration - 2) + '</span>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Audio Panel
+            html += '<div class="customization-panel">';
+            html += '<div class="panel-header">';
+            html += '<span class="panel-icon">🔊</span>';
+            html += '<span class="panel-title">AUDIO</span>';
+            html += '</div>';
+
+            html += '<div class="audio-options">';
+
+            var audioCheckedFiller = settings.removeFiller ? ' checked' : '';
+            html += '<label class="audio-option' + audioCheckedFiller + '">';
+            html += '<input type="checkbox" ' + (settings.removeFiller ? 'checked' : '') + ' onchange="app.toggleAudioOption(\'removeFiller\')">';
+            html += '<div class="audio-option-text">';
+            html += '<div class="audio-option-title">Remove filler words</div>';
+            html += '<div class="audio-option-desc">Removes um, uh, like, you know</div>';
+            html += '</div>';
+            html += '</label>';
+
+            var audioCheckedEnhance = settings.enhanceAudio ? ' checked' : '';
+            html += '<label class="audio-option' + audioCheckedEnhance + '">';
+            html += '<input type="checkbox" ' + (settings.enhanceAudio ? 'checked' : '') + ' onchange="app.toggleAudioOption(\'enhanceAudio\')">';
+            html += '<div class="audio-option-text">';
+            html += '<div class="audio-option-title">Enhance audio quality</div>';
+            html += '<div class="audio-option-desc">Noise reduction and normalization</div>';
+            html += '</div>';
+            html += '</label>';
+
+            html += '</div>';
+            html += '</div>';
+
+            // AI Features Bar
+            html += '<div class="ai-features-bar">';
+            html += '<button class="ai-feature-btn">✂️ AI clipping</button>';
+            html += '<button class="ai-feature-btn">💬 AI captioning</button>';
+            html += '<button class="ai-feature-btn">🔲 AI reframe</button>';
+            html += '<button class="ai-feature-btn">🎨 AI B-Roll</button>';
+            html += '<button class="ai-feature-btn">🔊 AI audio</button>';
+            html += '<button class="ai-feature-btn">🎙️ AI voice-over</button>';
+            html += '<button class="ai-feature-btn">🪝 AI hook</button>';
+            html += '</div>';
+
+            html += '</div>'; // customization-panels
+            html += '</div>'; // customization-layout
+
+            // Navigation
+            html += '<div class="wizard-nav">';
+            html += '<div class="wizard-nav-left">';
+            html += '<button class="btn-secondary" onclick="app.goToStep(3)">← Back</button>';
+            html += '</div>';
+            html += '<div class="wizard-nav-right">';
+            html += '<button class="btn-primary" onclick="app.goToStep(5)">SEO & Thumbnails →</button>';
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
+        function getDefaultSettings() {
+            return {
+                captionStyle: 'karaoke',
+                reframeMode: 'auto_center',
+                removeFiller: true,
+                enhanceAudio: true,
+                trimStart: 0,
+                trimEnd: null
+            };
+        }
+
+        /* ==========================================
+           STEP 5: SEO & THUMBNAILS
+           ========================================== */
+
+        function renderStep5SEO() {
+            var selectedClips = state.clips.filter(function(c) {
+                return state.selectedClipIds.indexOf(c.id) !== -1;
+            });
+            var activeClip = selectedClips[state.customization.activeClipIndex] || selectedClips[0];
+            var seo = state.clipSEO[activeClip.id] || MOCK_SEO['clip_001'];
+
+            var html = '';
+
+            // Clip navigation
+            html += '<div class="clips-header">';
+            html += '<h2>SEO & Thumbnails: Clip ' + (state.customization.activeClipIndex + 1) + '</h2>';
+            html += '<div class="clip-nav" style="margin-top:0">';
+            html += '<button class="clip-nav-btn" onclick="app.prevClip()" ' + (state.customization.activeClipIndex === 0 ? 'disabled' : '') + '>← Prev</button>';
+            html += '<span class="clip-counter">' + (state.customization.activeClipIndex + 1) + ' / ' + selectedClips.length + '</span>';
+            html += '<button class="clip-nav-btn" onclick="app.nextClip()" ' + (state.customization.activeClipIndex >= selectedClips.length - 1 ? 'disabled' : '') + '>Next →</button>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="seo-layout">';
+
+            // Left: SEO Fields
+            html += '<div class="seo-panel">';
+
+            // Title
+            html += '<div class="seo-field">';
+            html += '<div class="seo-label">';
+            html += '<span>TITLE (auto-generated)</span>';
+            html += '<span class="char-count">' + (seo.title ? seo.title.length : 0) + '/100</span>';
+            html += '</div>';
+            html += '<div style="display:flex;gap:0.5rem">';
+            html += '<input type="text" class="seo-input" id="seo-title" value="' + utils.escapeHtml(seo.title) + '" oninput="app.updateSEO(\'title\', this.value)">';
+            html += '<button class="regenerate-btn" onclick="app.regenerateSEO(\'title\')">🔄</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Description
+            html += '<div class="seo-field">';
+            html += '<div class="seo-label">';
+            html += '<span>DESCRIPTION</span>';
+            html += '<span class="char-count">' + (seo.description ? seo.description.length : 0) + '</span>';
+            html += '</div>';
+            html += '<textarea class="seo-input seo-textarea" id="seo-description" oninput="app.updateSEO(\'description\', this.value)">' + utils.escapeHtml(seo.description) + '</textarea>';
+            html += '</div>';
+
+            // Tags
+            html += '<div class="seo-field">';
+            html += '<div class="seo-label">';
+            html += '<span>TAGS</span>';
+            html += '</div>';
+            html += '<div class="tags-container">';
+            if (seo.tags) {
+                seo.tags.forEach(function(tag, index) {
+                    html += '<span class="tag">' + utils.escapeHtml(tag) + ' <span class="tag-remove" onclick="app.removeTag(' + index + ')">×</span></span>';
+                });
+            }
+            html += '<button class="add-tag-btn" onclick="app.addTag()">+ Add</button>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>'; // seo-panel
+
+            // Right: Thumbnails
+            html += '<div class="seo-panel thumbnails-panel">';
+            html += '<h3>THUMBNAILS (A/B Testing - 3 Options)</h3>';
+
+            html += '<div class="thumbnails-grid">';
+            for (var i = 0; i < 3; i++) {
+                var selectedClass = i === 0 ? ' selected' : '';
+                html += '<div class="thumbnail-option' + selectedClass + '" onclick="app.selectThumbnail(' + i + ')">';
+                html += '<img src="https://picsum.photos/seed/thumb' + activeClip.id + i + '/320/180" alt="Thumbnail ' + (i + 1) + '">';
+                html += '<span class="thumbnail-label">Option ' + String.fromCharCode(65 + i) + '</span>';
+                html += '<div class="thumbnail-radio"></div>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            html += '<button class="regenerate-thumbnails-btn" onclick="app.regenerateThumbnails()">🔄 Regenerate All Thumbnails</button>';
+
+            html += '</div>'; // thumbnails-panel
+
+            html += '</div>'; // seo-layout
+
+            // Navigation
+            html += '<div class="wizard-nav">';
+            html += '<div class="wizard-nav-left">';
+            html += '<button class="btn-secondary" onclick="app.goToStep(4)">← Back</button>';
+            html += '</div>';
+            html += '<div class="wizard-nav-right">';
+            html += '<button class="btn-primary" onclick="app.goToStep(6)">Export All →</button>';
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
+        /* ==========================================
+           STEP 6: EXPORT
+           ========================================== */
+
+        function renderStep6Export() {
+            var selectedClips = state.clips.filter(function(c) {
+                return state.selectedClipIds.indexOf(c.id) !== -1;
+            });
+
+            var html = '';
+
+            // Header
+            html += '<div class="export-header">';
+            html += '<h2>Export Ready: ' + selectedClips.length + ' Clips</h2>';
+            html += '<div class="export-ready-badge"><span>✅</span> All clips processed</div>';
+            html += '</div>';
+
+            // Export List
+            html += '<div class="export-list">';
+            selectedClips.forEach(function(clip, index) {
+                var seo = state.clipSEO[clip.id] || MOCK_SEO['clip_001'];
+                html += '<div class="export-item">';
+                html += '<img src="' + clip.thumbnail + '" alt="Clip" class="export-item-thumbnail">';
+                html += '<div class="export-item-info">';
+                html += '<div class="export-item-title">' + utils.escapeHtml(seo.title || 'Clip ' + (index + 1)) + '</div>';
+                html += '<div class="export-item-platforms">→ ' + clip.platforms.map(utils.getPlatformName).join(', ') + '</div>';
+                html += '</div>';
+                html += '<div class="export-item-status"><span>✅</span> Ready</div>';
+                html += '<div class="export-item-actions">';
+                html += '<button class="export-action-btn" onclick="app.downloadClip(\'' + clip.id + '\')">📥 MP4</button>';
+                html += '<button class="export-action-btn" onclick="app.downloadThumbnail(\'' + clip.id + '\')">🖼️ Thumb</button>';
+                html += '<button class="export-action-btn" onclick="app.copySEO(\'' + clip.id + '\')">📋 SEO</button>';
+                html += '</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+
+            // Batch Actions
+            html += '<div class="batch-actions">';
+            html += '<button class="batch-action-btn primary" onclick="app.downloadAllZip()">📥 Download All (ZIP)</button>';
+            html += '<button class="batch-action-btn" onclick="app.exportSEOSheet()">📋 Export SEO Sheet (CSV)</button>';
+            html += '<button class="batch-action-btn" onclick="app.saveProject()">💾 Save Project</button>';
+            html += '<button class="batch-action-btn" onclick="app.startNewProject()">🔄 Start New Project</button>';
+            html += '</div>';
+
+            // Navigation
+            html += '<div class="wizard-nav">';
+            html += '<div class="wizard-nav-left">';
+            html += '<button class="btn-secondary" onclick="app.goToStep(5)">← Back</button>';
+            html += '</div>';
+            html += '<div class="wizard-nav-right">';
+            html += '<a href="/aitools.html" class="btn-primary">Done - Go to AI Tools</a>';
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
+        /* ==========================================
+           4.5 EVENT HANDLERS
+           ========================================== */
+
+        function attachEventListeners() {
+            // Dropzone drag & drop
+            var dropzone = document.getElementById('dropzone');
+            if (dropzone) {
+                dropzone.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    dropzone.classList.add('dragover');
+                });
+                dropzone.addEventListener('dragleave', function(e) {
+                    dropzone.classList.remove('dragover');
+                });
+                dropzone.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    dropzone.classList.remove('dragover');
+                    // Handle file drop
+                    if (e.dataTransfer.files.length > 0) {
+                        utils.showToast('File upload coming soon!', 'info');
+                    }
+                });
+            }
+
+            // URL input
+            var urlInput = document.getElementById('video-url');
+            if (urlInput) {
+                urlInput.addEventListener('input', function() {
+                    state.videoInput.url = this.value;
+                });
+                urlInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        app.analyzeVideo();
+                    }
+                });
+            }
+        }
+
+        /* ==========================================
+           4.6 APPLICATION METHODS
+           ========================================== */
+
+        const app = {
+            goToStep: function(step) {
+                if (step < 1 || step > 6) return;
+                // Validate step transitions
+                if (step > state.currentStep + 1) return;
+                state.currentStep = step;
+                render();
+                window.scrollTo(0, 0);
+            },
+
+            toggleOption: function(key) {
+                state.videoInput.options[key] = !state.videoInput.options[key];
+                render();
+            },
+
+            analyzeVideo: function() {
+                var url = state.videoInput.url.trim();
+                if (!url) {
+                    utils.showToast('Please enter a video URL', 'error');
+                    return;
+                }
+
+                // Mock video data
+                state.videoInput.videoData = {
+                    title: 'How I Built a $10M Business in 2 Years',
+                    duration: 6330,
+                    thumbnail: 'https://picsum.photos/seed/mainvideo/320/180'
+                };
+
+                // Start analysis
+                state.currentStep = 2;
+                state.analysis.status = 'processing';
+                state.analysis.progress = 0;
+                render();
+
+                // Simulate progress
+                simulateAnalysis();
+            },
+
+            selectAllClips: function() {
+                state.selectedClipIds = state.clips.map(function(c) { return c.id; });
+                render();
+            },
+
+            deselectAllClips: function() {
+                state.selectedClipIds = [];
+                render();
+            },
+
+            toggleClipSelection: function(clipId) {
+                var index = state.selectedClipIds.indexOf(clipId);
+                if (index === -1) {
+                    state.selectedClipIds.push(clipId);
+                } else {
+                    state.selectedClipIds.splice(index, 1);
+                }
+                render();
+            },
+
+            prevClip: function() {
+                if (state.customization.activeClipIndex > 0) {
+                    state.customization.activeClipIndex--;
+                    render();
+                }
+            },
+
+            nextClip: function() {
+                var selectedCount = state.selectedClipIds.length;
+                if (state.customization.activeClipIndex < selectedCount - 1) {
+                    state.customization.activeClipIndex++;
+                    render();
+                }
+            },
+
+            setCaptionStyle: function(style) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].captionStyle = style;
+                render();
+            },
+
+            setReframeMode: function(mode) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].reframeMode = mode;
+                render();
+            },
+
+            toggleAudioOption: function(option) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id][option] = !state.clipSettings[activeClip.id][option];
+                render();
+            },
+
+            updateSEO: function(field, value) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSEO[activeClip.id]) {
+                    state.clipSEO[activeClip.id] = { ...MOCK_SEO['clip_001'] };
+                }
+                state.clipSEO[activeClip.id][field] = value;
+                // Don't re-render on every keystroke
+            },
+
+            regenerateSEO: function(field) {
+                utils.showToast('Regenerating ' + field + '...', 'info');
+            },
+
+            addTag: function() {
+                var tag = prompt('Enter a new tag:');
+                if (tag && tag.trim()) {
+                    var selectedClips = state.clips.filter(function(c) {
+                        return state.selectedClipIds.indexOf(c.id) !== -1;
+                    });
+                    var activeClip = selectedClips[state.customization.activeClipIndex];
+                    if (!state.clipSEO[activeClip.id]) {
+                        state.clipSEO[activeClip.id] = { ...MOCK_SEO['clip_001'] };
+                    }
+                    state.clipSEO[activeClip.id].tags.push(tag.trim());
+                    render();
+                }
+            },
+
+            removeTag: function(index) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (state.clipSEO[activeClip.id]) {
+                    state.clipSEO[activeClip.id].tags.splice(index, 1);
+                    render();
+                }
+            },
+
+            selectThumbnail: function(index) {
+                utils.showToast('Selected thumbnail ' + String.fromCharCode(65 + index), 'success');
+            },
+
+            regenerateThumbnails: function() {
+                utils.showToast('Regenerating thumbnails...', 'info');
+            },
+
+            downloadClip: function(clipId) {
+                utils.showToast('Downloading clip...', 'info');
+            },
+
+            downloadThumbnail: function(clipId) {
+                utils.showToast('Downloading thumbnail...', 'info');
+            },
+
+            copySEO: function(clipId) {
+                var seo = state.clipSEO[clipId] || MOCK_SEO['clip_001'];
+                var text = 'Title: ' + seo.title + '\n\nDescription:\n' + seo.description + '\n\nTags: ' + seo.tags.join(', ');
+                navigator.clipboard.writeText(text);
+                utils.showToast('SEO copied to clipboard!', 'success');
+            },
+
+            downloadAllZip: function() {
+                utils.showToast('Preparing ZIP download...', 'info');
+            },
+
+            exportSEOSheet: function() {
+                utils.showToast('Exporting CSV...', 'info');
+            },
+
+            saveProject: function() {
+                utils.showToast('Project saved!', 'success');
+            },
+
+            startNewProject: function() {
+                if (confirm('Start a new project? Current progress will be lost.')) {
+                    state.currentStep = 1;
+                    state.videoInput.url = '';
+                    state.videoInput.videoData = null;
+                    state.clips = [];
+                    state.selectedClipIds = [];
+                    state.clipSettings = {};
+                    state.clipSEO = {};
+                    state.analysis.status = 'idle';
+                    state.analysis.progress = 0;
+                    render();
+                }
+            }
+        };
+
+        // Make app globally accessible
+        window.app = app;
+        window.utils = utils;
+
+        /* ==========================================
+           4.7 SIMULATION HELPERS
+           ========================================== */
+
+        function simulateAnalysis() {
+            var stepIndex = 0;
+            var progressPerStep = 100 / state.analysis.steps.length;
+
+            function processNextStep() {
+                if (stepIndex >= state.analysis.steps.length) {
+                    // Analysis complete
+                    state.analysis.status = 'done';
+                    state.analysis.progress = 100;
+                    state.clips = MOCK_CLIPS;
+                    state.selectedClipIds = MOCK_CLIPS.slice(0, 5).map(function(c) { return c.id; });
+                    render();
+
+                    setTimeout(function() {
+                        state.currentStep = 3;
+                        render();
+                    }, 1000);
+                    return;
+                }
+
+                // Mark current step as processing
+                state.analysis.steps[stepIndex].status = 'processing';
+                render();
+
+                // Simulate processing time
+                setTimeout(function() {
+                    state.analysis.steps[stepIndex].status = 'done';
+                    state.analysis.progress = Math.round((stepIndex + 1) * progressPerStep);
+                    stepIndex++;
+                    render();
+
+                    setTimeout(processNextStep, 300);
+                }, 800 + Math.random() * 500);
+            }
+
+            processNextStep();
+        }
+
+        /* ==========================================
+           4.8 INITIALIZATION
+           ========================================== */
+
+        // Auth state listener
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                state.user = user;
+                state.tokens.balance = 100; // Mock balance
+                render();
+            } else {
+                // For demo purposes, allow access without auth
+                state.tokens.balance = 50;
+                render();
+            }
+        });
+
+        // Initial render
+        render();
+
+    })();
+    </script>
+</body>
+</html>
