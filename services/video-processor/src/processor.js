@@ -1,12 +1,14 @@
 /**
  * Video Processor
- * Core video processing logic using FFmpeg and yt-dlp
+ * Core video processing logic using FFmpeg and youtubei.js
  */
 
-const { spawn, execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+import { spawn, execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { Firestore } from '@google-cloud/firestore';
+import { downloadVideoSegment } from './youtube-downloader.js';
 
 /**
  * Main video processing function
@@ -82,92 +84,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir }
   }
 }
 
-/**
- * Download video segment using yt-dlp
- */
-async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDir }) {
-  const outputFile = path.join(workDir, 'source.mp4');
-  const duration = endTime - startTime;
-
-  console.log(`[${jobId}] Downloading segment: ${startTime}s to ${endTime}s (${duration}s)`);
-
-  // Use yt-dlp to download the video
-  // We download slightly more than needed to ensure we have the full segment
-  const bufferStart = Math.max(0, startTime - 2);
-  const bufferEnd = endTime + 2;
-
-  return new Promise((resolve, reject) => {
-    const args = [
-      // Format selection - use formats that work better with bot detection
-      '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
-      // Segment download
-      '--download-sections', `*${bufferStart}-${bufferEnd}`,
-      '--force-keyframes-at-cuts',
-      '-o', outputFile,
-      '--no-playlist',
-      '--no-warnings',
-      // Anti-bot detection measures - use iOS client which has fewer restrictions
-      '--extractor-args', 'youtube:player_client=ios,web',
-      '--user-agent', 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
-      '--sleep-requests', '1',
-      '--extractor-retries', '5',
-      '--retry-sleep', 'extractor:3',
-      // Additional bypass options
-      '--no-check-certificates',
-      '--geo-bypass',
-      '--ignore-errors',
-      // Merge output to mp4
-      '--merge-output-format', 'mp4'
-    ];
-
-    // Add cookies file if provided via environment variable
-    const cookiesFile = process.env.YOUTUBE_COOKIES_FILE;
-    if (cookiesFile && fs.existsSync(cookiesFile)) {
-      args.push('--cookies', cookiesFile);
-      console.log(`[${jobId}] Using cookies file for authentication`);
-    }
-
-    // Add PO Token if provided via environment variable
-    const poToken = process.env.YOUTUBE_PO_TOKEN;
-    if (poToken) {
-      args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
-      console.log(`[${jobId}] Using PO Token for authentication`);
-    }
-
-    // Add the video URL
-    args.push(`https://www.youtube.com/watch?v=${videoId}`);
-
-    console.log(`[${jobId}] yt-dlp command: yt-dlp ${args.join(' ')}`);
-
-    const ytdlpProcess = spawn('yt-dlp', args);
-
-    let stdout = '';
-    let stderr = '';
-
-    ytdlpProcess.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    ytdlpProcess.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    ytdlpProcess.on('close', (code) => {
-      if (code === 0 && fs.existsSync(outputFile)) {
-        console.log(`[${jobId}] Download completed: ${outputFile}`);
-        resolve(outputFile);
-      } else {
-        console.error(`[${jobId}] Download failed. Code: ${code}`);
-        console.error(`[${jobId}] stderr: ${stderr}`);
-        reject(new Error(`Video download failed: ${stderr || 'Unknown error'}`));
-      }
-    });
-
-    ytdlpProcess.on('error', (error) => {
-      reject(new Error(`Failed to start yt-dlp: ${error.message}`));
-    });
-  });
-}
+// downloadVideoSegment is imported from youtube-downloader.js
+// Uses youtubei.js with automatic PO token generation to bypass bot detection
 
 /**
  * Process video file with FFmpeg (crop, scale, enhance)
@@ -502,7 +420,7 @@ async function updateProgress(jobRef, progress, message) {
   await jobRef.update({
     progress,
     statusMessage: message,
-    updatedAt: require('@google-cloud/firestore').Firestore.FieldValue.serverTimestamp()
+    updatedAt: Firestore.FieldValue.serverTimestamp()
   });
 }
 
@@ -520,4 +438,4 @@ function cleanupWorkDir(workDir) {
   }
 }
 
-module.exports = { processVideo };
+export { processVideo };
