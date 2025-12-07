@@ -12,8 +12,16 @@ import { downloadVideoSegment } from './youtube-downloader.js';
 
 /**
  * Main video processing function
+ * @param {Object} params
+ * @param {string} params.jobId - The job ID
+ * @param {Object} params.jobRef - Firestore job reference
+ * @param {Object} params.job - Job data
+ * @param {Object} params.storage - Cloud Storage client
+ * @param {string} params.bucketName - Storage bucket name
+ * @param {string} params.tempDir - Temp directory path
+ * @param {Object} [params.youtubeAuth] - Optional YouTube OAuth credentials
  */
-async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir }) {
+async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, youtubeAuth }) {
   const workDir = path.join(tempDir, jobId);
 
   try {
@@ -30,7 +38,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir }
       videoId: job.videoId,
       startTime: job.startTime,
       endTime: job.endTime,
-      workDir
+      workDir,
+      youtubeAuth // Pass user's YouTube OAuth credentials if available
     });
 
     await updateProgress(jobRef, 30, 'Processing video...');

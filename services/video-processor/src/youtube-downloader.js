@@ -90,12 +90,27 @@ async function getVideoInfo(videoId) {
 
 /**
  * Download video segment using youtubei.js + FFmpeg
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {string} params.videoId - YouTube video ID
+ * @param {number} params.startTime - Start time in seconds
+ * @param {number} params.endTime - End time in seconds
+ * @param {string} params.workDir - Working directory path
+ * @param {Object} [params.youtubeAuth] - Optional YouTube OAuth credentials
+ * @param {string} [params.youtubeAuth.accessToken] - OAuth access token
  */
-async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDir }) {
+async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDir, youtubeAuth }) {
   const outputFile = path.join(workDir, 'source.mp4');
   const duration = endTime - startTime;
 
   console.log(`[${jobId}] Downloading video segment: ${startTime}s to ${endTime}s (${duration}s)`);
+
+  // Log if we have YouTube authentication
+  if (youtubeAuth?.accessToken) {
+    console.log(`[${jobId}] Using authenticated YouTube session`);
+  } else {
+    console.log(`[${jobId}] No YouTube auth - using unauthenticated mode`);
+  }
 
   try {
     // Try youtubei.js with multiple clients
@@ -213,14 +228,22 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
     console.error(`[${jobId}] youtubei.js download failed:`, error.message);
     console.log(`[${jobId}] Falling back to yt-dlp...`);
 
-    return downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile });
+    return downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
   }
 }
 
 /**
  * Fallback download using yt-dlp with TV client
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {string} params.videoId - YouTube video ID
+ * @param {number} params.startTime - Start time in seconds
+ * @param {number} params.endTime - End time in seconds
+ * @param {string} params.workDir - Working directory path
+ * @param {string} params.outputFile - Output file path
+ * @param {Object} [params.youtubeAuth] - Optional YouTube OAuth credentials
  */
-async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile }) {
+async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth }) {
   const bufferStart = Math.max(0, startTime - 2);
   const bufferEnd = endTime + 2;
 
@@ -241,15 +264,23 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
       '--no-check-certificates',
       '--geo-bypass',
       '--ignore-errors',
-      '--merge-output-format', 'mp4',
-      `https://www.youtube.com/watch?v=${videoId}`
+      '--merge-output-format', 'mp4'
     ];
 
-    // Add PO token if available from environment
-    const poToken = process.env.YOUTUBE_PO_TOKEN;
-    if (poToken) {
-      args.splice(-1, 0, '--extractor-args', `youtube:po_token=tv+${poToken}`);
+    // Add OAuth authorization header if available
+    if (youtubeAuth?.accessToken) {
+      args.push('--add-header', `Authorization: Bearer ${youtubeAuth.accessToken}`);
+      console.log(`[${jobId}] yt-dlp using OAuth authentication`);
     }
+
+    // Add PO token if available from environment (fallback for unauthenticated)
+    const poToken = process.env.YOUTUBE_PO_TOKEN;
+    if (poToken && !youtubeAuth?.accessToken) {
+      args.push('--extractor-args', `youtube:po_token=tv+${poToken}`);
+    }
+
+    // Add the video URL at the end
+    args.push(`https://www.youtube.com/watch?v=${videoId}`);
 
     console.log(`[${jobId}] yt-dlp starting with tv_simply client...`);
 

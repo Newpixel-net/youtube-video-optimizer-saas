@@ -3453,6 +3453,149 @@
             text-transform: uppercase;
         }
 
+        /* YouTube Connection Panel */
+        .youtube-connection-panel {
+            margin-bottom: 1rem;
+        }
+
+        .youtube-connection-desc {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .youtube-connection-info {
+            font-size: 0.75rem;
+            color: rgba(16, 185, 129, 0.8);
+            margin-top: 0.75rem;
+            line-height: 1.4;
+        }
+
+        .youtube-connection-error {
+            font-size: 0.8rem;
+            color: #ef4444;
+            padding: 0.75rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .youtube-connect-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .youtube-connect-btn:hover {
+            background: #cc0000;
+            transform: translateY(-1px);
+        }
+
+        .youtube-connect-btn svg {
+            flex-shrink: 0;
+        }
+
+        .youtube-connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.5rem;
+        }
+
+        .youtube-connection-status.connected {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .youtube-connection-status.loading {
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .connection-loading-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #ec4899;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .youtube-channel-thumb {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .youtube-channel-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border-radius: 50%;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+
+        .youtube-channel-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .youtube-channel-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .youtube-channel-label {
+            font-size: 0.7rem;
+            color: #10b981;
+        }
+
+        .youtube-disconnect-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 0.375rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .youtube-disconnect-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
         .quick-links {
             display: flex;
             flex-direction: column;
@@ -3689,7 +3832,15 @@
             // Phase 5: My Projects
             myProjects: [],           // List of user's saved projects
             projectsLoading: false,   // Loading state for projects list
-            projectsLoaded: false     // Whether projects have been loaded
+            projectsLoaded: false,    // Whether projects have been loaded
+
+            // YouTube OAuth Connection
+            youtubeConnection: {
+                connected: false,
+                loading: false,
+                channel: null,        // { id, title, thumbnail }
+                error: null
+            }
         };
 
         // Mock data for testing
@@ -4924,6 +5075,41 @@
             html += '</div>';
 
             html += '</div>'; // export-panel
+
+            // YouTube Connection Panel
+            html += '<div class="export-panel youtube-connection-panel">';
+            html += '<h3>🔗 YouTube Connection</h3>';
+
+            if (state.youtubeConnection.loading) {
+                html += '<div class="youtube-connection-status loading">';
+                html += '<div class="connection-loading-spinner"></div>';
+                html += '<span>Connecting to YouTube...</span>';
+                html += '</div>';
+            } else if (state.youtubeConnection.connected && state.youtubeConnection.channel) {
+                html += '<div class="youtube-connection-status connected">';
+                if (state.youtubeConnection.channel.thumbnail) {
+                    html += '<img src="' + state.youtubeConnection.channel.thumbnail + '" alt="Channel" class="youtube-channel-thumb">';
+                } else {
+                    html += '<div class="youtube-channel-icon">✓</div>';
+                }
+                html += '<div class="youtube-channel-info">';
+                html += '<div class="youtube-channel-name">' + utils.escapeHtml(state.youtubeConnection.channel.title || 'Connected') + '</div>';
+                html += '<div class="youtube-channel-label">YouTube Connected</div>';
+                html += '</div>';
+                html += '<button class="youtube-disconnect-btn" onclick="app.disconnectYouTube()" title="Disconnect">✕</button>';
+                html += '</div>';
+                html += '<p class="youtube-connection-info">Video export will use your YouTube authentication for best compatibility.</p>';
+            } else {
+                html += '<p class="youtube-connection-desc">Connect your YouTube account to enable video export. This allows us to download videos on your behalf.</p>';
+                if (state.youtubeConnection.error) {
+                    html += '<div class="youtube-connection-error">' + utils.escapeHtml(state.youtubeConnection.error) + '</div>';
+                }
+                html += '<button class="youtube-connect-btn" onclick="app.connectYouTube()">';
+                html += '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>';
+                html += ' Connect YouTube Account';
+                html += '</button>';
+            }
+            html += '</div>'; // youtube-connection-panel
 
             // Quick Links
             html += '<div class="export-panel">';
@@ -6578,6 +6764,156 @@
                 link.download = 'project-captions.srt';
                 link.click();
                 utils.showToast('Captions exported!', 'success');
+            },
+
+            // YouTube OAuth Connection Methods
+            connectYouTube: async function() {
+                if (!state.user) {
+                    utils.showToast('Please sign in first to connect YouTube', 'error');
+                    return;
+                }
+
+                state.youtubeConnection.loading = true;
+                state.youtubeConnection.error = null;
+                render();
+
+                try {
+                    var getYouTubeOAuthUrl = functions.httpsCallable('getYouTubeOAuthUrl');
+                    var result = await getYouTubeOAuthUrl({
+                        redirectUri: window.location.origin + window.location.pathname
+                    });
+
+                    if (result.data.success && result.data.authUrl) {
+                        // Store state for verification when redirected back
+                        sessionStorage.setItem('youtubeOAuthState', result.data.state);
+                        // Redirect to Google OAuth
+                        window.location.href = result.data.authUrl;
+                    } else {
+                        throw new Error('Failed to generate authorization URL');
+                    }
+                } catch (error) {
+                    console.error('YouTube connect error:', error);
+                    state.youtubeConnection.loading = false;
+                    state.youtubeConnection.error = error.message || 'Failed to connect YouTube. Please try again.';
+                    render();
+                    utils.showToast('Failed to connect YouTube', 'error');
+                }
+            },
+
+            disconnectYouTube: async function() {
+                if (!confirm('Are you sure you want to disconnect your YouTube account?')) {
+                    return;
+                }
+
+                state.youtubeConnection.loading = true;
+                render();
+
+                try {
+                    var disconnectYouTube = functions.httpsCallable('disconnectYouTube');
+                    await disconnectYouTube({});
+
+                    state.youtubeConnection.connected = false;
+                    state.youtubeConnection.channel = null;
+                    state.youtubeConnection.loading = false;
+                    render();
+                    utils.showToast('YouTube account disconnected', 'success');
+                } catch (error) {
+                    console.error('YouTube disconnect error:', error);
+                    state.youtubeConnection.loading = false;
+                    render();
+                    utils.showToast('Failed to disconnect YouTube', 'error');
+                }
+            },
+
+            checkYouTubeConnection: async function() {
+                if (!state.user) return;
+
+                try {
+                    var getYouTubeConnectionStatus = functions.httpsCallable('getYouTubeConnectionStatus');
+                    var result = await getYouTubeConnectionStatus({});
+
+                    state.youtubeConnection.connected = result.data.connected;
+                    state.youtubeConnection.channel = result.data.channel;
+
+                    if (result.data.needsRefresh) {
+                        // Token needs refresh - try to refresh
+                        try {
+                            var refreshYouTubeToken = functions.httpsCallable('refreshYouTubeToken');
+                            await refreshYouTubeToken({});
+                        } catch (refreshError) {
+                            console.log('Token refresh failed:', refreshError.message);
+                        }
+                    }
+
+                    render();
+                } catch (error) {
+                    console.error('Check YouTube connection error:', error);
+                }
+            },
+
+            handleYouTubeOAuthCallback: async function() {
+                // Check if this is an OAuth callback
+                var urlParams = new URLSearchParams(window.location.search);
+                var code = urlParams.get('code');
+                var returnedState = urlParams.get('state');
+                var error = urlParams.get('error');
+
+                if (error) {
+                    console.log('YouTube OAuth error:', error);
+                    state.youtubeConnection.error = 'Authorization was denied or cancelled.';
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    render();
+                    return;
+                }
+
+                if (!code || !returnedState) {
+                    return; // Not an OAuth callback
+                }
+
+                // Verify state matches what we stored
+                var storedState = sessionStorage.getItem('youtubeOAuthState');
+                if (storedState !== returnedState) {
+                    console.error('OAuth state mismatch');
+                    state.youtubeConnection.error = 'Security verification failed. Please try again.';
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    render();
+                    return;
+                }
+
+                // Clear stored state
+                sessionStorage.removeItem('youtubeOAuthState');
+
+                // Process the OAuth callback
+                state.youtubeConnection.loading = true;
+                render();
+
+                try {
+                    var handleYouTubeOAuthCallback = functions.httpsCallable('handleYouTubeOAuthCallback');
+                    var result = await handleYouTubeOAuthCallback({
+                        code: code,
+                        state: returnedState,
+                        redirectUri: window.location.origin + window.location.pathname
+                    });
+
+                    if (result.data.success) {
+                        state.youtubeConnection.connected = true;
+                        state.youtubeConnection.channel = result.data.channel;
+                        state.youtubeConnection.error = null;
+                        utils.showToast('YouTube account connected successfully!', 'success');
+                    } else {
+                        throw new Error(result.data.error || 'Failed to connect');
+                    }
+                } catch (error) {
+                    console.error('YouTube OAuth callback error:', error);
+                    state.youtubeConnection.error = error.message || 'Failed to complete YouTube connection.';
+                    utils.showToast('Failed to connect YouTube', 'error');
+                }
+
+                state.youtubeConnection.loading = false;
+                // Clean URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                render();
             }
         };
 
@@ -6601,6 +6937,12 @@
                 state.user = user;
                 state.tokens.balance = 100; // Mock balance
                 render();
+
+                // Check for YouTube OAuth callback
+                app.handleYouTubeOAuthCallback();
+
+                // Check YouTube connection status
+                app.checkYouTubeConnection();
             } else {
                 // For demo purposes, allow access without auth
                 state.tokens.balance = 50;
