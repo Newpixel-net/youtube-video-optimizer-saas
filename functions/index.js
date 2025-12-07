@@ -16218,7 +16218,10 @@ STYLE: Clean, professional, trustworthy, YouTube thumbnail, 16:9 aspect ratio, 4
 
         contentParts.push({ text: finalPrompt });
 
-        // Generate image
+        // Generate image - using exact same pattern as working generateThumbnailPro/generateCreativeImage
+        console.log(`[wizardGenerateThumbnails] Generating thumbnail ${i + 1}/3 with model: ${geminiModelId}`);
+        console.log(`[wizardGenerateThumbnails] Prompt length: ${finalPrompt.length}, hasReference: ${!!referenceImageBase64}`);
+
         const result = await ai.models.generateContent({
           model: geminiModelId,
           contents: [{ role: 'user', parts: contentParts }],
@@ -16227,27 +16230,41 @@ STYLE: Clean, professional, trustworthy, YouTube thumbnail, 16:9 aspect ratio, 4
           }
         });
 
-        // Extract image from response
+        // Extract image from response - handle both SDK response structures (same as working code)
         const candidates = result.candidates || (result.response && result.response.candidates);
+        console.log(`[wizardGenerateThumbnails] Got ${candidates?.length || 0} candidates`);
+
         if (candidates && candidates.length > 0) {
-          const parts = candidates[0].content?.parts || [];
+          const candidate = candidates[0];
+          const parts = candidate.content?.parts || candidate.parts || [];
+          console.log(`[wizardGenerateThumbnails] Candidate has ${parts.length} parts`);
+
           for (const part of parts) {
             const inlineData = part.inlineData || part.inline_data;
             if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
               const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
-              const mimeType = inlineData.mimeType || 'image/png';
+              const mimeType = inlineData.mimeType || inlineData.mime_type || 'image/png';
               const extension = mimeType.includes('jpeg') ? 'jpg' : 'png';
+
+              console.log(`[wizardGenerateThumbnails] Found image data, mimeType: ${mimeType}`);
 
               // Upload to Firebase Storage
               const fileName = `wizard-thumbnails/${uid}/${timestamp}-${clipId}-${i}.${extension}`;
               const file = storage.file(fileName);
 
-              await file.save(Buffer.from(imageBytes, 'base64'), {
-                metadata: { contentType: mimeType },
-                public: true
+              const buffer = Buffer.from(imageBytes, 'base64');
+              await file.save(buffer, {
+                metadata: {
+                  contentType: mimeType,
+                  metadata: {
+                    concept: concept.name,
+                    clipId: clipId,
+                    model: geminiModelId
+                  }
+                }
               });
 
-              const [metadata] = await file.getMetadata();
+              await file.makePublic();
               const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
 
               generatedThumbnails.push({
@@ -16257,6 +16274,8 @@ STYLE: Clean, professional, trustworthy, YouTube thumbnail, 16:9 aspect ratio, 4
                 storagePath: fileName,
                 generatedAt: new Date().toISOString()
               });
+
+              console.log(`[wizardGenerateThumbnails] Saved thumbnail: ${publicUrl}`);
 
               console.log(`Generated thumbnail ${i + 1}/3: ${concept.name}`);
               break; // Only need first image from response
