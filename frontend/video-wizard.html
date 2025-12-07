@@ -976,6 +976,281 @@
             object-fit: cover;
         }
 
+        /* ==========================================
+           REVOLUTIONARY REFRAME PREVIEW OVERLAY
+           Shows users exactly what will be exported
+           ========================================== */
+        .reframe-preview-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        /* Auto-center: 9:16 crop indicator */
+        .reframe-overlay-auto_center .crop-zone {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 56.25%; /* 9:16 from 16:9 = 56.25% */
+            border: 2px solid rgba(236, 72, 153, 0.8);
+            background: transparent;
+            box-shadow:
+                -100vw 0 0 rgba(0, 0, 0, 0.6),
+                100vw 0 0 rgba(0, 0, 0, 0.6);
+        }
+
+        .reframe-overlay-auto_center .crop-label {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(236, 72, 153, 0.9);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .reframe-overlay-auto_center .focus-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(34, 197, 94, 0.8);
+            border-radius: 50%;
+            animation: focusPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes focusPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.4; }
+        }
+
+        /* Split-screen: Two speakers stacked */
+        .reframe-overlay-split_screen {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .reframe-overlay-split_screen .speaker-zone {
+            flex: 1;
+            border: 2px dashed rgba(236, 72, 153, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .reframe-overlay-split_screen .speaker-zone:first-child {
+            border-bottom: 1px solid rgba(236, 72, 153, 0.8);
+            background: linear-gradient(180deg, rgba(236, 72, 153, 0.15) 0%, transparent 100%);
+        }
+
+        .reframe-overlay-split_screen .speaker-zone:last-child {
+            border-top: 1px solid rgba(236, 72, 153, 0.8);
+            background: linear-gradient(0deg, rgba(139, 92, 246, 0.15) 0%, transparent 100%);
+        }
+
+        .reframe-overlay-split_screen .speaker-label {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .reframe-overlay-split_screen .speaker-icon {
+            width: 30px;
+            height: 30px;
+            background: rgba(236, 72, 153, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 6px;
+            font-size: 1rem;
+        }
+
+        /* Three-person: Three zones */
+        .reframe-overlay-three_person {
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .reframe-overlay-three_person .zone-top {
+            grid-column: 1 / -1;
+            border: 2px dashed rgba(236, 72, 153, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, rgba(236, 72, 153, 0.15) 0%, transparent 100%);
+        }
+
+        .reframe-overlay-three_person .zone-bottom-left,
+        .reframe-overlay-three_person .zone-bottom-right {
+            border: 2px dashed rgba(139, 92, 246, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reframe-overlay-three_person .zone-bottom-left {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, transparent 100%);
+        }
+
+        .reframe-overlay-three_person .zone-bottom-right {
+            background: linear-gradient(225deg, rgba(59, 130, 246, 0.15) 0%, transparent 100%);
+        }
+
+        .reframe-overlay-three_person .zone-label {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-weight: 600;
+        }
+
+        /* Gameplay: Game area + facecam */
+        .reframe-overlay-gameplay {
+            position: relative;
+        }
+
+        .reframe-overlay-gameplay .game-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 30%;
+            border: 2px dashed rgba(34, 197, 94, 0.6);
+            background: linear-gradient(180deg, rgba(34, 197, 94, 0.1) 0%, transparent 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reframe-overlay-gameplay .game-icon {
+            font-size: 2rem;
+            opacity: 0.5;
+        }
+
+        .reframe-overlay-gameplay .facecam-zone {
+            position: absolute;
+            bottom: 5%;
+            right: 5%;
+            width: 35%;
+            height: 25%;
+            border: 3px solid rgba(236, 72, 153, 0.8);
+            border-radius: 8px;
+            background: rgba(236, 72, 153, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reframe-overlay-gameplay .facecam-label {
+            background: rgba(236, 72, 153, 0.9);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-weight: 600;
+        }
+
+        /* B-Roll: Ken Burns zoom effect */
+        .reframe-overlay-broll_split {
+            position: relative;
+        }
+
+        .reframe-overlay-broll_split .main-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 35%;
+            border: 2px dashed rgba(59, 130, 246, 0.6);
+            background: linear-gradient(180deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .reframe-overlay-broll_split .ken-burns-indicator {
+            position: absolute;
+            inset: 10%;
+            border: 1px dashed rgba(255, 255, 255, 0.3);
+            animation: kenBurnsPreview 4s ease-in-out infinite;
+        }
+
+        @keyframes kenBurnsPreview {
+            0%, 100% { transform: scale(1) translate(0, 0); }
+            50% { transform: scale(1.1) translate(5%, 5%); }
+        }
+
+        .reframe-overlay-broll_split .broll-zone {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 35%;
+            border: 2px dashed rgba(236, 72, 153, 0.6);
+            background: rgba(236, 72, 153, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reframe-overlay-broll_split .zone-label {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-weight: 600;
+        }
+
+        /* Crop position indicators */
+        .crop-position-indicator {
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .crop-position-indicator .pos-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .crop-position-indicator .pos-dot.active {
+            background: rgba(236, 72, 153, 1);
+            box-shadow: 0 0 8px rgba(236, 72, 153, 0.6);
+        }
+
+        /* Hide overlay when no reframe or auto-center with center position */
+        .reframe-overlay-none {
+            display: none;
+        }
+
         .phone-caption-preview {
             position: absolute;
             bottom: 80px;
@@ -5018,6 +5293,11 @@
                 html += '<img src="' + activeClip.thumbnail + '" alt="Preview">';
                 html += '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
             }
+
+            // REVOLUTIONARY REFRAME PREVIEW OVERLAY
+            // Shows users exactly what the exported video will look like
+            html += app.generateReframeOverlay(settings.reframeMode, settings.cropPosition || 'center');
+
             html += '</div>';
 
             // Caption preview with style-specific animations
@@ -6432,6 +6712,79 @@
                 }
                 state.clipSettings[activeClip.id].customCaptionStyle[property] = value;
                 render();
+            },
+
+            // REVOLUTIONARY REFRAME PREVIEW GENERATOR
+            // Creates visual overlay showing exactly what will be exported
+            generateReframeOverlay: function(mode, cropPosition) {
+                var html = '';
+                var pos = cropPosition || 'center';
+
+                switch (mode) {
+                    case 'auto_center':
+                        // Show 9:16 crop zone with position indicator
+                        var leftPos = pos === 'left' ? '15%' : (pos === 'right' ? '85%' : '50%');
+                        html += '<div class="reframe-preview-overlay reframe-overlay-auto_center">';
+                        html += '<div class="crop-zone" style="left:' + leftPos + '">';
+                        html += '<div class="crop-label">9:16 Export Zone</div>';
+                        html += '<div class="focus-indicator"></div>';
+                        html += '</div>';
+                        html += '<div class="crop-position-indicator">';
+                        html += '<div class="pos-dot' + (pos === 'left' ? ' active' : '') + '" title="Left"></div>';
+                        html += '<div class="pos-dot' + (pos === 'center' ? ' active' : '') + '" title="Center"></div>';
+                        html += '<div class="pos-dot' + (pos === 'right' ? ' active' : '') + '" title="Right"></div>';
+                        html += '</div>';
+                        html += '</div>';
+                        break;
+
+                    case 'split_screen':
+                        // Show two speaker zones stacked vertically
+                        html += '<div class="reframe-preview-overlay reframe-overlay-split_screen">';
+                        html += '<div class="speaker-zone">';
+                        html += '<span class="speaker-icon">👤</span>';
+                        html += '<span class="speaker-label">Speaker 1 (Left)</span>';
+                        html += '</div>';
+                        html += '<div class="speaker-zone">';
+                        html += '<span class="speaker-icon">👤</span>';
+                        html += '<span class="speaker-label">Speaker 2 (Right)</span>';
+                        html += '</div>';
+                        html += '</div>';
+                        break;
+
+                    case 'three_person':
+                        // Show three speaker zones
+                        html += '<div class="reframe-preview-overlay reframe-overlay-three_person">';
+                        html += '<div class="zone-top"><span class="zone-label">Main Speaker (Center)</span></div>';
+                        html += '<div class="zone-bottom-left"><span class="zone-label">Speaker 2</span></div>';
+                        html += '<div class="zone-bottom-right"><span class="zone-label">Speaker 3</span></div>';
+                        html += '</div>';
+                        break;
+
+                    case 'gameplay':
+                        // Show game area and facecam indicator
+                        html += '<div class="reframe-preview-overlay reframe-overlay-gameplay">';
+                        html += '<div class="game-zone"><span class="game-icon">🎮</span></div>';
+                        html += '<div class="facecam-zone"><span class="facecam-label">Facecam</span></div>';
+                        html += '</div>';
+                        break;
+
+                    case 'broll_split':
+                        // Show B-roll with Ken Burns effect indicator
+                        html += '<div class="reframe-preview-overlay reframe-overlay-broll_split">';
+                        html += '<div class="main-zone">';
+                        html += '<div class="ken-burns-indicator"></div>';
+                        html += '<span class="zone-label">Main Content + Ken Burns</span>';
+                        html += '</div>';
+                        html += '<div class="broll-zone"><span class="zone-label">Speaker / B-Roll</span></div>';
+                        html += '</div>';
+                        break;
+
+                    default:
+                        // No overlay for default/none mode
+                        html += '<div class="reframe-preview-overlay reframe-overlay-none"></div>';
+                }
+
+                return html;
             },
 
             setReframeMode: function(mode) {

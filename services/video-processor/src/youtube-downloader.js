@@ -342,12 +342,36 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
             console.log(`[${jobId}] Trimming Piped download to segment...`);
             return await trimVideoSegment({ jobId, inputFile: pipedOutput, outputFile, startTime, endTime });
           } catch (pipedError) {
-            console.error(`[${jobId}] All download methods failed`);
-            // Return a more helpful error message
-            const errorMsg = ytdlpError.message.includes('Sign in to confirm')
-              ? 'YouTube requires authentication. Please ensure your YouTube account is connected and try again. If the issue persists, the video may have restrictions.'
-              : `Video download failed after trying multiple methods (youtubei.js, yt-dlp, Cobalt, Invidious, Piped). The video may be restricted or geo-blocked.`;
-            throw new Error(errorMsg);
+            console.log(`[${jobId}] Piped failed, trying direct extraction...`);
+
+            try {
+              // Direct page parsing method
+              const directOutput = path.join(workDir, 'direct_source.mp4');
+              await downloadWithDirectExtraction({ jobId, videoId, workDir, outputFile: directOutput });
+
+              // Trim to desired segment
+              console.log(`[${jobId}] Trimming direct extraction download to segment...`);
+              return await trimVideoSegment({ jobId, inputFile: directOutput, outputFile, startTime, endTime });
+            } catch (directError) {
+              console.log(`[${jobId}] Direct extraction failed, trying alternative APIs...`);
+
+              try {
+                // Alternative download APIs (Tier-2)
+                const altOutput = path.join(workDir, 'alt_source.mp4');
+                await downloadWithAlternativeAPIs({ jobId, videoId, workDir, outputFile: altOutput });
+
+                // Trim to desired segment
+                console.log(`[${jobId}] Trimming alternative API download to segment...`);
+                return await trimVideoSegment({ jobId, inputFile: altOutput, outputFile, startTime, endTime });
+              } catch (altError) {
+                console.error(`[${jobId}] All download methods failed (7 methods tried)`);
+                // Return a more helpful error message
+                const errorMsg = ytdlpError.message.includes('Sign in to confirm')
+                  ? 'YouTube requires authentication. Please ensure your YouTube account is connected and try again. If the issue persists, the video may have restrictions.'
+                  : `Video download failed after trying 7 methods (youtubei.js, yt-dlp, Cobalt, Invidious, Piped, Direct, AltAPIs). The video may be age-restricted, private, or geo-blocked.`;
+                throw new Error(errorMsg);
+              }
+            }
           }
         }
       }
@@ -740,6 +764,249 @@ async function downloadWithPiped({ jobId, videoId, workDir, outputFile }) {
   }
 
   throw new Error('All Piped instances failed');
+}
+
+/**
+ * Tier-2 Download: SaveFrom-style extraction (direct video page parsing)
+ * Uses YouTube's own player API to extract stream URLs
+ */
+async function downloadWithDirectExtraction({ jobId, videoId, workDir, outputFile }) {
+  console.log(`[${jobId}] Trying direct extraction method...`);
+
+  const userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  ];
+
+  for (const userAgent of userAgents) {
+    try {
+      console.log(`[${jobId}] Trying with user agent: ${userAgent.substring(0, 50)}...`);
+
+      // Fetch the video page
+      const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: {
+          'User-Agent': userAgent,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive'
+        }
+      });
+
+      if (!response.ok) continue;
+
+      const html = await response.text();
+
+      // Extract player response from page
+      const playerMatch = html.match(/var ytInitialPlayerResponse\s*=\s*({.+?});/s);
+      if (!playerMatch) {
+        console.log(`[${jobId}] No player response found in page`);
+        continue;
+      }
+
+      let playerResponse;
+      try {
+        playerResponse = JSON.parse(playerMatch[1]);
+      } catch (e) {
+        console.log(`[${jobId}] Failed to parse player response`);
+        continue;
+      }
+
+      // Check if video is playable
+      const status = playerResponse.playabilityStatus?.status;
+      if (status !== 'OK') {
+        console.log(`[${jobId}] Video not playable: ${status}`);
+        continue;
+      }
+
+      // Get streaming data
+      const streamingData = playerResponse.streamingData;
+      if (!streamingData) {
+        console.log(`[${jobId}] No streaming data found`);
+        continue;
+      }
+
+      // Find best format
+      const formats = [...(streamingData.formats || []), ...(streamingData.adaptiveFormats || [])];
+
+      // Prefer combined format (video+audio) for simplicity
+      let bestFormat = formats
+        .filter(f => f.url && f.mimeType?.includes('video/mp4'))
+        .filter(f => f.height && f.height <= 1080)
+        .sort((a, b) => (b.height || 0) - (a.height || 0))[0];
+
+      if (!bestFormat) {
+        // Try adaptive formats separately
+        const videoFormat = formats
+          .filter(f => f.url && f.mimeType?.includes('video/mp4') && !f.audioQuality)
+          .filter(f => f.height && f.height <= 1080)
+          .sort((a, b) => (b.height || 0) - (a.height || 0))[0];
+
+        if (videoFormat) {
+          bestFormat = videoFormat;
+        }
+      }
+
+      if (!bestFormat || !bestFormat.url) {
+        console.log(`[${jobId}] No suitable format with URL found`);
+        continue;
+      }
+
+      console.log(`[${jobId}] Found format: ${bestFormat.qualityLabel || bestFormat.height + 'p'}`);
+
+      // Download with FFmpeg
+      return new Promise((resolve, reject) => {
+        const ffmpegArgs = [
+          '-user_agent', userAgent,
+          '-i', bestFormat.url,
+          '-c', 'copy',
+          '-y',
+          outputFile
+        ];
+
+        const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+        let stderr = '';
+
+        ffmpegProc.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        ffmpegProc.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outputFile)) {
+            console.log(`[${jobId}] Direct extraction download complete`);
+            resolve(outputFile);
+          } else {
+            reject(new Error(`Direct extraction FFmpeg failed: ${stderr.slice(-200)}`));
+          }
+        });
+
+        ffmpegProc.on('error', (error) => {
+          reject(new Error(`Direct extraction FFmpeg error: ${error.message}`));
+        });
+      });
+    } catch (error) {
+      console.log(`[${jobId}] Direct extraction attempt failed: ${error.message}`);
+    }
+  }
+
+  throw new Error('All direct extraction attempts failed');
+}
+
+/**
+ * Tier-2 Download: Using AllTube/SSYouTube style APIs
+ */
+async function downloadWithAlternativeAPIs({ jobId, videoId, workDir, outputFile }) {
+  console.log(`[${jobId}] Trying alternative download APIs...`);
+
+  // List of alternative YouTube download APIs
+  const alternativeAPIs = [
+    {
+      name: 'loader.to',
+      getUrl: async (vid) => {
+        const res = await fetch(`https://api.loader.to/youtube-dl/api?url=https://www.youtube.com/watch?v=${vid}&f=mp4`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+        return data?.downloadLink || data?.link;
+      }
+    },
+    {
+      name: 'onlinevideoconverter',
+      getUrl: async (vid) => {
+        const res = await fetch(`https://api.onlinevideoconverter.pro/api/convert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${vid}` })
+        });
+        const data = await res.json();
+        return data?.downloadUrl || data?.url;
+      }
+    },
+    {
+      name: 'yt5s',
+      getUrl: async (vid) => {
+        const res = await fetch(`https://yt5s.biz/api/ajaxSearch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `q=https://www.youtube.com/watch?v=${vid}&vt=mp4`
+        });
+        const data = await res.json();
+        if (data?.links?.mp4) {
+          const formats = Object.values(data.links.mp4);
+          const best = formats.find(f => f.q === '720p' || f.q === '1080p') || formats[0];
+          return best?.url;
+        }
+        return null;
+      }
+    }
+  ];
+
+  for (const api of alternativeAPIs) {
+    try {
+      console.log(`[${jobId}] Trying ${api.name}...`);
+      const downloadUrl = await api.getUrl(videoId);
+
+      if (!downloadUrl) {
+        console.log(`[${jobId}] ${api.name} returned no URL`);
+        continue;
+      }
+
+      console.log(`[${jobId}] ${api.name} provided download URL`);
+
+      // Download with FFmpeg
+      return new Promise((resolve, reject) => {
+        const ffmpegArgs = [
+          '-i', downloadUrl,
+          '-c', 'copy',
+          '-y',
+          outputFile
+        ];
+
+        const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+        let stderr = '';
+
+        ffmpegProc.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        ffmpegProc.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outputFile)) {
+            console.log(`[${jobId}] ${api.name} download complete`);
+            resolve(outputFile);
+          } else {
+            reject(new Error(`${api.name} FFmpeg failed: ${stderr.slice(-200)}`));
+          }
+        });
+
+        ffmpegProc.on('error', (error) => {
+          reject(new Error(`${api.name} FFmpeg error: ${error.message}`));
+        });
+      });
+    } catch (error) {
+      console.log(`[${jobId}] ${api.name} failed: ${error.message}`);
+    }
+  }
+
+  throw new Error('All alternative APIs failed');
+}
+
+/**
+ * Tier-2 Download: Google Video Cache (experimental)
+ * Sometimes YouTube videos are cached on Google's video servers
+ */
+async function downloadFromGoogleCache({ jobId, videoId, workDir, outputFile }) {
+  console.log(`[${jobId}] Trying Google video cache...`);
+
+  // Try various Google video cache patterns
+  const cachePatterns = [
+    `https://redirector.googlevideo.com/videoplayback?id=${videoId}`,
+    `https://r1---sn-n4v7sn76.googlevideo.com/videoplayback?id=${videoId}`
+  ];
+
+  // This is a fallback that usually doesn't work, but worth trying
+  console.log(`[${jobId}] Google cache method skipped (requires specific server info)`);
+  throw new Error('Google cache not available for this video');
 }
 
 /**
