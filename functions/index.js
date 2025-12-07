@@ -15797,32 +15797,22 @@ exports.wizardAnalyzeVideo = functions
       likeCount: parseInt(stats.likeCount || 0)
     };
 
-    // Try to get transcript from YouTube captions
-    let transcript = null;
-    let transcriptSegments = [];
+    // Get actual transcript using the working getVideoTranscript function
+    let transcriptData = { segments: [], fullText: '' };
     try {
-      const captionsResponse = await youtube.captions.list({
-        part: ['snippet'],
-        videoId: videoId
-      });
-
-      // If captions exist, try to fetch them
-      if (captionsResponse.data.items && captionsResponse.data.items.length > 0) {
-        // Find English captions or auto-generated ones
-        const captionTrack = captionsResponse.data.items.find(c =>
-          c.snippet.language === 'en' || c.snippet.trackKind === 'asr'
-        ) || captionsResponse.data.items[0];
-
-        if (captionTrack) {
-          console.log('Found caption track:', captionTrack.id);
-          // Note: Direct caption download requires OAuth, so we'll use alternative approach
-        }
-      }
-    } catch (captionError) {
-      console.log('Caption fetch note:', captionError.message);
+      transcriptData = await getVideoTranscript(videoId);
+      console.log(`Fetched transcript: ${transcriptData.segments.length} segments, ${transcriptData.fullText.length} chars`);
+    } catch (transcriptError) {
+      console.log('Transcript fetch note:', transcriptError.message);
     }
 
+    const transcriptSegments = transcriptData.segments;
+    const fullTranscript = transcriptData.fullText;
+
     // Enhanced clip analysis prompt with diversity requirements
+    // Include actual transcript if available (first 4000 chars to fit context)
+    const transcriptForPrompt = fullTranscript ? fullTranscript.substring(0, 4000) : '';
+
     const clipAnalysisPrompt = `You are an expert viral content analyst specializing in short-form video content. Analyze this YouTube video and identify 6-10 DISTINCT, NON-OVERLAPPING viral clip opportunities.
 
 VIDEO INFORMATION:
@@ -15832,6 +15822,11 @@ VIDEO INFORMATION:
 - Total Duration: ${Math.floor(durationSeconds / 60)} minutes ${durationSeconds % 60} seconds (${durationSeconds} total seconds)
 - Views: ${parseInt(stats.viewCount || 0).toLocaleString()}
 - Likes: ${parseInt(stats.likeCount || 0).toLocaleString()}
+${transcriptForPrompt ? `
+ACTUAL VIDEO TRANSCRIPT:
+${transcriptForPrompt}
+${fullTranscript && fullTranscript.length > 4000 ? '\n[Transcript truncated...]' : ''}
+` : ''}
 
 CRITICAL REQUIREMENTS:
 1. DIVERSITY: Each clip must focus on a DIFFERENT topic, moment, or theme - NO similar clips
@@ -15922,6 +15917,16 @@ IMPORTANT:
       analysisResult = { clips, overallPotential: 'Good', bestTopics: [], contentType: 'general' };
     }
 
+    // Helper function to get actual transcript for a time range
+    function getTranscriptForTimeRange(segments, startTime, endTime) {
+      if (!segments || segments.length === 0) return null;
+      const relevantSegments = segments.filter(seg =>
+        seg.timestamp >= startTime && seg.timestamp < endTime
+      );
+      if (relevantSegments.length === 0) return null;
+      return relevantSegments.map(s => s.text).join(' ');
+    }
+
     // Validate and process clips - ensure no overlaps and proper spread
     let processedClips = (analysisResult.clips || [])
       .filter(clip => {
@@ -15933,12 +15938,16 @@ IMPORTANT:
       .map((clip, index) => {
         const start = parseInt(clip.startTime) || 0;
         const end = parseInt(clip.endTime) || start + 45;
+        // Get actual transcript for this clip's time range
+        const actualTranscript = getTranscriptForTimeRange(transcriptSegments, start, end);
         return {
           id: `clip_${videoId}_${index}_${Date.now()}`,
           startTime: start,
           endTime: Math.min(end, durationSeconds),
           duration: Math.min(end - start, 60),
-          transcript: clip.transcript || `Clip ${index + 1}`,
+          // Use actual transcript if available, otherwise use AI-generated summary
+          transcript: actualTranscript || clip.transcript || `Clip ${index + 1}`,
+          aiSummary: clip.transcript || '', // Keep AI summary as additional context
           thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
           score: Math.min(100, Math.max(0, clip.viralityScore || 75)),
           uniqueAngle: clip.uniqueAngle || '',
@@ -15972,6 +15981,10 @@ IMPORTANT:
       videoUrl,
       videoData,
       clips: processedClips,
+      // Store transcript data for SEO generation and other features
+      transcriptSegments: transcriptSegments.slice(0, 500), // Limit to 500 segments
+      fullTranscript: fullTranscript ? fullTranscript.substring(0, 10000) : '', // First 10k chars
+      hasTranscript: transcriptSegments.length > 0,
       options: options || {},
       overallPotential: analysisResult.overallPotential,
       bestTopics: analysisResult.bestTopics || [],
@@ -16014,16 +16027,49 @@ exports.wizardGenerateClipSEO = functions.https.onCall(async (data, context) => 
   }
 
   try {
-    const seoPrompt = `Generate viral ${platform || 'YouTube Shorts'} metadata:
-"${transcript}"
-VIDEO: ${videoTitle || 'Not provided'}
+    // Fetch project data for more context
+    let videoDescription = '';
+    let channelTitle = '';
+    let bestTopics = [];
+    let contentType = '';
 
-RESPOND IN JSON:
+    if (projectId) {
+      const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+      if (projectDoc.exists) {
+        const project = projectDoc.data();
+        videoDescription = project.videoData?.description || '';
+        channelTitle = project.videoData?.channelTitle || '';
+        bestTopics = project.bestTopics || [];
+        contentType = project.contentType || '';
+      }
+    }
+
+    const seoPrompt = `Generate viral ${platform || 'YouTube Shorts'} SEO metadata for this video clip.
+
+CLIP TRANSCRIPT (what's actually said):
+"${transcript}"
+
+VIDEO CONTEXT:
+- Original Video Title: ${videoTitle || 'Not provided'}
+- Channel: ${channelTitle || 'Not provided'}
+- Content Type: ${contentType || 'general'}
+- Main Topics: ${bestTopics.length > 0 ? bestTopics.join(', ') : 'Not specified'}
+${videoDescription ? `- Video Description Preview: ${videoDescription.substring(0, 300)}...` : ''}
+
+PLATFORM: ${platform || 'YouTube Shorts'}
+
+Generate SEO that:
+1. Captures the ACTUAL content from the transcript
+2. Uses hooks and keywords that match what's spoken
+3. Targets ${platform || 'YouTube Shorts'} audience specifically
+4. Includes relevant hashtags for discoverability
+
+RESPOND IN VALID JSON:
 {
-  "title": "Catchy title (max 100 chars)",
-  "description": "Engaging description with CTA and hashtags",
-  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3"]
+  "title": "Catchy, hook-driven title based on actual content (max 100 chars)",
+  "description": "Engaging description that summarizes the clip content with CTA and 3-5 relevant hashtags",
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"],
+  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
 }`;
 
     const aiResponse = await openai.chat.completions.create({
