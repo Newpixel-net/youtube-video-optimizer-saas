@@ -1774,6 +1774,257 @@
             color: white;
         }
 
+        /* AI Modal Styles */
+        .ai-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+
+        .ai-modal {
+            background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.5rem;
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .ai-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ai-modal-header h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: white;
+            margin: 0;
+        }
+
+        .ai-modal-close {
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .ai-modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .ai-modal-content {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* B-Roll Suggestions */
+        .broll-suggestion {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .broll-number {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .broll-info {
+            flex: 1;
+        }
+
+        .broll-desc {
+            font-size: 0.95rem;
+            color: white;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .broll-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 0.5rem;
+        }
+
+        .broll-keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.375rem;
+        }
+
+        .broll-tag {
+            padding: 0.25rem 0.5rem;
+            background: rgba(236, 72, 153, 0.15);
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            color: #ec4899;
+        }
+
+        /* Hook Suggestions */
+        .hook-suggestion {
+            padding: 1.25rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.75rem;
+            margin-bottom: 0.75rem;
+            position: relative;
+        }
+
+        .hook-suggestion.recommended {
+            border-color: rgba(236, 72, 153, 0.4);
+            background: rgba(236, 72, 153, 0.08);
+        }
+
+        .hook-badge {
+            position: absolute;
+            top: -0.5rem;
+            right: 1rem;
+            padding: 0.25rem 0.75rem;
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border-radius: 1rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .hook-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.75rem;
+            line-height: 1.3;
+        }
+
+        .hook-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 1rem;
+        }
+
+        .hook-use-btn {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            border: none;
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .hook-use-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+        }
+
+        .hook-explanation {
+            padding: 1rem;
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid #3b82f6;
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 1rem;
+        }
+
+        /* Filler Analysis */
+        .filler-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .filler-stat {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.75rem;
+        }
+
+        .filler-stat .stat-value {
+            display: block;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #ec4899;
+            margin-bottom: 0.25rem;
+        }
+
+        .filler-stat .stat-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .filler-types {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .filler-type-badge {
+            padding: 0.375rem 0.75rem;
+            background: rgba(249, 115, 22, 0.15);
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            color: #f97316;
+        }
+
+        .filler-transcript {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.75rem;
+        }
+
+        .transcript-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .transcript-text {
+            font-size: 0.9rem;
+            color: white;
+            line-height: 1.6;
+        }
+
         /* ------------------------------------------
            2.10 SEO & THUMBNAILS (Step 5)
            ------------------------------------------ */
@@ -2506,6 +2757,13 @@
             // Step 5: SEO & Thumbnails
             clipSEO: {},
             clipThumbnails: {},
+
+            // Phase 4: Advanced AI Features
+            clipBRoll: {},      // AI B-Roll suggestions per clip
+            clipHooks: {},      // AI viral hooks per clip
+            clipFillers: {},    // Filler word analysis per clip
+            clipSpeakers: {},   // Speaker detection per clip
+            clipCaptions: {},   // Generated captions per clip
 
             // Step 6: Export
             exportStatus: {}
@@ -3849,7 +4107,21 @@
             },
 
             // AI feature application
-            applyAIFeature: function(feature) {
+            applyAIFeature: async function(feature) {
+                if (!state.projectId) {
+                    utils.showToast('No project loaded', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!activeClip) {
+                    utils.showToast('No clip selected', 'error');
+                    return;
+                }
+
                 var featureNames = {
                     clipping: 'AI Clipping',
                     captioning: 'AI Captioning',
@@ -3858,8 +4130,242 @@
                     audio: 'AI Audio Enhancement',
                     hook: 'AI Hook Generation'
                 };
+
                 utils.showToast('Applying ' + (featureNames[feature] || feature) + '...', 'info');
-                // In Phase 4, these will connect to actual Cloud Functions
+
+                try {
+                    var result;
+                    switch (feature) {
+                        case 'broll':
+                            var wizardGenerateBRoll = functions.httpsCallable('wizardGenerateBRoll');
+                            result = await wizardGenerateBRoll({
+                                projectId: state.projectId,
+                                clipId: activeClip.id
+                            });
+                            if (result.data.success) {
+                                state.clipBRoll = state.clipBRoll || {};
+                                state.clipBRoll[activeClip.id] = result.data.brollSuggestions;
+                                utils.showToast('Generated ' + result.data.brollSuggestions.length + ' B-Roll suggestions!', 'success');
+                                app.showBRollModal(activeClip.id);
+                            }
+                            break;
+
+                        case 'hook':
+                            var wizardGenerateHook = functions.httpsCallable('wizardGenerateHook');
+                            result = await wizardGenerateHook({
+                                projectId: state.projectId,
+                                clipId: activeClip.id,
+                                hookStyle: 'curiosity'
+                            });
+                            if (result.data.success) {
+                                state.clipHooks = state.clipHooks || {};
+                                state.clipHooks[activeClip.id] = result.data;
+                                utils.showToast('Generated ' + result.data.hooks.length + ' viral hooks!', 'success');
+                                app.showHooksModal(activeClip.id);
+                            }
+                            break;
+
+                        case 'captioning':
+                            var wizardGenerateCaptions = functions.httpsCallable('wizardGenerateAICaptions');
+                            var settings = state.clipSettings[activeClip.id] || getDefaultSettings();
+                            result = await wizardGenerateCaptions({
+                                projectId: state.projectId,
+                                clipId: activeClip.id,
+                                style: settings.captionStyle || 'karaoke'
+                            });
+                            if (result.data.success) {
+                                state.clipCaptions = state.clipCaptions || {};
+                                state.clipCaptions[activeClip.id] = result.data;
+                                utils.showToast('Generated ' + result.data.captionCount + ' word captions!', 'success');
+                            }
+                            break;
+
+                        case 'reframe':
+                            var wizardDetectSpeakers = functions.httpsCallable('wizardDetectSpeakers');
+                            result = await wizardDetectSpeakers({
+                                projectId: state.projectId,
+                                clipId: activeClip.id
+                            });
+                            if (result.data.success) {
+                                state.clipSpeakers = state.clipSpeakers || {};
+                                state.clipSpeakers[activeClip.id] = result.data;
+                                // Auto-apply recommended reframe
+                                if (result.data.recommendedReframe) {
+                                    app.setReframeMode(result.data.recommendedReframe);
+                                }
+                                utils.showToast('Detected ' + result.data.speakerCount + ' speaker(s). Reframe set to: ' + result.data.recommendedReframe, 'success');
+                            }
+                            break;
+
+                        case 'audio':
+                            var wizardRemoveFillers = functions.httpsCallable('wizardRemoveFillers');
+                            result = await wizardRemoveFillers({
+                                projectId: state.projectId,
+                                clipId: activeClip.id
+                            });
+                            if (result.data.success) {
+                                state.clipFillers = state.clipFillers || {};
+                                state.clipFillers[activeClip.id] = result.data;
+                                utils.showToast('Found ' + result.data.stats.fillersRemoved + ' filler words. ~' + result.data.stats.estimatedTimeSaved + 's saved!', 'success');
+                                app.showFillersModal(activeClip.id);
+                            }
+                            break;
+
+                        default:
+                            utils.showToast('Feature coming soon!', 'info');
+                    }
+                } catch (error) {
+                    console.error('AI feature error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to apply AI feature'), 'error');
+                }
+            },
+
+            // Show B-Roll suggestions modal
+            showBRollModal: function(clipId) {
+                var suggestions = (state.clipBRoll || {})[clipId] || [];
+                if (suggestions.length === 0) {
+                    utils.showToast('No B-Roll suggestions available', 'info');
+                    return;
+                }
+
+                var html = '<div class="ai-modal-overlay" onclick="app.closeAIModal()">';
+                html += '<div class="ai-modal" onclick="event.stopPropagation()">';
+                html += '<div class="ai-modal-header">';
+                html += '<h3>🎬 AI B-Roll Suggestions</h3>';
+                html += '<button class="ai-modal-close" onclick="app.closeAIModal()">×</button>';
+                html += '</div>';
+                html += '<div class="ai-modal-content">';
+
+                suggestions.forEach(function(s, i) {
+                    html += '<div class="broll-suggestion">';
+                    html += '<div class="broll-number">' + (i + 1) + '</div>';
+                    html += '<div class="broll-info">';
+                    html += '<div class="broll-desc">' + s.description + '</div>';
+                    html += '<div class="broll-meta">';
+                    html += '<span class="broll-duration">⏱️ ' + s.duration + 's</span>';
+                    html += '<span class="broll-placement">📍 ' + s.placement + '</span>';
+                    html += '</div>';
+                    html += '<div class="broll-keywords">' + s.keywords.map(function(k) { return '<span class="broll-tag">' + k + '</span>'; }).join('') + '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                });
+
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                var modal = document.createElement('div');
+                modal.id = 'ai-modal-container';
+                modal.innerHTML = html;
+                document.body.appendChild(modal);
+            },
+
+            // Show hooks modal
+            showHooksModal: function(clipId) {
+                var hookData = (state.clipHooks || {})[clipId];
+                if (!hookData || !hookData.hooks) {
+                    utils.showToast('No hooks available', 'info');
+                    return;
+                }
+
+                var html = '<div class="ai-modal-overlay" onclick="app.closeAIModal()">';
+                html += '<div class="ai-modal" onclick="event.stopPropagation()">';
+                html += '<div class="ai-modal-header">';
+                html += '<h3>🪝 AI Viral Hooks</h3>';
+                html += '<button class="ai-modal-close" onclick="app.closeAIModal()">×</button>';
+                html += '</div>';
+                html += '<div class="ai-modal-content">';
+
+                hookData.hooks.forEach(function(h, i) {
+                    var isRecommended = h.id === hookData.recommendedHook;
+                    html += '<div class="hook-suggestion' + (isRecommended ? ' recommended' : '') + '">';
+                    if (isRecommended) html += '<span class="hook-badge">⭐ Recommended</span>';
+                    html += '<div class="hook-text">"' + h.text + '"</div>';
+                    html += '<div class="hook-meta">';
+                    html += '<span>⏱️ ' + h.speakingDuration + 's</span>';
+                    html += '<span>💡 ' + h.emotionalTrigger + '</span>';
+                    html += '<span>🎭 ' + h.voiceDirection + '</span>';
+                    html += '</div>';
+                    html += '<button class="hook-use-btn" onclick="app.useHook(\'' + clipId + '\', ' + i + ')">Use This Hook</button>';
+                    html += '</div>';
+                });
+
+                if (hookData.explanation) {
+                    html += '<div class="hook-explanation">' + hookData.explanation + '</div>';
+                }
+
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                var modal = document.createElement('div');
+                modal.id = 'ai-modal-container';
+                modal.innerHTML = html;
+                document.body.appendChild(modal);
+            },
+
+            // Show fillers modal
+            showFillersModal: function(clipId) {
+                var fillerData = (state.clipFillers || {})[clipId];
+                if (!fillerData) {
+                    utils.showToast('No filler data available', 'info');
+                    return;
+                }
+
+                var html = '<div class="ai-modal-overlay" onclick="app.closeAIModal()">';
+                html += '<div class="ai-modal" onclick="event.stopPropagation()">';
+                html += '<div class="ai-modal-header">';
+                html += '<h3>🔊 Filler Word Analysis</h3>';
+                html += '<button class="ai-modal-close" onclick="app.closeAIModal()">×</button>';
+                html += '</div>';
+                html += '<div class="ai-modal-content">';
+
+                html += '<div class="filler-stats">';
+                html += '<div class="filler-stat"><span class="stat-value">' + fillerData.stats.fillersRemoved + '</span><span class="stat-label">Fillers Found</span></div>';
+                html += '<div class="filler-stat"><span class="stat-value">~' + fillerData.stats.estimatedTimeSaved + 's</span><span class="stat-label">Time Saved</span></div>';
+                html += '<div class="filler-stat"><span class="stat-value">' + fillerData.stats.originalWordCount + ' → ' + fillerData.stats.cleanedWordCount + '</span><span class="stat-label">Words</span></div>';
+                html += '</div>';
+
+                html += '<div class="filler-types">';
+                Object.keys(fillerData.stats.fillersByType || {}).forEach(function(type) {
+                    html += '<span class="filler-type-badge">' + type + ': ' + fillerData.stats.fillersByType[type] + '</span>';
+                });
+                html += '</div>';
+
+                html += '<div class="filler-transcript">';
+                html += '<div class="transcript-label">Cleaned Transcript:</div>';
+                html += '<div class="transcript-text">' + fillerData.cleanedTranscript + '</div>';
+                html += '</div>';
+
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                var modal = document.createElement('div');
+                modal.id = 'ai-modal-container';
+                modal.innerHTML = html;
+                document.body.appendChild(modal);
+            },
+
+            useHook: function(clipId, hookIndex) {
+                var hookData = (state.clipHooks || {})[clipId];
+                if (hookData && hookData.hooks && hookData.hooks[hookIndex]) {
+                    var hook = hookData.hooks[hookIndex];
+                    // Store selected hook
+                    if (!state.clipSettings[clipId]) {
+                        state.clipSettings[clipId] = getDefaultSettings();
+                    }
+                    state.clipSettings[clipId].selectedHook = hook;
+                    utils.showToast('Hook selected: "' + hook.text + '"', 'success');
+                    app.closeAIModal();
+                }
+            },
+
+            closeAIModal: function() {
+                var modal = document.getElementById('ai-modal-container');
+                if (modal) {
+                    modal.remove();
+                }
             },
 
             updateSEO: function(field, value) {
