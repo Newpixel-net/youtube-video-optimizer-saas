@@ -98,12 +98,23 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
 
   return new Promise((resolve, reject) => {
     const args = [
+      // Format selection
       '-f', 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best',
+      // Segment download
       '--download-sections', `*${bufferStart}-${bufferEnd}`,
       '--force-keyframes-at-cuts',
       '-o', outputFile,
       '--no-playlist',
       '--no-warnings',
+      // Anti-bot detection measures
+      '--extractor-args', 'youtube:player_client=android,web',
+      '--user-agent', 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      '--sleep-requests', '1',
+      '--extractor-retries', '3',
+      '--retry-sleep', 'extractor:5',
+      // Additional options
+      '--no-check-certificates',
+      '--prefer-free-formats',
       `https://www.youtube.com/watch?v=${videoId}`
     ];
 
