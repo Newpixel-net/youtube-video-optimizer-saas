@@ -16237,3 +16237,662 @@ exports.wizardExportProject = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', 'Failed to export project.');
   }
 });
+
+// ============================================
+// PHASE 4: ADVANCED AI FEATURES
+// ============================================
+
+/**
+ * wizardGenerateBRoll - Generates AI B-Roll suggestions for clips
+ * Uses OpenAI to analyze transcript and suggest relevant B-Roll footage
+ */
+exports.wizardGenerateBRoll = functions.runWith({ timeoutSeconds: 120 }).https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clipId } = data;
+
+  if (!projectId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
+  }
+
+  try {
+    // Verify project ownership
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const project = projectDoc.data();
+    const clip = (project.clips || []).find(c => c.id === clipId);
+
+    if (!clip) {
+      throw new functions.https.HttpsError('not-found', 'Clip not found');
+    }
+
+    // Get OpenAI API key
+    const settingsDoc = await db.collection('settings').doc('openai').get();
+    const openaiKey = settingsDoc.exists ? settingsDoc.data().apiKey : null;
+
+    if (!openaiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'OpenAI API key not configured');
+    }
+
+    // Generate B-Roll suggestions using GPT
+    const prompt = `Analyze this video clip transcript and suggest 5 B-Roll footage ideas that would enhance the visual storytelling. For each suggestion, provide:
+1. A brief description of the footage
+2. Suggested duration (2-5 seconds)
+3. When in the clip it should appear (beginning, middle, end, or specific phrase)
+4. Search keywords for stock footage
+
+Clip transcript: "${clip.transcript}"
+
+Video context: ${project.videoData?.title || 'Business/Educational content'}
+
+Respond in JSON format:
+{
+  "suggestions": [
+    {
+      "id": "broll_1",
+      "description": "Description of the B-Roll footage",
+      "duration": 3,
+      "placement": "beginning",
+      "triggerPhrase": "optional specific phrase",
+      "keywords": ["keyword1", "keyword2", "keyword3"],
+      "category": "stock" | "ai-generated" | "screen-recording"
+    }
+  ]
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 1000,
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const brollData = JSON.parse(result.choices[0].message.content);
+
+    // Add AI-generated image prompts for each suggestion
+    brollData.suggestions = brollData.suggestions.map(suggestion => ({
+      ...suggestion,
+      imagePrompt: `Professional cinematic B-Roll footage: ${suggestion.description}. High quality, 4K, smooth motion, ${suggestion.keywords.join(', ')}`
+    }));
+
+    // Save B-Roll suggestions to project
+    const clipBRoll = project.clipBRoll || {};
+    clipBRoll[clipId] = brollData.suggestions;
+
+    await db.collection('wizardProjects').doc(projectId).update({
+      clipBRoll,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      clipId,
+      brollSuggestions: brollData.suggestions
+    };
+
+  } catch (error) {
+    console.error('B-Roll generation error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate B-Roll suggestions.'));
+  }
+});
+
+/**
+ * wizardRemoveFillers - Analyzes transcript and marks filler words for removal
+ * Returns timestamps and cleaned transcript
+ */
+exports.wizardRemoveFillers = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clipId } = data;
+
+  if (!projectId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
+  }
+
+  try {
+    // Verify project ownership
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const project = projectDoc.data();
+    const clip = (project.clips || []).find(c => c.id === clipId);
+
+    if (!clip) {
+      throw new functions.https.HttpsError('not-found', 'Clip not found');
+    }
+
+    // Common filler words and phrases
+    const fillerPatterns = [
+      { pattern: /\b(um|uh|uhm|umm)\b/gi, type: 'hesitation' },
+      { pattern: /\b(like)\b(?!\s+(to|a|the|this|that|it|when|if|because))/gi, type: 'filler' },
+      { pattern: /\b(you know)\b/gi, type: 'filler' },
+      { pattern: /\b(I mean)\b/gi, type: 'filler' },
+      { pattern: /\b(basically)\b/gi, type: 'filler' },
+      { pattern: /\b(literally)\b/gi, type: 'filler' },
+      { pattern: /\b(actually)\b(?!\s+(is|was|are|were|do|did|have|has))/gi, type: 'filler' },
+      { pattern: /\b(so)\b(?=\s*,|\s*\.|\s*$)/gi, type: 'trailing' },
+      { pattern: /\b(right)\b(?=\s*,|\s*\?)/gi, type: 'tag' },
+      { pattern: /\b(kind of|sort of)\b/gi, type: 'hedge' },
+      { pattern: /\b(just)\b(?!\s+(now|then|because|in|on|at))/gi, type: 'minimizer' }
+    ];
+
+    const transcript = clip.transcript || '';
+    const fillers = [];
+    let cleanedTranscript = transcript;
+    let totalFillerDuration = 0;
+
+    // Find all filler occurrences
+    fillerPatterns.forEach(({ pattern, type }) => {
+      let match;
+      const regex = new RegExp(pattern.source, pattern.flags);
+      while ((match = regex.exec(transcript)) !== null) {
+        // Estimate timing based on word position (rough estimate)
+        const wordsBefore = transcript.substring(0, match.index).split(/\s+/).length;
+        const estimatedTime = clip.startTime + (wordsBefore * 0.4); // ~0.4s per word
+
+        fillers.push({
+          word: match[0],
+          type,
+          position: match.index,
+          estimatedTimestamp: Math.min(estimatedTime, clip.endTime),
+          duration: match[0].split(/\s+/).length * 0.3 // ~0.3s per filler word
+        });
+
+        totalFillerDuration += match[0].split(/\s+/).length * 0.3;
+      }
+    });
+
+    // Clean the transcript
+    fillerPatterns.forEach(({ pattern }) => {
+      cleanedTranscript = cleanedTranscript.replace(pattern, '').replace(/\s+/g, ' ').trim();
+    });
+
+    // Sort fillers by position
+    fillers.sort((a, b) => a.position - b.position);
+
+    // Calculate statistics
+    const stats = {
+      originalWordCount: transcript.split(/\s+/).length,
+      cleanedWordCount: cleanedTranscript.split(/\s+/).length,
+      fillersRemoved: fillers.length,
+      estimatedTimeSaved: Math.round(totalFillerDuration * 10) / 10,
+      fillersByType: fillers.reduce((acc, f) => {
+        acc[f.type] = (acc[f.type] || 0) + 1;
+        return acc;
+      }, {})
+    };
+
+    // Save to project
+    const clipFillers = project.clipFillers || {};
+    clipFillers[clipId] = {
+      fillers,
+      cleanedTranscript,
+      stats,
+      processedAt: new Date().toISOString()
+    };
+
+    await db.collection('wizardProjects').doc(projectId).update({
+      clipFillers,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      clipId,
+      originalTranscript: transcript,
+      cleanedTranscript,
+      fillers,
+      stats
+    };
+
+  } catch (error) {
+    console.error('Filler removal error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to process fillers.'));
+  }
+});
+
+/**
+ * wizardGenerateHook - Generates viral hook variations for clips
+ * Creates attention-grabbing opening lines
+ */
+exports.wizardGenerateHook = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clipId, hookStyle } = data;
+
+  if (!projectId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
+  }
+
+  try {
+    // Verify project ownership
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const project = projectDoc.data();
+    const clip = (project.clips || []).find(c => c.id === clipId);
+
+    if (!clip) {
+      throw new functions.https.HttpsError('not-found', 'Clip not found');
+    }
+
+    // Get OpenAI API key
+    const settingsDoc = await db.collection('settings').doc('openai').get();
+    const openaiKey = settingsDoc.exists ? settingsDoc.data().apiKey : null;
+
+    if (!openaiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'OpenAI API key not configured');
+    }
+
+    const styleDescriptions = {
+      curiosity: 'Create curiosity gaps that make viewers desperate to know more',
+      controversy: 'Make bold, slightly controversial statements that spark debate',
+      story: 'Start with a compelling personal story or narrative hook',
+      question: 'Ask thought-provoking questions that viewers want answered',
+      shock: 'Lead with surprising facts or statistics that stop the scroll',
+      promise: 'Make a clear value promise about what viewers will learn'
+    };
+
+    const style = hookStyle || 'curiosity';
+    const styleGuide = styleDescriptions[style] || styleDescriptions.curiosity;
+
+    const prompt = `You are a viral content expert. Generate 5 attention-grabbing hook variations for this short-form video clip.
+
+CLIP TRANSCRIPT:
+"${clip.transcript}"
+
+VIDEO CONTEXT: ${project.videoData?.title || 'Content creator video'}
+
+HOOK STYLE: ${style}
+STYLE GUIDE: ${styleGuide}
+
+Requirements:
+- Each hook should be 2-8 words (super punchy)
+- Hooks should be speakable in under 3 seconds
+- Create FOMO or curiosity
+- Match the energy and topic of the content
+- Make viewers stop scrolling immediately
+
+Respond in JSON format:
+{
+  "hooks": [
+    {
+      "id": "hook_1",
+      "text": "The hook text here",
+      "style": "${style}",
+      "speakingDuration": 2.5,
+      "emotionalTrigger": "curiosity|fear|excitement|surprise",
+      "captionOverlay": "Optional text to show on screen",
+      "voiceDirection": "excited|mysterious|urgent|casual"
+    }
+  ],
+  "recommendedHook": "hook_1",
+  "explanation": "Why this hook works best for this content"
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.8,
+        max_tokens: 800,
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const hookData = JSON.parse(result.choices[0].message.content);
+
+    // Save hooks to project
+    const clipHooks = project.clipHooks || {};
+    clipHooks[clipId] = {
+      ...hookData,
+      generatedAt: new Date().toISOString(),
+      style
+    };
+
+    await db.collection('wizardProjects').doc(projectId).update({
+      clipHooks,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      clipId,
+      ...hookData
+    };
+
+  } catch (error) {
+    console.error('Hook generation error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate hooks.'));
+  }
+});
+
+/**
+ * wizardDetectSpeakers - Analyzes video/audio to detect and label speakers
+ * Uses transcript analysis to identify speaker changes
+ */
+exports.wizardDetectSpeakers = functions.runWith({ timeoutSeconds: 120 }).https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clipId } = data;
+
+  if (!projectId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
+  }
+
+  try {
+    // Verify project ownership
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const project = projectDoc.data();
+    const clip = (project.clips || []).find(c => c.id === clipId);
+
+    if (!clip) {
+      throw new functions.https.HttpsError('not-found', 'Clip not found');
+    }
+
+    // Get OpenAI API key
+    const settingsDoc = await db.collection('settings').doc('openai').get();
+    const openaiKey = settingsDoc.exists ? settingsDoc.data().apiKey : null;
+
+    if (!openaiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'OpenAI API key not configured');
+    }
+
+    // Use GPT to analyze transcript for speaker patterns
+    const prompt = `Analyze this transcript and identify if there are multiple speakers. Look for:
+- Changes in speaking style or vocabulary
+- Question/answer patterns
+- Interview dynamics
+- Different perspectives being expressed
+
+TRANSCRIPT:
+"${clip.transcript}"
+
+VIDEO CONTEXT: ${project.videoData?.title || 'Video content'}
+
+Respond in JSON format:
+{
+  "speakerCount": 1,
+  "speakers": [
+    {
+      "id": "speaker_1",
+      "label": "Host" | "Guest" | "Interviewer" | "Speaker 1",
+      "estimatedRole": "main_speaker" | "interviewer" | "guest" | "narrator",
+      "characteristics": ["energetic", "expert", "casual"],
+      "segments": [
+        {
+          "text": "Part of transcript spoken by this speaker",
+          "estimatedStart": 0,
+          "estimatedEnd": 15
+        }
+      ]
+    }
+  ],
+  "isSingleSpeaker": true,
+  "isInterview": false,
+  "isPodcast": false,
+  "confidence": 0.85,
+  "analysis": "Brief explanation of the speaker detection"
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 1000,
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const speakerData = JSON.parse(result.choices[0].message.content);
+
+    // Recommend reframe mode based on speaker count
+    let recommendedReframe = 'auto_center';
+    if (speakerData.speakerCount === 2) {
+      recommendedReframe = 'split_screen';
+    } else if (speakerData.speakerCount >= 3) {
+      recommendedReframe = 'three_person';
+    }
+
+    speakerData.recommendedReframe = recommendedReframe;
+
+    // Save speaker detection to project
+    const clipSpeakers = project.clipSpeakers || {};
+    clipSpeakers[clipId] = {
+      ...speakerData,
+      detectedAt: new Date().toISOString()
+    };
+
+    await db.collection('wizardProjects').doc(projectId).update({
+      clipSpeakers,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      clipId,
+      ...speakerData
+    };
+
+  } catch (error) {
+    console.error('Speaker detection error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to detect speakers.'));
+  }
+});
+
+/**
+ * wizardApplyAIEnhancements - Batch applies AI enhancements to a clip
+ * Combines multiple AI features in one call
+ */
+exports.wizardApplyAIEnhancements = functions.runWith({ timeoutSeconds: 180, memory: '1GB' }).https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clipId, enhancements = [] } = data;
+
+  if (!projectId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
+  }
+
+  const validEnhancements = ['broll', 'fillers', 'hook', 'speakers', 'captions', 'reframe'];
+  const requestedEnhancements = enhancements.filter(e => validEnhancements.includes(e));
+
+  if (requestedEnhancements.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'At least one valid enhancement required');
+  }
+
+  try {
+    const results = {
+      success: true,
+      clipId,
+      applied: [],
+      failed: [],
+      data: {}
+    };
+
+    // Apply each enhancement
+    for (const enhancement of requestedEnhancements) {
+      try {
+        let result;
+        switch (enhancement) {
+          case 'broll':
+            result = await exports.wizardGenerateBRoll.run({ projectId, clipId }, context);
+            results.data.broll = result.brollSuggestions;
+            break;
+          case 'fillers':
+            result = await exports.wizardRemoveFillers.run({ projectId, clipId }, context);
+            results.data.fillers = result.stats;
+            break;
+          case 'hook':
+            result = await exports.wizardGenerateHook.run({ projectId, clipId }, context);
+            results.data.hooks = result.hooks;
+            break;
+          case 'speakers':
+            result = await exports.wizardDetectSpeakers.run({ projectId, clipId }, context);
+            results.data.speakers = result.speakers;
+            break;
+        }
+        results.applied.push(enhancement);
+      } catch (err) {
+        console.error(`Enhancement ${enhancement} failed:`, err);
+        results.failed.push({ enhancement, error: err.message });
+      }
+    }
+
+    return results;
+
+  } catch (error) {
+    console.error('AI enhancements error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to apply AI enhancements.'));
+  }
+});
+
+/**
+ * wizardGenerateAICaptions - Generates styled captions with timing
+ * Creates word-by-word captions with animation cues
+ */
+exports.wizardGenerateAICaptions = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clipId, style = 'karaoke' } = data;
+
+  if (!projectId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
+  }
+
+  try {
+    // Verify project ownership
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists || projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    const project = projectDoc.data();
+    const clip = (project.clips || []).find(c => c.id === clipId);
+
+    if (!clip) {
+      throw new functions.https.HttpsError('not-found', 'Clip not found');
+    }
+
+    // Parse transcript into words with estimated timing
+    const words = (clip.transcript || '').split(/\s+/).filter(w => w.length > 0);
+    const clipDuration = clip.duration || (clip.endTime - clip.startTime);
+    const avgWordDuration = clipDuration / words.length;
+
+    const captionStyles = {
+      karaoke: { highlightColor: '#FBBF24', animation: 'scale', wordsPerGroup: 3 },
+      beasty: { highlightColor: '#FBBF24', animation: 'pop', wordsPerGroup: 2, uppercase: true },
+      hormozi: { highlightColor: '#22C55E', animation: 'highlight', wordsPerGroup: 4 },
+      minimal: { highlightColor: '#FFFFFF', animation: 'fade', wordsPerGroup: 5 },
+      ali: { highlightColor: '#EC4899', animation: 'glow', wordsPerGroup: 3 }
+    };
+
+    const styleConfig = captionStyles[style] || captionStyles.karaoke;
+
+    // Generate word-by-word captions with timing
+    const captions = [];
+    let currentTime = clip.startTime;
+
+    for (let i = 0; i < words.length; i++) {
+      const word = styleConfig.uppercase ? words[i].toUpperCase() : words[i];
+      const isKeyword = word.length > 5 || /[!?]/.test(word); // Simple keyword detection
+
+      captions.push({
+        word,
+        startTime: currentTime,
+        endTime: currentTime + avgWordDuration,
+        isHighlight: isKeyword,
+        animation: isKeyword ? styleConfig.animation : 'none',
+        color: isKeyword ? styleConfig.highlightColor : '#FFFFFF',
+        groupIndex: Math.floor(i / styleConfig.wordsPerGroup)
+      });
+
+      currentTime += avgWordDuration;
+    }
+
+    // Group captions for display
+    const captionGroups = [];
+    for (let i = 0; i < captions.length; i += styleConfig.wordsPerGroup) {
+      const group = captions.slice(i, i + styleConfig.wordsPerGroup);
+      captionGroups.push({
+        text: group.map(c => c.word).join(' '),
+        startTime: group[0].startTime,
+        endTime: group[group.length - 1].endTime,
+        words: group
+      });
+    }
+
+    // Save captions to project
+    const clipCaptions = project.clipCaptions || {};
+    clipCaptions[clipId] = {
+      style,
+      styleConfig,
+      captions,
+      captionGroups,
+      generatedAt: new Date().toISOString()
+    };
+
+    await db.collection('wizardProjects').doc(projectId).update({
+      clipCaptions,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      clipId,
+      style,
+      captionCount: captions.length,
+      groupCount: captionGroups.length,
+      captions,
+      captionGroups
+    };
+
+  } catch (error) {
+    console.error('Caption generation error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate captions.'));
+  }
+});
