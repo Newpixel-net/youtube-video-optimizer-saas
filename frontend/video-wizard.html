@@ -1007,6 +1007,136 @@
             text-shadow: 0 0 10px rgba(236, 72, 153, 0.8), 0 0 20px rgba(236, 72, 153, 0.4);
         }
 
+        /* Animated Caption Previews */
+        .caption-animated {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.25rem;
+        }
+
+        /* Karaoke style - words highlight sequentially */
+        .caption-karaoke .word {
+            color: rgba(255, 255, 255, 0.6);
+            transition: all 0.2s ease;
+        }
+
+        .caption-karaoke .highlight-anim {
+            color: #fbbf24;
+            transform: scale(1.15);
+            display: inline-block;
+            animation: karaokePulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes karaokePulse {
+            0%, 100% { color: #fbbf24; transform: scale(1.1); }
+            50% { color: #f59e0b; transform: scale(1.15); }
+        }
+
+        /* MrBeast style - bold pop-in */
+        .caption-beasty .beasty-word {
+            display: inline-block;
+            animation: beastyBounce 0.8s ease-out infinite;
+            color: #fbbf24;
+            -webkit-text-stroke: 1.5px #000;
+            font-size: 1.3rem;
+        }
+
+        .caption-beasty .beasty-word:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        @keyframes beastyBounce {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.05); }
+            50% { transform: scale(0.98); }
+        }
+
+        /* Podcast style - fade in sequence */
+        .caption-podp .fade-word {
+            opacity: 0;
+            animation: fadeInWord 2.5s ease forwards infinite;
+        }
+
+        .caption-podp .fade-word.w1 { animation-delay: 0s; }
+        .caption-podp .fade-word.w2 { animation-delay: 0.3s; }
+        .caption-podp .fade-word.w3 { animation-delay: 0.6s; }
+
+        @keyframes fadeInWord {
+            0%, 20% { opacity: 0.3; }
+            40%, 60% { opacity: 1; }
+            80%, 100% { opacity: 0.3; }
+        }
+
+        /* Hormozi style - green highlight box */
+        .caption-hormozi .hormozi-highlight {
+            background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+            padding: 0.15rem 0.5rem;
+            border-radius: 0.25rem;
+            font-weight: 700;
+            animation: hormoziPop 1.2s ease infinite;
+        }
+
+        @keyframes hormoziPop {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* Ali style - neon glow pulse */
+        .caption-ali .glow-word {
+            animation: aliGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes aliGlow {
+            0%, 100% { text-shadow: 0 0 8px rgba(236, 72, 153, 0.6), 0 0 16px rgba(236, 72, 153, 0.3); }
+            50% { text-shadow: 0 0 15px rgba(236, 72, 153, 0.9), 0 0 30px rgba(236, 72, 153, 0.5), 0 0 45px rgba(236, 72, 153, 0.3); }
+        }
+
+        /* Custom caption style panel */
+        .custom-caption-panel {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+        }
+
+        .custom-caption-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .custom-caption-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .custom-caption-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            min-width: 70px;
+        }
+
+        .custom-caption-input {
+            flex: 1;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.85rem;
+        }
+
+        .custom-color-picker {
+            width: 40px;
+            height: 32px;
+            border: none;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            background: transparent;
+        }
+
         .clip-nav {
             display: flex;
             align-items: center;
@@ -1786,6 +1916,115 @@
 
         .ai-btn-icon {
             font-size: 1rem;
+        }
+
+        /* Apply to All Bar */
+        .apply-all-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 0.75rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .apply-all-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.9rem;
+        }
+
+        .apply-all-icon {
+            font-size: 1.25rem;
+        }
+
+        .apply-all-btn {
+            padding: 0.625rem 1.25rem;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            border: none;
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .apply-all-btn:hover {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        }
+
+        /* Quick Presets Panel */
+        .presets-panel {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(236, 72, 153, 0.05) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .presets-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.5rem;
+        }
+
+        @media (max-width: 1200px) {
+            .presets-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .presets-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .preset-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.75rem 0.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.625rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .preset-card:hover {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: rgba(139, 92, 246, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .preset-icon {
+            font-size: 1.5rem;
+            line-height: 1;
+        }
+
+        .preset-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.125rem;
+        }
+
+        .preset-name {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .preset-desc {
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.5);
         }
 
         /* Transition Options */
@@ -4564,16 +4803,25 @@
             // Caption preview with style-specific animations
             if (settings.captionStyle !== 'none') {
                 html += '<div class="phone-caption-preview caption-' + settings.captionStyle + '">';
-                html += '<p class="caption-text">';
-                var captionPreviews = {
-                    karaoke: 'The <span class="highlight">biggest</span> mistake...',
-                    beasty: 'BIGGEST MISTAKE',
-                    deepdiver: 'the biggest mistake entrepreneurs make',
-                    podp: 'The biggest mistake...',
-                    hormozi: 'The biggest <span class="highlight">MISTAKE</span>...',
-                    ali: 'The biggest mistake...'
-                };
-                html += captionPreviews[settings.captionStyle] || 'The biggest mistake...';
+                html += '<p class="caption-text caption-animated">';
+                if (settings.captionStyle === 'karaoke') {
+                    html += '<span class="word w1">The</span> <span class="word w2 highlight-anim">biggest</span> <span class="word w3">mistake</span>';
+                } else if (settings.captionStyle === 'beasty') {
+                    html += '<span class="beasty-word">BIGGEST</span> <span class="beasty-word">MISTAKE</span>';
+                } else if (settings.captionStyle === 'deepdiver') {
+                    html += 'the biggest mistake entrepreneurs make';
+                } else if (settings.captionStyle === 'podp') {
+                    html += '<span class="fade-word w1">The</span> <span class="fade-word w2">biggest</span> <span class="fade-word w3">mistake...</span>';
+                } else if (settings.captionStyle === 'hormozi') {
+                    html += 'The biggest <span class="hormozi-highlight">MISTAKE</span>...';
+                } else if (settings.captionStyle === 'ali') {
+                    html += '<span class="glow-word">The biggest mistake...</span>';
+                } else if (settings.captionStyle === 'custom') {
+                    var customStyle = settings.customCaptionStyle || {};
+                    html += '<span style="color:' + (customStyle.color || '#ffffff') + ';font-size:' + (customStyle.fontSize || 1) + 'rem">Your custom caption</span>';
+                } else {
+                    html += 'The biggest mistake...';
+                }
                 html += '</p>';
                 html += '</div>';
             }
@@ -4592,6 +4840,35 @@
 
             // Right: Customization Panels
             html += '<div class="customization-panels">';
+
+            // Quick Presets Panel
+            html += '<div class="customization-panel presets-panel">';
+            html += '<div class="panel-header">';
+            html += '<span class="panel-icon">⚡</span>';
+            html += '<span class="panel-title">QUICK PRESETS</span>';
+            html += '<span class="panel-preset-label">One-click setup</span>';
+            html += '</div>';
+
+            var presets = [
+                { id: 'tiktok', name: 'TikTok Viral', icon: '🎵', desc: 'Trending style' },
+                { id: 'youtube', name: 'YouTube Shorts', icon: '📺', desc: 'Platform optimized' },
+                { id: 'instagram', name: 'Instagram Reels', icon: '📷', desc: 'Visual focus' },
+                { id: 'podcast', name: 'Podcast Clip', icon: '🎙️', desc: 'Clean & clear' },
+                { id: 'gaming', name: 'Gaming Highlight', icon: '🎮', desc: 'Action-packed' }
+            ];
+
+            html += '<div class="presets-grid">';
+            presets.forEach(function(preset) {
+                html += '<button class="preset-card" onclick="app.applyPreset(\'' + preset.id + '\')">';
+                html += '<span class="preset-icon">' + preset.icon + '</span>';
+                html += '<div class="preset-info">';
+                html += '<div class="preset-name">' + preset.name + '</div>';
+                html += '<div class="preset-desc">' + preset.desc + '</div>';
+                html += '</div>';
+                html += '</button>';
+            });
+            html += '</div>';
+            html += '</div>';
 
             // Captions Panel with 7 styles + custom
             html += '<div class="customization-panel">';
@@ -4622,6 +4899,55 @@
                 html += '</div>';
             });
             html += '</div>';
+
+            // Custom caption configuration panel (shown when custom style is selected)
+            if (settings.captionStyle === 'custom') {
+                var customStyle = settings.customCaptionStyle || {};
+                html += '<div class="custom-caption-panel">';
+                html += '<div class="custom-caption-row">';
+                html += '<span class="custom-caption-label">Color</span>';
+                html += '<input type="color" class="custom-color-picker" value="' + (customStyle.color || '#ffffff') + '" onchange="app.setCustomCaptionStyle(\'color\', this.value)">';
+                html += '<span class="custom-caption-label">Highlight</span>';
+                html += '<input type="color" class="custom-color-picker" value="' + (customStyle.highlightColor || '#fbbf24') + '" onchange="app.setCustomCaptionStyle(\'highlightColor\', this.value)">';
+                html += '</div>';
+                html += '<div class="custom-caption-row">';
+                html += '<span class="custom-caption-label">Size</span>';
+                html += '<select class="custom-caption-input" style="flex:0.5" onchange="app.setCustomCaptionStyle(\'fontSize\', this.value)">';
+                ['0.8', '0.9', '1', '1.1', '1.2', '1.3'].forEach(function(size) {
+                    var selected = String(customStyle.fontSize || '1') === size ? ' selected' : '';
+                    html += '<option value="' + size + '"' + selected + '>' + (parseFloat(size) * 100) + '%</option>';
+                });
+                html += '</select>';
+                html += '<span class="custom-caption-label">Position</span>';
+                html += '<select class="custom-caption-input" style="flex:0.5" onchange="app.setCustomCaptionStyle(\'position\', this.value)">';
+                [['bottom', 'Bottom'], ['middle', 'Middle'], ['top', 'Top']].forEach(function(pos) {
+                    var selected = (customStyle.position || 'bottom') === pos[0] ? ' selected' : '';
+                    html += '<option value="' + pos[0] + '"' + selected + '>' + pos[1] + '</option>';
+                });
+                html += '</select>';
+                html += '</div>';
+                html += '<div class="custom-caption-row">';
+                html += '<span class="custom-caption-label">Font</span>';
+                html += '<select class="custom-caption-input" onchange="app.setCustomCaptionStyle(\'fontFamily\', this.value)">';
+                [['sans-serif', 'Sans Serif'], ['serif', 'Serif'], ['monospace', 'Monospace'], ['cursive', 'Cursive']].forEach(function(font) {
+                    var selected = (customStyle.fontFamily || 'sans-serif') === font[0] ? ' selected' : '';
+                    html += '<option value="' + font[0] + '"' + selected + '>' + font[1] + '</option>';
+                });
+                html += '</select>';
+                html += '</div>';
+                html += '<div class="custom-caption-row">';
+                html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;color:rgba(255,255,255,0.8)">';
+                html += '<input type="checkbox" ' + (customStyle.outline ? 'checked' : '') + ' onchange="app.setCustomCaptionStyle(\'outline\', this.checked)">';
+                html += 'Text outline';
+                html += '</label>';
+                html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;color:rgba(255,255,255,0.8);margin-left:1rem">';
+                html += '<input type="checkbox" ' + (customStyle.shadow ? 'checked' : '') + ' onchange="app.setCustomCaptionStyle(\'shadow\', this.checked)">';
+                html += 'Drop shadow';
+                html += '</label>';
+                html += '</div>';
+                html += '</div>';
+            }
+
             html += '</div>';
 
             // Reframe Panel with visual diagrams
@@ -4941,6 +5267,17 @@
 
             html += '</div>'; // customization-panels
             html += '</div>'; // customization-layout
+
+            // Apply to All bar (if multiple clips)
+            if (selectedClips.length > 1) {
+                html += '<div class="apply-all-bar">';
+                html += '<div class="apply-all-info">';
+                html += '<span class="apply-all-icon">⚡</span>';
+                html += '<span>Apply current settings to all ' + selectedClips.length + ' clips</span>';
+                html += '</div>';
+                html += '<button class="apply-all-btn" onclick="app.applySettingsToAllClips()">Apply to All Clips</button>';
+                html += '</div>';
+            }
 
             // Navigation
             html += '<div class="wizard-nav">';
@@ -5479,7 +5816,7 @@
                 document.addEventListener('mousemove', handleMouseMove);
                 document.addEventListener('mouseup', handleMouseUp);
 
-                // Touch support
+                // Touch support for mobile
                 handleStart.addEventListener('touchstart', function(e) {
                     e.preventDefault();
                     handleMouseDown({ clientX: e.touches[0].clientX, preventDefault: function(){} }, handleStart);
@@ -5747,6 +6084,21 @@
                 render();
             },
 
+            setCustomCaptionStyle: function(property, value) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].customCaptionStyle) {
+                    state.clipSettings[activeClip.id].customCaptionStyle = {};
+                }
+                state.clipSettings[activeClip.id].customCaptionStyle[property] = value;
+                render();
+            },
+
             setReframeMode: function(mode) {
                 var selectedClips = state.clips.filter(function(c) {
                     return state.selectedClipIds.indexOf(c.id) !== -1;
@@ -5835,6 +6187,152 @@
                 }
                 state.clipSettings[activeClip.id][effectName] = !state.clipSettings[activeClip.id][effectName];
                 render();
+            },
+
+            // Apply preset template
+            applyPreset: function(presetId) {
+                var presetSettings = {
+                    tiktok: {
+                        captionStyle: 'karaoke',
+                        reframeMode: 'auto_center',
+                        removeFiller: true,
+                        enhanceAudio: true,
+                        audioDucking: true,
+                        addMusic: false,
+                        introTransition: 'fade',
+                        outroTransition: 'fade',
+                        autoZoom: true,
+                        vignette: false,
+                        colorGrade: true
+                    },
+                    youtube: {
+                        captionStyle: 'hormozi',
+                        reframeMode: 'auto_center',
+                        removeFiller: true,
+                        enhanceAudio: true,
+                        audioDucking: true,
+                        addMusic: false,
+                        introTransition: 'none',
+                        outroTransition: 'fade',
+                        autoZoom: false,
+                        vignette: false,
+                        colorGrade: true
+                    },
+                    instagram: {
+                        captionStyle: 'ali',
+                        reframeMode: 'auto_center',
+                        removeFiller: false,
+                        enhanceAudio: true,
+                        audioDucking: true,
+                        addMusic: false,
+                        introTransition: 'zoom',
+                        outroTransition: 'fade',
+                        autoZoom: false,
+                        vignette: true,
+                        colorGrade: true
+                    },
+                    podcast: {
+                        captionStyle: 'podp',
+                        reframeMode: 'split_screen',
+                        removeFiller: true,
+                        enhanceAudio: true,
+                        audioDucking: false,
+                        addMusic: false,
+                        introTransition: 'fade',
+                        outroTransition: 'fade',
+                        autoZoom: false,
+                        vignette: false,
+                        colorGrade: false
+                    },
+                    gaming: {
+                        captionStyle: 'beasty',
+                        reframeMode: 'gameplay',
+                        removeFiller: false,
+                        enhanceAudio: true,
+                        audioDucking: true,
+                        addMusic: false,
+                        introTransition: 'glitch',
+                        outroTransition: 'fade',
+                        autoZoom: true,
+                        vignette: false,
+                        colorGrade: true
+                    }
+                };
+
+                var preset = presetSettings[presetId];
+                if (!preset) {
+                    utils.showToast('Unknown preset', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!activeClip) {
+                    utils.showToast('No clip selected', 'error');
+                    return;
+                }
+
+                // Apply preset to current clip
+                var currentSettings = state.clipSettings[activeClip.id] || getDefaultSettings();
+                state.clipSettings[activeClip.id] = Object.assign({}, currentSettings, preset, {
+                    trimStart: currentSettings.trimStart || 0,
+                    trimEnd: currentSettings.trimEnd || activeClip.duration,
+                    voiceVolume: currentSettings.voiceVolume || 100,
+                    musicVolume: currentSettings.musicVolume || 30,
+                    selectedTrack: currentSettings.selectedTrack
+                });
+
+                render();
+                utils.showToast(presetId.charAt(0).toUpperCase() + presetId.slice(1) + ' preset applied!', 'success');
+            },
+
+            // Apply settings from current clip to all other clips
+            applySettingsToAllClips: function() {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+
+                if (selectedClips.length <= 1) {
+                    utils.showToast('Only one clip selected', 'info');
+                    return;
+                }
+
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                var sourceSettings = state.clipSettings[activeClip.id] || getDefaultSettings();
+
+                // Apply settings to all clips (except trim times which are clip-specific)
+                var appliedCount = 0;
+                selectedClips.forEach(function(clip) {
+                    if (clip.id !== activeClip.id) {
+                        var clipSettings = state.clipSettings[clip.id] || getDefaultSettings();
+                        // Copy all settings except trim (which is clip-specific)
+                        state.clipSettings[clip.id] = {
+                            captionStyle: sourceSettings.captionStyle,
+                            reframeMode: sourceSettings.reframeMode,
+                            removeFiller: sourceSettings.removeFiller,
+                            enhanceAudio: sourceSettings.enhanceAudio,
+                            audioDucking: sourceSettings.audioDucking,
+                            voiceVolume: sourceSettings.voiceVolume,
+                            addMusic: sourceSettings.addMusic,
+                            musicVolume: sourceSettings.musicVolume,
+                            selectedTrack: sourceSettings.selectedTrack,
+                            introTransition: sourceSettings.introTransition,
+                            outroTransition: sourceSettings.outroTransition,
+                            autoZoom: sourceSettings.autoZoom,
+                            vignette: sourceSettings.vignette,
+                            colorGrade: sourceSettings.colorGrade,
+                            // Keep original trim values
+                            trimStart: clipSettings.trimStart || 0,
+                            trimEnd: clipSettings.trimEnd || clip.duration
+                        };
+                        appliedCount++;
+                    }
+                });
+
+                render();
+                utils.showToast('Settings applied to ' + appliedCount + ' clips!', 'success');
             },
 
             // Timeline trimming
@@ -6689,10 +7187,9 @@
                 render();
 
                 try {
-                    var wizardGetProjectsList = functions.httpsCallable('wizardGetProjectsList');
-                    var result = await wizardGetProjectsList({
-                        limit: 20,
-                        status: null // Get all statuses except archived
+                    var wizardGetProjects = functions.httpsCallable('wizardGetProjects');
+                    var result = await wizardGetProjects({
+                        limit: 20
                     });
 
                     if (result.data.success) {
@@ -6723,8 +7220,8 @@
                 render();
 
                 try {
-                    var wizardLoadProject = functions.httpsCallable('wizardLoadProject');
-                    var result = await wizardLoadProject({
+                    var wizardGetProject = functions.httpsCallable('wizardGetProject');
+                    var result = await wizardGetProject({
                         projectId: projectId
                     });
 
@@ -6970,8 +7467,8 @@
                 render();
 
                 try {
-                    // Use a dedicated callback URL that's not in an iframe
-                    var callbackUrl = 'https://ytseo.siteuo.com/youtube-oauth-callback.html';
+                    // Use Firebase Function as callback (no separate file upload needed)
+                    var callbackUrl = 'https://us-central1-ytseo-6d1b0.cloudfunctions.net/youtubeOAuthCallbackPage';
 
                     var getYouTubeOAuthUrl = functions.httpsCallable('getYouTubeOAuthUrl');
                     var result = await getYouTubeOAuthUrl({
@@ -7217,7 +7714,7 @@
                                 state.youtubeConnection.loading = true;
                                 render();
 
-                                var callbackUrl = 'https://ytseo.siteuo.com/youtube-oauth-callback.html';
+                                var callbackUrl = 'https://us-central1-ytseo-6d1b0.cloudfunctions.net/youtubeOAuthCallbackPage';
                                 var handleYouTubeOAuthCallback = functions.httpsCallable('handleYouTubeOAuthCallback');
                                 handleYouTubeOAuthCallback({
                                     code: data.code,
