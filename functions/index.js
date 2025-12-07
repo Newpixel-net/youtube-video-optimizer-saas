@@ -16031,7 +16031,7 @@ RESPOND IN JSON:
  */
 exports.wizardSaveClipSettings = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { projectId, clipId, settings } = data;
+  const { projectId, clipId, settings, seo } = data;
 
   if (!projectId || !clipId) {
     throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
@@ -16043,10 +16043,21 @@ exports.wizardSaveClipSettings = functions.https.onCall(async (data, context) =>
       throw new functions.https.HttpsError('permission-denied', 'Not authorized');
     }
 
-    await db.collection('wizardProjects').doc(projectId).update({
-      [`clipSettings.${clipId}`]: { ...settings, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+    const updateData = {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    };
+
+    // Save clip settings if provided
+    if (settings) {
+      updateData[`clipSettings.${clipId}`] = { ...settings, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    }
+
+    // Save clip SEO if provided
+    if (seo) {
+      updateData[`clipSEO.${clipId}`] = { ...seo, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    }
+
+    await db.collection('wizardProjects').doc(projectId).update(updateData);
 
     return { success: true };
   } catch (error) {
