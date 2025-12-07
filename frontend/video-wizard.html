@@ -3499,7 +3499,7 @@
 
                     html += '<div class="project-card">';
                     html += '<div class="project-card-header">';
-                    html += '<img src="' + (project.thumbnail || 'https://picsum.photos/seed/' + project.id + '/80/45') + '" alt="Project" class="project-thumbnail">';
+                    html += '<img src="' + (project.videoThumbnail || project.thumbnail || 'https://picsum.photos/seed/' + project.id + '/80/45') + '" alt="Project" class="project-thumbnail">';
                     html += '<div class="project-info">';
                     html += '<div class="project-title">' + utils.escapeHtml(project.videoTitle || 'Untitled Project') + '</div>';
                     html += '<div class="project-meta">' + lastUpdated + '</div>';
@@ -4527,7 +4527,8 @@
 
                         // Store project and video data
                         state.projectId = result.data.projectId;
-                        state.videoInput.videoData = result.data.videoInfo;
+                        // Backend returns videoData, not videoInfo
+                        state.videoInput.videoData = result.data.videoData || result.data.videoInfo;
                         state.clips = result.data.clips || [];
 
                         // Auto-select top 5 clips
@@ -5288,12 +5289,15 @@
                         // Restore state from loaded project
                         state.projectId = project.id;
                         state.videoInput.url = project.videoUrl || '';
-                        state.videoInput.videoData = {
-                            title: project.videoTitle,
-                            duration: project.videoDuration,
-                            thumbnail: project.videoThumbnail,
-                            videoId: project.videoId
-                        };
+                        // Backend returns videoData as nested object
+                        if (project.videoData) {
+                            state.videoInput.videoData = {
+                                title: project.videoData.title,
+                                duration: project.videoData.duration,
+                                thumbnail: project.videoData.thumbnail,
+                                videoId: project.videoData.videoId
+                            };
+                        }
 
                         // Load clips
                         if (project.clips && project.clips.length > 0) {
@@ -5520,8 +5524,28 @@
         // Get default clip settings
         function getDefaultSettings() {
             return {
+                // Caption settings
                 captionStyle: 'karaoke',
-                reframeMode: 'auto',
+
+                // Reframe settings
+                reframeMode: 'auto_center',
+
+                // Timeline/trim settings
+                trimStart: 0,
+                trimEnd: null, // Will be set to clip duration when used
+
+                // Audio settings
+                removeFiller: false,
+                enhanceAudio: true,
+                audioDucking: true,
+                voiceVolume: 100,
+
+                // Music settings
+                addMusic: false,
+                musicVolume: 30,
+                selectedTrack: null,
+
+                // Legacy fields (for compatibility)
                 normalizeAudio: true,
                 removeFillers: false,
                 addBackgroundMusic: false
