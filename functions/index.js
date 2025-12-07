@@ -17589,6 +17589,28 @@ exports.wizardProcessClip = functions
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    // Trigger Cloud Run video processor service (fire and forget)
+    const videoProcessorUrl = functions.config().videoprocessor?.url;
+    if (videoProcessorUrl) {
+      try {
+        // Async call to Cloud Run - don't await
+        axios.post(`${videoProcessorUrl}/process`, {
+          jobId: jobRef.id
+        }, {
+          timeout: 5000,
+          headers: { 'Content-Type': 'application/json' }
+        }).catch(err => {
+          console.log('Video processor trigger sent (async):', err.message || 'pending');
+        });
+        console.log(`Triggered video processor for job: ${jobRef.id}`);
+      } catch (triggerError) {
+        // Log but don't fail - job is queued and can be picked up by scheduler
+        console.log('Video processor trigger note:', triggerError.message);
+      }
+    } else {
+      console.log('Video processor URL not configured - job queued for manual processing');
+    }
+
     await logUsage(uid, 'wizard_process_clip', { projectId, clipId, quality: outputQuality });
 
     return {
