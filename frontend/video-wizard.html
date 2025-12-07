@@ -1231,6 +1231,7 @@
             background: rgba(0, 0, 0, 0.7);
             padding: 4px 8px;
             border-radius: 6px;
+            z-index: 20;
         }
 
         .crop-position-indicator .pos-dot {
@@ -1239,6 +1240,12 @@
             border-radius: 50%;
             background: rgba(255, 255, 255, 0.3);
             transition: all 0.2s ease;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        .crop-position-indicator .pos-dot:hover {
+            background: rgba(255, 255, 255, 0.6);
         }
 
         .crop-position-indicator .pos-dot.active {
@@ -1249,6 +1256,252 @@
         /* Hide overlay when no reframe or auto-center with center position */
         .reframe-overlay-none {
             display: none;
+        }
+
+        /* ==========================================
+           REVOLUTIONARY CSS TRANSFORM PREVIEW
+           Actually transforms the video to show
+           what the export will look like!
+           ========================================== */
+
+        /* Auto-center: Transform 16:9 to 9:16 crop */
+        .phone-video-area.reframe-auto_center {
+            overflow: hidden;
+        }
+
+        .phone-video-area.reframe-auto_center iframe,
+        .phone-video-area.reframe-auto_center img {
+            transform: scale(1.78) translateX(0%);
+            transition: transform 0.4s ease;
+        }
+
+        .phone-video-area.reframe-auto_center.crop-left iframe,
+        .phone-video-area.reframe-auto_center.crop-left img {
+            transform: scale(1.78) translateX(15%);
+        }
+
+        .phone-video-area.reframe-auto_center.crop-right iframe,
+        .phone-video-area.reframe-auto_center.crop-right img {
+            transform: scale(1.78) translateX(-15%);
+        }
+
+        /* Split-screen: Show two halves of the video */
+        .phone-video-area.reframe-split_screen {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .phone-video-area.reframe-split_screen .split-preview-top,
+        .phone-video-area.reframe-split_screen .split-preview-bottom {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-video-area.reframe-split_screen .split-preview-top iframe,
+        .phone-video-area.reframe-split_screen .split-preview-top img {
+            position: absolute;
+            width: 300%;
+            height: 200%;
+            top: 0;
+            left: 0;
+            object-fit: cover;
+            transform-origin: left center;
+        }
+
+        .phone-video-area.reframe-split_screen .split-preview-bottom iframe,
+        .phone-video-area.reframe-split_screen .split-preview-bottom img {
+            position: absolute;
+            width: 300%;
+            height: 200%;
+            top: 0;
+            right: 0;
+            left: auto;
+            object-fit: cover;
+            transform-origin: right center;
+        }
+
+        .phone-video-area.reframe-split_screen .split-label {
+            position: absolute;
+            top: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            z-index: 5;
+        }
+
+        /* Three-person mode */
+        .phone-video-area.reframe-three_person {
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
+            overflow: hidden;
+        }
+
+        .phone-video-area.reframe-three_person .three-zone {
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-video-area.reframe-three_person .three-zone-main {
+            grid-column: 1 / -1;
+        }
+
+        .phone-video-area.reframe-three_person .three-zone iframe,
+        .phone-video-area.reframe-three_person .three-zone img {
+            width: 200%;
+            height: 200%;
+            object-fit: cover;
+        }
+
+        .phone-video-area.reframe-three_person .three-zone-main iframe,
+        .phone-video-area.reframe-three_person .three-zone-main img {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .phone-video-area.reframe-three_person .three-zone-left iframe,
+        .phone-video-area.reframe-three_person .three-zone-left img {
+            position: absolute;
+            left: 0;
+        }
+
+        .phone-video-area.reframe-three_person .three-zone-right iframe,
+        .phone-video-area.reframe-three_person .three-zone-right img {
+            position: absolute;
+            right: 0;
+        }
+
+        .phone-video-area.reframe-three_person .zone-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.55rem;
+            font-weight: 600;
+            z-index: 5;
+        }
+
+        /* Gameplay mode */
+        .phone-video-area.reframe-gameplay {
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-video-area.reframe-gameplay iframe,
+        .phone-video-area.reframe-gameplay img {
+            transform: scale(1.78);
+            transition: transform 0.3s ease;
+        }
+
+        .phone-video-area.reframe-gameplay .facecam-preview {
+            position: absolute;
+            bottom: 5%;
+            right: 5%;
+            width: 30%;
+            height: 20%;
+            border: 2px solid rgba(236, 72, 153, 0.8);
+            border-radius: 8px;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(139, 92, 246, 0.2));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            backdrop-filter: blur(2px);
+        }
+
+        .phone-video-area.reframe-gameplay .facecam-preview span {
+            font-size: 0.55rem;
+            color: white;
+            font-weight: 600;
+            background: rgba(236, 72, 153, 0.8);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* B-Roll mode with Ken Burns effect */
+        .phone-video-area.reframe-broll_split {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .phone-video-area.reframe-broll_split .broll-main {
+            flex: 2;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-video-area.reframe-broll_split .broll-main iframe,
+        .phone-video-area.reframe-broll_split .broll-main img {
+            width: 100%;
+            height: 150%;
+            object-fit: cover;
+            animation: kenBurnsLive 8s ease-in-out infinite;
+        }
+
+        @keyframes kenBurnsLive {
+            0%, 100% { transform: scale(1.1) translate(0, 0); }
+            50% { transform: scale(1.2) translate(3%, 3%); }
+        }
+
+        .phone-video-area.reframe-broll_split .broll-speaker {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            border-top: 2px solid rgba(236, 72, 153, 0.6);
+        }
+
+        .phone-video-area.reframe-broll_split .broll-speaker iframe,
+        .phone-video-area.reframe-broll_split .broll-speaker img {
+            width: 300%;
+            height: 200%;
+            object-fit: cover;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .phone-video-area.reframe-broll_split .broll-label {
+            position: absolute;
+            top: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.55rem;
+            font-weight: 600;
+            z-index: 5;
+        }
+
+        /* Reframe mode indicator badge */
+        .reframe-mode-badge {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.9), rgba(139, 92, 246, 0.9));
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            z-index: 20;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         .phone-caption-preview {
@@ -5282,23 +5535,65 @@
 
             html += '<div class="phone-frame">';
             html += '<div class="phone-screen">';
-            html += '<div class="phone-video-area">';
+
+            // Generate reframe-specific HTML with CSS transform preview
+            var reframeMode = settings.reframeMode || 'auto_center';
+            var cropPos = settings.cropPosition || 'center';
+            var cropClass = 'crop-' + cropPos;
+            var videoAreaClasses = 'phone-video-area reframe-' + reframeMode + ' ' + cropClass;
 
             // YouTube embed for video preview
             var embedStart = activeClip.startTime || 0;
             var videoId = state.videoInput.videoData?.videoId || '';
+            var videoContent = '';
+
             if (videoId && state.customization.showVideoPreview) {
-                html += '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:inherit"></iframe>';
+                videoContent = '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:inherit"></iframe>';
             } else {
-                html += '<img src="' + activeClip.thumbnail + '" alt="Preview">';
-                html += '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
+                videoContent = '<img src="' + activeClip.thumbnail + '" alt="Preview" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">';
+                videoContent += '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
             }
 
-            // REVOLUTIONARY REFRAME PREVIEW OVERLAY
-            // Shows users exactly what the exported video will look like
-            html += app.generateReframeOverlay(settings.reframeMode, settings.cropPosition || 'center');
-
-            html += '</div>';
+            // Generate mode-specific HTML structure for CSS transform preview
+            if (reframeMode === 'split_screen') {
+                // Split-screen: Two video sections stacked
+                html += '<div class="' + videoAreaClasses + '">';
+                html += '<div class="split-preview-top">' + videoContent + '<span class="split-label">Speaker 1 (Left)</span></div>';
+                html += '<div class="split-preview-bottom">' + videoContent + '<span class="split-label">Speaker 2 (Right)</span></div>';
+                html += '</div>';
+            } else if (reframeMode === 'three_person') {
+                // Three-person: Grid layout
+                html += '<div class="' + videoAreaClasses + '">';
+                html += '<div class="three-zone three-zone-main">' + videoContent + '<span class="zone-label">Main</span></div>';
+                html += '<div class="three-zone three-zone-left">' + videoContent + '<span class="zone-label">Left</span></div>';
+                html += '<div class="three-zone three-zone-right">' + videoContent + '<span class="zone-label">Right</span></div>';
+                html += '</div>';
+            } else if (reframeMode === 'gameplay') {
+                // Gameplay: Video with facecam overlay
+                html += '<div class="' + videoAreaClasses + '">';
+                html += videoContent;
+                html += '<div class="facecam-preview"><span>Facecam</span></div>';
+                html += '<div class="reframe-mode-badge">Gameplay Mode</div>';
+                html += '</div>';
+            } else if (reframeMode === 'broll_split') {
+                // B-Roll: Main area with Ken Burns + speaker section
+                html += '<div class="' + videoAreaClasses + '">';
+                html += '<div class="broll-main">' + videoContent + '<span class="broll-label">B-Roll + Ken Burns</span></div>';
+                html += '<div class="broll-speaker">' + videoContent + '<span class="broll-label">Speaker</span></div>';
+                html += '</div>';
+            } else {
+                // Auto-center: Simple crop with position
+                html += '<div class="' + videoAreaClasses + '">';
+                html += videoContent;
+                html += '<div class="reframe-mode-badge">9:16 ' + (cropPos.charAt(0).toUpperCase() + cropPos.slice(1)) + ' Crop</div>';
+                // Crop position indicator
+                html += '<div class="crop-position-indicator">';
+                html += '<div class="pos-dot' + (cropPos === 'left' ? ' active' : '') + '" onclick="app.setCropPosition(\'left\')" title="Crop Left"></div>';
+                html += '<div class="pos-dot' + (cropPos === 'center' ? ' active' : '') + '" onclick="app.setCropPosition(\'center\')" title="Crop Center"></div>';
+                html += '<div class="pos-dot' + (cropPos === 'right' ? ' active' : '') + '" onclick="app.setCropPosition(\'right\')" title="Crop Right"></div>';
+                html += '</div>';
+                html += '</div>';
+            }
 
             // Caption preview with style-specific animations
             if (settings.captionStyle !== 'none') {
@@ -6712,79 +7007,6 @@
                 }
                 state.clipSettings[activeClip.id].customCaptionStyle[property] = value;
                 render();
-            },
-
-            // REVOLUTIONARY REFRAME PREVIEW GENERATOR
-            // Creates visual overlay showing exactly what will be exported
-            generateReframeOverlay: function(mode, cropPosition) {
-                var html = '';
-                var pos = cropPosition || 'center';
-
-                switch (mode) {
-                    case 'auto_center':
-                        // Show 9:16 crop zone with position indicator
-                        var leftPos = pos === 'left' ? '15%' : (pos === 'right' ? '85%' : '50%');
-                        html += '<div class="reframe-preview-overlay reframe-overlay-auto_center">';
-                        html += '<div class="crop-zone" style="left:' + leftPos + '">';
-                        html += '<div class="crop-label">9:16 Export Zone</div>';
-                        html += '<div class="focus-indicator"></div>';
-                        html += '</div>';
-                        html += '<div class="crop-position-indicator">';
-                        html += '<div class="pos-dot' + (pos === 'left' ? ' active' : '') + '" title="Left"></div>';
-                        html += '<div class="pos-dot' + (pos === 'center' ? ' active' : '') + '" title="Center"></div>';
-                        html += '<div class="pos-dot' + (pos === 'right' ? ' active' : '') + '" title="Right"></div>';
-                        html += '</div>';
-                        html += '</div>';
-                        break;
-
-                    case 'split_screen':
-                        // Show two speaker zones stacked vertically
-                        html += '<div class="reframe-preview-overlay reframe-overlay-split_screen">';
-                        html += '<div class="speaker-zone">';
-                        html += '<span class="speaker-icon">👤</span>';
-                        html += '<span class="speaker-label">Speaker 1 (Left)</span>';
-                        html += '</div>';
-                        html += '<div class="speaker-zone">';
-                        html += '<span class="speaker-icon">👤</span>';
-                        html += '<span class="speaker-label">Speaker 2 (Right)</span>';
-                        html += '</div>';
-                        html += '</div>';
-                        break;
-
-                    case 'three_person':
-                        // Show three speaker zones
-                        html += '<div class="reframe-preview-overlay reframe-overlay-three_person">';
-                        html += '<div class="zone-top"><span class="zone-label">Main Speaker (Center)</span></div>';
-                        html += '<div class="zone-bottom-left"><span class="zone-label">Speaker 2</span></div>';
-                        html += '<div class="zone-bottom-right"><span class="zone-label">Speaker 3</span></div>';
-                        html += '</div>';
-                        break;
-
-                    case 'gameplay':
-                        // Show game area and facecam indicator
-                        html += '<div class="reframe-preview-overlay reframe-overlay-gameplay">';
-                        html += '<div class="game-zone"><span class="game-icon">🎮</span></div>';
-                        html += '<div class="facecam-zone"><span class="facecam-label">Facecam</span></div>';
-                        html += '</div>';
-                        break;
-
-                    case 'broll_split':
-                        // Show B-roll with Ken Burns effect indicator
-                        html += '<div class="reframe-preview-overlay reframe-overlay-broll_split">';
-                        html += '<div class="main-zone">';
-                        html += '<div class="ken-burns-indicator"></div>';
-                        html += '<span class="zone-label">Main Content + Ken Burns</span>';
-                        html += '</div>';
-                        html += '<div class="broll-zone"><span class="zone-label">Speaker / B-Roll</span></div>';
-                        html += '</div>';
-                        break;
-
-                    default:
-                        // No overlay for default/none mode
-                        html += '<div class="reframe-preview-overlay reframe-overlay-none"></div>';
-                }
-
-                return html;
             },
 
             setReframeMode: function(mode) {
