@@ -5831,28 +5831,48 @@
                     return;
                 }
 
-                utils.showToast('Regenerating thumbnails...', 'info');
+                utils.showToast('Generating AI thumbnails...', 'info');
 
                 try {
-                    var wizardGenerateThumbnails = functions.httpsCallable('wizardGenerateThumbnails');
-                    var result = await wizardGenerateThumbnails({
-                        projectId: state.projectId,
-                        clipId: activeClip.id,
-                        transcript: activeClip.transcript,
-                        videoTitle: state.videoInput.videoData ? state.videoInput.videoData.title : ''
+                    // Use the working generateThumbnailPro function (same as main-dashboard)
+                    var generateThumbnailPro = functions.httpsCallable('generateThumbnailPro');
+
+                    // Build title from transcript or video title
+                    var thumbnailTitle = activeClip.transcript
+                        ? activeClip.transcript.substring(0, 100)
+                        : (state.videoInput.videoData ? state.videoInput.videoData.title : 'Video Clip');
+
+                    var result = await generateThumbnailPro({
+                        title: thumbnailTitle,
+                        customPrompt: 'Create a YouTube Shorts thumbnail for this clip: ' + (activeClip.transcript || '').substring(0, 200),
+                        style: 'professional',
+                        mode: 'quick',
+                        category: 'entertainment',
+                        variations: 3,
+                        compositionTemplate: 'auto',
+                        backgroundStyle: 'auto'
                     });
 
-                    if (result.data.success) {
-                        // Update local thumbnail data
-                        state.clipThumbnails[activeClip.id] = result.data.thumbnails;
+                    if (result.data.success && result.data.images) {
+                        // Convert response format to wizard format
+                        var thumbnails = result.data.images.map(function(img, idx) {
+                            return {
+                                id: 'thumb_' + activeClip.id + '_' + idx,
+                                concept: ['Curiosity Gap', 'Emotional Impact', 'Value Proposition'][idx] || 'Variation ' + (idx + 1),
+                                previewUrl: img.url,
+                                generatedAt: new Date().toISOString()
+                            };
+                        });
+
+                        state.clipThumbnails[activeClip.id] = thumbnails;
                         render();
-                        utils.showToast('Thumbnails regenerated!', 'success');
+                        utils.showToast('Generated ' + thumbnails.length + ' thumbnails!', 'success');
                     } else {
-                        throw new Error(result.data.error || 'Failed to regenerate thumbnails');
+                        throw new Error(result.data.message || 'Failed to generate thumbnails');
                     }
                 } catch (error) {
-                    console.error('Thumbnail regeneration error:', error);
-                    utils.showToast('Error: ' + (error.message || 'Failed to regenerate'), 'error');
+                    console.error('Thumbnail generation error:', error);
+                    utils.showToast('Error: ' + (error.message || 'Failed to generate'), 'error');
                 }
             },
 
