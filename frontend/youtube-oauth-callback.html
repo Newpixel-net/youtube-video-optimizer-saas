@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Authorization - Processing...</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 400px;
+        }
+        .icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem;
+            background: rgba(255, 0, 0, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .icon svg {
+            width: 40px;
+            height: 40px;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 1.5rem;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #ff0000;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .success {
+            color: #10b981;
+        }
+        .error {
+            color: #ef4444;
+        }
+        .status-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="content">
+        <div class="icon">
+            <svg viewBox="0 0 24 24" fill="#ff0000">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+        </div>
+        <h1>Connecting YouTube...</h1>
+        <p>Please wait while we complete the authorization.</p>
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        (function() {
+            // Get URL parameters
+            var params = new URLSearchParams(window.location.search);
+            var code = params.get('code');
+            var state = params.get('state');
+            var error = params.get('error');
+
+            var container = document.getElementById('content');
+
+            function showSuccess() {
+                container.innerHTML =
+                    '<div class="status-icon success">&#10003;</div>' +
+                    '<h1 class="success">Connected!</h1>' +
+                    '<p>YouTube account connected successfully. This window will close automatically.</p>';
+            }
+
+            function showError(message) {
+                container.innerHTML =
+                    '<div class="status-icon error">&#10007;</div>' +
+                    '<h1 class="error">Connection Failed</h1>' +
+                    '<p>' + (message || 'Authorization was denied or failed.') + '</p>' +
+                    '<p style="margin-top: 1rem;">You can close this window and try again.</p>';
+            }
+
+            // Handle error from Google
+            if (error) {
+                showError(error === 'access_denied' ? 'Authorization was cancelled.' : error);
+                return;
+            }
+
+            // Check if we have the required parameters
+            if (!code || !state) {
+                showError('Missing authorization parameters.');
+                return;
+            }
+
+            // Try to send the callback to the opener window
+            if (window.opener && !window.opener.closed) {
+                try {
+                    // Call the callback function in the opener
+                    if (typeof window.opener.youtubeOAuthCallback === 'function') {
+                        window.opener.youtubeOAuthCallback(code, state);
+                        showSuccess();
+
+                        // Close this window after a short delay
+                        setTimeout(function() {
+                            window.close();
+                        }, 2000);
+                    } else {
+                        // Opener exists but callback not found - try postMessage
+                        window.opener.postMessage({
+                            type: 'youtube-oauth-callback',
+                            code: code,
+                            state: state
+                        }, '*');
+
+                        showSuccess();
+                        setTimeout(function() {
+                            window.close();
+                        }, 2000);
+                    }
+                } catch (e) {
+                    console.error('Error communicating with opener:', e);
+                    showError('Could not communicate with the main window. Please close this window and try again.');
+                }
+            } else {
+                // No opener - might have been opened directly or opener was closed
+                // Store the credentials in localStorage for the main app to pick up
+                try {
+                    localStorage.setItem('youtube_oauth_pending', JSON.stringify({
+                        code: code,
+                        state: state,
+                        timestamp: Date.now()
+                    }));
+                    showSuccess();
+                    container.innerHTML += '<p style="margin-top: 1rem; font-size: 0.85rem;">Please return to the Video Wizard to complete the connection.</p>';
+                } catch (e) {
+                    showError('Could not save authorization. Please try again.');
+                }
+            }
+        })();
+    </script>
+</body>
+</html>

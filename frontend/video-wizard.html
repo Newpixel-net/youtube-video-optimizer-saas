@@ -6958,6 +6958,7 @@
             },
 
             // YouTube OAuth Connection Methods
+            // Using popup approach for iframe compatibility
             connectYouTube: async function() {
                 if (!state.user) {
                     utils.showToast('Please sign in first to connect YouTube', 'error');
@@ -6969,16 +6970,80 @@
                 render();
 
                 try {
+                    // Use a dedicated callback URL that's not in an iframe
+                    var callbackUrl = 'https://ytseo.siteuo.com/youtube-oauth-callback.html';
+
                     var getYouTubeOAuthUrl = functions.httpsCallable('getYouTubeOAuthUrl');
                     var result = await getYouTubeOAuthUrl({
-                        redirectUri: window.location.origin + window.location.pathname
+                        redirectUri: callbackUrl
                     });
 
                     if (result.data.success && result.data.authUrl) {
-                        // Store state for verification when redirected back
+                        // Store state for verification
                         sessionStorage.setItem('youtubeOAuthState', result.data.state);
-                        // Redirect to Google OAuth
-                        window.location.href = result.data.authUrl;
+
+                        // Open OAuth in popup window (works better in iframes)
+                        var popupWidth = 500;
+                        var popupHeight = 600;
+                        var left = (window.screen.width - popupWidth) / 2;
+                        var top = (window.screen.height - popupHeight) / 2;
+
+                        var popup = window.open(
+                            result.data.authUrl,
+                            'YouTube Authorization',
+                            'width=' + popupWidth + ',height=' + popupHeight + ',left=' + left + ',top=' + top + ',scrollbars=yes,resizable=yes'
+                        );
+
+                        if (!popup || popup.closed) {
+                            throw new Error('Popup was blocked. Please allow popups for this site.');
+                        }
+
+                        // Listen for message from popup
+                        window.youtubeOAuthCallback = async function(code, returnedState) {
+                            try {
+                                // Verify state matches
+                                var storedState = sessionStorage.getItem('youtubeOAuthState');
+                                if (storedState !== returnedState) {
+                                    throw new Error('Security verification failed');
+                                }
+                                sessionStorage.removeItem('youtubeOAuthState');
+
+                                // Process the callback
+                                var handleYouTubeOAuthCallback = functions.httpsCallable('handleYouTubeOAuthCallback');
+                                var callbackResult = await handleYouTubeOAuthCallback({
+                                    code: code,
+                                    state: returnedState,
+                                    redirectUri: callbackUrl
+                                });
+
+                                if (callbackResult.data.success) {
+                                    state.youtubeConnection.connected = true;
+                                    state.youtubeConnection.channel = callbackResult.data.channel;
+                                    state.youtubeConnection.error = null;
+                                    utils.showToast('YouTube account connected successfully!', 'success');
+                                } else {
+                                    throw new Error(callbackResult.data.error || 'Failed to connect');
+                                }
+                            } catch (err) {
+                                console.error('OAuth callback error:', err);
+                                state.youtubeConnection.error = err.message || 'Failed to complete connection';
+                                utils.showToast('Failed to connect YouTube', 'error');
+                            }
+                            state.youtubeConnection.loading = false;
+                            render();
+                        };
+
+                        // Also listen for popup close without completing
+                        var checkPopupClosed = setInterval(function() {
+                            if (popup.closed) {
+                                clearInterval(checkPopupClosed);
+                                if (state.youtubeConnection.loading) {
+                                    state.youtubeConnection.loading = false;
+                                    render();
+                                }
+                            }
+                        }, 500);
+
                     } else {
                         throw new Error('Failed to generate authorization URL');
                     }
@@ -7122,6 +7187,67 @@
            4.8 INITIALIZATION
            ========================================== */
 
+        // Listen for postMessage from OAuth popup (cross-origin compatible)
+        window.addEventListener('message', function(event) {
+            // Verify origin if needed (for security)
+            if (event.data && event.data.type === 'youtube-oauth-callback') {
+                if (typeof window.youtubeOAuthCallback === 'function') {
+                    window.youtubeOAuthCallback(event.data.code, event.data.state);
+                }
+            }
+        });
+
+        // Check for pending OAuth in localStorage (fallback for popup issues)
+        function checkPendingOAuth() {
+            try {
+                var pending = localStorage.getItem('youtube_oauth_pending');
+                if (pending) {
+                    var data = JSON.parse(pending);
+                    // Check if not expired (5 minutes)
+                    if (Date.now() - data.timestamp < 5 * 60 * 1000) {
+                        // Clear it first
+                        localStorage.removeItem('youtube_oauth_pending');
+
+                        // Process the callback
+                        if (state.user && data.code && data.state) {
+                            var storedState = sessionStorage.getItem('youtubeOAuthState');
+                            if (storedState === data.state) {
+                                sessionStorage.removeItem('youtubeOAuthState');
+
+                                state.youtubeConnection.loading = true;
+                                render();
+
+                                var callbackUrl = 'https://ytseo.siteuo.com/youtube-oauth-callback.html';
+                                var handleYouTubeOAuthCallback = functions.httpsCallable('handleYouTubeOAuthCallback');
+                                handleYouTubeOAuthCallback({
+                                    code: data.code,
+                                    state: data.state,
+                                    redirectUri: callbackUrl
+                                }).then(function(result) {
+                                    if (result.data.success) {
+                                        state.youtubeConnection.connected = true;
+                                        state.youtubeConnection.channel = result.data.channel;
+                                        utils.showToast('YouTube account connected!', 'success');
+                                    }
+                                    state.youtubeConnection.loading = false;
+                                    render();
+                                }).catch(function(err) {
+                                    console.error('Pending OAuth error:', err);
+                                    state.youtubeConnection.loading = false;
+                                    render();
+                                });
+                            }
+                        }
+                    } else {
+                        // Expired, remove it
+                        localStorage.removeItem('youtube_oauth_pending');
+                    }
+                }
+            } catch (e) {
+                console.error('Error checking pending OAuth:', e);
+            }
+        }
+
         // Auth state listener
         auth.onAuthStateChanged(function(user) {
             if (user) {
@@ -7129,7 +7255,10 @@
                 state.tokens.balance = 100; // Mock balance
                 render();
 
-                // Check for YouTube OAuth callback
+                // Check for pending OAuth from localStorage
+                checkPendingOAuth();
+
+                // Check for YouTube OAuth callback in URL (legacy support)
                 app.handleYouTubeOAuthCallback();
 
                 // Check YouTube connection status
