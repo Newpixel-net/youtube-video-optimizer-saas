@@ -16161,82 +16161,77 @@ exports.wizardGenerateThumbnails = functions
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
     const geminiModelId = 'gemini-3-pro-image-preview'; // Nano Banana Pro
 
-    // VIDEO PROCESSOR SERVICE URL for frame extraction
-    const VIDEO_PROCESSOR_URL = functions.config().video_processor?.url || 'https://video-processor-382790048044.us-central1.run.app';
-
-    // Fetch ACTUAL video frames from the clip timestamps
+    // Fetch ACTUAL video frames from YouTube's standard thumbnail endpoints
+    // YouTube provides multiple thumbnails that ARE actual frames from the video:
+    // - 0.jpg: Main thumbnail (full quality)
+    // - 1.jpg: Frame at ~25% of video
+    // - 2.jpg: Frame at ~50% of video (middle)
+    // - 3.jpg: Frame at ~75% of video
     const referenceImages = [];
 
-    // Try to extract frames from the actual clip using video-processor service
-    if (videoId && clipStartTime !== undefined) {
-      try {
-        console.log(`[wizardGenerateThumbnails] Extracting frames from clip at ${clipStartTime}s-${clipEndTime}s`);
+    if (videoId) {
+      // YouTube's numbered thumbnails are ACTUAL FRAMES from the video at different timestamps
+      const frameUrls = [
+        `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,  // HD main thumbnail
+        `https://img.youtube.com/vi/${videoId}/0.jpg`,              // Full-size main frame
+        `https://img.youtube.com/vi/${videoId}/1.jpg`,              // Frame at ~25%
+        `https://img.youtube.com/vi/${videoId}/2.jpg`,              // Frame at ~50%
+        `https://img.youtube.com/vi/${videoId}/3.jpg`,              // Frame at ~75%
+        `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,      // HQ fallback
+      ];
 
-        // Extract frames at key moments in the clip
-        const clipDuration = clipEndTime - clipStartTime;
-        const frameTimestamps = [
-          clipStartTime + Math.floor(clipDuration * 0.1),  // 10% into clip
-          clipStartTime + Math.floor(clipDuration * 0.5),  // Middle of clip
-          clipStartTime + Math.floor(clipDuration * 0.9)   // 90% into clip
-        ];
+      console.log(`[wizardGenerateThumbnails] Fetching video frames for ${videoId}`);
 
-        const frameResponse = await axios.post(`${VIDEO_PROCESSOR_URL}/extract-frames`, {
-          videoId,
-          timestamps: frameTimestamps,
-          clipId
-        }, {
-          timeout: 60000, // 60 second timeout for frame extraction
-          headers: { 'Content-Type': 'application/json' }
-        });
-
-        if (frameResponse.data?.success && frameResponse.data?.frames?.length > 0) {
-          for (const frame of frameResponse.data.frames) {
-            referenceImages.push({
-              base64: frame.base64,
-              type: 'clip_frame',
-              timestamp: frame.timestamp
-            });
-          }
-          console.log(`[wizardGenerateThumbnails] Extracted ${referenceImages.length} frames from clip`);
-        }
-      } catch (frameError) {
-        console.log(`[wizardGenerateThumbnails] Frame extraction failed, falling back to thumbnail: ${frameError.message}`);
-      }
-    }
-
-    // Fallback to video thumbnail if frame extraction failed
-    if (referenceImages.length === 0) {
-      const thumbnailUrls = [
-        videoThumbnailUrl,
-        `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
-        `https://img.youtube.com/vi/${videoId}/sddefault.jpg`,
-        `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
-      ].filter(Boolean);
-
-      for (const url of thumbnailUrls) {
+      // Fetch multiple frames in parallel for better reference
+      const framePromises = frameUrls.slice(0, 4).map(async (url, index) => {
         try {
           const imageResponse = await axios.get(url, {
             responseType: 'arraybuffer',
-            timeout: 5000,
+            timeout: 8000,
             validateStatus: (status) => status === 200
           });
-          if (imageResponse.data && imageResponse.data.length > 1000) {
-            referenceImages.push({
+
+          // Check if it's a valid image (not a placeholder)
+          if (imageResponse.data && imageResponse.data.length > 5000) {
+            return {
               base64: Buffer.from(imageResponse.data).toString('base64'),
-              type: 'video_thumbnail'
-            });
-            console.log(`[wizardGenerateThumbnails] Using video thumbnail as fallback`);
-            break;
+              type: 'video_frame',
+              source: url.includes('maxres') ? 'maxres' : `frame_${index}`
+            };
           }
-        } catch (imgError) {
-          // Continue to next URL
+        } catch (err) {
+          console.log(`[wizardGenerateThumbnails] Could not fetch ${url.split('/').pop()}`);
         }
+        return null;
+      });
+
+      const fetchedFrames = (await Promise.all(framePromises)).filter(f => f !== null);
+      referenceImages.push(...fetchedFrames);
+
+      console.log(`[wizardGenerateThumbnails] Fetched ${referenceImages.length} actual video frames`);
+    }
+
+    // Use custom thumbnail URL if provided and we don't have enough frames
+    if (referenceImages.length < 2 && videoThumbnailUrl) {
+      try {
+        const imageResponse = await axios.get(videoThumbnailUrl, {
+          responseType: 'arraybuffer',
+          timeout: 5000,
+          validateStatus: (status) => status === 200
+        });
+        if (imageResponse.data && imageResponse.data.length > 1000) {
+          referenceImages.push({
+            base64: Buffer.from(imageResponse.data).toString('base64'),
+            type: 'custom_thumbnail'
+          });
+        }
+      } catch (err) {
+        // Ignore
       }
     }
 
     const hasReference = referenceImages.length > 0;
-    const hasClipFrames = referenceImages.some(r => r.type === 'clip_frame');
-    console.log(`[wizardGenerateThumbnails] Reference images: ${referenceImages.length}, hasClipFrames: ${hasClipFrames}`);
+    console.log(`[wizardGenerateThumbnails] Total reference images: ${referenceImages.length}`);
 
     // Build comprehensive context from main video
     const videoContext = `
@@ -16305,10 +16300,10 @@ CRITICAL: The thumbnail must visually represent the VIDEO TOPIC with specific re
         // Build content parts with reference images FIRST for better context
         const contentParts = [];
 
-        // Add reference images - prioritize clip frames over video thumbnails
+        // Add multiple reference images from the actual video
         if (hasReference) {
-          // Add up to 2 reference images for better style matching
-          const imagesToAdd = referenceImages.slice(0, 2);
+          // Add up to 3 reference images for comprehensive style matching
+          const imagesToAdd = referenceImages.slice(0, 3);
           for (const refImg of imagesToAdd) {
             contentParts.push({
               inlineData: {
@@ -16317,28 +16312,21 @@ CRITICAL: The thumbnail must visually represent the VIDEO TOPIC with specific re
               }
             });
           }
+          console.log(`[wizardGenerateThumbnails] Added ${imagesToAdd.length} reference images to prompt`);
         }
 
-        // Build enhanced prompt with reference instructions
+        // Build enhanced prompt with strong reference instructions
         let finalPrompt;
-        if (hasClipFrames) {
-          // We have actual clip frames - use them as strong reference
-          finalPrompt = `REFERENCE FRAMES: I've provided ${referenceImages.length} actual frame(s) from the video clip. Use these as your PRIMARY VISUAL REFERENCE:
+        if (hasReference) {
+          finalPrompt = `REFERENCE FRAMES: I've provided ${Math.min(referenceImages.length, 3)} actual frame(s) from the original video. These show the REAL content of the video.
 
-CRITICAL INSTRUCTIONS FOR REFERENCE-BASED GENERATION:
-1. PRESERVE the visual style, lighting, and color palette from the reference frames
-2. If there are people in the frames, create a thumbnail featuring similar-looking people in the same style
-3. Maintain the same mood, energy, and aesthetic as the original video
-4. The thumbnail should look like it belongs to the same video - use similar backgrounds, lighting setup, and color grading
-5. Do NOT create generic stock-photo style images - make it specific to this video
-
-${concept.prompt}`;
-        } else if (hasReference) {
-          // Fallback to video thumbnail reference
-          finalPrompt = `REFERENCE IMAGE: I've provided the video thumbnail as a style reference. Use this to inform:
-- The color palette and lighting style
-- Visual aesthetic and mood
-- If there's a person visible, create a similar-looking person in a similar style
+CRITICAL - YOU MUST FOLLOW THESE RULES:
+1. The thumbnail MUST match the visual content shown in these reference frames
+2. If the reference shows animation/cartoon - create an animated/cartoon style thumbnail
+3. If the reference shows a real person - create a thumbnail featuring a similar-looking person
+4. If the reference shows a specific scene/setting - use that same setting
+5. MATCH the color palette, art style, and visual aesthetic of the reference frames exactly
+6. Do NOT create unrelated imagery - the thumbnail must represent what's actually in the video
 
 ${concept.prompt}`;
         } else {
