@@ -139,20 +139,20 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
 
     console.log(`[${jobId}] yt-dlp command: yt-dlp ${args.join(' ')}`);
 
-    const process = spawn('yt-dlp', args);
+    const ytdlpProcess = spawn('yt-dlp', args);
 
     let stdout = '';
     let stderr = '';
 
-    process.stdout.on('data', (data) => {
+    ytdlpProcess.stdout.on('data', (data) => {
       stdout += data.toString();
     });
 
-    process.stderr.on('data', (data) => {
+    ytdlpProcess.stderr.on('data', (data) => {
       stderr += data.toString();
     });
 
-    process.on('close', (code) => {
+    ytdlpProcess.on('close', (code) => {
       if (code === 0 && fs.existsSync(outputFile)) {
         console.log(`[${jobId}] Download completed: ${outputFile}`);
         resolve(outputFile);
@@ -163,7 +163,7 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
       }
     });
 
-    process.on('error', (error) => {
+    ytdlpProcess.on('error', (error) => {
       reject(new Error(`Failed to start yt-dlp: ${error.message}`));
     });
   });
@@ -220,11 +220,11 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
     console.log(`[${jobId}] FFmpeg command: ffmpeg ${args.join(' ')}`);
 
-    const process = spawn('ffmpeg', args);
+    const ffmpegProcess = spawn('ffmpeg', args);
 
     let stderr = '';
 
-    process.stderr.on('data', (data) => {
+    ffmpegProcess.stderr.on('data', (data) => {
       stderr += data.toString();
       // Log progress from FFmpeg
       const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
@@ -233,7 +233,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       }
     });
 
-    process.on('close', (code) => {
+    ffmpegProcess.on('close', (code) => {
       if (code === 0 && fs.existsSync(outputFile)) {
         console.log(`[${jobId}] Processing completed: ${outputFile}`);
         resolve(outputFile);
@@ -244,7 +244,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       }
     });
 
-    process.on('error', (error) => {
+    ffmpegProcess.on('error', (error) => {
       reject(new Error(`Failed to start FFmpeg: ${error.message}`));
     });
   });
@@ -379,9 +379,9 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
       outputFile
     ];
 
-    const process = spawn('ffmpeg', args);
+    const ffmpegProcess = spawn('ffmpeg', args);
 
-    process.on('close', (code) => {
+    ffmpegProcess.on('close', (code) => {
       if (code === 0 && fs.existsSync(outputFile)) {
         console.log(`[${jobId}] Transitions applied: ${outputFile}`);
         resolve(outputFile);
@@ -392,7 +392,7 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
       }
     });
 
-    process.on('error', () => {
+    ffmpegProcess.on('error', () => {
       resolve(inputFile);
     });
   });
