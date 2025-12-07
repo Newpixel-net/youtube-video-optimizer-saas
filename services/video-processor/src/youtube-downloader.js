@@ -1,6 +1,6 @@
 /**
  * YouTube Video Downloader using youtubei.js
- * Simplified implementation using TV client for better compatibility
+ * Supports both unauthenticated (TV client) and authenticated (OAuth) downloads
  */
 
 import { Innertube, ClientType } from 'youtubei.js';
@@ -14,8 +14,41 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Get or create Innertube instance for a specific client
+ * @param {string} clientType - The client type (TV, TV_EMBEDDED, WEB, etc.)
+ * @param {Object} [youtubeAuth] - Optional OAuth credentials
  */
-async function getInnertubeForClient(clientType = 'TV') {
+async function getInnertubeForClient(clientType = 'TV', youtubeAuth = null) {
+  // For authenticated requests, don't cache (token might change)
+  if (youtubeAuth?.accessToken) {
+    console.log(`[YouTubeDownloader] Creating authenticated ${clientType} client...`);
+
+    try {
+      const instance = await Innertube.create({
+        client_type: ClientType[clientType] || clientType,
+        generate_session_locally: true,
+        retrieve_player: true
+      });
+
+      // Set OAuth credentials for the session
+      // This enables authenticated requests
+      if (instance.session) {
+        instance.session.context.client.visitorData = undefined;
+        // Add access token to request headers
+        instance.session.http.fetch = async (input, init = {}) => {
+          init.headers = init.headers || {};
+          init.headers['Authorization'] = `Bearer ${youtubeAuth.accessToken}`;
+          return fetch(input, init);
+        };
+      }
+
+      return instance;
+    } catch (error) {
+      console.error(`[YouTubeDownloader] Failed to create authenticated ${clientType} client:`, error.message);
+      throw error;
+    }
+  }
+
+  // For unauthenticated, use cache
   const cacheKey = clientType;
   const cached = innertubeCache.get(cacheKey);
 
@@ -47,16 +80,21 @@ async function getInnertubeForClient(clientType = 'TV') {
 
 /**
  * Try to get video info using multiple clients
+ * @param {string} videoId - YouTube video ID
+ * @param {Object} [youtubeAuth] - Optional OAuth credentials
  */
-async function getVideoInfoWithFallback(videoId) {
-  // Order of clients to try (TV clients generally have fewer restrictions)
-  const clientsToTry = ['TV', 'TV_EMBEDDED', 'WEB'];
+async function getVideoInfoWithFallback(videoId, youtubeAuth = null) {
+  // If we have OAuth credentials, try authenticated WEB client first
+  // This should have fewer restrictions
+  const clientsToTry = youtubeAuth?.accessToken
+    ? ['WEB', 'TV', 'TV_EMBEDDED']
+    : ['TV', 'TV_EMBEDDED', 'WEB'];
 
   for (const clientType of clientsToTry) {
     try {
-      console.log(`[YouTubeDownloader] Trying ${clientType} client for video ${videoId}...`);
+      console.log(`[YouTubeDownloader] Trying ${clientType} client for video ${videoId}${youtubeAuth ? ' (authenticated)' : ''}...`);
 
-      const innertube = await getInnertubeForClient(clientType);
+      const innertube = await getInnertubeForClient(clientType, youtubeAuth);
       const info = await innertube.getInfo(videoId);
 
       if (info.streaming_data?.adaptive_formats?.length > 0) {
@@ -113,10 +151,10 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
   }
 
   try {
-    // Try youtubei.js with multiple clients
-    const { info, innertube, clientType } = await getVideoInfoWithFallback(videoId);
+    // Try youtubei.js with multiple clients (pass auth if available)
+    const { info, innertube, clientType } = await getVideoInfoWithFallback(videoId, youtubeAuth);
 
-    console.log(`[${jobId}] Got video info via ${clientType} client`);
+    console.log(`[${jobId}] Got video info via ${clientType} client${youtubeAuth ? ' (authenticated)' : ''}`);
 
     // Select best format (prefer 1080p or lower)
     const formats = info.streaming_data.adaptive_formats || [];
@@ -228,7 +266,68 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
     console.error(`[${jobId}] youtubei.js download failed:`, error.message);
     console.log(`[${jobId}] Falling back to yt-dlp...`);
 
-    return downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
+    try {
+      return await downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
+    } catch (ytdlpError) {
+      console.error(`[${jobId}] yt-dlp also failed:`, ytdlpError.message);
+      console.log(`[${jobId}] Trying Cobalt API as final fallback...`);
+
+      try {
+        // Cobalt downloads full video, we'll trim it with FFmpeg
+        const cobaltOutput = path.join(workDir, 'cobalt_source.mp4');
+        await downloadWithCobalt({ jobId, videoId, workDir, outputFile: cobaltOutput });
+
+        // Trim to desired segment
+        console.log(`[${jobId}] Trimming Cobalt download to segment...`);
+        const bufferStart = Math.max(0, startTime - 1);
+        const segmentDuration = (endTime - startTime) + 2;
+
+        return new Promise((resolve, reject) => {
+          const ffmpegArgs = [
+            '-ss', bufferStart.toString(),
+            '-t', segmentDuration.toString(),
+            '-i', cobaltOutput,
+            '-c', 'copy',
+            '-y',
+            outputFile
+          ];
+
+          const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+          let stderr = '';
+
+          ffmpegProc.stderr.on('data', (data) => {
+            stderr += data.toString();
+          });
+
+          ffmpegProc.on('close', (code) => {
+            // Cleanup cobalt source
+            try {
+              if (fs.existsSync(cobaltOutput)) {
+                fs.unlinkSync(cobaltOutput);
+              }
+            } catch (e) {}
+
+            if (code === 0 && fs.existsSync(outputFile)) {
+              console.log(`[${jobId}] Cobalt segment trim complete`);
+              resolve(outputFile);
+            } else {
+              reject(new Error(`Segment trim failed: ${stderr.slice(-200)}`));
+            }
+          });
+
+          ffmpegProc.on('error', (error) => {
+            reject(new Error(`Trim FFmpeg error: ${error.message}`));
+          });
+        });
+      } catch (cobaltError) {
+        console.error(`[${jobId}] All download methods failed`);
+        // Return a more helpful error message
+        const errorMsg = ytdlpError.message.includes('Sign in to confirm')
+          ? 'YouTube requires authentication. Please ensure your YouTube account is connected and try again. If the issue persists, the video may have restrictions.'
+          : `Video download failed after trying multiple methods. Last error: ${cobaltError.message}`;
+        throw new Error(errorMsg);
+      }
+    }
   }
 }
 
@@ -312,6 +411,88 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
       reject(new Error(`yt-dlp error: ${error.message}`));
     });
   });
+}
+
+/**
+ * Fallback download using Cobalt API (cobalt.tools)
+ * Cobalt is an open-source video download service that handles YouTube restrictions better
+ */
+async function downloadWithCobalt({ jobId, videoId, workDir, outputFile }) {
+  console.log(`[${jobId}] Trying Cobalt API fallback...`);
+
+  try {
+    // Cobalt API endpoint (using public instance - consider self-hosting for production)
+    const cobaltUrl = process.env.COBALT_API_URL || 'https://api.cobalt.tools';
+
+    const response = await fetch(`${cobaltUrl}/api/json`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        vCodec: 'h264',
+        vQuality: '1080',
+        aFormat: 'mp3',
+        filenamePattern: 'basic',
+        isAudioOnly: false,
+        disableMetadata: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Cobalt API returned ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.status === 'error') {
+      throw new Error(result.text || 'Cobalt API error');
+    }
+
+    if (result.status === 'redirect' || result.status === 'stream') {
+      const downloadUrl = result.url;
+
+      console.log(`[${jobId}] Cobalt provided download URL, downloading with FFmpeg...`);
+
+      // Download using FFmpeg
+      return new Promise((resolve, reject) => {
+        const ffmpegArgs = [
+          '-i', downloadUrl,
+          '-c', 'copy',
+          '-y',
+          outputFile
+        ];
+
+        const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+        let stderr = '';
+
+        ffmpegProc.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        ffmpegProc.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outputFile)) {
+            console.log(`[${jobId}] Cobalt download complete`);
+            resolve(outputFile);
+          } else {
+            reject(new Error(`Cobalt FFmpeg failed: ${stderr.slice(-200)}`));
+          }
+        });
+
+        ffmpegProc.on('error', (error) => {
+          reject(new Error(`Cobalt FFmpeg error: ${error.message}`));
+        });
+      });
+    }
+
+    throw new Error('Cobalt returned unexpected response');
+
+  } catch (error) {
+    console.error(`[${jobId}] Cobalt fallback failed:`, error.message);
+    throw error;
+  }
 }
 
 /**

@@ -3596,6 +3596,156 @@
             border-color: rgba(239, 68, 68, 0.4);
         }
 
+        /* YouTube Connection Panel - Step 1 */
+        .youtube-connection-step1 {
+            margin: 1.5rem 0;
+            padding: 1.25rem;
+            background: linear-gradient(135deg, rgba(255, 0, 0, 0.05) 0%, rgba(255, 0, 0, 0.02) 100%);
+            border: 1px solid rgba(255, 0, 0, 0.15);
+            border-radius: 1rem;
+        }
+
+        .youtube-connection-step1-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .youtube-icon-large {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            background: rgba(255, 0, 0, 0.1);
+            border-radius: 0.75rem;
+        }
+
+        .youtube-connection-step1-title h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            margin: 0;
+        }
+
+        .youtube-connection-step1-title p {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin: 0.25rem 0 0 0;
+        }
+
+        .youtube-connect-btn-step1 {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .youtube-connect-btn-step1:hover {
+            background: #cc0000;
+            transform: translateY(-1px);
+        }
+
+        .youtube-connection-step1-status {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.5rem;
+        }
+
+        .youtube-connection-step1-status.connected {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.25);
+        }
+
+        .youtube-connection-step1-status.loading {
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .youtube-channel-thumb-small {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .youtube-channel-icon-small {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border-radius: 50%;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .youtube-connection-step1-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .youtube-connected-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .youtube-connected-label {
+            font-size: 0.7rem;
+            color: #10b981;
+        }
+
+        .youtube-disconnect-btn-small {
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .youtube-disconnect-btn-small:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .youtube-connection-error-small {
+            font-size: 0.8rem;
+            color: #ef4444;
+            padding: 0.5rem 0.75rem;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 0.375rem;
+            margin-bottom: 0.75rem;
+        }
+
         .quick-links {
             display: flex;
             flex-direction: column;
@@ -4145,6 +4295,47 @@
                 html += '</label>';
             });
 
+            html += '</div>';
+
+            // YouTube Connection Panel (Required for Video Export)
+            html += '<div class="youtube-connection-step1">';
+            html += '<div class="youtube-connection-step1-header">';
+            html += '<span class="youtube-icon-large">';
+            html += '<svg viewBox="0 0 24 24" width="24" height="24" fill="#ff0000"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>';
+            html += '</span>';
+            html += '<div class="youtube-connection-step1-title">';
+            html += '<h3>Connect YouTube Account</h3>';
+            html += '<p>Required for video export functionality</p>';
+            html += '</div>';
+            html += '</div>';
+
+            if (state.youtubeConnection.loading) {
+                html += '<div class="youtube-connection-step1-status loading">';
+                html += '<div class="connection-loading-spinner"></div>';
+                html += '<span>Connecting...</span>';
+                html += '</div>';
+            } else if (state.youtubeConnection.connected && state.youtubeConnection.channel) {
+                html += '<div class="youtube-connection-step1-status connected">';
+                if (state.youtubeConnection.channel.thumbnail) {
+                    html += '<img src="' + state.youtubeConnection.channel.thumbnail + '" alt="Channel" class="youtube-channel-thumb-small">';
+                } else {
+                    html += '<div class="youtube-channel-icon-small">✓</div>';
+                }
+                html += '<div class="youtube-connection-step1-info">';
+                html += '<span class="youtube-connected-name">' + utils.escapeHtml(state.youtubeConnection.channel.title || 'Connected') + '</span>';
+                html += '<span class="youtube-connected-label">YouTube Connected</span>';
+                html += '</div>';
+                html += '<button class="youtube-disconnect-btn-small" onclick="app.disconnectYouTube()" title="Disconnect">✕</button>';
+                html += '</div>';
+            } else {
+                if (state.youtubeConnection.error) {
+                    html += '<div class="youtube-connection-error-small">' + utils.escapeHtml(state.youtubeConnection.error) + '</div>';
+                }
+                html += '<button class="youtube-connect-btn-step1" onclick="app.connectYouTube()">';
+                html += '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>';
+                html += ' Connect YouTube to Enable Export';
+                html += '</button>';
+            }
             html += '</div>';
 
             // My Projects Section
