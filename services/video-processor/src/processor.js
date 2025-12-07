@@ -98,25 +98,44 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
 
   return new Promise((resolve, reject) => {
     const args = [
-      // Format selection
-      '-f', 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best',
+      // Format selection - use formats that work better with bot detection
+      '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
       // Segment download
       '--download-sections', `*${bufferStart}-${bufferEnd}`,
       '--force-keyframes-at-cuts',
       '-o', outputFile,
       '--no-playlist',
       '--no-warnings',
-      // Anti-bot detection measures
-      '--extractor-args', 'youtube:player_client=android,web',
-      '--user-agent', 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      // Anti-bot detection measures - use iOS client which has fewer restrictions
+      '--extractor-args', 'youtube:player_client=ios,web',
+      '--user-agent', 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)',
       '--sleep-requests', '1',
-      '--extractor-retries', '3',
-      '--retry-sleep', 'extractor:5',
-      // Additional options
+      '--extractor-retries', '5',
+      '--retry-sleep', 'extractor:3',
+      // Additional bypass options
       '--no-check-certificates',
-      '--prefer-free-formats',
-      `https://www.youtube.com/watch?v=${videoId}`
+      '--geo-bypass',
+      '--ignore-errors',
+      // Merge output to mp4
+      '--merge-output-format', 'mp4'
     ];
+
+    // Add cookies file if provided via environment variable
+    const cookiesFile = process.env.YOUTUBE_COOKIES_FILE;
+    if (cookiesFile && fs.existsSync(cookiesFile)) {
+      args.push('--cookies', cookiesFile);
+      console.log(`[${jobId}] Using cookies file for authentication`);
+    }
+
+    // Add PO Token if provided via environment variable
+    const poToken = process.env.YOUTUBE_PO_TOKEN;
+    if (poToken) {
+      args.push('--extractor-args', `youtube:po_token=web+${poToken}`);
+      console.log(`[${jobId}] Using PO Token for authentication`);
+    }
+
+    // Add the video URL
+    args.push(`https://www.youtube.com/watch?v=${videoId}`);
 
     console.log(`[${jobId}] yt-dlp command: yt-dlp ${args.join(' ')}`);
 
