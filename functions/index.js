@@ -18277,3 +18277,117 @@ async function getYouTubeCredentialsForUser(uid) {
     refreshToken: connection.refreshToken
   };
 }
+
+// ============================================
+// YOUTUBE OAUTH CALLBACK PAGE
+// ============================================
+
+/**
+ * HTTP endpoint that serves the OAuth callback page
+ * This eliminates the need to upload a separate HTML file
+ * URL: https://us-central1-ytseo-6d1b0.cloudfunctions.net/youtubeOAuthCallbackPage
+ */
+exports.youtubeOAuthCallbackPage = functions.https.onRequest((req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+
+  const callbackHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Authorization</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .container { text-align: center; padding: 2rem; max-width: 400px; }
+        .icon {
+            width: 80px; height: 80px; margin: 0 auto 1.5rem;
+            background: rgba(255, 0, 0, 0.1); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .icon svg { width: 40px; height: 40px; }
+        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        p { color: rgba(255, 255, 255, 0.6); margin-bottom: 1.5rem; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #ff0000; border-radius: 50%;
+            animation: spin 1s linear infinite; margin: 0 auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .status-icon { font-size: 3rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="container" id="content">
+        <div class="icon">
+            <svg viewBox="0 0 24 24" fill="#ff0000">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+        </div>
+        <h1>Connecting YouTube...</h1>
+        <p>Please wait while we complete the authorization.</p>
+        <div class="spinner"></div>
+    </div>
+    <script>
+        (function() {
+            var params = new URLSearchParams(window.location.search);
+            var code = params.get('code');
+            var state = params.get('state');
+            var error = params.get('error');
+            var container = document.getElementById('content');
+
+            function showSuccess() {
+                container.innerHTML = '<div class="status-icon success">✓</div>' +
+                    '<h1 class="success">Connected!</h1>' +
+                    '<p>YouTube account connected. This window will close automatically.</p>';
+            }
+            function showError(msg) {
+                container.innerHTML = '<div class="status-icon error">✗</div>' +
+                    '<h1 class="error">Connection Failed</h1>' +
+                    '<p>' + (msg || 'Authorization failed.') + '</p>' +
+                    '<p style="margin-top:1rem">You can close this window and try again.</p>';
+            }
+
+            if (error) { showError(error === 'access_denied' ? 'Authorization was cancelled.' : error); return; }
+            if (!code || !state) { showError('Missing authorization parameters.'); return; }
+
+            if (window.opener && !window.opener.closed) {
+                try {
+                    if (typeof window.opener.youtubeOAuthCallback === 'function') {
+                        window.opener.youtubeOAuthCallback(code, state);
+                        showSuccess();
+                        setTimeout(function() { window.close(); }, 2000);
+                    } else {
+                        window.opener.postMessage({ type: 'youtube-oauth-callback', code: code, state: state }, '*');
+                        showSuccess();
+                        setTimeout(function() { window.close(); }, 2000);
+                    }
+                } catch (e) {
+                    showError('Could not communicate with main window.');
+                }
+            } else {
+                try {
+                    localStorage.setItem('youtube_oauth_pending', JSON.stringify({ code: code, state: state, timestamp: Date.now() }));
+                    showSuccess();
+                    container.innerHTML += '<p style="margin-top:1rem;font-size:0.85rem">Return to Video Wizard to complete connection.</p>';
+                } catch (e) { showError('Could not save authorization.'); }
+            }
+        })();
+    </script>
+</body>
+</html>`;
+
+  res.status(200).send(callbackHTML);
+});
