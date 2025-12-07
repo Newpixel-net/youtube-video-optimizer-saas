@@ -936,6 +936,12 @@
             color: #fbbf24;
             transform: scale(1.1);
             display: inline-block;
+            animation: karaokeHighlight 0.3s ease-out;
+        }
+
+        @keyframes karaokeHighlight {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
         }
 
         .caption-beasty .caption-text {
@@ -943,6 +949,13 @@
             text-transform: uppercase;
             color: #fbbf24;
             -webkit-text-stroke: 1px #000;
+            animation: beastyPop 0.5s ease-out;
+        }
+
+        @keyframes beastyPop {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
         }
 
         .caption-deepdiver .caption-text {
@@ -950,6 +963,13 @@
             font-weight: 400;
             text-transform: lowercase;
             color: rgba(255, 255, 255, 0.9);
+        }
+
+        .caption-podp .caption-text {
+            font-size: 1rem;
+            font-weight: 500;
+            color: white;
+            letter-spacing: 0.5px;
         }
 
         .caption-hormozi .caption-text {
@@ -962,6 +982,19 @@
             color: white;
             padding: 0.125rem 0.375rem;
             border-radius: 0.25rem;
+            animation: hormoziSlide 0.3s ease-out;
+        }
+
+        @keyframes hormoziSlide {
+            from { transform: translateY(10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .caption-ali .caption-text {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 0 10px rgba(236, 72, 153, 0.8), 0 0 20px rgba(236, 72, 153, 0.4);
         }
 
         .clip-nav {
@@ -1040,8 +1073,14 @@
         /* Caption Style Cards */
         .caption-styles-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 0.75rem;
+        }
+
+        @media (max-width: 900px) {
+            .caption-styles-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
         }
 
         @media (max-width: 600px) {
@@ -1051,38 +1090,87 @@
         }
 
         .caption-style-card {
-            padding: 1rem;
+            padding: 0.875rem;
             background: rgba(255, 255, 255, 0.03);
             border: 2px solid rgba(255, 255, 255, 0.08);
             border-radius: 0.75rem;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.25s ease;
             text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .caption-style-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(249, 115, 22, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.25s ease;
         }
 
         .caption-style-card:hover {
-            border-color: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.25);
             background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .caption-style-card:hover::before {
+            opacity: 1;
         }
 
         .caption-style-card.selected {
             border-color: #ec4899;
-            background: rgba(236, 72, 153, 0.1);
+            background: rgba(236, 72, 153, 0.15);
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.2);
+        }
+
+        .caption-style-card.selected::after {
+            content: '✓';
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            width: 18px;
+            height: 18px;
+            background: #ec4899;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            color: white;
         }
 
         .caption-style-preview {
-            height: 40px;
+            height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-bottom: 0.5rem;
-            font-size: 0.75rem;
+            font-size: 0.85rem;
             font-weight: 600;
+            position: relative;
+            z-index: 1;
+            padding: 0 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.5rem;
         }
 
         .caption-style-name {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        .caption-style-card.custom-style {
+            border-style: dashed;
+        }
+
+        .caption-style-card.custom-style .caption-style-preview {
+            font-size: 1.5rem;
         }
 
         /* Reframe Layout Cards */
@@ -1099,105 +1187,366 @@
         }
 
         .reframe-layout-card {
-            padding: 0.75rem;
+            padding: 0.625rem;
             background: rgba(255, 255, 255, 0.03);
             border: 2px solid rgba(255, 255, 255, 0.08);
             border-radius: 0.75rem;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.25s ease;
             text-align: center;
         }
 
         .reframe-layout-card:hover {
-            border-color: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
         }
 
         .reframe-layout-card.selected {
             border-color: #ec4899;
             background: rgba(236, 72, 153, 0.1);
+            box-shadow: 0 0 15px rgba(236, 72, 153, 0.2);
         }
 
-        .reframe-layout-icon {
+        .reframe-layout-diagram {
             width: 100%;
             aspect-ratio: 9/16;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.3);
             border-radius: 0.375rem;
             margin-bottom: 0.5rem;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Layout Diagram Styles */
+        .reframe-layout-diagram.auto-center .layout-face {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 50%;
+            background: linear-gradient(180deg, rgba(236, 72, 153, 0.4) 0%, rgba(236, 72, 153, 0.2) 100%);
+            border-radius: 50% 50% 40% 40%;
+            border: 2px solid rgba(236, 72, 153, 0.6);
+        }
+
+        .reframe-layout-diagram.split-screen .layout-section {
+            flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .reframe-layout-diagram.split-screen .layout-section:last-child {
+            border-bottom: none;
+        }
+
+        .reframe-layout-diagram.split-screen .layout-face-small {
+            width: 40%;
+            height: 60%;
+            background: linear-gradient(180deg, rgba(236, 72, 153, 0.3) 0%, rgba(236, 72, 153, 0.15) 100%);
+            border-radius: 50% 50% 40% 40%;
+            border: 1px solid rgba(236, 72, 153, 0.5);
+        }
+
+        .reframe-layout-diagram.three-person .layout-section-top {
+            flex: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .reframe-layout-diagram.three-person .layout-section-bottom {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+        }
+
+        .reframe-layout-diagram.three-person .layout-face-main {
+            width: 50%;
+            height: 60%;
+            background: rgba(236, 72, 153, 0.3);
+            border-radius: 50% 50% 40% 40%;
+            border: 1px solid rgba(236, 72, 153, 0.5);
+        }
+
+        .reframe-layout-diagram.three-person .layout-face-small {
+            width: 35%;
+            height: 70%;
+            background: rgba(249, 115, 22, 0.25);
+            border-radius: 50% 50% 40% 40%;
+            border: 1px solid rgba(249, 115, 22, 0.5);
+        }
+
+        .reframe-layout-diagram.gameplay .layout-game-area {
+            flex: 2;
+            background: rgba(34, 197, 94, 0.15);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reframe-layout-diagram.gameplay .layout-game-icon {
             font-size: 1.5rem;
+        }
+
+        .reframe-layout-diagram.gameplay .layout-cam-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reframe-layout-diagram.gameplay .layout-face-cam {
+            width: 40%;
+            height: 70%;
+            background: rgba(236, 72, 153, 0.25);
+            border-radius: 50% 50% 40% 40%;
+            border: 1px solid rgba(236, 72, 153, 0.4);
+        }
+
+        .reframe-layout-diagram.broll-split .layout-main-area {
+            flex: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .reframe-layout-diagram.broll-split .layout-face-broll {
+            width: 50%;
+            height: 60%;
+            background: rgba(236, 72, 153, 0.3);
+            border-radius: 50% 50% 40% 40%;
+            border: 1px solid rgba(236, 72, 153, 0.5);
+        }
+
+        .reframe-layout-diagram.broll-split .layout-broll-area {
+            flex: 1;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
         }
 
         .reframe-layout-name {
             font-size: 0.7rem;
-            color: rgba(255, 255, 255, 0.7);
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 500;
+        }
+
+        .reframe-layout-card.selected .reframe-layout-name {
+            color: white;
         }
 
         /* Timeline Trimmer */
         .timeline-container {
-            padding: 1rem;
-            background: rgba(0, 0, 0, 0.2);
+            padding: 1.25rem;
+            background: rgba(0, 0, 0, 0.3);
             border-radius: 0.75rem;
         }
 
-        .timeline-bar {
-            height: 40px;
-            background: rgba(255, 255, 255, 0.1);
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .timeline-duration {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .timeline-duration-value {
+            color: #ec4899;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .timeline-duration-label {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .timeline-fine-tune {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .timeline-fine-btn {
+            width: 28px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .timeline-fine-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .timeline-waveform {
+            height: 50px;
+            background: rgba(255, 255, 255, 0.05);
             border-radius: 0.5rem;
             position: relative;
             overflow: hidden;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .waveform-bars {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 2px;
+            height: 100%;
+            padding: 8px 10px;
+        }
+
+        .waveform-bar {
+            flex: 1;
+            max-width: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            transition: background 0.15s ease;
+        }
+
+        .waveform-bar.active {
+            background: linear-gradient(180deg, #ec4899 0%, #f97316 100%);
+        }
+
+        .timeline-bar {
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            position: relative;
+            overflow: visible;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
         }
 
         .timeline-fill {
             position: absolute;
             top: 0;
             bottom: 0;
-            background: linear-gradient(90deg, rgba(236, 72, 153, 0.3) 0%, rgba(249, 115, 22, 0.3) 100%);
-            border-radius: 0.5rem;
+            background: linear-gradient(90deg, rgba(236, 72, 153, 0.6) 0%, rgba(249, 115, 22, 0.6) 100%);
+            border-radius: 6px;
+        }
+
+        .timeline-playhead {
+            position: absolute;
+            top: -4px;
+            bottom: -4px;
+            width: 3px;
+            background: white;
+            border-radius: 2px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            pointer-events: none;
         }
 
         .timeline-handle {
             position: absolute;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: #ec4899;
+            top: -6px;
+            bottom: -6px;
+            width: 16px;
+            background: transparent;
             cursor: ew-resize;
+            z-index: 10;
+            transform: translateX(-50%);
         }
 
         .timeline-handle::before {
             content: '';
             position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 100%;
+            background: #ec4899;
+            border-radius: 2px;
+        }
+
+        .timeline-handle::after {
+            content: '';
+            position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 12px;
-            height: 24px;
-            background: #ec4899;
+            width: 14px;
+            height: 20px;
+            background: linear-gradient(180deg, #ec4899 0%, #db2777 100%);
             border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4);
+        }
+
+        .timeline-handle:hover::after {
+            box-shadow: 0 2px 12px rgba(236, 72, 153, 0.6);
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        .timeline-handle.dragging::after {
+            background: linear-gradient(180deg, #f472b6 0%, #ec4899 100%);
+            box-shadow: 0 2px 16px rgba(236, 72, 153, 0.8);
         }
 
         .timeline-times {
             display: flex;
             justify-content: space-between;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             color: rgba(255, 255, 255, 0.6);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .timeline-times span {
+            padding: 0.25rem 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.25rem;
         }
 
         /* Audio Options */
+        .audio-section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.4);
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .audio-section-title:first-child {
+            margin-top: 0;
+        }
+
         .audio-options {
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.625rem;
         }
 
         .audio-option {
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            padding: 0.875rem;
+            padding: 0.75rem;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 0.625rem;
@@ -1225,14 +1574,172 @@
         }
 
         .audio-option-title {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: white;
             margin-bottom: 0.125rem;
         }
 
         .audio-option-desc {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Volume Slider */
+        .audio-volume-control {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.875rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.625rem;
+        }
+
+        .volume-icon {
+            font-size: 1.25rem;
+            width: 28px;
+            text-align: center;
+        }
+
+        .volume-slider-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .volume-slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .volume-slider-value {
+            color: #ec4899;
+            font-weight: 600;
+        }
+
+        .volume-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(180deg, #ec4899 0%, #db2777 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(236, 72, 153, 0.4);
+            transition: transform 0.15s ease;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(180deg, #ec4899 0%, #db2777 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(236, 72, 153, 0.4);
+        }
+
+        /* Music Library */
+        .music-library {
+            margin-top: 0.75rem;
+        }
+
+        .music-tracks {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 180px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .music-tracks::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .music-tracks::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+
+        .music-track {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .music-track:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .music-track.selected {
+            background: rgba(236, 72, 153, 0.1);
+            border-color: rgba(236, 72, 153, 0.4);
+        }
+
+        .music-track-play {
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .music-track.selected .music-track-play {
+            background: #ec4899;
+        }
+
+        .music-track-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .music-track-name {
+            font-size: 0.8rem;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .music-track-meta {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .music-track-duration {
             font-size: 0.75rem;
             color: rgba(255, 255, 255, 0.5);
+            flex-shrink: 0;
         }
 
         /* AI Features Bar */
@@ -2447,17 +2954,19 @@
             html += '<img src="' + activeClip.thumbnail + '" alt="Preview">';
             html += '</div>';
 
-            // Caption preview
+            // Caption preview with style-specific animations
             if (settings.captionStyle !== 'none') {
                 html += '<div class="phone-caption-preview caption-' + settings.captionStyle + '">';
                 html += '<p class="caption-text">';
-                if (settings.captionStyle === 'karaoke') {
-                    html += 'The <span class="highlight">biggest</span> mistake...';
-                } else if (settings.captionStyle === 'hormozi') {
-                    html += 'The biggest <span class="highlight">mistake</span>...';
-                } else {
-                    html += 'The biggest mistake...';
-                }
+                var captionPreviews = {
+                    karaoke: 'The <span class="highlight">biggest</span> mistake...',
+                    beasty: 'BIGGEST MISTAKE',
+                    deepdiver: 'the biggest mistake entrepreneurs make',
+                    podp: 'The biggest mistake...',
+                    hormozi: 'The biggest <span class="highlight">MISTAKE</span>...',
+                    ali: 'The biggest mistake...'
+                };
+                html += captionPreviews[settings.captionStyle] || 'The biggest mistake...';
                 html += '</p>';
                 html += '</div>';
             }
@@ -2477,27 +2986,30 @@
             // Right: Customization Panels
             html += '<div class="customization-panels">';
 
-            // Captions Panel
+            // Captions Panel with 7 styles + custom
             html += '<div class="customization-panel">';
             html += '<div class="panel-header">';
             html += '<span class="panel-icon">💬</span>';
             html += '<span class="panel-title">CAPTIONS</span>';
-            html += '<span class="panel-preset-label">Presets ▼</span>';
+            html += '<span class="panel-preset-label">7 Styles</span>';
             html += '</div>';
 
             var captionStyles = [
-                { id: 'none', name: 'No captions', preview: '—' },
-                { id: 'karaoke', name: 'Karaoke', preview: '<span style="color:#fbbf24">word</span>' },
-                { id: 'beasty', name: 'Beasty', preview: '<span style="color:#fbbf24;font-weight:900;text-transform:uppercase">BOLD</span>' },
-                { id: 'deepdiver', name: 'Deep Diver', preview: '<span style="font-weight:400;font-size:0.7rem">minimal</span>' },
-                { id: 'podp', name: 'Pod P', preview: '<span style="font-weight:500">clean</span>' },
-                { id: 'hormozi', name: 'Hormozi', preview: '<span style="background:#22c55e;padding:2px 4px;border-radius:2px">high</span>' }
+                { id: 'none', name: 'None', preview: '—' },
+                { id: 'karaoke', name: 'Karaoke', preview: '<span style="color:white">The </span><span style="color:#fbbf24;font-weight:700">biggest</span>' },
+                { id: 'beasty', name: 'MrBeast', preview: '<span style="color:#fbbf24;font-weight:900;text-transform:uppercase;font-size:0.9rem">BOLD</span>' },
+                { id: 'deepdiver', name: 'Minimal', preview: '<span style="font-weight:400;font-size:0.75rem;opacity:0.9">minimal style</span>' },
+                { id: 'podp', name: 'Podcast', preview: '<span style="font-weight:500;letter-spacing:0.3px">Clean Text</span>' },
+                { id: 'hormozi', name: 'Hormozi', preview: '<span style="background:linear-gradient(180deg,#22c55e,#16a34a);padding:2px 6px;border-radius:3px;font-weight:600">KEY</span>' },
+                { id: 'ali', name: 'Ali', preview: '<span style="text-shadow:0 0 8px rgba(236,72,153,0.8)">Glow</span>' },
+                { id: 'custom', name: 'Custom', preview: '✨', isCustom: true }
             ];
 
             html += '<div class="caption-styles-grid">';
             captionStyles.forEach(function(style) {
                 var selectedClass = settings.captionStyle === style.id ? ' selected' : '';
-                html += '<div class="caption-style-card' + selectedClass + '" onclick="app.setCaptionStyle(\'' + style.id + '\')">';
+                var customClass = style.isCustom ? ' custom-style' : '';
+                html += '<div class="caption-style-card' + selectedClass + customClass + '" onclick="app.setCaptionStyle(\'' + style.id + '\')">';
                 html += '<div class="caption-style-preview">' + style.preview + '</div>';
                 html += '<div class="caption-style-name">' + style.name + '</div>';
                 html += '</div>';
@@ -2505,59 +3017,132 @@
             html += '</div>';
             html += '</div>';
 
-            // Reframe Panel
+            // Reframe Panel with visual diagrams
             html += '<div class="customization-panel">';
             html += '<div class="panel-header">';
             html += '<span class="panel-icon">🔲</span>';
             html += '<span class="panel-title">REFRAME</span>';
             html += '</div>';
 
-            var reframeLayouts = [
-                { id: 'auto_center', name: 'Auto-center', icon: '👤' },
-                { id: 'split_screen', name: 'Split', icon: '👥' },
-                { id: 'three_person', name: 'Three', icon: '👥👤' },
-                { id: 'gameplay', name: 'Gameplay', icon: '🎮' },
-                { id: 'broll_split', name: 'B-Roll', icon: '🎬' }
-            ];
-
             html += '<div class="reframe-layouts-grid">';
-            reframeLayouts.forEach(function(layout) {
-                var selectedClass = settings.reframeMode === layout.id ? ' selected' : '';
-                html += '<div class="reframe-layout-card' + selectedClass + '" onclick="app.setReframeMode(\'' + layout.id + '\')">';
-                html += '<div class="reframe-layout-icon">' + layout.icon + '</div>';
-                html += '<div class="reframe-layout-name">' + layout.name + '</div>';
-                html += '</div>';
-            });
+
+            // Auto-center layout
+            var autoSelected = settings.reframeMode === 'auto_center' ? ' selected' : '';
+            html += '<div class="reframe-layout-card' + autoSelected + '" onclick="app.setReframeMode(\'auto_center\')">';
+            html += '<div class="reframe-layout-diagram auto-center"><div class="layout-face"></div></div>';
+            html += '<div class="reframe-layout-name">Auto-center</div>';
+            html += '</div>';
+
+            // Split screen layout
+            var splitSelected = settings.reframeMode === 'split_screen' ? ' selected' : '';
+            html += '<div class="reframe-layout-card' + splitSelected + '" onclick="app.setReframeMode(\'split_screen\')">';
+            html += '<div class="reframe-layout-diagram split-screen">';
+            html += '<div class="layout-section"><div class="layout-face-small"></div></div>';
+            html += '<div class="layout-section"><div class="layout-face-small"></div></div>';
+            html += '</div>';
+            html += '<div class="reframe-layout-name">Split</div>';
+            html += '</div>';
+
+            // Three person layout
+            var threeSelected = settings.reframeMode === 'three_person' ? ' selected' : '';
+            html += '<div class="reframe-layout-card' + threeSelected + '" onclick="app.setReframeMode(\'three_person\')">';
+            html += '<div class="reframe-layout-diagram three-person">';
+            html += '<div class="layout-section-top"><div class="layout-face-main"></div></div>';
+            html += '<div class="layout-section-bottom"><div class="layout-face-small"></div><div class="layout-face-small"></div></div>';
+            html += '</div>';
+            html += '<div class="reframe-layout-name">Three</div>';
+            html += '</div>';
+
+            // Gameplay layout
+            var gameSelected = settings.reframeMode === 'gameplay' ? ' selected' : '';
+            html += '<div class="reframe-layout-card' + gameSelected + '" onclick="app.setReframeMode(\'gameplay\')">';
+            html += '<div class="reframe-layout-diagram gameplay">';
+            html += '<div class="layout-game-area"><span class="layout-game-icon">🎮</span></div>';
+            html += '<div class="layout-cam-area"><div class="layout-face-cam"></div></div>';
+            html += '</div>';
+            html += '<div class="reframe-layout-name">Gameplay</div>';
+            html += '</div>';
+
+            // B-Roll split layout
+            var brollSelected = settings.reframeMode === 'broll_split' ? ' selected' : '';
+            html += '<div class="reframe-layout-card' + brollSelected + '" onclick="app.setReframeMode(\'broll_split\')">';
+            html += '<div class="reframe-layout-diagram broll-split">';
+            html += '<div class="layout-main-area"><div class="layout-face-broll"></div></div>';
+            html += '<div class="layout-broll-area">B-Roll</div>';
+            html += '</div>';
+            html += '<div class="reframe-layout-name">B-Roll</div>';
+            html += '</div>';
+
             html += '</div>';
             html += '</div>';
 
-            // Timeline Panel
+            // Timeline Panel with waveform and draggable handles
             html += '<div class="customization-panel">';
             html += '<div class="panel-header">';
             html += '<span class="panel-icon">✂️</span>';
-            html += '<span class="panel-title">TRIM</span>';
+            html += '<span class="panel-title">TRIM CLIP</span>';
             html += '</div>';
+
+            var trimStart = settings.trimStart || 0;
+            var trimEnd = settings.trimEnd || activeClip.duration;
+            var trimDuration = trimEnd - trimStart;
+            var startPercent = (trimStart / activeClip.duration) * 100;
+            var widthPercent = (trimDuration / activeClip.duration) * 100;
 
             html += '<div class="timeline-container">';
-            html += '<div class="timeline-bar">';
-            html += '<div class="timeline-fill" style="left: 5%; width: 90%"></div>';
-            html += '<div class="timeline-handle" style="left: 5%"></div>';
-            html += '<div class="timeline-handle" style="left: 95%"></div>';
+
+            // Duration header
+            html += '<div class="timeline-header">';
+            html += '<div class="timeline-duration">';
+            html += '<span class="timeline-duration-label">Duration:</span>';
+            html += '<span class="timeline-duration-value">' + utils.formatDuration(trimDuration) + '</span>';
             html += '</div>';
-            html += '<div class="timeline-times">';
-            html += '<span>00:02</span>';
-            html += '<span>' + utils.formatDuration(activeClip.duration - 2) + '</span>';
-            html += '</div>';
+            html += '<div class="timeline-fine-tune">';
+            html += '<button class="timeline-fine-btn" onclick="app.adjustTrim(\'start\', -1)" title="Start -1s">◀</button>';
+            html += '<button class="timeline-fine-btn" onclick="app.adjustTrim(\'start\', 1)" title="Start +1s">▶</button>';
+            html += '<span style="width:8px"></span>';
+            html += '<button class="timeline-fine-btn" onclick="app.adjustTrim(\'end\', -1)" title="End -1s">◀</button>';
+            html += '<button class="timeline-fine-btn" onclick="app.adjustTrim(\'end\', 1)" title="End +1s">▶</button>';
             html += '</div>';
             html += '</div>';
 
-            // Audio Panel
+            // Waveform visualization
+            html += '<div class="timeline-waveform">';
+            html += '<div class="waveform-bars">';
+            for (var i = 0; i < 50; i++) {
+                var barHeight = 20 + Math.random() * 60;
+                var barPos = (i / 50) * 100;
+                var isActive = barPos >= startPercent && barPos <= (startPercent + widthPercent);
+                html += '<div class="waveform-bar' + (isActive ? ' active' : '') + '" style="height:' + barHeight + '%"></div>';
+            }
+            html += '</div>';
+            html += '</div>';
+
+            // Timeline bar with handles
+            html += '<div class="timeline-bar" id="timeline-bar">';
+            html += '<div class="timeline-fill" style="left:' + startPercent + '%; width:' + widthPercent + '%"></div>';
+            html += '<div class="timeline-handle" id="handle-start" style="left:' + startPercent + '%" data-handle="start"></div>';
+            html += '<div class="timeline-handle" id="handle-end" style="left:' + (startPercent + widthPercent) + '%" data-handle="end"></div>';
+            html += '</div>';
+
+            // Time display
+            html += '<div class="timeline-times">';
+            html += '<span>' + utils.formatDuration(trimStart) + '</span>';
+            html += '<span>' + utils.formatDuration(trimEnd) + '</span>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+
+            // Audio Panel with enhanced controls
             html += '<div class="customization-panel">';
             html += '<div class="panel-header">';
             html += '<span class="panel-icon">🔊</span>';
             html += '<span class="panel-title">AUDIO</span>';
             html += '</div>';
 
+            // Voice enhancement section
+            html += '<div class="audio-section-title">Voice Enhancement</div>';
             html += '<div class="audio-options">';
 
             var audioCheckedFiller = settings.removeFiller ? ' checked' : '';
@@ -2565,7 +3150,7 @@
             html += '<input type="checkbox" ' + (settings.removeFiller ? 'checked' : '') + ' onchange="app.toggleAudioOption(\'removeFiller\')">';
             html += '<div class="audio-option-text">';
             html += '<div class="audio-option-title">Remove filler words</div>';
-            html += '<div class="audio-option-desc">Removes um, uh, like, you know</div>';
+            html += '<div class="audio-option-desc">AI removes um, uh, like, you know</div>';
             html += '</div>';
             html += '</label>';
 
@@ -2574,22 +3159,97 @@
             html += '<input type="checkbox" ' + (settings.enhanceAudio ? 'checked' : '') + ' onchange="app.toggleAudioOption(\'enhanceAudio\')">';
             html += '<div class="audio-option-text">';
             html += '<div class="audio-option-title">Enhance audio quality</div>';
-            html += '<div class="audio-option-desc">Noise reduction and normalization</div>';
+            html += '<div class="audio-option-desc">Noise reduction & normalization</div>';
+            html += '</div>';
+            html += '</label>';
+
+            var audioCheckedDucking = settings.audioDucking ? ' checked' : '';
+            html += '<label class="audio-option' + audioCheckedDucking + '">';
+            html += '<input type="checkbox" ' + (settings.audioDucking ? 'checked' : '') + ' onchange="app.toggleAudioOption(\'audioDucking\')">';
+            html += '<div class="audio-option-text">';
+            html += '<div class="audio-option-title">Smart audio ducking</div>';
+            html += '<div class="audio-option-desc">Auto-lower music during speech</div>';
             html += '</div>';
             html += '</label>';
 
             html += '</div>';
+
+            // Volume control
+            html += '<div class="audio-section-title">Volume Control</div>';
+            var voiceVolume = settings.voiceVolume || 100;
+            html += '<div class="audio-volume-control">';
+            html += '<span class="volume-icon">🎙️</span>';
+            html += '<div class="volume-slider-container">';
+            html += '<div class="volume-slider-label">';
+            html += '<span>Voice Volume</span>';
+            html += '<span class="volume-slider-value">' + voiceVolume + '%</span>';
+            html += '</div>';
+            html += '<input type="range" class="volume-slider" min="0" max="150" value="' + voiceVolume + '" oninput="app.setVolume(\'voice\', this.value)">';
+            html += '</div>';
+            html += '</div>';
+
+            // Background music
+            html += '<div class="audio-section-title">Background Music</div>';
+            var musicChecked = settings.addMusic ? ' checked' : '';
+            html += '<label class="audio-option' + musicChecked + '">';
+            html += '<input type="checkbox" ' + (settings.addMusic ? 'checked' : '') + ' onchange="app.toggleAudioOption(\'addMusic\')">';
+            html += '<div class="audio-option-text">';
+            html += '<div class="audio-option-title">Add background music</div>';
+            html += '<div class="audio-option-desc">Royalty-free trending tracks</div>';
+            html += '</div>';
+            html += '</label>';
+
+            // Music library (shown when addMusic is enabled)
+            if (settings.addMusic) {
+                var musicVolume = settings.musicVolume || 30;
+                html += '<div class="audio-volume-control" style="margin-top:0.75rem">';
+                html += '<span class="volume-icon">🎵</span>';
+                html += '<div class="volume-slider-container">';
+                html += '<div class="volume-slider-label">';
+                html += '<span>Music Volume</span>';
+                html += '<span class="volume-slider-value">' + musicVolume + '%</span>';
+                html += '</div>';
+                html += '<input type="range" class="volume-slider" min="0" max="100" value="' + musicVolume + '" oninput="app.setVolume(\'music\', this.value)">';
+                html += '</div>';
+                html += '</div>';
+
+                html += '<div class="music-library">';
+                html += '<div class="music-tracks">';
+
+                var musicTracks = [
+                    { id: 'upbeat1', name: 'Energetic Rise', genre: 'Upbeat', duration: '2:45' },
+                    { id: 'chill1', name: 'Lofi Dreams', genre: 'Chill', duration: '3:12' },
+                    { id: 'epic1', name: 'Cinematic Power', genre: 'Epic', duration: '2:30' },
+                    { id: 'electronic1', name: 'Digital Future', genre: 'Electronic', duration: '2:58' },
+                    { id: 'ambient1', name: 'Peaceful Flow', genre: 'Ambient', duration: '4:05' }
+                ];
+
+                musicTracks.forEach(function(track) {
+                    var trackSelected = settings.selectedTrack === track.id ? ' selected' : '';
+                    html += '<div class="music-track' + trackSelected + '" onclick="app.selectMusicTrack(\'' + track.id + '\')">';
+                    html += '<div class="music-track-play">▶</div>';
+                    html += '<div class="music-track-info">';
+                    html += '<div class="music-track-name">' + track.name + '</div>';
+                    html += '<div class="music-track-meta">' + track.genre + '</div>';
+                    html += '</div>';
+                    html += '<div class="music-track-duration">' + track.duration + '</div>';
+                    html += '</div>';
+                });
+
+                html += '</div>';
+                html += '</div>';
+            }
+
             html += '</div>';
 
             // AI Features Bar
             html += '<div class="ai-features-bar">';
-            html += '<button class="ai-feature-btn">✂️ AI clipping</button>';
-            html += '<button class="ai-feature-btn">💬 AI captioning</button>';
-            html += '<button class="ai-feature-btn">🔲 AI reframe</button>';
-            html += '<button class="ai-feature-btn">🎨 AI B-Roll</button>';
-            html += '<button class="ai-feature-btn">🔊 AI audio</button>';
-            html += '<button class="ai-feature-btn">🎙️ AI voice-over</button>';
-            html += '<button class="ai-feature-btn">🪝 AI hook</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'clipping\')">✂️ AI clipping</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'captioning\')">💬 AI captioning</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'reframe\')">🔲 AI reframe</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'broll\')">🎨 AI B-Roll</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'audio\')">🔊 AI audio</button>';
+            html += '<button class="ai-feature-btn" onclick="app.applyAIFeature(\'hook\')">🪝 AI hook</button>';
             html += '</div>';
 
             html += '</div>'; // customization-panels
@@ -2598,9 +3258,10 @@
             // Navigation
             html += '<div class="wizard-nav">';
             html += '<div class="wizard-nav-left">';
-            html += '<button class="btn-secondary" onclick="app.goToStep(3)">← Back</button>';
+            html += '<button class="btn-secondary" onclick="app.goToStep(3)">← Back to Clips</button>';
             html += '</div>';
             html += '<div class="wizard-nav-right">';
+            html += '<button class="btn-secondary" onclick="app.saveProject()" style="margin-right:0.75rem">💾 Save</button>';
             html += '<button class="btn-primary" onclick="app.goToStep(5)">SEO & Thumbnails →</button>';
             html += '</div>';
             html += '</div>';
@@ -2614,6 +3275,11 @@
                 reframeMode: 'auto_center',
                 removeFiller: true,
                 enhanceAudio: true,
+                audioDucking: false,
+                voiceVolume: 100,
+                addMusic: false,
+                musicVolume: 30,
+                selectedTrack: null,
                 trimStart: 0,
                 trimEnd: null
             };
@@ -2814,6 +3480,123 @@
                     }
                 });
             }
+
+            // Timeline draggable handles (Step 4)
+            var timelineBar = document.getElementById('timeline-bar');
+            var handleStart = document.getElementById('handle-start');
+            var handleEnd = document.getElementById('handle-end');
+
+            if (timelineBar && handleStart && handleEnd) {
+                var isDragging = null;
+                var barRect = null;
+
+                function getActiveClipDuration() {
+                    var selectedClips = state.clips.filter(function(c) {
+                        return state.selectedClipIds.indexOf(c.id) !== -1;
+                    });
+                    var activeClip = selectedClips[state.customization.activeClipIndex];
+                    return activeClip ? activeClip.duration : 60;
+                }
+
+                function handleMouseDown(e, handle) {
+                    e.preventDefault();
+                    isDragging = handle;
+                    barRect = timelineBar.getBoundingClientRect();
+                    handle.classList.add('dragging');
+                    document.body.style.cursor = 'ew-resize';
+                }
+
+                function handleMouseMove(e) {
+                    if (!isDragging || !barRect) return;
+
+                    var x = e.clientX - barRect.left;
+                    var percent = Math.max(0, Math.min(100, (x / barRect.width) * 100));
+                    var duration = getActiveClipDuration();
+                    var time = Math.round((percent / 100) * duration);
+
+                    var selectedClips = state.clips.filter(function(c) {
+                        return state.selectedClipIds.indexOf(c.id) !== -1;
+                    });
+                    var activeClip = selectedClips[state.customization.activeClipIndex];
+                    if (!activeClip) return;
+
+                    var settings = state.clipSettings[activeClip.id] || getDefaultSettings();
+                    var trimStart = settings.trimStart || 0;
+                    var trimEnd = settings.trimEnd || duration;
+
+                    if (isDragging === handleStart) {
+                        // Minimum 5 second clip
+                        trimStart = Math.max(0, Math.min(time, trimEnd - 5));
+                    } else {
+                        // Minimum 5 second clip
+                        trimEnd = Math.min(duration, Math.max(time, trimStart + 5));
+                    }
+
+                    // Update visually without full re-render
+                    var startPercent = (trimStart / duration) * 100;
+                    var widthPercent = ((trimEnd - trimStart) / duration) * 100;
+
+                    var fill = timelineBar.querySelector('.timeline-fill');
+                    if (fill) {
+                        fill.style.left = startPercent + '%';
+                        fill.style.width = widthPercent + '%';
+                    }
+                    handleStart.style.left = startPercent + '%';
+                    handleEnd.style.left = (startPercent + widthPercent) + '%';
+
+                    // Update state
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+                    state.clipSettings[activeClip.id].trimStart = trimStart;
+                    state.clipSettings[activeClip.id].trimEnd = trimEnd;
+
+                    // Update time display
+                    var times = document.querySelectorAll('.timeline-times span');
+                    if (times.length >= 2) {
+                        times[0].textContent = utils.formatDuration(trimStart);
+                        times[1].textContent = utils.formatDuration(trimEnd);
+                    }
+
+                    // Update duration display
+                    var durationValue = document.querySelector('.timeline-duration-value');
+                    if (durationValue) {
+                        durationValue.textContent = utils.formatDuration(trimEnd - trimStart);
+                    }
+                }
+
+                function handleMouseUp() {
+                    if (isDragging) {
+                        isDragging.classList.remove('dragging');
+                        isDragging = null;
+                        barRect = null;
+                        document.body.style.cursor = '';
+                        // Update waveform colors
+                        render();
+                    }
+                }
+
+                handleStart.addEventListener('mousedown', function(e) { handleMouseDown(e, handleStart); });
+                handleEnd.addEventListener('mousedown', function(e) { handleMouseDown(e, handleEnd); });
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+
+                // Touch support
+                handleStart.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    handleMouseDown({ clientX: e.touches[0].clientX, preventDefault: function(){} }, handleStart);
+                });
+                handleEnd.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    handleMouseDown({ clientX: e.touches[0].clientX, preventDefault: function(){} }, handleEnd);
+                });
+                document.addEventListener('touchmove', function(e) {
+                    if (isDragging) {
+                        handleMouseMove({ clientX: e.touches[0].clientX });
+                    }
+                });
+                document.addEventListener('touchend', handleMouseUp);
+            }
         }
 
         /* ==========================================
@@ -2990,6 +3773,93 @@
                 }
                 state.clipSettings[activeClip.id][option] = !state.clipSettings[activeClip.id][option];
                 render();
+            },
+
+            // Volume control
+            setVolume: function(type, value) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (type === 'voice') {
+                    state.clipSettings[activeClip.id].voiceVolume = parseInt(value);
+                } else if (type === 'music') {
+                    state.clipSettings[activeClip.id].musicVolume = parseInt(value);
+                }
+                // Update display without full re-render
+                var valueSpan = document.querySelector('.volume-slider-container .volume-slider[value="' + value + '"]');
+                if (valueSpan) {
+                    var label = valueSpan.parentElement.querySelector('.volume-slider-value');
+                    if (label) label.textContent = value + '%';
+                }
+            },
+
+            // Music track selection
+            selectMusicTrack: function(trackId) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].selectedTrack = trackId;
+                render();
+                utils.showToast('Track selected', 'success');
+            },
+
+            // Timeline trimming
+            adjustTrim: function(handle, delta) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                var settings = state.clipSettings[activeClip.id];
+                var trimStart = settings.trimStart || 0;
+                var trimEnd = settings.trimEnd || activeClip.duration;
+
+                if (handle === 'start') {
+                    trimStart = Math.max(0, Math.min(trimStart + delta, trimEnd - 5));
+                } else {
+                    trimEnd = Math.min(activeClip.duration, Math.max(trimEnd + delta, trimStart + 5));
+                }
+
+                state.clipSettings[activeClip.id].trimStart = trimStart;
+                state.clipSettings[activeClip.id].trimEnd = trimEnd;
+                render();
+            },
+
+            setTrim: function(start, end) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].trimStart = Math.max(0, start);
+                state.clipSettings[activeClip.id].trimEnd = Math.min(activeClip.duration, end);
+                render();
+            },
+
+            // AI feature application
+            applyAIFeature: function(feature) {
+                var featureNames = {
+                    clipping: 'AI Clipping',
+                    captioning: 'AI Captioning',
+                    reframe: 'AI Reframe',
+                    broll: 'AI B-Roll',
+                    audio: 'AI Audio Enhancement',
+                    hook: 'AI Hook Generation'
+                };
+                utils.showToast('Applying ' + (featureNames[feature] || feature) + '...', 'info');
+                // In Phase 4, these will connect to actual Cloud Functions
             },
 
             updateSEO: function(field, value) {
