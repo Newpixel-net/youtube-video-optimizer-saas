@@ -512,3 +512,142 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
+
+/* Wizard Active Section */
+.wizard-active {
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.wizard-active-icon {
+  margin-bottom: 16px;
+}
+
+.wizard-active h3 {
+  font-size: 16px;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.wizard-active p {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 20px;
+}
+
+.wizard-instructions {
+  text-align: left;
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.instruction-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.instruction-step:not(:last-child) {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.instruction-step span:last-child {
+  font-size: 13px;
+  color: #374151;
+}
+
+/* YouTube Ready Section */
+.youtube-ready {
+  padding: 0;
+}
+
+.action-info {
+  text-align: center;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.05), rgba(139, 92, 246, 0.05));
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.action-info p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Usage Steps (Not YouTube) */
+.usage-steps {
+  margin-bottom: 20px;
+}
+
+.usage-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.usage-step:last-child {
+  margin-bottom: 0;
+}
+
+.usage-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: white;
+  border-radius: 8px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.usage-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.usage-text strong {
+  font-size: 13px;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.usage-text span {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Footer Link */
+.footer-link {
+  font-size: 11px;
+}
+
+.footer-link a {
+  color: #8b5cf6;
+  text-decoration: none;
+}
+
+.footer-link a:hover {
+  text-decoration: underline;
+}
