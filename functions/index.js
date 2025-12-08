@@ -15760,8 +15760,18 @@ exports.wizardAnalyzeVideo = functions
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'wizardAnalyzeVideo', 3);
 
-  const { videoUrl, options, uploadedVideoUrl, uploadedVideoPath, uploadedVideoName } = data;
+  const { videoUrl, options, uploadedVideoUrl, uploadedVideoPath, uploadedVideoName, extensionData, useExtension } = data;
   const isUploadedFile = !!uploadedVideoUrl;
+  const hasExtensionData = useExtension && extensionData && extensionData.videoInfo;
+
+  // Log extension data if provided
+  if (hasExtensionData) {
+    console.log('[wizardAnalyzeVideo] Extension data provided:', {
+      hasVideoInfo: !!extensionData.videoInfo,
+      hasStreamData: !!extensionData.streamData,
+      videoId: extensionData.videoInfo?.videoId
+    });
+  }
 
   // Validate input - need either YouTube URL or uploaded file
   if (!videoUrl && !uploadedVideoUrl) {
@@ -15862,31 +15872,91 @@ exports.wizardAnalyzeVideo = functions
   }
 
   try {
-    // Get video metadata
-    const videoResponse = await youtube.videos.list({
-      part: ['snippet', 'statistics', 'contentDetails'],
-      id: [videoId]
-    });
+    let videoData;
+    let snippet = {};
+    let stats = {};
+    let durationSeconds = 0;
 
-    if (!videoResponse.data.items || videoResponse.data.items.length === 0) {
-      throw new functions.https.HttpsError('not-found', 'Video not found');
+    // If extension provided video info, use it; otherwise fetch from YouTube API
+    if (hasExtensionData && extensionData.videoInfo) {
+      const extInfo = extensionData.videoInfo;
+      console.log('[wizardAnalyzeVideo] Using extension-provided video info:', extInfo.title);
+
+      // Parse duration from extension format (e.g., "10:30" or "1:05:30" or seconds)
+      if (typeof extInfo.duration === 'number') {
+        durationSeconds = extInfo.duration;
+      } else if (typeof extInfo.duration === 'string' && extInfo.duration.includes(':')) {
+        const parts = extInfo.duration.split(':').map(Number);
+        if (parts.length === 3) {
+          durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+        } else if (parts.length === 2) {
+          durationSeconds = parts[0] * 60 + parts[1];
+        }
+      }
+
+      videoData = {
+        videoId,
+        title: extInfo.title || 'YouTube Video',
+        description: '', // Extension doesn't capture description
+        channelTitle: extInfo.channel || extInfo.channelTitle || 'Unknown Channel',
+        thumbnail: extInfo.thumbnail || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+        duration: durationSeconds || 300, // Default to 5 mins if unknown
+        viewCount: 0,
+        likeCount: 0,
+        fromExtension: true
+      };
+
+      // Store extension stream data for later use in processing
+      if (extensionData.streamData) {
+        videoData.extensionStreamData = {
+          videoUrl: extensionData.streamData.videoUrl,
+          audioUrl: extensionData.streamData.audioUrl,
+          quality: extensionData.streamData.quality,
+          mimeType: extensionData.streamData.mimeType,
+          capturedAt: Date.now()
+        };
+        console.log('[wizardAnalyzeVideo] Extension stream URLs stored:', {
+          hasVideoUrl: !!extensionData.streamData.videoUrl,
+          hasAudioUrl: !!extensionData.streamData.audioUrl,
+          quality: extensionData.streamData.quality
+        });
+      }
+
+      // Also set snippet for the AI prompt
+      snippet = {
+        title: videoData.title,
+        description: videoData.description,
+        channelTitle: videoData.channelTitle
+      };
+      stats = { viewCount: 0, likeCount: 0 };
+    } else {
+      // Fallback to YouTube API
+      console.log('[wizardAnalyzeVideo] Fetching video metadata from YouTube API');
+      const videoResponse = await youtube.videos.list({
+        part: ['snippet', 'statistics', 'contentDetails'],
+        id: [videoId]
+      });
+
+      if (!videoResponse.data.items || videoResponse.data.items.length === 0) {
+        throw new functions.https.HttpsError('not-found', 'Video not found');
+      }
+
+      const video = videoResponse.data.items[0];
+      snippet = video.snippet;
+      stats = video.statistics;
+      durationSeconds = parseDurationToSeconds(video.contentDetails.duration);
+
+      videoData = {
+        videoId,
+        title: snippet.title,
+        description: snippet.description?.substring(0, 1000) || '',
+        channelTitle: snippet.channelTitle,
+        thumbnail: snippet.thumbnails?.maxres?.url || snippet.thumbnails?.high?.url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+        duration: durationSeconds,
+        viewCount: parseInt(stats.viewCount || 0),
+        likeCount: parseInt(stats.likeCount || 0)
+      };
     }
-
-    const video = videoResponse.data.items[0];
-    const snippet = video.snippet;
-    const stats = video.statistics;
-    const durationSeconds = parseDurationToSeconds(video.contentDetails.duration);
-
-    const videoData = {
-      videoId,
-      title: snippet.title,
-      description: snippet.description?.substring(0, 1000) || '',
-      channelTitle: snippet.channelTitle,
-      thumbnail: snippet.thumbnails?.maxres?.url || snippet.thumbnails?.high?.url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-      duration: durationSeconds,
-      viewCount: parseInt(stats.viewCount || 0),
-      likeCount: parseInt(stats.likeCount || 0)
-    };
 
     // Get actual transcript using the working getVideoTranscript function
     let transcriptData = { segments: [], fullText: '' };
@@ -17832,6 +17902,17 @@ exports.wizardProcessClip = functions
     // Get clip settings (from project or from request)
     const clipSettings = settings || project.clipSettings?.[clipId] || {};
 
+    // Check if extension stream data is available
+    const extensionStreamData = project.videoData?.extensionStreamData;
+    if (extensionStreamData) {
+      console.log(`[wizardProcessClip] Extension stream data available for ${clipId}:`, {
+        hasVideoUrl: !!extensionStreamData.videoUrl,
+        hasAudioUrl: !!extensionStreamData.audioUrl,
+        quality: extensionStreamData.quality,
+        capturedAt: extensionStreamData.capturedAt
+      });
+    }
+
     // Create processing job record
     const processingJob = {
       userId: uid,
@@ -17844,6 +17925,10 @@ exports.wizardProcessClip = functions
       isUpload: project.isUpload || false,
       uploadedVideoUrl: project.videoData?.uploadedVideoUrl || project.videoUrl,
       uploadedVideoPath: project.uploadedVideoPath || null,
+
+      // Extension stream data (if available from browser extension capture)
+      extensionStreamData: extensionStreamData || null,
+      hasExtensionStream: !!extensionStreamData,
 
       // Clip timing
       startTime: clip.startTime,

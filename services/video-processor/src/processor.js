@@ -74,6 +74,18 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         downloadedFile = segmentFile;
         console.log(`[${jobId}] Extracted segment from ${job.startTime}s to ${job.endTime}s`);
       }
+    } else if (job.hasExtensionStream && job.extensionStreamData?.videoUrl) {
+      // Extension-captured video - use direct stream URLs
+      console.log(`[${jobId}] Using extension-captured stream URLs`);
+      await updateProgress(jobRef, 10, 'Downloading from extension capture...');
+
+      downloadedFile = await downloadFromExtensionStream({
+        jobId,
+        extensionStreamData: job.extensionStreamData,
+        startTime: job.startTime,
+        endTime: job.endTime,
+        workDir
+      });
     } else {
       // YouTube video - download from YouTube
       await updateProgress(jobRef, 10, 'Downloading video...');
@@ -141,6 +153,139 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
 // downloadVideoSegment is imported from youtube-downloader.js
 // Uses youtubei.js with automatic PO token generation to bypass bot detection
+
+/**
+ * Download video from extension-captured stream URLs
+ * Uses direct stream URLs provided by the browser extension
+ */
+async function downloadFromExtensionStream({ jobId, extensionStreamData, startTime, endTime, workDir }) {
+  console.log(`[${jobId}] Downloading from extension stream URLs`);
+
+  const { videoUrl, audioUrl, quality } = extensionStreamData;
+  const outputFile = path.join(workDir, 'segment.mp4');
+
+  // Check if stream URLs are still valid (they expire after some time)
+  const capturedAt = extensionStreamData.capturedAt || 0;
+  const now = Date.now();
+  const ageMinutes = (now - capturedAt) / (1000 * 60);
+
+  if (ageMinutes > 30) {
+    console.log(`[${jobId}] Extension stream URLs are ${ageMinutes.toFixed(1)} minutes old, may have expired`);
+  }
+
+  try {
+    if (audioUrl) {
+      // Download video and audio separately, then merge
+      console.log(`[${jobId}] Downloading video stream (${quality || 'unknown quality'})...`);
+      const videoFile = path.join(workDir, 'video_only.mp4');
+      const audioFile = path.join(workDir, 'audio_only.m4a');
+
+      // Download video stream
+      const videoResponse = await fetch(videoUrl);
+      if (!videoResponse.ok) {
+        throw new Error(`Video stream download failed: ${videoResponse.status}`);
+      }
+      const videoBuffer = await videoResponse.arrayBuffer();
+      fs.writeFileSync(videoFile, Buffer.from(videoBuffer));
+      console.log(`[${jobId}] Downloaded video: ${fs.statSync(videoFile).size} bytes`);
+
+      // Download audio stream
+      console.log(`[${jobId}] Downloading audio stream...`);
+      const audioResponse = await fetch(audioUrl);
+      if (!audioResponse.ok) {
+        throw new Error(`Audio stream download failed: ${audioResponse.status}`);
+      }
+      const audioBuffer = await audioResponse.arrayBuffer();
+      fs.writeFileSync(audioFile, Buffer.from(audioBuffer));
+      console.log(`[${jobId}] Downloaded audio: ${fs.statSync(audioFile).size} bytes`);
+
+      // Merge video and audio with FFmpeg, and extract segment
+      console.log(`[${jobId}] Merging video and audio, extracting segment ${startTime}s to ${endTime}s...`);
+      await new Promise((resolve, reject) => {
+        const args = [
+          '-i', videoFile,
+          '-i', audioFile,
+          '-ss', String(startTime),
+          '-to', String(endTime),
+          '-c:v', 'copy',
+          '-c:a', 'aac',
+          '-map', '0:v:0',
+          '-map', '1:a:0',
+          '-avoid_negative_ts', 'make_zero',
+          '-y',
+          outputFile
+        ];
+
+        const ffmpeg = spawn('ffmpeg', args);
+
+        let stderr = '';
+        ffmpeg.stderr.on('data', data => {
+          stderr += data.toString();
+        });
+
+        ffmpeg.on('close', code => {
+          if (code === 0) {
+            console.log(`[${jobId}] Merge and segment extraction complete`);
+            resolve();
+          } else {
+            console.error(`[${jobId}] FFmpeg merge failed: ${stderr.slice(-500)}`);
+            reject(new Error(`FFmpeg merge failed with code ${code}`));
+          }
+        });
+      });
+    } else {
+      // Video-only stream (audio might be embedded)
+      console.log(`[${jobId}] Downloading combined stream (${quality || 'unknown quality'})...`);
+      const tempFile = path.join(workDir, 'temp_source.mp4');
+
+      const response = await fetch(videoUrl);
+      if (!response.ok) {
+        throw new Error(`Stream download failed: ${response.status}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      fs.writeFileSync(tempFile, Buffer.from(buffer));
+      console.log(`[${jobId}] Downloaded video: ${fs.statSync(tempFile).size} bytes`);
+
+      // Extract segment with FFmpeg
+      console.log(`[${jobId}] Extracting segment ${startTime}s to ${endTime}s...`);
+      await new Promise((resolve, reject) => {
+        const ffmpeg = spawn('ffmpeg', [
+          '-i', tempFile,
+          '-ss', String(startTime),
+          '-to', String(endTime),
+          '-c', 'copy',
+          '-avoid_negative_ts', 'make_zero',
+          '-y',
+          outputFile
+        ]);
+
+        ffmpeg.stderr.on('data', data => {
+          console.log(`[${jobId}] ffmpeg: ${data.toString().substring(0, 100)}`);
+        });
+
+        ffmpeg.on('close', code => {
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`FFmpeg segment extraction failed with code ${code}`));
+          }
+        });
+      });
+    }
+
+    if (!fs.existsSync(outputFile)) {
+      throw new Error('Output file was not created');
+    }
+
+    console.log(`[${jobId}] Extension stream download complete: ${fs.statSync(outputFile).size} bytes`);
+    return outputFile;
+
+  } catch (error) {
+    console.error(`[${jobId}] Extension stream download failed:`, error.message);
+    throw error;
+  }
+}
 
 /**
  * Process video file with FFmpeg (crop, scale, enhance)
