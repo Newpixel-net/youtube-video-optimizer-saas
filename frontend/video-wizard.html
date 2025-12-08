@@ -1079,6 +1079,7 @@
             align-items: center;
             justify-content: center;
             box-shadow: 0 4px 20px rgba(236, 72, 153, 0.4);
+            z-index: 20;
         }
 
         .video-preview-btn:hover {
@@ -1412,22 +1413,51 @@
         /* Auto-center: Transform 16:9 to 9:16 crop */
         .phone-video-area.reframe-auto_center {
             overflow: hidden;
+            position: relative;
         }
 
-        .phone-video-area.reframe-auto_center iframe,
-        .phone-video-area.reframe-auto_center img {
-            transform: scale(1.78) translateX(0%);
+        .phone-video-area.reframe-auto_center .reframe-video {
+            position: absolute;
+            /* Size the video to be 16:9 aspect ratio that fills the height */
+            /* For a 9:16 container, the video width needs to be 16/9 * 9/16 = 1.0 of width for 16:9 aspect */
+            /* Actually: container is 9:16, video is 16:9. To fill height, scale width by (16/9)/(9/16) = 256/81 ≈ 3.16 */
+            /* Simpler: width should be 177.78% (16/9 ratio), then use object-fit:cover */
+            width: 177.78%;
+            height: 100%;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+            transition: transform 0.4s ease, left 0.4s ease;
+            object-fit: cover;
+        }
+
+        .phone-video-area.reframe-auto_center.crop-center .reframe-video {
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .phone-video-area.reframe-auto_center.crop-left .reframe-video {
+            left: 0;
+            transform: translateX(0%);
+        }
+
+        .phone-video-area.reframe-auto_center.crop-right .reframe-video {
+            left: auto;
+            right: 0;
+            transform: translateX(0%);
+        }
+
+        /* Fallback for iframe/img without .reframe-video class */
+        .phone-video-area.reframe-auto_center iframe:not(.reframe-video),
+        .phone-video-area.reframe-auto_center img:not(.reframe-video) {
+            position: absolute;
+            width: 177.78%;
+            height: 100%;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
             transition: transform 0.4s ease;
-        }
-
-        .phone-video-area.reframe-auto_center.crop-left iframe,
-        .phone-video-area.reframe-auto_center.crop-left img {
-            transform: scale(1.78) translateX(15%);
-        }
-
-        .phone-video-area.reframe-auto_center.crop-right iframe,
-        .phone-video-area.reframe-auto_center.crop-right img {
-            transform: scale(1.78) translateX(-15%);
+            object-fit: cover;
         }
 
         /* Split-screen: Show two halves of the video */
@@ -1544,10 +1574,17 @@
             position: relative;
         }
 
+        .phone-video-area.reframe-gameplay .reframe-video,
         .phone-video-area.reframe-gameplay iframe,
         .phone-video-area.reframe-gameplay img {
-            transform: scale(1.78);
+            position: absolute;
+            width: 177.78%;
+            height: 100%;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
             transition: transform 0.3s ease;
+            object-fit: cover;
         }
 
         .phone-video-area.reframe-gameplay .facecam-preview {
@@ -5740,18 +5777,21 @@
 
             // Different styles for different reframe modes
             var getVideoContent = function(mode) {
-                // For modes that need CSS transforms, don't use position:absolute
-                var needsTransform = ['split_screen', 'three_person', 'broll_split'].indexOf(mode) !== -1;
+                // All reframe modes need CSS transforms - avoid inline position/size styles
+                var needsTransform = ['auto_center', 'split_screen', 'three_person', 'broll_split', 'gameplay'].indexOf(mode) !== -1;
 
                 if (videoId && state.customization.showVideoPreview) {
                     if (needsTransform) {
-                        return '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+                        // Let CSS handle the positioning and transforms
+                        return '<iframe class="reframe-video" src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
                     } else {
                         return '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:inherit"></iframe>';
                     }
                 } else {
                     if (needsTransform) {
-                        return '<img src="' + activeClip.thumbnail + '" alt="Preview">';
+                        // Let CSS handle the positioning and transforms
+                        return '<img class="reframe-video" src="' + activeClip.thumbnail + '" alt="Preview">' +
+                               '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
                     } else {
                         return '<img src="' + activeClip.thumbnail + '" alt="Preview" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">' +
                                '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
