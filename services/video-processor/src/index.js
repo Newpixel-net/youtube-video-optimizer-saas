@@ -340,6 +340,119 @@ async function processJobAsync(jobId) {
   }
 }
 
+/**
+ * Analyze an uploaded video file
+ * Extracts duration and generates suggested clip segments
+ */
+app.post('/analyze-upload', async (req, res) => {
+  const { projectId, videoUrl, storagePath, userId } = req.body;
+
+  if (!projectId || !videoUrl) {
+    return res.status(400).json({ error: 'projectId and videoUrl are required' });
+  }
+
+  console.log(`[AnalyzeUpload] Processing uploaded video for project ${projectId}`);
+
+  try {
+    // Create work directory
+    const workDir = path.join(TEMP_DIR, `upload_${projectId}`);
+    fs.mkdirSync(workDir, { recursive: true });
+
+    // Download the video from Firebase Storage URL
+    const localVideoPath = path.join(workDir, 'source.mp4');
+
+    console.log(`[AnalyzeUpload] Downloading video from ${videoUrl}`);
+
+    // Fetch the video
+    const response = await fetch(videoUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download video: ${response.status}`);
+    }
+
+    const buffer = await response.arrayBuffer();
+    fs.writeFileSync(localVideoPath, Buffer.from(buffer));
+
+    console.log(`[AnalyzeUpload] Video downloaded, size: ${fs.statSync(localVideoPath).size} bytes`);
+
+    // Get video duration using ffprobe
+    const { spawn } = await import('child_process');
+
+    const getDuration = () => new Promise((resolve, reject) => {
+      const ffprobe = spawn('ffprobe', [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'json',
+        localVideoPath
+      ]);
+
+      let output = '';
+      ffprobe.stdout.on('data', data => output += data.toString());
+      ffprobe.stderr.on('data', data => console.log('[ffprobe]', data.toString()));
+
+      ffprobe.on('close', code => {
+        if (code !== 0) {
+          reject(new Error(`ffprobe exited with code ${code}`));
+          return;
+        }
+        try {
+          const result = JSON.parse(output);
+          const duration = parseFloat(result.format?.duration || 0);
+          resolve(Math.round(duration));
+        } catch (e) {
+          reject(new Error('Failed to parse duration'));
+        }
+      });
+    });
+
+    const durationSeconds = await getDuration();
+    console.log(`[AnalyzeUpload] Video duration: ${durationSeconds} seconds`);
+
+    // Generate suggested clips based on duration
+    const clips = [];
+    const numClips = Math.min(8, Math.max(3, Math.floor(durationSeconds / 60)));
+    const segmentSize = Math.floor(durationSeconds / numClips);
+
+    for (let i = 0; i < numClips; i++) {
+      const clipDuration = Math.min(45, Math.max(20, segmentSize - 10));
+      const startTime = Math.floor(segmentSize * i + Math.random() * 10);
+      const endTime = Math.min(startTime + clipDuration, durationSeconds);
+
+      clips.push({
+        id: `clip_upload_${i}_${Date.now()}`,
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        transcript: `Segment ${i + 1}`,
+        aiSummary: `Suggested clip ${i + 1}`,
+        thumbnail: '',
+        score: 75 + Math.floor(Math.random() * 20),
+        platforms: ['youtube', 'tiktok', 'instagram'],
+        reason: 'Auto-generated segment for uploaded video'
+      });
+    }
+
+    // Clean up
+    try {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    } catch (e) {
+      console.log('[AnalyzeUpload] Cleanup warning:', e.message);
+    }
+
+    console.log(`[AnalyzeUpload] Generated ${clips.length} suggested clips`);
+
+    res.status(200).json({
+      success: true,
+      projectId,
+      duration: durationSeconds,
+      clips
+    });
+
+  } catch (error) {
+    console.error('[AnalyzeUpload] Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to analyze uploaded video' });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Video Processor Service running on port ${PORT}`);

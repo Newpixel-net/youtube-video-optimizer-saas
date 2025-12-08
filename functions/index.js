@@ -15760,11 +15760,102 @@ exports.wizardAnalyzeVideo = functions
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'wizardAnalyzeVideo', 3);
 
-  const { videoUrl, options } = data;
-  if (!videoUrl) {
-    throw new functions.https.HttpsError('invalid-argument', 'Video URL is required');
+  const { videoUrl, options, uploadedVideoUrl, uploadedVideoPath, uploadedVideoName } = data;
+  const isUploadedFile = !!uploadedVideoUrl;
+
+  // Validate input - need either YouTube URL or uploaded file
+  if (!videoUrl && !uploadedVideoUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video URL or uploaded file is required');
   }
 
+  // Handle uploaded file
+  if (isUploadedFile) {
+    console.log('Processing uploaded video file:', uploadedVideoName);
+
+    // Generate a unique ID for uploaded videos
+    const videoId = `upload_${Date.now()}_${uid.substring(0, 8)}`;
+    const videoData = {
+      videoId,
+      title: uploadedVideoName || 'Uploaded Video',
+      description: 'Uploaded video file',
+      channelTitle: 'User Upload',
+      thumbnail: '', // No thumbnail for uploaded files initially
+      duration: 0, // Will be determined during processing
+      viewCount: 0,
+      likeCount: 0,
+      isUpload: true,
+      uploadedVideoUrl,
+      uploadedVideoPath
+    };
+
+    // For uploaded files, we'll create a project and process it differently
+    // The video processor will handle extracting duration and generating clips
+    const projectData = {
+      userId: uid,
+      videoId,
+      videoUrl: uploadedVideoUrl,
+      videoData,
+      clips: [], // Will be populated by video processor
+      isUpload: true,
+      uploadedVideoPath,
+      uploadedVideoName: uploadedVideoName || 'Uploaded Video',
+      options: options || {},
+      status: 'pending_processing', // Needs video processor to analyze
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const projectRef = await db.collection('wizardProjects').add(projectData);
+    await logUsage(uid, 'wizard_analyze_upload', { videoId, fileName: uploadedVideoName });
+
+    // Call video processor to analyze the uploaded file
+    try {
+      const videoProcessorUrl = functions.config().videoprocessor?.url;
+      if (videoProcessorUrl) {
+        // Trigger async processing
+        const processorResponse = await fetch(`${videoProcessorUrl}/analyze-upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: projectRef.id,
+            videoUrl: uploadedVideoUrl,
+            storagePath: uploadedVideoPath,
+            userId: uid
+          })
+        });
+
+        if (processorResponse.ok) {
+          const result = await processorResponse.json();
+          // Update project with analysis results
+          if (result.clips && result.duration) {
+            await projectRef.update({
+              clips: result.clips,
+              'videoData.duration': result.duration,
+              status: 'analyzed',
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            projectData.clips = result.clips;
+            projectData.videoData.duration = result.duration;
+            projectData.status = 'analyzed';
+          }
+        }
+      }
+    } catch (processorError) {
+      console.log('Video processor not available for uploaded file:', processorError.message);
+      // Continue without processor - clips will be generated on export
+    }
+
+    return {
+      success: true,
+      projectId: projectRef.id,
+      videoData: projectData.videoData,
+      clips: projectData.clips,
+      isUpload: true,
+      message: 'Uploaded video ready for processing'
+    };
+  }
+
+  // Handle YouTube URL (existing logic)
   const videoId = extractYouTubeVideoId(videoUrl);
   if (!videoId) {
     throw new functions.https.HttpsError('invalid-argument', 'Invalid YouTube URL');
