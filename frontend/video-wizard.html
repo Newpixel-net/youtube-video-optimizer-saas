@@ -3668,6 +3668,87 @@
             flex-shrink: 0;
         }
 
+        .export-item-status.processing {
+            background: rgba(236, 72, 153, 0.15);
+            color: #ec4899;
+            animation: pulse-processing 2s ease-in-out infinite;
+        }
+
+        .export-item-status.failed {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        @keyframes pulse-processing {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .processing-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(236, 72, 153, 0.3);
+            border-top-color: #ec4899;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Global processing toast - persistent notification */
+        .processing-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.98) 0%, rgba(15, 15, 26, 0.98) 100%);
+            border: 1px solid rgba(236, 72, 153, 0.3);
+            border-radius: 1rem;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+            max-width: 350px;
+        }
+
+        .processing-toast-spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(236, 72, 153, 0.3);
+            border-top-color: #ec4899;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            flex-shrink: 0;
+        }
+
+        .processing-toast-content {
+            flex: 1;
+        }
+
+        .processing-toast-title {
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.25rem;
+        }
+
+        .processing-toast-progress {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .processing-toast-close {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            font-size: 1.25rem;
+            padding: 0;
+            line-height: 1;
+        }
+
         .export-item-actions {
             display: flex;
             gap: 0.5rem;
@@ -8317,7 +8398,9 @@
                         };
 
                         app.closeDownloadModal();
-                        utils.showToast('Processing started! ' + result.data.estimatedTime, 'success');
+
+                        // Show persistent processing toast
+                        app.showProcessingToast(clipId);
 
                         // Start polling for status
                         app.pollProcessingStatus(clipId, result.data.jobId);
@@ -8330,8 +8413,41 @@
                 }
             },
 
+            showProcessingToast: function(clipId) {
+                // Remove any existing processing toast
+                var existing = document.querySelector('.processing-toast');
+                if (existing) existing.remove();
+
+                var clip = state.clips.find(function(c) { return c.id === clipId; });
+                var clipName = clip ? (clip.aiSummary || 'Clip').substring(0, 30) : 'Clip';
+
+                var toastHtml = '<div class="processing-toast" id="processing-toast-' + clipId + '">';
+                toastHtml += '<div class="processing-toast-spinner"></div>';
+                toastHtml += '<div class="processing-toast-content">';
+                toastHtml += '<div class="processing-toast-title">🎬 Processing Video</div>';
+                toastHtml += '<div class="processing-toast-progress" id="processing-progress-' + clipId + '">Starting... 0%</div>';
+                toastHtml += '</div>';
+                toastHtml += '<button class="processing-toast-close" onclick="this.parentElement.remove()">×</button>';
+                toastHtml += '</div>';
+
+                document.body.insertAdjacentHTML('beforeend', toastHtml);
+            },
+
+            updateProcessingToast: function(clipId, progress, status) {
+                var progressEl = document.getElementById('processing-progress-' + clipId);
+                if (progressEl) {
+                    var statusText = status === 'processing' ? 'Processing' : (status === 'queued' ? 'In queue' : status);
+                    progressEl.textContent = statusText + '... ' + (progress || 0) + '%';
+                }
+            },
+
+            removeProcessingToast: function(clipId) {
+                var toast = document.getElementById('processing-toast-' + clipId);
+                if (toast) toast.remove();
+            },
+
             pollProcessingStatus: async function(clipId, jobId) {
-                // Poll every 10 seconds for status updates
+                // Poll every 5 seconds for status updates (more frequent for better UX)
                 var pollInterval = setInterval(async function() {
                     try {
                         var wizardGetProcessingStatus = functions.httpsCallable('wizardGetProcessingStatus');
@@ -8345,23 +8461,28 @@
                                 state.processingJobs[clipId].progress = job.progress;
                             }
 
+                            // Update the processing toast
+                            app.updateProcessingToast(clipId, job.progress, job.status);
+
                             if (job.status === 'completed') {
                                 clearInterval(pollInterval);
+                                app.removeProcessingToast(clipId);
                                 if (job.outputUrl) {
-                                    utils.showToast('Video ready! Click to download.', 'success');
+                                    utils.showToast('🎉 Video ready! Downloading...', 'success');
                                     window.open(job.outputUrl, '_blank');
                                 } else {
                                     utils.showToast('Video processed but download not available yet.', 'info');
                                 }
                             } else if (job.status === 'failed') {
                                 clearInterval(pollInterval);
+                                app.removeProcessingToast(clipId);
                                 utils.showToast('Processing failed: ' + (job.error || 'Unknown error'), 'error');
                             }
                         }
                     } catch (error) {
                         console.error('Poll status error:', error);
                     }
-                }, 10000); // 10 second interval
+                }, 5000); // 5 second interval for better UX
 
                 // Stop polling after 10 minutes
                 setTimeout(function() {

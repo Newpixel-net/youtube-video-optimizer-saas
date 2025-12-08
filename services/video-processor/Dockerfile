@@ -7,13 +7,17 @@ FROM node:20-slim
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
+    python3-pip \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp for YouTube video downloading
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp
+# Install yt-dlp via pip (gets more frequent updates than GitHub releases)
+# Using --break-system-packages since we're in a container
+RUN pip3 install --break-system-packages --upgrade yt-dlp
+
+# Verify yt-dlp installation
+RUN yt-dlp --version
 
 # Create app directory
 WORKDIR /app
