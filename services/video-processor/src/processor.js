@@ -75,17 +75,35 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         console.log(`[${jobId}] Extracted segment from ${job.startTime}s to ${job.endTime}s`);
       }
     } else if (job.hasExtensionStream && job.extensionStreamData?.videoUrl) {
-      // Extension-captured video - use direct stream URLs
-      console.log(`[${jobId}] Using extension-captured stream URLs`);
-      await updateProgress(jobRef, 10, 'Downloading from extension capture...');
+      // Extension-captured video - try direct stream URLs first
+      // NOTE: These URLs are IP-restricted and may fail from Cloud Run
+      console.log(`[${jobId}] Attempting extension-captured stream URLs (may be IP-restricted)`);
+      await updateProgress(jobRef, 10, 'Trying extension capture...');
 
-      downloadedFile = await downloadFromExtensionStream({
-        jobId,
-        extensionStreamData: job.extensionStreamData,
-        startTime: job.startTime,
-        endTime: job.endTime,
-        workDir
-      });
+      try {
+        downloadedFile = await downloadFromExtensionStream({
+          jobId,
+          extensionStreamData: job.extensionStreamData,
+          startTime: job.startTime,
+          endTime: job.endTime,
+          workDir
+        });
+        console.log(`[${jobId}] Extension stream download succeeded`);
+      } catch (extStreamError) {
+        // Extension streams often fail due to IP restrictions (403 Forbidden)
+        // Fall back to server-side download methods
+        console.warn(`[${jobId}] Extension stream failed (${extStreamError.message}), falling back to server download...`);
+        await updateProgress(jobRef, 12, 'Extension failed, trying server download...');
+
+        downloadedFile = await downloadVideoSegment({
+          jobId,
+          videoId: job.videoId,
+          startTime: job.startTime,
+          endTime: job.endTime,
+          workDir,
+          youtubeAuth
+        });
+      }
     } else {
       // YouTube video - download from YouTube
       await updateProgress(jobRef, 10, 'Downloading video...');

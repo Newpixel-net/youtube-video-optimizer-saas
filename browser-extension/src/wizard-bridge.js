@@ -21,18 +21,18 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '1.2.0',
+        version: '1.3.0',
         extensionId: EXTENSION_ID,
-        features: ['auto_capture', 'network_intercept', 'stream_cache']
+        features: ['auto_capture', 'network_intercept', 'stream_cache', 'server_fallback']
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '1.2.0';
-    window.__YVO_EXTENSION_FEATURES__ = ['auto_capture', 'network_intercept', 'stream_cache'];
+    window.__YVO_EXTENSION_VERSION__ = '1.3.0';
+    window.__YVO_EXTENSION_FEATURES__ = ['auto_capture', 'network_intercept', 'stream_cache', 'server_fallback'];
 
-    console.log('[YVO Extension] Bridge ready - Video Wizard integration active (v1.2.0 with auto-capture)');
+    console.log('[YVO Extension] Bridge ready - Video Wizard integration active (v1.3.0 with improved diagnostics)');
   }
 
   /**

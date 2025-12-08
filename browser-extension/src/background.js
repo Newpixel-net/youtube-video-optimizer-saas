@@ -447,11 +447,16 @@ async function getBasicVideoInfo(videoId, youtubeUrl) {
 /**
  * Open YouTube video in a new tab and wait for stream interception
  * This is the key function that enables reliable stream capture
+ *
+ * NOTE: Captured stream URLs are IP-restricted and may not work from servers.
+ * This is primarily useful for client-side downloads or when the server
+ * can access YouTube through a similar network path.
  */
 async function openAndCaptureStreams(videoId, youtubeUrl) {
   const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
 
   console.log(`[YVO Background] Opening YouTube tab for stream capture: ${videoId}`);
+  console.log(`[YVO Background] Note: Captured URLs may be IP-restricted`);
 
   return new Promise(async (resolve) => {
     let captureTab = null;
@@ -477,7 +482,8 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
 
       // Wait for tab to load and start playing
       let attempts = 0;
-      const maxAttempts = 20; // 20 attempts * 500ms = 10 seconds max
+      const maxAttempts = 30; // 30 attempts * 500ms = 15 seconds max
+      let playbackTriggered = false;
 
       checkInterval = setInterval(async () => {
         attempts++;
@@ -487,7 +493,9 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
 
         if (intercepted && intercepted.videoUrl) {
           cleanup();
-          console.log(`[YVO Background] Streams captured after ${attempts} checks`);
+          console.log(`[YVO Background] Streams captured after ${attempts} checks (${attempts * 0.5}s)`);
+          console.log(`[YVO Background] Video URLs: ${intercepted.allVideoUrls?.length || 1}`);
+          console.log(`[YVO Background] Audio URLs: ${intercepted.allAudioUrls?.length || 1}`);
 
           // Try to get video info from the tab
           let videoInfo = null;
@@ -497,6 +505,7 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
             });
             if (infoResponse?.success) {
               videoInfo = infoResponse.videoInfo;
+              console.log(`[YVO Background] Got video info: ${videoInfo.title}`);
             }
           } catch (e) {
             console.warn('[YVO Background] Could not get video info from tab:', e.message);
@@ -519,29 +528,47 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
             streamData: {
               videoUrl: intercepted.videoUrl,
               audioUrl: intercepted.audioUrl,
+              allVideoUrls: intercepted.allVideoUrls,
+              allAudioUrls: intercepted.allAudioUrls,
               quality: 'intercepted',
               mimeType: 'video/mp4',
               capturedAt: intercepted.capturedAt,
-              source: 'network_intercept_auto'
+              source: 'network_intercept_auto',
+              note: 'URLs may be IP-restricted - server download may fail'
             },
-            message: 'Streams captured by auto-opening YouTube video.'
+            message: 'Streams captured. Note: URLs may be IP-restricted.'
           });
           return;
         }
 
-        // Try to trigger playback if tab is loaded
-        if (attempts === 5 || attempts === 10 || attempts === 15) {
+        // Try to trigger playback more aggressively
+        if (!playbackTriggered && attempts >= 3) {
           try {
             await chrome.tabs.sendMessage(captureTab.id, { action: 'triggerPlayback' });
-            console.log(`[YVO Background] Triggered playback attempt ${attempts}`);
+            console.log(`[YVO Background] Triggered playback at attempt ${attempts}`);
+            playbackTriggered = true;
           } catch (e) {
-            // Tab might not be ready yet
+            // Tab might not be ready yet - this is expected
+            if (attempts === 3 || attempts === 6 || attempts === 10) {
+              console.log(`[YVO Background] Playback trigger failed (attempt ${attempts}), tab may not be ready`);
+            }
+          }
+        }
+
+        // Re-try playback trigger periodically
+        if (playbackTriggered && (attempts === 12 || attempts === 18 || attempts === 24)) {
+          try {
+            await chrome.tabs.sendMessage(captureTab.id, { action: 'triggerPlayback' });
+            console.log(`[YVO Background] Re-triggered playback at attempt ${attempts}`);
+          } catch (e) {
+            // Ignore
           }
         }
 
         // Check if we've exceeded max attempts
         if (attempts >= maxAttempts) {
           cleanup();
+          console.warn(`[YVO Background] Stream capture timeout after ${maxAttempts * 0.5}s`);
 
           // Close the capture tab
           try {
@@ -550,22 +577,23 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
 
           resolve({
             success: false,
-            error: 'Timeout waiting for stream capture. Please try opening the video in YouTube first.'
+            error: 'Stream capture timeout. The video may require manual playback or has playback restrictions.'
           });
         }
       }, 500);
 
-      // Set absolute timeout
+      // Set absolute timeout (20 seconds)
       timeoutId = setTimeout(() => {
         cleanup();
+        console.warn('[YVO Background] Absolute timeout reached for stream capture');
         try {
           if (captureTab) chrome.tabs.remove(captureTab.id).catch(() => {});
         } catch (e) {}
         resolve({
           success: false,
-          error: 'Stream capture timeout'
+          error: 'Stream capture timeout - video may have restrictions'
         });
-      }, 15000); // 15 second absolute timeout
+      }, 20000);
 
     } catch (error) {
       cleanup();
