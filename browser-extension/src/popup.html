@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none';">
+  <title>YouTube Video Optimizer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <rect width="24" height="24" rx="6" fill="url(#grad)"/>
+          <path d="M10 8L16 12L10 16V8Z" fill="white"/>
+          <defs>
+            <linearGradient id="grad" x1="0" y1="0" x2="24" y2="24">
+              <stop offset="0%" stop-color="#ec4899"/>
+              <stop offset="100%" stop-color="#8b5cf6"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span>Video Optimizer</span>
+      </div>
+      <div class="status-indicator" id="statusIndicator">
+        <span class="status-dot"></span>
+        <span class="status-text">Ready</span>
+      </div>
+    </header>
+
+    <!-- Not on YouTube Message -->
+    <div class="not-youtube hidden" id="notYoutube">
+      <div class="not-youtube-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 8v4M12 16h.01"/>
+        </svg>
+      </div>
+      <h3>Not on YouTube</h3>
+      <p>Navigate to a YouTube video to capture it</p>
+      <a href="https://www.youtube.com" target="_blank" class="btn btn-secondary">
+        Open YouTube
+      </a>
+    </div>
+
+    <!-- Video Info Section -->
+    <div class="video-section hidden" id="videoSection">
+      <div class="video-card">
+        <div class="video-thumbnail" id="videoThumbnail">
+          <img src="" alt="Video thumbnail" id="thumbnailImg">
+          <div class="video-duration" id="videoDuration">0:00</div>
+        </div>
+        <div class="video-info">
+          <h3 class="video-title" id="videoTitle">Loading...</h3>
+          <p class="video-channel" id="videoChannel">Channel</p>
+        </div>
+      </div>
+
+      <!-- Clip Selection -->
+      <div class="clip-section">
+        <h4>Select Clip Range</h4>
+        <div class="time-inputs">
+          <div class="time-input-group">
+            <label for="startTime">Start</label>
+            <input type="text" id="startTime" placeholder="0:00" pattern="[0-9:]+">
+          </div>
+          <span class="time-separator">to</span>
+          <div class="time-input-group">
+            <label for="endTime">End</label>
+            <input type="text" id="endTime" placeholder="0:30" pattern="[0-9:]+">
+          </div>
+        </div>
+        <div class="clip-duration">
+          Clip duration: <span id="clipDuration">30s</span>
+          <span class="duration-hint">(max 60s for Shorts)</span>
+        </div>
+      </div>
+
+      <!-- Quality Selection -->
+      <div class="quality-section">
+        <h4>Quality</h4>
+        <div class="quality-options">
+          <label class="quality-option">
+            <input type="radio" name="quality" value="720" checked>
+            <span class="quality-label">720p HD</span>
+          </label>
+          <label class="quality-option">
+            <input type="radio" name="quality" value="1080">
+            <span class="quality-label">1080p Full HD</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="actions">
+        <button class="btn btn-primary" id="captureBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7,10 12,15 17,10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Capture & Download
+        </button>
+        <button class="btn btn-secondary" id="openAppBtn">
+          Open Full App
+        </button>
+      </div>
+    </div>
+
+    <!-- Processing State -->
+    <div class="processing-section hidden" id="processingSection">
+      <div class="processing-animation">
+        <div class="spinner"></div>
+      </div>
+      <h3>Processing Video</h3>
+      <p class="processing-status" id="processingStatus">Capturing video stream...</p>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <p class="progress-text" id="progressText">0%</p>
+      <button class="btn btn-ghost" id="cancelBtn">Cancel</button>
+    </div>
+
+    <!-- Success State -->
+    <div class="success-section hidden" id="successSection">
+      <div class="success-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+      </div>
+      <h3>Video Captured!</h3>
+      <p>Your clip has been downloaded successfully</p>
+      <div class="success-actions">
+        <button class="btn btn-primary" id="processInAppBtn">
+          Process in App
+        </button>
+        <button class="btn btn-secondary" id="captureAnotherBtn">
+          Capture Another
+        </button>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div class="error-section hidden" id="errorSection">
+      <div class="error-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="15" y1="9" x2="9" y2="15"/>
+          <line x1="9" y1="9" x2="15" y2="15"/>
+        </svg>
+      </div>
+      <h3>Capture Failed</h3>
+      <p class="error-message" id="errorMessage">An error occurred</p>
+      <button class="btn btn-secondary" id="retryBtn">
+        Try Again
+      </button>
+    </div>
+
+    <!-- Settings Link -->
+    <footer class="footer">
+      <button class="settings-btn" id="settingsBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+        Settings
+      </button>
+      <span class="version">v1.0.0</span>
+    </footer>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
