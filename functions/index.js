@@ -18485,21 +18485,33 @@ exports.youtubeOAuthCallbackPage = functions.https.onRequest((req, res) => {
             if (error) { showError(error === 'access_denied' ? 'Authorization was cancelled.' : error); return; }
             if (!code || !state) { showError('Missing authorization parameters.'); return; }
 
+            // Check if opener exists
             if (window.opener && !window.opener.closed) {
+                // Always use postMessage first - it works cross-origin
+                // The try/catch for direct function call would fail on cross-origin
                 try {
-                    if (typeof window.opener.youtubeOAuthCallback === 'function') {
-                        window.opener.youtubeOAuthCallback(code, state);
-                        showSuccess();
-                        setTimeout(function() { window.close(); }, 2000);
-                    } else {
-                        window.opener.postMessage({ type: 'youtube-oauth-callback', code: code, state: state }, '*');
-                        showSuccess();
-                        setTimeout(function() { window.close(); }, 2000);
-                    }
+                    // Send via postMessage (cross-origin compatible)
+                    window.opener.postMessage({
+                        type: 'youtube-oauth-callback',
+                        code: code,
+                        state: state
+                    }, '*');
+
+                    showSuccess();
+                    setTimeout(function() { window.close(); }, 2000);
                 } catch (e) {
-                    showError('Could not communicate with main window.');
+                    console.error('postMessage failed:', e);
+                    // Fallback to localStorage
+                    try {
+                        localStorage.setItem('youtube_oauth_pending', JSON.stringify({ code: code, state: state, timestamp: Date.now() }));
+                        showSuccess();
+                        container.innerHTML += '<p style="margin-top:1rem;font-size:0.85rem">Return to Video Wizard to complete connection.</p>';
+                    } catch (e2) {
+                        showError('Could not communicate with main window.');
+                    }
                 }
             } else {
+                // No opener - store in localStorage for main app to pick up
                 try {
                     localStorage.setItem('youtube_oauth_pending', JSON.stringify({ code: code, state: state, timestamp: Date.now() }));
                     showSuccess();

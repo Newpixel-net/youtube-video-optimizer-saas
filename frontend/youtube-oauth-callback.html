@@ -121,32 +121,34 @@
 
             // Try to send the callback to the opener window
             if (window.opener && !window.opener.closed) {
+                // Always use postMessage first - it works cross-origin
+                // Direct function calls fail on cross-origin due to security
                 try {
-                    // Call the callback function in the opener
-                    if (typeof window.opener.youtubeOAuthCallback === 'function') {
-                        window.opener.youtubeOAuthCallback(code, state);
-                        showSuccess();
+                    // Send via postMessage (cross-origin compatible)
+                    window.opener.postMessage({
+                        type: 'youtube-oauth-callback',
+                        code: code,
+                        state: state
+                    }, '*');
 
-                        // Close this window after a short delay
-                        setTimeout(function() {
-                            window.close();
-                        }, 2000);
-                    } else {
-                        // Opener exists but callback not found - try postMessage
-                        window.opener.postMessage({
-                            type: 'youtube-oauth-callback',
-                            code: code,
-                            state: state
-                        }, '*');
-
-                        showSuccess();
-                        setTimeout(function() {
-                            window.close();
-                        }, 2000);
-                    }
+                    showSuccess();
+                    setTimeout(function() {
+                        window.close();
+                    }, 2000);
                 } catch (e) {
-                    console.error('Error communicating with opener:', e);
-                    showError('Could not communicate with the main window. Please close this window and try again.');
+                    console.error('postMessage failed:', e);
+                    // Fallback to localStorage
+                    try {
+                        localStorage.setItem('youtube_oauth_pending', JSON.stringify({
+                            code: code,
+                            state: state,
+                            timestamp: Date.now()
+                        }));
+                        showSuccess();
+                        container.innerHTML += '<p style="margin-top: 1rem; font-size: 0.85rem;">Please return to the Video Wizard to complete the connection.</p>';
+                    } catch (e2) {
+                        showError('Could not communicate with the main window. Please close this window and try again.');
+                    }
                 }
             } else {
                 // No opener - might have been opened directly or opener was closed
