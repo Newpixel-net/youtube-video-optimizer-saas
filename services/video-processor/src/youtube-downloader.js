@@ -17,6 +17,56 @@ const innertubeCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
+ * Download video using FFmpeg (handles YouTube URLs better than fetch)
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {string} params.downloadUrl - Direct video URL
+ * @param {string} params.outputFile - Output file path
+ */
+async function downloadWithFFmpeg({ jobId, downloadUrl, outputFile }) {
+  console.log(`[${jobId}] Using FFmpeg to download video...`);
+
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      '-headers', 'Referer: https://www.youtube.com/\r\nOrigin: https://www.youtube.com\r\n',
+      '-i', downloadUrl,
+      '-c', 'copy',
+      '-y',
+      outputFile
+    ];
+
+    const ffmpegProc = spawn('ffmpeg', args);
+    let stderr = '';
+
+    ffmpegProc.stderr.on('data', (data) => {
+      stderr += data.toString();
+      // Log progress
+      const timeMatch = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
+      if (timeMatch) {
+        console.log(`[${jobId}] FFmpeg progress: ${timeMatch[1]}`);
+      }
+    });
+
+    ffmpegProc.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outputFile)) {
+        const stats = fs.statSync(outputFile);
+        console.log(`[${jobId}] FFmpeg download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+        resolve(outputFile);
+      } else {
+        console.error(`[${jobId}] FFmpeg download failed with code ${code}`);
+        console.error(`[${jobId}] FFmpeg stderr: ${stderr.slice(-500)}`);
+        reject(new Error(`FFmpeg download failed: ${stderr.slice(-200)}`));
+      }
+    });
+
+    ffmpegProc.on('error', (error) => {
+      reject(new Error(`FFmpeg error: ${error.message}`));
+    });
+  });
+}
+
+/**
  * Download video using RapidAPI (paid, reliable)
  * API: youtube-video-download-info (~$0.0003 per download)
  * @param {Object} params
@@ -122,16 +172,35 @@ async function downloadWithRapidAPI({ jobId, videoId, workDir, outputFile }) {
     }
 
     console.log(`[${jobId}] YT-API: Downloading ${selectedQuality} video...`);
+    console.log(`[${jobId}] Download URL domain: ${new URL(downloadUrl).hostname}`);
 
-    // Step 2: Download the video file with streaming to handle large files
+    // Step 2: Download the video file - YouTube URLs require specific headers
     const videoResponse = await fetch(downloadUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'identity;q=1, *;q=0',
+        'Range': 'bytes=0-',
+        'Referer': 'https://www.youtube.com/',
+        'Origin': 'https://www.youtube.com',
+        'Sec-Fetch-Dest': 'video',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+        'Connection': 'keep-alive'
       }
     });
 
-    if (!videoResponse.ok) {
-      throw new Error(`Video download failed: ${videoResponse.status} ${videoResponse.statusText}`);
+    // YouTube may return 206 Partial Content or 200 OK
+    if (!videoResponse.ok && videoResponse.status !== 206) {
+      console.error(`[${jobId}] Fetch failed with ${videoResponse.status}, trying FFmpeg download...`);
+      // Log response headers for debugging
+      const respHeaders = {};
+      videoResponse.headers.forEach((v, k) => respHeaders[k] = v);
+      console.error(`[${jobId}] Response headers: ${JSON.stringify(respHeaders)}`);
+
+      // Fallback to FFmpeg for downloading (handles YouTube URLs better)
+      return await downloadWithFFmpeg({ jobId, downloadUrl, outputFile });
     }
 
     // Get content length if available
