@@ -25,42 +25,70 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
  */
 async function downloadWithFFmpeg({ jobId, downloadUrl, outputFile }) {
   console.log(`[${jobId}] Using FFmpeg to download video...`);
+  console.log(`[${jobId}] FFmpeg target URL: ${downloadUrl.substring(0, 100)}...`);
 
   return new Promise((resolve, reject) => {
     const args = [
+      '-y',
       '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       '-headers', 'Referer: https://www.youtube.com/\r\nOrigin: https://www.youtube.com\r\n',
+      '-reconnect', '1',
+      '-reconnect_streamed', '1',
+      '-reconnect_delay_max', '5',
+      '-timeout', '30000000',  // 30 second timeout in microseconds
       '-i', downloadUrl,
       '-c', 'copy',
-      '-y',
       outputFile
     ];
 
     const ffmpegProc = spawn('ffmpeg', args);
     let stderr = '';
+    let lastProgress = Date.now();
+
+    // Set a timeout - kill if no progress for 60 seconds
+    const timeoutCheck = setInterval(() => {
+      if (Date.now() - lastProgress > 60000) {
+        console.error(`[${jobId}] FFmpeg timeout - no progress for 60s, killing...`);
+        ffmpegProc.kill('SIGKILL');
+        clearInterval(timeoutCheck);
+      }
+    }, 10000);
 
     ffmpegProc.stderr.on('data', (data) => {
       stderr += data.toString();
+      lastProgress = Date.now();
       // Log progress
       const timeMatch = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
       if (timeMatch) {
         console.log(`[${jobId}] FFmpeg progress: ${timeMatch[1]}`);
       }
+      // Log errors immediately
+      if (stderr.includes('403 Forbidden') || stderr.includes('Server returned')) {
+        console.error(`[${jobId}] FFmpeg HTTP error detected: ${stderr.slice(-300)}`);
+      }
     });
 
     ffmpegProc.on('close', (code) => {
+      clearInterval(timeoutCheck);
       if (code === 0 && fs.existsSync(outputFile)) {
         const stats = fs.statSync(outputFile);
-        console.log(`[${jobId}] FFmpeg download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
-        resolve(outputFile);
+        if (stats.size > 1000) {  // At least 1KB
+          console.log(`[${jobId}] FFmpeg download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+          resolve(outputFile);
+        } else {
+          console.error(`[${jobId}] FFmpeg output too small: ${stats.size} bytes`);
+          reject(new Error('FFmpeg output file too small'));
+        }
       } else {
         console.error(`[${jobId}] FFmpeg download failed with code ${code}`);
-        console.error(`[${jobId}] FFmpeg stderr: ${stderr.slice(-500)}`);
+        console.error(`[${jobId}] FFmpeg stderr (last 500): ${stderr.slice(-500)}`);
         reject(new Error(`FFmpeg download failed: ${stderr.slice(-200)}`));
       }
     });
 
     ffmpegProc.on('error', (error) => {
+      clearInterval(timeoutCheck);
+      console.error(`[${jobId}] FFmpeg spawn error: ${error.message}`);
       reject(new Error(`FFmpeg error: ${error.message}`));
     });
   });
@@ -295,11 +323,11 @@ async function getInnertubeForClient(clientType = 'TV', youtubeAuth = null) {
  * @param {Object} [youtubeAuth] - Optional OAuth credentials
  */
 async function getVideoInfoWithFallback(videoId, youtubeAuth = null) {
-  // If we have OAuth credentials, try authenticated WEB client first
-  // This should have fewer restrictions
+  // Try multiple client types - some work better than others depending on video/region
+  // ANDROID and IOS clients often bypass restrictions that affect WEB/TV
   const clientsToTry = youtubeAuth?.accessToken
-    ? ['WEB', 'TV', 'TV_EMBEDDED']
-    : ['TV', 'TV_EMBEDDED', 'WEB'];
+    ? ['WEB', 'ANDROID', 'IOS', 'TV', 'TV_EMBEDDED']
+    : ['ANDROID', 'IOS', 'TV', 'TV_EMBEDDED', 'WEB', 'ANDROID_MUSIC'];
 
   for (const clientType of clientsToTry) {
     try {
@@ -354,20 +382,11 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
 
   console.log(`[${jobId}] Downloading video segment: ${startTime}s to ${endTime}s (${duration}s)`);
 
-  // Method 1: Try RapidAPI first (most reliable paid option)
+  // NOTE: RapidAPI disabled - URLs are IP-restricted to RapidAPI's servers, not Cloud Run
+  // The download URLs only work from the IP that requested them (RapidAPI's servers)
+  // so they fail with 403 when Cloud Run tries to download
   if (RAPIDAPI_KEY) {
-    try {
-      const rapidApiOutput = path.join(workDir, 'rapidapi_source.mp4');
-      await downloadWithRapidAPI({ jobId, videoId, workDir, outputFile: rapidApiOutput });
-
-      // RapidAPI downloads full video, so we need to trim to the segment
-      console.log(`[${jobId}] Trimming RapidAPI download to segment...`);
-      return await trimVideoSegment({ jobId, inputFile: rapidApiOutput, outputFile, startTime, endTime });
-    } catch (rapidApiError) {
-      console.log(`[${jobId}] RapidAPI failed: ${rapidApiError.message}, trying other methods...`);
-    }
-  } else {
-    console.log(`[${jobId}] RapidAPI key not configured, skipping paid download`);
+    console.log(`[${jobId}] RapidAPI configured but disabled - URLs are IP-restricted and don't work from Cloud Run`);
   }
 
   // Log if we have YouTube authentication
@@ -668,7 +687,7 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
   const bufferEnd = endTime + 2;
 
   return new Promise((resolve, reject) => {
-    // Use tv_simply client which has fewer restrictions
+    // Try multiple clients - ios and android often work when web/tv fail
     const args = [
       '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
       '--download-sections', `*${bufferStart}-${bufferEnd}`,
@@ -676,15 +695,18 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
       '-o', outputFile,
       '--no-playlist',
       '--no-warnings',
-      // Use tv_simply client which generally works better
-      '--extractor-args', 'youtube:player_client=tv_simply,tv,web',
-      '--sleep-requests', '1',
-      '--extractor-retries', '5',
-      '--retry-sleep', 'extractor:3',
+      // Try multiple clients - ios/android often bypass restrictions
+      '--extractor-args', 'youtube:player_client=ios,android,tv_simply,mweb,tv,web',
+      '--sleep-requests', '0.5',
+      '--extractor-retries', '10',
+      '--retry-sleep', 'extractor:2',
       '--no-check-certificates',
       '--geo-bypass',
       '--ignore-errors',
-      '--merge-output-format', 'mp4'
+      '--merge-output-format', 'mp4',
+      '--socket-timeout', '30',
+      '--retries', '5',
+      '-v'  // Verbose mode for debugging
     ];
 
     // Add OAuth authorization header if available
@@ -702,7 +724,7 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
     // Add the video URL at the end
     args.push(`https://www.youtube.com/watch?v=${videoId}`);
 
-    console.log(`[${jobId}] yt-dlp starting with tv_simply client...`);
+    console.log(`[${jobId}] yt-dlp starting with ios,android,tv_simply clients...`);
 
     const ytdlpProc = spawn('yt-dlp', args);
     let stdout = '';
