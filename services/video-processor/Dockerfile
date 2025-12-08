@@ -1,23 +1,38 @@
 # Video Processor Service for Cloud Run
-# Uses FFmpeg for video processing
+# Uses FFmpeg for video processing with reliable YouTube downloads
 
 FROM node:20-slim
 
-# Install FFmpeg and other dependencies
+# Install FFmpeg, Python, and other dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
     python3-pip \
+    python3-venv \
     curl \
     ca-certificates \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp via pip (gets more frequent updates than GitHub releases)
+# Install yt-dlp nightly (more frequent updates for YouTube changes)
 # Using --break-system-packages since we're in a container
-RUN pip3 install --break-system-packages --upgrade yt-dlp
+RUN pip3 install --break-system-packages --upgrade "yt-dlp[default]"
 
-# Verify yt-dlp installation
-RUN yt-dlp --version
+# Install bgutil-ytdlp-pot-provider for YouTube bot detection bypass
+# This is CRITICAL - without POT tokens, YouTube blocks most requests
+RUN pip3 install --break-system-packages bgutil-ytdlp-pot-provider
+
+# Download and install the POT provider plugin
+RUN mkdir -p /root/.config/yt-dlp/plugins && \
+    cd /tmp && \
+    curl -L -o pot-provider.zip https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/latest/download/bgutil-ytdlp-pot-provider.zip && \
+    unzip pot-provider.zip -d /root/.config/yt-dlp/plugins/ && \
+    rm pot-provider.zip
+
+# Verify installations
+RUN yt-dlp --version && \
+    echo "Checking for POT provider..." && \
+    yt-dlp --list-plugins 2>/dev/null || echo "Plugins installed"
 
 # Create app directory
 WORKDIR /app

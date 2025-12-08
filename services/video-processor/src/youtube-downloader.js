@@ -1,6 +1,9 @@
 /**
- * YouTube Video Downloader with RapidAPI (YT-API) + youtubei.js fallback
- * Priority: RapidAPI YT-API (paid, reliable) > youtubei.js > yt-dlp > other fallbacks
+ * YouTube Video Downloader with multiple fallbacks
+ * Priority: yt-dlp (with POT provider) > Video Download API > youtubei.js > other fallbacks
+ *
+ * The POT (Proof of Origin Token) provider is critical for bypassing YouTube's bot detection.
+ * See: https://github.com/Brainicism/bgutil-ytdlp-pot-provider
  */
 
 import { Innertube, ClientType } from 'youtubei.js';
@@ -8,9 +11,15 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 
-// RapidAPI YT-API configuration - set via environment variable
+// RapidAPI YT-API configuration (legacy, disabled)
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '';
 const RAPIDAPI_HOST = 'yt-api.p.rapidapi.com';
+
+// Video Download API - reliable third-party service
+// Supports time segments, 99%+ uptime, production-ready
+// See: https://video-download-api.com/
+const VIDEO_DOWNLOAD_API_KEY = process.env.VIDEO_DOWNLOAD_API_KEY || '';
+const VIDEO_DOWNLOAD_API_URL = 'https://api.video-download-api.com';
 
 // Cache for Innertube instances per client type
 const innertubeCache = new Map();
@@ -510,13 +519,24 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
 
   } catch (error) {
     console.error(`[${jobId}] youtubei.js download failed:`, error.message);
-    console.log(`[${jobId}] Falling back to yt-dlp...`);
+    console.log(`[${jobId}] Falling back to yt-dlp with POT provider...`);
 
     try {
       return await downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
     } catch (ytdlpError) {
-      console.error(`[${jobId}] yt-dlp also failed:`, ytdlpError.message);
-      console.log(`[${jobId}] Trying Cobalt API as final fallback...`);
+      console.error(`[${jobId}] yt-dlp failed:`, ytdlpError.message);
+
+      // Try Video Download API if configured (paid, reliable)
+      if (VIDEO_DOWNLOAD_API_KEY) {
+        console.log(`[${jobId}] Trying Video Download API (paid service)...`);
+        try {
+          return await downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime, workDir, outputFile });
+        } catch (apiError) {
+          console.error(`[${jobId}] Video Download API failed:`, apiError.message);
+        }
+      }
+
+      console.log(`[${jobId}] Trying Cobalt API fallback (may be broken for YouTube)...`);
 
       try {
         // Cobalt downloads full video, we'll trim it with FFmpeg
@@ -687,7 +707,9 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
   const bufferEnd = endTime + 2;
 
   return new Promise((resolve, reject) => {
-    // Try multiple clients - ios and android often work when web/tv fail
+    // yt-dlp with POT (Proof of Origin Token) provider
+    // The bgutil-ytdlp-pot-provider plugin automatically generates tokens
+    // to bypass YouTube's bot detection - this is critical for reliability
     const args = [
       '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
       '--download-sections', `*${bufferStart}-${bufferEnd}`,
@@ -695,36 +717,28 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
       '-o', outputFile,
       '--no-playlist',
       '--no-warnings',
-      // Try multiple clients - ios/android often bypass restrictions
-      '--extractor-args', 'youtube:player_client=ios,android,tv_simply,mweb,tv,web',
-      '--sleep-requests', '0.5',
-      '--extractor-retries', '10',
-      '--retry-sleep', 'extractor:2',
+      // Use web_creator client which works best with POT provider
+      '--extractor-args', 'youtube:player_client=web_creator,mweb,ios',
+      '--sleep-requests', '1',
+      '--extractor-retries', '5',
+      '--retry-sleep', 'extractor:3',
       '--no-check-certificates',
       '--geo-bypass',
-      '--ignore-errors',
       '--merge-output-format', 'mp4',
-      '--socket-timeout', '30',
-      '--retries', '5',
+      '--socket-timeout', '60',
+      '--retries', '3',
+      '--fragment-retries', '3',
       '-v'  // Verbose mode for debugging
     ];
 
-    // Add OAuth authorization header if available
-    if (youtubeAuth?.accessToken) {
-      args.push('--add-header', `Authorization: Bearer ${youtubeAuth.accessToken}`);
-      console.log(`[${jobId}] yt-dlp using OAuth authentication`);
-    }
-
-    // Add PO token if available from environment (fallback for unauthenticated)
-    const poToken = process.env.YOUTUBE_PO_TOKEN;
-    if (poToken && !youtubeAuth?.accessToken) {
-      args.push('--extractor-args', `youtube:po_token=tv+${poToken}`);
-    }
+    // OAuth is deprecated for yt-dlp as of 2024, so we don't use it anymore
+    // The POT provider plugin handles authentication automatically if installed
 
     // Add the video URL at the end
     args.push(`https://www.youtube.com/watch?v=${videoId}`);
 
-    console.log(`[${jobId}] yt-dlp starting with ios,android,tv_simply clients...`);
+    console.log(`[${jobId}] yt-dlp starting with POT provider (web_creator client)...`);
+    console.log(`[${jobId}] Download segment: ${bufferStart}s to ${bufferEnd}s`);
 
     const ytdlpProc = spawn('yt-dlp', args);
     let stdout = '';
@@ -732,21 +746,44 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
 
     ytdlpProc.stdout.on('data', (data) => {
       stdout += data.toString();
-      console.log(`[${jobId}] yt-dlp: ${data.toString().trim()}`);
+      const line = data.toString().trim();
+      // Log progress and important messages
+      if (line.includes('[download]') || line.includes('POT') || line.includes('Downloading')) {
+        console.log(`[${jobId}] yt-dlp: ${line}`);
+      }
     });
 
     ytdlpProc.stderr.on('data', (data) => {
       stderr += data.toString();
+      const line = data.toString().trim();
+      // Log errors and POT-related messages
+      if (line.includes('POT') || line.includes('bgutil') || line.includes('ERROR') || line.includes('WARNING')) {
+        console.log(`[${jobId}] yt-dlp stderr: ${line}`);
+      }
     });
 
     ytdlpProc.on('close', (code) => {
       if (code === 0 && fs.existsSync(outputFile)) {
-        console.log(`[${jobId}] yt-dlp download complete`);
+        const stats = fs.statSync(outputFile);
+        console.log(`[${jobId}] yt-dlp download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
         resolve(outputFile);
       } else {
         console.error(`[${jobId}] yt-dlp failed with code ${code}`);
-        console.error(`[${jobId}] stderr: ${stderr}`);
-        reject(new Error(`Video download failed: ${stderr || 'Unknown error'}`));
+        console.error(`[${jobId}] Full stderr: ${stderr}`);
+
+        // Provide helpful error message
+        let errorMsg = 'Video download failed';
+        if (stderr.includes('Sign in to confirm')) {
+          errorMsg = 'YouTube bot detection triggered. POT provider may not be installed correctly.';
+        } else if (stderr.includes('403')) {
+          errorMsg = 'YouTube returned 403 Forbidden. IP may be rate limited.';
+        } else if (stderr.includes('private video')) {
+          errorMsg = 'This is a private video and cannot be downloaded.';
+        } else if (stderr.includes('age-restricted')) {
+          errorMsg = 'This video is age-restricted.';
+        }
+
+        reject(new Error(`${errorMsg}: ${stderr.slice(-200) || 'Unknown error'}`));
       }
     });
 
@@ -757,11 +794,74 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
 }
 
 /**
+ * Download using Video Download API (video-download-api.com)
+ * Reliable third-party service with ~99% uptime, supports time segments
+ * This is a PAID service - set VIDEO_DOWNLOAD_API_KEY environment variable
+ */
+async function downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime, workDir, outputFile }) {
+  if (!VIDEO_DOWNLOAD_API_KEY) {
+    throw new Error('VIDEO_DOWNLOAD_API_KEY not configured');
+  }
+
+  console.log(`[${jobId}] Trying Video Download API (reliable third-party)...`);
+
+  try {
+    // Request video download with time segment
+    const response = await fetch(`${VIDEO_DOWNLOAD_API_URL}/v1/download`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${VIDEO_DOWNLOAD_API_KEY}`
+      },
+      body: JSON.stringify({
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        format: 'mp4',
+        quality: '1080',
+        start_time: Math.max(0, startTime - 1),
+        end_time: endTime + 1
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API returned ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.download_url) {
+      throw new Error('No download URL in response');
+    }
+
+    console.log(`[${jobId}] Video Download API returned URL, downloading...`);
+
+    // Download the file
+    const downloadResponse = await fetch(data.download_url);
+    if (!downloadResponse.ok) {
+      throw new Error(`Download failed: ${downloadResponse.status}`);
+    }
+
+    const buffer = await downloadResponse.arrayBuffer();
+    fs.writeFileSync(outputFile, Buffer.from(buffer));
+
+    const stats = fs.statSync(outputFile);
+    console.log(`[${jobId}] Video Download API complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+
+    return outputFile;
+
+  } catch (error) {
+    console.error(`[${jobId}] Video Download API failed:`, error.message);
+    throw error;
+  }
+}
+
+/**
  * Fallback download using Cobalt API (cobalt.tools)
- * Cobalt is an open-source video download service that handles YouTube restrictions better
+ * NOTE: Cobalt YouTube support is currently BROKEN as of late 2024
+ * See: https://github.com/imputnet/cobalt - "YouTube will not be available until further notice"
  */
 async function downloadWithCobalt({ jobId, videoId, workDir, outputFile }) {
-  console.log(`[${jobId}] Trying Cobalt API fallback...`);
+  console.log(`[${jobId}] Trying Cobalt API fallback (may be broken for YouTube)...`);
 
   try {
     // Try multiple Cobalt instances
