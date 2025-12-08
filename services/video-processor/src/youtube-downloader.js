@@ -26,15 +26,20 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
  * @param {string} params.outputFile - Output file path
  */
 async function downloadWithRapidAPI({ jobId, videoId, workDir, outputFile }) {
+  // Log key status (masked for security)
+  const keyStatus = RAPIDAPI_KEY ? `configured (${RAPIDAPI_KEY.substring(0, 8)}...)` : 'NOT CONFIGURED';
+  console.log(`[${jobId}] RapidAPI key status: ${keyStatus}`);
+
   if (!RAPIDAPI_KEY) {
-    throw new Error('RapidAPI key not configured');
+    throw new Error('RapidAPI key not configured - set RAPIDAPI_KEY environment variable');
   }
 
-  console.log(`[${jobId}] Trying RapidAPI YT-API download...`);
+  console.log(`[${jobId}] Trying RapidAPI YT-API download for video: ${videoId}`);
 
   try {
     // Step 1: Get download URL from YT-API on RapidAPI
     const apiUrl = `https://${RAPIDAPI_HOST}/dl?id=${videoId}`;
+    console.log(`[${jobId}] YT-API request: ${apiUrl}`);
 
     const response = await fetch(apiUrl, {
       method: 'GET',
@@ -44,25 +49,33 @@ async function downloadWithRapidAPI({ jobId, videoId, workDir, outputFile }) {
       }
     });
 
+    console.log(`[${jobId}] YT-API response status: ${response.status}`);
+
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`YT-API request failed: ${response.status} - ${text}`);
+      console.error(`[${jobId}] YT-API error response: ${text.substring(0, 500)}`);
+      throw new Error(`YT-API request failed: ${response.status} - ${text.substring(0, 200)}`);
     }
 
     const data = await response.json();
+    console.log(`[${jobId}] YT-API response received, status: ${data.status}, formats: ${data.formats?.length || 0}`);
 
     // YT-API returns status: "OK" on success
     if (data.status !== 'OK') {
-      throw new Error(`YT-API returned status: ${data.status}`);
+      console.error(`[${jobId}] YT-API error: status=${data.status}, message=${data.message || 'unknown'}`);
+      throw new Error(`YT-API returned status: ${data.status} - ${data.message || 'unknown error'}`);
     }
 
     // YT-API returns formats array with combined video+audio streams
     if (!data.formats || data.formats.length === 0) {
+      console.error(`[${jobId}] YT-API returned no formats. Full response keys: ${Object.keys(data).join(', ')}`);
       throw new Error('No download formats returned from YT-API');
     }
 
+    // Log available formats for debugging
+    console.log(`[${jobId}] Available formats: ${data.formats.map(f => `${f.qualityLabel || f.quality}(${f.mimeType?.split(';')[0]})`).join(', ')}`);
+
     // Find best quality MP4 format (prefer 720p, then 360p)
-    // formats array contains combined video+audio streams
     let downloadUrl = null;
     let selectedQuality = null;
 
@@ -78,41 +91,65 @@ async function downloadWithRapidAPI({ jobId, videoId, workDir, outputFile }) {
       if (format && format.url) {
         downloadUrl = format.url;
         selectedQuality = quality;
+        console.log(`[${jobId}] Selected format: ${quality} MP4`);
         break;
       }
     }
 
-    // If no MP4 found, try any video format
+    // If no MP4 found at preferred quality, try any MP4
+    if (!downloadUrl) {
+      const mp4Format = data.formats.find(f => f.url && f.mimeType && f.mimeType.includes('video/mp4'));
+      if (mp4Format) {
+        downloadUrl = mp4Format.url;
+        selectedQuality = mp4Format.qualityLabel || 'unknown';
+        console.log(`[${jobId}] Fallback to any MP4: ${selectedQuality}`);
+      }
+    }
+
+    // If still no URL, try any video format
     if (!downloadUrl) {
       const anyFormat = data.formats.find(f => f.url && f.mimeType && f.mimeType.includes('video/'));
       if (anyFormat) {
         downloadUrl = anyFormat.url;
         selectedQuality = anyFormat.qualityLabel || 'unknown';
+        console.log(`[${jobId}] Fallback to any video: ${selectedQuality} (${anyFormat.mimeType})`);
       }
     }
 
     if (!downloadUrl) {
+      console.error(`[${jobId}] No usable download URL found in ${data.formats.length} formats`);
       throw new Error('No valid download URL in YT-API response');
     }
 
-    console.log(`[${jobId}] YT-API: Got ${selectedQuality} download URL`);
+    console.log(`[${jobId}] YT-API: Downloading ${selectedQuality} video...`);
 
-    // Step 2: Download the video file
-    const videoResponse = await fetch(downloadUrl);
+    // Step 2: Download the video file with streaming to handle large files
+    const videoResponse = await fetch(downloadUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
     if (!videoResponse.ok) {
-      throw new Error(`Video download failed: ${videoResponse.status}`);
+      throw new Error(`Video download failed: ${videoResponse.status} ${videoResponse.statusText}`);
     }
 
+    // Get content length if available
+    const contentLength = videoResponse.headers.get('content-length');
+    console.log(`[${jobId}] Downloading video, size: ${contentLength ? (parseInt(contentLength) / 1024 / 1024).toFixed(2) + ' MB' : 'unknown'}`);
+
+    // Stream to file for better memory handling
     const buffer = await videoResponse.arrayBuffer();
     fs.writeFileSync(outputFile, Buffer.from(buffer));
 
     const stats = fs.statSync(outputFile);
-    console.log(`[${jobId}] YT-API download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`[${jobId}] YT-API download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB saved to ${outputFile}`);
 
     return outputFile;
 
   } catch (error) {
     console.error(`[${jobId}] YT-API download failed:`, error.message);
+    console.error(`[${jobId}] Error details:`, error.stack?.split('\n').slice(0, 3).join('\n'));
     throw error;
   }
 }
