@@ -342,7 +342,7 @@ async function processJobAsync(jobId) {
 
 /**
  * Analyze an uploaded video file
- * Extracts duration and generates suggested clip segments
+ * Extracts duration, generates thumbnails, and creates clip segments
  */
 app.post('/analyze-upload', async (req, res) => {
   const { projectId, videoUrl, storagePath, userId } = req.body;
@@ -408,43 +408,93 @@ app.post('/analyze-upload', async (req, res) => {
     console.log(`[AnalyzeUpload] Video duration: ${durationSeconds} seconds`);
 
     // Generate suggested clips based on duration
-    const clips = [];
     const numClips = Math.min(8, Math.max(3, Math.floor(durationSeconds / 60)));
     const segmentSize = Math.floor(durationSeconds / numClips);
 
+    // Generate thumbnails for each clip
+    const generateThumbnail = (timestamp, outputPath) => new Promise((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', [
+        '-ss', String(timestamp),
+        '-i', localVideoPath,
+        '-vframes', '1',
+        '-vf', 'scale=320:180',
+        '-y',
+        outputPath
+      ]);
+
+      ffmpeg.stderr.on('data', data => console.log('[ffmpeg thumbnail]', data.toString().substring(0, 100)));
+      ffmpeg.on('close', code => {
+        if (code === 0 && fs.existsSync(outputPath)) {
+          resolve(outputPath);
+        } else {
+          reject(new Error(`Failed to generate thumbnail at ${timestamp}s`));
+        }
+      });
+    });
+
+    const clips = [];
     for (let i = 0; i < numClips; i++) {
       const clipDuration = Math.min(45, Math.max(20, segmentSize - 10));
       const startTime = Math.floor(segmentSize * i + Math.random() * 10);
       const endTime = Math.min(startTime + clipDuration, durationSeconds);
+      const clipId = `clip_upload_${i}_${Date.now()}`;
+
+      // Generate thumbnail for this clip
+      let thumbnailUrl = '';
+      try {
+        const thumbnailPath = path.join(workDir, `thumb_${i}.jpg`);
+        await generateThumbnail(startTime + 2, thumbnailPath); // 2 seconds into the clip
+
+        // Upload thumbnail to Firebase Storage
+        const thumbnailStoragePath = `thumbnails/${userId}/${projectId}_clip_${i}.jpg`;
+        await storage.bucket(BUCKET_NAME).upload(thumbnailPath, {
+          destination: thumbnailStoragePath,
+          metadata: { contentType: 'image/jpeg' }
+        });
+
+        // Get public URL
+        const [url] = await storage.bucket(BUCKET_NAME)
+          .file(thumbnailStoragePath)
+          .getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 365 * 24 * 60 * 60 * 1000 // 1 year
+          });
+        thumbnailUrl = url;
+        console.log(`[AnalyzeUpload] Generated thumbnail for clip ${i}`);
+      } catch (thumbError) {
+        console.log(`[AnalyzeUpload] Thumbnail generation failed for clip ${i}:`, thumbError.message);
+        // Use a placeholder or leave empty
+      }
 
       clips.push({
-        id: `clip_upload_${i}_${Date.now()}`,
+        id: clipId,
         startTime,
         endTime,
         duration: endTime - startTime,
-        transcript: `Segment ${i + 1}`,
-        aiSummary: `Suggested clip ${i + 1}`,
-        thumbnail: '',
+        transcript: `Video segment ${i + 1} (${Math.floor(startTime / 60)}:${String(startTime % 60).padStart(2, '0')} - ${Math.floor(endTime / 60)}:${String(endTime % 60).padStart(2, '0')})`,
+        aiSummary: `Clip ${i + 1} from uploaded video`,
+        thumbnail: thumbnailUrl,
         score: 75 + Math.floor(Math.random() * 20),
         platforms: ['youtube', 'tiktok', 'instagram'],
         reason: 'Auto-generated segment for uploaded video'
       });
     }
 
-    // Clean up
+    // Clean up work directory
     try {
       fs.rmSync(workDir, { recursive: true, force: true });
     } catch (e) {
       console.log('[AnalyzeUpload] Cleanup warning:', e.message);
     }
 
-    console.log(`[AnalyzeUpload] Generated ${clips.length} suggested clips`);
+    console.log(`[AnalyzeUpload] Generated ${clips.length} clips with thumbnails`);
 
     res.status(200).json({
       success: true,
       projectId,
       duration: durationSeconds,
-      clips
+      clips,
+      videoUrl // Return the video URL for preview
     });
 
   } catch (error) {

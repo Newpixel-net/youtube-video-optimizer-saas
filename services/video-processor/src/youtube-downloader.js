@@ -1,6 +1,6 @@
 /**
- * YouTube Video Downloader using youtubei.js
- * Supports both unauthenticated (TV client) and authenticated (OAuth) downloads
+ * YouTube Video Downloader with RapidAPI + youtubei.js fallback
+ * Priority: RapidAPI (paid, reliable) > youtubei.js > yt-dlp > other fallbacks
  */
 
 import { Innertube, ClientType } from 'youtubei.js';
@@ -8,9 +8,100 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 
+// RapidAPI configuration - set via environment variable or Firebase config
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '';
+const RAPIDAPI_HOST = 'youtube-video-download-info.p.rapidapi.com';
+
 // Cache for Innertube instances per client type
 const innertubeCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Download video using RapidAPI (paid, reliable)
+ * API: youtube-video-download-info (~$0.0003 per download)
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {string} params.videoId - YouTube video ID
+ * @param {string} params.workDir - Working directory path
+ * @param {string} params.outputFile - Output file path
+ */
+async function downloadWithRapidAPI({ jobId, videoId, workDir, outputFile }) {
+  if (!RAPIDAPI_KEY) {
+    throw new Error('RapidAPI key not configured');
+  }
+
+  console.log(`[${jobId}] Trying RapidAPI download...`);
+
+  try {
+    // Step 1: Get download URL from RapidAPI
+    const apiUrl = `https://${RAPIDAPI_HOST}/dl?id=${videoId}`;
+
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'X-RapidAPI-Key': RAPIDAPI_KEY,
+        'X-RapidAPI-Host': RAPIDAPI_HOST
+      }
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`RapidAPI request failed: ${response.status} - ${text}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.link || data.link.length === 0) {
+      throw new Error('No download links returned from RapidAPI');
+    }
+
+    // Find best quality link (prefer 720p or 1080p)
+    let downloadUrl = null;
+    let selectedQuality = null;
+
+    // Sort by quality preference: 1080p > 720p > 480p > others
+    const qualityOrder = ['1080p', '720p', '480p', '360p'];
+
+    for (const quality of qualityOrder) {
+      const link = data.link.find(l => l.quality === quality || l.qualityLabel === quality);
+      if (link && link.url) {
+        downloadUrl = link.url;
+        selectedQuality = quality;
+        break;
+      }
+    }
+
+    // If no standard quality found, take the first available
+    if (!downloadUrl && data.link[0]?.url) {
+      downloadUrl = data.link[0].url;
+      selectedQuality = data.link[0].quality || data.link[0].qualityLabel || 'unknown';
+    }
+
+    if (!downloadUrl) {
+      throw new Error('No valid download URL in RapidAPI response');
+    }
+
+    console.log(`[${jobId}] RapidAPI: Got ${selectedQuality} download URL`);
+
+    // Step 2: Download the video file
+    const videoResponse = await fetch(downloadUrl);
+    if (!videoResponse.ok) {
+      throw new Error(`Video download failed: ${videoResponse.status}`);
+    }
+
+    const buffer = await videoResponse.arrayBuffer();
+    fs.writeFileSync(outputFile, Buffer.from(buffer));
+
+    const stats = fs.statSync(outputFile);
+    console.log(`[${jobId}] RapidAPI download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+
+    return outputFile;
+
+  } catch (error) {
+    console.error(`[${jobId}] RapidAPI download failed:`, error.message);
+    throw error;
+  }
+}
 
 /**
  * Get or create Innertube instance for a specific client
@@ -143,6 +234,22 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
 
   console.log(`[${jobId}] Downloading video segment: ${startTime}s to ${endTime}s (${duration}s)`);
 
+  // Method 1: Try RapidAPI first (most reliable paid option)
+  if (RAPIDAPI_KEY) {
+    try {
+      const rapidApiOutput = path.join(workDir, 'rapidapi_source.mp4');
+      await downloadWithRapidAPI({ jobId, videoId, workDir, outputFile: rapidApiOutput });
+
+      // RapidAPI downloads full video, so we need to trim to the segment
+      console.log(`[${jobId}] Trimming RapidAPI download to segment...`);
+      return await trimVideoSegment({ jobId, inputFile: rapidApiOutput, outputFile, startTime, endTime });
+    } catch (rapidApiError) {
+      console.log(`[${jobId}] RapidAPI failed: ${rapidApiError.message}, trying other methods...`);
+    }
+  } else {
+    console.log(`[${jobId}] RapidAPI key not configured, skipping paid download`);
+  }
+
   // Log if we have YouTube authentication
   if (youtubeAuth?.accessToken) {
     console.log(`[${jobId}] Using authenticated YouTube session`);
@@ -151,7 +258,7 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
   }
 
   try {
-    // Try youtubei.js with multiple clients (pass auth if available)
+    // Method 2: Try youtubei.js with multiple clients (pass auth if available)
     const { info, innertube, clientType } = await getVideoInfoWithFallback(videoId, youtubeAuth);
 
     console.log(`[${jobId}] Got video info via ${clientType} client${youtubeAuth ? ' (authenticated)' : ''}`);
@@ -364,11 +471,11 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
                 console.log(`[${jobId}] Trimming alternative API download to segment...`);
                 return await trimVideoSegment({ jobId, inputFile: altOutput, outputFile, startTime, endTime });
               } catch (altError) {
-                console.error(`[${jobId}] All download methods failed (7 methods tried)`);
+                console.error(`[${jobId}] All download methods failed (8 methods tried)`);
                 // Return a more helpful error message
                 const errorMsg = ytdlpError.message.includes('Sign in to confirm')
                   ? 'YouTube requires authentication. Please ensure your YouTube account is connected and try again. If the issue persists, the video may have restrictions.'
-                  : `Video download failed after trying 7 methods (youtubei.js, yt-dlp, Cobalt, Invidious, Piped, Direct, AltAPIs). The video may be age-restricted, private, or geo-blocked.`;
+                  : `Video download failed after trying 8 methods (RapidAPI, youtubei.js, yt-dlp, Cobalt, Invidious, Piped, Direct, AltAPIs). The video may be age-restricted, private, or geo-blocked. Consider uploading the video directly.`;
                 throw new Error(errorMsg);
               }
             }

@@ -17840,6 +17840,11 @@ exports.wizardProcessClip = functions
       videoId: project.videoId,
       videoUrl: project.videoUrl,
 
+      // For uploaded videos, include the upload info
+      isUpload: project.isUpload || false,
+      uploadedVideoUrl: project.videoData?.uploadedVideoUrl || project.videoUrl,
+      uploadedVideoPath: project.uploadedVideoPath || null,
+
       // Clip timing
       startTime: clip.startTime,
       endTime: clip.endTime,
@@ -17850,6 +17855,7 @@ exports.wizardProcessClip = functions
       settings: {
         captionStyle: clipSettings.captionStyle || 'karaoke',
         reframeMode: clipSettings.reframeMode || 'auto_center',
+        cropPosition: clipSettings.cropPosition || 'center',
         trimStart: clipSettings.trimStart || 0,
         trimEnd: clipSettings.trimEnd || clip.duration,
         introTransition: clipSettings.introTransition || 'none',
