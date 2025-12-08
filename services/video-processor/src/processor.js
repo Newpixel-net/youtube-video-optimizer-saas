@@ -164,6 +164,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     targetWidth,
     targetHeight,
     reframeMode: settings.reframeMode,
+    cropPosition: settings.cropPosition || 'center',
     autoZoom: settings.autoZoom,
     vignette: settings.vignette,
     colorGrade: settings.colorGrade
@@ -226,13 +227,16 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 /**
  * Build FFmpeg video filter chain
  */
-function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, reframeMode, autoZoom, vignette, colorGrade }) {
+function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, reframeMode, cropPosition, autoZoom, vignette, colorGrade }) {
   const filters = [];
   const inputAspect = inputWidth / inputHeight;
   const targetAspect = targetWidth / targetHeight; // 9:16 = 0.5625
 
+  // Normalize reframe mode names (frontend uses 'broll_split', backend used 'b_roll')
+  const normalizedMode = reframeMode === 'broll_split' ? 'b_roll' : reframeMode;
+
   // Step 1: Reframe/Crop based on mode
-  switch (reframeMode) {
+  switch (normalizedMode) {
     case 'split_screen':
       // Split screen: Show left and right speakers stacked vertically (for podcasts)
       // Take left 1/3 and right 1/3 of the video, stack them
@@ -297,14 +301,21 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 
     case 'auto_center':
     default:
-      // Center crop to 9:16
+      // Crop to 9:16 based on cropPosition (left/center/right)
       if (inputAspect > targetAspect) {
-        // Video is wider than target - crop sides
+        // Video is wider than target - crop sides based on position
         const cropWidth = Math.floor(inputHeight * targetAspect);
-        const cropX = Math.floor((inputWidth - cropWidth) / 2);
+        let cropX;
+        if (cropPosition === 'left') {
+          cropX = 0; // Crop from left edge
+        } else if (cropPosition === 'right') {
+          cropX = inputWidth - cropWidth; // Crop from right edge
+        } else {
+          cropX = Math.floor((inputWidth - cropWidth) / 2); // Center crop (default)
+        }
         filters.push(`crop=${cropWidth}:${inputHeight}:${cropX}:0`);
       } else {
-        // Video is taller than target - crop top/bottom
+        // Video is taller than target - crop top/bottom (position doesn't apply here)
         const cropHeight = Math.floor(inputWidth / targetAspect);
         const cropY = Math.floor((inputHeight - cropHeight) / 2);
         filters.push(`crop=${inputWidth}:${cropHeight}:0:${cropY}`);
@@ -315,10 +326,10 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
   }
 
   // Step 2: Apply visual effects (but not for complex filter chains)
-  const isComplexFilter = ['split_screen', 'three_person'].includes(reframeMode);
+  const isComplexFilter = ['split_screen', 'three_person'].includes(normalizedMode);
 
   if (!isComplexFilter) {
-    if (autoZoom && reframeMode !== 'b_roll') {
+    if (autoZoom && normalizedMode !== 'b_roll') {
       // Subtle zoom pulse effect
       filters.push(`zoompan=z='1+0.02*sin(2*PI*t/5)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${targetWidth}x${targetHeight}`);
     }
