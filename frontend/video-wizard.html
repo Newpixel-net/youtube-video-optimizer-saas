@@ -5677,9 +5677,10 @@
 
                 html += '<div class="' + cardClass + '" onclick="app.toggleClipSelection(\'' + clip.id + '\')">';
 
-                // Thumbnail with play button
+                // Thumbnail with play button (use placeholder if missing)
+                var thumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"%3E%3Crect fill="%231a1a2e" width="320" height="180"/%3E%3Ctext x="160" y="85" fill="%23ec4899" font-family="sans-serif" font-size="24" text-anchor="middle"%3E🎬%3C/text%3E%3Ctext x="160" y="110" fill="%23888" font-family="sans-serif" font-size="12" text-anchor="middle"%3EClip ' + (state.clips.indexOf(clip) + 1) + '%3C/text%3E%3C/svg%3E';
                 html += '<div class="clip-thumbnail">';
-                html += '<img src="' + clip.thumbnail + '" alt="Clip thumbnail">';
+                html += '<img src="' + thumbUrl + '" alt="Clip thumbnail">';
                 html += '<span class="clip-duration">' + utils.formatDuration(clip.duration) + '</span>';
                 html += '<div class="clip-checkbox">' + (isSelected ? '✓' : '') + '</div>';
                 html += '<div class="clip-play-btn" onclick="event.stopPropagation(); app.previewClip(\'' + clip.id + '\')" title="Preview clip"></div>';
@@ -5771,31 +5772,45 @@
             var cropClass = 'crop-' + cropPos;
             var videoAreaClasses = 'phone-video-area reframe-' + reframeMode + ' ' + cropClass;
 
-            // YouTube embed for video preview
+            // Video preview setup
             var embedStart = activeClip.startTime || 0;
             var videoId = state.videoInput.videoData?.videoId || '';
+            var isUpload = state.videoInput.isUpload || false;
+            var uploadedVideoUrl = state.videoInput.uploadedFile?.url || state.videoInput.videoData?.uploadedVideoUrl || '';
+
+            // Use placeholder thumbnail if missing
+            var clipThumbnail = activeClip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"%3E%3Crect fill="%231a1a2e" width="320" height="180"/%3E%3Ctext x="160" y="90" fill="%23666" font-family="sans-serif" font-size="14" text-anchor="middle"%3ENo Preview%3C/text%3E%3C/svg%3E';
 
             // Different styles for different reframe modes
             var getVideoContent = function(mode) {
                 // All reframe modes need CSS transforms - avoid inline position/size styles
                 var needsTransform = ['auto_center', 'split_screen', 'three_person', 'broll_split', 'gameplay'].indexOf(mode) !== -1;
 
-                if (videoId && state.customization.showVideoPreview) {
+                // For uploaded videos, use HTML5 video element
+                if (isUpload && uploadedVideoUrl && state.customization.showVideoPreview) {
                     if (needsTransform) {
-                        // Let CSS handle the positioning and transforms
+                        return '<video class="reframe-video" src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted></video>';
+                    } else {
+                        return '<video src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:inherit"></video>';
+                    }
+                }
+
+                // For YouTube videos, use embed
+                if (videoId && !isUpload && state.customization.showVideoPreview) {
+                    if (needsTransform) {
                         return '<iframe class="reframe-video" src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
                     } else {
                         return '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:inherit"></iframe>';
                     }
+                }
+
+                // Show thumbnail with play button
+                if (needsTransform) {
+                    return '<img class="reframe-video" src="' + clipThumbnail + '" alt="Preview">' +
+                           '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
                 } else {
-                    if (needsTransform) {
-                        // Let CSS handle the positioning and transforms
-                        return '<img class="reframe-video" src="' + activeClip.thumbnail + '" alt="Preview">' +
-                               '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
-                    } else {
-                        return '<img src="' + activeClip.thumbnail + '" alt="Preview" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">' +
-                               '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
-                    }
+                    return '<img src="' + clipThumbnail + '" alt="Preview" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">' +
+                           '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
                 }
             };
 
@@ -6679,8 +6694,9 @@
             html += '<div class="export-list">';
             selectedClips.forEach(function(clip, index) {
                 var seo = state.clipSEO[clip.id] || getDefaultSEO(clip);
+                var exportThumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="45" viewBox="0 0 80 45"%3E%3Crect fill="%231a1a2e" width="80" height="45"/%3E%3Ctext x="40" y="28" fill="%23ec4899" font-family="sans-serif" font-size="14" text-anchor="middle"%3E🎬%3C/text%3E%3C/svg%3E';
                 html += '<div class="export-item">';
-                html += '<img src="' + clip.thumbnail + '" alt="Clip" class="export-item-thumbnail">';
+                html += '<img src="' + exportThumbUrl + '" alt="Clip" class="export-item-thumbnail">';
                 html += '<div class="export-item-info">';
                 html += '<div class="export-item-title">' + utils.escapeHtml(seo.title || 'Clip ' + (index + 1)) + '</div>';
                 html += '<div class="export-item-platforms">→ ' + clip.platforms.map(utils.getPlatformName).join(', ') + '</div>';
@@ -7190,6 +7206,9 @@
                         // Backend returns videoData, not videoInfo
                         state.videoInput.videoData = result.data.videoData || result.data.videoInfo;
                         state.clips = result.data.clips || [];
+
+                        // Store isUpload flag for uploaded videos
+                        state.videoInput.isUpload = result.data.isUpload || false;
 
                         // Auto-select top 5 clips
                         state.selectedClipIds = state.clips.slice(0, 5).map(function(c) { return c.id; });

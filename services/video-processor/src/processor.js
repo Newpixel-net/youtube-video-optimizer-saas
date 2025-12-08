@@ -29,18 +29,64 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
     fs.mkdirSync(workDir, { recursive: true });
     console.log(`[${jobId}] Created work directory: ${workDir}`);
 
-    // Update progress
-    await updateProgress(jobRef, 10, 'Downloading video...');
+    let downloadedFile;
 
-    // Step 1: Download the video segment
-    const downloadedFile = await downloadVideoSegment({
-      jobId,
-      videoId: job.videoId,
-      startTime: job.startTime,
-      endTime: job.endTime,
-      workDir,
-      youtubeAuth // Pass user's YouTube OAuth credentials if available
-    });
+    // Check if this is an uploaded video
+    if (job.isUpload && job.uploadedVideoUrl) {
+      console.log(`[${jobId}] Processing uploaded video - downloading from storage...`);
+      await updateProgress(jobRef, 10, 'Downloading uploaded video...');
+
+      // Download the uploaded video from Firebase Storage
+      const response = await fetch(job.uploadedVideoUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download uploaded video: ${response.status}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      downloadedFile = path.join(workDir, 'source.mp4');
+      fs.writeFileSync(downloadedFile, Buffer.from(buffer));
+      console.log(`[${jobId}] Downloaded uploaded video: ${fs.statSync(downloadedFile).size} bytes`);
+
+      // For uploaded videos, we need to extract the segment
+      if (job.startTime > 0 || job.endTime < job.duration) {
+        const segmentFile = path.join(workDir, 'segment.mp4');
+        await new Promise((resolve, reject) => {
+          const { spawn } = require('child_process');
+          const ffmpeg = spawn('ffmpeg', [
+            '-i', downloadedFile,
+            '-ss', String(job.startTime),
+            '-to', String(job.endTime),
+            '-c', 'copy',
+            '-avoid_negative_ts', 'make_zero',
+            '-y',
+            segmentFile
+          ]);
+
+          ffmpeg.stderr.on('data', data => console.log(`[${jobId}] ffmpeg: ${data.toString().substring(0, 100)}`));
+          ffmpeg.on('close', code => {
+            if (code === 0) {
+              resolve();
+            } else {
+              reject(new Error(`ffmpeg segment extraction failed with code ${code}`));
+            }
+          });
+        });
+        downloadedFile = segmentFile;
+        console.log(`[${jobId}] Extracted segment from ${job.startTime}s to ${job.endTime}s`);
+      }
+    } else {
+      // YouTube video - download from YouTube
+      await updateProgress(jobRef, 10, 'Downloading video...');
+
+      downloadedFile = await downloadVideoSegment({
+        jobId,
+        videoId: job.videoId,
+        startTime: job.startTime,
+        endTime: job.endTime,
+        workDir,
+        youtubeAuth // Pass user's YouTube OAuth credentials if available
+      });
+    }
 
     await updateProgress(jobRef, 30, 'Processing video...');
 

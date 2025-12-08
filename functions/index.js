@@ -17840,6 +17840,11 @@ exports.wizardProcessClip = functions
       videoId: project.videoId,
       videoUrl: project.videoUrl,
 
+      // For uploaded videos, include the upload info
+      isUpload: project.isUpload || false,
+      uploadedVideoUrl: project.videoData?.uploadedVideoUrl || project.videoUrl,
+      uploadedVideoPath: project.uploadedVideoPath || null,
+
       // Clip timing
       startTime: clip.startTime,
       endTime: clip.endTime,
