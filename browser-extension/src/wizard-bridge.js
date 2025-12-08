@@ -21,16 +21,18 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '1.1.0',
-        extensionId: EXTENSION_ID
+        version: '1.2.0',
+        extensionId: EXTENSION_ID,
+        features: ['auto_capture', 'network_intercept', 'stream_cache']
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '1.1.0';
+    window.__YVO_EXTENSION_VERSION__ = '1.2.0';
+    window.__YVO_EXTENSION_FEATURES__ = ['auto_capture', 'network_intercept', 'stream_cache'];
 
-    console.log('[YVO Extension] Bridge ready - Video Wizard integration active');
+    console.log('[YVO Extension] Bridge ready - Video Wizard integration active (v1.2.0 with auto-capture)');
   }
 
   /**
@@ -63,9 +65,10 @@
 
   /**
    * Handle request to capture video from YouTube
+   * Enhanced to support auto-capture when no streams are immediately available
    */
   async function handleGetVideoRequest(data, requestId) {
-    const { youtubeUrl } = data || {};
+    const { youtubeUrl, autoCapture = true } = data || {};
 
     if (!youtubeUrl) {
       sendResponse(requestId, { error: 'No YouTube URL provided' });
@@ -81,28 +84,40 @@
         return;
       }
 
+      console.log(`[YVO Extension] Capturing video: ${videoId}, autoCapture: ${autoCapture}`);
+
       // Send message to background script to capture video
+      // This may take a few seconds if auto-capture needs to open a new tab
       const response = await chrome.runtime.sendMessage({
         action: 'captureVideoForWizard',
         videoId: videoId,
-        youtubeUrl: youtubeUrl
+        youtubeUrl: youtubeUrl,
+        autoCapture: autoCapture
       });
 
       if (response?.success) {
+        // Log the capture source for debugging
+        const source = response.streamData?.source || 'none';
+        console.log(`[YVO Extension] Capture successful, source: ${source}`);
+
         sendResponse(requestId, {
           success: true,
           videoInfo: response.videoInfo,
-          streamData: response.streamData
+          streamData: response.streamData,
+          message: response.message,
+          captureSource: source
         });
       } else {
+        console.warn('[YVO Extension] Capture failed:', response?.error);
         sendResponse(requestId, {
+          success: false,
           error: response?.error || 'Failed to capture video'
         });
       }
 
     } catch (error) {
       console.error('[YVO Extension] Capture error:', error);
-      sendResponse(requestId, { error: error.message });
+      sendResponse(requestId, { success: false, error: error.message });
     }
   }
 

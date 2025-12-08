@@ -31,8 +31,91 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'triggerPlayback') {
+    triggerVideoPlayback().then(result => {
+      sendResponse(result);
+    }).catch(error => {
+      sendResponse({ success: false, error: error.message });
+    });
+    return true;
+  }
+
   return false;
 });
+
+/**
+ * Trigger video playback to enable stream interception
+ * This is called when we need to capture streams but video isn't playing
+ */
+async function triggerVideoPlayback() {
+  try {
+    const video = document.querySelector('video.html5-main-video');
+
+    if (!video) {
+      console.log('[YVO Content] No video element found');
+      return { success: false, error: 'No video element found' };
+    }
+
+    // Check if video is already playing
+    if (!video.paused && !video.ended) {
+      console.log('[YVO Content] Video already playing');
+      return { success: true, alreadyPlaying: true };
+    }
+
+    // Try multiple methods to start playback
+    console.log('[YVO Content] Triggering video playback...');
+
+    // Method 1: Click play button
+    const playButton = document.querySelector('.ytp-play-button, button.ytp-play-button');
+    if (playButton) {
+      playButton.click();
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Method 2: Direct video.play()
+    if (video.paused) {
+      try {
+        await video.play();
+      } catch (e) {
+        console.log('[YVO Content] Direct play failed (autoplay restrictions):', e.message);
+      }
+    }
+
+    // Method 3: Simulate user interaction and try again
+    if (video.paused) {
+      // Trigger a user-like interaction
+      video.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      }));
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      try {
+        await video.play();
+      } catch (e) {
+        console.log('[YVO Content] Simulated interaction play failed:', e.message);
+      }
+    }
+
+    // Check result
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const isPlaying = !video.paused && !video.ended;
+    console.log('[YVO Content] Playback trigger result:', isPlaying ? 'playing' : 'not playing');
+
+    return {
+      success: true,
+      isPlaying: isPlaying,
+      currentTime: video.currentTime,
+      duration: video.duration
+    };
+
+  } catch (error) {
+    console.error('[YVO Content] Trigger playback error:', error);
+    return { success: false, error: error.message };
+  }
+}
 
 /**
  * Extract video information from the YouTube page

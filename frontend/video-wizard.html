@@ -5317,6 +5317,7 @@
             extension: {
                 installed: false,
                 version: null,
+                features: [],        // Extension capabilities (auto_capture, network_intercept, etc.)
                 checking: true,      // Initially checking for extension
                 capturedVideo: null  // Video data captured by extension
             }
@@ -7355,7 +7356,7 @@
                     if (state.extension.installed && url && !uploadedFile) {
                         try {
                             console.log('[Video Wizard] Requesting video capture from extension...');
-                            utils.showToast('Extension capturing video...', 'info');
+                            utils.showToast('Extension capturing video (may open YouTube tab)...', 'info');
 
                             // Extract video ID from URL
                             var videoId = null;
@@ -7376,7 +7377,8 @@
                             if (videoId) {
                                 var captureResult = await sendExtensionRequest('getVideoFromYouTube', {
                                     youtubeUrl: url,
-                                    videoId: videoId
+                                    videoId: videoId,
+                                    autoCapture: true  // Enable auto-capture feature
                                 });
 
                                 if (captureResult && captureResult.success) {
@@ -7384,14 +7386,22 @@
                                         videoInfo: captureResult.videoInfo,
                                         streamData: captureResult.streamData
                                     };
-                                    console.log('[Video Wizard] Extension captured video:', extensionData);
-                                    utils.showToast('Video captured by extension!', 'success');
+                                    var captureSource = captureResult.captureSource || 'unknown';
+                                    console.log('[Video Wizard] Extension captured video (source: ' + captureSource + '):', extensionData);
+
+                                    if (extensionData.streamData) {
+                                        utils.showToast('Video streams captured successfully!', 'success');
+                                    } else {
+                                        utils.showToast('Video info captured (server will download video)', 'info');
+                                    }
                                 } else {
                                     console.warn('[Video Wizard] Extension capture failed:', captureResult?.error);
+                                    utils.showToast('Extension capture failed, using server fallback', 'warning');
                                 }
                             }
                         } catch (extError) {
                             console.warn('[Video Wizard] Extension capture error (will try server):', extError);
+                            utils.showToast('Extension timeout, using server download', 'warning');
                         }
                     }
 
@@ -9399,13 +9409,13 @@
                 // Set up callback
                 extensionCallbacks[requestId] = { resolve: resolve, reject: reject };
 
-                // Timeout after 10 seconds
+                // Timeout after 20 seconds (extended for auto-capture which opens YouTube tab)
                 setTimeout(function() {
                     if (extensionCallbacks[requestId]) {
                         delete extensionCallbacks[requestId];
-                        reject(new Error('Extension request timeout'));
+                        reject(new Error('Extension request timeout - auto-capture may have failed'));
                     }
-                }, 10000);
+                }, 20000);
 
                 // Send request to extension
                 window.dispatchEvent(new CustomEvent('yvo-extension-request', {
@@ -9435,8 +9445,15 @@
             var detail = event.detail || {};
             state.extension.installed = true;
             state.extension.version = detail.version || '1.0.0';
+            state.extension.features = detail.features || [];
             state.extension.checking = false;
-            console.log('[Video Wizard] Extension detected:', detail.version);
+            console.log('[Video Wizard] Extension detected:', detail.version, 'features:', detail.features);
+
+            // Check if auto-capture is supported
+            if (detail.features && detail.features.indexOf('auto_capture') !== -1) {
+                console.log('[Video Wizard] Extension supports auto-capture - reliable stream capture enabled');
+            }
+
             render();
         });
 
