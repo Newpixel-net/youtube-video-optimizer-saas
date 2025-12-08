@@ -1,6 +1,6 @@
 /**
- * YouTube Video Downloader with RapidAPI + youtubei.js fallback
- * Priority: RapidAPI (paid, reliable) > youtubei.js > yt-dlp > other fallbacks
+ * YouTube Video Downloader with RapidAPI (YT-API) + youtubei.js fallback
+ * Priority: RapidAPI YT-API (paid, reliable) > youtubei.js > yt-dlp > other fallbacks
  */
 
 import { Innertube, ClientType } from 'youtubei.js';
@@ -8,9 +8,9 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 
-// RapidAPI configuration - set via environment variable or Firebase config
+// RapidAPI YT-API configuration - set via environment variable
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '';
-const RAPIDAPI_HOST = 'youtube-video-download-info.p.rapidapi.com';
+const RAPIDAPI_HOST = 'yt-api.p.rapidapi.com';
 
 // Cache for Innertube instances per client type
 const innertubeCache = new Map();
@@ -30,10 +30,10 @@ async function downloadWithRapidAPI({ jobId, videoId, workDir, outputFile }) {
     throw new Error('RapidAPI key not configured');
   }
 
-  console.log(`[${jobId}] Trying RapidAPI download...`);
+  console.log(`[${jobId}] Trying RapidAPI YT-API download...`);
 
   try {
-    // Step 1: Get download URL from RapidAPI
+    // Step 1: Get download URL from YT-API on RapidAPI
     const apiUrl = `https://${RAPIDAPI_HOST}/dl?id=${videoId}`;
 
     const response = await fetch(apiUrl, {
@@ -46,42 +46,56 @@ async function downloadWithRapidAPI({ jobId, videoId, workDir, outputFile }) {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`RapidAPI request failed: ${response.status} - ${text}`);
+      throw new Error(`YT-API request failed: ${response.status} - ${text}`);
     }
 
     const data = await response.json();
 
-    if (!data.link || data.link.length === 0) {
-      throw new Error('No download links returned from RapidAPI');
+    // YT-API returns status: "OK" on success
+    if (data.status !== 'OK') {
+      throw new Error(`YT-API returned status: ${data.status}`);
     }
 
-    // Find best quality link (prefer 720p or 1080p)
+    // YT-API returns formats array with combined video+audio streams
+    if (!data.formats || data.formats.length === 0) {
+      throw new Error('No download formats returned from YT-API');
+    }
+
+    // Find best quality MP4 format (prefer 720p, then 360p)
+    // formats array contains combined video+audio streams
     let downloadUrl = null;
     let selectedQuality = null;
 
-    // Sort by quality preference: 1080p > 720p > 480p > others
-    const qualityOrder = ['1080p', '720p', '480p', '360p'];
+    // Quality preference order: 720p > 480p > 360p > 144p
+    const qualityOrder = ['720p', '480p', '360p', '240p', '144p'];
 
     for (const quality of qualityOrder) {
-      const link = data.link.find(l => l.quality === quality || l.qualityLabel === quality);
-      if (link && link.url) {
-        downloadUrl = link.url;
+      const format = data.formats.find(f =>
+        f.qualityLabel === quality &&
+        f.mimeType &&
+        f.mimeType.includes('video/mp4')
+      );
+      if (format && format.url) {
+        downloadUrl = format.url;
         selectedQuality = quality;
         break;
       }
     }
 
-    // If no standard quality found, take the first available
-    if (!downloadUrl && data.link[0]?.url) {
-      downloadUrl = data.link[0].url;
-      selectedQuality = data.link[0].quality || data.link[0].qualityLabel || 'unknown';
+    // If no MP4 found, try any video format
+    if (!downloadUrl) {
+      const anyFormat = data.formats.find(f => f.url && f.mimeType && f.mimeType.includes('video/'));
+      if (anyFormat) {
+        downloadUrl = anyFormat.url;
+        selectedQuality = anyFormat.qualityLabel || 'unknown';
+      }
     }
 
     if (!downloadUrl) {
-      throw new Error('No valid download URL in RapidAPI response');
+      throw new Error('No valid download URL in YT-API response');
     }
 
-    console.log(`[${jobId}] RapidAPI: Got ${selectedQuality} download URL`);
+    console.log(`[${jobId}] YT-API: Got ${selectedQuality} download URL`);
 
     // Step 2: Download the video file
     const videoResponse = await fetch(downloadUrl);
@@ -93,12 +107,12 @@ async function downloadWithRapidAPI({ jobId, videoId, workDir, outputFile }) {
     fs.writeFileSync(outputFile, Buffer.from(buffer));
 
     const stats = fs.statSync(outputFile);
-    console.log(`[${jobId}] RapidAPI download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`[${jobId}] YT-API download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
 
     return outputFile;
 
   } catch (error) {
-    console.error(`[${jobId}] RapidAPI download failed:`, error.message);
+    console.error(`[${jobId}] YT-API download failed:`, error.message);
     throw error;
   }
 }
