@@ -30,23 +30,34 @@
       </div>
     </header>
 
-    <!-- Not on YouTube Message -->
-    <div class="not-youtube hidden" id="notYoutube">
-      <div class="not-youtube-icon">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <!-- On Video Wizard - Integration Active -->
+    <div class="wizard-active hidden" id="wizardActive">
+      <div class="wizard-active-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
-          <path d="M12 8v4M12 16h.01"/>
+          <path d="M9 12l2 2 4-4"/>
         </svg>
       </div>
-      <h3>Not on YouTube</h3>
-      <p>Navigate to a YouTube video to capture it</p>
-      <a href="https://www.youtube.com" target="_blank" class="btn btn-secondary">
-        Open YouTube
-      </a>
+      <h3>Extension Connected</h3>
+      <p>Video Wizard can now capture YouTube videos directly through your browser</p>
+      <div class="wizard-instructions">
+        <div class="instruction-step">
+          <span class="step-num">1</span>
+          <span>Paste a YouTube URL in Video Wizard</span>
+        </div>
+        <div class="instruction-step">
+          <span class="step-num">2</span>
+          <span>The extension captures the video</span>
+        </div>
+        <div class="instruction-step">
+          <span class="step-num">3</span>
+          <span>Video Wizard processes your clips</span>
+        </div>
+      </div>
     </div>
 
-    <!-- Video Info Section -->
-    <div class="video-section hidden" id="videoSection">
+    <!-- On YouTube - Can capture for wizard -->
+    <div class="youtube-ready hidden" id="youtubeReady">
       <div class="video-card">
         <div class="video-thumbnail" id="videoThumbnail">
           <img src="" alt="Video thumbnail" id="thumbnailImg">
@@ -58,54 +69,66 @@
         </div>
       </div>
 
-      <!-- Clip Selection -->
-      <div class="clip-section">
-        <h4>Select Clip Range</h4>
-        <div class="time-inputs">
-          <div class="time-input-group">
-            <label for="startTime">Start</label>
-            <input type="text" id="startTime" placeholder="0:00" pattern="[0-9:]+">
-          </div>
-          <span class="time-separator">to</span>
-          <div class="time-input-group">
-            <label for="endTime">End</label>
-            <input type="text" id="endTime" placeholder="0:30" pattern="[0-9:]+">
-          </div>
-        </div>
-        <div class="clip-duration">
-          Clip duration: <span id="clipDuration">30s</span>
-          <span class="duration-hint">(max 60s for Shorts)</span>
-        </div>
+      <div class="action-info">
+        <p>Ready to capture this video for Video Wizard</p>
       </div>
 
-      <!-- Quality Selection -->
-      <div class="quality-section">
-        <h4>Quality</h4>
-        <div class="quality-options">
-          <label class="quality-option">
-            <input type="radio" name="quality" value="720" checked>
-            <span class="quality-label">720p HD</span>
-          </label>
-          <label class="quality-option">
-            <input type="radio" name="quality" value="1080">
-            <span class="quality-label">1080p Full HD</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Action Buttons -->
       <div class="actions">
-        <button class="btn btn-primary" id="captureBtn">
+        <button class="btn btn-primary" id="sendToWizardBtn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7,10 12,15 17,10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
+            <path d="M5 12h14"/>
+            <path d="M12 5l7 7-7 7"/>
           </svg>
-          Capture & Download
+          Send to Video Wizard
         </button>
-        <button class="btn btn-secondary" id="openAppBtn">
-          Open Full App
+        <button class="btn btn-secondary" id="openWizardBtn">
+          Open Video Wizard
         </button>
+      </div>
+    </div>
+
+    <!-- Not on YouTube or Wizard -->
+    <div class="not-youtube hidden" id="notYoutube">
+      <div class="not-youtube-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 8v4M12 16h.01"/>
+        </svg>
+      </div>
+      <h3>How to Use</h3>
+      <div class="usage-steps">
+        <div class="usage-step">
+          <div class="usage-icon youtube-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ff0000">
+              <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/>
+            </svg>
+          </div>
+          <div class="usage-text">
+            <strong>On YouTube</strong>
+            <span>Extension captures video data</span>
+          </div>
+        </div>
+        <div class="usage-step">
+          <div class="usage-icon wizard-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+              <polyline points="2 17 12 22 22 17"/>
+              <polyline points="2 12 12 17 22 12"/>
+            </svg>
+          </div>
+          <div class="usage-text">
+            <strong>In Video Wizard</strong>
+            <span>Paste YouTube URL to process</span>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <a href="https://www.youtube.com" target="_blank" class="btn btn-secondary">
+          Open YouTube
+        </a>
+        <a href="https://ytseo.siteuo.com/video-wizard.html" target="_blank" class="btn btn-primary">
+          Open Video Wizard
+        </a>
       </div>
     </div>
 
@@ -114,8 +137,8 @@
       <div class="processing-animation">
         <div class="spinner"></div>
       </div>
-      <h3>Processing Video</h3>
-      <p class="processing-status" id="processingStatus">Capturing video stream...</p>
+      <h3>Capturing Video</h3>
+      <p class="processing-status" id="processingStatus">Getting video stream...</p>
       <div class="progress-bar">
         <div class="progress-fill" id="progressFill"></div>
       </div>
@@ -131,11 +154,11 @@
           <path d="M9 12l2 2 4-4"/>
         </svg>
       </div>
-      <h3>Video Captured!</h3>
-      <p>Your clip has been downloaded successfully</p>
+      <h3>Video Ready!</h3>
+      <p>Video captured and sent to Video Wizard</p>
       <div class="success-actions">
-        <button class="btn btn-primary" id="processInAppBtn">
-          Process in App
+        <button class="btn btn-primary" id="openWizardSuccessBtn">
+          Open Video Wizard
         </button>
         <button class="btn btn-secondary" id="captureAnotherBtn">
           Capture Another
@@ -159,19 +182,15 @@
       </button>
     </div>
 
-    <!-- Settings Link -->
+    <!-- Footer -->
     <footer class="footer">
-      <button class="settings-btn" id="settingsBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-        </svg>
-        Settings
-      </button>
       <span class="version">v1.0.0</span>
+      <span class="footer-link">
+        <a href="https://ytseo.siteuo.com/video-wizard.html" target="_blank">Video Wizard</a>
+      </span>
     </footer>
   </div>
 
-  <script src="popup.js" type="module"></script>
+  <script src="popup.js"></script>
 </body>
 </html>

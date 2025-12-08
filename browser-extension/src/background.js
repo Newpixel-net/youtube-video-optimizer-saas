@@ -1,6 +1,6 @@
 /**
  * YouTube Video Optimizer - Background Service Worker
- * Handles video capture, processing, and downloads
+ * Handles video capture and Video Wizard integration
  *
  * Security: Validates all inputs, uses secure fetch, sanitizes data
  */
@@ -8,41 +8,158 @@
 // State
 let currentCapture = null;
 let isCapturing = false;
+let storedVideoData = null; // Video data captured from YouTube for Video Wizard
 
 // Constants
-const APP_ORIGIN = 'https://youtube-video-optimizer.web.app';
+const WIZARD_ORIGINS = [
+  'https://ytseo.siteuo.com',
+  'https://youtube-video-optimizer.web.app',
+  'https://ytseo-6d1b0.web.app'
+];
 
 /**
  * Message handler for extension communication
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Validate message source for sensitive operations
-  if (message.action === 'captureVideo') {
-    handleCaptureVideo(message, sendResponse);
-    return true; // Keep channel open for async response
-  }
+  // Log for debugging
+  console.log('[YVO Background] Message:', message.action, 'from:', sender?.url || 'unknown');
 
-  if (message.action === 'cancelCapture') {
-    handleCancelCapture();
-    sendResponse({ success: true });
-    return false;
-  }
+  switch (message.action) {
+    // Video Wizard integration
+    case 'captureVideoForWizard':
+      handleCaptureForWizard(message, sendResponse);
+      return true;
 
-  if (message.action === 'getSettings') {
-    getSettings().then(sendResponse);
-    return true;
-  }
+    case 'getStoredVideoData':
+      sendResponse({ videoData: storedVideoData });
+      return false;
 
-  if (message.action === 'saveSettings') {
-    saveSettings(message.settings).then(sendResponse);
-    return true;
-  }
+    case 'storeVideoForWizard':
+      storedVideoData = message.videoData;
+      sendResponse({ success: true });
+      return false;
 
-  return false;
+    case 'clearStoredVideoData':
+      storedVideoData = null;
+      sendResponse({ success: true });
+      return false;
+
+    // Popup capture (standalone mode)
+    case 'captureVideo':
+      handleCaptureVideo(message, sendResponse);
+      return true;
+
+    case 'cancelCapture':
+      handleCancelCapture();
+      sendResponse({ success: true });
+      return false;
+
+    case 'getSettings':
+      getSettings().then(sendResponse);
+      return true;
+
+    case 'saveSettings':
+      saveSettings(message.settings).then(sendResponse);
+      return true;
+
+    default:
+      return false;
+  }
 });
 
 /**
- * Handle video capture request
+ * Handle video capture request from Video Wizard
+ * This captures video info and stream URLs to pass to the wizard
+ */
+async function handleCaptureForWizard(message, sendResponse) {
+  const { videoId, youtubeUrl } = message;
+
+  if (!videoId || !isValidVideoId(videoId)) {
+    sendResponse({ success: false, error: 'Invalid video ID' });
+    return;
+  }
+
+  try {
+    // Find YouTube tab with this video
+    const tabs = await chrome.tabs.query({
+      url: ['*://www.youtube.com/*', '*://youtube.com/*']
+    });
+
+    const targetTab = tabs.find(tab => {
+      const url = new URL(tab.url);
+      return url.searchParams.get('v') === videoId ||
+             tab.url.includes(`/shorts/${videoId}`) ||
+             tab.url.includes(`/embed/${videoId}`);
+    });
+
+    if (!targetTab) {
+      // No YouTube tab with this video - try to get basic info
+      sendResponse({
+        success: true,
+        videoInfo: {
+          videoId: videoId,
+          url: youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`
+        },
+        streamData: null,
+        message: 'Video tab not found. Open the video on YouTube for better capture.'
+      });
+      return;
+    }
+
+    // Get video info from the YouTube tab
+    const videoInfo = await chrome.tabs.sendMessage(targetTab.id, {
+      action: 'getVideoInfo'
+    });
+
+    if (!videoInfo?.success) {
+      sendResponse({
+        success: false,
+        error: videoInfo?.error || 'Failed to get video info from YouTube'
+      });
+      return;
+    }
+
+    // Try to get stream URLs
+    let streamData = null;
+    try {
+      const streamResponse = await chrome.tabs.sendMessage(targetTab.id, {
+        action: 'getVideoStream',
+        quality: '720'
+      });
+
+      if (streamResponse?.success) {
+        streamData = {
+          videoUrl: streamResponse.videoUrl,
+          audioUrl: streamResponse.audioUrl,
+          quality: streamResponse.quality,
+          mimeType: streamResponse.mimeType
+        };
+      }
+    } catch (streamError) {
+      console.warn('[YVO Background] Could not get stream URLs:', streamError);
+    }
+
+    // Store for later retrieval
+    storedVideoData = {
+      videoInfo: videoInfo.videoInfo,
+      streamData: streamData,
+      capturedAt: Date.now()
+    };
+
+    sendResponse({
+      success: true,
+      videoInfo: videoInfo.videoInfo,
+      streamData: streamData
+    });
+
+  } catch (error) {
+    console.error('[YVO Background] Capture for wizard error:', error);
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
+/**
+ * Handle video capture request (standalone popup mode)
  */
 async function handleCaptureVideo(message, sendResponse) {
   if (isCapturing) {
@@ -68,13 +185,13 @@ async function handleCaptureVideo(message, sendResponse) {
     return;
   }
 
-  if (startTime < 0 || endTime <= startTime || endTime > 36000) { // Max 10 hours
+  if (startTime < 0 || endTime <= startTime || endTime > 36000) {
     sendResponse({ success: false, error: 'Invalid time range values' });
     return;
   }
 
   const duration = endTime - startTime;
-  if (duration > 300) { // Max 5 minutes
+  if (duration > 300) {
     sendResponse({ success: false, error: 'Clip duration exceeds maximum (5 minutes)' });
     return;
   }
@@ -83,17 +200,14 @@ async function handleCaptureVideo(message, sendResponse) {
   currentCapture = { videoInfo, startTime, endTime, quality, cancelled: false };
 
   try {
-    // Notify popup of progress
     sendProgress(5, 'Getting video stream...');
 
-    // Get the current tab to request video stream from content script
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     if (!tab?.id) {
       throw new Error('Cannot access YouTube tab');
     }
 
-    // Request video stream URL from content script
     const streamResponse = await chrome.tabs.sendMessage(tab.id, {
       action: 'getVideoStream',
       quality: quality
@@ -110,7 +224,6 @@ async function handleCaptureVideo(message, sendResponse) {
 
     sendProgress(20, 'Downloading video segment...');
 
-    // Download the video segment
     const videoBlob = await downloadVideoSegment(
       streamResponse.videoUrl,
       streamResponse.audioUrl,
@@ -125,20 +238,17 @@ async function handleCaptureVideo(message, sendResponse) {
 
     sendProgress(80, 'Preparing download...');
 
-    // Create filename
     const safeTitle = sanitizeFilename(videoInfo.title || 'video');
     const filename = `${safeTitle}_${startTime}-${endTime}.mp4`;
 
-    // Download the file
     await downloadBlob(videoBlob, filename);
 
     sendProgress(100, 'Complete!');
 
-    // Notify popup
     chrome.runtime.sendMessage({
       action: 'captureComplete',
       success: true
-    });
+    }).catch(() => {});
 
     sendResponse({ success: true });
 
@@ -149,7 +259,7 @@ async function handleCaptureVideo(message, sendResponse) {
       action: 'captureComplete',
       success: false,
       error: error.message
-    });
+    }).catch(() => {});
 
     sendResponse({ success: false, error: error.message });
 
@@ -173,7 +283,6 @@ function handleCancelCapture() {
  * Download video segment
  */
 async function downloadVideoSegment(videoUrl, audioUrl, startTime, endTime) {
-  // For security, validate URLs are from googlevideo.com
   if (videoUrl && !isValidGoogleVideoUrl(videoUrl)) {
     throw new Error('Invalid video URL source');
   }
@@ -181,12 +290,8 @@ async function downloadVideoSegment(videoUrl, audioUrl, startTime, endTime) {
     throw new Error('Invalid audio URL source');
   }
 
-  // If we have a direct URL with range support, we can use fetch
-  // Otherwise, we'll download the full stream and clip locally
-
   sendProgress(30, 'Fetching video data...');
 
-  // Fetch video
   const videoResponse = await fetch(videoUrl, {
     method: 'GET',
     credentials: 'include'
@@ -200,7 +305,6 @@ async function downloadVideoSegment(videoUrl, audioUrl, startTime, endTime) {
 
   const videoBuffer = await videoResponse.arrayBuffer();
 
-  // If there's a separate audio stream, fetch it too
   let audioBuffer = null;
   if (audioUrl && audioUrl !== videoUrl) {
     sendProgress(60, 'Fetching audio data...');
@@ -217,9 +321,6 @@ async function downloadVideoSegment(videoUrl, audioUrl, startTime, endTime) {
 
   sendProgress(70, 'Creating video file...');
 
-  // For now, return the video as-is
-  // In a full implementation, we'd use WebCodecs API or a WASM library
-  // to clip the video to the specified time range
   return new Blob([videoBuffer], { type: 'video/mp4' });
 }
 
@@ -241,7 +342,6 @@ async function downloadBlob(blob, filename) {
         return;
       }
 
-      // Listen for download completion
       const listener = (delta) => {
         if (delta.id === downloadId) {
           if (delta.state?.current === 'complete') {
@@ -258,11 +358,10 @@ async function downloadBlob(blob, filename) {
 
       chrome.downloads.onChanged.addListener(listener);
 
-      // Cleanup after timeout
       setTimeout(() => {
         chrome.downloads.onChanged.removeListener(listener);
         URL.revokeObjectURL(url);
-      }, 300000); // 5 minutes timeout
+      }, 300000);
     });
   });
 }
@@ -275,20 +374,18 @@ function sendProgress(percent, status) {
     action: 'progressUpdate',
     percent: percent,
     status: status
-  }).catch(() => {
-    // Popup may be closed, ignore error
-  });
+  }).catch(() => {});
 }
 
 /**
- * Validate video ID format (11 characters, alphanumeric with dash/underscore)
+ * Validate video ID format
  */
 function isValidVideoId(videoId) {
   return /^[a-zA-Z0-9_-]{11}$/.test(videoId);
 }
 
 /**
- * Validate URL is from googlevideo.com
+ * Validate URL is from Google/YouTube
  */
 function isValidGoogleVideoUrl(url) {
   try {
@@ -306,9 +403,9 @@ function isValidGoogleVideoUrl(url) {
  */
 function sanitizeFilename(name) {
   return name
-    .replace(/[<>:"/\\|?*]/g, '') // Remove invalid chars
-    .replace(/\s+/g, '_') // Replace spaces with underscores
-    .substring(0, 100); // Limit length
+    .replace(/[<>:"/\\|?*]/g, '')
+    .replace(/\s+/g, '_')
+    .substring(0, 100);
 }
 
 /**
@@ -328,7 +425,6 @@ async function getSettings() {
  */
 async function saveSettings(settings) {
   try {
-    // Validate settings
     const validSettings = {
       defaultQuality: ['720', '1080'].includes(settings.defaultQuality)
         ? settings.defaultQuality
@@ -360,9 +456,11 @@ function getDefaultSettings() {
  */
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    // Set default settings on install
     saveSettings(getDefaultSettings());
+    console.log('[YVO Extension] Installed successfully');
+  } else if (details.reason === 'update') {
+    console.log('[YVO Extension] Updated to version', chrome.runtime.getManifest().version);
   }
 });
 
-console.log('YouTube Video Optimizer background service worker loaded');
+console.log('[YVO Extension] Background service worker loaded');

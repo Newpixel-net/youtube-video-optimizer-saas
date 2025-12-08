@@ -1,121 +1,138 @@
 # YouTube Video Optimizer - Chrome Extension
 
-A secure Chrome extension for capturing and downloading YouTube video clips directly from your browser.
+A Chrome extension that integrates with Video Wizard to capture YouTube videos directly from your browser, bypassing server-side download restrictions.
+
+## Why This Extension?
+
+YouTube frequently changes their APIs and encryption, which breaks server-side video downloaders. This extension solves that problem by:
+
+- Using your browser's existing YouTube session
+- Capturing video data directly from the page
+- Sending video info to Video Wizard for processing
+- No server-side YouTube downloading needed
 
 ## Features
 
-- Capture clips from any YouTube video
-- Select custom start and end times
-- Choose between 720p and 1080p quality
-- Direct download to your computer
-- Works with your existing YouTube session (no authentication issues)
-- High security with Manifest V3
-
-## Security Features
-
-- **Manifest V3**: Uses the latest, most secure Chrome extension architecture
-- **Strict Content Security Policy**: Prevents XSS and injection attacks
-- **Minimal Permissions**: Only requests necessary permissions (activeTab, storage, downloads)
-- **Input Validation**: All user inputs are validated and sanitized
-- **Secure Communication**: All extension components use secure message passing
-- **No External Servers**: Video capture happens entirely in your browser
+- **Video Wizard Integration**: Seamlessly works with the Video Wizard web app
+- **Direct Capture**: Uses your browser's YouTube session (no auth issues)
+- **One-Click Send**: Send YouTube videos directly to Video Wizard
+- **Secure**: Manifest V3 with strict security policies
+- **Lightweight**: Minimal permissions, no external servers
 
 ## Installation
 
-### Developer Mode Installation
+### Step 1: Download the Extension
 
-1. **Download the Extension**
-   - Download or clone this folder to your computer
+Download the `browser-extension` folder to your computer.
 
-2. **Open Chrome Extensions**
-   - Open Chrome browser
-   - Navigate to `chrome://extensions/`
-   - Or: Menu > More tools > Extensions
+### Step 2: Open Chrome Extensions
 
-3. **Enable Developer Mode**
-   - Toggle the "Developer mode" switch in the top-right corner
+1. Open Chrome browser
+2. Navigate to `chrome://extensions/`
+3. Or: Click Menu (three dots) > More tools > Extensions
 
-4. **Load the Extension**
-   - Click "Load unpacked"
-   - Select the `browser-extension` folder
-   - The extension icon should appear in your toolbar
+### Step 3: Enable Developer Mode
 
-5. **Pin the Extension (Recommended)**
-   - Click the puzzle piece icon in Chrome toolbar
-   - Find "YouTube Video Optimizer"
-   - Click the pin icon to keep it visible
+Toggle the "Developer mode" switch in the top-right corner.
 
-## Usage
+### Step 4: Load the Extension
 
-1. **Navigate to a YouTube Video**
-   - Go to any YouTube video page (youtube.com/watch?v=...)
+1. Click "Load unpacked"
+2. Select the `browser-extension` folder
+3. The extension icon should appear in your toolbar
 
-2. **Open the Extension**
-   - Click the extension icon in your toolbar
+### Step 5: Pin the Extension (Recommended)
 
-3. **Select Clip Range**
-   - Set the start time and end time for your clip
-   - Maximum duration is 5 minutes
+1. Click the puzzle piece icon in Chrome toolbar
+2. Find "YouTube Video Optimizer"
+3. Click the pin icon to keep it visible
 
-4. **Choose Quality**
-   - Select 720p HD or 1080p Full HD
+## How to Use
 
-5. **Capture & Download**
-   - Click "Capture & Download"
-   - Choose where to save the file
-   - Wait for the download to complete
+### Method 1: From YouTube
 
-## Permissions Explained
+1. Go to any YouTube video
+2. Click the extension icon
+3. Click "Send to Video Wizard"
+4. Video Wizard opens with your video ready to process
 
-| Permission | Why It's Needed |
-|------------|-----------------|
-| `activeTab` | Access the current YouTube tab to extract video info |
-| `storage` | Save your preferences (quality, etc.) |
-| `downloads` | Save captured videos to your computer |
-| `host_permissions: youtube.com` | Read video information from YouTube pages |
-| `host_permissions: googlevideo.com` | Download video streams from YouTube's servers |
+### Method 2: From Video Wizard
 
-## Troubleshooting
+1. Open Video Wizard (ytseo.siteuo.com/video-wizard.html)
+2. The extension shows "Connected" status
+3. Paste any YouTube URL in Video Wizard
+4. The extension automatically captures the video
 
-### Extension doesn't show video info
-- Make sure you're on a YouTube video page (URL contains `/watch?v=`)
-- Try refreshing the YouTube page
-- Check if the video is available in your region
+## How It Works
 
-### Download fails
-- Some videos may be protected and cannot be downloaded
-- Live streams cannot be captured (wait until they finish)
-- Try selecting a lower quality
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   YouTube    │ --> │  Extension   │ --> │ Video Wizard │
+│   Browser    │     │  (captures)  │     │  (processes) │
+└──────────────┘     └──────────────┘     └──────────────┘
 
-### "Please refresh the page" message
-- The extension needs to inject a script into the page
-- Refresh the YouTube page and try again
+1. You browse YouTube normally
+2. Extension captures video info from the page
+3. Video Wizard receives the data and processes clips
+4. No server-side YouTube downloading needed!
+```
 
-## Development
+## Security
 
-### File Structure
+- **Manifest V3**: Latest, most secure extension architecture
+- **Minimal Permissions**: Only `activeTab` and `storage`
+- **Strict CSP**: `script-src 'self'; object-src 'none'`
+- **Input Validation**: All inputs are sanitized
+- **No External Servers**: Data stays in your browser
+
+## File Structure
 
 ```
 browser-extension/
-  manifest.json          # Extension configuration
-  src/
-    popup.html           # Extension popup UI
-    popup.css            # Popup styles
-    popup.js             # Popup logic
-    background.js        # Service worker
-    content.js           # YouTube page script
-    content.css          # Content script styles
-    injected.js          # Page context script
-  icons/
-    icon16.png           # Toolbar icon
-    icon32.png           # Extension menu icon
-    icon48.png           # Extensions page icon
-    icon128.png          # Chrome Web Store icon
-  scripts/
-    create-png-icons.mjs # Icon generation script
+├── manifest.json          # Extension configuration
+├── src/
+│   ├── popup.html         # Extension popup UI
+│   ├── popup.css          # Popup styles
+│   ├── popup.js           # Popup logic
+│   ├── background.js      # Service worker
+│   ├── content.js         # YouTube page script
+│   ├── content.css        # Content script styles
+│   ├── injected.js        # Page context script
+│   └── wizard-bridge.js   # Video Wizard integration
+├── icons/
+│   ├── icon16.png         # Toolbar icon
+│   ├── icon32.png         # Extension menu icon
+│   ├── icon48.png         # Extensions page icon
+│   └── icon128.png        # Chrome Web Store icon
+└── scripts/
+    └── create-png-icons.mjs  # Icon generation
 ```
 
-### Building from Source
+## Troubleshooting
+
+### Extension shows "Inactive"
+- Make sure you're on YouTube or Video Wizard
+- Check that the extension is enabled in `chrome://extensions/`
+
+### "Please refresh the page" message
+- The extension needs to inject scripts into the page
+- Refresh the YouTube page and try again
+
+### Video Wizard doesn't detect extension
+- Check that wizard-bridge.js is loaded (check browser console)
+- Refresh the Video Wizard page
+- Make sure you're using the correct domain
+
+## Privacy
+
+This extension:
+- Does NOT collect any personal data
+- Does NOT track your browsing activity
+- Does NOT send data to external servers (only to Video Wizard)
+- Only accesses YouTube and Video Wizard pages
+- Stores preferences locally in your browser
+
+## Development
 
 ```bash
 # Generate icons (if needed)
@@ -124,15 +141,6 @@ node scripts/create-png-icons.mjs
 # Load the extension in Chrome as described above
 ```
 
-## Privacy
-
-This extension:
-- Does NOT collect any personal data
-- Does NOT track your browsing activity
-- Does NOT send data to external servers
-- Only accesses YouTube pages you visit
-- Stores preferences locally in your browser
-
 ## License
 
-MIT License - See LICENSE file for details.
+MIT License
