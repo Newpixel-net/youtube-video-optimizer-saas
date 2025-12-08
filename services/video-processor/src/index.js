@@ -509,4 +509,13 @@ app.listen(PORT, () => {
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Bucket: ${BUCKET_NAME}`);
   console.log(`Temp Dir: ${TEMP_DIR}`);
+
+  // Diagnostic logging for RapidAPI configuration
+  const rapidApiKey = process.env.RAPIDAPI_KEY;
+  if (rapidApiKey) {
+    console.log(`RapidAPI Key: CONFIGURED (${rapidApiKey.substring(0, 8)}...${rapidApiKey.substring(rapidApiKey.length - 4)})`);
+  } else {
+    console.log(`RapidAPI Key: NOT CONFIGURED - video downloads will use fallback methods`);
+    console.log(`Set RAPIDAPI_KEY environment variable to enable premium YouTube downloads`);
+  }
 });

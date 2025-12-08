@@ -2,6 +2,12 @@
 
 # Video Processor Service Deployment Script
 # Usage: ./deploy.sh [project-id] [region]
+#
+# Environment variables:
+#   RAPIDAPI_KEY - RapidAPI key for YouTube video downloads (required for premium downloads)
+#
+# Example:
+#   RAPIDAPI_KEY=your-api-key ./deploy.sh my-project us-central1
 
 set -e
 
@@ -9,6 +15,7 @@ PROJECT_ID="${1:-$(gcloud config get-value project)}"
 REGION="${2:-us-central1}"
 SERVICE_NAME="video-processor"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
+RAPIDAPI_KEY="${RAPIDAPI_KEY:-}"
 
 echo "============================================"
 echo "Video Processor Service Deployment"
@@ -16,6 +23,12 @@ echo "============================================"
 echo "Project: ${PROJECT_ID}"
 echo "Region: ${REGION}"
 echo "Service: ${SERVICE_NAME}"
+if [ -n "$RAPIDAPI_KEY" ]; then
+    echo "RapidAPI Key: Configured (${RAPIDAPI_KEY:0:8}...)"
+else
+    echo "RapidAPI Key: NOT SET (video downloads will use fallback methods)"
+    echo "  Set RAPIDAPI_KEY environment variable for premium YouTube downloads"
+fi
 echo "============================================"
 
 # Check if gcloud is configured
@@ -44,6 +57,12 @@ echo ""
 echo "Pushing to Container Registry..."
 docker push "${IMAGE_NAME}:latest"
 
+# Build environment variables string
+ENV_VARS="BUCKET_NAME=${PROJECT_ID}.appspot.com,NODE_ENV=production"
+if [ -n "$RAPIDAPI_KEY" ]; then
+    ENV_VARS="${ENV_VARS},RAPIDAPI_KEY=${RAPIDAPI_KEY}"
+fi
+
 # Deploy to Cloud Run
 echo ""
 echo "Deploying to Cloud Run..."
@@ -57,7 +76,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --concurrency=1 \
     --min-instances=0 \
     --max-instances=10 \
-    --set-env-vars="BUCKET_NAME=${PROJECT_ID}.appspot.com,NODE_ENV=production" \
+    --set-env-vars="${ENV_VARS}" \
     --allow-unauthenticated \
     --project="${PROJECT_ID}"
 
