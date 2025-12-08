@@ -406,6 +406,33 @@ function getStreamUrl(format) {
 function init() {
   // Inject script to access page context if needed
   injectPageScript();
+
+  // Report current video ID to background script
+  reportCurrentVideoId();
+
+  // Watch for URL changes (YouTube is a SPA)
+  let lastUrl = location.href;
+  new MutationObserver(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      // Report new video ID after navigation
+      setTimeout(reportCurrentVideoId, 500);
+    }
+  }).observe(document, { subtree: true, childList: true });
+}
+
+/**
+ * Report current video ID to background script for stream interception tracking
+ */
+function reportCurrentVideoId() {
+  const videoId = getVideoId();
+  if (videoId) {
+    chrome.runtime.sendMessage({
+      action: 'reportVideoId',
+      videoId: videoId
+    }).catch(() => {});
+    console.log(`[YVO Content] Reported video ID: ${videoId}`);
+  }
 }
 
 /**

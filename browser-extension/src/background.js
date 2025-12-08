@@ -10,12 +10,150 @@ let currentCapture = null;
 let isCapturing = false;
 let storedVideoData = null; // Video data captured from YouTube for Video Wizard
 
+// Intercepted stream URLs from actual network requests (keyed by video ID)
+const interceptedStreams = new Map();
+const STREAM_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+// Track which video ID is playing in which tab
+const tabVideoMap = new Map();
+
 // Constants
 const WIZARD_ORIGINS = [
   'https://ytseo.siteuo.com',
   'https://youtube-video-optimizer.web.app',
   'https://ytseo-6d1b0.web.app'
 ];
+
+/**
+ * Network request interception to capture actual stream URLs
+ * This captures the REAL URLs that YouTube's player uses (after signature deciphering)
+ */
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    const url = details.url;
+
+    // Only process googlevideo.com requests (actual video/audio streams)
+    if (!url.includes('.googlevideo.com/')) return;
+
+    try {
+      const urlObj = new URL(url);
+      const params = urlObj.searchParams;
+
+      // Extract video ID from the URL
+      // YouTube stream URLs contain 'id' parameter with video ID or embedded in 'ei' param
+      let videoId = null;
+
+      // Try to get from initiator URL (the YouTube page that made the request)
+      if (details.initiator && details.initiator.includes('youtube.com')) {
+        // Check for video ID in initiator
+        const initiatorMatch = details.initiator.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+        if (initiatorMatch) {
+          videoId = initiatorMatch[1];
+        }
+      }
+
+      // Also try to extract from documentUrl
+      if (!videoId && details.documentUrl) {
+        const docMatch = details.documentUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+        if (docMatch) {
+          videoId = docMatch[1];
+        }
+      }
+
+      // Check if this is a video or audio stream
+      const mime = params.get('mime');
+      const itag = params.get('itag');
+      const range = params.get('range');
+
+      // Skip range requests (partial downloads) - we want the full stream URL
+      if (range && range !== '0-') return;
+
+      // Determine if video or audio based on mime type or itag
+      const isVideo = mime?.startsWith('video/') ||
+                      ['18', '22', '37', '38', '82', '83', '84', '85', '136', '137', '298', '299', '264', '271', '313', '315', '266', '138'].includes(itag);
+      const isAudio = mime?.startsWith('audio/') ||
+                      ['139', '140', '141', '171', '172', '249', '250', '251'].includes(itag);
+
+      if (!isVideo && !isAudio) return;
+
+      // Get video ID from tab tracking if we couldn't extract it from URL
+      if (!videoId && details.tabId && details.tabId > 0) {
+        videoId = tabVideoMap.get(details.tabId);
+      }
+
+      if (!videoId) {
+        // Can't determine video ID - skip this request
+        return;
+      }
+
+      // Store the intercepted URL
+      if (!interceptedStreams.has(videoId)) {
+        interceptedStreams.set(videoId, {
+          capturedAt: Date.now(),
+          videoUrls: [],
+          audioUrls: []
+        });
+      }
+
+      const streams = interceptedStreams.get(videoId);
+
+      // Add URL if not already present (avoid duplicates)
+      if (isVideo && !streams.videoUrls.includes(url)) {
+        streams.videoUrls.push(url);
+        console.log(`[YVO] Captured video stream for ${videoId}: itag=${itag}, mime=${mime}`);
+      } else if (isAudio && !streams.audioUrls.includes(url)) {
+        streams.audioUrls.push(url);
+        console.log(`[YVO] Captured audio stream for ${videoId}: itag=${itag}, mime=${mime}`);
+      }
+
+      // Update timestamp
+      streams.capturedAt = Date.now();
+
+    } catch (e) {
+      // Ignore parsing errors
+    }
+  },
+  { urls: ['*://*.googlevideo.com/*'] }
+);
+
+/**
+ * Get intercepted streams for a video ID
+ */
+function getInterceptedStreams(videoId) {
+  const streams = interceptedStreams.get(videoId);
+
+  if (!streams) {
+    return null;
+  }
+
+  // Check if expired
+  if (Date.now() - streams.capturedAt > STREAM_CACHE_TTL) {
+    interceptedStreams.delete(videoId);
+    return null;
+  }
+
+  // Return the best streams (first ones captured are usually best quality)
+  return {
+    videoUrl: streams.videoUrls[0] || null,
+    audioUrl: streams.audioUrls[0] || null,
+    allVideoUrls: streams.videoUrls,
+    allAudioUrls: streams.audioUrls,
+    capturedAt: streams.capturedAt
+  };
+}
+
+/**
+ * Clean up old cached streams periodically
+ */
+setInterval(() => {
+  const now = Date.now();
+  for (const [videoId, streams] of interceptedStreams.entries()) {
+    if (now - streams.capturedAt > STREAM_CACHE_TTL) {
+      interceptedStreams.delete(videoId);
+      console.log(`[YVO] Cleaned up expired streams for ${videoId}`);
+    }
+  }
+}, 5 * 60 * 1000); // Every 5 minutes
 
 /**
  * Message handler for extension communication
@@ -32,6 +170,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'getStoredVideoData':
       sendResponse({ videoData: storedVideoData });
+      return false;
+
+    case 'getInterceptedStreams':
+      const streams = getInterceptedStreams(message.videoId);
+      sendResponse({ success: !!streams, streams: streams });
+      return false;
+
+    case 'reportVideoId':
+      // Content script reporting which video is currently playing
+      if (message.videoId && sender.tab?.id) {
+        tabVideoMap.set(sender.tab.id, message.videoId);
+        console.log(`[YVO] Tab ${sender.tab.id} is playing video ${message.videoId}`);
+      }
+      sendResponse({ success: true });
       return false;
 
     case 'storeVideoForWizard':
@@ -79,6 +231,8 @@ async function handleCaptureForWizard(message, sendResponse) {
     return;
   }
 
+  console.log(`[YVO Background] Capture request for video: ${videoId}`);
+
   try {
     // Find YouTube tab with this video
     const tabs = await chrome.tabs.query({
@@ -93,7 +247,27 @@ async function handleCaptureForWizard(message, sendResponse) {
     });
 
     if (!targetTab) {
-      // No YouTube tab with this video - try to get basic info
+      // No YouTube tab with this video - check if we have intercepted streams
+      const intercepted = getInterceptedStreams(videoId);
+      if (intercepted && intercepted.videoUrl) {
+        console.log(`[YVO Background] No tab but have intercepted streams for ${videoId}`);
+        sendResponse({
+          success: true,
+          videoInfo: {
+            videoId: videoId,
+            url: youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`
+          },
+          streamData: {
+            videoUrl: intercepted.videoUrl,
+            audioUrl: intercepted.audioUrl,
+            quality: 'intercepted',
+            capturedAt: intercepted.capturedAt
+          },
+          message: 'Using previously intercepted stream URLs.'
+        });
+        return;
+      }
+
       sendResponse({
         success: true,
         videoInfo: {
@@ -101,7 +275,7 @@ async function handleCaptureForWizard(message, sendResponse) {
           url: youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`
         },
         streamData: null,
-        message: 'Video tab not found. Open the video on YouTube for better capture.'
+        message: 'Video tab not found. Open the video on YouTube to capture streams.'
       });
       return;
     }
@@ -119,24 +293,52 @@ async function handleCaptureForWizard(message, sendResponse) {
       return;
     }
 
-    // Try to get stream URLs
+    // PRIORITY 1: Check for intercepted stream URLs (most reliable!)
     let streamData = null;
-    try {
-      const streamResponse = await chrome.tabs.sendMessage(targetTab.id, {
-        action: 'getVideoStream',
-        quality: '720'
-      });
+    const intercepted = getInterceptedStreams(videoId);
 
-      if (streamResponse?.success) {
-        streamData = {
-          videoUrl: streamResponse.videoUrl,
-          audioUrl: streamResponse.audioUrl,
-          quality: streamResponse.quality,
-          mimeType: streamResponse.mimeType
-        };
+    if (intercepted && intercepted.videoUrl) {
+      console.log(`[YVO Background] Using INTERCEPTED stream URLs for ${videoId}`);
+      streamData = {
+        videoUrl: intercepted.videoUrl,
+        audioUrl: intercepted.audioUrl,
+        quality: 'intercepted',
+        mimeType: 'video/mp4',
+        capturedAt: intercepted.capturedAt,
+        source: 'network_intercept'
+      };
+    } else {
+      // FALLBACK: Try to get stream URLs from content script (may fail due to signature cipher)
+      console.log(`[YVO Background] No intercepted streams, trying content script...`);
+      try {
+        const streamResponse = await chrome.tabs.sendMessage(targetTab.id, {
+          action: 'getVideoStream',
+          quality: '720'
+        });
+
+        if (streamResponse?.success && streamResponse.videoUrl) {
+          streamData = {
+            videoUrl: streamResponse.videoUrl,
+            audioUrl: streamResponse.audioUrl,
+            quality: streamResponse.quality,
+            mimeType: streamResponse.mimeType,
+            source: 'content_script'
+          };
+        }
+      } catch (streamError) {
+        console.warn('[YVO Background] Content script stream capture failed:', streamError.message);
       }
-    } catch (streamError) {
-      console.warn('[YVO Background] Could not get stream URLs:', streamError);
+    }
+
+    // Log what we captured
+    if (streamData) {
+      console.log(`[YVO Background] Captured streams (${streamData.source}):`, {
+        hasVideo: !!streamData.videoUrl,
+        hasAudio: !!streamData.audioUrl,
+        quality: streamData.quality
+      });
+    } else {
+      console.warn(`[YVO Background] No stream URLs captured for ${videoId}`);
     }
 
     // Store for later retrieval
