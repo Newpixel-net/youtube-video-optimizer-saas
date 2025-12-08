@@ -47,6 +47,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
 
     <!-- 1.3 PDF Generation Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -440,6 +441,150 @@
             .url-input-container {
                 flex-direction: column;
             }
+        }
+
+        /* Upload Divider */
+        .upload-divider {
+            display: flex;
+            align-items: center;
+            margin: 1.5rem 0;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .upload-divider::before,
+        .upload-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2), transparent);
+        }
+
+        .upload-divider span {
+            padding: 0 1rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        /* File Upload */
+        .file-upload-container {
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .btn-upload {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(139, 92, 246, 0.8));
+            border: none;
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+        }
+
+        .upload-icon {
+            font-size: 1.2rem;
+        }
+
+        .upload-hint {
+            margin-top: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.8rem;
+        }
+
+        /* Upload Progress */
+        .upload-progress-container {
+            max-width: 400px;
+            margin: 1.5rem auto;
+            text-align: center;
+        }
+
+        .upload-progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .upload-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ec4899, #8b5cf6);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .upload-progress-text {
+            display: block;
+            margin-top: 0.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.85rem;
+        }
+
+        /* Uploaded File Info */
+        .uploaded-file-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            max-width: 400px;
+            margin: 1.5rem auto;
+            padding: 1rem;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 0.75rem;
+        }
+
+        .uploaded-file-icon {
+            font-size: 1.5rem;
+        }
+
+        .uploaded-file-details {
+            flex: 1;
+            text-align: left;
+        }
+
+        .uploaded-file-name {
+            display: block;
+            color: white;
+            font-weight: 500;
+            font-size: 0.9rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 250px;
+        }
+
+        .uploaded-file-size {
+            display: block;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8rem;
+        }
+
+        .remove-file-btn {
+            width: 28px;
+            height: 28px;
+            background: rgba(239, 68, 68, 0.2);
+            border: none;
+            border-radius: 50%;
+            color: #ef4444;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .remove-file-btn:hover {
+            background: rgba(239, 68, 68, 0.4);
         }
 
         /* Video Preview */
@@ -934,6 +1079,7 @@
             align-items: center;
             justify-content: center;
             box-shadow: 0 4px 20px rgba(236, 72, 153, 0.4);
+            z-index: 20;
         }
 
         .video-preview-btn:hover {
@@ -1267,22 +1413,51 @@
         /* Auto-center: Transform 16:9 to 9:16 crop */
         .phone-video-area.reframe-auto_center {
             overflow: hidden;
+            position: relative;
         }
 
-        .phone-video-area.reframe-auto_center iframe,
-        .phone-video-area.reframe-auto_center img {
-            transform: scale(1.78) translateX(0%);
+        .phone-video-area.reframe-auto_center .reframe-video {
+            position: absolute;
+            /* Size the video to be 16:9 aspect ratio that fills the height */
+            /* For a 9:16 container, the video width needs to be 16/9 * 9/16 = 1.0 of width for 16:9 aspect */
+            /* Actually: container is 9:16, video is 16:9. To fill height, scale width by (16/9)/(9/16) = 256/81 ≈ 3.16 */
+            /* Simpler: width should be 177.78% (16/9 ratio), then use object-fit:cover */
+            width: 177.78%;
+            height: 100%;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+            transition: transform 0.4s ease, left 0.4s ease;
+            object-fit: cover;
+        }
+
+        .phone-video-area.reframe-auto_center.crop-center .reframe-video {
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .phone-video-area.reframe-auto_center.crop-left .reframe-video {
+            left: 0;
+            transform: translateX(0%);
+        }
+
+        .phone-video-area.reframe-auto_center.crop-right .reframe-video {
+            left: auto;
+            right: 0;
+            transform: translateX(0%);
+        }
+
+        /* Fallback for iframe/img without .reframe-video class */
+        .phone-video-area.reframe-auto_center iframe:not(.reframe-video),
+        .phone-video-area.reframe-auto_center img:not(.reframe-video) {
+            position: absolute;
+            width: 177.78%;
+            height: 100%;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
             transition: transform 0.4s ease;
-        }
-
-        .phone-video-area.reframe-auto_center.crop-left iframe,
-        .phone-video-area.reframe-auto_center.crop-left img {
-            transform: scale(1.78) translateX(15%);
-        }
-
-        .phone-video-area.reframe-auto_center.crop-right iframe,
-        .phone-video-area.reframe-auto_center.crop-right img {
-            transform: scale(1.78) translateX(-15%);
+            object-fit: cover;
         }
 
         /* Split-screen: Show two halves of the video */
@@ -1399,10 +1574,17 @@
             position: relative;
         }
 
+        .phone-video-area.reframe-gameplay .reframe-video,
         .phone-video-area.reframe-gameplay iframe,
         .phone-video-area.reframe-gameplay img {
-            transform: scale(1.78);
+            position: absolute;
+            width: 177.78%;
+            height: 100%;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
             transition: transform 0.3s ease;
+            object-fit: cover;
         }
 
         .phone-video-area.reframe-gameplay .facecam-preview {
@@ -4868,6 +5050,7 @@
         const auth = firebase.auth();
         const functions = firebase.functions();
         const db = firebase.firestore();
+        const storage = firebase.storage();
 
         /* ==========================================
            4.2 APPLICATION STATE
@@ -4895,7 +5078,11 @@
                     generateThumbnails: true,
                     seoOptimization: true,
                     multiPlatform: true
-                }
+                },
+                // File upload state
+                uploading: false,
+                uploadProgress: 0,
+                uploadedFile: null // { name, size, type, url, storagePath }
             },
 
             // Step 2: Analysis
@@ -5007,6 +5194,14 @@
                     return hours + ':' + (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
                 }
                 return mins + ':' + (secs < 10 ? '0' : '') + secs;
+            },
+
+            formatFileSize: function(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
             },
 
             getScoreClass: function(score) {
@@ -5220,13 +5415,47 @@
             html += '<div class="video-dropzone" id="dropzone">';
             html += '<div class="dropzone-icon">🎬</div>';
             html += '<h3 class="dropzone-title">Drop a long video and get clips</h3>';
-            html += '<p class="dropzone-subtitle">Paste a YouTube URL or drag & drop a video file</p>';
+            html += '<p class="dropzone-subtitle">Paste a YouTube URL or upload a video file</p>';
 
             // URL Input
             html += '<div class="url-input-container">';
             html += '<input type="text" class="url-input" id="video-url" placeholder="https://youtube.com/watch?v=..." value="' + utils.escapeHtml(state.videoInput.url) + '">';
             html += '<button class="btn-primary" onclick="app.analyzeVideo()">Get Clips</button>';
             html += '</div>';
+
+            // OR Divider
+            html += '<div class="upload-divider"><span>OR</span></div>';
+
+            // File Upload Button
+            html += '<div class="file-upload-container">';
+            html += '<input type="file" id="video-file-input" accept="video/*" style="display:none" onchange="app.handleVideoUpload(this)">';
+            html += '<button class="btn-upload" onclick="document.getElementById(\'video-file-input\').click()">';
+            html += '<span class="upload-icon">📤</span> Upload Video from Device';
+            html += '</button>';
+            html += '<p class="upload-hint">Supports MP4, MOV, AVI, WebM (max 500MB)</p>';
+            html += '</div>';
+
+            // Upload Progress (if uploading)
+            if (state.videoInput.uploading) {
+                html += '<div class="upload-progress-container">';
+                html += '<div class="upload-progress-bar">';
+                html += '<div class="upload-progress-fill" style="width: ' + (state.videoInput.uploadProgress || 0) + '%"></div>';
+                html += '</div>';
+                html += '<span class="upload-progress-text">Uploading... ' + (state.videoInput.uploadProgress || 0) + '%</span>';
+                html += '</div>';
+            }
+
+            // Uploaded File Info (if uploaded)
+            if (state.videoInput.uploadedFile) {
+                html += '<div class="uploaded-file-info">';
+                html += '<span class="uploaded-file-icon">✅</span>';
+                html += '<div class="uploaded-file-details">';
+                html += '<span class="uploaded-file-name">' + utils.escapeHtml(state.videoInput.uploadedFile.name) + '</span>';
+                html += '<span class="uploaded-file-size">' + utils.formatFileSize(state.videoInput.uploadedFile.size) + '</span>';
+                html += '</div>';
+                html += '<button class="remove-file-btn" onclick="app.removeUploadedFile()">✕</button>';
+                html += '</div>';
+            }
 
             html += '</div>';
 
@@ -5548,18 +5777,21 @@
 
             // Different styles for different reframe modes
             var getVideoContent = function(mode) {
-                // For modes that need CSS transforms, don't use position:absolute
-                var needsTransform = ['split_screen', 'three_person', 'broll_split'].indexOf(mode) !== -1;
+                // All reframe modes need CSS transforms - avoid inline position/size styles
+                var needsTransform = ['auto_center', 'split_screen', 'three_person', 'broll_split', 'gameplay'].indexOf(mode) !== -1;
 
                 if (videoId && state.customization.showVideoPreview) {
                     if (needsTransform) {
-                        return '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+                        // Let CSS handle the positioning and transforms
+                        return '<iframe class="reframe-video" src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
                     } else {
                         return '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:inherit"></iframe>';
                     }
                 } else {
                     if (needsTransform) {
-                        return '<img src="' + activeClip.thumbnail + '" alt="Preview">';
+                        // Let CSS handle the positioning and transforms
+                        return '<img class="reframe-video" src="' + activeClip.thumbnail + '" alt="Preview">' +
+                               '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
                     } else {
                         return '<img src="' + activeClip.thumbnail + '" alt="Preview" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">' +
                                '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
@@ -6772,10 +7004,119 @@
                 render();
             },
 
+            // Handle video file upload from device
+            handleVideoUpload: async function(input) {
+                var file = input.files[0];
+                if (!file) return;
+
+                // Validate file type
+                var validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/avi', 'video/mov'];
+                if (!file.type.startsWith('video/') && !validTypes.includes(file.type)) {
+                    utils.showToast('Please select a valid video file (MP4, MOV, AVI, WebM)', 'error');
+                    input.value = '';
+                    return;
+                }
+
+                // Validate file size (500MB max)
+                var maxSize = 500 * 1024 * 1024; // 500MB
+                if (file.size > maxSize) {
+                    utils.showToast('File too large. Maximum size is 500MB.', 'error');
+                    input.value = '';
+                    return;
+                }
+
+                if (!state.user) {
+                    utils.showToast('Please sign in to upload videos', 'error');
+                    input.value = '';
+                    return;
+                }
+
+                // Start upload
+                state.videoInput.uploading = true;
+                state.videoInput.uploadProgress = 0;
+                state.videoInput.uploadedFile = null;
+                render();
+
+                try {
+                    // Create a unique filename
+                    var timestamp = Date.now();
+                    var safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                    var storagePath = 'uploads/' + state.user.uid + '/' + timestamp + '_' + safeName;
+                    var storageRef = storage.ref(storagePath);
+
+                    // Upload with progress tracking
+                    var uploadTask = storageRef.put(file);
+
+                    uploadTask.on('state_changed',
+                        function(snapshot) {
+                            var progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                            state.videoInput.uploadProgress = progress;
+                            render();
+                        },
+                        function(error) {
+                            console.error('Upload error:', error);
+                            state.videoInput.uploading = false;
+                            state.videoInput.uploadProgress = 0;
+                            utils.showToast('Upload failed: ' + error.message, 'error');
+                            render();
+                        },
+                        async function() {
+                            // Upload completed
+                            var downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+
+                            state.videoInput.uploading = false;
+                            state.videoInput.uploadProgress = 100;
+                            state.videoInput.uploadedFile = {
+                                name: file.name,
+                                size: file.size,
+                                type: file.type,
+                                url: downloadURL,
+                                storagePath: storagePath
+                            };
+                            state.videoInput.url = ''; // Clear YouTube URL if any
+
+                            utils.showToast('Video uploaded successfully!', 'success');
+                            render();
+                        }
+                    );
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    state.videoInput.uploading = false;
+                    state.videoInput.uploadProgress = 0;
+                    utils.showToast('Upload failed: ' + error.message, 'error');
+                    render();
+                }
+
+                // Clear input for potential re-upload
+                input.value = '';
+            },
+
+            // Remove uploaded file
+            removeUploadedFile: async function() {
+                if (!state.videoInput.uploadedFile) return;
+
+                try {
+                    // Delete from storage
+                    var storageRef = storage.ref(state.videoInput.uploadedFile.storagePath);
+                    await storageRef.delete();
+                } catch (error) {
+                    console.warn('Could not delete file from storage:', error);
+                }
+
+                state.videoInput.uploadedFile = null;
+                state.videoInput.uploading = false;
+                state.videoInput.uploadProgress = 0;
+                render();
+                utils.showToast('File removed', 'info');
+            },
+
             analyzeVideo: async function() {
                 var url = state.videoInput.url.trim();
-                if (!url) {
-                    utils.showToast('Please enter a video URL', 'error');
+                var uploadedFile = state.videoInput.uploadedFile;
+
+                // Check if we have either a URL or an uploaded file
+                if (!url && !uploadedFile) {
+                    utils.showToast('Please enter a video URL or upload a video file', 'error');
                     return;
                 }
 
@@ -6816,10 +7157,23 @@
                     }, 3000);
 
                     var wizardAnalyzeVideo = functions.httpsCallable('wizardAnalyzeVideo');
-                    var result = await wizardAnalyzeVideo({
-                        videoUrl: url,
+
+                    // Prepare request data based on input type
+                    var requestData = {
                         options: state.videoInput.options
-                    });
+                    };
+
+                    if (uploadedFile) {
+                        // Use uploaded file
+                        requestData.uploadedVideoUrl = uploadedFile.url;
+                        requestData.uploadedVideoPath = uploadedFile.storagePath;
+                        requestData.uploadedVideoName = uploadedFile.name;
+                    } else {
+                        // Use YouTube URL
+                        requestData.videoUrl = url;
+                    }
+
+                    var result = await wizardAnalyzeVideo(requestData);
 
                     clearInterval(progressInterval);
 
