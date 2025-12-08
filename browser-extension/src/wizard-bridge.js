@@ -21,14 +21,14 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '1.0.0',
+        version: '1.1.0',
         extensionId: EXTENSION_ID
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '1.0.0';
+    window.__YVO_EXTENSION_VERSION__ = '1.1.0';
 
     console.log('[YVO Extension] Bridge ready - Video Wizard integration active');
   }
