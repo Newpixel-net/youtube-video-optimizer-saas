@@ -58,7 +58,19 @@ echo "Pushing to Container Registry..."
 docker push "${IMAGE_NAME}:latest"
 
 # Build environment variables string
-ENV_VARS="BUCKET_NAME=${PROJECT_ID}.appspot.com,NODE_ENV=production"
+# IMPORTANT: Firebase Storage uses .firebasestorage.app (not .appspot.com)
+ENV_VARS="BUCKET_NAME=${PROJECT_ID}.firebasestorage.app,NODE_ENV=production"
+
+# Add video download API key if provided (RECOMMENDED for 99%+ reliability)
+VIDEO_DOWNLOAD_API_KEY="${VIDEO_DOWNLOAD_API_KEY:-}"
+if [ -n "$VIDEO_DOWNLOAD_API_KEY" ]; then
+    ENV_VARS="${ENV_VARS},VIDEO_DOWNLOAD_API_KEY=${VIDEO_DOWNLOAD_API_KEY}"
+    echo "Video Download API Key: Configured"
+else
+    echo "Video Download API Key: NOT SET (downloads may fail due to YouTube bot detection)"
+    echo "  Set VIDEO_DOWNLOAD_API_KEY for reliable downloads"
+fi
+
 if [ -n "$RAPIDAPI_KEY" ]; then
     ENV_VARS="${ENV_VARS},RAPIDAPI_KEY=${RAPIDAPI_KEY}"
 fi

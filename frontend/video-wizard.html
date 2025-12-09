@@ -538,6 +538,97 @@
             text-decoration: underline;
         }
 
+        /* Extension Promotion Banner */
+        .extension-promo-banner {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%);
+            border: 2px solid rgba(139, 92, 246, 0.3);
+            border-radius: 1rem;
+            padding: 1.25rem;
+            margin: 1.5rem 0;
+            text-align: center;
+            animation: promo-glow 3s ease-in-out infinite;
+        }
+
+        @keyframes promo-glow {
+            0%, 100% { box-shadow: 0 0 10px rgba(139, 92, 246, 0.2); }
+            50% { box-shadow: 0 0 25px rgba(139, 92, 246, 0.4); }
+        }
+
+        .extension-promo-banner h4 {
+            color: #10b981;
+            margin: 0 0 0.75rem 0;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .extension-promo-banner p {
+            color: rgba(255, 255, 255, 0.8);
+            margin: 0 0 1rem 0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .extension-promo-banner .savings-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .extension-promo-banner .btn-install-extension {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .extension-promo-banner .btn-install-extension:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .extension-promo-banner .free-tag {
+            background: #10b981;
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.25rem;
+            font-weight: 700;
+        }
+
+        .extension-features {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .extension-feature {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .extension-feature-icon {
+            color: #10b981;
+        }
+
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
@@ -5617,6 +5708,23 @@
                 html += '</span>';
             }
             html += '</div>';
+
+            // Extension Promotion Banner (shown when extension not installed)
+            if (!state.extension.installed && !state.extension.checking) {
+                html += '<div class="extension-promo-banner">';
+                html += '<span class="savings-badge">SAVE 100% ON DOWNLOADS</span>';
+                html += '<h4><span>🚀</span> Get FREE Video Capture with Browser Extension</h4>';
+                html += '<p>The extension captures videos directly from your browser - no download costs, no restrictions, works with any YouTube video!</p>';
+                html += '<a href="https://github.com/Newpixel-net/youtube-video-optimizer-saas/tree/main/browser-extension" target="_blank" class="btn-install-extension">';
+                html += '<span>📦</span> Install Extension <span class="free-tag">FREE</span>';
+                html += '</a>';
+                html += '<div class="extension-features">';
+                html += '<span class="extension-feature"><span class="extension-feature-icon">✓</span> Capture any video</span>';
+                html += '<span class="extension-feature"><span class="extension-feature-icon">✓</span> No download limits</span>';
+                html += '<span class="extension-feature"><span class="extension-feature-icon">✓</span> Works instantly</span>';
+                html += '</div>';
+                html += '</div>';
+            }
 
             // OR Divider
             html += '<div class="upload-divider"><span>OR</span></div>';

@@ -1685,8 +1685,250 @@ async function extractYouTubeFrames({ videoId, timestamps, workDir }) {
   }
 }
 
+/**
+ * Download FULL video (no time segment) - CHEAPER than segment downloads!
+ * Used for caching: download once, cut multiple clips locally
+ *
+ * COST COMPARISON:
+ * - Segment download: ~$0.50 per segment (extended duration pricing)
+ * - Full video download: ~$0.30-0.50 once (standard pricing)
+ * - Local segment extraction: FREE (FFmpeg)
+ *
+ * For 4 clips: Segment = $2.00 vs Cache = $0.50 = 75% SAVINGS
+ */
+async function downloadFullVideo({ jobId, videoId, workDir, outputFile }) {
+  console.log(`[${jobId}] CACHE: Downloading FULL video for caching (cost optimization)`);
+
+  // Try Video Download API first (no time segment = cheaper!)
+  if (VIDEO_DOWNLOAD_API_KEY) {
+    console.log(`[${jobId}] CACHE: [METHOD 1] Trying Video Download API (full video)...`);
+    try {
+      const result = await downloadFullVideoWithAPI({ jobId, videoId, workDir, outputFile });
+      console.log(`[${jobId}] CACHE: Video Download API succeeded!`);
+      return result;
+    } catch (apiError) {
+      console.warn(`[${jobId}] CACHE: Video Download API FAILED: ${apiError.message}`);
+    }
+  }
+
+  // Try yt-dlp (free fallback)
+  console.log(`[${jobId}] CACHE: [METHOD 2] Trying yt-dlp (full video)...`);
+  try {
+    const result = await downloadFullVideoWithYtDlp({ jobId, videoId, workDir, outputFile });
+    console.log(`[${jobId}] CACHE: yt-dlp succeeded!`);
+    return result;
+  } catch (ytdlpError) {
+    console.warn(`[${jobId}] CACHE: yt-dlp FAILED: ${ytdlpError.message}`);
+  }
+
+  // Try youtubei.js (free fallback)
+  console.log(`[${jobId}] CACHE: [METHOD 3] Trying youtubei.js (full video)...`);
+  try {
+    const result = await downloadFullVideoWithYoutubeijs({ jobId, videoId, workDir, outputFile });
+    console.log(`[${jobId}] CACHE: youtubei.js succeeded!`);
+    return result;
+  } catch (ytjsError) {
+    console.warn(`[${jobId}] CACHE: youtubei.js FAILED: ${ytjsError.message}`);
+  }
+
+  throw new Error('All full video download methods failed');
+}
+
+/**
+ * Download full video using Video Download API (NO time segment = standard pricing)
+ */
+async function downloadFullVideoWithAPI({ jobId, videoId, workDir, outputFile }) {
+  if (!VIDEO_DOWNLOAD_API_KEY) {
+    throw new Error('VIDEO_DOWNLOAD_API_KEY not configured');
+  }
+
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  console.log(`[${jobId}] CACHE-API: Downloading full video (no time segment)`);
+
+  for (let i = 0; i < VIDEO_DOWNLOAD_API_ENDPOINTS.length; i++) {
+    const baseEndpoint = VIDEO_DOWNLOAD_API_ENDPOINTS[i];
+    try {
+      // NO start_time or end_time = standard pricing (cheaper!)
+      const params = new URLSearchParams({
+        format: '720',  // 720p for cache (balance quality/size)
+        url: youtubeUrl,
+        apikey: VIDEO_DOWNLOAD_API_KEY,
+        add_info: '1',
+        audio_quality: '128'
+      });
+
+      const downloadUrl = `${baseEndpoint}/ajax/download.php?${params.toString()}`;
+      console.log(`[${jobId}] CACHE-API: Trying endpoint ${i + 1}/${VIDEO_DOWNLOAD_API_ENDPOINTS.length}`);
+
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      if (!data.success || !data.id) continue;
+
+      console.log(`[${jobId}] CACHE-API: Download ID: ${data.id}`);
+
+      // Poll for completion
+      const finalDownloadUrl = await pollForDownloadCompletion({
+        jobId,
+        baseEndpoint,
+        downloadId: data.id,
+        maxWaitTime: 600000  // 10 minutes for full video
+      });
+
+      if (!finalDownloadUrl) continue;
+
+      // Download the file
+      const videoResponse = await fetch(finalDownloadUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': '*/*'
+        }
+      });
+
+      if (!videoResponse.ok) continue;
+
+      const buffer = await videoResponse.arrayBuffer();
+      fs.writeFileSync(outputFile, Buffer.from(buffer));
+
+      const stats = fs.statSync(outputFile);
+      if (stats.size < 100000) continue; // At least 100KB
+
+      console.log(`[${jobId}] CACHE-API: Full video downloaded: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+      return { path: outputFile, size: stats.size };
+
+    } catch (error) {
+      console.error(`[${jobId}] CACHE-API: Endpoint failed: ${error.message}`);
+    }
+  }
+
+  throw new Error('All Video Download API endpoints failed for full video');
+}
+
+/**
+ * Download full video using yt-dlp (free)
+ */
+async function downloadFullVideoWithYtDlp({ jobId, videoId, workDir, outputFile }) {
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-f', 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
+      '-o', outputFile,
+      '--no-playlist',
+      '--merge-output-format', 'mp4',
+      '--socket-timeout', '30',
+      '--retries', '3',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      '--extractor-args', 'youtube:getpot_bgutil_baseurl=http://127.0.0.1:4416',
+      `https://www.youtube.com/watch?v=${videoId}`
+    ];
+
+    const ytdlpProc = spawn('yt-dlp', args);
+    let stderr = '';
+
+    ytdlpProc.stdout.on('data', data => {
+      const line = data.toString().trim();
+      if (line.includes('[download]')) {
+        console.log(`[${jobId}] CACHE-ytdlp: ${line}`);
+      }
+    });
+
+    ytdlpProc.stderr.on('data', data => {
+      stderr += data.toString();
+    });
+
+    ytdlpProc.on('close', code => {
+      if (code === 0 && fs.existsSync(outputFile)) {
+        const stats = fs.statSync(outputFile);
+        if (stats.size > 100000) {
+          console.log(`[${jobId}] CACHE-ytdlp: Full video: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+          resolve({ path: outputFile, size: stats.size });
+        } else {
+          reject(new Error('Downloaded file too small'));
+        }
+      } else {
+        reject(new Error(`yt-dlp failed: ${stderr.slice(-200)}`));
+      }
+    });
+
+    ytdlpProc.on('error', error => reject(error));
+  });
+}
+
+/**
+ * Download full video using youtubei.js (free)
+ */
+async function downloadFullVideoWithYoutubeijs({ jobId, videoId, workDir, outputFile }) {
+  const { info, innertube, clientType } = await getVideoInfoWithFallback(videoId);
+  console.log(`[${jobId}] CACHE-ytjs: Got video info via ${clientType}`);
+
+  const formats = info.streaming_data?.adaptive_formats || [];
+  const videoFormats = formats.filter(f =>
+    f.has_video && !f.has_audio && f.height <= 720
+  ).sort((a, b) => (b.height || 0) - (a.height || 0));
+
+  const audioFormats = formats.filter(f =>
+    f.has_audio && !f.has_video
+  ).sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+
+  const videoFormat = videoFormats[0];
+  const audioFormat = audioFormats[0];
+
+  if (!videoFormat) throw new Error('No suitable video format');
+
+  let videoUrl, audioUrl;
+  try {
+    videoUrl = videoFormat.decipher(innertube.session.player);
+    audioUrl = audioFormat?.decipher(innertube.session.player);
+  } catch (e) {
+    videoUrl = videoFormat.url;
+    audioUrl = audioFormat?.url;
+  }
+
+  if (!videoUrl) throw new Error('Could not get video URL');
+
+  console.log(`[${jobId}] CACHE-ytjs: Downloading ${videoFormat.height}p video...`);
+
+  return new Promise((resolve, reject) => {
+    const args = ['-i', videoUrl];
+    if (audioUrl) args.push('-i', audioUrl);
+
+    args.push(
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    );
+
+    const ffmpegProc = spawn('ffmpeg', args);
+    let stderr = '';
+
+    ffmpegProc.stderr.on('data', data => stderr += data.toString());
+
+    ffmpegProc.on('close', code => {
+      if (code === 0 && fs.existsSync(outputFile)) {
+        const stats = fs.statSync(outputFile);
+        console.log(`[${jobId}] CACHE-ytjs: Full video: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+        resolve({ path: outputFile, size: stats.size });
+      } else {
+        reject(new Error(`FFmpeg failed: ${stderr.slice(-200)}`));
+      }
+    });
+
+    ffmpegProc.on('error', error => reject(error));
+  });
+}
+
 export {
   downloadVideoSegment,
+  downloadFullVideo,
   getVideoInfo,
   extractYouTubeFrames,
   getInnertubeForClient

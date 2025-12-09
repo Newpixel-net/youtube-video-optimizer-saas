@@ -29,7 +29,8 @@ const firestore = new Firestore();
 const storage = new Storage();
 
 const PORT = process.env.PORT || 8080;
-const BUCKET_NAME = process.env.BUCKET_NAME || 'your-project-id.appspot.com';
+// IMPORTANT: Use .firebasestorage.app format (not .appspot.com)
+const BUCKET_NAME = process.env.BUCKET_NAME || 'ytseo-6d1b0.firebasestorage.app';
 const TEMP_DIR = process.env.TEMP_DIR || '/tmp/video-processing';
 
 // Track active processing jobs for health reporting
