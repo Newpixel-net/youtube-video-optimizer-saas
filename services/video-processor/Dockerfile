@@ -3,7 +3,7 @@
 
 FROM node:20-slim
 
-# Install FFmpeg, Python, git, and other dependencies
+# Install FFmpeg, Python, git, Chromium (for POT server), and other dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
@@ -13,7 +13,28 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     unzip \
     git \
+    chromium \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Set Puppeteer to use system Chromium (skip download)
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Install yt-dlp nightly (more frequent updates for YouTube changes)
 # Using --break-system-packages since we're in a container
@@ -36,11 +57,15 @@ WORKDIR /app/pot-server
 RUN git clone --single-branch --depth 1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git . && \
     cd server && \
     npm install && \
+    npm install puppeteer-core && \
     npx tsc && \
     mv build ../build && \
     mv node_modules ../node_modules && \
     cd .. && \
     rm -rf server .git
+
+# Create puppeteer config to use system Chromium
+RUN echo '{"executablePath":"/usr/bin/chromium","args":["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage"]}' > /app/pot-server/.puppeteerrc.json
 
 # Verify yt-dlp installation
 RUN yt-dlp --version && \
