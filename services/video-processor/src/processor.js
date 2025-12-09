@@ -31,6 +31,11 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
     let downloadedFile;
 
+    // Detect if running on server (Cloud Run) - extension URLs won't work due to IP restriction
+    const isRunningOnServer = process.env.NODE_ENV === 'production' ||
+                               process.env.K_SERVICE || // Cloud Run sets this
+                               process.env.GOOGLE_CLOUD_PROJECT;
+
     // Check if this is an uploaded video
     if (job.isUpload && job.uploadedVideoUrl) {
       console.log(`[${jobId}] Processing uploaded video - downloading from storage...`);
@@ -75,25 +80,49 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         console.log(`[${jobId}] Extracted segment from ${job.startTime}s to ${job.endTime}s`);
       }
     } else if (job.hasExtensionStream && job.extensionStreamData?.videoUrl) {
-      // Extension-captured video - try direct stream URLs first
-      // NOTE: These URLs are IP-restricted and may fail from Cloud Run
-      console.log(`[${jobId}] Attempting extension-captured stream URLs (may be IP-restricted)`);
-      await updateProgress(jobRef, 10, 'Trying extension capture...');
+      // Extension-captured video - check if we should try these URLs
+      // IMPORTANT: Extension stream URLs are IP-restricted to user's browser IP
+      // When running on server (Cloud Run), these ALWAYS fail with 403, so skip them
 
-      try {
-        downloadedFile = await downloadFromExtensionStream({
-          jobId,
-          extensionStreamData: job.extensionStreamData,
-          startTime: job.startTime,
-          endTime: job.endTime,
-          workDir
-        });
-        console.log(`[${jobId}] Extension stream download succeeded`);
-      } catch (extStreamError) {
-        // Extension streams often fail due to IP restrictions (403 Forbidden)
-        // Fall back to server-side download methods
-        console.warn(`[${jobId}] Extension stream failed (${extStreamError.message}), falling back to server download...`);
-        await updateProgress(jobRef, 12, 'Extension failed, trying server download...');
+      const extensionStreamSource = job.extensionStreamData?.source || 'unknown';
+      const isUploadedCapture = extensionStreamSource === 'mediarecorder_capture' &&
+                                 job.extensionStreamData?.uploadedToStorage;
+
+      if (isUploadedCapture) {
+        // MediaRecorder capture was uploaded to our storage - use it directly
+        console.log(`[${jobId}] Using MediaRecorder captured video from storage (bypasses IP restriction)`);
+        await updateProgress(jobRef, 10, 'Downloading captured video...');
+
+        try {
+          const response = await fetch(job.extensionStreamData.videoUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to download captured video: ${response.status}`);
+          }
+
+          const buffer = await response.arrayBuffer();
+          downloadedFile = path.join(workDir, 'source.webm');
+          fs.writeFileSync(downloadedFile, Buffer.from(buffer));
+          console.log(`[${jobId}] Downloaded MediaRecorder capture: ${fs.statSync(downloadedFile).size} bytes`);
+        } catch (captureError) {
+          console.warn(`[${jobId}] MediaRecorder capture download failed: ${captureError.message}`);
+          console.log(`[${jobId}] Falling back to Video Download API...`);
+          await updateProgress(jobRef, 12, 'Capture failed, using download API...');
+
+          downloadedFile = await downloadVideoSegment({
+            jobId,
+            videoId: job.videoId,
+            startTime: job.startTime,
+            endTime: job.endTime,
+            workDir,
+            youtubeAuth
+          });
+        }
+      } else if (isRunningOnServer) {
+        // Running on server - skip extension stream URLs (they're IP-restricted and will always fail)
+        console.log(`[${jobId}] Running on server - skipping extension stream URLs (IP-restricted)`);
+        console.log(`[${jobId}] Extension stream source: ${extensionStreamSource}`);
+        console.log(`[${jobId}] Going directly to Video Download API for reliability`);
+        await updateProgress(jobRef, 10, 'Downloading video...');
 
         downloadedFile = await downloadVideoSegment({
           jobId,
@@ -103,6 +132,33 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           workDir,
           youtubeAuth
         });
+      } else {
+        // Not on server (local dev) - can try extension streams
+        console.log(`[${jobId}] Local environment - attempting extension stream URLs`);
+        await updateProgress(jobRef, 10, 'Trying extension capture...');
+
+        try {
+          downloadedFile = await downloadFromExtensionStream({
+            jobId,
+            extensionStreamData: job.extensionStreamData,
+            startTime: job.startTime,
+            endTime: job.endTime,
+            workDir
+          });
+          console.log(`[${jobId}] Extension stream download succeeded`);
+        } catch (extStreamError) {
+          console.warn(`[${jobId}] Extension stream failed (${extStreamError.message}), falling back to server download...`);
+          await updateProgress(jobRef, 12, 'Extension failed, trying server download...');
+
+          downloadedFile = await downloadVideoSegment({
+            jobId,
+            videoId: job.videoId,
+            startTime: job.startTime,
+            endTime: job.endTime,
+            workDir,
+            youtubeAuth
+          });
+        }
       }
     } else {
       // YouTube video - download from YouTube

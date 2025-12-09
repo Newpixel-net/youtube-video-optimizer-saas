@@ -32,11 +32,35 @@ const PORT = process.env.PORT || 8080;
 const BUCKET_NAME = process.env.BUCKET_NAME || 'your-project-id.appspot.com';
 const TEMP_DIR = process.env.TEMP_DIR || '/tmp/video-processing';
 
+// Track active processing jobs for health reporting
+let activeJobs = 0;
+let totalJobsProcessed = 0;
+let lastJobCompletedAt = null;
+
 /**
  * Health check endpoint
+ * Returns detailed status including memory usage and active job count
  */
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+  const memUsage = process.memoryUsage();
+  const uptimeSeconds = process.uptime();
+
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: `${Math.floor(uptimeSeconds / 60)} minutes`,
+    memory: {
+      heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`,
+      heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`,
+      rss: `${Math.round(memUsage.rss / 1024 / 1024)} MB`
+    },
+    jobs: {
+      active: activeJobs,
+      totalProcessed: totalJobsProcessed,
+      lastCompleted: lastJobCompletedAt
+    },
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 /**
@@ -189,7 +213,13 @@ app.post('/process', async (req, res) => {
     return res.status(400).json({ error: 'jobId is required' });
   }
 
+  console.log(`[${jobId}] ========================================`);
   console.log(`[${jobId}] Starting video processing job`);
+  console.log(`[${jobId}] Timestamp: ${new Date().toISOString()}`);
+  console.log(`[${jobId}] Active jobs before: ${activeJobs}`);
+
+  // Increment active job counter
+  activeJobs++;
 
   // Log if we have YouTube authentication
   if (youtubeAuth?.accessToken) {
@@ -203,14 +233,18 @@ app.post('/process', async (req, res) => {
 
     if (!jobDoc.exists) {
       console.error(`[${jobId}] Job not found`);
+      activeJobs--;
       return res.status(404).json({ error: 'Job not found' });
     }
 
     const job = jobDoc.data();
+    console.log(`[${jobId}] Job details: videoId=${job.videoId}, segment=${job.startTime}s-${job.endTime}s`);
+    console.log(`[${jobId}] Job flags: isUpload=${job.isUpload}, hasExtensionStream=${job.hasExtensionStream}`);
 
     // Check if already processed
     if (job.status === 'completed' || job.status === 'failed') {
       console.log(`[${jobId}] Job already ${job.status}`);
+      activeJobs--;
       return res.status(200).json({ status: job.status, message: 'Job already processed' });
     }
 
@@ -256,17 +290,37 @@ app.post('/process', async (req, res) => {
       updatedAt: Firestore.FieldValue.serverTimestamp()
     });
 
-    console.log(`[${jobId}] Processing completed in ${Date.now() - startTime}ms`);
+    // Update tracking stats
+    activeJobs--;
+    totalJobsProcessed++;
+    lastJobCompletedAt = new Date().toISOString();
+
+    const processingTime = Date.now() - startTime;
+    console.log(`[${jobId}] ========================================`);
+    console.log(`[${jobId}] Processing COMPLETED successfully`);
+    console.log(`[${jobId}] Processing time: ${(processingTime / 1000).toFixed(1)}s`);
+    console.log(`[${jobId}] Output size: ${(result.outputSize / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`[${jobId}] Active jobs after: ${activeJobs}`);
+    console.log(`[${jobId}] Total jobs processed: ${totalJobsProcessed}`);
+    console.log(`[${jobId}] ========================================`);
 
     res.status(200).json({
       success: true,
       jobId,
       outputUrl: result.outputUrl,
-      processingTime: Date.now() - startTime
+      processingTime
     });
 
   } catch (error) {
-    console.error(`[${jobId}] Processing failed:`, error);
+    // Decrement active job counter on error
+    activeJobs--;
+
+    console.error(`[${jobId}] ========================================`);
+    console.error(`[${jobId}] Processing FAILED`);
+    console.error(`[${jobId}] Error: ${error.message}`);
+    console.error(`[${jobId}] Stack: ${error.stack?.split('\n').slice(0, 3).join('\n')}`);
+    console.error(`[${jobId}] Active jobs after error: ${activeJobs}`);
+    console.error(`[${jobId}] ========================================`);
 
     // Update job with error
     try {
@@ -598,17 +652,51 @@ app.post('/analyze-upload', async (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Video Processor Service running on port ${PORT}`);
+  console.log(`========================================`);
+  console.log(`Video Processor Service STARTED`);
+  console.log(`========================================`);
+  console.log(`Timestamp: ${new Date().toISOString()}`);
+  console.log(`Port: ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Bucket: ${BUCKET_NAME}`);
   console.log(`Temp Dir: ${TEMP_DIR}`);
+  console.log(`----------------------------------------`);
 
-  // Diagnostic logging for RapidAPI configuration
+  // Log memory settings
+  console.log(`Node.js Memory Settings:`);
+  const memUsage = process.memoryUsage();
+  console.log(`  Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`);
+  console.log(`  Heap Total: ${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`);
+  console.log(`  RSS: ${Math.round(memUsage.rss / 1024 / 1024)} MB`);
+  console.log(`----------------------------------------`);
+
+  // Log API key configurations
+  console.log(`API Configuration:`);
+
+  // Video Download API (PRIMARY - 99%+ reliable)
+  const videoDownloadApiKey = process.env.VIDEO_DOWNLOAD_API_KEY;
+  if (videoDownloadApiKey) {
+    console.log(`  Video Download API: CONFIGURED (${videoDownloadApiKey.substring(0, 4)}...${videoDownloadApiKey.slice(-4)}) [PRIMARY]`);
+  } else {
+    console.log(`  Video Download API: NOT CONFIGURED`);
+    console.log(`    ! Set VIDEO_DOWNLOAD_API_KEY for 99%+ reliable downloads`);
+    console.log(`    ! Get API key at: https://video-download-api.com/`);
+  }
+
+  // RapidAPI (legacy)
   const rapidApiKey = process.env.RAPIDAPI_KEY;
   if (rapidApiKey) {
-    console.log(`RapidAPI Key: CONFIGURED (${rapidApiKey.substring(0, 8)}...${rapidApiKey.substring(rapidApiKey.length - 4)})`);
+    console.log(`  RapidAPI: CONFIGURED (${rapidApiKey.substring(0, 4)}...${rapidApiKey.slice(-4)}) [legacy]`);
   } else {
-    console.log(`RapidAPI Key: NOT CONFIGURED - video downloads will use fallback methods`);
-    console.log(`Set RAPIDAPI_KEY environment variable to enable premium YouTube downloads`);
+    console.log(`  RapidAPI: NOT CONFIGURED (optional, legacy)`);
   }
+
+  console.log(`----------------------------------------`);
+  console.log(`Cloud Run Environment:`);
+  console.log(`  K_SERVICE: ${process.env.K_SERVICE || 'not set'}`);
+  console.log(`  K_REVISION: ${process.env.K_REVISION || 'not set'}`);
+  console.log(`  GOOGLE_CLOUD_PROJECT: ${process.env.GOOGLE_CLOUD_PROJECT || 'not set'}`);
+  console.log(`========================================`);
+  console.log(`Ready to process video jobs!`);
+  console.log(`========================================`);
 });
