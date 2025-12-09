@@ -96,11 +96,18 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV TEMP_DIR=/tmp/video-processing
 
+# Memory settings for Node.js (prevent OOM)
+ENV NODE_OPTIONS="--max-old-space-size=3072"
+
 # Expose port (video processor)
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+# Health check with longer intervals and start period for heavy video processing workloads
+# - interval: 60s (don't check too frequently during processing)
+# - timeout: 30s (give health endpoint time to respond under load)
+# - start-period: 30s (allow time for POT server + Node.js to start)
+# - retries: 5 (be forgiving during video processing)
+HEALTHCHECK --interval=60s --timeout=30s --start-period=30s --retries=5 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the service using startup script

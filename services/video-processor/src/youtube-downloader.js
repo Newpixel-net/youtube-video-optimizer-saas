@@ -394,103 +394,134 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
   const outputFile = path.join(workDir, 'source.mp4');
   const duration = endTime - startTime;
 
-  console.log(`[${jobId}] Downloading video segment: ${startTime}s to ${endTime}s (${duration}s)`);
+  console.log(`[${jobId}] ----------------------------------------`);
+  console.log(`[${jobId}] DOWNLOAD: Starting video segment download`);
+  console.log(`[${jobId}] DOWNLOAD: Video ID: ${videoId}`);
+  console.log(`[${jobId}] DOWNLOAD: Segment: ${startTime}s to ${endTime}s (${duration}s duration)`);
+  console.log(`[${jobId}] DOWNLOAD: Working directory: ${workDir}`);
+  console.log(`[${jobId}] ----------------------------------------`);
 
   // Log authentication status
   if (youtubeAuth?.accessToken) {
-    console.log(`[${jobId}] YouTube OAuth available (used for metadata, not downloads)`);
+    console.log(`[${jobId}] DOWNLOAD: YouTube OAuth available (used for metadata, not downloads)`);
   } else {
-    console.log(`[${jobId}] No YouTube OAuth - using standard download methods`);
+    console.log(`[${jobId}] DOWNLOAD: No YouTube OAuth - using standard download methods`);
   }
+
+  // Log API key status
+  const apiKeyStatus = VIDEO_DOWNLOAD_API_KEY
+    ? `CONFIGURED (${VIDEO_DOWNLOAD_API_KEY.substring(0, 4)}...${VIDEO_DOWNLOAD_API_KEY.slice(-4)})`
+    : 'NOT CONFIGURED';
+  console.log(`[${jobId}] DOWNLOAD: Video Download API key: ${apiKeyStatus}`);
 
   // PRIMARY METHOD: Video Download API (paid, most reliable - 99%+ uptime)
   // When API key is configured, this is the best method - no browser extension needed!
   if (VIDEO_DOWNLOAD_API_KEY) {
-    console.log(`[${jobId}] Trying Video Download API (PRIMARY - paid service with 99%+ uptime)...`);
+    console.log(`[${jobId}] DOWNLOAD: [METHOD 1/7] Trying Video Download API (PRIMARY - 99%+ uptime)...`);
     try {
-      return await downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime, workDir, outputFile });
+      const result = await downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime, workDir, outputFile });
+      console.log(`[${jobId}] DOWNLOAD: Video Download API succeeded!`);
+      return result;
     } catch (apiError) {
-      console.warn(`[${jobId}] Video Download API failed: ${apiError.message}`);
-      console.log(`[${jobId}] Falling back to alternative methods...`);
+      console.warn(`[${jobId}] DOWNLOAD: Video Download API FAILED: ${apiError.message}`);
+      console.log(`[${jobId}] DOWNLOAD: Proceeding to fallback methods...`);
     }
   } else {
-    console.log(`[${jobId}] Video Download API key not configured - using free fallbacks`);
+    console.log(`[${jobId}] DOWNLOAD: Video Download API key not configured - skipping primary method`);
+    console.log(`[${jobId}] DOWNLOAD: Consider configuring VIDEO_DOWNLOAD_API_KEY for 99%+ success rate`);
   }
 
   // FALLBACK 1: Try yt-dlp (free but may be blocked by YouTube)
-  console.log(`[${jobId}] Trying yt-dlp (fallback method)...`);
+  console.log(`[${jobId}] DOWNLOAD: [METHOD 2/7] Trying yt-dlp with POT provider...`);
   try {
-    return await downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
+    const result = await downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
+    console.log(`[${jobId}] DOWNLOAD: yt-dlp succeeded!`);
+    return result;
   } catch (ytdlpError) {
-    console.warn(`[${jobId}] yt-dlp failed: ${ytdlpError.message}`);
+    console.warn(`[${jobId}] DOWNLOAD: yt-dlp FAILED: ${ytdlpError.message}`);
   }
 
   // FALLBACK 2: Try youtubei.js (JavaScript library)
-  console.log(`[${jobId}] Trying youtubei.js (fallback method)...`);
+  console.log(`[${jobId}] DOWNLOAD: [METHOD 3/7] Trying youtubei.js library...`);
   try {
     const result = await downloadWithYoutubeijs({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
+    console.log(`[${jobId}] DOWNLOAD: youtubei.js succeeded!`);
     return result;
   } catch (ytjsError) {
-    console.warn(`[${jobId}] youtubei.js failed: ${ytjsError.message}`);
+    console.warn(`[${jobId}] DOWNLOAD: youtubei.js FAILED: ${ytjsError.message}`);
   }
 
   // FALLBACK 3: Try Video Download API again if not tried (shouldn't happen but just in case)
   if (!VIDEO_DOWNLOAD_API_KEY) {
-    console.log(`[${jobId}] Note: Configure VIDEO_DOWNLOAD_API_KEY for reliable downloads`);
+    console.log(`[${jobId}] DOWNLOAD: RECOMMENDATION: Configure VIDEO_DOWNLOAD_API_KEY for 99%+ reliability`);
   }
 
   // Try Invidious (open-source YouTube frontend)
-  console.log(`[${jobId}] Trying Invidious API...`);
+  console.log(`[${jobId}] DOWNLOAD: [METHOD 4/7] Trying Invidious API...`);
   try {
     const invidiousOutput = path.join(workDir, 'invidious_source.mp4');
     await downloadWithInvidious({ jobId, videoId, workDir, outputFile: invidiousOutput });
-    return await trimVideoSegment({ jobId, inputFile: invidiousOutput, outputFile, startTime, endTime });
+    const result = await trimVideoSegment({ jobId, inputFile: invidiousOutput, outputFile, startTime, endTime });
+    console.log(`[${jobId}] DOWNLOAD: Invidious succeeded!`);
+    return result;
   } catch (invidiousError) {
-    console.warn(`[${jobId}] Invidious failed: ${invidiousError.message}`);
+    console.warn(`[${jobId}] DOWNLOAD: Invidious FAILED: ${invidiousError.message}`);
   }
 
   // Try Piped (another open-source YouTube frontend)
-  console.log(`[${jobId}] Trying Piped API...`);
+  console.log(`[${jobId}] DOWNLOAD: [METHOD 5/7] Trying Piped API...`);
   try {
     const pipedOutput = path.join(workDir, 'piped_source.mp4');
     await downloadWithPiped({ jobId, videoId, workDir, outputFile: pipedOutput });
-    return await trimVideoSegment({ jobId, inputFile: pipedOutput, outputFile, startTime, endTime });
+    const result = await trimVideoSegment({ jobId, inputFile: pipedOutput, outputFile, startTime, endTime });
+    console.log(`[${jobId}] DOWNLOAD: Piped succeeded!`);
+    return result;
   } catch (pipedError) {
-    console.warn(`[${jobId}] Piped failed: ${pipedError.message}`);
+    console.warn(`[${jobId}] DOWNLOAD: Piped FAILED: ${pipedError.message}`);
   }
 
   // Try direct extraction from YouTube page
-  console.log(`[${jobId}] Trying direct extraction...`);
+  console.log(`[${jobId}] DOWNLOAD: [METHOD 6/7] Trying direct extraction...`);
   try {
     const directOutput = path.join(workDir, 'direct_source.mp4');
     await downloadWithDirectExtraction({ jobId, videoId, workDir, outputFile: directOutput });
-    return await trimVideoSegment({ jobId, inputFile: directOutput, outputFile, startTime, endTime });
+    const result = await trimVideoSegment({ jobId, inputFile: directOutput, outputFile, startTime, endTime });
+    console.log(`[${jobId}] DOWNLOAD: Direct extraction succeeded!`);
+    return result;
   } catch (directError) {
-    console.warn(`[${jobId}] Direct extraction failed: ${directError.message}`);
+    console.warn(`[${jobId}] DOWNLOAD: Direct extraction FAILED: ${directError.message}`);
   }
 
   // Try Cobalt API (known to be broken for YouTube as of late 2024)
-  console.log(`[${jobId}] Trying Cobalt API (last resort)...`);
+  console.log(`[${jobId}] DOWNLOAD: [METHOD 7/7] Trying Cobalt API (last resort)...`);
   try {
     const cobaltOutput = path.join(workDir, 'cobalt_source.mp4');
     await downloadWithCobalt({ jobId, videoId, workDir, outputFile: cobaltOutput });
-    return await trimVideoSegment({ jobId, inputFile: cobaltOutput, outputFile, startTime, endTime });
+    const result = await trimVideoSegment({ jobId, inputFile: cobaltOutput, outputFile, startTime, endTime });
+    console.log(`[${jobId}] DOWNLOAD: Cobalt succeeded!`);
+    return result;
   } catch (cobaltError) {
-    console.warn(`[${jobId}] Cobalt failed: ${cobaltError.message}`);
+    console.warn(`[${jobId}] DOWNLOAD: Cobalt FAILED: ${cobaltError.message}`);
   }
 
   // Try alternative APIs
-  console.log(`[${jobId}] Trying alternative APIs...`);
+  console.log(`[${jobId}] DOWNLOAD: [BONUS] Trying alternative APIs (loader.to, yt5s, etc.)...`);
   try {
     const altOutput = path.join(workDir, 'alt_source.mp4');
     await downloadWithAlternativeAPIs({ jobId, videoId, workDir, outputFile: altOutput });
-    return await trimVideoSegment({ jobId, inputFile: altOutput, outputFile, startTime, endTime });
+    const result = await trimVideoSegment({ jobId, inputFile: altOutput, outputFile, startTime, endTime });
+    console.log(`[${jobId}] DOWNLOAD: Alternative APIs succeeded!`);
+    return result;
   } catch (altError) {
-    console.warn(`[${jobId}] Alternative APIs failed: ${altError.message}`);
+    console.warn(`[${jobId}] DOWNLOAD: Alternative APIs FAILED: ${altError.message}`);
   }
 
   // All methods failed
-  console.error(`[${jobId}] All download methods failed`);
+  console.error(`[${jobId}] ========================================`);
+  console.error(`[${jobId}] DOWNLOAD: ALL METHODS EXHAUSTED - DOWNLOAD FAILED`);
+  console.error(`[${jobId}] DOWNLOAD: Video ID: ${videoId}`);
+  console.error(`[${jobId}] DOWNLOAD: API Key configured: ${!!VIDEO_DOWNLOAD_API_KEY}`);
+  console.error(`[${jobId}] ========================================`);
 
   // Provide appropriate error message based on configuration
   if (!VIDEO_DOWNLOAD_API_KEY) {
@@ -846,13 +877,18 @@ async function downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime
   }
 
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  console.log(`[${jobId}] Starting Video Download API for: ${youtubeUrl}`);
-  console.log(`[${jobId}] Time segment: ${startTime}s - ${endTime}s`);
+  console.log(`[${jobId}] API: ========================================`);
+  console.log(`[${jobId}] API: Starting Video Download API request`);
+  console.log(`[${jobId}] API: YouTube URL: ${youtubeUrl}`);
+  console.log(`[${jobId}] API: Time segment: ${startTime}s - ${endTime}s (${endTime - startTime}s duration)`);
+  console.log(`[${jobId}] API: Available endpoints: ${VIDEO_DOWNLOAD_API_ENDPOINTS.length}`);
+  console.log(`[${jobId}] API: ========================================`);
 
   // Try each endpoint in case of regional blocking
-  for (const baseEndpoint of VIDEO_DOWNLOAD_API_ENDPOINTS) {
+  for (let i = 0; i < VIDEO_DOWNLOAD_API_ENDPOINTS.length; i++) {
+    const baseEndpoint = VIDEO_DOWNLOAD_API_ENDPOINTS[i];
     try {
-      console.log(`[${jobId}] Trying endpoint: ${baseEndpoint}`);
+      console.log(`[${jobId}] API: Trying endpoint ${i + 1}/${VIDEO_DOWNLOAD_API_ENDPOINTS.length}: ${baseEndpoint}`);
 
       // Build query parameters
       const params = new URLSearchParams({
@@ -890,21 +926,24 @@ async function downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime
       }
 
       const data = await response.json();
-      console.log(`[${jobId}] API response received, success: ${data.success}`);
+      console.log(`[${jobId}] API: Response received - success: ${data.success}`);
 
       if (!data.success) {
-        console.error(`[${jobId}] API returned success=false: ${JSON.stringify(data).substring(0, 300)}`);
+        console.error(`[${jobId}] API: Request failed - response: ${JSON.stringify(data).substring(0, 300)}`);
         continue; // Try next endpoint
       }
 
       // Log video info if available
       if (data.info) {
-        console.log(`[${jobId}] Video title: ${data.info.title || 'Unknown'}`);
+        console.log(`[${jobId}] API: Video title: ${data.info.title || 'Unknown'}`);
+        if (data.info.image) {
+          console.log(`[${jobId}] API: Thumbnail available`);
+        }
       }
 
       // Check for extended duration pricing warning
       if (data.extended_duration) {
-        console.log(`[${jobId}] Note: Extended duration pricing may apply`);
+        console.log(`[${jobId}] API: Note - Extended duration pricing may apply`);
       }
 
       // Get download ID for progress tracking
@@ -912,7 +951,7 @@ async function downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime
       if (!downloadId) {
         throw new Error('No download ID in response');
       }
-      console.log(`[${jobId}] Download ID: ${downloadId}`);
+      console.log(`[${jobId}] API: Download ID assigned: ${downloadId}`);
 
       // Poll for download progress/completion
       const finalDownloadUrl = await pollForDownloadCompletion({
@@ -926,7 +965,8 @@ async function downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime
         throw new Error('Failed to get download URL after polling');
       }
 
-      console.log(`[${jobId}] Download URL received, downloading file...`);
+      console.log(`[${jobId}] API: Download URL received, starting file download...`);
+      console.log(`[${jobId}] API: Download URL domain: ${new URL(finalDownloadUrl).hostname}`);
 
       // Download the actual video file
       const videoResponse = await fetch(finalDownloadUrl, {
@@ -942,7 +982,8 @@ async function downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime
 
       // Get content length for progress logging
       const contentLength = videoResponse.headers.get('content-length');
-      console.log(`[${jobId}] Downloading video, size: ${contentLength ? (parseInt(contentLength) / 1024 / 1024).toFixed(2) + ' MB' : 'unknown'}`);
+      const expectedSize = contentLength ? (parseInt(contentLength) / 1024 / 1024).toFixed(2) + ' MB' : 'unknown';
+      console.log(`[${jobId}] API: Downloading video file (expected size: ${expectedSize})`);
 
       // Stream to file
       const buffer = await videoResponse.arrayBuffer();
@@ -953,15 +994,21 @@ async function downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime
         throw new Error(`Downloaded file too small: ${stats.size} bytes`);
       }
 
-      console.log(`[${jobId}] Video Download API complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+      const finalSize = (stats.size / 1024 / 1024).toFixed(2);
+      console.log(`[${jobId}] API: ========================================`);
+      console.log(`[${jobId}] API: Download COMPLETE`);
+      console.log(`[${jobId}] API: File size: ${finalSize} MB`);
+      console.log(`[${jobId}] API: Output path: ${outputFile}`);
+      console.log(`[${jobId}] API: ========================================`);
       return outputFile;
 
     } catch (endpointError) {
-      console.error(`[${jobId}] Endpoint ${baseEndpoint} failed: ${endpointError.message}`);
+      console.error(`[${jobId}] API: Endpoint ${baseEndpoint} FAILED: ${endpointError.message}`);
       // Continue to next endpoint
     }
   }
 
+  console.error(`[${jobId}] API: All endpoints exhausted - download failed`);
   throw new Error('All Video Download API endpoints failed');
 }
 
@@ -999,14 +1046,15 @@ async function pollForDownloadCompletion({ jobId, baseEndpoint, downloadId, maxW
 
       const progress = await response.json();
 
-      // Log progress if changed
+      // Log progress if changed (cap display at 100% - API may return higher values like 1000 to indicate completion)
       if (progress.progress !== undefined && progress.progress !== lastProgress) {
-        console.log(`[${jobId}] Download progress: ${progress.progress}%`);
+        const displayProgress = Math.min(100, progress.progress);
+        console.log(`[${jobId}] Download progress: ${displayProgress}%${progress.progress > 100 ? ' (complete)' : ''}`);
         lastProgress = progress.progress;
       }
 
-      // Check if download is complete
-      if (progress.success === true || progress.status === 'finished' || progress.progress === 100) {
+      // Check if download is complete (progress >= 100 indicates completion, API sometimes returns 1000)
+      if (progress.success === true || progress.status === 'finished' || progress.progress >= 100) {
         // Get download URL - API returns array of alternative URLs for regional redundancy
         let downloadUrl = null;
 
