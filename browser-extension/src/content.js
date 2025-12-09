@@ -40,8 +40,98 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // NEW: Download video stream in page context (has cookie access)
+  if (message.action === 'downloadStreamInPage') {
+    downloadStreamInPage(message.videoUrl, message.audioUrl).then(result => {
+      sendResponse(result);
+    }).catch(error => {
+      console.error('[YVO Content] Download error:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+    return true;
+  }
+
   return false;
 });
+
+/**
+ * Download video/audio streams in page context
+ * This has access to YouTube's cookies and session, bypassing 403 errors
+ */
+async function downloadStreamInPage(videoUrl, audioUrl) {
+  console.log('[YVO Content] Starting in-page download (has cookie access)');
+
+  if (!videoUrl) {
+    throw new Error('No video URL provided');
+  }
+
+  try {
+    // Download video stream - this works because we're in the YouTube page context
+    console.log('[YVO Content] Downloading video stream...');
+    const videoResponse = await fetch(videoUrl, {
+      method: 'GET',
+      credentials: 'include' // This actually works in page context
+    });
+
+    if (!videoResponse.ok) {
+      throw new Error(`Video download failed: ${videoResponse.status}`);
+    }
+
+    const videoBlob = await videoResponse.blob();
+    console.log(`[YVO Content] Video downloaded: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
+
+    // Convert to base64 for transfer to service worker
+    // (Chrome message passing doesn't support Blob directly)
+    const videoBase64 = await blobToBase64(videoBlob);
+
+    let audioBase64 = null;
+    if (audioUrl && audioUrl !== videoUrl) {
+      try {
+        console.log('[YVO Content] Downloading audio stream...');
+        const audioResponse = await fetch(audioUrl, {
+          method: 'GET',
+          credentials: 'include'
+        });
+
+        if (audioResponse.ok) {
+          const audioBlob = await audioResponse.blob();
+          console.log(`[YVO Content] Audio downloaded: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
+          audioBase64 = await blobToBase64(audioBlob);
+        }
+      } catch (audioError) {
+        console.warn('[YVO Content] Audio download failed:', audioError.message);
+      }
+    }
+
+    console.log('[YVO Content] Download complete, sending to background');
+    return {
+      success: true,
+      videoData: videoBase64,
+      videoSize: videoBlob.size,
+      audioData: audioBase64
+    };
+
+  } catch (error) {
+    console.error('[YVO Content] Download failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Convert Blob to base64 string
+ */
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // Remove data URL prefix (e.g., "data:video/mp4;base64,")
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 /**
  * Trigger video playback to enable stream interception

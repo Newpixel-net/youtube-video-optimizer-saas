@@ -859,7 +859,7 @@ async function downloadVideoSegment(videoUrl, audioUrl, startTime, endTime) {
  */
 async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
   console.log(`[YVO Background] Starting browser-side download for ${videoId}`);
-  console.log(`[YVO Background] This bypasses IP-restriction by downloading from user's browser`);
+  console.log(`[YVO Background] Will use content script for download (has page cookie access)`);
 
   if (!videoUrl) {
     return { success: false, error: 'No video URL provided' };
@@ -874,43 +874,37 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
   }
 
   try {
-    // Get cookies for YouTube/Google domains to include in request
-    // Service workers don't automatically include cookies, so we need to do it manually
-    console.log(`[YVO Background] Getting cookies for googlevideo.com and youtube.com...`);
-
-    const [googleVideoCookies, youtubeCookies] = await Promise.all([
-      chrome.cookies.getAll({ domain: '.googlevideo.com' }),
-      chrome.cookies.getAll({ domain: '.youtube.com' })
-    ]);
-
-    // Combine cookies into a cookie header string
-    const allCookies = [...googleVideoCookies, ...youtubeCookies];
-    const cookieHeader = allCookies.map(c => `${c.name}=${c.value}`).join('; ');
-
-    console.log(`[YVO Background] Got ${allCookies.length} cookies (${googleVideoCookies.length} googlevideo, ${youtubeCookies.length} youtube)`);
-
-    // Step 1: Download video stream in browser with cookies
-    console.log(`[YVO Background] Downloading video stream (browser-side with cookies)...`);
-    const videoResponse = await fetch(videoUrl, {
-      method: 'GET',
-      headers: {
-        'Cookie': cookieHeader,
-        // Add common browser headers to avoid bot detection
-        'User-Agent': navigator.userAgent,
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.youtube.com/',
-        'Origin': 'https://www.youtube.com'
-      },
-      credentials: 'include'
+    // Find a YouTube tab to use for downloading
+    // The content script runs in page context and has full cookie access
+    console.log(`[YVO Background] Finding YouTube tab for in-page download...`);
+    const tabs = await chrome.tabs.query({
+      url: ['*://www.youtube.com/*', '*://youtube.com/*']
     });
 
-    if (!videoResponse.ok) {
-      throw new Error(`Video download failed: ${videoResponse.status} ${videoResponse.statusText}`);
+    if (tabs.length === 0) {
+      throw new Error('No YouTube tab found. Please have YouTube open in a tab.');
     }
 
-    const videoBlob = await videoResponse.blob();
-    console.log(`[YVO Background] Video downloaded: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
+    const youtubeTab = tabs[0];
+    console.log(`[YVO Background] Using YouTube tab ${youtubeTab.id} for download`);
+
+    // Send download request to content script (runs in page context with cookie access)
+    console.log(`[YVO Background] Requesting download from content script...`);
+    const downloadResult = await chrome.tabs.sendMessage(youtubeTab.id, {
+      action: 'downloadStreamInPage',
+      videoUrl: videoUrl,
+      audioUrl: audioUrl
+    });
+
+    if (!downloadResult || !downloadResult.success) {
+      throw new Error(downloadResult?.error || 'Content script download failed');
+    }
+
+    console.log(`[YVO Background] Content script downloaded video: ${(downloadResult.videoSize / 1024 / 1024).toFixed(2)}MB`);
+
+    // Convert base64 back to Blob for upload
+    const videoBlob = base64ToBlob(downloadResult.videoData, 'video/mp4');
+    console.log(`[YVO Background] Converted to blob: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
 
     // Step 2: Upload video to our server
     console.log(`[YVO Background] Uploading video to server...`);
@@ -934,47 +928,29 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
 
     let audioStorageUrl = null;
 
-    // Step 3: Download and upload audio if available (for DASH streams)
-    if (audioUrl && audioUrl !== videoUrl) {
+    // Step 3: Upload audio if content script downloaded it
+    if (downloadResult.audioData) {
       try {
-        console.log(`[YVO Background] Downloading audio stream (browser-side with cookies)...`);
-        const audioResponse = await fetch(audioUrl, {
-          method: 'GET',
-          headers: {
-            'Cookie': cookieHeader,
-            'User-Agent': navigator.userAgent,
-            'Accept': '*/*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': 'https://www.youtube.com/',
-            'Origin': 'https://www.youtube.com'
-          },
-          credentials: 'include'
+        console.log(`[YVO Background] Content script also downloaded audio, uploading...`);
+        const audioBlob = base64ToBlob(downloadResult.audioData, 'audio/mp4');
+
+        const audioFormData = new FormData();
+        audioFormData.append('video', audioBlob, 'audio.mp4');
+        audioFormData.append('videoId', videoId);
+        audioFormData.append('type', 'audio');
+
+        const audioUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
+          method: 'POST',
+          body: audioFormData
         });
 
-        if (audioResponse.ok) {
-          const audioBlob = await audioResponse.blob();
-          console.log(`[YVO Background] Audio downloaded: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
-
-          console.log(`[YVO Background] Uploading audio to server...`);
-          const audioFormData = new FormData();
-          audioFormData.append('video', audioBlob, 'audio.mp4');
-          audioFormData.append('videoId', videoId);
-          audioFormData.append('type', 'audio');
-
-          const audioUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
-            method: 'POST',
-            body: audioFormData
-          });
-
-          if (audioUploadResponse.ok) {
-            const audioUploadResult = await audioUploadResponse.json();
-            audioStorageUrl = audioUploadResult.url;
-            console.log(`[YVO Background] Audio uploaded successfully: ${audioStorageUrl}`);
-          }
+        if (audioUploadResponse.ok) {
+          const audioUploadResult = await audioUploadResponse.json();
+          audioStorageUrl = audioUploadResult.url;
+          console.log(`[YVO Background] Audio uploaded successfully: ${audioStorageUrl}`);
         }
       } catch (audioError) {
-        console.warn(`[YVO Background] Audio download/upload failed (non-fatal):`, audioError.message);
-        // Continue without audio - the video might have embedded audio
+        console.warn(`[YVO Background] Audio upload failed (non-fatal):`, audioError.message);
       }
     }
 
@@ -1065,6 +1041,19 @@ function isValidGoogleVideoUrl(url) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Convert base64 string to Blob
+ * Used to reconstruct video data received from content script
+ */
+function base64ToBlob(base64, mimeType = 'video/mp4') {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mimeType });
 }
 
 /**
