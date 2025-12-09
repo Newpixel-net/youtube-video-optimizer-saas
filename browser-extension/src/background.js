@@ -874,10 +874,34 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
   }
 
   try {
-    // Step 1: Download video stream in browser (works because same IP as YouTube)
-    console.log(`[YVO Background] Downloading video stream (browser-side)...`);
+    // Get cookies for YouTube/Google domains to include in request
+    // Service workers don't automatically include cookies, so we need to do it manually
+    console.log(`[YVO Background] Getting cookies for googlevideo.com and youtube.com...`);
+
+    const [googleVideoCookies, youtubeCookies] = await Promise.all([
+      chrome.cookies.getAll({ domain: '.googlevideo.com' }),
+      chrome.cookies.getAll({ domain: '.youtube.com' })
+    ]);
+
+    // Combine cookies into a cookie header string
+    const allCookies = [...googleVideoCookies, ...youtubeCookies];
+    const cookieHeader = allCookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+    console.log(`[YVO Background] Got ${allCookies.length} cookies (${googleVideoCookies.length} googlevideo, ${youtubeCookies.length} youtube)`);
+
+    // Step 1: Download video stream in browser with cookies
+    console.log(`[YVO Background] Downloading video stream (browser-side with cookies)...`);
     const videoResponse = await fetch(videoUrl, {
       method: 'GET',
+      headers: {
+        'Cookie': cookieHeader,
+        // Add common browser headers to avoid bot detection
+        'User-Agent': navigator.userAgent,
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://www.youtube.com/',
+        'Origin': 'https://www.youtube.com'
+      },
       credentials: 'include'
     });
 
@@ -913,9 +937,17 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
     // Step 3: Download and upload audio if available (for DASH streams)
     if (audioUrl && audioUrl !== videoUrl) {
       try {
-        console.log(`[YVO Background] Downloading audio stream (browser-side)...`);
+        console.log(`[YVO Background] Downloading audio stream (browser-side with cookies)...`);
         const audioResponse = await fetch(audioUrl, {
           method: 'GET',
+          headers: {
+            'Cookie': cookieHeader,
+            'User-Agent': navigator.userAgent,
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.youtube.com/',
+            'Origin': 'https://www.youtube.com'
+          },
           credentials: 'include'
         });
 
