@@ -242,17 +242,27 @@ async function handleCaptureForWizard(message, sendResponse) {
 
   // Helper function to process captured streams - downloads and uploads to server
   async function processAndUploadStreams(intercepted, source) {
+    console.log(`[YVO Background] processAndUploadStreams called with source: ${source}`);
+    console.log(`[YVO Background] Video URL to download: ${intercepted.videoUrl?.substring(0, 100)}...`);
+
     const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
 
     // CRITICAL: Download video in browser (same IP as YouTube) and upload to our server
     // This bypasses the IP-restriction that causes 403 errors when server tries to use stream URLs
     console.log(`[YVO Background] Processing streams - will download in browser and upload to server`);
 
-    const uploadResult = await downloadAndUploadStream(
-      videoId,
-      intercepted.videoUrl,
-      intercepted.audioUrl
-    );
+    let uploadResult;
+    try {
+      uploadResult = await downloadAndUploadStream(
+        videoId,
+        intercepted.videoUrl,
+        intercepted.audioUrl
+      );
+      console.log(`[YVO Background] downloadAndUploadStream returned:`, uploadResult.success, uploadResult.error || 'no error');
+    } catch (downloadError) {
+      console.error(`[YVO Background] downloadAndUploadStream threw exception:`, downloadError);
+      uploadResult = { success: false, error: downloadError.message };
+    }
 
     if (uploadResult.success) {
       console.log(`[YVO Background] Browser-side download and upload successful!`);
