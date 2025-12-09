@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "1.4.0",
-  "description": "Capture YouTube videos for Video Wizard - with browser-side download to bypass IP restrictions",
+  "version": "1.5.0",
+  "description": "Capture YouTube videos for Video Wizard - with MAIN world injection for reliable browser-side download",
 
   "permissions": [
     "activeTab",
