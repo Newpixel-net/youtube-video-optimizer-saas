@@ -205,8 +205,11 @@
       }
     });
 
-    // Re-announce periodically for SPA navigation
-    setInterval(announceExtension, 5000);
+    // Listen for explicit check requests from Video Wizard
+    // This replaces the aggressive polling that caused page flashing
+    window.addEventListener('yvo-check-extension', () => {
+      announceExtension();
+    });
   }
 
   // Initialize
