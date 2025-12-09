@@ -648,16 +648,42 @@ async function trimVideoSegment({ jobId, inputFile, outputFile, startTime, endTi
 }
 
 /**
+ * Check if the POT (Proof of Origin Token) server is running
+ * The POT server is required for bypassing YouTube's bot detection
+ */
+async function checkPotServer() {
+  try {
+    const response = await fetch('http://127.0.0.1:4416/ping', {
+      method: 'GET',
+      signal: AbortSignal.timeout(2000)
+    });
+    return response.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * Download using yt-dlp with multiple client configurations
  * Tries different YouTube client types to bypass restrictions
+ * Uses POT (Proof of Origin Token) server for bot detection bypass
  */
 async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth }) {
   const bufferStart = Math.max(0, startTime - 2);
   const bufferEnd = endTime + 2;
 
+  // Check if POT server is running (critical for bypassing bot detection)
+  const potServerRunning = await checkPotServer();
+  if (potServerRunning) {
+    console.log(`[${jobId}] POT server is running on port 4416 - bot detection bypass enabled`);
+  } else {
+    console.warn(`[${jobId}] WARNING: POT server is NOT running - downloads may fail with bot detection`);
+  }
+
   // Try multiple client configurations - different clients bypass different restrictions
   const clientConfigs = [
-    'tv,tv_embedded',           // TV clients often work when web fails
+    'web',                       // Web client (best with POT tokens)
+    'tv,tv_embedded',            // TV clients often work when web fails
     'android,android_creator',   // Android clients have different restrictions
     'ios',                       // iOS client
     'web_creator,mweb',          // Web creator client
@@ -691,6 +717,7 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
 
 /**
  * Try yt-dlp with a specific client configuration
+ * Uses POT (Proof of Origin Token) server on localhost:4416 to bypass bot detection
  */
 async function tryYtDlpWithClient({ jobId, videoId, bufferStart, bufferEnd, outputFile, clients }) {
   return new Promise((resolve, reject) => {
@@ -700,7 +727,7 @@ async function tryYtDlpWithClient({ jobId, videoId, bufferStart, bufferEnd, outp
       '--force-keyframes-at-cuts',
       '-o', outputFile,
       '--no-playlist',
-      '--no-warnings',
+      '--verbose',  // Enable verbose logging to see POT server interactions
       '--sleep-requests', '0.5',
       '--extractor-retries', '3',
       '--retry-sleep', 'extractor:2',
@@ -713,10 +740,17 @@ async function tryYtDlpWithClient({ jobId, videoId, bufferStart, bufferEnd, outp
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     ];
 
+    // CRITICAL: Configure POT (Proof of Origin Token) provider
+    // The POT server runs on localhost:4416 and generates tokens to bypass YouTube's bot detection
+    // See: https://github.com/Brainicism/bgutil-ytdlp-pot-provider
+    let extractorArgs = 'youtube:getpot_bgutil_baseurl=http://127.0.0.1:4416';
+
     // Add client configuration unless using default
     if (clients !== 'default') {
-      args.push('--extractor-args', `youtube:player_client=${clients}`);
+      extractorArgs += `;player_client=${clients}`;
     }
+
+    args.push('--extractor-args', extractorArgs);
 
     // Add video URL
     args.push(`https://www.youtube.com/watch?v=${videoId}`);
