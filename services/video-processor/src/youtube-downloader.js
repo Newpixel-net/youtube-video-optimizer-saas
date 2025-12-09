@@ -391,258 +391,214 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
 
   console.log(`[${jobId}] Downloading video segment: ${startTime}s to ${endTime}s (${duration}s)`);
 
-  // NOTE: RapidAPI disabled - URLs are IP-restricted to RapidAPI's servers, not Cloud Run
-  // The download URLs only work from the IP that requested them (RapidAPI's servers)
-  // so they fail with 403 when Cloud Run tries to download
-  if (RAPIDAPI_KEY) {
-    console.log(`[${jobId}] RapidAPI configured but disabled - URLs are IP-restricted and don't work from Cloud Run`);
+  // Log authentication status
+  if (youtubeAuth?.accessToken) {
+    console.log(`[${jobId}] YouTube OAuth available (used for metadata, not downloads)`);
+  } else {
+    console.log(`[${jobId}] No YouTube OAuth - using standard download methods`);
   }
 
-  // Log if we have YouTube authentication
-  if (youtubeAuth?.accessToken) {
-    console.log(`[${jobId}] Using authenticated YouTube session`);
-  } else {
-    console.log(`[${jobId}] No YouTube auth - using unauthenticated mode`);
+  // PRIMARY METHOD: Try yt-dlp first (most reliable, updated frequently)
+  console.log(`[${jobId}] Trying yt-dlp (primary method)...`);
+  try {
+    return await downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
+  } catch (ytdlpError) {
+    console.warn(`[${jobId}] yt-dlp failed: ${ytdlpError.message}`);
   }
+
+  // SECONDARY METHOD: Try youtubei.js (JavaScript library)
+  console.log(`[${jobId}] Trying youtubei.js (secondary method)...`);
+  try {
+    const result = await downloadWithYoutubeijs({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
+    return result;
+  } catch (ytjsError) {
+    console.warn(`[${jobId}] youtubei.js failed: ${ytjsError.message}`);
+  }
+
+  // TERTIARY METHODS: Try various fallbacks
+  // Try Video Download API if configured (paid, reliable)
+  if (VIDEO_DOWNLOAD_API_KEY) {
+    console.log(`[${jobId}] Trying Video Download API (paid service)...`);
+    try {
+      return await downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime, workDir, outputFile });
+    } catch (apiError) {
+      console.warn(`[${jobId}] Video Download API failed: ${apiError.message}`);
+    }
+  }
+
+  // Try Invidious (open-source YouTube frontend)
+  console.log(`[${jobId}] Trying Invidious API...`);
+  try {
+    const invidiousOutput = path.join(workDir, 'invidious_source.mp4');
+    await downloadWithInvidious({ jobId, videoId, workDir, outputFile: invidiousOutput });
+    return await trimVideoSegment({ jobId, inputFile: invidiousOutput, outputFile, startTime, endTime });
+  } catch (invidiousError) {
+    console.warn(`[${jobId}] Invidious failed: ${invidiousError.message}`);
+  }
+
+  // Try Piped (another open-source YouTube frontend)
+  console.log(`[${jobId}] Trying Piped API...`);
+  try {
+    const pipedOutput = path.join(workDir, 'piped_source.mp4');
+    await downloadWithPiped({ jobId, videoId, workDir, outputFile: pipedOutput });
+    return await trimVideoSegment({ jobId, inputFile: pipedOutput, outputFile, startTime, endTime });
+  } catch (pipedError) {
+    console.warn(`[${jobId}] Piped failed: ${pipedError.message}`);
+  }
+
+  // Try direct extraction from YouTube page
+  console.log(`[${jobId}] Trying direct extraction...`);
+  try {
+    const directOutput = path.join(workDir, 'direct_source.mp4');
+    await downloadWithDirectExtraction({ jobId, videoId, workDir, outputFile: directOutput });
+    return await trimVideoSegment({ jobId, inputFile: directOutput, outputFile, startTime, endTime });
+  } catch (directError) {
+    console.warn(`[${jobId}] Direct extraction failed: ${directError.message}`);
+  }
+
+  // Try Cobalt API (known to be broken for YouTube as of late 2024)
+  console.log(`[${jobId}] Trying Cobalt API (last resort)...`);
+  try {
+    const cobaltOutput = path.join(workDir, 'cobalt_source.mp4');
+    await downloadWithCobalt({ jobId, videoId, workDir, outputFile: cobaltOutput });
+    return await trimVideoSegment({ jobId, inputFile: cobaltOutput, outputFile, startTime, endTime });
+  } catch (cobaltError) {
+    console.warn(`[${jobId}] Cobalt failed: ${cobaltError.message}`);
+  }
+
+  // Try alternative APIs
+  console.log(`[${jobId}] Trying alternative APIs...`);
+  try {
+    const altOutput = path.join(workDir, 'alt_source.mp4');
+    await downloadWithAlternativeAPIs({ jobId, videoId, workDir, outputFile: altOutput });
+    return await trimVideoSegment({ jobId, inputFile: altOutput, outputFile, startTime, endTime });
+  } catch (altError) {
+    console.warn(`[${jobId}] Alternative APIs failed: ${altError.message}`);
+  }
+
+  // All methods failed
+  console.error(`[${jobId}] All download methods failed`);
+  throw new Error(
+    'Video download failed. YouTube has strengthened bot detection. ' +
+    'Please try: 1) Upload the video directly, or 2) Use the browser extension to capture the video while playing it on YouTube.'
+  );
+}
+
+/**
+ * Download using youtubei.js library
+ */
+async function downloadWithYoutubeijs({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth }) {
+  const duration = endTime - startTime;
+
+  // Try multiple clients - some work better than others
+  const { info, innertube, clientType } = await getVideoInfoWithFallback(videoId, youtubeAuth);
+
+  console.log(`[${jobId}] Got video info via ${clientType} client`);
+
+  // Select best format (prefer 1080p or lower)
+  const formats = info.streaming_data?.adaptive_formats || [];
+
+  // Get best video format (1080p max)
+  const videoFormats = formats.filter(f =>
+    f.has_video &&
+    !f.has_audio &&
+    f.height <= 1080
+  ).sort((a, b) => (b.height || 0) - (a.height || 0));
+
+  // Get best audio format
+  const audioFormats = formats.filter(f =>
+    f.has_audio &&
+    !f.has_video
+  ).sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+
+  const videoFormat = videoFormats[0];
+  const audioFormat = audioFormats[0];
+
+  if (!videoFormat) {
+    throw new Error('No suitable video format found');
+  }
+
+  console.log(`[${jobId}] Selected video: ${videoFormat.quality_label || videoFormat.height}p`);
+  console.log(`[${jobId}] Selected audio: ${audioFormat?.audio_quality || 'N/A'}`);
+
+  // Get stream URLs
+  let videoUrl, audioUrl;
 
   try {
-    // Method 2: Try youtubei.js with multiple clients (pass auth if available)
-    const { info, innertube, clientType } = await getVideoInfoWithFallback(videoId, youtubeAuth);
+    videoUrl = videoFormat.decipher(innertube.session.player);
+    audioUrl = audioFormat?.decipher(innertube.session.player);
+  } catch (decipherError) {
+    console.log(`[${jobId}] Decipher failed, trying direct URL...`);
+    videoUrl = videoFormat.url;
+    audioUrl = audioFormat?.url;
+  }
 
-    console.log(`[${jobId}] Got video info via ${clientType} client${youtubeAuth ? ' (authenticated)' : ''}`);
+  if (!videoUrl) {
+    throw new Error('Could not get video URL');
+  }
 
-    // Select best format (prefer 1080p or lower)
-    const formats = info.streaming_data.adaptive_formats || [];
+  console.log(`[${jobId}] Got stream URLs, starting FFmpeg download...`);
 
-    // Get best video format (1080p max)
-    const videoFormats = formats.filter(f =>
-      f.has_video &&
-      !f.has_audio &&
-      f.height <= 1080
-    ).sort((a, b) => (b.height || 0) - (a.height || 0));
+  // Download and trim using FFmpeg
+  const bufferStart = Math.max(0, startTime - 1);
+  const bufferDuration = (endTime - bufferStart) + 2;
 
-    // Get best audio format
-    const audioFormats = formats.filter(f =>
-      f.has_audio &&
-      !f.has_video
-    ).sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-ss', bufferStart.toString(),
+      '-t', bufferDuration.toString(),
+      '-i', videoUrl,
+    ];
 
-    const videoFormat = videoFormats[0];
-    const audioFormat = audioFormats[0];
-
-    if (!videoFormat) {
-      throw new Error('No suitable video format found');
-    }
-
-    console.log(`[${jobId}] Selected video: ${videoFormat.quality_label || videoFormat.height}p`);
-    console.log(`[${jobId}] Selected audio: ${audioFormat?.audio_quality || 'N/A'}`);
-
-    // Get stream URLs
-    let videoUrl, audioUrl;
-
-    try {
-      videoUrl = videoFormat.decipher(innertube.session.player);
-      audioUrl = audioFormat?.decipher(innertube.session.player);
-    } catch (decipherError) {
-      // Try getting URL directly if decipher fails
-      console.log(`[${jobId}] Decipher failed, trying direct URL...`);
-      videoUrl = videoFormat.url;
-      audioUrl = audioFormat?.url;
-    }
-
-    if (!videoUrl) {
-      throw new Error('Could not get video URL');
-    }
-
-    console.log(`[${jobId}] Got stream URLs, starting FFmpeg download...`);
-
-    // Download and trim using FFmpeg
-    const bufferStart = Math.max(0, startTime - 1);
-    const bufferDuration = (endTime - bufferStart) + 2;
-
-    return new Promise((resolve, reject) => {
-      const args = [
+    if (audioUrl) {
+      args.push(
         '-ss', bufferStart.toString(),
         '-t', bufferDuration.toString(),
-        '-i', videoUrl,
-      ];
-
-      if (audioUrl) {
-        args.push(
-          '-ss', bufferStart.toString(),
-          '-t', bufferDuration.toString(),
-          '-i', audioUrl
-        );
-      }
-
-      args.push(
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '23',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-ss', (startTime - bufferStart).toString(),
-        '-t', duration.toString(),
-        '-movflags', '+faststart',
-        '-y',
-        outputFile
+        '-i', audioUrl
       );
+    }
 
-      console.log(`[${jobId}] FFmpeg starting...`);
+    args.push(
+      '-c:v', 'libx264',
+      '-preset', 'fast',
+      '-crf', '23',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-ss', (startTime - bufferStart).toString(),
+      '-t', duration.toString(),
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    );
 
-      const ffmpegProc = spawn('ffmpeg', args);
-      let stderr = '';
+    console.log(`[${jobId}] FFmpeg starting...`);
 
-      ffmpegProc.stderr.on('data', (data) => {
-        stderr += data.toString();
-        const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
-        if (match) {
-          console.log(`[${jobId}] Progress: ${match[1]}`);
-        }
-      });
+    const ffmpegProc = spawn('ffmpeg', args);
+    let stderr = '';
 
-      ffmpegProc.on('close', (code) => {
-        if (code === 0 && fs.existsSync(outputFile)) {
-          const stats = fs.statSync(outputFile);
-          console.log(`[${jobId}] Download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
-          resolve(outputFile);
-        } else {
-          console.error(`[${jobId}] FFmpeg failed with code ${code}`);
-          reject(new Error(`FFmpeg failed: ${stderr.slice(-300)}`));
-        }
-      });
-
-      ffmpegProc.on('error', (error) => {
-        reject(new Error(`FFmpeg error: ${error.message}`));
-      });
+    ffmpegProc.stderr.on('data', (data) => {
+      stderr += data.toString();
+      const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
+      if (match) {
+        console.log(`[${jobId}] Progress: ${match[1]}`);
+      }
     });
 
-  } catch (error) {
-    console.error(`[${jobId}] youtubei.js download failed:`, error.message);
-    console.log(`[${jobId}] Falling back to yt-dlp with POT provider...`);
-
-    try {
-      return await downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
-    } catch (ytdlpError) {
-      console.error(`[${jobId}] yt-dlp failed:`, ytdlpError.message);
-
-      // Try Video Download API if configured (paid, reliable)
-      if (VIDEO_DOWNLOAD_API_KEY) {
-        console.log(`[${jobId}] Trying Video Download API (paid service)...`);
-        try {
-          return await downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime, workDir, outputFile });
-        } catch (apiError) {
-          console.error(`[${jobId}] Video Download API failed:`, apiError.message);
-        }
+    ffmpegProc.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outputFile)) {
+        const stats = fs.statSync(outputFile);
+        console.log(`[${jobId}] Download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+        resolve(outputFile);
+      } else {
+        console.error(`[${jobId}] FFmpeg failed with code ${code}`);
+        reject(new Error(`FFmpeg failed: ${stderr.slice(-300)}`));
       }
+    });
 
-      console.log(`[${jobId}] Trying Cobalt API fallback (may be broken for YouTube)...`);
-
-      try {
-        // Cobalt downloads full video, we'll trim it with FFmpeg
-        const cobaltOutput = path.join(workDir, 'cobalt_source.mp4');
-        await downloadWithCobalt({ jobId, videoId, workDir, outputFile: cobaltOutput });
-
-        // Trim to desired segment
-        console.log(`[${jobId}] Trimming Cobalt download to segment...`);
-        const bufferStart = Math.max(0, startTime - 1);
-        const segmentDuration = (endTime - startTime) + 2;
-
-        return new Promise((resolve, reject) => {
-          const ffmpegArgs = [
-            '-ss', bufferStart.toString(),
-            '-t', segmentDuration.toString(),
-            '-i', cobaltOutput,
-            '-c', 'copy',
-            '-y',
-            outputFile
-          ];
-
-          const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
-          let stderr = '';
-
-          ffmpegProc.stderr.on('data', (data) => {
-            stderr += data.toString();
-          });
-
-          ffmpegProc.on('close', (code) => {
-            // Cleanup cobalt source
-            try {
-              if (fs.existsSync(cobaltOutput)) {
-                fs.unlinkSync(cobaltOutput);
-              }
-            } catch (e) {}
-
-            if (code === 0 && fs.existsSync(outputFile)) {
-              console.log(`[${jobId}] Cobalt segment trim complete`);
-              resolve(outputFile);
-            } else {
-              reject(new Error(`Segment trim failed: ${stderr.slice(-200)}`));
-            }
-          });
-
-          ffmpegProc.on('error', (error) => {
-            reject(new Error(`Trim FFmpeg error: ${error.message}`));
-          });
-        });
-      } catch (cobaltError) {
-        console.log(`[${jobId}] Cobalt failed, trying Invidious...`);
-
-        try {
-          // Invidious downloads full video, we'll trim it
-          const invidiousOutput = path.join(workDir, 'invidious_source.mp4');
-          await downloadWithInvidious({ jobId, videoId, workDir, outputFile: invidiousOutput });
-
-          // Trim to desired segment
-          console.log(`[${jobId}] Trimming Invidious download to segment...`);
-          return await trimVideoSegment({ jobId, inputFile: invidiousOutput, outputFile, startTime, endTime });
-        } catch (invidiousError) {
-          console.log(`[${jobId}] Invidious failed, trying Piped...`);
-
-          try {
-            // Piped downloads full video, we'll trim it
-            const pipedOutput = path.join(workDir, 'piped_source.mp4');
-            await downloadWithPiped({ jobId, videoId, workDir, outputFile: pipedOutput });
-
-            // Trim to desired segment
-            console.log(`[${jobId}] Trimming Piped download to segment...`);
-            return await trimVideoSegment({ jobId, inputFile: pipedOutput, outputFile, startTime, endTime });
-          } catch (pipedError) {
-            console.log(`[${jobId}] Piped failed, trying direct extraction...`);
-
-            try {
-              // Direct page parsing method
-              const directOutput = path.join(workDir, 'direct_source.mp4');
-              await downloadWithDirectExtraction({ jobId, videoId, workDir, outputFile: directOutput });
-
-              // Trim to desired segment
-              console.log(`[${jobId}] Trimming direct extraction download to segment...`);
-              return await trimVideoSegment({ jobId, inputFile: directOutput, outputFile, startTime, endTime });
-            } catch (directError) {
-              console.log(`[${jobId}] Direct extraction failed, trying alternative APIs...`);
-
-              try {
-                // Alternative download APIs (Tier-2)
-                const altOutput = path.join(workDir, 'alt_source.mp4');
-                await downloadWithAlternativeAPIs({ jobId, videoId, workDir, outputFile: altOutput });
-
-                // Trim to desired segment
-                console.log(`[${jobId}] Trimming alternative API download to segment...`);
-                return await trimVideoSegment({ jobId, inputFile: altOutput, outputFile, startTime, endTime });
-              } catch (altError) {
-                console.error(`[${jobId}] All download methods failed (8 methods tried)`);
-                // Return a more helpful error message
-                const errorMsg = ytdlpError.message.includes('Sign in to confirm')
-                  ? 'YouTube requires authentication. Please ensure your YouTube account is connected and try again. If the issue persists, the video may have restrictions.'
-                  : `Video download failed after trying 8 methods (RapidAPI, youtubei.js, yt-dlp, Cobalt, Invidious, Piped, Direct, AltAPIs). The video may be age-restricted, private, or geo-blocked. Consider uploading the video directly.`;
-                throw new Error(errorMsg);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+    ffmpegProc.on('error', (error) => {
+      reject(new Error(`FFmpeg error: ${error.message}`));
+    });
+  });
 }
 
 /**
@@ -692,24 +648,52 @@ async function trimVideoSegment({ jobId, inputFile, outputFile, startTime, endTi
 }
 
 /**
- * Fallback download using yt-dlp with TV client
- * @param {Object} params
- * @param {string} params.jobId - Job ID for logging
- * @param {string} params.videoId - YouTube video ID
- * @param {number} params.startTime - Start time in seconds
- * @param {number} params.endTime - End time in seconds
- * @param {string} params.workDir - Working directory path
- * @param {string} params.outputFile - Output file path
- * @param {Object} [params.youtubeAuth] - Optional YouTube OAuth credentials
+ * Download using yt-dlp with multiple client configurations
+ * Tries different YouTube client types to bypass restrictions
  */
 async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth }) {
   const bufferStart = Math.max(0, startTime - 2);
   const bufferEnd = endTime + 2;
 
+  // Try multiple client configurations - different clients bypass different restrictions
+  const clientConfigs = [
+    'tv,tv_embedded',           // TV clients often work when web fails
+    'android,android_creator',   // Android clients have different restrictions
+    'ios',                       // iOS client
+    'web_creator,mweb',          // Web creator client
+    'default'                    // Let yt-dlp choose
+  ];
+
+  let lastError = null;
+
+  for (const clients of clientConfigs) {
+    console.log(`[${jobId}] yt-dlp trying clients: ${clients}`);
+
+    try {
+      const result = await tryYtDlpWithClient({
+        jobId,
+        videoId,
+        bufferStart,
+        bufferEnd,
+        outputFile,
+        clients
+      });
+      return result;
+    } catch (error) {
+      console.warn(`[${jobId}] yt-dlp with ${clients} failed: ${error.message}`);
+      lastError = error;
+      // Continue to next client config
+    }
+  }
+
+  throw lastError || new Error('All yt-dlp client configurations failed');
+}
+
+/**
+ * Try yt-dlp with a specific client configuration
+ */
+async function tryYtDlpWithClient({ jobId, videoId, bufferStart, bufferEnd, outputFile, clients }) {
   return new Promise((resolve, reject) => {
-    // yt-dlp with POT (Proof of Origin Token) provider
-    // The bgutil-ytdlp-pot-provider plugin automatically generates tokens
-    // to bypass YouTube's bot detection - this is critical for reliability
     const args = [
       '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
       '--download-sections', `*${bufferStart}-${bufferEnd}`,
@@ -717,28 +701,25 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
       '-o', outputFile,
       '--no-playlist',
       '--no-warnings',
-      // Use web_creator client which works best with POT provider
-      '--extractor-args', 'youtube:player_client=web_creator,mweb,ios',
-      '--sleep-requests', '1',
-      '--extractor-retries', '5',
-      '--retry-sleep', 'extractor:3',
+      '--sleep-requests', '0.5',
+      '--extractor-retries', '3',
+      '--retry-sleep', 'extractor:2',
       '--no-check-certificates',
       '--geo-bypass',
       '--merge-output-format', 'mp4',
-      '--socket-timeout', '60',
-      '--retries', '3',
-      '--fragment-retries', '3',
-      '-v'  // Verbose mode for debugging
+      '--socket-timeout', '30',
+      '--retries', '2',
+      '--fragment-retries', '2',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     ];
 
-    // OAuth is deprecated for yt-dlp as of 2024, so we don't use it anymore
-    // The POT provider plugin handles authentication automatically if installed
+    // Add client configuration unless using default
+    if (clients !== 'default') {
+      args.push('--extractor-args', `youtube:player_client=${clients}`);
+    }
 
-    // Add the video URL at the end
+    // Add video URL
     args.push(`https://www.youtube.com/watch?v=${videoId}`);
-
-    console.log(`[${jobId}] yt-dlp starting with POT provider (web_creator client)...`);
-    console.log(`[${jobId}] Download segment: ${bufferStart}s to ${bufferEnd}s`);
 
     const ytdlpProc = spawn('yt-dlp', args);
     let stdout = '';
@@ -747,48 +728,45 @@ async function downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, 
     ytdlpProc.stdout.on('data', (data) => {
       stdout += data.toString();
       const line = data.toString().trim();
-      // Log progress and important messages
-      if (line.includes('[download]') || line.includes('POT') || line.includes('Downloading')) {
+      if (line.includes('[download]') || line.includes('Downloading')) {
         console.log(`[${jobId}] yt-dlp: ${line}`);
       }
     });
 
     ytdlpProc.stderr.on('data', (data) => {
       stderr += data.toString();
-      const line = data.toString().trim();
-      // Log errors and POT-related messages
-      if (line.includes('POT') || line.includes('bgutil') || line.includes('ERROR') || line.includes('WARNING')) {
-        console.log(`[${jobId}] yt-dlp stderr: ${line}`);
-      }
     });
 
     ytdlpProc.on('close', (code) => {
       if (code === 0 && fs.existsSync(outputFile)) {
         const stats = fs.statSync(outputFile);
-        console.log(`[${jobId}] yt-dlp download complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
-        resolve(outputFile);
+        if (stats.size > 10000) { // At least 10KB
+          console.log(`[${jobId}] yt-dlp success: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+          resolve(outputFile);
+        } else {
+          reject(new Error('Downloaded file too small'));
+        }
       } else {
-        console.error(`[${jobId}] yt-dlp failed with code ${code}`);
-        console.error(`[${jobId}] Full stderr: ${stderr}`);
-
-        // Provide helpful error message
-        let errorMsg = 'Video download failed';
-        if (stderr.includes('Sign in to confirm')) {
-          errorMsg = 'YouTube bot detection triggered. POT provider may not be installed correctly.';
+        // Parse error type
+        let errorType = 'unknown';
+        if (stderr.includes('Sign in to confirm') || stderr.includes('bot')) {
+          errorType = 'bot_detection';
         } else if (stderr.includes('403')) {
-          errorMsg = 'YouTube returned 403 Forbidden. IP may be rate limited.';
-        } else if (stderr.includes('private video')) {
-          errorMsg = 'This is a private video and cannot be downloaded.';
+          errorType = 'forbidden';
+        } else if (stderr.includes('private')) {
+          errorType = 'private';
         } else if (stderr.includes('age-restricted')) {
-          errorMsg = 'This video is age-restricted.';
+          errorType = 'age_restricted';
+        } else if (stderr.includes('unavailable')) {
+          errorType = 'unavailable';
         }
 
-        reject(new Error(`${errorMsg}: ${stderr.slice(-200) || 'Unknown error'}`));
+        reject(new Error(`yt-dlp failed (${errorType}): ${stderr.slice(-150)}`));
       }
     });
 
     ytdlpProc.on('error', (error) => {
-      reject(new Error(`yt-dlp error: ${error.message}`));
+      reject(new Error(`yt-dlp spawn error: ${error.message}`));
     });
   });
 }
