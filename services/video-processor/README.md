@@ -108,10 +108,12 @@ gcloud run deploy video-processor \
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Server port | 8080 |
-| `BUCKET_NAME` | Cloud Storage bucket | project.appspot.com |
+| `BUCKET_NAME` | Firebase Storage bucket (use `.firebasestorage.app` format) | ytseo-6d1b0.firebasestorage.app |
 | `TEMP_DIR` | Temporary file directory | /tmp/video-processing |
 | `NODE_ENV` | Environment | production |
 | `VIDEO_DOWNLOAD_API_KEY` | **RECOMMENDED**: API key for video-download-api.com (99%+ success rate) | (none) |
+
+**IMPORTANT**: The bucket name must use the `.firebasestorage.app` format (NOT `.appspot.com`). Using the wrong format will cause "bucket does not exist" errors.
 
 ### YouTube Download Configuration
 
