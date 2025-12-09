@@ -848,6 +848,82 @@ async function downloadVideoSegment(videoUrl, audioUrl, startTime, endTime) {
 }
 
 /**
+ * Function to be injected into YouTube page for video download
+ * This runs in the page context with full cookie/session access
+ * IMPORTANT: This function is serialized and injected, so it must be self-contained
+ */
+async function downloadVideoInPage(videoUrl, audioUrl) {
+  console.log('[YVO Injected] Starting in-page download (has full cookie access)');
+
+  // Helper function to convert blob to base64
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  try {
+    if (!videoUrl) {
+      return { success: false, error: 'No video URL provided' };
+    }
+
+    // Download video stream - this works because we're in the YouTube page context
+    console.log('[YVO Injected] Downloading video stream...');
+    const videoResponse = await fetch(videoUrl, {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (!videoResponse.ok) {
+      return { success: false, error: `Video download failed: ${videoResponse.status}` };
+    }
+
+    const videoBlob = await videoResponse.blob();
+    console.log(`[YVO Injected] Video downloaded: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
+
+    // Convert to base64 for transfer back to service worker
+    const videoBase64 = await blobToBase64(videoBlob);
+
+    let audioBase64 = null;
+    if (audioUrl && audioUrl !== videoUrl) {
+      try {
+        console.log('[YVO Injected] Downloading audio stream...');
+        const audioResponse = await fetch(audioUrl, {
+          method: 'GET',
+          credentials: 'include'
+        });
+
+        if (audioResponse.ok) {
+          const audioBlob = await audioResponse.blob();
+          console.log(`[YVO Injected] Audio downloaded: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
+          audioBase64 = await blobToBase64(audioBlob);
+        }
+      } catch (audioError) {
+        console.warn('[YVO Injected] Audio download failed:', audioError.message);
+      }
+    }
+
+    console.log('[YVO Injected] Download complete, returning to background');
+    return {
+      success: true,
+      videoData: videoBase64,
+      videoSize: videoBlob.size,
+      audioData: audioBase64
+    };
+
+  } catch (error) {
+    console.error('[YVO Injected] Download failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Download video stream from YouTube and upload to our server
  * This bypasses IP-restriction by downloading in the user's browser (same IP as YouTube)
  * and uploading to our server which stores it in Firebase Storage
@@ -875,7 +951,7 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
 
   try {
     // Find a YouTube tab to use for downloading
-    // The content script runs in page context and has full cookie access
+    // We'll inject and execute download code directly (more reliable than messaging)
     console.log(`[YVO Background] Finding YouTube tab for in-page download...`);
     const tabs = await chrome.tabs.query({
       url: ['*://www.youtube.com/*', '*://youtube.com/*']
@@ -888,19 +964,27 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
     const youtubeTab = tabs[0];
     console.log(`[YVO Background] Using YouTube tab ${youtubeTab.id} for download`);
 
-    // Send download request to content script (runs in page context with cookie access)
-    console.log(`[YVO Background] Requesting download from content script...`);
-    const downloadResult = await chrome.tabs.sendMessage(youtubeTab.id, {
-      action: 'downloadStreamInPage',
-      videoUrl: videoUrl,
-      audioUrl: audioUrl
+    // Use chrome.scripting.executeScript to run download code directly in the page
+    // This is more reliable than messaging because it doesn't depend on content script being loaded
+    console.log(`[YVO Background] Injecting download code into YouTube tab...`);
+
+    const injectionResults = await chrome.scripting.executeScript({
+      target: { tabId: youtubeTab.id },
+      func: downloadVideoInPage,
+      args: [videoUrl, audioUrl]
     });
 
-    if (!downloadResult || !downloadResult.success) {
-      throw new Error(downloadResult?.error || 'Content script download failed');
+    if (!injectionResults || injectionResults.length === 0 || !injectionResults[0].result) {
+      throw new Error('Script injection failed');
     }
 
-    console.log(`[YVO Background] Content script downloaded video: ${(downloadResult.videoSize / 1024 / 1024).toFixed(2)}MB`);
+    const downloadResult = injectionResults[0].result;
+
+    if (!downloadResult.success) {
+      throw new Error(downloadResult.error || 'In-page download failed');
+    }
+
+    console.log(`[YVO Background] In-page download successful: ${(downloadResult.videoSize / 1024 / 1024).toFixed(2)}MB`);
 
     // Convert base64 back to Blob for upload
     const videoBlob = base64ToBlob(downloadResult.videoData, 'video/mp4');

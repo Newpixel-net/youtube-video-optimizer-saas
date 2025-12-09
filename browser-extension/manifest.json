@@ -10,7 +10,8 @@
     "downloads",
     "webRequest",
     "tabs",
-    "cookies"
+    "cookies",
+    "scripting"
   ],
 
   "host_permissions": [
