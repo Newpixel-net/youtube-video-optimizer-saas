@@ -24,6 +24,11 @@ const WIZARD_ORIGINS = [
   'https://ytseo-6d1b0.web.app'
 ];
 
+// Video Processor Service URL for uploading captured streams
+// The extension downloads video streams (which are IP-restricted to user's browser)
+// and uploads them to our server, bypassing the IP restriction
+const VIDEO_PROCESSOR_URL = 'https://video-processor-867328435695.us-central1.run.app';
+
 /**
  * Network request interception to capture actual stream URLs
  * This captures the REAL URLs that YouTube's player uses (after signature deciphering)
@@ -235,13 +240,44 @@ async function handleCaptureForWizard(message, sendResponse) {
 
   console.log(`[YVO Background] Capture request for video: ${videoId}`);
 
-  try {
-    // PRIORITY 1: Check if we already have intercepted streams (from previous playback)
-    let intercepted = getInterceptedStreams(videoId);
-    if (intercepted && intercepted.videoUrl) {
-      console.log(`[YVO Background] Using cached intercepted streams for ${videoId}`);
-      const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-      sendResponse({
+  // Helper function to process captured streams - downloads and uploads to server
+  async function processAndUploadStreams(intercepted, source) {
+    const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
+
+    // CRITICAL: Download video in browser (same IP as YouTube) and upload to our server
+    // This bypasses the IP-restriction that causes 403 errors when server tries to use stream URLs
+    console.log(`[YVO Background] Processing streams - will download in browser and upload to server`);
+
+    const uploadResult = await downloadAndUploadStream(
+      videoId,
+      intercepted.videoUrl,
+      intercepted.audioUrl
+    );
+
+    if (uploadResult.success) {
+      console.log(`[YVO Background] Browser-side download and upload successful!`);
+      return {
+        success: true,
+        videoInfo: videoInfo,
+        streamData: {
+          // Return Firebase Storage URLs (no IP-restriction!)
+          videoUrl: uploadResult.videoStorageUrl,
+          audioUrl: uploadResult.audioStorageUrl,
+          // Keep original URLs as fallback (in case server wants to try them)
+          originalVideoUrl: intercepted.videoUrl,
+          originalAudioUrl: intercepted.audioUrl,
+          quality: 'uploaded',
+          mimeType: 'video/mp4',
+          capturedAt: intercepted.capturedAt,
+          source: source + '_uploaded',
+          uploadedToStorage: true
+        },
+        message: 'Video downloaded in browser and uploaded to server (bypasses IP-restriction).'
+      };
+    } else {
+      // Upload failed - return original stream URLs as fallback
+      console.warn(`[YVO Background] Upload failed: ${uploadResult.error}, returning stream URLs`);
+      return {
         success: true,
         videoInfo: videoInfo,
         streamData: {
@@ -250,10 +286,22 @@ async function handleCaptureForWizard(message, sendResponse) {
           quality: 'intercepted',
           mimeType: 'video/mp4',
           capturedAt: intercepted.capturedAt,
-          source: 'network_intercept_cached'
+          source: source,
+          uploadFailed: true,
+          uploadError: uploadResult.error
         },
-        message: 'Using previously intercepted stream URLs.'
-      });
+        message: 'Stream URLs captured (upload failed, server will try direct download).'
+      };
+    }
+  }
+
+  try {
+    // PRIORITY 1: Check if we already have intercepted streams (from previous playback)
+    let intercepted = getInterceptedStreams(videoId);
+    if (intercepted && intercepted.videoUrl) {
+      console.log(`[YVO Background] Using cached intercepted streams for ${videoId}`);
+      const result = await processAndUploadStreams(intercepted, 'network_intercept_cached');
+      sendResponse(result);
       return;
     }
 
@@ -281,7 +329,16 @@ async function handleCaptureForWizard(message, sendResponse) {
         const captureResult = await openAndCaptureStreams(videoId, youtubeUrl);
 
         if (captureResult.success && captureResult.streamData) {
-          sendResponse(captureResult);
+          // Process the captured streams - download and upload to server
+          const interceptedData = {
+            videoUrl: captureResult.streamData.videoUrl,
+            audioUrl: captureResult.streamData.audioUrl,
+            capturedAt: captureResult.streamData.capturedAt
+          };
+          const result = await processAndUploadStreams(interceptedData, 'network_intercept_auto');
+          // Merge video info from capture result
+          result.videoInfo = captureResult.videoInfo || result.videoInfo;
+          sendResponse(result);
           return;
         } else {
           console.warn(`[YVO Background] Auto-capture failed:`, captureResult.error);
@@ -295,20 +352,8 @@ async function handleCaptureForWizard(message, sendResponse) {
       // Re-check for intercepted streams after auto-capture attempt
       intercepted = getInterceptedStreams(videoId);
       if (intercepted && intercepted.videoUrl) {
-        const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-        sendResponse({
-          success: true,
-          videoInfo: videoInfo,
-          streamData: {
-            videoUrl: intercepted.videoUrl,
-            audioUrl: intercepted.audioUrl,
-            quality: 'intercepted',
-            mimeType: 'video/mp4',
-            capturedAt: intercepted.capturedAt,
-            source: 'network_intercept_auto'
-          },
-          message: 'Streams captured by auto-opening YouTube video.'
-        });
+        const result = await processAndUploadStreams(intercepted, 'network_intercept_auto');
+        sendResponse(result);
         return;
       }
     }
@@ -396,21 +441,41 @@ async function handleCaptureForWizard(message, sendResponse) {
           hasAudio: !!streamData.audioUrl,
           quality: streamData.quality
         });
+
+        // CRITICAL: Process and upload the streams to bypass IP-restriction
+        const interceptedData = {
+          videoUrl: streamData.videoUrl,
+          audioUrl: streamData.audioUrl,
+          capturedAt: streamData.capturedAt || Date.now()
+        };
+        const result = await processAndUploadStreams(interceptedData, streamData.source);
+        result.videoInfo = videoInfo.videoInfo || result.videoInfo;
+
+        // Store for later retrieval
+        storedVideoData = {
+          videoInfo: videoInfo.videoInfo,
+          streamData: result.streamData,
+          capturedAt: Date.now()
+        };
+
+        sendResponse(result);
+        return;
       } else {
         console.warn(`[YVO Background] No stream URLs captured for ${videoId}`);
       }
 
-      // Store for later retrieval
+      // Store for later retrieval (without streams)
       storedVideoData = {
         videoInfo: videoInfo.videoInfo,
-        streamData: streamData,
+        streamData: null,
         capturedAt: Date.now()
       };
 
       sendResponse({
         success: true,
         videoInfo: videoInfo.videoInfo,
-        streamData: streamData
+        streamData: null,
+        message: 'Could not capture streams from existing tab.'
       });
       return;
     }
@@ -770,6 +835,120 @@ async function downloadVideoSegment(videoUrl, audioUrl, startTime, endTime) {
   sendProgress(70, 'Creating video file...');
 
   return new Blob([videoBuffer], { type: 'video/mp4' });
+}
+
+/**
+ * Download video stream from YouTube and upload to our server
+ * This bypasses IP-restriction by downloading in the user's browser (same IP as YouTube)
+ * and uploading to our server which stores it in Firebase Storage
+ *
+ * @param {string} videoId - YouTube video ID
+ * @param {string} videoUrl - The IP-restricted video stream URL
+ * @param {string} audioUrl - Optional audio stream URL (for DASH streams)
+ * @returns {Promise<{success: boolean, videoStorageUrl?: string, audioStorageUrl?: string, error?: string}>}
+ */
+async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
+  console.log(`[YVO Background] Starting browser-side download for ${videoId}`);
+  console.log(`[YVO Background] This bypasses IP-restriction by downloading from user's browser`);
+
+  if (!videoUrl) {
+    return { success: false, error: 'No video URL provided' };
+  }
+
+  // Validate URLs
+  if (!isValidGoogleVideoUrl(videoUrl)) {
+    return { success: false, error: 'Invalid video URL' };
+  }
+  if (audioUrl && !isValidGoogleVideoUrl(audioUrl)) {
+    audioUrl = null; // Skip invalid audio URL
+  }
+
+  try {
+    // Step 1: Download video stream in browser (works because same IP as YouTube)
+    console.log(`[YVO Background] Downloading video stream (browser-side)...`);
+    const videoResponse = await fetch(videoUrl, {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (!videoResponse.ok) {
+      throw new Error(`Video download failed: ${videoResponse.status} ${videoResponse.statusText}`);
+    }
+
+    const videoBlob = await videoResponse.blob();
+    console.log(`[YVO Background] Video downloaded: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
+
+    // Step 2: Upload video to our server
+    console.log(`[YVO Background] Uploading video to server...`);
+    const videoFormData = new FormData();
+    videoFormData.append('video', videoBlob, 'video.mp4');
+    videoFormData.append('videoId', videoId);
+    videoFormData.append('type', 'video');
+
+    const videoUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
+      method: 'POST',
+      body: videoFormData
+    });
+
+    if (!videoUploadResponse.ok) {
+      const errorText = await videoUploadResponse.text();
+      throw new Error(`Video upload failed: ${videoUploadResponse.status} - ${errorText}`);
+    }
+
+    const videoUploadResult = await videoUploadResponse.json();
+    console.log(`[YVO Background] Video uploaded successfully: ${videoUploadResult.url}`);
+
+    let audioStorageUrl = null;
+
+    // Step 3: Download and upload audio if available (for DASH streams)
+    if (audioUrl && audioUrl !== videoUrl) {
+      try {
+        console.log(`[YVO Background] Downloading audio stream (browser-side)...`);
+        const audioResponse = await fetch(audioUrl, {
+          method: 'GET',
+          credentials: 'include'
+        });
+
+        if (audioResponse.ok) {
+          const audioBlob = await audioResponse.blob();
+          console.log(`[YVO Background] Audio downloaded: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
+
+          console.log(`[YVO Background] Uploading audio to server...`);
+          const audioFormData = new FormData();
+          audioFormData.append('video', audioBlob, 'audio.mp4');
+          audioFormData.append('videoId', videoId);
+          audioFormData.append('type', 'audio');
+
+          const audioUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
+            method: 'POST',
+            body: audioFormData
+          });
+
+          if (audioUploadResponse.ok) {
+            const audioUploadResult = await audioUploadResponse.json();
+            audioStorageUrl = audioUploadResult.url;
+            console.log(`[YVO Background] Audio uploaded successfully: ${audioStorageUrl}`);
+          }
+        }
+      } catch (audioError) {
+        console.warn(`[YVO Background] Audio download/upload failed (non-fatal):`, audioError.message);
+        // Continue without audio - the video might have embedded audio
+      }
+    }
+
+    return {
+      success: true,
+      videoStorageUrl: videoUploadResult.url,
+      audioStorageUrl: audioStorageUrl
+    };
+
+  } catch (error) {
+    console.error(`[YVO Background] Download/upload failed:`, error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 }
 
 /**
