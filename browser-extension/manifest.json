@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "1.3.0",
-  "description": "Capture YouTube videos for Video Wizard - improved stream capture and diagnostics",
+  "version": "1.4.0",
+  "description": "Capture YouTube videos for Video Wizard - with browser-side download to bypass IP restrictions",
 
   "permissions": [
     "activeTab",
@@ -18,7 +18,8 @@
     "https://*.googlevideo.com/*",
     "https://ytseo.siteuo.com/*",
     "https://youtube-video-optimizer.web.app/*",
-    "https://ytseo-6d1b0.web.app/*"
+    "https://ytseo-6d1b0.web.app/*",
+    "https://video-processor-867328435695.us-central1.run.app/*"
   ],
 
   "background": {

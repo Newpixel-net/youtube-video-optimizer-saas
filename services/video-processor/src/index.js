@@ -11,9 +11,18 @@ import { extractYouTubeFrames } from './youtube-downloader.js';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
+import multer from 'multer';
 
 const app = express();
 app.use(express.json());
+
+// Configure multer for handling file uploads (video streams from browser extension)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 500 * 1024 * 1024, // 500MB max (video files can be large)
+  },
+});
 
 // Initialize clients
 const firestore = new Firestore();
@@ -28,6 +37,90 @@ const TEMP_DIR = process.env.TEMP_DIR || '/tmp/video-processing';
  */
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+/**
+ * Upload video stream from browser extension
+ * This endpoint receives video data downloaded by the browser extension
+ * (which has access to IP-restricted YouTube stream URLs) and stores it
+ * in Firebase Storage for processing.
+ *
+ * This bypasses YouTube's IP-restriction on stream URLs by having the
+ * extension download in the user's browser and upload to our server.
+ */
+app.post('/upload-stream', upload.single('video'), async (req, res) => {
+  const uploadId = uuidv4().slice(0, 8);
+  console.log(`[UploadStream:${uploadId}] Received upload request`);
+
+  // Set CORS headers for browser extension
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No video file provided' });
+    }
+
+    const { videoId, type = 'video' } = req.body;
+    if (!videoId) {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    const fileSize = req.file.size;
+    const mimeType = req.file.mimetype || 'video/mp4';
+    console.log(`[UploadStream:${uploadId}] Video: ${videoId}, Type: ${type}, Size: ${(fileSize / 1024 / 1024).toFixed(2)}MB, MIME: ${mimeType}`);
+
+    // Generate unique filename for storage
+    const timestamp = Date.now();
+    const extension = type === 'audio' ? 'mp4' : 'mp4';
+    const fileName = `extension-uploads/${videoId}/${type}_${timestamp}.${extension}`;
+
+    // Upload to Firebase Storage
+    const bucket = storage.bucket(BUCKET_NAME);
+    const file = bucket.file(fileName);
+
+    await file.save(req.file.buffer, {
+      metadata: {
+        contentType: mimeType,
+        metadata: {
+          videoId: videoId,
+          type: type,
+          uploadedAt: new Date().toISOString(),
+          source: 'browser-extension'
+        }
+      }
+    });
+
+    // Make the file publicly accessible
+    await file.makePublic();
+
+    // Get the public URL
+    const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${fileName}`;
+
+    console.log(`[UploadStream:${uploadId}] Upload successful: ${publicUrl}`);
+
+    res.json({
+      success: true,
+      url: publicUrl,
+      videoId: videoId,
+      type: type,
+      size: fileSize,
+      uploadId: uploadId
+    });
+
+  } catch (error) {
+    console.error(`[UploadStream:${uploadId}] Upload failed:`, error);
+    res.status(500).json({ error: error.message || 'Upload failed' });
+  }
+});
+
+// Handle CORS preflight for upload endpoint
+app.options('/upload-stream', (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.status(204).send('');
 });
 
 /**
