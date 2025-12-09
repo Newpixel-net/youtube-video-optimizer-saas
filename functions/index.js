@@ -496,6 +496,151 @@ async function getVideoTranscript(videoId) {
   }
 }
 
+/**
+ * AI Virality Scoring System (OpusClip-style)
+ *
+ * This enhanced scoring system analyzes clips based on multiple factors:
+ * - Hook Strength: How compelling are the first 3 seconds
+ * - Emotional Impact: What emotions does the content trigger
+ * - Trend Alignment: How relevant is the topic to current trends
+ * - Engagement Potential: Likelihood of comments, shares, saves
+ * - Watch-Through Rate: Will viewers watch to the end
+ *
+ * Returns a detailed score breakdown instead of just a single number
+ */
+async function calculateEnhancedViralityScore(clipData, videoContext) {
+  const { transcript, duration, emotionalHook, reason, uniqueAngle } = clipData;
+  const { title, channelTitle, viewCount, contentType } = videoContext;
+
+  // Build analysis prompt for detailed scoring
+  const scoringPrompt = `You are a viral content scoring AI like OpusClip's virality predictor.
+
+Analyze this short-form video clip and provide detailed virality scores.
+
+CLIP CONTENT:
+- From video: "${title}" by ${channelTitle}
+- Duration: ${duration} seconds
+- Content: "${transcript || reason || 'No transcript available'}"
+- Unique angle: "${uniqueAngle || 'Not specified'}"
+- Emotional hook: "${emotionalHook || 'Not specified'}"
+- Video views: ${(viewCount || 0).toLocaleString()}
+- Content type: ${contentType || 'general'}
+
+Score each factor from 0-100 and provide a DETAILED breakdown.
+
+SCORING CRITERIA:
+
+1. HOOK STRENGTH (0-100): Does the first 3 seconds grab attention?
+   - 90-100: Irresistible hook, impossible to scroll past
+   - 70-89: Strong hook, catches most viewers
+   - 50-69: Decent hook, some engagement
+   - Below 50: Weak hook, easy to scroll past
+
+2. EMOTIONAL IMPACT (0-100): How much emotion does it trigger?
+   - Consider: curiosity, surprise, inspiration, humor, controversy, relatability
+   - 90-100: Strong emotional response guaranteed
+   - 70-89: Noticeable emotional reaction
+   - 50-69: Mild interest
+   - Below 50: Low emotional engagement
+
+3. SHAREABILITY (0-100): Will viewers share this?
+   - Consider: "I need to show this to someone" factor
+   - Quotable moments, relatable content, useful tips
+
+4. TREND ALIGNMENT (0-100): How relevant to current trends?
+   - Consider: trending topics, formats, sounds, themes
+   - Evergreen content scores 60-70 (always relevant but not trending)
+
+5. COMPLETION RATE (0-100): Will viewers watch until the end?
+   - Consider: pacing, payoff, story arc, length
+
+6. ENGAGEMENT BAIT (0-100): Will it generate comments?
+   - Consider: controversial takes, questions, debate potential
+
+RESPOND IN JSON:
+{
+  "overallScore": <weighted average, 0-100>,
+  "breakdown": {
+    "hookStrength": { "score": <0-100>, "reason": "brief explanation" },
+    "emotionalImpact": { "score": <0-100>, "reason": "brief explanation" },
+    "shareability": { "score": <0-100>, "reason": "brief explanation" },
+    "trendAlignment": { "score": <0-100>, "reason": "brief explanation" },
+    "completionRate": { "score": <0-100>, "reason": "brief explanation" },
+    "engagementBait": { "score": <0-100>, "reason": "brief explanation" }
+  },
+  "viralPrediction": "HIGH/MEDIUM/LOW",
+  "recommendedPlatform": "tiktok/instagram/youtube",
+  "improvementTips": ["tip 1", "tip 2"],
+  "bestPostingTime": "e.g., 'weekday evenings' or 'weekend mornings'"
+}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', // Use mini for cost efficiency on repeated calls
+      messages: [{ role: 'user', content: scoringPrompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 800,
+      temperature: 0.5
+    });
+
+    const result = JSON.parse(response.choices[0].message.content);
+
+    return {
+      score: Math.round(result.overallScore || 75),
+      breakdown: result.breakdown || {},
+      prediction: result.viralPrediction || 'MEDIUM',
+      recommendedPlatform: result.recommendedPlatform || 'tiktok',
+      tips: result.improvementTips || [],
+      bestTime: result.bestPostingTime || 'evening'
+    };
+  } catch (error) {
+    console.log('Enhanced virality scoring failed, using basic score:', error.message);
+    // Fallback to basic scoring
+    return {
+      score: clipData.viralityScore || 75,
+      breakdown: {},
+      prediction: 'MEDIUM',
+      recommendedPlatform: 'tiktok',
+      tips: [],
+      bestTime: 'evening'
+    };
+  }
+}
+
+/**
+ * Batch process virality scores for multiple clips
+ * More efficient than scoring one at a time
+ */
+async function batchCalculateViralityScores(clips, videoContext) {
+  // For cost efficiency, only do enhanced scoring on top candidates
+  // Sort by initial score and enhance top 6
+  const sortedClips = [...clips].sort((a, b) => (b.score || 0) - (a.score || 0));
+  const topClips = sortedClips.slice(0, 6);
+
+  const enhancedClips = await Promise.all(
+    topClips.map(async (clip) => {
+      const enhanced = await calculateEnhancedViralityScore(clip, videoContext);
+      return {
+        ...clip,
+        score: enhanced.score,
+        viralityBreakdown: enhanced.breakdown,
+        viralPrediction: enhanced.prediction,
+        recommendedPlatform: enhanced.recommendedPlatform,
+        improvementTips: enhanced.tips,
+        bestPostingTime: enhanced.bestTime
+      };
+    })
+  );
+
+  // Keep remaining clips with original scores
+  const remainingClips = sortedClips.slice(6).map(clip => ({
+    ...clip,
+    viralPrediction: clip.score >= 80 ? 'MEDIUM' : 'LOW'
+  }));
+
+  return [...enhancedClips, ...remainingClips];
+}
+
 async function getVideoMetadata(videoId) {
   try {
     const response = await youtube.videos.list({
@@ -16135,6 +16280,24 @@ IMPORTANT:
 
     // Sort by score for final output
     processedClips = nonOverlappingClips.sort((a, b) => b.score - a.score);
+
+    // ENHANCED VIRALITY SCORING (OpusClip-style)
+    // This adds detailed breakdown and predictions for top clips
+    try {
+      console.log('[wizardAnalyzeVideo] Running enhanced virality scoring on top clips...');
+      const videoContext = {
+        title: snippet.title || videoData.title,
+        channelTitle: snippet.channelTitle || videoData.channelTitle,
+        viewCount: parseInt(stats.viewCount || videoData.viewCount || 0),
+        contentType: analysisResult.contentType || 'general'
+      };
+
+      processedClips = await batchCalculateViralityScores(processedClips, videoContext);
+      console.log('[wizardAnalyzeVideo] Enhanced virality scoring complete');
+    } catch (scoringError) {
+      console.log('[wizardAnalyzeVideo] Enhanced scoring skipped:', scoringError.message);
+      // Continue with basic scores
+    }
 
     const projectData = {
       userId: uid,
