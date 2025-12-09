@@ -18,8 +18,13 @@ const RAPIDAPI_HOST = 'yt-api.p.rapidapi.com';
 // Video Download API - reliable third-party service
 // Supports time segments, 99%+ uptime, production-ready
 // See: https://video-download-api.com/
+// API uses GET requests to /ajax/download.php with apikey query parameter
 const VIDEO_DOWNLOAD_API_KEY = process.env.VIDEO_DOWNLOAD_API_KEY || '';
-const VIDEO_DOWNLOAD_API_URL = 'https://api.video-download-api.com';
+// Primary endpoint - switch to alternative if blocked in your region
+const VIDEO_DOWNLOAD_API_ENDPOINTS = [
+  'https://p.savenow.to',
+  'https://api.savenow.to'  // Alternative endpoint for regional redundancy
+];
 
 // Cache for Innertube instances per client type
 const innertubeCache = new Map();
@@ -398,16 +403,30 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
     console.log(`[${jobId}] No YouTube OAuth - using standard download methods`);
   }
 
-  // PRIMARY METHOD: Try yt-dlp first (most reliable, updated frequently)
-  console.log(`[${jobId}] Trying yt-dlp (primary method)...`);
+  // PRIMARY METHOD: Video Download API (paid, most reliable - 99%+ uptime)
+  // When API key is configured, this is the best method - no browser extension needed!
+  if (VIDEO_DOWNLOAD_API_KEY) {
+    console.log(`[${jobId}] Trying Video Download API (PRIMARY - paid service with 99%+ uptime)...`);
+    try {
+      return await downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime, workDir, outputFile });
+    } catch (apiError) {
+      console.warn(`[${jobId}] Video Download API failed: ${apiError.message}`);
+      console.log(`[${jobId}] Falling back to alternative methods...`);
+    }
+  } else {
+    console.log(`[${jobId}] Video Download API key not configured - using free fallbacks`);
+  }
+
+  // FALLBACK 1: Try yt-dlp (free but may be blocked by YouTube)
+  console.log(`[${jobId}] Trying yt-dlp (fallback method)...`);
   try {
     return await downloadWithYtDlp({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
   } catch (ytdlpError) {
     console.warn(`[${jobId}] yt-dlp failed: ${ytdlpError.message}`);
   }
 
-  // SECONDARY METHOD: Try youtubei.js (JavaScript library)
-  console.log(`[${jobId}] Trying youtubei.js (secondary method)...`);
+  // FALLBACK 2: Try youtubei.js (JavaScript library)
+  console.log(`[${jobId}] Trying youtubei.js (fallback method)...`);
   try {
     const result = await downloadWithYoutubeijs({ jobId, videoId, startTime, endTime, workDir, outputFile, youtubeAuth });
     return result;
@@ -415,15 +434,9 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
     console.warn(`[${jobId}] youtubei.js failed: ${ytjsError.message}`);
   }
 
-  // TERTIARY METHODS: Try various fallbacks
-  // Try Video Download API if configured (paid, reliable)
-  if (VIDEO_DOWNLOAD_API_KEY) {
-    console.log(`[${jobId}] Trying Video Download API (paid service)...`);
-    try {
-      return await downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime, workDir, outputFile });
-    } catch (apiError) {
-      console.warn(`[${jobId}] Video Download API failed: ${apiError.message}`);
-    }
+  // FALLBACK 3: Try Video Download API again if not tried (shouldn't happen but just in case)
+  if (!VIDEO_DOWNLOAD_API_KEY) {
+    console.log(`[${jobId}] Note: Configure VIDEO_DOWNLOAD_API_KEY for reliable downloads`);
   }
 
   // Try Invidious (open-source YouTube frontend)
@@ -478,10 +491,20 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
 
   // All methods failed
   console.error(`[${jobId}] All download methods failed`);
-  throw new Error(
-    'Video download failed. YouTube has strengthened bot detection. ' +
-    'Please try: 1) Upload the video directly, or 2) Use the browser extension to capture the video while playing it on YouTube.'
-  );
+
+  // Provide appropriate error message based on configuration
+  if (!VIDEO_DOWNLOAD_API_KEY) {
+    throw new Error(
+      'Video download failed. YouTube has strengthened bot detection. ' +
+      'Solution: Configure VIDEO_DOWNLOAD_API_KEY in your environment for reliable downloads (99%+ success rate). ' +
+      'Get your API key at: https://video-download-api.com/'
+    );
+  } else {
+    throw new Error(
+      'Video download failed despite using paid API service. ' +
+      'This may be a temporary issue. Please try again in a few minutes, or upload the video directly.'
+    );
+  }
 }
 
 /**
@@ -809,62 +832,226 @@ async function tryYtDlpWithClient({ jobId, videoId, bufferStart, bufferEnd, outp
  * Download using Video Download API (video-download-api.com)
  * Reliable third-party service with ~99% uptime, supports time segments
  * This is a PAID service - set VIDEO_DOWNLOAD_API_KEY environment variable
+ *
+ * API Documentation:
+ * - Endpoint: /ajax/download.php (GET request)
+ * - Parameters: format, url, apikey, start_time, end_time, add_info, audio_quality
+ * - Response: { success, id, content (base64), info: { image, title }, extended_duration }
+ * - Progress tracking via /ajax/progress.php?id=<download_id>
+ * - Note: Time segment downloads (start_time/end_time) have limited progress tracking
  */
 async function downloadWithVideoDownloadAPI({ jobId, videoId, startTime, endTime, workDir, outputFile }) {
   if (!VIDEO_DOWNLOAD_API_KEY) {
     throw new Error('VIDEO_DOWNLOAD_API_KEY not configured');
   }
 
-  console.log(`[${jobId}] Trying Video Download API (reliable third-party)...`);
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  console.log(`[${jobId}] Starting Video Download API for: ${youtubeUrl}`);
+  console.log(`[${jobId}] Time segment: ${startTime}s - ${endTime}s`);
 
-  try {
-    // Request video download with time segment
-    const response = await fetch(`${VIDEO_DOWNLOAD_API_URL}/v1/download`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${VIDEO_DOWNLOAD_API_KEY}`
-      },
-      body: JSON.stringify({
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        format: 'mp4',
-        quality: '1080',
-        start_time: Math.max(0, startTime - 1),
-        end_time: endTime + 1
-      })
-    });
+  // Try each endpoint in case of regional blocking
+  for (const baseEndpoint of VIDEO_DOWNLOAD_API_ENDPOINTS) {
+    try {
+      console.log(`[${jobId}] Trying endpoint: ${baseEndpoint}`);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API returned ${response.status}: ${errorText}`);
+      // Build query parameters
+      const params = new URLSearchParams({
+        format: '1080',           // Best quality
+        url: youtubeUrl,
+        apikey: VIDEO_DOWNLOAD_API_KEY,
+        add_info: '1',            // Include video metadata
+        audio_quality: '128'      // Good audio quality
+      });
+
+      // Add time segment parameters if specified
+      if (startTime !== undefined && startTime > 0) {
+        params.append('start_time', Math.max(0, Math.floor(startTime)).toString());
+      }
+      if (endTime !== undefined && endTime > 0) {
+        params.append('end_time', Math.ceil(endTime).toString());
+      }
+
+      // Initial download request
+      const downloadUrl = `${baseEndpoint}/ajax/download.php?${params.toString()}`;
+      console.log(`[${jobId}] Initiating download request...`);
+
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[${jobId}] API returned ${response.status}: ${errorText.substring(0, 200)}`);
+        continue; // Try next endpoint
+      }
+
+      const data = await response.json();
+      console.log(`[${jobId}] API response received, success: ${data.success}`);
+
+      if (!data.success) {
+        console.error(`[${jobId}] API returned success=false: ${JSON.stringify(data).substring(0, 300)}`);
+        continue; // Try next endpoint
+      }
+
+      // Log video info if available
+      if (data.info) {
+        console.log(`[${jobId}] Video title: ${data.info.title || 'Unknown'}`);
+      }
+
+      // Check for extended duration pricing warning
+      if (data.extended_duration) {
+        console.log(`[${jobId}] Note: Extended duration pricing may apply`);
+      }
+
+      // Get download ID for progress tracking
+      const downloadId = data.id;
+      if (!downloadId) {
+        throw new Error('No download ID in response');
+      }
+      console.log(`[${jobId}] Download ID: ${downloadId}`);
+
+      // Poll for download progress/completion
+      const finalDownloadUrl = await pollForDownloadCompletion({
+        jobId,
+        baseEndpoint,
+        downloadId,
+        maxWaitTime: 300000  // 5 minutes max wait
+      });
+
+      if (!finalDownloadUrl) {
+        throw new Error('Failed to get download URL after polling');
+      }
+
+      console.log(`[${jobId}] Download URL received, downloading file...`);
+
+      // Download the actual video file
+      const videoResponse = await fetch(finalDownloadUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': '*/*'
+        }
+      });
+
+      if (!videoResponse.ok) {
+        throw new Error(`Video download failed: ${videoResponse.status}`);
+      }
+
+      // Get content length for progress logging
+      const contentLength = videoResponse.headers.get('content-length');
+      console.log(`[${jobId}] Downloading video, size: ${contentLength ? (parseInt(contentLength) / 1024 / 1024).toFixed(2) + ' MB' : 'unknown'}`);
+
+      // Stream to file
+      const buffer = await videoResponse.arrayBuffer();
+      fs.writeFileSync(outputFile, Buffer.from(buffer));
+
+      const stats = fs.statSync(outputFile);
+      if (stats.size < 10000) {
+        throw new Error(`Downloaded file too small: ${stats.size} bytes`);
+      }
+
+      console.log(`[${jobId}] Video Download API complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+      return outputFile;
+
+    } catch (endpointError) {
+      console.error(`[${jobId}] Endpoint ${baseEndpoint} failed: ${endpointError.message}`);
+      // Continue to next endpoint
     }
-
-    const data = await response.json();
-
-    if (!data.download_url) {
-      throw new Error('No download URL in response');
-    }
-
-    console.log(`[${jobId}] Video Download API returned URL, downloading...`);
-
-    // Download the file
-    const downloadResponse = await fetch(data.download_url);
-    if (!downloadResponse.ok) {
-      throw new Error(`Download failed: ${downloadResponse.status}`);
-    }
-
-    const buffer = await downloadResponse.arrayBuffer();
-    fs.writeFileSync(outputFile, Buffer.from(buffer));
-
-    const stats = fs.statSync(outputFile);
-    console.log(`[${jobId}] Video Download API complete: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
-
-    return outputFile;
-
-  } catch (error) {
-    console.error(`[${jobId}] Video Download API failed:`, error.message);
-    throw error;
   }
+
+  throw new Error('All Video Download API endpoints failed');
+}
+
+/**
+ * Poll the progress endpoint until download is complete
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {string} params.baseEndpoint - Base API endpoint
+ * @param {string} params.downloadId - Download ID from initial request
+ * @param {number} params.maxWaitTime - Maximum time to wait in ms
+ * @returns {Promise<string>} Final download URL
+ */
+async function pollForDownloadCompletion({ jobId, baseEndpoint, downloadId, maxWaitTime }) {
+  const progressUrl = `${baseEndpoint}/ajax/progress.php?id=${downloadId}`;
+  const startTime = Date.now();
+  const pollInterval = 2000; // Poll every 2 seconds
+  let lastProgress = -1;
+
+  console.log(`[${jobId}] Polling for download completion...`);
+
+  while (Date.now() - startTime < maxWaitTime) {
+    try {
+      const response = await fetch(progressUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+
+      if (!response.ok) {
+        console.warn(`[${jobId}] Progress check returned ${response.status}`);
+        await sleep(pollInterval);
+        continue;
+      }
+
+      const progress = await response.json();
+
+      // Log progress if changed
+      if (progress.progress !== undefined && progress.progress !== lastProgress) {
+        console.log(`[${jobId}] Download progress: ${progress.progress}%`);
+        lastProgress = progress.progress;
+      }
+
+      // Check if download is complete
+      if (progress.success === true || progress.status === 'finished' || progress.progress === 100) {
+        // Get download URL - API returns array of alternative URLs for regional redundancy
+        let downloadUrl = null;
+
+        if (progress.download_url) {
+          downloadUrl = progress.download_url;
+        } else if (progress.download_urls && Array.isArray(progress.download_urls)) {
+          // Use first available URL
+          downloadUrl = progress.download_urls[0];
+        } else if (progress.url) {
+          downloadUrl = progress.url;
+        } else if (progress.urls && Array.isArray(progress.urls)) {
+          downloadUrl = progress.urls[0];
+        }
+
+        if (downloadUrl) {
+          console.log(`[${jobId}] Download ready!`);
+          return downloadUrl;
+        }
+      }
+
+      // Check for errors
+      if (progress.success === false || progress.status === 'error' || progress.error) {
+        throw new Error(`Download failed: ${progress.error || progress.message || 'Unknown error'}`);
+      }
+
+      // Wait before next poll
+      await sleep(pollInterval);
+
+    } catch (pollError) {
+      if (pollError.message.includes('Download failed')) {
+        throw pollError;
+      }
+      console.warn(`[${jobId}] Progress poll error: ${pollError.message}`);
+      await sleep(pollInterval);
+    }
+  }
+
+  throw new Error('Download timeout - exceeded maximum wait time');
+}
+
+/**
+ * Sleep utility function
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**

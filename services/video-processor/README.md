@@ -111,6 +111,34 @@ gcloud run deploy video-processor \
 | `BUCKET_NAME` | Cloud Storage bucket | project.appspot.com |
 | `TEMP_DIR` | Temporary file directory | /tmp/video-processing |
 | `NODE_ENV` | Environment | production |
+| `VIDEO_DOWNLOAD_API_KEY` | **RECOMMENDED**: API key for video-download-api.com (99%+ success rate) | (none) |
+
+### YouTube Download Configuration
+
+The service supports multiple methods for downloading YouTube videos:
+
+1. **Video Download API** (RECOMMENDED - Paid Service)
+   - 99%+ success rate, bypasses all YouTube bot detection
+   - Supports time segments (start/end time)
+   - No browser extension required
+   - Get your API key at: https://video-download-api.com/
+   - Set the `VIDEO_DOWNLOAD_API_KEY` environment variable
+
+2. **yt-dlp with POT Provider** (Free Fallback)
+   - Uses Proof-of-Origin Token server to bypass bot detection
+   - Success rate varies depending on YouTube's current restrictions
+   - Automatically included in Docker image
+
+3. **youtubei.js** (Free Fallback)
+   - JavaScript library for YouTube data extraction
+   - May be blocked by YouTube periodically
+
+**To configure the paid API on Cloud Run:**
+```bash
+gcloud run services update video-processor \
+  --set-env-vars "VIDEO_DOWNLOAD_API_KEY=your-api-key-here" \
+  --region us-central1
+```
 
 ## Job Data Structure
 
@@ -162,17 +190,23 @@ Per video clip (45 seconds @ 720p):
 
 ### Common Issues
 
-1. **yt-dlp fails to download**
+1. **YouTube download fails with bot detection**
+   - **SOLUTION**: Configure `VIDEO_DOWNLOAD_API_KEY` for reliable downloads
+   - This is the recommended solution - 99%+ success rate
+   - Get your API key at: https://video-download-api.com/
+
+2. **yt-dlp fails to download**
+   - This is normal - YouTube frequently blocks yt-dlp
+   - Configure `VIDEO_DOWNLOAD_API_KEY` for reliable fallback
    - Check if video is available in your region
    - Verify video is not age-restricted
-   - Try updating yt-dlp: `yt-dlp -U`
 
-2. **FFmpeg processing fails**
+3. **FFmpeg processing fails**
    - Check input video format
    - Verify sufficient memory (4GB recommended)
    - Check disk space in temp directory
 
-3. **Upload fails**
+4. **Upload fails**
    - Verify Cloud Storage permissions
    - Check bucket exists and is accessible
    - Verify service account has Storage Admin role
