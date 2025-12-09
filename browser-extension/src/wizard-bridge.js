@@ -98,7 +98,21 @@
       if (response?.success) {
         // Log the capture source for debugging
         const source = response.streamData?.source || 'none';
+        const uploadedToStorage = response.streamData?.uploadedToStorage || false;
+        const uploadFailed = response.streamData?.uploadFailed || false;
+        const uploadError = response.streamData?.uploadError || null;
+
         console.log(`[YVO Extension] Capture successful, source: ${source}`);
+
+        if (uploadedToStorage) {
+          console.log(`[YVO Extension] ✓ Video uploaded to Firebase Storage (bypasses IP-restriction)`);
+          console.log(`[YVO Extension] Storage URL: ${response.streamData?.videoUrl}`);
+        } else if (uploadFailed) {
+          console.warn(`[YVO Extension] ✗ Browser upload FAILED: ${uploadError}`);
+          console.warn(`[YVO Extension] Falling back to stream URLs (will likely fail due to IP-restriction)`);
+        } else {
+          console.warn(`[YVO Extension] ⚠ No upload attempted - using raw stream URLs`);
+        }
 
         sendResponse(requestId, {
           success: true,

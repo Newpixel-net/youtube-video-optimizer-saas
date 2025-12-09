@@ -9,7 +9,8 @@
     "storage",
     "downloads",
     "webRequest",
-    "tabs"
+    "tabs",
+    "cookies"
   ],
 
   "host_permissions": [
