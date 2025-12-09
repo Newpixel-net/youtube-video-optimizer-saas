@@ -849,11 +849,17 @@ async function downloadVideoSegment(videoUrl, audioUrl, startTime, endTime) {
 
 /**
  * Function to be injected into YouTube page for video download
- * This runs in the page context with full cookie/session access
+ * This runs in the page's MAIN world with full cookie/session access
  * IMPORTANT: This function is serialized and injected, so it must be self-contained
+ *
+ * YouTube stream URLs are IP-restricted and session-bound. This function works because:
+ * 1. It runs in the page's main world (same origin as youtube.com)
+ * 2. It has access to the page's cookies and session
+ * 3. It uses the same browser IP that generated the stream URLs
  */
 async function downloadVideoInPage(videoUrl, audioUrl) {
-  console.log('[YVO Injected] Starting in-page download (has full cookie access)');
+  console.log('[YVO Injected] Starting in-page download (MAIN world with cookie access)');
+  console.log('[YVO Injected] Video URL:', videoUrl?.substring(0, 100) + '...');
 
   // Helper function to convert blob to base64
   function blobToBase64(blob) {
@@ -868,24 +874,75 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
     });
   }
 
+  // Helper function to download with proper headers
+  async function downloadStream(url, type) {
+    console.log(`[YVO Injected] Downloading ${type} stream...`);
+
+    // Use XMLHttpRequest for better control over headers and progress
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'blob';
+
+      // Set headers that YouTube's player uses
+      xhr.setRequestHeader('Accept', '*/*');
+      xhr.setRequestHeader('Accept-Language', 'en-US,en;q=0.9');
+      // Note: Origin and Referer are automatically set by the browser
+
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          console.log(`[YVO Injected] ${type} downloaded: ${(xhr.response.size / 1024 / 1024).toFixed(2)}MB`);
+          resolve(xhr.response);
+        } else {
+          reject(new Error(`${type} download failed: ${xhr.status} ${xhr.statusText}`));
+        }
+      };
+
+      xhr.onerror = function() {
+        reject(new Error(`${type} download network error`));
+      };
+
+      xhr.onprogress = function(e) {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          console.log(`[YVO Injected] ${type} progress: ${percent}%`);
+        }
+      };
+
+      xhr.withCredentials = true;  // Include cookies
+      xhr.send();
+    });
+  }
+
   try {
     if (!videoUrl) {
       return { success: false, error: 'No video URL provided' };
     }
 
-    // Download video stream - this works because we're in the YouTube page context
-    console.log('[YVO Injected] Downloading video stream...');
-    const videoResponse = await fetch(videoUrl, {
-      method: 'GET',
-      credentials: 'include'
-    });
+    // Download video stream
+    let videoBlob;
+    try {
+      videoBlob = await downloadStream(videoUrl, 'Video');
+    } catch (xhrError) {
+      console.warn('[YVO Injected] XHR download failed, trying fetch fallback:', xhrError.message);
 
-    if (!videoResponse.ok) {
-      return { success: false, error: `Video download failed: ${videoResponse.status}` };
+      // Fallback to fetch
+      const videoResponse = await fetch(videoUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': '*/*',
+          'Accept-Language': 'en-US,en;q=0.9'
+        }
+      });
+
+      if (!videoResponse.ok) {
+        return { success: false, error: `Video download failed: ${videoResponse.status}` };
+      }
+
+      videoBlob = await videoResponse.blob();
+      console.log(`[YVO Injected] Video downloaded via fetch: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
     }
-
-    const videoBlob = await videoResponse.blob();
-    console.log(`[YVO Injected] Video downloaded: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
 
     // Convert to base64 for transfer back to service worker
     const videoBase64 = await blobToBase64(videoBlob);
@@ -893,19 +950,11 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
     let audioBase64 = null;
     if (audioUrl && audioUrl !== videoUrl) {
       try {
-        console.log('[YVO Injected] Downloading audio stream...');
-        const audioResponse = await fetch(audioUrl, {
-          method: 'GET',
-          credentials: 'include'
-        });
-
-        if (audioResponse.ok) {
-          const audioBlob = await audioResponse.blob();
-          console.log(`[YVO Injected] Audio downloaded: ${(audioBlob.size / 1024 / 1024).toFixed(2)}MB`);
-          audioBase64 = await blobToBase64(audioBlob);
-        }
+        const audioBlob = await downloadStream(audioUrl, 'Audio');
+        audioBase64 = await blobToBase64(audioBlob);
       } catch (audioError) {
         console.warn('[YVO Injected] Audio download failed:', audioError.message);
+        // Audio is optional, continue without it
       }
     }
 
@@ -921,6 +970,86 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
     console.error('[YVO Injected] Download failed:', error);
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Fallback: Capture video using MediaRecorder from the video element
+ * This is more reliable but requires the video to play (captures in real-time)
+ * Used as a fallback when direct URL download fails
+ *
+ * NOTE: This function is for future use when direct download consistently fails
+ */
+async function captureVideoWithMediaRecorder(durationSeconds = 60) {
+  console.log('[YVO Injected] Starting MediaRecorder capture (fallback method)');
+
+  return new Promise((resolve, reject) => {
+    try {
+      const videoElement = document.querySelector('video.html5-main-video');
+      if (!videoElement) {
+        reject(new Error('No video element found'));
+        return;
+      }
+
+      // Capture the video stream
+      const stream = videoElement.captureStream();
+      const chunks = [];
+
+      // Use webm format for better browser support
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9,opus',
+        videoBitsPerSecond: 5000000  // 5 Mbps
+      });
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        console.log('[YVO Injected] MediaRecorder capture complete');
+        const blob = new Blob(chunks, { type: 'video/webm' });
+
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          resolve({
+            success: true,
+            videoData: reader.result.split(',')[1],
+            videoSize: blob.size,
+            mimeType: 'video/webm',
+            captureMethod: 'mediarecorder'
+          });
+        };
+        reader.onerror = () => reject(new Error('Failed to convert video to base64'));
+        reader.readAsDataURL(blob);
+      };
+
+      recorder.onerror = (e) => {
+        reject(new Error(`MediaRecorder error: ${e.error?.message || 'unknown'}`));
+      };
+
+      // Start recording
+      recorder.start(1000);  // Capture in 1-second chunks
+
+      // Ensure video is playing
+      if (videoElement.paused) {
+        videoElement.play().catch(() => {});
+      }
+
+      // Stop after specified duration
+      setTimeout(() => {
+        if (recorder.state === 'recording') {
+          recorder.stop();
+        }
+      }, durationSeconds * 1000);
+
+      console.log(`[YVO Injected] Recording for ${durationSeconds} seconds...`);
+
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 /**
@@ -950,8 +1079,8 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
   }
 
   try {
-    // Find a YouTube tab to use for downloading
-    // We'll inject and execute download code directly (more reliable than messaging)
+    // Find the best YouTube tab for downloading
+    // Prefer the tab that's playing this specific video (has the stream URLs bound to it)
     console.log(`[YVO Background] Finding YouTube tab for in-page download...`);
     const tabs = await chrome.tabs.query({
       url: ['*://www.youtube.com/*', '*://youtube.com/*']
@@ -961,15 +1090,33 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
       throw new Error('No YouTube tab found. Please have YouTube open in a tab.');
     }
 
-    const youtubeTab = tabs[0];
-    console.log(`[YVO Background] Using YouTube tab ${youtubeTab.id} for download`);
+    // Try to find the tab with the specific video (best match for IP-bound URLs)
+    let youtubeTab = tabs.find(tab => {
+      try {
+        const url = new URL(tab.url);
+        return url.searchParams.get('v') === videoId ||
+               tab.url.includes(`/shorts/${videoId}`) ||
+               tab.url.includes(`/embed/${videoId}`);
+      } catch {
+        return false;
+      }
+    });
 
-    // Use chrome.scripting.executeScript to run download code directly in the page
-    // This is more reliable than messaging because it doesn't depend on content script being loaded
-    console.log(`[YVO Background] Injecting download code into YouTube tab...`);
+    // Fall back to any YouTube tab if specific video tab not found
+    if (!youtubeTab) {
+      youtubeTab = tabs[0];
+      console.log(`[YVO Background] Video-specific tab not found, using tab ${youtubeTab.id}`);
+    } else {
+      console.log(`[YVO Background] Found video-specific tab ${youtubeTab.id} for ${videoId}`);
+    }
+
+    // Use chrome.scripting.executeScript to run download code directly in the page's MAIN world
+    // CRITICAL: world: 'MAIN' is required to access page cookies for cross-origin requests
+    console.log(`[YVO Background] Injecting download code into YouTube tab (MAIN world)...`);
 
     const injectionResults = await chrome.scripting.executeScript({
       target: { tabId: youtubeTab.id },
+      world: 'MAIN',  // Execute in page's main world for cookie/session access
       func: downloadVideoInPage,
       args: [videoUrl, audioUrl]
     });
@@ -1046,9 +1193,22 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
 
   } catch (error) {
     console.error(`[YVO Background] Download/upload failed:`, error);
+
+    // Provide a helpful error message based on the failure type
+    let userFriendlyError = error.message;
+
+    if (error.message.includes('403')) {
+      userFriendlyError = 'YouTube blocked the download request (403). The video may have additional restrictions or the session expired. Try playing the video first, then export again.';
+    } else if (error.message.includes('Script injection failed')) {
+      userFriendlyError = 'Could not access the YouTube page. Please make sure a YouTube tab is open and try again.';
+    } else if (error.message.includes('No YouTube tab found')) {
+      userFriendlyError = 'No YouTube tab found. Please open the video on YouTube first, then try exporting.';
+    }
+
     return {
       success: false,
-      error: error.message
+      error: userFriendlyError,
+      originalError: error.message
     };
   }
 }
