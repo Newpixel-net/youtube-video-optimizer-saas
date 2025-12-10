@@ -8,10 +8,17 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Lazy-initialize OpenAI client (only when needed)
+let openai = null;
+
+function getOpenAIClient() {
+  if (!openai && process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+  }
+  return openai;
+}
 
 /**
  * Main function to generate captions for a video
@@ -96,14 +103,15 @@ async function transcribeWithWhisper(jobId, audioFile) {
   console.log(`[${jobId}] Transcribing with Whisper...`);
 
   // Check if OpenAI API key is available
-  if (!process.env.OPENAI_API_KEY) {
+  const client = getOpenAIClient();
+  if (!client) {
     console.log(`[${jobId}] OPENAI_API_KEY not set, skipping transcription`);
     return null;
   }
 
   try {
     // Use fs.createReadStream for Node.js (not browser File API)
-    const response = await openai.audio.transcriptions.create({
+    const response = await client.audio.transcriptions.create({
       file: fs.createReadStream(audioFile),
       model: 'whisper-1',
       response_format: 'verbose_json',
