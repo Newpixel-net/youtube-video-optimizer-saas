@@ -2266,23 +2266,48 @@
 
         /* Animated Caption Previews */
         .caption-animated {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 0.25rem;
+            display: inline;
+            line-height: 1.4;
         }
 
         /* Karaoke style - words highlight sequentially */
         .caption-karaoke .word {
-            color: rgba(255, 255, 255, 0.6);
-            transition: all 0.2s ease;
+            color: rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+            display: inline-block;
+            margin: 0 0.15rem;
+        }
+
+        /* Sequential karaoke highlight animation - each word takes turn */
+        .caption-karaoke .word.w1 {
+            animation: karaokeWord 4s ease-in-out infinite;
+        }
+        .caption-karaoke .word.w2 {
+            animation: karaokeWord 4s ease-in-out infinite 0.7s;
+        }
+        .caption-karaoke .word.w3 {
+            animation: karaokeWord 4s ease-in-out infinite 1.4s;
+        }
+        .caption-karaoke .word.w4 {
+            animation: karaokeWord 4s ease-in-out infinite 2.1s;
+        }
+        .caption-karaoke .word.w5 {
+            animation: karaokeWord 4s ease-in-out infinite 2.8s;
+        }
+        .caption-karaoke .word.w6 {
+            animation: karaokeWord 4s ease-in-out infinite 3.5s;
+        }
+
+        @keyframes karaokeWord {
+            0%, 10% { color: rgba(255, 255, 255, 0.5); transform: scale(1); }
+            15%, 25% { color: #fbbf24; transform: scale(1.15); text-shadow: 0 0 10px rgba(251, 191, 36, 0.5); }
+            30%, 100% { color: rgba(255, 255, 255, 0.5); transform: scale(1); }
         }
 
         .caption-karaoke .highlight-anim {
             color: #fbbf24;
             transform: scale(1.15);
             display: inline-block;
-            animation: karaokePulse 1.5s ease-in-out infinite;
         }
 
         @keyframes karaokePulse {
@@ -2297,27 +2322,36 @@
             color: #fbbf24;
             -webkit-text-stroke: 1.5px #000;
             font-size: 1.3rem;
+            margin: 0 0.2rem;
         }
 
+        .caption-beasty .beasty-word:nth-child(1) {
+            animation-delay: 0s;
+        }
         .caption-beasty .beasty-word:nth-child(2) {
-            animation-delay: 0.1s;
+            animation-delay: 0.15s;
+        }
+        .caption-beasty .beasty-word:nth-child(3) {
+            animation-delay: 0.3s;
         }
 
         @keyframes beastyBounce {
-            0%, 100% { transform: scale(1); }
-            25% { transform: scale(1.05); }
-            50% { transform: scale(0.98); }
+            0%, 100% { transform: scale(1) translateY(0); }
+            25% { transform: scale(1.08) translateY(-2px); }
+            50% { transform: scale(0.98) translateY(0); }
         }
 
         /* Podcast style - fade in sequence */
         .caption-podp .fade-word {
+            display: inline-block;
+            margin: 0 0.15rem;
             opacity: 0;
             animation: fadeInWord 2.5s ease forwards infinite;
         }
 
         .caption-podp .fade-word.w1 { animation-delay: 0s; }
-        .caption-podp .fade-word.w2 { animation-delay: 0.3s; }
-        .caption-podp .fade-word.w3 { animation-delay: 0.6s; }
+        .caption-podp .fade-word.w2 { animation-delay: 0.4s; }
+        .caption-podp .fade-word.w3 { animation-delay: 0.8s; }
 
         @keyframes fadeInWord {
             0%, 20% { opacity: 0.3; }
@@ -7146,17 +7180,22 @@
             var imgErrorHandler = 'onerror="this.onerror=null; this.src=\'' + ytThumbnailFallback + '\';"';
 
             // Helper function to generate media element
-            var getMediaElement = function() {
+            var getMediaElement = function(isPrimary) {
+                var audioMix = settings.audioMix || { primaryMuted: false, secondaryMuted: true };
+                var shouldMute = isPrimary ? audioMix.primaryMuted : audioMix.secondaryMuted;
+                var mutedAttr = shouldMute ? ' muted' : '';
+                var dataTrack = isPrimary ? 'data-track="primary"' : 'data-track="secondary"';
+
                 if (isUpload && uploadedVideoUrl) {
-                    return '<video class="preview-media" src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted playsinline></video>';
+                    return '<video class="preview-media" ' + dataTrack + ' src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls' + mutedAttr + ' playsinline></video>';
                 }
                 if (videoId) {
                     if (state.customization.playingInFrame) {
                         var embedUrl = 'https://www.youtube.com/embed/' + videoId +
                             '?autoplay=1&start=' + Math.floor(embedStart) +
-                            '&modestbranding=1&rel=0&playsinline=1';
+                            '&modestbranding=1&rel=0&playsinline=1' + (shouldMute ? '&mute=1' : '');
                         return '<div class="preview-iframe-wrapper">' +
-                               '<iframe src="' + embedUrl + '" ' +
+                               '<iframe ' + dataTrack + ' src="' + embedUrl + '" ' +
                                'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
                                'allowfullscreen></iframe>' +
                                '</div>';
@@ -7166,30 +7205,117 @@
                 return '<div class="preview-media" style="background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%); display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem;">No video</div>';
             };
 
-            var mediaElement = getMediaElement();
+            // Helper function to generate secondary source media element
+            var secondarySource = settings.secondarySource || { enabled: false };
+            var hasSecondaryVideo = secondarySource.enabled && (secondarySource.youtubeVideoId || secondarySource.uploadedUrl);
+
+            var getSecondaryMediaElement = function() {
+                if (!hasSecondaryVideo) return null;
+
+                var audioMix = settings.audioMix || { secondaryMuted: true };
+                var shouldMute = audioMix.secondaryMuted;
+                var mutedAttr = shouldMute ? ' muted' : '';
+
+                if (secondarySource.type === 'youtube' && secondarySource.youtubeVideoId) {
+                    var secThumbnail = 'https://img.youtube.com/vi/' + secondarySource.youtubeVideoId + '/mqdefault.jpg';
+                    if (state.customization.playingInFrame) {
+                        var secEmbedUrl = 'https://www.youtube.com/embed/' + secondarySource.youtubeVideoId +
+                            '?autoplay=1&modestbranding=1&rel=0&playsinline=1' + (shouldMute ? '&mute=1' : '');
+                        return '<div class="preview-iframe-wrapper">' +
+                               '<iframe data-track="secondary" src="' + secEmbedUrl + '" ' +
+                               'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
+                               'allowfullscreen></iframe>' +
+                               '</div>';
+                    }
+                    return '<img class="preview-media secondary-preview" src="' + secThumbnail + '" alt="Secondary Video">';
+                } else if (secondarySource.type === 'upload' && secondarySource.uploadedUrl) {
+                    return '<video class="preview-media secondary-preview" data-track="secondary" src="' + secondarySource.uploadedUrl + '" controls' + mutedAttr + ' playsinline></video>';
+                }
+                return null;
+            };
+
+            var mediaElement = getMediaElement(true);
+            var secondaryMediaElement = getSecondaryMediaElement();
 
             // Build phone-video-area with reframe mode class
             var videoAreaClasses = 'phone-video-area reframe-' + reframeMode + ' crop-' + cropPos;
             html += '<div class="' + videoAreaClasses + '">';
 
             // Generate reframe-specific content
+            // Determine which media goes where based on secondary position
+            var secPosition = secondarySource.position || 'bottom';
+
             if (reframeMode === 'split_screen') {
-                // Split screen: Two speakers stacked vertically
-                html += '<div class="split-preview-top">' + mediaElement + '<span class="split-label">Speaker 1</span></div>';
-                html += '<div class="split-preview-bottom">' + mediaElement + '<span class="split-label">Speaker 2</span></div>';
+                // Split screen: Two videos stacked vertically
+                var topMedia, bottomMedia, topLabel, bottomLabel;
+                if (hasSecondaryVideo && secondaryMediaElement) {
+                    if (secPosition === 'top') {
+                        topMedia = secondaryMediaElement;
+                        bottomMedia = mediaElement;
+                        topLabel = 'Secondary';
+                        bottomLabel = 'Primary';
+                    } else {
+                        topMedia = mediaElement;
+                        bottomMedia = secondaryMediaElement;
+                        topLabel = 'Primary';
+                        bottomLabel = 'Secondary';
+                    }
+                } else {
+                    // No secondary - split primary video
+                    topMedia = mediaElement;
+                    bottomMedia = mediaElement;
+                    topLabel = 'Speaker 1';
+                    bottomLabel = 'Speaker 2';
+                }
+                html += '<div class="split-preview-top">' + topMedia + '<span class="split-label">' + topLabel + '</span></div>';
+                html += '<div class="split-preview-bottom">' + bottomMedia + '<span class="split-label">' + bottomLabel + '</span></div>';
             } else if (reframeMode === 'three_person') {
                 // Three person: Main top, two bottom
-                html += '<div class="three-zone three-zone-main">' + mediaElement + '<span class="zone-label">Main</span></div>';
-                html += '<div class="three-zone three-zone-left">' + mediaElement + '<span class="zone-label">L</span></div>';
-                html += '<div class="three-zone three-zone-right">' + mediaElement + '<span class="zone-label">R</span></div>';
+                var mainMedia = mediaElement, leftMedia = mediaElement, rightMedia = mediaElement;
+                var mainLabel = 'Main', leftLabel = 'L', rightLabel = 'R';
+                if (hasSecondaryVideo && secondaryMediaElement) {
+                    if (secPosition === 'top') {
+                        mainMedia = secondaryMediaElement;
+                        mainLabel = 'Secondary';
+                    } else if (secPosition === 'bottom-left') {
+                        leftMedia = secondaryMediaElement;
+                        leftLabel = 'Sec';
+                    } else {
+                        rightMedia = secondaryMediaElement;
+                        rightLabel = 'Sec';
+                    }
+                }
+                html += '<div class="three-zone three-zone-main">' + mainMedia + '<span class="zone-label">' + mainLabel + '</span></div>';
+                html += '<div class="three-zone three-zone-left">' + leftMedia + '<span class="zone-label">' + leftLabel + '</span></div>';
+                html += '<div class="three-zone three-zone-right">' + rightMedia + '<span class="zone-label">' + rightLabel + '</span></div>';
             } else if (reframeMode === 'gameplay') {
-                // Gameplay: Full screen with facecam indicator
-                html += mediaElement;
-                html += '<div class="facecam-preview"><span>Facecam</span></div>';
+                // Gameplay: Main video with facecam overlay
+                var gameMedia = mediaElement;
+                var facecamContent = '<span>Facecam</span>';
+                if (hasSecondaryVideo && secondaryMediaElement) {
+                    if (secPosition === 'facecam') {
+                        facecamContent = secondaryMediaElement;
+                    } else {
+                        gameMedia = secondaryMediaElement;
+                    }
+                }
+                html += gameMedia;
+                html += '<div class="facecam-preview">' + facecamContent + '</div>';
             } else if (reframeMode === 'broll_split') {
-                // B-Roll: Main content with Ken Burns + B-roll area
-                html += '<div class="broll-main">' + mediaElement + '<span class="broll-label">B-Roll</span></div>';
-                html += '<div class="broll-speaker">' + mediaElement + '<span class="broll-label">Speaker</span></div>';
+                // B-Roll: Main content + B-roll area
+                var brollMainMedia = mediaElement, brollSpeakerMedia = mediaElement;
+                var brollMainLabel = 'B-Roll', brollSpeakerLabel = 'Speaker';
+                if (hasSecondaryVideo && secondaryMediaElement) {
+                    if (secPosition === 'broll') {
+                        brollMainMedia = secondaryMediaElement;
+                        brollMainLabel = 'Secondary';
+                    } else {
+                        brollSpeakerMedia = secondaryMediaElement;
+                        brollSpeakerLabel = 'Secondary';
+                    }
+                }
+                html += '<div class="broll-main">' + brollMainMedia + '<span class="broll-label">' + brollMainLabel + '</span></div>';
+                html += '<div class="broll-speaker">' + brollSpeakerMedia + '<span class="broll-label">' + brollSpeakerLabel + '</span></div>';
             } else {
                 // Auto-center: Simple crop with play button
                 html += mediaElement;
@@ -7199,6 +7325,15 @@
                 } else if (state.customization.playingInFrame) {
                     html += '<button class="video-stop-btn" onclick="app.stopInFrameVideo()" title="Stop video">✕</button>';
                 }
+            }
+
+            // Add audio indicator badges when multi-source is active
+            if (hasSecondaryVideo) {
+                html += '<div class="phone-audio-indicators">';
+                var audioMix = settings.audioMix || { primaryMuted: false, secondaryMuted: true };
+                html += '<div class="audio-indicator' + (audioMix.primaryMuted ? ' muted' : '') + '">🎙️ Primary ' + (audioMix.primaryMuted ? 'OFF' : (audioMix.primaryVolume || 100) + '%') + '</div>';
+                html += '<div class="audio-indicator' + (audioMix.secondaryMuted ? ' muted' : '') + '">🎬 Secondary ' + (audioMix.secondaryMuted ? 'OFF' : (audioMix.secondaryVolume || 0) + '%') + '</div>';
+                html += '</div>';
             }
 
             html += '</div>'; // phone-video-area
@@ -8663,6 +8798,67 @@
                 });
                 document.addEventListener('touchend', handleMouseUp);
             }
+
+            // Apply audio mute state to preview videos
+            applyPreviewAudioMute();
+
+            // Secondary source dropzone
+            var secondaryDropzone = document.getElementById('secondary-upload-dropzone');
+            if (secondaryDropzone) {
+                secondaryDropzone.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    secondaryDropzone.classList.add('dragging');
+                });
+                secondaryDropzone.addEventListener('dragleave', function(e) {
+                    secondaryDropzone.classList.remove('dragging');
+                });
+                secondaryDropzone.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    secondaryDropzone.classList.remove('dragging');
+                    if (e.dataTransfer.files.length > 0) {
+                        app.handleSecondaryFileSelect(e.dataTransfer.files);
+                    }
+                });
+            }
+        }
+
+        /**
+         * Apply audio mute state to all preview video elements
+         * Called after render to ensure mute state matches audioMix settings
+         */
+        function applyPreviewAudioMute() {
+            // Get current clip settings
+            var selectedClips = state.clips.filter(function(c) {
+                return state.selectedClipIds.indexOf(c.id) !== -1;
+            });
+            if (!selectedClips.length) return;
+
+            var activeClip = selectedClips[state.customization.activeClipIndex];
+            if (!activeClip) return;
+
+            var settings = state.clipSettings[activeClip.id] || {};
+            var audioMix = settings.audioMix || { primaryMuted: false, secondaryMuted: true };
+
+            // Find all video elements and apply mute state
+            var videos = document.querySelectorAll('.phone-video-area video');
+            videos.forEach(function(video) {
+                var track = video.getAttribute('data-track');
+                if (track === 'primary') {
+                    video.muted = audioMix.primaryMuted;
+                    video.volume = audioMix.primaryMuted ? 0 : (audioMix.primaryVolume || 100) / 100;
+                } else if (track === 'secondary') {
+                    video.muted = audioMix.secondaryMuted;
+                    video.volume = audioMix.secondaryMuted ? 0 : (audioMix.secondaryVolume || 0) / 100;
+                }
+            });
+
+            // For iframes, we can only control via URL param (handled in render)
+            // But log for debugging
+            var iframes = document.querySelectorAll('.phone-video-area iframe');
+            iframes.forEach(function(iframe) {
+                var track = iframe.getAttribute('data-track');
+                console.log('Preview iframe track:', track, 'mute state applied via URL');
+            });
         }
 
         /* ==========================================
