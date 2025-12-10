@@ -1903,7 +1903,8 @@
         }
 
         .phone-video-area.reframe-split_screen .split-preview-top iframe,
-        .phone-video-area.reframe-split_screen .split-preview-top img {
+        .phone-video-area.reframe-split_screen .split-preview-top img,
+        .phone-video-area.reframe-split_screen .split-preview-top video {
             position: absolute;
             width: 300%;
             height: 200%;
@@ -1914,7 +1915,8 @@
         }
 
         .phone-video-area.reframe-split_screen .split-preview-bottom iframe,
-        .phone-video-area.reframe-split_screen .split-preview-bottom img {
+        .phone-video-area.reframe-split_screen .split-preview-bottom img,
+        .phone-video-area.reframe-split_screen .split-preview-bottom video {
             position: absolute;
             width: 300%;
             height: 200%;
@@ -1957,27 +1959,31 @@
         }
 
         .phone-video-area.reframe-three_person .three-zone iframe,
-        .phone-video-area.reframe-three_person .three-zone img {
+        .phone-video-area.reframe-three_person .three-zone img,
+        .phone-video-area.reframe-three_person .three-zone video {
             width: 200%;
             height: 200%;
             object-fit: cover;
         }
 
         .phone-video-area.reframe-three_person .three-zone-main iframe,
-        .phone-video-area.reframe-three_person .three-zone-main img {
+        .phone-video-area.reframe-three_person .three-zone-main img,
+        .phone-video-area.reframe-three_person .three-zone-main video {
             position: absolute;
             left: 50%;
             transform: translateX(-50%);
         }
 
         .phone-video-area.reframe-three_person .three-zone-left iframe,
-        .phone-video-area.reframe-three_person .three-zone-left img {
+        .phone-video-area.reframe-three_person .three-zone-left img,
+        .phone-video-area.reframe-three_person .three-zone-left video {
             position: absolute;
             left: 0;
         }
 
         .phone-video-area.reframe-three_person .three-zone-right iframe,
-        .phone-video-area.reframe-three_person .three-zone-right img {
+        .phone-video-area.reframe-three_person .three-zone-right img,
+        .phone-video-area.reframe-three_person .three-zone-right video {
             position: absolute;
             right: 0;
         }
@@ -2004,7 +2010,8 @@
 
         .phone-video-area.reframe-gameplay .reframe-video,
         .phone-video-area.reframe-gameplay iframe,
-        .phone-video-area.reframe-gameplay img {
+        .phone-video-area.reframe-gameplay img,
+        .phone-video-area.reframe-gameplay > video {
             position: absolute;
             width: 177.78%;
             height: 100%;
@@ -2013,6 +2020,16 @@
             transform: translateX(-50%);
             transition: transform 0.3s ease;
             object-fit: cover;
+        }
+
+        /* Secondary video in facecam overlay */
+        .phone-video-area.reframe-gameplay .facecam-preview video,
+        .phone-video-area.reframe-gameplay .facecam-preview img,
+        .phone-video-area.reframe-gameplay .facecam-preview iframe {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 6px;
         }
 
         .phone-video-area.reframe-gameplay .facecam-preview {
@@ -2054,7 +2071,8 @@
         }
 
         .phone-video-area.reframe-broll_split .broll-main iframe,
-        .phone-video-area.reframe-broll_split .broll-main img {
+        .phone-video-area.reframe-broll_split .broll-main img,
+        .phone-video-area.reframe-broll_split .broll-main video {
             width: 100%;
             height: 150%;
             object-fit: cover;
@@ -2074,7 +2092,8 @@
         }
 
         .phone-video-area.reframe-broll_split .broll-speaker iframe,
-        .phone-video-area.reframe-broll_split .broll-speaker img {
+        .phone-video-area.reframe-broll_split .broll-speaker img,
+        .phone-video-area.reframe-broll_split .broll-speaker video {
             width: 300%;
             height: 200%;
             object-fit: cover;
@@ -2136,6 +2155,42 @@
             bottom: auto;
             top: 50%;
             transform: translateY(-50%);
+        }
+
+        /* Caption style preview hint */
+        .caption-style-hint {
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.55rem;
+            color: rgba(255, 255, 255, 0.6);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 8px;
+            border-radius: 3px;
+            white-space: nowrap;
+            z-index: 16;
+        }
+
+        .caption-source-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+
+        .caption-source-indicator.source-transcript {
+            background: #22c55e;
+        }
+
+        .caption-source-indicator.source-ai {
+            background: #f59e0b;
+        }
+
+        .caption-source-indicator.source-sample {
+            background: #6b7280;
         }
 
         .caption-text {
@@ -7372,9 +7427,21 @@
                 html += '<p class="caption-text caption-animated">';
 
                 // Get actual transcript words for preview (first 5-6 words)
+                // Prioritize the actual transcript over AI summary
                 var transcriptPreview = activeClip.transcript || activeClip.aiSummary || '';
                 var previewWords = transcriptPreview.split(' ').slice(0, 6);
                 var hasTranscript = previewWords.length > 2;
+
+                // Determine caption source for indicator
+                var captionSource = 'sample';
+                var captionSourceLabel = 'Style preview';
+                if (activeClip.transcript && activeClip.transcript.length > 10) {
+                    captionSource = 'transcript';
+                    captionSourceLabel = 'From transcript';
+                } else if (activeClip.aiSummary && activeClip.aiSummary.length > 10) {
+                    captionSource = 'ai';
+                    captionSourceLabel = 'AI summary';
+                }
 
                 if (settings.captionStyle === 'karaoke') {
                     if (hasTranscript) {
@@ -7419,6 +7486,12 @@
                     html += hasTranscript ? utils.escapeHtml(previewWords.join(' ') + '...') : 'The biggest mistake...';
                 }
                 html += '</p>';
+                html += '</div>';
+
+                // Add caption source indicator below phone-screen
+                html += '<div class="caption-style-hint">';
+                html += '<span class="caption-source-indicator source-' + captionSource + '"></span>';
+                html += captionSourceLabel + ' • Final captions from audio';
                 html += '</div>';
             }
 
@@ -9689,12 +9762,67 @@
                 if (!state.clipSettings[activeClip.id].audioMix) {
                     state.clipSettings[activeClip.id].audioMix = getDefaultSettings().audioMix;
                 }
+
+                // Toggle mute state
+                var audioMix = state.clipSettings[activeClip.id].audioMix;
+                var newMuteState = false;
                 if (track === 'primary') {
-                    state.clipSettings[activeClip.id].audioMix.primaryMuted = !state.clipSettings[activeClip.id].audioMix.primaryMuted;
+                    audioMix.primaryMuted = !audioMix.primaryMuted;
+                    newMuteState = audioMix.primaryMuted;
                 } else if (track === 'secondary') {
-                    state.clipSettings[activeClip.id].audioMix.secondaryMuted = !state.clipSettings[activeClip.id].audioMix.secondaryMuted;
+                    audioMix.secondaryMuted = !audioMix.secondaryMuted;
+                    newMuteState = audioMix.secondaryMuted;
                 }
-                render();
+
+                // Apply mute directly to video elements without full re-render
+                var videos = document.querySelectorAll('.phone-video-area video');
+                var appliedToVideo = false;
+                videos.forEach(function(video) {
+                    var videoTrack = video.getAttribute('data-track');
+                    if (videoTrack === track) {
+                        video.muted = newMuteState;
+                        video.volume = newMuteState ? 0 : (track === 'primary' ? (audioMix.primaryVolume || 100) : (audioMix.secondaryVolume || 0)) / 100;
+                        appliedToVideo = true;
+                    }
+                });
+
+                // Update mute button UI without full re-render
+                var muteBtn = document.querySelector('.audio-mix-mute-btn[onclick*="' + track + '"]');
+                if (muteBtn) {
+                    if (newMuteState) {
+                        muteBtn.classList.add('muted');
+                        muteBtn.innerHTML = '🔇 Muted';
+                    } else {
+                        muteBtn.classList.remove('muted');
+                        muteBtn.innerHTML = '🔊 Active';
+                    }
+                }
+
+                // Update volume slider state
+                var volumeSlider = document.querySelector('.audio-mix-slider' + (track === 'secondary' ? '.secondary' : ':not(.secondary)'));
+                if (volumeSlider) {
+                    volumeSlider.disabled = newMuteState;
+                }
+
+                // Update audio indicator badges
+                var indicator = document.querySelector('.audio-indicator:' + (track === 'primary' ? 'first-child' : 'last-child'));
+                if (indicator) {
+                    if (newMuteState) {
+                        indicator.classList.add('muted');
+                        indicator.innerHTML = (track === 'primary' ? '🎙️ Primary OFF' : '🎬 Secondary OFF');
+                    } else {
+                        indicator.classList.remove('muted');
+                        var vol = track === 'primary' ? (audioMix.primaryVolume || 100) : (audioMix.secondaryVolume || 0);
+                        indicator.innerHTML = (track === 'primary' ? '🎙️ Primary ' : '🎬 Secondary ') + vol + '%';
+                    }
+                }
+
+                // For YouTube iframes, we need to reload to change mute - only do this if no video element was found
+                var hasIframe = document.querySelector('.phone-video-area iframe[data-track="' + track + '"]');
+                if (hasIframe && !appliedToVideo) {
+                    // Full re-render needed for YouTube iframes to update mute parameter in URL
+                    render();
+                }
             },
 
             setAudioMixVolume: function(track, value) {
@@ -9708,25 +9836,44 @@
                 if (!state.clipSettings[activeClip.id].audioMix) {
                     state.clipSettings[activeClip.id].audioMix = getDefaultSettings().audioMix;
                 }
+                var audioMix = state.clipSettings[activeClip.id].audioMix;
+                var volumeValue = parseInt(value);
+
                 if (track === 'primary') {
-                    state.clipSettings[activeClip.id].audioMix.primaryVolume = parseInt(value);
+                    audioMix.primaryVolume = volumeValue;
                 } else if (track === 'secondary') {
-                    state.clipSettings[activeClip.id].audioMix.secondaryVolume = parseInt(value);
+                    audioMix.secondaryVolume = volumeValue;
                 }
-                // Update display without full re-render
-                var valueSpan = document.querySelector('.audio-mix-slider-row .audio-mix-value');
-                if (valueSpan) {
-                    // Find the right one based on slider
-                    var sliders = document.querySelectorAll('.audio-mix-slider');
-                    sliders.forEach(function(slider, index) {
-                        if (slider.value == value) {
-                            var row = slider.closest('.audio-mix-slider-row');
-                            if (row) {
-                                var valEl = row.querySelector('.audio-mix-value');
-                                if (valEl) valEl.textContent = value + '%';
-                            }
+
+                // Apply volume directly to video elements without re-render
+                var videos = document.querySelectorAll('.phone-video-area video');
+                videos.forEach(function(video) {
+                    var videoTrack = video.getAttribute('data-track');
+                    if (videoTrack === track) {
+                        var isMuted = track === 'primary' ? audioMix.primaryMuted : audioMix.secondaryMuted;
+                        if (!isMuted) {
+                            video.volume = volumeValue / 100;
                         }
-                    });
+                    }
+                });
+
+                // Update value display
+                var sliders = document.querySelectorAll('.audio-mix-slider');
+                sliders.forEach(function(slider) {
+                    if ((track === 'secondary' && slider.classList.contains('secondary')) ||
+                        (track === 'primary' && !slider.classList.contains('secondary'))) {
+                        var row = slider.closest('.audio-mix-slider-row');
+                        if (row) {
+                            var valEl = row.querySelector('.audio-mix-value');
+                            if (valEl) valEl.textContent = volumeValue + '%';
+                        }
+                    }
+                });
+
+                // Update audio indicator badges
+                var indicator = document.querySelector('.audio-indicator:' + (track === 'primary' ? 'first-child' : 'last-child'));
+                if (indicator && !indicator.classList.contains('muted')) {
+                    indicator.innerHTML = (track === 'primary' ? '🎙️ Primary ' : '🎬 Secondary ') + volumeValue + '%';
                 }
             },
 
