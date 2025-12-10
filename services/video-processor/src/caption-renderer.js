@@ -102,13 +102,9 @@ async function transcribeWithWhisper(jobId, audioFile) {
   }
 
   try {
-    const audioBuffer = fs.readFileSync(audioFile);
-
-    // Create a File object from the buffer
-    const file = new File([audioBuffer], 'audio.wav', { type: 'audio/wav' });
-
+    // Use fs.createReadStream for Node.js (not browser File API)
     const response = await openai.audio.transcriptions.create({
-      file: file,
+      file: fs.createReadStream(audioFile),
       model: 'whisper-1',
       response_format: 'verbose_json',
       timestamp_granularities: ['word']
