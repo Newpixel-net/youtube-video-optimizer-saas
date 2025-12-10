@@ -1253,6 +1253,236 @@
             transform: translate(-50%, -50%) scale(1.1);
         }
 
+        /* YouTube-specific preview button with label */
+        .video-preview-btn-youtube {
+            flex-direction: column;
+            gap: 2px;
+            width: 70px;
+            height: 70px;
+        }
+
+        .video-preview-btn-youtube .play-icon {
+            font-size: 1.2rem;
+        }
+
+        .video-preview-btn-youtube .yt-label {
+            font-size: 0.6rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* YouTube Preview Modal */
+        .youtube-preview-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .youtube-preview-content {
+            background: #1a1a2e;
+            border-radius: 1rem;
+            max-width: 900px;
+            width: 100%;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .youtube-preview-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            z-index: 10;
+            transition: background 0.2s;
+        }
+
+        .youtube-preview-close:hover {
+            background: rgba(236, 72, 153, 0.8);
+        }
+
+        .youtube-preview-header {
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .youtube-preview-header span:first-child {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .youtube-preview-note {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .youtube-preview-video {
+            aspect-ratio: 16/9;
+            background: #000;
+        }
+
+        .youtube-preview-video iframe {
+            width: 100%;
+            height: 100%;
+        }
+
+        .youtube-preview-footer {
+            padding: 1rem 1.5rem;
+            background: rgba(236, 72, 153, 0.1);
+            border-top: 1px solid rgba(236, 72, 153, 0.3);
+        }
+
+        .youtube-preview-footer p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Source Preview with Crop Guides */
+        .source-preview-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .source-preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .source-preview-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+        }
+
+        .source-preview-toggle {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 1rem;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .source-preview-toggle:hover {
+            background: rgba(236, 72, 153, 0.3);
+            border-color: rgba(236, 72, 153, 0.5);
+        }
+
+        .source-preview-video {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+
+        .source-preview-video img,
+        .source-preview-video video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Crop guide overlay on source */
+        .crop-guide-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .crop-guide-zone {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 56.25%; /* 9:16 ratio within 16:9 = 56.25% */
+            border: 3px solid rgba(236, 72, 153, 0.9);
+            background: transparent;
+            box-shadow:
+                inset 0 0 0 2px rgba(236, 72, 153, 0.3),
+                0 0 0 9999px rgba(0, 0, 0, 0.5);
+            transition: left 0.3s ease;
+        }
+
+        .crop-guide-zone.crop-left {
+            left: 0;
+        }
+
+        .crop-guide-zone.crop-center {
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .crop-guide-zone.crop-right {
+            left: auto;
+            right: 0;
+        }
+
+        .crop-guide-label {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(236, 72, 153, 0.9);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .crop-position-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .crop-pos-btn {
+            padding: 0.4rem 1rem;
+            font-size: 0.75rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .crop-pos-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .crop-pos-btn.active {
+            background: rgba(236, 72, 153, 0.3);
+            border-color: rgba(236, 72, 153, 0.6);
+            color: white;
+        }
+
         .phone-frame {
             background: #000;
             border-radius: 2.5rem;
@@ -5368,6 +5598,7 @@
                 activeClipIndex: 0,
                 batchMode: false,
                 showVideoPreview: false,
+                showSourcePreview: true, // Show source with crop guides by default
                 showAdvancedOptions: false
             },
 
@@ -6066,6 +6297,45 @@
             html += '</div>';
             html += '</div>';
 
+            // Source Video Preview with Crop Guides (shows 16:9 original with 9:16 crop overlay)
+            var sourceVideoId = state.videoInput.videoData?.videoId || '';
+            var sourceIsUpload = state.videoInput.isUpload || false;
+            var sourceUploadUrl = state.videoInput.uploadedFile?.url || state.videoInput.videoData?.uploadedVideoUrl || '';
+            var sourceThumbnail = activeClip.thumbnail || (sourceVideoId ? 'https://img.youtube.com/vi/' + sourceVideoId + '/maxresdefault.jpg' : '');
+            var sourceCropPos = settings.cropPosition || 'center';
+
+            html += '<div class="source-preview-container">';
+            html += '<div class="source-preview-header">';
+            html += '<span class="source-preview-label">📺 Source Video (16:9) → 9:16 Crop</span>';
+            html += '</div>';
+            html += '<div class="source-preview-video">';
+
+            // Show video or thumbnail based on source type
+            if (sourceIsUpload && sourceUploadUrl) {
+                html += '<video src="' + sourceUploadUrl + '#t=' + (activeClip.startTime || 0) + '" muted playsinline></video>';
+            } else if (sourceThumbnail) {
+                html += '<img src="' + sourceThumbnail + '" alt="Source video" onerror="this.src=\'https://img.youtube.com/vi/' + sourceVideoId + '/hqdefault.jpg\'">';
+            }
+
+            // Crop guide overlay showing what will be cropped
+            html += '<div class="crop-guide-overlay">';
+            html += '<div class="crop-guide-zone crop-' + sourceCropPos + '">';
+            html += '<div class="crop-guide-label">9:16 Output Area</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>'; // source-preview-video
+
+            // Crop position buttons
+            html += '<div class="crop-position-buttons">';
+            html += '<button class="crop-pos-btn' + (sourceCropPos === 'left' ? ' active' : '') + '" onclick="app.setCropPosition(\'left\')">◀ Left</button>';
+            html += '<button class="crop-pos-btn' + (sourceCropPos === 'center' ? ' active' : '') + '" onclick="app.setCropPosition(\'center\')">● Center</button>';
+            html += '<button class="crop-pos-btn' + (sourceCropPos === 'right' ? ' active' : '') + '" onclick="app.setCropPosition(\'right\')">Right ▶</button>';
+            html += '</div>';
+            html += '</div>'; // source-preview-container
+
+            // Output Preview Label
+            html += '<div style="text-align: center; margin-bottom: 0.5rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">📱 Output Preview (9:16)</div>';
+
             html += '<div class="phone-frame">';
             html += '<div class="phone-screen">';
 
@@ -6089,27 +6359,38 @@
                 // All reframe modes need CSS transforms - avoid inline position/size styles
                 var needsTransform = ['auto_center', 'split_screen', 'three_person', 'broll_split', 'gameplay'].indexOf(mode) !== -1;
 
-                // For uploaded videos, use HTML5 video element
+                // For uploaded videos, use HTML5 video element with proper cropping
                 if (isUpload && uploadedVideoUrl && state.customization.showVideoPreview) {
                     if (needsTransform) {
-                        return '<video class="reframe-video" src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted></video>';
+                        return '<video class="reframe-video" src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted playsinline></video>';
                     } else {
-                        return '<video src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:inherit"></video>';
+                        return '<video src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted playsinline style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:inherit"></video>';
                     }
                 }
 
-                // For YouTube videos, use embed
-                if (videoId && !isUpload && state.customization.showVideoPreview) {
+                // For YouTube videos - IMPORTANT: Use thumbnail for crop preview since iframes can't be CSS-cropped
+                // YouTube embeds maintain their own aspect ratio and ignore CSS transforms
+                // So we show the thumbnail cropped to demonstrate the 9:16 output, with a play button to watch
+                if (videoId && !isUpload) {
+                    // Always use thumbnail for the crop preview (CSS transforms work on images)
+                    var ytThumbnail = 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg';
+                    var ytThumbnailFallback = 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg';
+                    var imgErrorHandler = 'onerror="this.onerror=null; this.src=\'' + ytThumbnailFallback + '\';"';
+
                     if (needsTransform) {
-                        return '<iframe class="reframe-video" src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+                        // Show cropped thumbnail preview + watch button for actual playback
+                        return '<img class="reframe-video" src="' + ytThumbnail + '" alt="Preview" ' + imgErrorHandler + '>' +
+                               '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.openYouTubePreview(\'' + videoId + '\', ' + embedStart + ')" title="Watch video at this timestamp">' +
+                               '<span class="play-icon">▶</span><span class="yt-label">Preview</span></button>';
                     } else {
-                        return '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + embedStart + '&autoplay=0&modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:inherit"></iframe>';
+                        return '<img src="' + ytThumbnail + '" alt="Preview" ' + imgErrorHandler + ' style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">' +
+                               '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.openYouTubePreview(\'' + videoId + '\', ' + embedStart + ')" title="Watch video at this timestamp">' +
+                               '<span class="play-icon">▶</span><span class="yt-label">Preview</span></button>';
                     }
                 }
 
-                // Show thumbnail with play button
-                // Add onerror handler to show placeholder if thumbnail fails to load
-                var imgErrorHandler = 'onerror="this.onerror=null; this.src=\'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22320%22 height=%22180%22%3E%3Crect fill=%22%231a1a2e%22 width=%22320%22 height=%22180%22/%3E%3Ctext x=%22160%22 y=%2290%22 fill=%22%23888%22 font-family=%22sans-serif%22 font-size=%2214%22 text-anchor=%22middle%22%3EClick ▶ to Preview%3C/text%3E%3C/svg%3E\';"';
+                // Fallback: Show thumbnail with play button
+                var imgErrorHandler = 'onerror="this.onerror=null; this.src=\'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22320%22 height=%22180%22%3E%3Crect fill=%22%231a1a2e%22 width=%22320%22 height=%22180%22/%3E%3Ctext x=%22160%22 y=%2290%22 fill=%22%23888%22 font-family=%22sans-serif%22 font-size=%2214%22 text-anchor=%22middle%22%3ENo Preview Available%3C/text%3E%3C/svg%3E\';"';
                 if (needsTransform) {
                     return '<img class="reframe-video" src="' + clipThumbnail + '" alt="Preview" ' + imgErrorHandler + '>' +
                            '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
@@ -7733,6 +8014,41 @@
 
             toggleVideoPreview: function() {
                 state.customization.showVideoPreview = !state.customization.showVideoPreview;
+                render();
+            },
+
+            // Open YouTube video preview in a modal at specific timestamp
+            openYouTubePreview: function(videoId, startTime) {
+                var modalHtml = '<div class="youtube-preview-modal" onclick="app.closeYouTubePreview(event)">';
+                modalHtml += '<div class="youtube-preview-content" onclick="event.stopPropagation()">';
+                modalHtml += '<button class="youtube-preview-close" onclick="app.closeYouTubePreview()">×</button>';
+                modalHtml += '<div class="youtube-preview-header">';
+                modalHtml += '<span>🎬 Video Preview</span>';
+                modalHtml += '<span class="youtube-preview-note">This shows the original 16:9 video. The final export will be cropped to 9:16.</span>';
+                modalHtml += '</div>';
+                modalHtml += '<div class="youtube-preview-video">';
+                modalHtml += '<iframe src="https://www.youtube.com/embed/' + videoId + '?start=' + Math.floor(startTime) + '&autoplay=1&modestbranding=1&rel=0" ';
+                modalHtml += 'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+                modalHtml += '</div>';
+                modalHtml += '<div class="youtube-preview-footer">';
+                modalHtml += '<p>💡 The phone preview shows how your video will look after 9:16 crop</p>';
+                modalHtml += '</div>';
+                modalHtml += '</div>';
+                modalHtml += '</div>';
+
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            },
+
+            closeYouTubePreview: function(event) {
+                var modal = document.querySelector('.youtube-preview-modal');
+                if (modal) {
+                    modal.remove();
+                }
+            },
+
+            // Toggle source video view with crop guides
+            toggleSourcePreview: function() {
+                state.customization.showSourcePreview = !state.customization.showSourcePreview;
                 render();
             },
 
