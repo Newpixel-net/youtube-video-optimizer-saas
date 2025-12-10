@@ -427,8 +427,8 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
       console.log(`[${jobId}] DOWNLOAD: Proceeding to fallback methods...`);
     }
   } else {
-    console.log(`[${jobId}] DOWNLOAD: Video Download API key not configured - skipping primary method`);
-    console.log(`[${jobId}] DOWNLOAD: Consider configuring VIDEO_DOWNLOAD_API_KEY for 99%+ success rate`);
+    console.log(`[${jobId}] DOWNLOAD: Video Download API key not configured - using free fallback methods`);
+    console.log(`[${jobId}] DOWNLOAD: For best results, use browser extension which bypasses all restrictions`);
   }
 
   // FALLBACK 1: Try yt-dlp (free but may be blocked by YouTube)
@@ -451,10 +451,8 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
     console.warn(`[${jobId}] DOWNLOAD: youtubei.js FAILED: ${ytjsError.message}`);
   }
 
-  // FALLBACK 3: Try Video Download API again if not tried (shouldn't happen but just in case)
-  if (!VIDEO_DOWNLOAD_API_KEY) {
-    console.log(`[${jobId}] DOWNLOAD: RECOMMENDATION: Configure VIDEO_DOWNLOAD_API_KEY for 99%+ reliability`);
-  }
+  // Note: Free methods may be unreliable due to YouTube's bot detection
+  console.log(`[${jobId}] DOWNLOAD: Trying additional free methods (may be unreliable)...`);
 
   // Try Invidious (open-source YouTube frontend)
   console.log(`[${jobId}] DOWNLOAD: [METHOD 4/7] Trying Invidious API...`);
@@ -523,19 +521,13 @@ async function downloadVideoSegment({ jobId, videoId, startTime, endTime, workDi
   console.error(`[${jobId}] DOWNLOAD: API Key configured: ${!!VIDEO_DOWNLOAD_API_KEY}`);
   console.error(`[${jobId}] ========================================`);
 
-  // Provide appropriate error message based on configuration
-  if (!VIDEO_DOWNLOAD_API_KEY) {
-    throw new Error(
-      'Video download failed. YouTube has strengthened bot detection. ' +
-      'Solution: Configure VIDEO_DOWNLOAD_API_KEY in your environment for reliable downloads (99%+ success rate). ' +
-      'Get your API key at: https://video-download-api.com/'
-    );
-  } else {
-    throw new Error(
-      'Video download failed despite using paid API service. ' +
-      'This may be a temporary issue. Please try again in a few minutes, or upload the video directly.'
-    );
-  }
+  // Provide appropriate error message - recommend browser extension
+  throw new Error(
+    'YouTube download failed due to bot detection. ' +
+    'For reliable YouTube export, please use the Video Wizard browser extension ' +
+    'which captures videos directly from your browser (bypasses all restrictions). ' +
+    'Alternative: Upload the video file directly from your device.'
+  );
 }
 
 /**

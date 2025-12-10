@@ -229,9 +229,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * This captures video info and stream URLs to pass to the wizard
  *
  * ENHANCED: If no streams are available, automatically opens YouTube tab to capture them
+ * NOW SUPPORTS: Segment capture with startTime/endTime parameters
  */
 async function handleCaptureForWizard(message, sendResponse) {
-  const { videoId, youtubeUrl, autoCapture = true } = message;
+  const { videoId, youtubeUrl, autoCapture = true, startTime, endTime } = message;
 
   if (!videoId || !isValidVideoId(videoId)) {
     sendResponse({ success: false, error: 'Invalid video ID' });
@@ -248,11 +249,16 @@ async function handleCaptureForWizard(message, sendResponse) {
 
     // NEW APPROACH: Use MediaRecorder to capture video as it plays
     // This bypasses ALL URL restrictions because we capture from the video element directly
-    console.log(`[YVO Background] Using MediaRecorder capture (bypasses all URL restrictions)`);
+    // Now supports segment capture with startTime/endTime from Video Wizard
+    const segmentInfo = (startTime !== undefined && endTime !== undefined)
+      ? `segment ${startTime}s-${endTime}s`
+      : 'auto (up to 5 min)';
+    console.log(`[YVO Background] Using MediaRecorder capture (bypasses all URL restrictions) - ${segmentInfo}`);
 
     let uploadResult;
     try {
-      uploadResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl);
+      // Pass segment times to capture function (uses closure from outer handleCaptureForWizard)
+      uploadResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
       console.log(`[YVO Background] MediaRecorder capture returned:`, uploadResult.success, uploadResult.error || 'no error');
     } catch (captureError) {
       console.error(`[YVO Background] MediaRecorder capture threw exception:`, captureError);
@@ -261,6 +267,7 @@ async function handleCaptureForWizard(message, sendResponse) {
 
     if (uploadResult.success) {
       console.log(`[YVO Background] MediaRecorder capture and upload successful!`);
+      const capturedSegment = uploadResult.capturedSegment || {};
       return {
         success: true,
         videoInfo: videoInfo,
@@ -270,9 +277,14 @@ async function handleCaptureForWizard(message, sendResponse) {
           mimeType: uploadResult.mimeType || 'video/webm',
           capturedAt: Date.now(),
           source: 'mediarecorder_capture',
-          uploadedToStorage: true
+          uploadedToStorage: true,
+          // Include captured segment info for server processing
+          capturedSegment: capturedSegment,
+          captureStartTime: capturedSegment.startTime,
+          captureEndTime: capturedSegment.endTime,
+          captureDuration: capturedSegment.duration
         },
-        message: 'Video captured from playback and uploaded to server.'
+        message: `Video segment (${capturedSegment.startTime || 0}s-${capturedSegment.endTime || '?'}s) captured and uploaded.`
       };
     } else {
       // MediaRecorder failed - return stream URLs as last resort (will likely fail on server)
@@ -1136,9 +1148,18 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
 /**
  * Capture and upload video using MediaRecorder
  * This is the main entry point for the capture process
+ *
+ * @param {string} videoId - YouTube video ID
+ * @param {string} youtubeUrl - Full YouTube URL
+ * @param {number} [requestedStartTime] - Optional segment start time in seconds
+ * @param {number} [requestedEndTime] - Optional segment end time in seconds
  */
-async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl) {
-  console.log(`[YVO Background] Starting MediaRecorder capture for ${videoId}`);
+async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedStartTime, requestedEndTime) {
+  const hasSegmentRequest = requestedStartTime !== undefined && requestedEndTime !== undefined;
+  const segmentInfo = hasSegmentRequest
+    ? `segment ${requestedStartTime}s-${requestedEndTime}s`
+    : 'auto-detect';
+  console.log(`[YVO Background] Starting MediaRecorder capture for ${videoId} (${segmentInfo})`);
 
   try {
     // Find or open YouTube tab with this video
@@ -1174,11 +1195,34 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl) {
       videoInfo = { success: true, videoInfo: { duration: 60 } };
     }
 
-    const videoDuration = videoInfo?.videoInfo?.duration || 60;
+    const videoDuration = videoInfo?.videoInfo?.duration || 300;
 
-    // For now, capture first 60 seconds or full video if shorter
-    const captureStart = 0;
-    const captureEnd = Math.min(60, videoDuration);
+    // Determine capture range:
+    // - If segment times provided: use those (from Video Wizard clip selection)
+    // - Otherwise: capture from start, up to 5 minutes max
+    const MAX_CAPTURE_DURATION = 300; // 5 minutes max to keep capture time reasonable
+
+    let captureStart, captureEnd;
+
+    if (hasSegmentRequest) {
+      // Use requested segment times from Video Wizard
+      captureStart = Math.max(0, requestedStartTime);
+      captureEnd = Math.min(requestedEndTime, videoDuration);
+
+      // Validate segment duration
+      const segmentDuration = captureEnd - captureStart;
+      if (segmentDuration > MAX_CAPTURE_DURATION) {
+        console.warn(`[YVO Background] Requested segment (${segmentDuration}s) exceeds max (${MAX_CAPTURE_DURATION}s), limiting...`);
+        captureEnd = captureStart + MAX_CAPTURE_DURATION;
+      }
+
+      console.log(`[YVO Background] Using requested segment: ${captureStart}s to ${captureEnd}s (${captureEnd - captureStart}s duration)`);
+    } else {
+      // No segment specified - capture from start, up to max duration
+      captureStart = 0;
+      captureEnd = Math.min(MAX_CAPTURE_DURATION, videoDuration);
+      console.log(`[YVO Background] No segment specified, capturing first ${captureEnd}s of video`);
+    }
 
     console.log(`[YVO Background] Injecting MediaRecorder capture (${captureStart}s to ${captureEnd}s)...`);
 
@@ -1200,17 +1244,22 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl) {
       throw new Error(captureResult.error || 'Capture failed');
     }
 
-    console.log(`[YVO Background] Capture successful: ${(captureResult.videoSize / 1024 / 1024).toFixed(2)}MB`);
+    const capturedDuration = captureEnd - captureStart;
+    console.log(`[YVO Background] Capture successful: ${(captureResult.videoSize / 1024 / 1024).toFixed(2)}MB (${capturedDuration}s)`);
 
-    // Upload to server
+    // Upload to server with segment metadata
     const videoBlob = base64ToBlob(captureResult.videoData, captureResult.mimeType);
 
     const formData = new FormData();
     formData.append('video', videoBlob, `captured_${videoId}.webm`);
     formData.append('videoId', videoId);
     formData.append('type', 'video');
+    // Include segment info so server knows what was captured
+    formData.append('captureStart', String(captureStart));
+    formData.append('captureEnd', String(captureEnd));
+    formData.append('capturedDuration', String(capturedDuration));
 
-    console.log(`[YVO Background] Uploading captured video to server...`);
+    console.log(`[YVO Background] Uploading captured video to server (${captureStart}s-${captureEnd}s)...`);
 
     const uploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
       method: 'POST',
@@ -1229,7 +1278,13 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl) {
       success: true,
       videoStorageUrl: uploadResult.url,
       mimeType: captureResult.mimeType,
-      captureMethod: 'mediarecorder'
+      captureMethod: 'mediarecorder',
+      // Include segment info in response for server processing
+      capturedSegment: {
+        startTime: captureStart,
+        endTime: captureEnd,
+        duration: capturedDuration
+      }
     };
 
   } catch (error) {
