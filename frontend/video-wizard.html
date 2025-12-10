@@ -3411,6 +3411,141 @@
             gap: 0.5rem;
         }
 
+        /* ==========================================
+           VISUAL EFFECTS PREVIEW
+           Live preview of effects in phone frame
+           ========================================== */
+
+        /* Vignette effect - dark edges */
+        .phone-screen.effect-vignette::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            box-shadow: inset 0 0 80px 30px rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+            z-index: 12;
+            border-radius: inherit;
+        }
+
+        /* Auto Zoom effect - subtle pulse animation */
+        .phone-screen.effect-zoom .phone-video-area {
+            animation: effectZoomPulse 4s ease-in-out infinite;
+        }
+
+        @keyframes effectZoomPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+
+        /* Color Grading effect - enhanced saturation */
+        .phone-screen.effect-colorgrade .phone-video-area {
+            filter: saturate(1.2) contrast(1.08) brightness(1.02);
+        }
+
+        .phone-screen.effect-colorgrade .phone-video-area img,
+        .phone-screen.effect-colorgrade .phone-video-area video {
+            filter: saturate(1.15) contrast(1.05);
+        }
+
+        /* Combined effects stacking */
+        .phone-screen.effect-vignette.effect-colorgrade .phone-video-area {
+            filter: saturate(1.2) contrast(1.08) brightness(1.02);
+        }
+
+        /* Transition preview animations */
+        .transition-btn.preview-active {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .transition-btn.preview-active::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(236, 72, 153, 0.3);
+            animation: transitionPreviewFlash 0.5s ease-out;
+        }
+
+        @keyframes transitionPreviewFlash {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* Fade transition preview */
+        .phone-screen.transition-fade-in .phone-video-area {
+            animation: previewFadeIn 1s ease-out;
+        }
+
+        @keyframes previewFadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        /* Zoom transition preview */
+        .phone-screen.transition-zoom-in .phone-video-area {
+            animation: previewZoomIn 0.8s ease-out;
+        }
+
+        @keyframes previewZoomIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Slide transition preview */
+        .phone-screen.transition-slide-in .phone-video-area {
+            animation: previewSlideIn 0.6s ease-out;
+        }
+
+        @keyframes previewSlideIn {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(0); }
+        }
+
+        /* Glitch transition preview */
+        .phone-screen.transition-glitch-in .phone-video-area {
+            animation: previewGlitch 0.5s ease-out;
+        }
+
+        @keyframes previewGlitch {
+            0%, 20% {
+                transform: translateX(-2px);
+                filter: hue-rotate(90deg);
+            }
+            40% {
+                transform: translateX(2px);
+                filter: hue-rotate(-90deg);
+            }
+            60% {
+                transform: translateX(-1px);
+                filter: hue-rotate(45deg);
+            }
+            80%, 100% {
+                transform: translateX(0);
+                filter: hue-rotate(0deg);
+            }
+        }
+
+        /* Effects indicator badge */
+        .effects-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 4px;
+            z-index: 20;
+        }
+
+        .effects-badge .effect-indicator {
+            background: rgba(0, 0, 0, 0.7);
+            color: #ec4899;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.55rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            border: 1px solid rgba(236, 72, 153, 0.4);
+        }
+
         /* AI Modal Styles */
         .ai-modal-overlay {
             position: fixed;
@@ -6465,13 +6600,16 @@
             html += '<div style="text-align: center; margin-bottom: 0.5rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">📱 Output Preview (9:16)</div>';
 
             html += '<div class="phone-frame">';
-            html += '<div class="phone-screen">';
 
-            // Generate reframe-specific HTML with CSS transform preview
+            // Build phone-screen classes with visual effects
             var reframeMode = settings.reframeMode || 'auto_center';
             var cropPos = settings.cropPosition || 'center';
-            var cropClass = 'crop-' + cropPos;
-            var videoAreaClasses = 'phone-video-area reframe-' + reframeMode + ' ' + cropClass;
+            var phoneScreenClasses = 'phone-screen';
+            if (settings.vignette) phoneScreenClasses += ' effect-vignette';
+            if (settings.autoZoom) phoneScreenClasses += ' effect-zoom';
+            if (settings.colorGrade) phoneScreenClasses += ' effect-colorgrade';
+
+            html += '<div class="' + phoneScreenClasses + '">';
 
             // Video preview setup
             var embedStart = activeClip.startTime || 0;
@@ -6479,23 +6617,17 @@
             var isUpload = state.videoInput.isUpload || false;
             var uploadedVideoUrl = state.videoInput.uploadedFile?.url || state.videoInput.videoData?.uploadedVideoUrl || '';
 
-            // Use placeholder thumbnail if missing
-            var clipThumbnail = activeClip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"%3E%3Crect fill="%231a1a2e" width="320" height="180"/%3E%3Ctext x="160" y="90" fill="%23666" font-family="sans-serif" font-size="14" text-anchor="middle"%3ENo Preview%3C/text%3E%3C/svg%3E';
+            // Get thumbnail URLs
+            var ytThumbnail = videoId ? 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg' : '';
+            var ytThumbnailFallback = videoId ? 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg' : '';
+            var imgErrorHandler = 'onerror="this.onerror=null; this.src=\'' + ytThumbnailFallback + '\';"';
 
-            // Simple video content generator - uses object-fit:cover for cropping
-            var getVideoContent = function() {
-                // For uploaded videos
+            // Helper function to generate media element
+            var getMediaElement = function() {
                 if (isUpload && uploadedVideoUrl) {
                     return '<video class="preview-media" src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted playsinline></video>';
                 }
-
-                // For YouTube videos
                 if (videoId) {
-                    var ytThumbnail = 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg';
-                    var ytThumbnailFallback = 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg';
-                    var imgErrorHandler = 'onerror="this.onerror=null; this.src=\'' + ytThumbnailFallback + '\';"';
-
-                    // If playing in frame, show YouTube iframe
                     if (state.customization.playingInFrame) {
                         var embedUrl = 'https://www.youtube.com/embed/' + videoId +
                             '?autoplay=1&start=' + Math.floor(embedStart) +
@@ -6504,48 +6636,124 @@
                                '<iframe src="' + embedUrl + '" ' +
                                'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
                                'allowfullscreen></iframe>' +
-                               '</div>' +
-                               '<button class="video-stop-btn" onclick="app.stopInFrameVideo()" title="Stop video">✕</button>';
+                               '</div>';
                     }
-
-                    // Default: Show thumbnail with play button
-                    return '<img class="preview-media" src="' + ytThumbnail + '" alt="Video Preview" ' + imgErrorHandler + '>' +
-                           '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.playInFrameVideo()" title="Play video">' +
-                           '<span class="play-icon">▶</span><span class="yt-label">Play</span></button>';
+                    return '<img class="preview-media" src="' + ytThumbnail + '" alt="Video Preview" ' + imgErrorHandler + '>';
                 }
-
-                // Fallback: Show placeholder
-                return '<div class="preview-media" style="background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%); display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem;">No video loaded</div>';
+                return '<div class="preview-media" style="background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%); display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem;">No video</div>';
             };
 
-            var videoContent = getVideoContent();
+            var mediaElement = getMediaElement();
 
-            // Simple phone preview - just show the video with crop position
-            html += '<div class="phone-video-area crop-' + cropPos + '">';
-            html += videoContent;
-            html += '</div>';
+            // Build phone-video-area with reframe mode class
+            var videoAreaClasses = 'phone-video-area reframe-' + reframeMode + ' crop-' + cropPos;
+            html += '<div class="' + videoAreaClasses + '">';
 
-            // Caption preview with style-specific animations
+            // Generate reframe-specific content
+            if (reframeMode === 'split_screen') {
+                // Split screen: Two speakers stacked vertically
+                html += '<div class="split-preview-top">' + mediaElement + '<span class="split-label">Speaker 1</span></div>';
+                html += '<div class="split-preview-bottom">' + mediaElement + '<span class="split-label">Speaker 2</span></div>';
+            } else if (reframeMode === 'three_person') {
+                // Three person: Main top, two bottom
+                html += '<div class="three-zone three-zone-main">' + mediaElement + '<span class="zone-label">Main</span></div>';
+                html += '<div class="three-zone three-zone-left">' + mediaElement + '<span class="zone-label">L</span></div>';
+                html += '<div class="three-zone three-zone-right">' + mediaElement + '<span class="zone-label">R</span></div>';
+            } else if (reframeMode === 'gameplay') {
+                // Gameplay: Full screen with facecam indicator
+                html += mediaElement;
+                html += '<div class="facecam-preview"><span>Facecam</span></div>';
+            } else if (reframeMode === 'broll_split') {
+                // B-Roll: Main content with Ken Burns + B-roll area
+                html += '<div class="broll-main">' + mediaElement + '<span class="broll-label">B-Roll</span></div>';
+                html += '<div class="broll-speaker">' + mediaElement + '<span class="broll-label">Speaker</span></div>';
+            } else {
+                // Auto-center: Simple crop with play button
+                html += mediaElement;
+                if (videoId && !state.customization.playingInFrame) {
+                    html += '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.playInFrameVideo()" title="Play video">';
+                    html += '<span class="play-icon">▶</span><span class="yt-label">Play</span></button>';
+                } else if (state.customization.playingInFrame) {
+                    html += '<button class="video-stop-btn" onclick="app.stopInFrameVideo()" title="Stop video">✕</button>';
+                }
+            }
+
+            html += '</div>'; // phone-video-area
+
+            // Reframe mode badge
+            var reframeModeNames = {
+                'auto_center': 'Center Crop',
+                'split_screen': 'Split Screen',
+                'three_person': 'Three Person',
+                'gameplay': 'Gameplay',
+                'broll_split': 'B-Roll'
+            };
+            html += '<div class="reframe-mode-badge">' + (reframeModeNames[reframeMode] || 'Crop') + '</div>';
+
+            // Effects indicator badges
+            var activeEffects = [];
+            if (settings.autoZoom) activeEffects.push('Zoom');
+            if (settings.vignette) activeEffects.push('Vignette');
+            if (settings.colorGrade) activeEffects.push('Color');
+            if (activeEffects.length > 0) {
+                html += '<div class="effects-badge">';
+                activeEffects.forEach(function(effect) {
+                    html += '<span class="effect-indicator">' + effect + '</span>';
+                });
+                html += '</div>';
+            }
+
+            // Caption preview with actual transcript or styled fallback
             if (settings.captionStyle !== 'none') {
                 html += '<div class="phone-caption-preview caption-' + settings.captionStyle + '">';
                 html += '<p class="caption-text caption-animated">';
+
+                // Get actual transcript words for preview (first 5-6 words)
+                var transcriptPreview = activeClip.transcript || activeClip.aiSummary || '';
+                var previewWords = transcriptPreview.split(' ').slice(0, 6);
+                var hasTranscript = previewWords.length > 2;
+
                 if (settings.captionStyle === 'karaoke') {
-                    html += '<span class="word w1">The</span> <span class="word w2 highlight-anim">biggest</span> <span class="word w3">mistake</span>';
+                    if (hasTranscript) {
+                        previewWords.forEach(function(word, i) {
+                            var highlightClass = i === 1 ? ' highlight-anim' : '';
+                            html += '<span class="word w' + (i+1) + highlightClass + '">' + utils.escapeHtml(word) + '</span> ';
+                        });
+                    } else {
+                        html += '<span class="word w1">The</span> <span class="word w2 highlight-anim">biggest</span> <span class="word w3">mistake</span>';
+                    }
                 } else if (settings.captionStyle === 'beasty') {
-                    html += '<span class="beasty-word">BIGGEST</span> <span class="beasty-word">MISTAKE</span>';
+                    if (hasTranscript) {
+                        previewWords.slice(0, 3).forEach(function(word) {
+                            html += '<span class="beasty-word">' + utils.escapeHtml(word.toUpperCase()) + '</span> ';
+                        });
+                    } else {
+                        html += '<span class="beasty-word">BIGGEST</span> <span class="beasty-word">MISTAKE</span>';
+                    }
                 } else if (settings.captionStyle === 'deepdiver') {
-                    html += 'the biggest mistake entrepreneurs make';
+                    html += hasTranscript ? utils.escapeHtml(previewWords.join(' ').toLowerCase()) : 'the biggest mistake entrepreneurs make';
                 } else if (settings.captionStyle === 'podp') {
-                    html += '<span class="fade-word w1">The</span> <span class="fade-word w2">biggest</span> <span class="fade-word w3">mistake...</span>';
+                    if (hasTranscript) {
+                        previewWords.slice(0, 3).forEach(function(word, i) {
+                            html += '<span class="fade-word w' + (i+1) + '">' + utils.escapeHtml(word) + '</span> ';
+                        });
+                    } else {
+                        html += '<span class="fade-word w1">The</span> <span class="fade-word w2">biggest</span> <span class="fade-word w3">mistake...</span>';
+                    }
                 } else if (settings.captionStyle === 'hormozi') {
-                    html += 'The biggest <span class="hormozi-highlight">MISTAKE</span>...';
+                    if (hasTranscript && previewWords.length >= 3) {
+                        html += utils.escapeHtml(previewWords.slice(0, 2).join(' ')) + ' <span class="hormozi-highlight">' + utils.escapeHtml(previewWords[2].toUpperCase()) + '</span>...';
+                    } else {
+                        html += 'The biggest <span class="hormozi-highlight">MISTAKE</span>...';
+                    }
                 } else if (settings.captionStyle === 'ali') {
-                    html += '<span class="glow-word">The biggest mistake...</span>';
+                    html += '<span class="glow-word">' + (hasTranscript ? utils.escapeHtml(previewWords.join(' ')) : 'The biggest mistake...') + '</span>';
                 } else if (settings.captionStyle === 'custom') {
                     var customStyle = settings.customCaptionStyle || {};
-                    html += '<span style="color:' + (customStyle.color || '#ffffff') + ';font-size:' + (customStyle.fontSize || 1) + 'rem">Your custom caption</span>';
+                    var captionText = hasTranscript ? utils.escapeHtml(previewWords.join(' ')) : 'Your custom caption';
+                    html += '<span style="color:' + (customStyle.color || '#ffffff') + ';font-size:' + (customStyle.fontSize || 1) + 'rem">' + captionText + '</span>';
                 } else {
-                    html += 'The biggest mistake...';
+                    html += hasTranscript ? utils.escapeHtml(previewWords.join(' ') + '...') : 'The biggest mistake...';
                 }
                 html += '</p>';
                 html += '</div>';
@@ -6857,14 +7065,37 @@
             html += '</div>';
             html += '</div>';
 
-            // Waveform visualization
+            // Waveform visualization - generate speech-like pattern based on clip ID for consistency
             html += '<div class="timeline-waveform">';
             html += '<div class="waveform-bars">';
-            for (var i = 0; i < 50; i++) {
-                var barHeight = 20 + Math.random() * 60;
-                var barPos = (i / 50) * 100;
+
+            // Seeded random based on clip ID for consistent waveform per clip
+            var clipSeed = activeClip.id.split('').reduce(function(a, c) { return a + c.charCodeAt(0); }, 0);
+            var seededRandom = function(i) {
+                var x = Math.sin(clipSeed + i * 9999) * 10000;
+                return x - Math.floor(x);
+            };
+
+            // Generate speech-like waveform pattern with phrases and pauses
+            var numBars = 60;
+            for (var i = 0; i < numBars; i++) {
+                // Create speech pattern with clusters (phrases) and gaps (pauses)
+                var phraseProgress = (i % 8) / 8;
+                var inPhrase = (i % 12) < 8; // 8 bars speech, 4 bars pause
+                var baseHeight = inPhrase ? 35 + seededRandom(i) * 50 : 10 + seededRandom(i) * 15;
+
+                // Add natural speech variation - words get louder in middle
+                var phraseEnvelope = Math.sin(phraseProgress * Math.PI);
+                var height = inPhrase ? baseHeight * (0.5 + phraseEnvelope * 0.5) : baseHeight;
+
+                // Occasional loud peaks (emphasis)
+                if (seededRandom(i + 100) > 0.85 && inPhrase) {
+                    height = Math.min(95, height * 1.4);
+                }
+
+                var barPos = (i / numBars) * 100;
                 var isActive = barPos >= startPercent && barPos <= (startPercent + widthPercent);
-                html += '<div class="waveform-bar' + (isActive ? ' active' : '') + '" style="height:' + barHeight + '%"></div>';
+                html += '<div class="waveform-bar' + (isActive ? ' active' : '') + '" style="height:' + height.toFixed(1) + '%"></div>';
             }
             html += '</div>';
             html += '</div>';
@@ -8290,7 +8521,7 @@
                 utils.showToast('Track selected', 'success');
             },
 
-            // Transitions
+            // Transitions with preview animation
             setTransition: function(type, transitionId) {
                 var selectedClips = state.clips.filter(function(c) {
                     return state.selectedClipIds.indexOf(c.id) !== -1;
@@ -8304,6 +8535,24 @@
                 } else {
                     state.clipSettings[activeClip.id].outroTransition = transitionId;
                 }
+
+                // Trigger transition preview animation on phone screen
+                if (transitionId !== 'none') {
+                    var phoneScreen = document.querySelector('.phone-screen');
+                    if (phoneScreen) {
+                        // Remove any existing transition classes
+                        phoneScreen.classList.remove('transition-fade-in', 'transition-zoom-in', 'transition-slide-in', 'transition-glitch-in');
+                        // Force reflow to restart animation
+                        void phoneScreen.offsetWidth;
+                        // Add the transition preview class
+                        phoneScreen.classList.add('transition-' + transitionId + '-in');
+                        // Remove after animation completes
+                        setTimeout(function() {
+                            phoneScreen.classList.remove('transition-' + transitionId + '-in');
+                        }, 1000);
+                    }
+                }
+
                 render();
             },
 

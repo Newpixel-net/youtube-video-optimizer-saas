@@ -18114,17 +18114,18 @@ exports.wizardProcessClip = functions
         colorGrade: clipSettings.colorGrade || false,
         enhanceAudio: clipSettings.enhanceAudio !== false,
         removeFiller: clipSettings.removeFiller || false,
+        voiceVolume: clipSettings.voiceVolume || 100,
         addMusic: clipSettings.addMusic || false,
         musicVolume: clipSettings.musicVolume || 30,
         selectedTrack: clipSettings.selectedTrack || null
       },
 
-      // Output specifications
+      // Output specifications - use frame rate from settings
       output: {
         format: 'mp4',
         aspectRatio: '9:16',
         resolution: outputQuality === '1080p' ? { width: 1080, height: 1920 } : { width: 720, height: 1280 },
-        fps: 30,
+        fps: parseInt(clipSettings.frameRate) || 30,
         codec: 'h264'
       },
 
