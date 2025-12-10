@@ -520,13 +520,26 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   // Generate captions if requested
   let captionFile = null;
   if (settings.captionStyle && settings.captionStyle !== 'none') {
-    console.log(`[${jobId}] Generating captions with style: ${settings.captionStyle}`);
+    // Map frontend caption style IDs to backend style keys
+    // Frontend uses different names than backend caption-renderer.js expects
+    const captionStyleMap = {
+      'karaoke': 'karaoke',   // Matches
+      'beasty': 'bold',       // Frontend "MrBeast" → Backend "bold"
+      'deepdiver': 'minimal', // Frontend "Minimal" → Backend "minimal"
+      'podp': 'podcast',      // Frontend "Podcast" → Backend "podcast"
+      'hormozi': 'hormozi',   // Matches
+      'ali': 'ali',           // Matches
+      'custom': 'custom'      // Matches
+    };
+    const backendStyle = captionStyleMap[settings.captionStyle] || settings.captionStyle;
+
+    console.log(`[${jobId}] Generating captions with style: ${settings.captionStyle} → ${backendStyle}`);
     try {
       captionFile = await generateCaptions({
         jobId,
         videoFile: inputFile,
         workDir,
-        captionStyle: settings.captionStyle,
+        captionStyle: backendStyle,
         customStyle: settings.customCaptionStyle
       });
     } catch (captionError) {
