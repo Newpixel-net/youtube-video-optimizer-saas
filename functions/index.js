@@ -18117,7 +18117,26 @@ exports.wizardProcessClip = functions
         voiceVolume: clipSettings.voiceVolume || 100,
         addMusic: clipSettings.addMusic || false,
         musicVolume: clipSettings.musicVolume || 30,
-        selectedTrack: clipSettings.selectedTrack || null
+        selectedTrack: clipSettings.selectedTrack || null,
+
+        // Multi-source split screen settings
+        secondarySource: clipSettings.secondarySource && clipSettings.secondarySource.enabled ? {
+          enabled: true,
+          type: clipSettings.secondarySource.type || null,
+          uploadedUrl: clipSettings.secondarySource.uploadedUrl || null,
+          youtubeUrl: clipSettings.secondarySource.youtubeUrl || null,
+          youtubeVideoId: clipSettings.secondarySource.youtubeVideoId || null,
+          position: clipSettings.secondarySource.position || 'bottom',
+          timeOffset: clipSettings.secondarySource.timeOffset || 0
+        } : null,
+
+        // Audio mixing settings (for multi-source)
+        audioMix: clipSettings.audioMix ? {
+          primaryVolume: clipSettings.audioMix.primaryVolume ?? 100,
+          secondaryVolume: clipSettings.audioMix.secondaryVolume ?? 0,
+          primaryMuted: clipSettings.audioMix.primaryMuted ?? false,
+          secondaryMuted: clipSettings.audioMix.secondaryMuted ?? true
+        } : null
       },
 
       // Output specifications - use frame rate from settings
