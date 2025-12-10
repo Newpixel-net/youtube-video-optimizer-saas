@@ -1941,6 +1941,23 @@
             z-index: 5;
         }
 
+        /* Multi-source split screen - different videos need centered positioning */
+        .phone-video-area.reframe-split_screen.multi-source .split-preview-top iframe,
+        .phone-video-area.reframe-split_screen.multi-source .split-preview-top img,
+        .phone-video-area.reframe-split_screen.multi-source .split-preview-top video,
+        .phone-video-area.reframe-split_screen.multi-source .split-preview-bottom iframe,
+        .phone-video-area.reframe-split_screen.multi-source .split-preview-bottom img,
+        .phone-video-area.reframe-split_screen.multi-source .split-preview-bottom video {
+            position: absolute;
+            width: 200%;
+            height: 100%;
+            top: 0;
+            left: 50%;
+            right: auto;
+            transform: translateX(-50%);
+            object-fit: cover;
+        }
+
         /* Three-person mode */
         .phone-video-area.reframe-three_person {
             display: grid;
@@ -2000,6 +2017,18 @@
             font-size: 0.55rem;
             font-weight: 600;
             z-index: 5;
+        }
+
+        /* Multi-source three person mode - center all zones */
+        .phone-video-area.reframe-three_person.multi-source .three-zone iframe,
+        .phone-video-area.reframe-three_person.multi-source .three-zone img,
+        .phone-video-area.reframe-three_person.multi-source .three-zone video {
+            position: absolute;
+            width: 200%;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            object-fit: cover;
         }
 
         /* Gameplay mode */
@@ -2114,6 +2143,22 @@
             font-size: 0.55rem;
             font-weight: 600;
             z-index: 5;
+        }
+
+        /* Multi-source broll mode - proper video positioning */
+        .phone-video-area.reframe-broll_split.multi-source .broll-main iframe,
+        .phone-video-area.reframe-broll_split.multi-source .broll-main img,
+        .phone-video-area.reframe-broll_split.multi-source .broll-main video,
+        .phone-video-area.reframe-broll_split.multi-source .broll-speaker iframe,
+        .phone-video-area.reframe-broll_split.multi-source .broll-speaker img,
+        .phone-video-area.reframe-broll_split.multi-source .broll-speaker video {
+            width: 200%;
+            height: 100%;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            object-fit: cover;
+            animation: none;
         }
 
         /* Reframe mode indicator badge */
@@ -7294,6 +7339,10 @@
 
             // Build phone-video-area with reframe mode class
             var videoAreaClasses = 'phone-video-area reframe-' + reframeMode + ' crop-' + cropPos;
+            // Add multi-source class when secondary video is present (for different CSS positioning)
+            if (hasSecondaryVideo && secondaryMediaElement) {
+                videoAreaClasses += ' multi-source';
+            }
             html += '<div class="' + videoAreaClasses + '">';
 
             // Generate reframe-specific content
@@ -7433,14 +7482,25 @@
                 var hasTranscript = previewWords.length > 2;
 
                 // Determine caption source for indicator
+                // Backend sets transcript = actualTranscript OR aiSummary (fallback)
+                // If transcript === aiSummary, then no real YouTube captions were available
                 var captionSource = 'sample';
                 var captionSourceLabel = 'Style preview';
-                if (activeClip.transcript && activeClip.transcript.length > 10) {
+                var hasRealTranscript = activeClip.transcript &&
+                    activeClip.transcript.length > 10 &&
+                    activeClip.aiSummary &&
+                    activeClip.transcript !== activeClip.aiSummary;
+
+                if (hasRealTranscript) {
                     captionSource = 'transcript';
-                    captionSourceLabel = 'From transcript';
+                    captionSourceLabel = 'YouTube captions';
+                } else if (activeClip.transcript && activeClip.transcript.length > 10) {
+                    // transcript exists but equals aiSummary - it's AI generated
+                    captionSource = 'ai';
+                    captionSourceLabel = 'AI description (not word-for-word)';
                 } else if (activeClip.aiSummary && activeClip.aiSummary.length > 10) {
                     captionSource = 'ai';
-                    captionSourceLabel = 'AI summary';
+                    captionSourceLabel = 'AI description (not word-for-word)';
                 }
 
                 if (settings.captionStyle === 'karaoke') {
