@@ -10804,8 +10804,51 @@
                 var info = state.downloadModal;
                 var clipId = info.clipId;
                 var quality = info.quality || '720p';
+                var clipSettings = state.clipSettings[clipId] || {};
+
+                // Pre-export validation for secondary source
+                if (clipSettings.secondarySource && clipSettings.secondarySource.enabled) {
+                    var sec = clipSettings.secondarySource;
+
+                    // Check if source is properly configured
+                    if (!sec.uploadedUrl && !sec.youtubeVideoId) {
+                        utils.showToast('Secondary source is enabled but no video is configured. Please add a video or disable secondary source.', 'error');
+                        return;
+                    }
+
+                    // Warn about YouTube secondary source reliability
+                    if (sec.type === 'youtube' && sec.youtubeVideoId) {
+                        var confirmed = confirm(
+                            '⚠️ Secondary Source Warning\n\n' +
+                            'Using a YouTube URL as secondary source may fail during export due to YouTube download restrictions.\n\n' +
+                            'For more reliable results, consider uploading the video file directly instead.\n\n' +
+                            'Do you want to continue anyway?'
+                        );
+                        if (!confirmed) {
+                            return;
+                        }
+                    }
+
+                    // Check if upload is still in progress
+                    if (sec.uploading) {
+                        utils.showToast('Please wait for the secondary video to finish uploading.', 'error');
+                        return;
+                    }
+
+                    console.log('Secondary source validated:', sec.type, sec.uploadedUrl ? 'has URL' : sec.youtubeVideoId);
+                }
 
                 utils.showToast('Starting video processing...', 'info');
+
+                // Log settings being sent for debugging
+                console.log('=== EXPORT SETTINGS DEBUG ===');
+                console.log('Clip ID:', clipId);
+                console.log('Quality:', quality);
+                console.log('Reframe Mode:', clipSettings.reframeMode);
+                console.log('Caption Style:', clipSettings.captionStyle);
+                console.log('Secondary Source:', JSON.stringify(clipSettings.secondarySource, null, 2));
+                console.log('Audio Mix:', JSON.stringify(clipSettings.audioMix, null, 2));
+                console.log('=============================');
 
                 try {
                     var wizardProcessClip = functions.httpsCallable('wizardProcessClip');
@@ -10813,7 +10856,7 @@
                         projectId: state.projectId,
                         clipId: clipId,
                         quality: quality,
-                        settings: state.clipSettings[clipId] || {}
+                        settings: clipSettings
                     });
 
                     if (result.data.success) {

@@ -982,8 +982,38 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
   const targetWidth = output.resolution.width;
   const targetHeight = output.resolution.height;
 
+  // Generate captions from PRIMARY audio (the main speaker)
+  let captionFile = null;
+  if (settings.captionStyle && settings.captionStyle !== 'none') {
+    // Map frontend caption style IDs to backend style keys
+    const captionStyleMap = {
+      'karaoke': 'karaoke',
+      'beasty': 'bold',
+      'deepdiver': 'minimal',
+      'podp': 'podcast',
+      'hormozi': 'hormozi',
+      'ali': 'ali',
+      'custom': 'custom'
+    };
+    const backendStyle = captionStyleMap[settings.captionStyle] || settings.captionStyle;
+
+    console.log(`[${jobId}] Multi-source: Generating captions with style: ${settings.captionStyle} → ${backendStyle}`);
+    try {
+      captionFile = await generateCaptions({
+        jobId,
+        videoFile: primaryFile,  // Use primary video for audio transcription
+        workDir,
+        captionStyle: backendStyle,
+        customStyle: settings.customCaptionStyle
+      });
+      console.log(`[${jobId}] Multi-source: Captions generated: ${captionFile}`);
+    } catch (captionError) {
+      console.error(`[${jobId}] Multi-source: Caption generation failed (continuing without captions):`, captionError.message);
+    }
+  }
+
   // Build complex filter for multi-source
-  const complexFilter = buildMultiSourceFilter({
+  let complexFilter = buildMultiSourceFilter({
     primaryWidth: primaryInfo.width,
     primaryHeight: primaryInfo.height,
     secondaryWidth: secondaryInfo.width,
@@ -994,6 +1024,17 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
     position: settings.secondarySource?.position || 'bottom',
     audioMix: settings.audioMix
   });
+
+  // Add subtitle filter if captions were generated
+  if (captionFile && fs.existsSync(captionFile)) {
+    // Escape special characters in path for FFmpeg
+    const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
+    // In complex filter, we need to apply ass to the output video
+    // Replace [outv] with intermediate, apply subtitles, then output as [outv]
+    complexFilter = complexFilter.replace('[outv]', '[outv_nosub]');
+    complexFilter += `;[outv_nosub]ass='${escapedPath}'[outv]`;
+    console.log(`[${jobId}] Multi-source: Adding captions from: ${captionFile}`);
+  }
 
   // Handle time offset for secondary source
   const timeOffset = settings.secondarySource?.timeOffset || 0;
