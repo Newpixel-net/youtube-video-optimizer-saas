@@ -357,34 +357,38 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           });
         } catch (ytError) {
           console.error(`[${jobId}] Failed to download secondary YouTube video: ${ytError.message}`);
-          // Fall back to single-source processing
-          console.log(`[${jobId}] Falling back to single-source processing...`);
-          secondaryFile = null;
+          // DON'T silently fall back - throw error so user knows
+          throw new Error(`Could not download secondary YouTube video. Please try uploading the video file directly instead of using YouTube URL. Error: ${ytError.message}`);
         }
+      } else {
+        // Unknown secondary source type
+        console.error(`[${jobId}] Unknown secondary source type: ${secondarySource.type}`);
+        throw new Error(`Invalid secondary source configuration. Type: ${secondarySource.type}, has upload URL: ${!!secondarySource.uploadedUrl}, has YouTube ID: ${!!secondarySource.youtubeVideoId}`);
       }
 
-      if (secondaryFile && fs.existsSync(secondaryFile)) {
-        // Process with multi-source
-        await updateProgress(jobRef, 45, 'Combining video sources...');
-        processedFile = await processMultiSourceVideo({
-          jobId,
-          primaryFile: downloadedFile,
-          secondaryFile,
-          settings: job.settings,
-          output: job.output,
-          workDir
-        });
-      } else {
-        // Fall back to single-source processing
-        console.log(`[${jobId}] Secondary source not available, using single-source mode`);
-        processedFile = await processVideoFile({
-          jobId,
-          inputFile: downloadedFile,
-          settings: job.settings,
-          output: job.output,
-          workDir
-        });
+      // Verify secondary file exists
+      if (!secondaryFile || !fs.existsSync(secondaryFile)) {
+        throw new Error(`Secondary video file not found after download. Please try again or use a different video.`);
       }
+
+      // Verify file has content
+      const secondarySize = fs.statSync(secondaryFile).size;
+      if (secondarySize < 1000) {
+        throw new Error(`Secondary video file is too small (${secondarySize} bytes). The download may have failed. Please try again.`);
+      }
+
+      console.log(`[${jobId}] Secondary video verified: ${secondarySize} bytes`);
+
+      // Process with multi-source
+      await updateProgress(jobRef, 45, 'Combining video sources...');
+      processedFile = await processMultiSourceVideo({
+        jobId,
+        primaryFile: downloadedFile,
+        secondaryFile,
+        settings: job.settings,
+        output: job.output,
+        workDir
+      });
     } else {
       // Step 2: Process the video (crop to 9:16, apply effects)
       processedFile = await processVideoFile({
