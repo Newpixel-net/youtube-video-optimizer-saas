@@ -2745,6 +2745,466 @@
             color: white;
         }
 
+        /* Secondary Source Panel */
+        .secondary-source-panel {
+            margin-top: 0.75rem;
+            padding: 1rem;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+        }
+
+        .secondary-source-toggle {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .source-toggle-btn {
+            flex: 1;
+            padding: 0.6rem 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .source-toggle-btn:hover {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: rgba(139, 92, 246, 0.4);
+        }
+
+        .source-toggle-btn.active {
+            background: rgba(139, 92, 246, 0.25);
+            border-color: rgba(139, 92, 246, 0.6);
+            color: white;
+        }
+
+        .secondary-source-input {
+            margin-bottom: 1rem;
+        }
+
+        .source-input-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .source-input-tab {
+            flex: 1;
+            padding: 0.5rem;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .source-input-tab:hover {
+            border-color: rgba(139, 92, 246, 0.4);
+        }
+
+        .source-input-tab.active {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: rgba(139, 92, 246, 0.5);
+            color: white;
+        }
+
+        .upload-dropzone {
+            border: 2px dashed rgba(139, 92, 246, 0.4);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .upload-dropzone:hover {
+            border-color: rgba(139, 92, 246, 0.7);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .upload-dropzone.dragging {
+            border-color: #8b5cf6;
+            background: rgba(139, 92, 246, 0.2);
+        }
+
+        .upload-dropzone-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-dropzone-text {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .upload-dropzone-hint {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 0.25rem;
+        }
+
+        .youtube-url-input-container {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .youtube-url-input {
+            flex: 1;
+            padding: 0.6rem 0.75rem;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.8rem;
+        }
+
+        .youtube-url-input::placeholder {
+            color: rgba(255, 255, 255, 0.35);
+        }
+
+        .youtube-url-input:focus {
+            outline: none;
+            border-color: rgba(139, 92, 246, 0.6);
+        }
+
+        .youtube-load-btn {
+            padding: 0.6rem 1rem;
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            border: none;
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .youtube-load-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+        }
+
+        .youtube-load-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .secondary-source-preview {
+            display: flex;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.5rem;
+            align-items: center;
+        }
+
+        .source-preview-thumb {
+            width: 80px;
+            height: 45px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 0.375rem;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .source-preview-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .source-preview-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .source-preview-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: white;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .source-preview-meta {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .source-preview-status {
+            color: #22c55e;
+        }
+
+        .source-preview-remove {
+            width: 28px;
+            height: 28px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 0.375rem;
+            color: #ef4444;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .source-preview-remove:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        .secondary-source-options {
+            margin-top: 1rem;
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .source-option-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+
+        .source-option-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .source-option-select {
+            padding: 0.4rem 0.6rem;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 0.75rem;
+            min-width: 120px;
+        }
+
+        .source-offset-control {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .source-offset-btn {
+            width: 24px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.25rem;
+            color: white;
+            font-size: 0.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .source-offset-btn:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: rgba(139, 92, 246, 0.4);
+        }
+
+        .source-offset-value {
+            min-width: 45px;
+            text-align: center;
+            font-size: 0.75rem;
+            color: white;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Audio Mix Panel */
+        .audio-mix-panel {
+            margin-top: 0.75rem;
+            padding: 1rem;
+            background: rgba(34, 197, 94, 0.08);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 0.75rem;
+        }
+
+        .audio-mix-track {
+            margin-bottom: 1rem;
+        }
+
+        .audio-mix-track:last-child {
+            margin-bottom: 0;
+        }
+
+        .audio-mix-track-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .audio-mix-track-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .audio-mix-track-name .track-icon {
+            font-size: 1rem;
+        }
+
+        .audio-mix-mute-btn {
+            padding: 0.35rem 0.6rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .audio-mix-mute-btn:hover {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .audio-mix-mute-btn.muted {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.5);
+            color: #ef4444;
+        }
+
+        .audio-mix-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .audio-mix-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .audio-mix-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #22c55e;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(34, 197, 94, 0.4);
+        }
+
+        .audio-mix-slider.secondary::-webkit-slider-thumb {
+            background: #8b5cf6;
+            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);
+        }
+
+        .audio-mix-value {
+            min-width: 40px;
+            text-align: right;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .audio-mix-presets {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .audio-mix-preset {
+            padding: 0.4rem 0.6rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .audio-mix-preset:hover {
+            background: rgba(34, 197, 94, 0.15);
+            border-color: rgba(34, 197, 94, 0.4);
+            color: white;
+        }
+
+        .audio-mix-preset.active {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: rgba(34, 197, 94, 0.5);
+            color: #22c55e;
+        }
+
+        /* Secondary source in phone preview */
+        .phone-secondary-source-indicator {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            padding: 0.25rem 0.5rem;
+            background: rgba(139, 92, 246, 0.9);
+            border-radius: 0.25rem;
+            font-size: 0.6rem;
+            color: white;
+            z-index: 10;
+        }
+
+        .phone-audio-indicators {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 10;
+        }
+
+        .audio-indicator {
+            padding: 0.2rem 0.4rem;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 0.25rem;
+            font-size: 0.55rem;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .audio-indicator.muted {
+            color: #ef4444;
+            text-decoration: line-through;
+        }
+
         /* Timeline Trimmer */
         .timeline-container {
             padding: 1.25rem;
@@ -7010,6 +7470,192 @@
             html += '</div>';
             html += '</div>';
 
+            // Secondary Source Panel (only show for split-related modes)
+            var showSecondarySource = ['split_screen', 'three_person', 'gameplay', 'broll_split'].indexOf(settings.reframeMode) !== -1;
+            if (showSecondarySource) {
+                var secondarySource = settings.secondarySource || { enabled: false, inputTab: 'upload' };
+                var audioMix = settings.audioMix || { primaryVolume: 100, secondaryVolume: 0, primaryMuted: false, secondaryMuted: true };
+
+                html += '<div class="customization-panel">';
+                html += '<div class="panel-header">';
+                html += '<span class="panel-icon">🎬</span>';
+                html += '<span class="panel-title">SECONDARY SOURCE</span>';
+                html += '</div>';
+
+                html += '<div class="secondary-source-panel">';
+
+                // Toggle: None vs Add second video
+                html += '<div class="secondary-source-toggle">';
+                html += '<button class="source-toggle-btn' + (!secondarySource.enabled ? ' active' : '') + '" onclick="app.toggleSecondarySource(false)">';
+                html += '<span>○</span> Split primary video';
+                html += '</button>';
+                html += '<button class="source-toggle-btn' + (secondarySource.enabled ? ' active' : '') + '" onclick="app.toggleSecondarySource(true)">';
+                html += '<span>●</span> Add second video';
+                html += '</button>';
+                html += '</div>';
+
+                if (secondarySource.enabled) {
+                    // Check if source is already set
+                    var hasSource = secondarySource.type && (secondarySource.fileName || secondarySource.youtubeVideoId);
+
+                    if (!hasSource) {
+                        // Input tabs
+                        html += '<div class="secondary-source-input">';
+                        html += '<div class="source-input-tabs">';
+                        html += '<button class="source-input-tab' + (secondarySource.inputTab === 'upload' ? ' active' : '') + '" onclick="app.setSecondaryInputTab(\'upload\')">';
+                        html += '📤 Upload File';
+                        html += '</button>';
+                        html += '<button class="source-input-tab' + (secondarySource.inputTab === 'youtube' ? ' active' : '') + '" onclick="app.setSecondaryInputTab(\'youtube\')">';
+                        html += '🔗 YouTube URL';
+                        html += '</button>';
+                        html += '</div>';
+
+                        if (secondarySource.inputTab === 'upload') {
+                            // Upload dropzone
+                            html += '<div class="upload-dropzone" id="secondary-upload-dropzone" onclick="document.getElementById(\'secondary-file-input\').click()">';
+                            html += '<div class="upload-dropzone-icon">📁</div>';
+                            html += '<div class="upload-dropzone-text">Click or drag video file here</div>';
+                            html += '<div class="upload-dropzone-hint">MP4, MOV, WebM up to 500MB</div>';
+                            html += '</div>';
+                            html += '<input type="file" id="secondary-file-input" accept="video/*" style="display:none" onchange="app.handleSecondaryFileSelect(this.files)">';
+                        } else {
+                            // YouTube URL input
+                            html += '<div class="youtube-url-input-container">';
+                            html += '<input type="text" class="youtube-url-input" id="secondary-youtube-url" placeholder="https://www.youtube.com/watch?v=..." onkeypress="if(event.key===\'Enter\')app.loadSecondaryYouTube()">';
+                            html += '<button class="youtube-load-btn" onclick="app.loadSecondaryYouTube()">Load</button>';
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    } else {
+                        // Show source preview
+                        html += '<div class="secondary-source-preview">';
+                        html += '<div class="source-preview-thumb">';
+                        if (secondarySource.type === 'youtube' && secondarySource.youtubeThumbnail) {
+                            html += '<img src="' + secondarySource.youtubeThumbnail + '" alt="thumbnail">';
+                        } else {
+                            html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:1.5rem">📹</div>';
+                        }
+                        html += '</div>';
+                        html += '<div class="source-preview-info">';
+                        var sourceName = secondarySource.type === 'youtube' ? (secondarySource.youtubeTitle || 'YouTube Video') : (secondarySource.fileName || 'Uploaded Video');
+                        html += '<div class="source-preview-name">' + sourceName + '</div>';
+                        html += '<div class="source-preview-meta">';
+                        if (secondarySource.type === 'upload' && secondarySource.fileSize) {
+                            html += '<span>' + utils.formatFileSize(secondarySource.fileSize) + '</span>';
+                        }
+                        // Show upload progress or ready status
+                        if (secondarySource.uploading) {
+                            html += '<span class="source-preview-status" style="color:#f59e0b">⏳ Uploading ' + (secondarySource.uploadProgress || 0) + '%</span>';
+                        } else if (secondarySource.uploadedUrl || secondarySource.youtubeVideoId) {
+                            html += '<span class="source-preview-status">✓ Ready</span>';
+                        } else {
+                            html += '<span class="source-preview-status" style="color:#f59e0b">⏳ Processing...</span>';
+                        }
+                        html += '</div>';
+                        html += '</div>';
+                        html += '<button class="source-preview-remove" onclick="app.removeSecondarySource()" title="Remove"' + (secondarySource.uploading ? ' disabled style="opacity:0.5"' : '') + '>×</button>';
+                        html += '</div>';
+
+                        // Position and sync options
+                        html += '<div class="secondary-source-options">';
+
+                        // Position selection
+                        html += '<div class="source-option-row">';
+                        html += '<span class="source-option-label">📍 Position</span>';
+                        html += '<select class="source-option-select" onchange="app.setSecondaryPosition(this.value)">';
+                        var positionOptions = [];
+                        if (settings.reframeMode === 'split_screen') {
+                            positionOptions = [
+                                { value: 'top', label: 'Top half' },
+                                { value: 'bottom', label: 'Bottom half' }
+                            ];
+                        } else if (settings.reframeMode === 'three_person') {
+                            positionOptions = [
+                                { value: 'top', label: 'Top (main)' },
+                                { value: 'bottom-left', label: 'Bottom left' },
+                                { value: 'bottom-right', label: 'Bottom right' }
+                            ];
+                        } else if (settings.reframeMode === 'gameplay') {
+                            positionOptions = [
+                                { value: 'facecam', label: 'Facecam area' },
+                                { value: 'game', label: 'Game area' }
+                            ];
+                        } else if (settings.reframeMode === 'broll_split') {
+                            positionOptions = [
+                                { value: 'main', label: 'Main speaker' },
+                                { value: 'broll', label: 'B-Roll area' }
+                            ];
+                        }
+                        positionOptions.forEach(function(opt) {
+                            var selected = secondarySource.position === opt.value ? ' selected' : '';
+                            html += '<option value="' + opt.value + '"' + selected + '>' + opt.label + '</option>';
+                        });
+                        html += '</select>';
+                        html += '</div>';
+
+                        // Time sync offset
+                        html += '<div class="source-option-row">';
+                        html += '<span class="source-option-label">⏱️ Sync offset</span>';
+                        html += '<div class="source-offset-control">';
+                        html += '<button class="source-offset-btn" onclick="app.adjustSecondaryOffset(-0.5)">−</button>';
+                        var offsetSign = secondarySource.timeOffset >= 0 ? '+' : '';
+                        html += '<span class="source-offset-value">' + offsetSign + secondarySource.timeOffset.toFixed(1) + 's</span>';
+                        html += '<button class="source-offset-btn" onclick="app.adjustSecondaryOffset(0.5)">+</button>';
+                        html += '</div>';
+                        html += '</div>';
+
+                        html += '</div>';
+                    }
+
+                    // Audio Mix Panel (only when source is set)
+                    if (hasSource) {
+                        html += '<div class="audio-mix-panel">';
+                        html += '<div style="font-size:0.75rem;color:rgba(255,255,255,0.5);margin-bottom:0.75rem;font-weight:500">🔊 AUDIO MIX</div>';
+
+                        // Primary audio track
+                        html += '<div class="audio-mix-track">';
+                        html += '<div class="audio-mix-track-header">';
+                        html += '<div class="audio-mix-track-name"><span class="track-icon">🎙️</span> Primary Video</div>';
+                        html += '<button class="audio-mix-mute-btn' + (audioMix.primaryMuted ? ' muted' : '') + '" onclick="app.toggleAudioMute(\'primary\')">';
+                        html += (audioMix.primaryMuted ? '🔇 Muted' : '🔊 Active');
+                        html += '</button>';
+                        html += '</div>';
+                        html += '<div class="audio-mix-slider-row">';
+                        html += '<input type="range" class="audio-mix-slider" min="0" max="100" value="' + audioMix.primaryVolume + '" oninput="app.setAudioMixVolume(\'primary\', this.value)"' + (audioMix.primaryMuted ? ' disabled' : '') + '>';
+                        html += '<span class="audio-mix-value">' + audioMix.primaryVolume + '%</span>';
+                        html += '</div>';
+                        html += '</div>';
+
+                        // Secondary audio track
+                        html += '<div class="audio-mix-track">';
+                        html += '<div class="audio-mix-track-header">';
+                        html += '<div class="audio-mix-track-name"><span class="track-icon">🎬</span> Secondary Video</div>';
+                        html += '<button class="audio-mix-mute-btn' + (audioMix.secondaryMuted ? ' muted' : '') + '" onclick="app.toggleAudioMute(\'secondary\')">';
+                        html += (audioMix.secondaryMuted ? '🔇 Muted' : '🔊 Active');
+                        html += '</button>';
+                        html += '</div>';
+                        html += '<div class="audio-mix-slider-row">';
+                        html += '<input type="range" class="audio-mix-slider secondary" min="0" max="100" value="' + audioMix.secondaryVolume + '" oninput="app.setAudioMixVolume(\'secondary\', this.value)"' + (audioMix.secondaryMuted ? ' disabled' : '') + '>';
+                        html += '<span class="audio-mix-value">' + audioMix.secondaryVolume + '%</span>';
+                        html += '</div>';
+                        html += '</div>';
+
+                        // Quick presets
+                        html += '<div class="audio-mix-presets">';
+                        html += '<button class="audio-mix-preset" onclick="app.applyAudioMixPreset(\'primary\')">Primary Only</button>';
+                        html += '<button class="audio-mix-preset" onclick="app.applyAudioMixPreset(\'secondary\')">Secondary Only</button>';
+                        html += '<button class="audio-mix-preset" onclick="app.applyAudioMixPreset(\'mix\')">50/50 Mix</button>';
+                        html += '<button class="audio-mix-preset" onclick="app.applyAudioMixPreset(\'background\')">Primary + BG</button>';
+                        html += '</div>';
+
+                        html += '</div>';
+                    }
+                }
+
+                html += '</div>'; // secondary-source-panel
+                html += '</div>'; // customization-panel
+            }
+
             // Advanced Reframe Options Panel
             html += '<div class="customization-panel advanced-options-panel">';
             html += '<div class="panel-header">';
@@ -7479,7 +8125,32 @@
                 // Visual effects
                 autoZoom: false,
                 vignette: false,
-                colorGrade: false
+                colorGrade: false,
+
+                // Secondary source settings (multi-source split screen)
+                secondarySource: {
+                    enabled: false,
+                    inputTab: 'upload',       // 'upload' or 'youtube'
+                    type: null,               // 'upload' or 'youtube' when file/url is set
+                    file: null,               // File object for uploads
+                    fileName: null,           // File name for display
+                    fileSize: null,           // File size for display
+                    uploadedUrl: null,        // Storage URL after upload
+                    youtubeUrl: null,         // YouTube URL
+                    youtubeVideoId: null,     // Extracted video ID
+                    youtubeThumbnail: null,   // YouTube thumbnail for preview
+                    youtubeTitle: null,       // YouTube video title
+                    position: 'bottom',       // 'top', 'bottom', 'left', 'right', 'corner'
+                    timeOffset: 0             // Sync offset in seconds (-10 to +10)
+                },
+
+                // Audio mixing (when secondary source is enabled)
+                audioMix: {
+                    primaryVolume: 100,       // 0-100
+                    secondaryVolume: 0,       // 0-100
+                    primaryMuted: false,
+                    secondaryMuted: true      // Default: secondary audio muted
+                }
             };
         }
 
@@ -8562,6 +9233,336 @@
                     state.clipSettings[activeClip.id] = getDefaultSettings();
                 }
                 state.clipSettings[activeClip.id].frameRate = fps;
+                render();
+            },
+
+            // =============================================
+            // SECONDARY SOURCE (Multi-source split screen)
+            // =============================================
+
+            toggleSecondarySource: function(enabled) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].secondarySource) {
+                    state.clipSettings[activeClip.id].secondarySource = getDefaultSettings().secondarySource;
+                }
+                state.clipSettings[activeClip.id].secondarySource.enabled = enabled;
+                render();
+            },
+
+            setSecondaryInputTab: function(tab) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].secondarySource) {
+                    state.clipSettings[activeClip.id].secondarySource = getDefaultSettings().secondarySource;
+                }
+                state.clipSettings[activeClip.id].secondarySource.inputTab = tab;
+                render();
+            },
+
+            handleSecondaryFileSelect: async function(files) {
+                if (!files || files.length === 0) return;
+                var file = files[0];
+
+                // Validate file type
+                if (!file.type.startsWith('video/')) {
+                    utils.showToast('Please select a video file', 'error');
+                    return;
+                }
+
+                // Validate file size (500MB max)
+                var maxSize = 500 * 1024 * 1024;
+                if (file.size > maxSize) {
+                    utils.showToast('File too large. Maximum size is 500MB', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].secondarySource) {
+                    state.clipSettings[activeClip.id].secondarySource = getDefaultSettings().secondarySource;
+                }
+
+                // Store file info immediately for UI
+                state.clipSettings[activeClip.id].secondarySource.type = 'upload';
+                state.clipSettings[activeClip.id].secondarySource.file = file;
+                state.clipSettings[activeClip.id].secondarySource.fileName = file.name;
+                state.clipSettings[activeClip.id].secondarySource.fileSize = file.size;
+                state.clipSettings[activeClip.id].secondarySource.uploading = true;
+                state.clipSettings[activeClip.id].secondarySource.uploadProgress = 0;
+
+                // Set default position based on reframe mode
+                var reframeMode = state.clipSettings[activeClip.id].reframeMode;
+                if (reframeMode === 'split_screen') {
+                    state.clipSettings[activeClip.id].secondarySource.position = 'bottom';
+                } else if (reframeMode === 'three_person') {
+                    state.clipSettings[activeClip.id].secondarySource.position = 'bottom-left';
+                } else if (reframeMode === 'gameplay') {
+                    state.clipSettings[activeClip.id].secondarySource.position = 'facecam';
+                } else if (reframeMode === 'broll_split') {
+                    state.clipSettings[activeClip.id].secondarySource.position = 'broll';
+                }
+
+                render();
+                utils.showToast('Uploading secondary video...', 'info');
+
+                // Upload to Firebase Storage
+                try {
+                    var timestamp = Date.now();
+                    var safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                    var storagePath = 'secondary_videos/' + state.user.uid + '/' + activeClip.id + '_' + timestamp + '_' + safeName;
+                    var storageRef = storage.ref(storagePath);
+
+                    var uploadTask = storageRef.put(file);
+
+                    uploadTask.on('state_changed',
+                        function(snapshot) {
+                            // Progress updates
+                            var progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                            if (state.clipSettings[activeClip.id]?.secondarySource) {
+                                state.clipSettings[activeClip.id].secondarySource.uploadProgress = progress;
+                            }
+                            // Update UI periodically
+                            if (progress % 20 === 0 || progress === 100) {
+                                render();
+                            }
+                        },
+                        function(error) {
+                            // Error handling
+                            console.error('Secondary video upload error:', error);
+                            utils.showToast('Upload failed: ' + error.message, 'error');
+                            if (state.clipSettings[activeClip.id]?.secondarySource) {
+                                state.clipSettings[activeClip.id].secondarySource.uploading = false;
+                                state.clipSettings[activeClip.id].secondarySource.uploadProgress = 0;
+                            }
+                            render();
+                        },
+                        async function() {
+                            // Upload completed - get download URL
+                            var downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+
+                            if (state.clipSettings[activeClip.id]?.secondarySource) {
+                                state.clipSettings[activeClip.id].secondarySource.uploading = false;
+                                state.clipSettings[activeClip.id].secondarySource.uploadProgress = 100;
+                                state.clipSettings[activeClip.id].secondarySource.uploadedUrl = downloadURL;
+                            }
+
+                            console.log('Secondary video uploaded:', downloadURL);
+                            utils.showToast('Secondary video ready!', 'success');
+                            render();
+                        }
+                    );
+                } catch (uploadError) {
+                    console.error('Secondary video upload error:', uploadError);
+                    utils.showToast('Upload failed: ' + uploadError.message, 'error');
+                    if (state.clipSettings[activeClip.id]?.secondarySource) {
+                        state.clipSettings[activeClip.id].secondarySource.uploading = false;
+                    }
+                    render();
+                }
+            },
+
+            loadSecondaryYouTube: function() {
+                var urlInput = document.getElementById('secondary-youtube-url');
+                if (!urlInput) return;
+
+                var url = urlInput.value.trim();
+                if (!url) {
+                    utils.showToast('Please enter a YouTube URL', 'error');
+                    return;
+                }
+
+                // Extract video ID from URL
+                var videoId = null;
+                var patterns = [
+                    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+                    /^([a-zA-Z0-9_-]{11})$/
+                ];
+                for (var i = 0; i < patterns.length; i++) {
+                    var match = url.match(patterns[i]);
+                    if (match) {
+                        videoId = match[1];
+                        break;
+                    }
+                }
+
+                if (!videoId) {
+                    utils.showToast('Invalid YouTube URL', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].secondarySource) {
+                    state.clipSettings[activeClip.id].secondarySource = getDefaultSettings().secondarySource;
+                }
+
+                // Store YouTube info
+                state.clipSettings[activeClip.id].secondarySource.type = 'youtube';
+                state.clipSettings[activeClip.id].secondarySource.youtubeUrl = url;
+                state.clipSettings[activeClip.id].secondarySource.youtubeVideoId = videoId;
+                state.clipSettings[activeClip.id].secondarySource.youtubeThumbnail = 'https://img.youtube.com/vi/' + videoId + '/mqdefault.jpg';
+                state.clipSettings[activeClip.id].secondarySource.youtubeTitle = 'YouTube Video';
+
+                // Set default position
+                var reframeMode = state.clipSettings[activeClip.id].reframeMode;
+                if (reframeMode === 'split_screen') {
+                    state.clipSettings[activeClip.id].secondarySource.position = 'bottom';
+                } else if (reframeMode === 'three_person') {
+                    state.clipSettings[activeClip.id].secondarySource.position = 'bottom-left';
+                } else if (reframeMode === 'gameplay') {
+                    state.clipSettings[activeClip.id].secondarySource.position = 'facecam';
+                } else if (reframeMode === 'broll_split') {
+                    state.clipSettings[activeClip.id].secondarySource.position = 'broll';
+                }
+
+                utils.showToast('YouTube video loaded', 'success');
+                render();
+            },
+
+            removeSecondarySource: function() {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (state.clipSettings[activeClip.id] && state.clipSettings[activeClip.id].secondarySource) {
+                    // Reset secondary source to defaults
+                    state.clipSettings[activeClip.id].secondarySource = getDefaultSettings().secondarySource;
+                    state.clipSettings[activeClip.id].secondarySource.enabled = true; // Keep enabled state
+                }
+                utils.showToast('Secondary source removed', 'info');
+                render();
+            },
+
+            setSecondaryPosition: function(position) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (state.clipSettings[activeClip.id] && state.clipSettings[activeClip.id].secondarySource) {
+                    state.clipSettings[activeClip.id].secondarySource.position = position;
+                }
+                render();
+            },
+
+            adjustSecondaryOffset: function(delta) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (state.clipSettings[activeClip.id] && state.clipSettings[activeClip.id].secondarySource) {
+                    var current = state.clipSettings[activeClip.id].secondarySource.timeOffset || 0;
+                    var newOffset = Math.max(-10, Math.min(10, current + delta));
+                    state.clipSettings[activeClip.id].secondarySource.timeOffset = newOffset;
+                }
+                render();
+            },
+
+            // =============================================
+            // AUDIO MIX (for multi-source)
+            // =============================================
+
+            toggleAudioMute: function(track) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].audioMix) {
+                    state.clipSettings[activeClip.id].audioMix = getDefaultSettings().audioMix;
+                }
+                if (track === 'primary') {
+                    state.clipSettings[activeClip.id].audioMix.primaryMuted = !state.clipSettings[activeClip.id].audioMix.primaryMuted;
+                } else if (track === 'secondary') {
+                    state.clipSettings[activeClip.id].audioMix.secondaryMuted = !state.clipSettings[activeClip.id].audioMix.secondaryMuted;
+                }
+                render();
+            },
+
+            setAudioMixVolume: function(track, value) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].audioMix) {
+                    state.clipSettings[activeClip.id].audioMix = getDefaultSettings().audioMix;
+                }
+                if (track === 'primary') {
+                    state.clipSettings[activeClip.id].audioMix.primaryVolume = parseInt(value);
+                } else if (track === 'secondary') {
+                    state.clipSettings[activeClip.id].audioMix.secondaryVolume = parseInt(value);
+                }
+                // Update display without full re-render
+                var valueSpan = document.querySelector('.audio-mix-slider-row .audio-mix-value');
+                if (valueSpan) {
+                    // Find the right one based on slider
+                    var sliders = document.querySelectorAll('.audio-mix-slider');
+                    sliders.forEach(function(slider, index) {
+                        if (slider.value == value) {
+                            var row = slider.closest('.audio-mix-slider-row');
+                            if (row) {
+                                var valEl = row.querySelector('.audio-mix-value');
+                                if (valEl) valEl.textContent = value + '%';
+                            }
+                        }
+                    });
+                }
+            },
+
+            applyAudioMixPreset: function(preset) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].audioMix) {
+                    state.clipSettings[activeClip.id].audioMix = getDefaultSettings().audioMix;
+                }
+
+                var presets = {
+                    'primary': { primaryVolume: 100, secondaryVolume: 0, primaryMuted: false, secondaryMuted: true },
+                    'secondary': { primaryVolume: 0, secondaryVolume: 100, primaryMuted: true, secondaryMuted: false },
+                    'mix': { primaryVolume: 50, secondaryVolume: 50, primaryMuted: false, secondaryMuted: false },
+                    'background': { primaryVolume: 100, secondaryVolume: 20, primaryMuted: false, secondaryMuted: false }
+                };
+
+                if (presets[preset]) {
+                    state.clipSettings[activeClip.id].audioMix = presets[preset];
+                    var presetNames = {
+                        'primary': 'Primary Only',
+                        'secondary': 'Secondary Only',
+                        'mix': '50/50 Mix',
+                        'background': 'Primary + Background'
+                    };
+                    utils.showToast('Audio preset applied: ' + presetNames[preset], 'success');
+                }
                 render();
             },
 
