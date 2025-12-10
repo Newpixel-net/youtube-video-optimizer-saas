@@ -558,7 +558,8 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   // Build audio filters
   const audioFilters = buildAudioFilters({
     enhanceAudio: settings.enhanceAudio,
-    removeFiller: settings.removeFiller
+    removeFiller: settings.removeFiller,
+    voiceVolume: settings.voiceVolume
   });
 
   return new Promise((resolve, reject) => {
@@ -737,8 +738,14 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 /**
  * Build FFmpeg audio filter chain
  */
-function buildAudioFilters({ enhanceAudio, removeFiller }) {
+function buildAudioFilters({ enhanceAudio, removeFiller, voiceVolume }) {
   const filters = [];
+
+  // Apply voice volume adjustment (100 = normal, 150 = +50%, 50 = -50%)
+  if (voiceVolume !== undefined && voiceVolume !== 100) {
+    const volumeMultiplier = voiceVolume / 100;
+    filters.push(`volume=${volumeMultiplier.toFixed(2)}`);
+  }
 
   if (enhanceAudio) {
     // Audio normalization
