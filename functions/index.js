@@ -18800,3 +18800,166 @@ exports.youtubeOAuthCallbackPage = functions.https.onRequest((req, res) => {
 
   res.status(200).send(callbackHTML);
 });
+
+// ==============================================
+// WIZARD: AI-POWERED METADATA EXTRACTION
+// Extract title, description, tags from uploaded video
+// Uses Whisper for transcription + GPT-4 for metadata generation
+// ==============================================
+
+exports.wizardExtractVideoMetadata = functions
+  .runWith({
+    timeoutSeconds: 300,  // 5 minutes for transcription
+    memory: '1GB'         // Need memory for video processing
+  })
+  .https.onCall(async (data, context) => {
+    const uid = await verifyAuth(context);
+
+    const { videoUrl, fileName } = data;
+
+    if (!videoUrl) {
+      throw new functions.https.HttpsError('invalid-argument', 'Video URL is required');
+    }
+
+    console.log(`[MetadataExtract] Starting for user ${uid}, file: ${fileName || 'unknown'}`);
+
+    try {
+      // Step 1: Download video to temporary file
+      console.log(`[MetadataExtract] Downloading video from: ${videoUrl.substring(0, 100)}...`);
+
+      const fetch = (await import('node-fetch')).default;
+      const fs = require('fs');
+      const os = require('os');
+      const path = require('path');
+
+      const tempDir = os.tmpdir();
+      const tempVideoFile = path.join(tempDir, `metadata_${Date.now()}.mp4`);
+
+      const response = await fetch(videoUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download video: ${response.status}`);
+      }
+
+      const buffer = await response.buffer();
+      fs.writeFileSync(tempVideoFile, buffer);
+
+      const fileSizeMB = (buffer.length / (1024 * 1024)).toFixed(2);
+      console.log(`[MetadataExtract] Downloaded ${fileSizeMB} MB`);
+
+      // Check file size limit for Whisper (25MB for audio, but video files are larger)
+      // Whisper API has a 25MB limit - we'll need to extract just audio for larger files
+      // For now, let's try with the video file directly (Whisper extracts audio)
+
+      let transcription = '';
+
+      try {
+        // Step 2: Transcribe with Whisper
+        console.log(`[MetadataExtract] Transcribing with Whisper...`);
+
+        const whisperResponse = await openai.audio.transcriptions.create({
+          file: fs.createReadStream(tempVideoFile),
+          model: 'whisper-1',
+          response_format: 'text',
+          language: 'en'  // Can be auto-detected by removing this
+        });
+
+        transcription = whisperResponse;
+        console.log(`[MetadataExtract] Transcription complete: ${transcription.length} chars`);
+
+      } catch (whisperError) {
+        console.error(`[MetadataExtract] Whisper error:`, whisperError.message);
+
+        // If file too large, try with a shorter segment
+        if (whisperError.message.includes('too large') || whisperError.message.includes('25 MB')) {
+          console.log(`[MetadataExtract] File too large for Whisper, skipping transcription`);
+          transcription = '(Video too large for automatic transcription)';
+        } else {
+          throw whisperError;
+        }
+      } finally {
+        // Clean up temp file
+        try {
+          fs.unlinkSync(tempVideoFile);
+        } catch (e) {
+          console.log(`[MetadataExtract] Could not delete temp file:`, e.message);
+        }
+      }
+
+      // Step 3: Generate metadata with GPT-4
+      console.log(`[MetadataExtract] Generating metadata with GPT-4...`);
+
+      const gptPrompt = `You are an expert video content analyst. Based on the following transcript from a video, generate SEO-optimized metadata.
+
+TRANSCRIPT:
+${transcription.substring(0, 4000)}${transcription.length > 4000 ? '...(truncated)' : ''}
+
+FILE NAME (may contain hints): ${fileName || 'unknown'}
+
+Generate the following in JSON format:
+{
+  "title": "A compelling, SEO-friendly title (max 60 chars)",
+  "description": "A detailed description summarizing the content (100-200 words). Include key points and make it engaging for viewers.",
+  "tags": ["array", "of", "relevant", "tags", "for", "discovery"],
+  "category": "Best fitting category (e.g., Education, Entertainment, Gaming, How-to, Vlog, etc.)",
+  "keyTopics": ["main", "topics", "discussed"],
+  "suggestedHashtags": ["#relevant", "#hashtags"]
+}
+
+Respond ONLY with valid JSON, no markdown or explanation.`;
+
+      const gptResponse = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',  // Cost-efficient for this task
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a video content analyst that generates SEO metadata. Always respond with valid JSON only.'
+          },
+          { role: 'user', content: gptPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+
+      const gptContent = gptResponse.choices[0]?.message?.content || '{}';
+      console.log(`[MetadataExtract] GPT response: ${gptContent.substring(0, 200)}...`);
+
+      // Parse the JSON response
+      let metadata;
+      try {
+        // Clean up potential markdown formatting
+        let cleanJson = gptContent.trim();
+        if (cleanJson.startsWith('```json')) {
+          cleanJson = cleanJson.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+        } else if (cleanJson.startsWith('```')) {
+          cleanJson = cleanJson.replace(/^```\n?/, '').replace(/\n?```$/, '');
+        }
+
+        metadata = JSON.parse(cleanJson);
+      } catch (parseError) {
+        console.error(`[MetadataExtract] Failed to parse GPT response:`, parseError.message);
+        metadata = {
+          title: fileName?.replace(/\.[^/.]+$/, '') || 'Untitled Video',
+          description: transcription.substring(0, 500) || 'No description available',
+          tags: [],
+          category: 'Other',
+          keyTopics: [],
+          suggestedHashtags: []
+        };
+      }
+
+      // Add transcription to metadata for reference
+      metadata.transcription = transcription.substring(0, 2000);
+      metadata.hasFullTranscription = transcription.length > 0 && !transcription.includes('too large');
+
+      console.log(`[MetadataExtract] Success! Title: "${metadata.title}"`);
+
+      return {
+        success: true,
+        metadata: metadata
+      };
+
+    } catch (error) {
+      console.error(`[MetadataExtract] Error:`, error.message);
+      throw new functions.https.HttpsError('internal', `Failed to extract metadata: ${error.message}`);
+    }
+  });
