@@ -7805,24 +7805,67 @@
                         }
                         html += '</div>';
                         html += '<div class="source-preview-info">';
-                        var sourceName = secondarySource.type === 'youtube' ? (secondarySource.youtubeTitle || 'YouTube Video') : (secondarySource.fileName || 'Uploaded Video');
-                        html += '<div class="source-preview-name">' + sourceName + '</div>';
+                        // Show AI-extracted title if available, otherwise fallback to filename
+                        var sourceName = secondarySource.type === 'youtube'
+                            ? (secondarySource.youtubeTitle || 'YouTube Video')
+                            : (secondarySource.metadata?.title || secondarySource.fileName || 'Uploaded Video');
+                        html += '<div class="source-preview-name">' + utils.escapeHtml(sourceName) + '</div>';
                         html += '<div class="source-preview-meta">';
                         if (secondarySource.type === 'upload' && secondarySource.fileSize) {
                             html += '<span>' + utils.formatFileSize(secondarySource.fileSize) + '</span>';
                         }
-                        // Show upload progress or ready status
+                        // Show upload progress, extracting status, or ready status
                         if (secondarySource.uploading) {
                             html += '<span class="source-preview-status" style="color:#f59e0b">⏳ Uploading ' + (secondarySource.uploadProgress || 0) + '%</span>';
+                        } else if (secondarySource.extractingMetadata) {
+                            html += '<span class="source-preview-status" style="color:#8b5cf6">🤖 Extracting metadata...</span>';
                         } else if (secondarySource.uploadedUrl || secondarySource.youtubeVideoId) {
                             html += '<span class="source-preview-status">✓ Ready</span>';
+                            if (secondarySource.metadata) {
+                                html += '<span style="color:#22c55e;margin-left:0.5rem">✨ AI Metadata</span>';
+                            }
                         } else {
                             html += '<span class="source-preview-status" style="color:#f59e0b">⏳ Processing...</span>';
                         }
                         html += '</div>';
                         html += '</div>';
-                        html += '<button class="source-preview-remove" onclick="app.removeSecondarySource()" title="Remove"' + (secondarySource.uploading ? ' disabled style="opacity:0.5"' : '') + '>×</button>';
+                        html += '<button class="source-preview-remove" onclick="app.removeSecondarySource()" title="Remove"' + (secondarySource.uploading || secondarySource.extractingMetadata ? ' disabled style="opacity:0.5"' : '') + '>×</button>';
                         html += '</div>';
+
+                        // Show AI-extracted metadata if available (for uploaded videos)
+                        if (secondarySource.type === 'upload' && secondarySource.metadata) {
+                            html += '<div class="source-metadata-panel" style="margin-top:0.75rem;padding:0.75rem;background:rgba(139,92,246,0.1);border-radius:8px;border:1px solid rgba(139,92,246,0.3)">';
+                            html += '<div style="font-size:0.7rem;color:rgba(139,92,246,0.8);margin-bottom:0.5rem;font-weight:600">🤖 AI-EXTRACTED METADATA</div>';
+
+                            // Description preview
+                            if (secondarySource.metadata.description) {
+                                html += '<div style="font-size:0.75rem;color:rgba(255,255,255,0.7);margin-bottom:0.5rem;line-height:1.4">';
+                                html += utils.escapeHtml(secondarySource.metadata.description.substring(0, 150));
+                                if (secondarySource.metadata.description.length > 150) html += '...';
+                                html += '</div>';
+                            }
+
+                            // Tags
+                            if (secondarySource.metadata.tags && secondarySource.metadata.tags.length > 0) {
+                                html += '<div style="display:flex;flex-wrap:wrap;gap:0.25rem;margin-bottom:0.5rem">';
+                                secondarySource.metadata.tags.slice(0, 5).forEach(function(tag) {
+                                    html += '<span style="font-size:0.65rem;background:rgba(139,92,246,0.2);color:#a78bfa;padding:0.15rem 0.4rem;border-radius:4px">' + utils.escapeHtml(tag) + '</span>';
+                                });
+                                if (secondarySource.metadata.tags.length > 5) {
+                                    html += '<span style="font-size:0.65rem;color:rgba(255,255,255,0.4)">+' + (secondarySource.metadata.tags.length - 5) + ' more</span>';
+                                }
+                                html += '</div>';
+                            }
+
+                            // Category
+                            if (secondarySource.metadata.category) {
+                                html += '<div style="font-size:0.65rem;color:rgba(255,255,255,0.5)">';
+                                html += '📁 Category: ' + utils.escapeHtml(secondarySource.metadata.category);
+                                html += '</div>';
+                            }
+
+                            html += '</div>';
+                        }
 
                         // Position and sync options
                         html += '<div class="secondary-source-options">';
@@ -9692,8 +9735,43 @@
                             }
 
                             console.log('Secondary video uploaded:', downloadURL);
-                            utils.showToast('Secondary video ready!', 'success');
+                            utils.showToast('Upload complete! Extracting metadata...', 'success');
                             render();
+
+                            // Extract AI-powered metadata from the uploaded video
+                            try {
+                                state.clipSettings[activeClip.id].secondarySource.extractingMetadata = true;
+                                render();
+
+                                var extractMetadata = functions.httpsCallable('wizardExtractVideoMetadata');
+                                var result = await extractMetadata({
+                                    videoUrl: downloadURL,
+                                    fileName: file.name
+                                });
+
+                                if (result.data.success && result.data.metadata) {
+                                    var meta = result.data.metadata;
+                                    state.clipSettings[activeClip.id].secondarySource.metadata = {
+                                        title: meta.title,
+                                        description: meta.description,
+                                        tags: meta.tags || [],
+                                        category: meta.category,
+                                        keyTopics: meta.keyTopics || [],
+                                        suggestedHashtags: meta.suggestedHashtags || [],
+                                        transcription: meta.transcription,
+                                        hasTranscription: meta.hasFullTranscription
+                                    };
+                                    state.clipSettings[activeClip.id].secondarySource.extractingMetadata = false;
+                                    console.log('Metadata extracted:', meta.title);
+                                    utils.showToast('AI metadata extracted: "' + meta.title.substring(0, 30) + '..."', 'success');
+                                    render();
+                                }
+                            } catch (metaError) {
+                                console.error('Metadata extraction failed:', metaError);
+                                state.clipSettings[activeClip.id].secondarySource.extractingMetadata = false;
+                                utils.showToast('Video ready (metadata extraction failed)', 'info');
+                                render();
+                            }
                         }
                     );
                 } catch (uploadError) {
