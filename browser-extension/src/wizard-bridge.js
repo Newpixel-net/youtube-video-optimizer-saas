@@ -66,9 +66,10 @@
   /**
    * Handle request to capture video from YouTube
    * Enhanced to support auto-capture when no streams are immediately available
+   * Now supports segment capture with startTime/endTime parameters
    */
   async function handleGetVideoRequest(data, requestId) {
-    const { youtubeUrl, autoCapture = true } = data || {};
+    const { youtubeUrl, autoCapture = true, startTime, endTime } = data || {};
 
     if (!youtubeUrl) {
       sendResponse(requestId, { error: 'No YouTube URL provided' });
@@ -84,15 +85,22 @@
         return;
       }
 
-      console.log(`[YVO Extension] Capturing video: ${videoId}, autoCapture: ${autoCapture}`);
+      // Log segment info if provided
+      const segmentInfo = (startTime !== undefined && endTime !== undefined)
+        ? `segment ${startTime}s-${endTime}s`
+        : 'full video (up to 5 min)';
+      console.log(`[YVO Extension] Capturing video: ${videoId}, ${segmentInfo}, autoCapture: ${autoCapture}`);
 
       // Send message to background script to capture video
       // This may take a few seconds if auto-capture needs to open a new tab
+      // Pass segment times if provided for precise capture
       const response = await chrome.runtime.sendMessage({
         action: 'captureVideoForWizard',
         videoId: videoId,
         youtubeUrl: youtubeUrl,
-        autoCapture: autoCapture
+        autoCapture: autoCapture,
+        startTime: startTime,    // Segment start time in seconds
+        endTime: endTime         // Segment end time in seconds
       });
 
       if (response?.success) {

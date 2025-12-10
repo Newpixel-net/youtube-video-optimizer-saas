@@ -111,9 +111,60 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           }
 
           const buffer = await response.arrayBuffer();
-          downloadedFile = path.join(workDir, 'source.webm');
-          fs.writeFileSync(downloadedFile, Buffer.from(buffer));
-          console.log(`[${jobId}] Downloaded MediaRecorder capture: ${fs.statSync(downloadedFile).size} bytes`);
+          const capturedFile = path.join(workDir, 'captured.webm');
+          fs.writeFileSync(capturedFile, Buffer.from(buffer));
+          console.log(`[${jobId}] Downloaded MediaRecorder capture: ${fs.statSync(capturedFile).size} bytes`);
+
+          // Check if we need to extract a specific segment from the captured video
+          // The extension may have captured more than needed (e.g., full 5 minutes)
+          // while the clip only needs a portion (e.g., 30 seconds at 2:00)
+          const capturedStart = job.extensionStreamData?.captureStartTime || 0;
+          const capturedEnd = job.extensionStreamData?.captureEndTime || 300;
+          const clipStart = job.startTime || 0;
+          const clipEnd = job.endTime || (clipStart + 60);
+
+          // Calculate if segment extraction is needed
+          const needsExtraction = (clipStart > capturedStart) || (clipEnd < capturedEnd);
+
+          if (needsExtraction && clipStart >= capturedStart && clipEnd <= capturedEnd) {
+            // Extract the specific segment from the captured video
+            const relativeStart = clipStart - capturedStart;
+            const relativeEnd = clipEnd - capturedStart;
+            console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s from captured video`);
+            await updateProgress(jobRef, 15, 'Extracting clip segment...');
+
+            downloadedFile = path.join(workDir, 'source.webm');
+            await new Promise((resolve, reject) => {
+              const ffmpeg = spawn('ffmpeg', [
+                '-i', capturedFile,
+                '-ss', String(relativeStart),
+                '-to', String(relativeEnd),
+                '-c', 'copy',
+                '-avoid_negative_ts', 'make_zero',
+                '-y',
+                downloadedFile
+              ]);
+
+              let stderr = '';
+              ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
+              ffmpeg.on('close', (code) => {
+                if (code === 0 && fs.existsSync(downloadedFile)) {
+                  console.log(`[${jobId}] Segment extracted: ${fs.statSync(downloadedFile).size} bytes`);
+                  resolve();
+                } else {
+                  reject(new Error(`FFmpeg segment extraction failed: ${stderr.slice(-200)}`));
+                }
+              });
+              ffmpeg.on('error', reject);
+            });
+
+            // Cleanup captured file
+            try { fs.unlinkSync(capturedFile); } catch (e) {}
+          } else {
+            // Use the captured file directly (segment already matches or no extraction needed)
+            downloadedFile = capturedFile;
+            console.log(`[${jobId}] Using captured video directly (segment matches or full capture)`);
+          }
         } catch (captureError) {
           console.warn(`[${jobId}] MediaRecorder capture download failed: ${captureError.message}`);
           console.log(`[${jobId}] Falling back to Video Download API...`);
