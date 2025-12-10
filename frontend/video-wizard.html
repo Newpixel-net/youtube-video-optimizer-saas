@@ -1519,27 +1519,60 @@
         .phone-video-area {
             position: absolute;
             inset: 0;
-            background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(15, 15, 26, 0.9) 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: #0a0a12;
             overflow: hidden;
         }
 
-        .phone-video-area img,
-        .phone-video-area video,
-        .phone-video-area iframe {
+        /* Simple 9:16 crop using object-fit - MUCH more reliable than transforms */
+        .phone-video-area .preview-media {
+            position: absolute;
+            inset: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: block;
+            z-index: 1;
         }
 
-        /* Ensure reframe-video images are visible */
-        .phone-video-area img.reframe-video {
-            min-width: 100%;
-            min-height: 100%;
-            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+        /* Crop positions using object-position */
+        .phone-video-area.crop-left .preview-media {
+            object-position: left center;
+        }
+
+        .phone-video-area.crop-center .preview-media {
+            object-position: center center;
+        }
+
+        .phone-video-area.crop-right .preview-media {
+            object-position: right center;
+        }
+
+        /* YouTube iframe cropping - make it fill and overflow */
+        .phone-video-area .preview-iframe-wrapper {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .phone-video-area .preview-iframe-wrapper iframe {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 177.78vh; /* 16:9 ratio based on viewport height */
+            height: 100%;
+            min-width: 316%; /* Ensures video fills height and overflows width */
+            border: none;
+        }
+
+        .phone-video-area.crop-left .preview-iframe-wrapper iframe {
+            left: 0;
+            transform: translateX(0);
+        }
+
+        .phone-video-area.crop-right .preview-iframe-wrapper iframe {
+            left: 100%;
+            transform: translateX(-100%);
         }
 
         /* ==========================================
@@ -1829,86 +1862,6 @@
            Actually transforms the video to show
            what the export will look like!
            ========================================== */
-
-        /* Auto-center: Transform 16:9 to 9:16 crop */
-        .phone-video-area.reframe-auto_center {
-            overflow: hidden;
-            /* Note: Don't set position:relative here - it overrides position:absolute from base rule
-               which breaks inset:0 sizing. position:absolute already works as containing block. */
-        }
-
-        .phone-video-area.reframe-auto_center .reframe-video {
-            position: absolute;
-            /* To crop 16:9 to 9:16: the video needs to be wider than container to show cropped portion.
-               Container is 9:16 (height > width). Video is 16:9 (width > height).
-               To fill height: video width = container height * (16/9)
-               Since container width = container height * (9/16), video width = 177.78% of container width */
-            width: 177.78%;
-            height: 100%;
-            left: 50%;
-            top: 0;
-            transform: translateX(-50%);
-            transition: transform 0.4s ease, left 0.4s ease;
-            object-fit: cover;
-            z-index: 1;
-        }
-
-        .phone-video-area.reframe-auto_center.crop-center .reframe-video {
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .phone-video-area.reframe-auto_center.crop-left .reframe-video {
-            left: 0;
-            transform: translateX(0%);
-        }
-
-        .phone-video-area.reframe-auto_center.crop-right .reframe-video {
-            left: auto;
-            right: 0;
-            transform: translateX(0%);
-        }
-
-        /* Fallback for img without .reframe-video class */
-        .phone-video-area.reframe-auto_center img:not(.reframe-video) {
-            position: absolute;
-            width: 177.78%;
-            height: 100%;
-            left: 50%;
-            top: 0;
-            transform: translateX(-50%);
-            transition: transform 0.4s ease;
-            object-fit: cover;
-        }
-
-        /* YouTube iframe cropping - needs 316% width to crop 16:9 to 9:16
-           Math: (16/9) / (9/16) = 256/81 ≈ 3.16 = 316% */
-        .phone-video-area.reframe-auto_center iframe.youtube-cropped {
-            position: absolute;
-            width: 316%;
-            height: 100%;
-            left: 50%;
-            top: 0;
-            transform: translateX(-50%);
-            transition: left 0.4s ease, transform 0.4s ease;
-            border: none;
-            z-index: 2;
-        }
-
-        .phone-video-area.reframe-auto_center.crop-center iframe.youtube-cropped {
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .phone-video-area.reframe-auto_center.crop-left iframe.youtube-cropped {
-            left: 0;
-            transform: translateX(0%);
-        }
-
-        .phone-video-area.reframe-auto_center.crop-right iframe.youtube-cropped {
-            left: 100%;
-            transform: translateX(-100%);
-        }
 
         /* Stop button for playing video */
         .video-stop-btn {
@@ -6427,102 +6380,48 @@
             // Use placeholder thumbnail if missing
             var clipThumbnail = activeClip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"%3E%3Crect fill="%231a1a2e" width="320" height="180"/%3E%3Ctext x="160" y="90" fill="%23666" font-family="sans-serif" font-size="14" text-anchor="middle"%3ENo Preview%3C/text%3E%3C/svg%3E';
 
-            // Different styles for different reframe modes
-            var getVideoContent = function(mode) {
-                // All reframe modes need CSS transforms - avoid inline position/size styles
-                var needsTransform = ['auto_center', 'split_screen', 'three_person', 'broll_split', 'gameplay'].indexOf(mode) !== -1;
-
-                // For uploaded videos, use HTML5 video element with proper cropping
-                if (isUpload && uploadedVideoUrl && state.customization.showVideoPreview) {
-                    if (needsTransform) {
-                        return '<video class="reframe-video" src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted playsinline></video>';
-                    } else {
-                        return '<video src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted playsinline style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:inherit"></video>';
-                    }
+            // Simple video content generator - uses object-fit:cover for cropping
+            var getVideoContent = function() {
+                // For uploaded videos
+                if (isUpload && uploadedVideoUrl) {
+                    return '<video class="preview-media" src="' + uploadedVideoUrl + '#t=' + embedStart + '" controls muted playsinline></video>';
                 }
 
-                // For YouTube videos - can show either cropped thumbnail or cropped iframe for playback
-                if (videoId && !isUpload) {
+                // For YouTube videos
+                if (videoId) {
                     var ytThumbnail = 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg';
                     var ytThumbnailFallback = 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg';
                     var imgErrorHandler = 'onerror="this.onerror=null; this.src=\'' + ytThumbnailFallback + '\';"';
 
-                    // If playing in frame, show cropped YouTube iframe
-                    if (state.customization.playingInFrame && needsTransform) {
+                    // If playing in frame, show YouTube iframe
+                    if (state.customization.playingInFrame) {
                         var embedUrl = 'https://www.youtube.com/embed/' + videoId +
                             '?autoplay=1&start=' + Math.floor(embedStart) +
                             '&modestbranding=1&rel=0&playsinline=1';
-                        return '<iframe class="youtube-cropped" src="' + embedUrl + '" ' +
+                        return '<div class="preview-iframe-wrapper">' +
+                               '<iframe src="' + embedUrl + '" ' +
                                'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
                                'allowfullscreen></iframe>' +
+                               '</div>' +
                                '<button class="video-stop-btn" onclick="app.stopInFrameVideo()" title="Stop video">✕</button>';
                     }
 
-                    // Default: Show cropped thumbnail with play button
-                    if (needsTransform) {
-                        return '<img class="reframe-video" src="' + ytThumbnail + '" alt="Preview" ' + imgErrorHandler + '>' +
-                               '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.playInFrameVideo()" title="Play video in 9:16 crop">' +
-                               '<span class="play-icon">▶</span><span class="yt-label">Play</span></button>';
-                    } else {
-                        return '<img src="' + ytThumbnail + '" alt="Preview" ' + imgErrorHandler + ' style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">' +
-                               '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.playInFrameVideo()" title="Play video in 9:16 crop">' +
-                               '<span class="play-icon">▶</span><span class="yt-label">Play</span></button>';
-                    }
+                    // Default: Show thumbnail with play button
+                    return '<img class="preview-media" src="' + ytThumbnail + '" alt="Video Preview" ' + imgErrorHandler + '>' +
+                           '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.playInFrameVideo()" title="Play video">' +
+                           '<span class="play-icon">▶</span><span class="yt-label">Play</span></button>';
                 }
 
-                // Fallback: Show thumbnail with play button
-                var imgErrorHandler = 'onerror="this.onerror=null; this.src=\'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22320%22 height=%22180%22%3E%3Crect fill=%22%231a1a2e%22 width=%22320%22 height=%22180%22/%3E%3Ctext x=%22160%22 y=%2290%22 fill=%22%23888%22 font-family=%22sans-serif%22 font-size=%2214%22 text-anchor=%22middle%22%3ENo Preview Available%3C/text%3E%3C/svg%3E\';"';
-                if (needsTransform) {
-                    return '<img class="reframe-video" src="' + clipThumbnail + '" alt="Preview" ' + imgErrorHandler + '>' +
-                           '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
-                } else {
-                    return '<img src="' + clipThumbnail + '" alt="Preview" ' + imgErrorHandler + ' style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">' +
-                           '<button class="video-preview-btn" onclick="app.toggleVideoPreview()" title="Play video preview">▶</button>';
-                }
+                // Fallback: Show placeholder
+                return '<div class="preview-media" style="background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%); display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem;">No video loaded</div>';
             };
 
-            var videoContent = getVideoContent(reframeMode);
+            var videoContent = getVideoContent();
 
-            // Generate mode-specific HTML structure for CSS transform preview
-            if (reframeMode === 'split_screen') {
-                // Split-screen: Two video sections stacked showing left/right of original
-                html += '<div class="' + videoAreaClasses + '">';
-                html += '<div class="split-preview-top">' + getVideoContent('split_screen') + '<div class="split-label">Left Speaker</div></div>';
-                html += '<div class="split-preview-bottom">' + getVideoContent('split_screen') + '<div class="split-label">Right Speaker</div></div>';
-                html += '</div>';
-            } else if (reframeMode === 'three_person') {
-                // Three-person: Grid layout
-                html += '<div class="' + videoAreaClasses + '">';
-                html += '<div class="three-zone three-zone-main">' + getVideoContent('three_person') + '<div class="zone-label">Main</div></div>';
-                html += '<div class="three-zone three-zone-left">' + getVideoContent('three_person') + '<div class="zone-label">Left</div></div>';
-                html += '<div class="three-zone three-zone-right">' + getVideoContent('three_person') + '<div class="zone-label">Right</div></div>';
-                html += '</div>';
-            } else if (reframeMode === 'gameplay') {
-                // Gameplay: Video with facecam overlay
-                html += '<div class="' + videoAreaClasses + '">';
-                html += videoContent;
-                html += '<div class="facecam-preview"><span>Facecam</span></div>';
-                html += '<div class="reframe-mode-badge">Gameplay Mode</div>';
-                html += '</div>';
-            } else if (reframeMode === 'broll_split') {
-                // B-Roll: Main area with Ken Burns + speaker section
-                html += '<div class="' + videoAreaClasses + '">';
-                html += '<div class="broll-main">' + getVideoContent('broll_split') + '<div class="broll-label">B-Roll + Ken Burns</div></div>';
-                html += '<div class="broll-speaker">' + getVideoContent('broll_split') + '<div class="broll-label">Speaker</div></div>';
-                html += '</div>';
-            } else {
-                // Auto-center: Simple crop with position
-                html += '<div class="' + videoAreaClasses + '">';
-                html += videoContent;
-                html += '<div class="reframe-mode-badge">9:16 ' + (cropPos.charAt(0).toUpperCase() + cropPos.slice(1)) + ' Crop</div>';
-                // Crop position indicator
-                html += '<div class="crop-position-indicator">';
-                html += '<div class="pos-dot' + (cropPos === 'left' ? ' active' : '') + '" onclick="app.setCropPosition(\'left\')" title="Crop Left"></div>';
-                html += '<div class="pos-dot' + (cropPos === 'center' ? ' active' : '') + '" onclick="app.setCropPosition(\'center\')" title="Crop Center"></div>';
-                html += '<div class="pos-dot' + (cropPos === 'right' ? ' active' : '') + '" onclick="app.setCropPosition(\'right\')" title="Crop Right"></div>';
-                html += '</div>';
-                html += '</div>';
-            }
+            // Simple phone preview - just show the video with crop position
+            html += '<div class="phone-video-area crop-' + cropPos + '">';
+            html += videoContent;
+            html += '</div>';
 
             // Caption preview with style-specific animations
             if (settings.captionStyle !== 'none') {
