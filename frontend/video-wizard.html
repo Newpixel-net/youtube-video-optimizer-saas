@@ -1833,15 +1833,16 @@
         /* Auto-center: Transform 16:9 to 9:16 crop */
         .phone-video-area.reframe-auto_center {
             overflow: hidden;
-            position: relative;
+            /* Note: Don't set position:relative here - it overrides position:absolute from base rule
+               which breaks inset:0 sizing. position:absolute already works as containing block. */
         }
 
         .phone-video-area.reframe-auto_center .reframe-video {
             position: absolute;
-            /* Size the video to be 16:9 aspect ratio that fills the height */
-            /* For a 9:16 container, the video width needs to be 16/9 * 9/16 = 1.0 of width for 16:9 aspect */
-            /* Actually: container is 9:16, video is 16:9. To fill height, scale width by (16/9)/(9/16) = 256/81 ≈ 3.16 */
-            /* Simpler: width should be 177.78% (16/9 ratio), then use object-fit:cover */
+            /* To crop 16:9 to 9:16: the video needs to be wider than container to show cropped portion.
+               Container is 9:16 (height > width). Video is 16:9 (width > height).
+               To fill height: video width = container height * (16/9)
+               Since container width = container height * (9/16), video width = 177.78% of container width */
             width: 177.78%;
             height: 100%;
             left: 50%;
@@ -1849,6 +1850,7 @@
             transform: translateX(-50%);
             transition: transform 0.4s ease, left 0.4s ease;
             object-fit: cover;
+            z-index: 1;
         }
 
         .phone-video-area.reframe-auto_center.crop-center .reframe-video {
@@ -1991,7 +1993,7 @@
         /* Gameplay mode */
         .phone-video-area.reframe-gameplay {
             overflow: hidden;
-            position: relative;
+            /* position: absolute is inherited from base rule - don't override with relative */
         }
 
         .phone-video-area.reframe-gameplay .reframe-video,
@@ -2113,6 +2115,8 @@
             right: 0;
             text-align: center;
             padding: 0 1rem;
+            z-index: 15;
+            pointer-events: none;
         }
 
         .caption-text {
