@@ -18102,6 +18102,7 @@ exports.wizardProcessClip = functions
       quality: outputQuality,
       settings: {
         captionStyle: clipSettings.captionStyle || 'karaoke',
+        customCaptionStyle: clipSettings.customCaptionStyle || null,
         reframeMode: clipSettings.reframeMode || 'auto_center',
         cropPosition: clipSettings.cropPosition || 'center',
         trimStart: clipSettings.trimStart || 0,

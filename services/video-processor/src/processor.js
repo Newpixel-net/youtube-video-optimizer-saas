@@ -20,6 +20,7 @@ import {
   downloadFromCache,
   extractSegmentFromCache
 } from './video-cache.js';
+import { generateCaptions } from './caption-renderer.js';
 
 /**
  * Main video processing function
@@ -516,8 +517,25 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   const targetHeight = output.resolution.height; // 1280 or 1920
   const targetAspect = 9 / 16;
 
+  // Generate captions if requested
+  let captionFile = null;
+  if (settings.captionStyle && settings.captionStyle !== 'none') {
+    console.log(`[${jobId}] Generating captions with style: ${settings.captionStyle}`);
+    try {
+      captionFile = await generateCaptions({
+        jobId,
+        videoFile: inputFile,
+        workDir,
+        captionStyle: settings.captionStyle,
+        customStyle: settings.customCaptionStyle
+      });
+    } catch (captionError) {
+      console.error(`[${jobId}] Caption generation failed (continuing without captions):`, captionError.message);
+    }
+  }
+
   // Build FFmpeg filter chain
-  const filters = buildFilterChain({
+  let filters = buildFilterChain({
     inputWidth: videoInfo.width,
     inputHeight: videoInfo.height,
     targetWidth,
@@ -528,6 +546,14 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     vignette: settings.vignette,
     colorGrade: settings.colorGrade
   });
+
+  // Add subtitle filter if captions were generated
+  if (captionFile && fs.existsSync(captionFile)) {
+    // Escape special characters in path for FFmpeg
+    const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
+    filters = `${filters},ass='${escapedPath}'`;
+    console.log(`[${jobId}] Adding captions from: ${captionFile}`);
+  }
 
   // Build audio filters
   const audioFilters = buildAudioFilters({
