@@ -4849,6 +4849,108 @@
             margin-bottom: 1.25rem;
         }
 
+        /* Download Ready Modal */
+        .download-ready-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            padding: 2rem;
+        }
+
+        .download-ready-content {
+            background: rgba(30, 30, 40, 0.98);
+            border-radius: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 400px;
+            width: 100%;
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .download-ready-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .download-ready-close:hover {
+            background: rgba(239, 68, 68, 0.5);
+        }
+
+        .download-ready-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .download-ready-content h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+            margin: 0 0 0.5rem 0;
+        }
+
+        .download-ready-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .download-btn-primary,
+        .download-btn-secondary {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .download-btn-primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .download-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        .download-btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .download-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .download-btn-icon {
+            font-size: 1.2rem;
+        }
+
         .my-projects-header h3 {
             font-size: 1.1rem;
             font-weight: 600;
@@ -9051,8 +9153,9 @@
                                 clearInterval(pollInterval);
                                 app.removeProcessingToast(clipId);
                                 if (job.outputUrl) {
-                                    utils.showToast('🎉 Video ready! Downloading...', 'success');
-                                    window.open(job.outputUrl, '_blank');
+                                    utils.showToast('🎉 Video ready!', 'success');
+                                    // Show download options modal
+                                    app.showDownloadReadyModal(clipId, job.outputUrl);
                                 } else {
                                     utils.showToast('Video processed but download not available yet.', 'info');
                                 }
@@ -9071,6 +9174,71 @@
                 setTimeout(function() {
                     clearInterval(pollInterval);
                 }, 600000);
+            },
+
+            // Show modal with download options when video is ready
+            showDownloadReadyModal: function(clipId, outputUrl) {
+                var clip = state.clips.find(function(c) { return c.id === clipId; });
+                var clipName = clip ? 'Clip ' + (state.clips.indexOf(clip) + 1) : 'Video';
+
+                var modalHtml = '<div class="download-ready-modal" onclick="app.closeDownloadReadyModal(event)">';
+                modalHtml += '<div class="download-ready-content" onclick="event.stopPropagation()">';
+                modalHtml += '<button class="download-ready-close" onclick="app.closeDownloadReadyModal()">×</button>';
+                modalHtml += '<div class="download-ready-icon">🎉</div>';
+                modalHtml += '<h3>Video Ready!</h3>';
+                modalHtml += '<p style="color: rgba(255,255,255,0.7); margin-bottom: 1.5rem;">' + clipName + ' has been processed successfully.</p>';
+                modalHtml += '<div class="download-ready-actions">';
+                modalHtml += '<button class="download-btn-primary" onclick="app.directDownloadVideo(\'' + outputUrl + '\', \'' + clipId + '\')">';
+                modalHtml += '<span class="download-btn-icon">📥</span>';
+                modalHtml += '<span>Download to Device</span>';
+                modalHtml += '</button>';
+                modalHtml += '<button class="download-btn-secondary" onclick="window.open(\'' + outputUrl + '\', \'_blank\'); app.closeDownloadReadyModal();">';
+                modalHtml += '<span class="download-btn-icon">🔗</span>';
+                modalHtml += '<span>Open in New Tab</span>';
+                modalHtml += '</button>';
+                modalHtml += '</div>';
+                modalHtml += '</div>';
+                modalHtml += '</div>';
+
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            },
+
+            closeDownloadReadyModal: function(event) {
+                var modal = document.querySelector('.download-ready-modal');
+                if (modal) modal.remove();
+            },
+
+            // Direct download video file to device
+            directDownloadVideo: async function(url, clipId) {
+                utils.showToast('Starting download...', 'info');
+
+                try {
+                    // Fetch the video as blob
+                    var response = await fetch(url);
+                    if (!response.ok) throw new Error('Failed to fetch video');
+
+                    var blob = await response.blob();
+
+                    // Create download link
+                    var downloadUrl = URL.createObjectURL(blob);
+                    var link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = 'video-clip-' + clipId + '.mp4';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    // Cleanup
+                    URL.revokeObjectURL(downloadUrl);
+
+                    utils.showToast('Download started!', 'success');
+                    app.closeDownloadReadyModal();
+                } catch (error) {
+                    console.error('Direct download error:', error);
+                    // Fallback to opening in new tab
+                    utils.showToast('Direct download failed, opening in new tab...', 'info');
+                    window.open(url, '_blank');
+                }
             },
 
             downloadThumbnail: function(clipId, index) {
