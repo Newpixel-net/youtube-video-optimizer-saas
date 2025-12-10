@@ -1869,8 +1869,7 @@
             transform: translateX(0%);
         }
 
-        /* Fallback for iframe/img without .reframe-video class */
-        .phone-video-area.reframe-auto_center iframe:not(.reframe-video),
+        /* Fallback for img without .reframe-video class */
         .phone-video-area.reframe-auto_center img:not(.reframe-video) {
             position: absolute;
             width: 177.78%;
@@ -1880,6 +1879,60 @@
             transform: translateX(-50%);
             transition: transform 0.4s ease;
             object-fit: cover;
+        }
+
+        /* YouTube iframe cropping - needs 316% width to crop 16:9 to 9:16
+           Math: (16/9) / (9/16) = 256/81 ≈ 3.16 = 316% */
+        .phone-video-area.reframe-auto_center iframe.youtube-cropped {
+            position: absolute;
+            width: 316%;
+            height: 100%;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+            transition: left 0.4s ease, transform 0.4s ease;
+            border: none;
+            z-index: 2;
+        }
+
+        .phone-video-area.reframe-auto_center.crop-center iframe.youtube-cropped {
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .phone-video-area.reframe-auto_center.crop-left iframe.youtube-cropped {
+            left: 0;
+            transform: translateX(0%);
+        }
+
+        .phone-video-area.reframe-auto_center.crop-right iframe.youtube-cropped {
+            left: 100%;
+            transform: translateX(-100%);
+        }
+
+        /* Stop button for playing video */
+        .video-stop-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 36px;
+            height: 36px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            z-index: 25;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .video-stop-btn:hover {
+            background: rgba(239, 68, 68, 0.9);
+            border-color: rgba(239, 68, 68, 1);
         }
 
         /* Split-screen: Show two halves of the video */
@@ -5617,7 +5670,8 @@
                 batchMode: false,
                 showVideoPreview: false,
                 showSourcePreview: true, // Show source with crop guides by default
-                showAdvancedOptions: false
+                showAdvancedOptions: false,
+                playingInFrame: false // YouTube video playing inside phone frame with 9:16 crop
             },
 
             // Clip settings (per clip)
@@ -6387,24 +6441,32 @@
                     }
                 }
 
-                // For YouTube videos - IMPORTANT: Use thumbnail for crop preview since iframes can't be CSS-cropped
-                // YouTube embeds maintain their own aspect ratio and ignore CSS transforms
-                // So we show the thumbnail cropped to demonstrate the 9:16 output, with a play button to watch
+                // For YouTube videos - can show either cropped thumbnail or cropped iframe for playback
                 if (videoId && !isUpload) {
-                    // Always use thumbnail for the crop preview (CSS transforms work on images)
                     var ytThumbnail = 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg';
                     var ytThumbnailFallback = 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg';
                     var imgErrorHandler = 'onerror="this.onerror=null; this.src=\'' + ytThumbnailFallback + '\';"';
 
+                    // If playing in frame, show cropped YouTube iframe
+                    if (state.customization.playingInFrame && needsTransform) {
+                        var embedUrl = 'https://www.youtube.com/embed/' + videoId +
+                            '?autoplay=1&start=' + Math.floor(embedStart) +
+                            '&modestbranding=1&rel=0&playsinline=1';
+                        return '<iframe class="youtube-cropped" src="' + embedUrl + '" ' +
+                               'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
+                               'allowfullscreen></iframe>' +
+                               '<button class="video-stop-btn" onclick="app.stopInFrameVideo()" title="Stop video">✕</button>';
+                    }
+
+                    // Default: Show cropped thumbnail with play button
                     if (needsTransform) {
-                        // Show cropped thumbnail preview + watch button for actual playback
                         return '<img class="reframe-video" src="' + ytThumbnail + '" alt="Preview" ' + imgErrorHandler + '>' +
-                               '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.openYouTubePreview(\'' + videoId + '\', ' + embedStart + ')" title="Watch video at this timestamp">' +
-                               '<span class="play-icon">▶</span><span class="yt-label">Preview</span></button>';
+                               '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.playInFrameVideo()" title="Play video in 9:16 crop">' +
+                               '<span class="play-icon">▶</span><span class="yt-label">Play</span></button>';
                     } else {
                         return '<img src="' + ytThumbnail + '" alt="Preview" ' + imgErrorHandler + ' style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">' +
-                               '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.openYouTubePreview(\'' + videoId + '\', ' + embedStart + ')" title="Watch video at this timestamp">' +
-                               '<span class="play-icon">▶</span><span class="yt-label">Preview</span></button>';
+                               '<button class="video-preview-btn video-preview-btn-youtube" onclick="app.playInFrameVideo()" title="Play video in 9:16 crop">' +
+                               '<span class="play-icon">▶</span><span class="yt-label">Play</span></button>';
                     }
                 }
 
@@ -7618,6 +7680,7 @@
                 // Validate step transitions
                 if (step > state.currentStep + 1) return;
                 state.currentStep = step;
+                state.customization.playingInFrame = false; // Stop any playing video
                 render();
                 window.scrollTo(0, 0);
             },
@@ -8019,6 +8082,7 @@
             prevClip: function() {
                 if (state.customization.activeClipIndex > 0) {
                     state.customization.activeClipIndex--;
+                    state.customization.playingInFrame = false; // Stop video when changing clips
                     render();
                 }
             },
@@ -8028,6 +8092,7 @@
                 if (state.customization.activeClipIndex < selectedCount - 1) {
                     state.customization.activeClipIndex++;
                     state.customization.showVideoPreview = false; // Reset preview when changing clips
+                    state.customization.playingInFrame = false; // Stop video when changing clips
                     render();
                 }
             },
@@ -8064,6 +8129,18 @@
                 if (modal) {
                     modal.remove();
                 }
+            },
+
+            // Play YouTube video directly inside phone frame with 9:16 crop
+            playInFrameVideo: function() {
+                state.customization.playingInFrame = true;
+                render();
+            },
+
+            // Stop in-frame video playback
+            stopInFrameVideo: function() {
+                state.customization.playingInFrame = false;
+                render();
             },
 
             // Toggle source video view with crop guides
