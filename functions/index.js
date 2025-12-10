@@ -16584,7 +16584,7 @@ DESIGN REQUIREMENTS:
 5. Leave 30% space on one side for potential text overlay
 6. Colors: Vibrant, high saturation, complementary color scheme
 
-STYLE: Ultra high quality, photorealistic, cinematic lighting, 16:9 aspect ratio, 4K resolution, professional YouTube thumbnail that gets clicks. Magazine cover quality with depth and dimension.
+STYLE: Ultra high quality, photorealistic, cinematic lighting, 9:16 vertical/portrait aspect ratio (for YouTube Shorts, TikTok, Instagram Reels), 4K resolution, professional short-form video thumbnail that gets clicks. Magazine cover quality with depth and dimension.
 
 TEXT RULES: If including any text overlay, use ONLY simple ASCII characters (A-Z, a-z, 0-9). Do NOT use checkmarks, special symbols, emojis, or Unicode characters like ✓ ✗ → ★. Keep text minimal and impactful.
 
@@ -16604,7 +16604,7 @@ DESIGN REQUIREMENTS:
 5. Include visual elements specific to the topic (icons, objects, expressions related to the content)
 6. Background: either blurred/bokeh or gradient that makes subject pop
 
-STYLE: High energy, bold contrast, vibrant colors, professional YouTube thumbnail, 16:9 aspect ratio, 4K resolution. The kind of thumbnail that stops scroll and demands attention.
+STYLE: High energy, bold contrast, vibrant colors, professional short-form video thumbnail, 9:16 vertical/portrait aspect ratio (for YouTube Shorts, TikTok, Instagram Reels), 4K resolution. The kind of thumbnail that stops scroll and demands attention.
 
 TEXT RULES: If including any text overlay, use ONLY simple ASCII characters (A-Z, a-z, 0-9). Do NOT use checkmarks, special symbols, emojis, or Unicode characters like ✓ ✗ → ★. Keep text minimal and impactful.
 
