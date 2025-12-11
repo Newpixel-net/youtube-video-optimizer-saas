@@ -16052,18 +16052,40 @@ exports.wizardAnalyzeVideo = functions
       };
 
       // Store extension stream data for later use in processing
+      // CRITICAL: Preserve ALL fields from extension's streamData, especially:
+      // - source: 'mediarecorder_capture' (for identifying upload method)
+      // - uploadedToStorage: true (indicates video is in Firebase Storage)
+      // - captureStartTime/captureEndTime (for segment extraction)
+      // Without these, processor falls back to YouTube API which fails with bot detection
       if (extensionData.streamData) {
+        const streamData = extensionData.streamData;
         videoData.extensionStreamData = {
-          videoUrl: extensionData.streamData.videoUrl,
-          audioUrl: extensionData.streamData.audioUrl,
-          quality: extensionData.streamData.quality,
-          mimeType: extensionData.streamData.mimeType,
-          capturedAt: Date.now()
+          // Core URLs
+          videoUrl: streamData.videoUrl,
+          audioUrl: streamData.audioUrl,
+          // Source identification - CRITICAL for processor to recognize uploaded capture
+          source: streamData.source || 'unknown',
+          uploadedToStorage: streamData.uploadedToStorage || false,
+          // Quality and format info
+          quality: streamData.quality,
+          mimeType: streamData.mimeType,
+          // Timing info for segment extraction
+          captureStartTime: streamData.captureStartTime,
+          captureEndTime: streamData.captureEndTime,
+          captureDuration: streamData.captureDuration,
+          // Metadata
+          capturedAt: streamData.capturedAt || Date.now(),
+          // Any captured segment info
+          capturedSegment: streamData.capturedSegment
         };
-        console.log('[wizardAnalyzeVideo] Extension stream URLs stored:', {
-          hasVideoUrl: !!extensionData.streamData.videoUrl,
-          hasAudioUrl: !!extensionData.streamData.audioUrl,
-          quality: extensionData.streamData.quality
+        console.log('[wizardAnalyzeVideo] Extension stream data stored:', {
+          hasVideoUrl: !!streamData.videoUrl,
+          hasAudioUrl: !!streamData.audioUrl,
+          source: streamData.source,
+          uploadedToStorage: streamData.uploadedToStorage,
+          quality: streamData.quality,
+          captureStartTime: streamData.captureStartTime,
+          captureEndTime: streamData.captureEndTime
         });
       }
 
