@@ -1150,63 +1150,9 @@ function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
 
       console.log(`[YVO Capture] Found video element: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration: ${videoElement.duration}s, readyState: ${videoElement.readyState}`);
 
-      // Wait for video to be ready (readyState >= 2 means HAVE_CURRENT_DATA)
-      // This handles cases where the page loaded but video is still buffering
-      if (videoElement.readyState < 2) {
-        console.log(`[YVO Capture] Video not ready (readyState: ${videoElement.readyState}), waiting...`);
-
-        // Wait up to 15 seconds for video to be ready
-        const waitForReady = () => new Promise((resolveWait) => {
-          const maxWait = 15000; // 15 seconds max
-          const checkInterval = 500; // Check every 500ms
-          let waited = 0;
-
-          const checkReady = () => {
-            if (videoElement.readyState >= 2) {
-              console.log(`[YVO Capture] Video ready after ${waited}ms (readyState: ${videoElement.readyState})`);
-              resolveWait(true);
-              return;
-            }
-
-            waited += checkInterval;
-            if (waited >= maxWait) {
-              console.warn(`[YVO Capture] Timeout waiting for video to be ready after ${waited}ms`);
-              resolveWait(false);
-              return;
-            }
-
-            // Also try to trigger playback
-            if (waited === 1000 || waited === 3000) {
-              try {
-                videoElement.play().catch(() => {});
-              } catch (e) {}
-            }
-
-            setTimeout(checkReady, checkInterval);
-          };
-
-          // Start checking
-          checkReady();
-        });
-
-        const isReady = await waitForReady();
-        if (!isReady) {
-          // Try one more time - click play button if it exists
-          const playButton = document.querySelector('.ytp-play-button');
-          if (playButton) {
-            console.log('[YVO Capture] Clicking play button...');
-            playButton.click();
-            await new Promise(r => setTimeout(r, 2000));
-          }
-
-          if (videoElement.readyState < 2) {
-            resolve(errorResult(`Video failed to load after 15+ seconds (readyState: ${videoElement.readyState}). Please ensure the video is playing and try again.`));
-            return;
-          }
-        }
-      }
-
-      // Check for captureStream support
+      // Function to continue with capture (called after video is ready)
+      const continueCapture = () => {
+        // Check for captureStream support
       if (typeof videoElement.captureStream !== 'function') {
         resolve(errorResult('Browser does not support video capture. Please use Chrome or Edge.'));
         return;
@@ -1392,6 +1338,54 @@ function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
 
         videoElement.currentTime = startTime;
       }
+      }; // End of continueCapture function
+
+      // Check if video is ready, wait if needed
+      if (videoElement.readyState >= 2) {
+        // Video is ready, proceed immediately
+        console.log('[YVO Capture] Video already ready, proceeding with capture');
+        continueCapture();
+      } else {
+        // Video not ready, wait for it
+        console.log(`[YVO Capture] Video not ready (readyState: ${videoElement.readyState}), waiting...`);
+
+        const maxWait = 15000; // 15 seconds max
+        const checkInterval = 500;
+        let waited = 0;
+
+        const checkVideoReady = () => {
+          if (videoElement.readyState >= 2) {
+            console.log(`[YVO Capture] Video ready after ${waited}ms`);
+            continueCapture();
+            return;
+          }
+
+          waited += checkInterval;
+
+          // Try to trigger playback at certain intervals
+          if (waited === 1000 || waited === 3000 || waited === 6000) {
+            try {
+              videoElement.play().catch(() => {});
+              // Also try clicking play button
+              const playButton = document.querySelector('.ytp-play-button');
+              if (playButton && waited === 3000) {
+                playButton.click();
+              }
+            } catch (e) {}
+          }
+
+          if (waited >= maxWait) {
+            console.error(`[YVO Capture] Timeout waiting for video after ${waited}ms`);
+            resolve(errorResult(`Video failed to load after ${maxWait/1000} seconds (readyState: ${videoElement.readyState}). Please ensure the video is playing and try again.`));
+            return;
+          }
+
+          setTimeout(checkVideoReady, checkInterval);
+        };
+
+        // Start checking
+        setTimeout(checkVideoReady, checkInterval);
+      }
 
     } catch (error) {
       resolve(errorResult(`Unexpected error: ${error.message}`));
@@ -1436,11 +1430,10 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
       youtubeTab = await chrome.tabs.create({ url, active: true });
 
-      // Wait for page to load - YouTube can be slow especially on first load
+      // Wait for page to load - YouTube needs time to initialize player
       // The injected script will also wait for video to be ready
       console.log(`[YVO Background] Waiting for YouTube page to load...`);
       await new Promise(resolve => setTimeout(resolve, 8000));
-      console.log(`[YVO Background] Initial wait complete, proceeding with capture...`);
     }
 
     // Get video duration from content script
