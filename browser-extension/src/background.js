@@ -241,23 +241,56 @@ async function handleCaptureForWizard(message, sendResponse) {
 
   console.log(`[YVO Background] Capture request for video: ${videoId}`);
 
-  // Helper function to process captured streams - NOW USES MEDIARECORDER CAPTURE
+  // Helper function to process captured streams
+  // PRIORITY: Try browser-side download first (works in background), then MediaRecorder as backup
   async function processAndUploadStreams(intercepted, source) {
     console.log(`[YVO Background] processAndUploadStreams called with source: ${source}`);
 
     const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
 
-    // NEW APPROACH: Use MediaRecorder to capture video as it plays
-    // This bypasses ALL URL restrictions because we capture from the video element directly
-    // Now supports segment capture with startTime/endTime from Video Wizard
+    // METHOD 1: Try browser-side download and upload (PREFERRED - works in background!)
+    // This downloads the intercepted stream URLs in the browser (same IP as YouTube)
+    // and uploads to our server. Works without opening new tabs.
+    if (intercepted?.videoUrl) {
+      console.log(`[YVO Background] Trying browser-side download (preferred method - works in background)`);
+
+      try {
+        const downloadResult = await downloadAndUploadStream(videoId, intercepted.videoUrl, intercepted.audioUrl);
+
+        if (downloadResult.success) {
+          console.log(`[YVO Background] ✓ Browser-side download and upload successful!`);
+          return {
+            success: true,
+            videoInfo: videoInfo,
+            streamData: {
+              videoUrl: downloadResult.videoStorageUrl,
+              audioUrl: downloadResult.audioStorageUrl || null,
+              quality: 'downloaded',
+              mimeType: 'video/mp4',
+              capturedAt: Date.now(),
+              source: 'browser_download',
+              uploadedToStorage: true
+            },
+            message: 'Video downloaded and uploaded successfully.'
+          };
+        } else {
+          console.warn(`[YVO Background] Browser-side download failed: ${downloadResult.error}`);
+          console.log(`[YVO Background] Falling back to MediaRecorder capture...`);
+        }
+      } catch (downloadError) {
+        console.warn(`[YVO Background] Browser-side download threw exception: ${downloadError.message}`);
+        console.log(`[YVO Background] Falling back to MediaRecorder capture...`);
+      }
+    }
+
+    // METHOD 2: MediaRecorder capture (backup - requires YouTube tab at specific timestamp)
     const segmentInfo = (startTime !== undefined && endTime !== undefined)
       ? `segment ${startTime}s-${endTime}s`
       : 'auto (up to 5 min)';
-    console.log(`[YVO Background] Using MediaRecorder capture (bypasses all URL restrictions) - ${segmentInfo}`);
+    console.log(`[YVO Background] Trying MediaRecorder capture - ${segmentInfo}`);
 
     let uploadResult;
     try {
-      // Pass segment times to capture function (uses closure from outer handleCaptureForWizard)
       uploadResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
       console.log(`[YVO Background] MediaRecorder capture returned:`, uploadResult.success, uploadResult.error || 'no error');
     } catch (captureError) {
@@ -266,7 +299,7 @@ async function handleCaptureForWizard(message, sendResponse) {
     }
 
     if (uploadResult.success) {
-      console.log(`[YVO Background] MediaRecorder capture and upload successful!`);
+      console.log(`[YVO Background] ✓ MediaRecorder capture and upload successful!`);
       const capturedSegment = uploadResult.capturedSegment || {};
       return {
         success: true,
@@ -278,7 +311,6 @@ async function handleCaptureForWizard(message, sendResponse) {
           capturedAt: Date.now(),
           source: 'mediarecorder_capture',
           uploadedToStorage: true,
-          // Include captured segment info for server processing
           capturedSegment: capturedSegment,
           captureStartTime: capturedSegment.startTime,
           captureEndTime: capturedSegment.endTime,
@@ -286,28 +318,28 @@ async function handleCaptureForWizard(message, sendResponse) {
         },
         message: `Video segment (${capturedSegment.startTime || 0}s-${capturedSegment.endTime || '?'}s) captured and uploaded.`
       };
-    } else {
-      // MediaRecorder failed - return stream URLs as last resort (will likely fail on server)
-      console.warn(`[YVO Background] MediaRecorder capture failed: ${uploadResult.error}`);
-      console.warn(`[YVO Background] ⚠️ Falling back to intercepted URLs - these are IP-restricted and will NOT work on server!`);
-      return {
-        success: true,
-        videoInfo: videoInfo,
-        streamData: {
-          videoUrl: intercepted?.videoUrl || null,
-          audioUrl: intercepted?.audioUrl || null,
-          quality: 'intercepted',
-          mimeType: 'video/mp4',
-          capturedAt: intercepted?.capturedAt || Date.now(),
-          source: source,
-          captureMethod: 'fallback_urls',
-          captureError: uploadResult.error,
-          uploadFailed: true,  // Flag so frontend knows this won't work on server
-          uploadError: `MediaRecorder capture failed: ${uploadResult.error}. Please ensure YouTube video is open in a browser tab.`
-        },
-        message: `MediaRecorder capture failed: ${uploadResult.error}. Please ensure YouTube is open in another tab and try again.`
-      };
     }
+
+    // Both methods failed
+    console.error(`[YVO Background] ✗ All capture methods failed`);
+    console.error(`[YVO Background] Last error: ${uploadResult.error}`);
+    return {
+      success: true,  // Return success:true so we can include error details
+      videoInfo: videoInfo,
+      streamData: {
+        videoUrl: intercepted?.videoUrl || null,
+        audioUrl: intercepted?.audioUrl || null,
+        quality: 'intercepted',
+        mimeType: 'video/mp4',
+        capturedAt: intercepted?.capturedAt || Date.now(),
+        source: source,
+        captureMethod: 'fallback_urls',
+        captureError: uploadResult.error,
+        uploadFailed: true,
+        uploadError: `All capture methods failed. Please ensure YouTube video is open in a browser tab and try again.`
+      },
+      message: `Capture failed: ${uploadResult.error}. Please ensure YouTube is open in another tab and try again.`
+    };
   }
 
   try {
