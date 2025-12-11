@@ -65,8 +65,7 @@
 
   /**
    * Handle request to capture video from YouTube
-   * Enhanced to support auto-capture when no streams are immediately available
-   * Now supports segment capture with startTime/endTime parameters
+   * Uses polling approach to avoid Chrome message channel timeouts
    */
   async function handleGetVideoRequest(data, requestId) {
     const { youtubeUrl, autoCapture = true, startTime, endTime } = data || {};
@@ -89,58 +88,102 @@
       const segmentInfo = (startTime !== undefined && endTime !== undefined)
         ? `segment ${startTime}s-${endTime}s`
         : 'full video (up to 5 min)';
-      console.log(`[YVO Extension] Capturing video: ${videoId}, ${segmentInfo}, autoCapture: ${autoCapture}`);
+      console.log(`[YVO Extension] Starting capture: ${videoId}, ${segmentInfo}`);
 
-      // Send message to background script to capture video
-      // This may take a few seconds if auto-capture needs to open a new tab
-      // Pass segment times if provided for precise capture
-      const response = await chrome.runtime.sendMessage({
+      // Start capture - this returns immediately with a captureId
+      const startResponse = await chrome.runtime.sendMessage({
         action: 'captureVideoForWizard',
         videoId: videoId,
         youtubeUrl: youtubeUrl,
         autoCapture: autoCapture,
-        startTime: startTime,    // Segment start time in seconds
-        endTime: endTime         // Segment end time in seconds
+        startTime: startTime,
+        endTime: endTime
       });
 
-      if (response?.success) {
-        // Log the capture source for debugging
-        const source = response.streamData?.source || 'none';
-        const uploadedToStorage = response.streamData?.uploadedToStorage || false;
-        const uploadFailed = response.streamData?.uploadFailed || false;
-        const uploadError = response.streamData?.uploadError || null;
-
-        console.log(`[YVO Extension] Capture successful, source: ${source}`);
-
-        if (uploadedToStorage) {
-          console.log(`[YVO Extension] ✓ Video uploaded to Firebase Storage (bypasses IP-restriction)`);
-          console.log(`[YVO Extension] Storage URL: ${response.streamData?.videoUrl}`);
-        } else if (uploadFailed) {
-          console.warn(`[YVO Extension] ✗ Browser upload FAILED: ${uploadError}`);
-          console.warn(`[YVO Extension] Falling back to stream URLs (will likely fail due to IP-restriction)`);
-        } else {
-          console.warn(`[YVO Extension] ⚠ No upload attempted - using raw stream URLs`);
-        }
-
-        sendResponse(requestId, {
-          success: true,
-          videoInfo: response.videoInfo,
-          streamData: response.streamData,
-          message: response.message,
-          captureSource: source
-        });
-      } else {
-        console.warn('[YVO Extension] Capture failed:', response?.error);
+      if (!startResponse?.success) {
         sendResponse(requestId, {
           success: false,
-          error: response?.error || 'Failed to capture video'
+          error: startResponse?.error || 'Failed to start capture'
         });
+        return;
       }
+
+      console.log(`[YVO Extension] Capture started, polling for completion...`);
+
+      // Poll for capture status (max 3 minutes = 180 seconds)
+      const maxWaitMs = 180000;
+      const pollIntervalMs = 2000;
+      const startTime_ = Date.now();
+
+      while (Date.now() - startTime_ < maxWaitMs) {
+        await sleep(pollIntervalMs);
+
+        try {
+          const status = await chrome.runtime.sendMessage({
+            action: 'getCaptureStatus',
+            videoId: videoId
+          });
+
+          console.log(`[YVO Extension] Capture status: ${status?.status}, progress: ${status?.progress || 0}%`);
+
+          if (status?.status === 'completed' && status?.result) {
+            // Clear the status from storage
+            chrome.runtime.sendMessage({ action: 'clearCaptureStatus', videoId });
+
+            const result = status.result;
+            console.log(`[YVO Extension] ✓ Capture completed successfully`);
+
+            if (result.streamData?.uploadedToStorage) {
+              console.log(`[YVO Extension] ✓ Video uploaded to Firebase Storage`);
+              console.log(`[YVO Extension] Storage URL: ${result.streamData?.videoUrl}`);
+            }
+
+            sendResponse(requestId, {
+              success: true,
+              videoInfo: result.videoInfo,
+              streamData: result.streamData,
+              message: result.message,
+              captureSource: result.streamData?.source || 'mediarecorder_capture'
+            });
+            return;
+          }
+
+          if (status?.status === 'failed' && status?.result) {
+            // Clear the status from storage
+            chrome.runtime.sendMessage({ action: 'clearCaptureStatus', videoId });
+
+            console.warn('[YVO Extension] Capture failed:', status.result.error);
+            sendResponse(requestId, {
+              success: false,
+              error: status.result.error || 'Capture failed'
+            });
+            return;
+          }
+
+          // Still in progress - continue polling
+        } catch (pollError) {
+          console.warn('[YVO Extension] Poll error (will retry):', pollError.message);
+        }
+      }
+
+      // Timeout reached
+      console.error('[YVO Extension] Capture timeout after 3 minutes');
+      sendResponse(requestId, {
+        success: false,
+        error: 'Capture timeout - please ensure the YouTube video is playing and try again'
+      });
 
     } catch (error) {
       console.error('[YVO Extension] Capture error:', error);
       sendResponse(requestId, { success: false, error: error.message });
     }
+  }
+
+  /**
+   * Sleep helper function
+   */
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
