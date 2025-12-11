@@ -100,22 +100,40 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       const isUploadedCapture = extensionStreamSource === 'mediarecorder_capture' &&
                                  job.extensionStreamData?.uploadedToStorage === true;
       const hasExtensionData = job.hasExtensionStream && job.extensionStreamData?.videoUrl;
+      const extensionWasUsed = job.useExtension === true;
+      const extensionHadVideoInfo = job.extensionVideoInfo && job.extensionVideoInfo.videoId;
 
       console.log(`[${jobId}] YouTube video download - checking extension capture status:`);
       console.log(`[${jobId}]   - hasExtensionData: ${hasExtensionData}`);
       console.log(`[${jobId}]   - extensionStreamSource: ${extensionStreamSource}`);
       console.log(`[${jobId}]   - uploadedToStorage: ${job.extensionStreamData?.uploadedToStorage}`);
       console.log(`[${jobId}]   - isUploadedCapture: ${isUploadedCapture}`);
+      console.log(`[${jobId}]   - extensionWasUsed: ${extensionWasUsed}`);
+      console.log(`[${jobId}]   - extensionHadVideoInfo: ${extensionHadVideoInfo}`);
 
       if (!hasExtensionData) {
-        // No extension data at all - fail immediately
-        console.error(`[${jobId}] FATAL: No browser extension capture data available`);
-        console.error(`[${jobId}] The Video Wizard browser extension v1.6+ is REQUIRED for YouTube video export`);
-        throw new Error(
-          'Browser extension required for YouTube video export. ' +
-          'Please install the Video Wizard extension v1.6+ and ensure the video is captured before exporting. ' +
-          'The extension captures video directly from your browser to bypass YouTube restrictions.'
-        );
+        // Determine if extension was used but capture failed, or if extension wasn't used at all
+        if (extensionWasUsed || extensionHadVideoInfo) {
+          // Extension was used but capture failed - more specific error
+          const captureMessage = job.extensionStreamData?.message || 'No stream data captured';
+          console.error(`[${jobId}] FATAL: Extension was used but video capture failed`);
+          console.error(`[${jobId}]   - message: ${captureMessage}`);
+          throw new Error(
+            'Video capture failed. The browser extension was detected but could not capture the video. ' +
+            `Reason: ${captureMessage}. ` +
+            'Please ensure: (1) YouTube video tab is open and playing, ' +
+            '(2) Video has fully loaded, (3) Check browser console (F12) for detailed errors.'
+          );
+        } else {
+          // No extension data at all - extension not used
+          console.error(`[${jobId}] FATAL: No browser extension capture data available`);
+          console.error(`[${jobId}] The Video Wizard browser extension v1.6+ is REQUIRED for YouTube video export`);
+          throw new Error(
+            'Browser extension required for YouTube video export. ' +
+            'Please install the Video Wizard extension v1.6+ and ensure the video is captured before exporting. ' +
+            'The extension captures video directly from your browser to bypass YouTube restrictions.'
+          );
+        }
       }
 
       if (!isUploadedCapture) {
@@ -161,7 +179,41 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       // The extension may have captured more than needed (e.g., full 5 minutes)
       // while the clip only needs a portion (e.g., 30 seconds at 2:00)
       const capturedStart = job.extensionStreamData?.captureStartTime || 0;
-      const capturedEnd = job.extensionStreamData?.captureEndTime || 300;
+      let capturedEnd = job.extensionStreamData?.captureEndTime;
+
+      // If captureEndTime is not provided, get the actual duration from the file using ffprobe
+      if (!capturedEnd) {
+        console.log(`[${jobId}] No captureEndTime provided, detecting actual video duration...`);
+        try {
+          const durationResult = await new Promise((resolve, reject) => {
+            const ffprobe = spawn('ffprobe', [
+              '-v', 'error',
+              '-show_entries', 'format=duration',
+              '-of', 'default=noprint_wrappers=1:nokey=1',
+              capturedFile
+            ]);
+            let stdout = '';
+            let stderr = '';
+            ffprobe.stdout.on('data', (data) => { stdout += data.toString(); });
+            ffprobe.stderr.on('data', (data) => { stderr += data.toString(); });
+            ffprobe.on('close', (code) => {
+              if (code === 0) {
+                resolve(parseFloat(stdout.trim()) || 300);
+              } else {
+                console.warn(`[${jobId}] ffprobe failed, using default duration: ${stderr}`);
+                resolve(300);
+              }
+            });
+            ffprobe.on('error', () => resolve(300));
+          });
+          capturedEnd = capturedStart + durationResult;
+          console.log(`[${jobId}] Detected actual video duration: ${durationResult}s (capturedEnd: ${capturedEnd}s)`);
+        } catch (e) {
+          console.warn(`[${jobId}] Could not detect duration, using default 300s`);
+          capturedEnd = 300;
+        }
+      }
+
       const clipStart = job.startTime || 0;
       const clipEnd = job.endTime || (clipStart + 60);
 
