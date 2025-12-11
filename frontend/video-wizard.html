@@ -10930,6 +10930,89 @@
                 }
             },
 
+            // Show server unavailable modal with direct download option
+            showServerUnavailableModal: function(streamData, clipId) {
+                var modalBody = document.querySelector('.download-modal-body');
+                if (!modalBody) return;
+
+                var videoSize = streamData.videoSize ? (streamData.videoSize / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown';
+
+                modalBody.innerHTML = `
+                    <div class="server-unavailable-container" style="text-align: center; padding: 2rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+                        <h3 style="color: #fbbf24; margin-bottom: 1rem;">Video Captured - Server Temporarily Unavailable</h3>
+                        <p style="color: rgba(255,255,255,0.8); margin-bottom: 1rem; line-height: 1.6;">
+                            Your video clip was captured successfully (${videoSize}), but our processing server is temporarily unavailable.
+                        </p>
+                        <div style="background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                            <p style="color: rgba(255,255,255,0.7); font-size: 0.9rem; margin: 0;">
+                                <strong>You can:</strong><br>
+                                1. Download the captured video now<br>
+                                2. Try again later when the server is back online<br>
+                                3. Upload the downloaded video file directly
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+                            <button class="btn-primary" onclick="app.downloadCapturedVideo('${clipId}')" style="background: linear-gradient(135deg, #10b981, #059669);">
+                                ⬇️ Download Video
+                            </button>
+                            <button class="btn-secondary" onclick="app.retryCapture()">🔄 Retry</button>
+                            <button class="btn-secondary" onclick="app.closeDownloadModal()">Close</button>
+                        </div>
+                    </div>
+                `;
+
+                // Store the video data for download
+                state.capturedVideoData = streamData;
+            },
+
+            // Download captured video directly to user's browser
+            downloadCapturedVideo: function(clipId) {
+                if (!state.capturedVideoData || !state.capturedVideoData.videoData) {
+                    utils.showToast('No captured video data available', 'error');
+                    return;
+                }
+
+                try {
+                    // Convert base64 to blob
+                    var base64 = state.capturedVideoData.videoData;
+                    var mimeType = state.capturedVideoData.mimeType || 'video/webm';
+                    var byteCharacters = atob(base64);
+                    var byteArrays = [];
+
+                    for (var i = 0; i < byteCharacters.length; i += 512) {
+                        var slice = byteCharacters.slice(i, i + 512);
+                        var byteNumbers = new Array(slice.length);
+                        for (var j = 0; j < slice.length; j++) {
+                            byteNumbers[j] = slice.charCodeAt(j);
+                        }
+                        byteArrays.push(new Uint8Array(byteNumbers));
+                    }
+
+                    var blob = new Blob(byteArrays, { type: mimeType });
+                    var url = URL.createObjectURL(blob);
+
+                    // Create download link
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'captured_clip_' + clipId + (mimeType.includes('webm') ? '.webm' : '.mp4');
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+
+                    // Cleanup
+                    setTimeout(function() {
+                        URL.revokeObjectURL(url);
+                    }, 1000);
+
+                    utils.showToast('Video downloaded! You can upload it directly for processing.', 'success');
+
+                } catch (error) {
+                    console.error('[Video Wizard] Download failed:', error);
+                    utils.showToast('Download failed: ' + error.message, 'error');
+                }
+            },
+
             openClipInYouTube: function() {
                 if (!state.downloadModal) return;
                 var info = state.downloadModal;
@@ -11051,9 +11134,15 @@
                                     captureEndTime: captureResult.streamData.captureEndTime || clipEndTime
                                 };
                                 utils.showToast('Video captured and ready for processing!', 'success');
+                            } else if (captureResult.streamData.videoData) {
+                                // Capture succeeded but server upload failed - offer direct download
+                                console.warn('[Video Wizard] Server unavailable, offering direct download');
+                                console.warn('[Video Wizard] Server error:', captureResult.streamData.uploadError);
+                                app.showServerUnavailableModal(captureResult.streamData, clipId);
+                                return; // Wait for user action
                             } else {
-                                // Capture returned but no upload - show error in modal and abort
-                                var captureError = 'Video capture incomplete. Please ensure the YouTube video is open in a browser tab.';
+                                // Capture returned but no upload and no video data
+                                var captureError = captureResult.streamData.uploadError || 'Video capture incomplete. Please ensure the YouTube video is open in a browser tab.';
                                 console.error('[Video Wizard] Capture returned but not uploaded:', captureError);
                                 app.showCaptureErrorInModal(captureError);
                                 return; // ABORT - don't submit invalid job
