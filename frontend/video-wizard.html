@@ -9190,65 +9190,9 @@
 
                 // Call Cloud Function with progress simulation
                 try {
-                    // If extension is installed and we have a YouTube URL, request capture
-                    var extensionData = null;
-                    if (state.extension.installed && url && !uploadedFile) {
-                        try {
-                            console.log('[Video Wizard] Requesting video capture from extension...');
-                            utils.showToast('Extension capturing video from YouTube tab...', 'info');
-
-                            // Extract video ID from URL
-                            var videoId = null;
-                            try {
-                                var urlObj = new URL(url);
-                                if (urlObj.hostname.includes('youtube.com')) {
-                                    videoId = urlObj.searchParams.get('v');
-                                    if (!videoId && urlObj.pathname.startsWith('/shorts/')) {
-                                        videoId = urlObj.pathname.split('/shorts/')[1];
-                                    }
-                                } else if (urlObj.hostname === 'youtu.be') {
-                                    videoId = urlObj.pathname.slice(1).split('/')[0];
-                                }
-                            } catch (e) {
-                                console.warn('[Video Wizard] Could not parse URL:', e);
-                            }
-
-                            if (videoId) {
-                                var captureResult = await sendExtensionRequest('getVideoFromYouTube', {
-                                    youtubeUrl: url,
-                                    videoId: videoId,
-                                    autoCapture: true  // Enable auto-capture feature
-                                });
-
-                                if (captureResult && captureResult.success) {
-                                    extensionData = {
-                                        videoInfo: captureResult.videoInfo,
-                                        streamData: captureResult.streamData
-                                    };
-                                    var captureSource = captureResult.captureSource || 'unknown';
-                                    console.log('[Video Wizard] Extension captured video (source: ' + captureSource + '):', extensionData);
-
-                                    if (extensionData.streamData) {
-                                        utils.showToast('Video streams captured successfully!', 'success');
-                                    } else {
-                                        utils.showToast('Video info captured (server will download video)', 'info');
-                                    }
-                                } else {
-                                    var extError = captureResult?.error || 'Unknown error';
-                                    console.warn('[Video Wizard] Extension capture failed:', extError);
-                                    // Show specific error if it's about needing YouTube tab open
-                                    if (extError.includes('open the YouTube video')) {
-                                        utils.showToast(extError, 'warning');
-                                    } else {
-                                        utils.showToast('Extension capture failed: ' + extError, 'warning');
-                                    }
-                                }
-                            }
-                        } catch (extError) {
-                            console.warn('[Video Wizard] Extension capture error (will try server):', extError);
-                            utils.showToast('Extension timeout, using server download', 'warning');
-                        }
-                    }
+                    // NOTE: Extension capture is NOT done here during analysis
+                    // The extension is only used during Export phase when downloading clips
+                    // Analysis uses YouTube API via Cloud Function
 
                     // Simulate progress steps during API call
                     var progressInterval = setInterval(function() {
@@ -9282,14 +9226,8 @@
                         requestData.uploadedVideoPath = uploadedFile.storagePath;
                         requestData.uploadedVideoName = uploadedFile.name;
                     } else {
-                        // Use YouTube URL
+                        // Use YouTube URL - Cloud Function will fetch metadata via YouTube API
                         requestData.videoUrl = url;
-
-                        // Include extension-captured data if available
-                        if (extensionData) {
-                            requestData.extensionData = extensionData;
-                            requestData.useExtension = true;
-                        }
                     }
 
                     var result = await wizardAnalyzeVideo(requestData);
@@ -10922,8 +10860,6 @@
                     console.log('Secondary source validated:', sec.type, sec.uploadedUrl ? 'has URL' : sec.youtubeVideoId);
                 }
 
-                utils.showToast('Starting video processing...', 'info');
-
                 // Log settings being sent for debugging
                 console.log('=== EXPORT SETTINGS DEBUG ===');
                 console.log('Clip ID:', clipId);
@@ -10934,14 +10870,72 @@
                 console.log('Audio Mix:', JSON.stringify(clipSettings.audioMix, null, 2));
                 console.log('=============================');
 
+                // For YouTube videos, we need to capture the clip segment using the browser extension
+                var extensionCaptureData = null;
+                var videoId = state.videoInput.videoData?.videoId || info.videoId;
+                var isUploadedVideo = state.videoInput.isUpload || !videoId || videoId.startsWith('upload_');
+
+                if (!isUploadedVideo && state.extension.installed && videoId) {
+                    // Capture the specific clip segment using the extension
+                    utils.showToast('Capturing video clip...', 'info');
+                    console.log('[Export] Starting extension capture for clip:', clipId);
+                    console.log('[Export] Video ID:', videoId);
+                    console.log('[Export] Segment:', info.startTime, '-', info.endTime);
+
+                    try {
+                        var youtubeUrl = 'https://www.youtube.com/watch?v=' + videoId;
+                        var captureResult = await sendExtensionRequest('getVideoFromYouTube', {
+                            youtubeUrl: youtubeUrl,
+                            videoId: videoId,
+                            startTime: info.startTime,
+                            endTime: info.endTime,
+                            autoCapture: true
+                        });
+
+                        if (captureResult && captureResult.success && captureResult.streamData) {
+                            extensionCaptureData = {
+                                videoUrl: captureResult.streamData.videoUrl,
+                                source: captureResult.streamData.source,
+                                uploadedToStorage: captureResult.streamData.uploadedToStorage,
+                                mimeType: captureResult.streamData.mimeType,
+                                capturedAt: captureResult.streamData.capturedAt,
+                                capturedSegment: captureResult.streamData.capturedSegment
+                            };
+                            console.log('[Export] ✓ Extension capture successful:', extensionCaptureData);
+                            utils.showToast('Video captured! Processing...', 'success');
+                        } else {
+                            var captureError = captureResult?.error || 'Unknown capture error';
+                            console.error('[Export] Extension capture failed:', captureError);
+                            utils.showToast('Capture failed: ' + captureError, 'error');
+                            return;
+                        }
+                    } catch (captureErr) {
+                        console.error('[Export] Extension capture exception:', captureErr);
+                        utils.showToast('Capture error: ' + (captureErr.message || 'Unknown error'), 'error');
+                        return;
+                    }
+                } else if (!isUploadedVideo) {
+                    utils.showToast('Browser extension required for YouTube video export. Please install the Video Wizard extension.', 'error');
+                    return;
+                } else {
+                    utils.showToast('Processing uploaded video...', 'info');
+                }
+
                 try {
                     var wizardProcessClip = functions.httpsCallable('wizardProcessClip');
-                    var result = await wizardProcessClip({
+                    var requestData = {
                         projectId: state.projectId,
                         clipId: clipId,
                         quality: quality,
                         settings: clipSettings
-                    });
+                    };
+
+                    // Include extension capture data if available
+                    if (extensionCaptureData) {
+                        requestData.extensionCaptureData = extensionCaptureData;
+                    }
+
+                    var result = await wizardProcessClip(requestData);
 
                     if (result.data.success) {
                         // Store job info

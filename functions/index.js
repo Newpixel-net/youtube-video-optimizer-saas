@@ -18039,7 +18039,7 @@ exports.wizardProcessClip = functions
   .runWith({ timeoutSeconds: 540, memory: '2GB' })
   .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { projectId, clipId, quality, settings } = data;
+  const { projectId, clipId, quality, settings, extensionCaptureData } = data;
 
   if (!projectId || !clipId) {
     throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
@@ -18068,15 +18068,21 @@ exports.wizardProcessClip = functions
     // Get clip settings (from project or from request)
     const clipSettings = settings || project.clipSettings?.[clipId] || {};
 
-    // Check if extension stream data is available
-    const extensionStreamData = project.videoData?.extensionStreamData;
-    if (extensionStreamData) {
-      console.log(`[wizardProcessClip] Extension stream data available for ${clipId}:`, {
-        hasVideoUrl: !!extensionStreamData.videoUrl,
-        hasAudioUrl: !!extensionStreamData.audioUrl,
-        quality: extensionStreamData.quality,
-        capturedAt: extensionStreamData.capturedAt
+    // PRIORITY: Use extension capture data from request (captured during export)
+    // This is the clip-specific capture done when user clicks "Start Processing"
+    // Falls back to project-level extension data if available
+    let extensionStreamData = null;
+    if (extensionCaptureData && extensionCaptureData.videoUrl) {
+      console.log(`[wizardProcessClip] Using fresh extension capture for ${clipId}:`, {
+        hasVideoUrl: true,
+        source: extensionCaptureData.source,
+        uploadedToStorage: extensionCaptureData.uploadedToStorage,
+        capturedAt: extensionCaptureData.capturedAt
       });
+      extensionStreamData = extensionCaptureData;
+    } else if (project.videoData?.extensionStreamData) {
+      console.log(`[wizardProcessClip] Using project-level extension data for ${clipId}`);
+      extensionStreamData = project.videoData.extensionStreamData;
     }
 
     // Create processing job record
@@ -18092,7 +18098,7 @@ exports.wizardProcessClip = functions
       uploadedVideoUrl: project.videoData?.uploadedVideoUrl || project.videoUrl,
       uploadedVideoPath: project.uploadedVideoPath || null,
 
-      // Extension stream data (if available from browser extension capture)
+      // Extension stream data (from export capture or project)
       extensionStreamData: extensionStreamData || null,
       hasExtensionStream: !!extensionStreamData,
 
