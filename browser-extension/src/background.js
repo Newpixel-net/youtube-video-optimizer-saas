@@ -70,14 +70,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleCaptureForWizard(message, sendResponse) {
   const { videoId, youtubeUrl, startTime, endTime } = message;
 
-  if (!videoId || !isValidVideoId(videoId)) {
-    sendResponse({ success: false, error: 'Invalid video ID' });
-    return;
-  }
-
-  console.log(`[YVO Background] Capture request for video: ${videoId}`);
-
+  // Wrap everything in try-catch to ALWAYS call sendResponse
   try {
+    if (!videoId || !isValidVideoId(videoId)) {
+      sendResponse({ success: false, error: 'Invalid video ID' });
+      return;
+    }
+
+    console.log(`[YVO Background] Capture request for video: ${videoId}`);
+
     // Get basic video info
     const videoInfo = {
       videoId: videoId,
@@ -113,7 +114,11 @@ async function handleCaptureForWizard(message, sendResponse) {
     }
   } catch (error) {
     console.error('[YVO Background] Capture error:', error);
-    sendResponse({ success: false, error: error.message });
+    try {
+      sendResponse({ success: false, error: error.message || 'Unknown capture error' });
+    } catch (responseError) {
+      console.error('[YVO Background] Failed to send error response:', responseError);
+    }
   }
 }
 
@@ -125,8 +130,16 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
   console.log(`[YVO Background] Starting capture for ${videoId}`);
 
   try {
-    // Step 1: Get or create a YouTube tab with the video
+    // Step 1: Find a YouTube tab with the video (no new windows!)
     const tab = await ensureYouTubeTab(videoId, youtubeUrl);
+
+    if (!tab) {
+      return {
+        success: false,
+        error: 'Please open the YouTube video in a browser tab first, then try again.'
+      };
+    }
+
     console.log(`[YVO Background] Using tab ${tab.id}`);
 
     // Step 2: Wait for tab to be fully loaded
@@ -135,20 +148,20 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
 
     // Step 3: Make sure the tab is focused (helps with autoplay)
     await chrome.tabs.update(tab.id, { active: true });
-    await sleep(1000);
+    await sleep(500); // Reduced from 1000ms
 
-    // Step 4: Try to get video info and start playback
+    // Step 4: Try to get video info (don't wait for playback - injection will handle it)
     let videoDuration = 300;
     try {
-      const info = await chrome.tabs.sendMessage(tab.id, { action: 'getVideoInfo' });
+      const info = await Promise.race([
+        chrome.tabs.sendMessage(tab.id, { action: 'getVideoInfo' }),
+        sleep(2000).then(() => null) // 2 second timeout
+      ]);
       if (info?.success && info.videoInfo?.duration) {
         videoDuration = info.videoInfo.duration;
       }
-      // Trigger playback
-      await chrome.tabs.sendMessage(tab.id, { action: 'triggerPlayback' });
-      await sleep(2000);
     } catch (e) {
-      console.log(`[YVO Background] Content script not ready, will retry in injection`);
+      console.log(`[YVO Background] Content script not ready, will use defaults`);
     }
 
     // Step 5: Calculate capture range
@@ -232,15 +245,17 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
 }
 
 /**
- * Find an existing YouTube tab with the video, or create a new one
+ * Find an existing YouTube tab with the video
+ * Does NOT create new tabs - requires user to have video open
  */
 async function ensureYouTubeTab(videoId, youtubeUrl) {
-  // Look for existing tab
+  // Look for existing tab with exact video
   const tabs = await chrome.tabs.query({
     url: ['*://www.youtube.com/*', '*://youtube.com/*']
   });
 
-  const existingTab = tabs.find(tab => {
+  // First, try to find tab with exact video ID
+  let existingTab = tabs.find(tab => {
     try {
       const url = new URL(tab.url);
       return url.searchParams.get('v') === videoId;
@@ -250,16 +265,31 @@ async function ensureYouTubeTab(videoId, youtubeUrl) {
   });
 
   if (existingTab) {
-    console.log(`[YVO Background] Found existing tab ${existingTab.id}`);
+    console.log(`[YVO Background] Found exact tab ${existingTab.id} for video ${videoId}`);
     return existingTab;
   }
 
-  // Create new tab
-  const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
-  console.log(`[YVO Background] Creating new tab for ${url}`);
+  // If no exact match, use any YouTube tab that's on a watch page
+  existingTab = tabs.find(tab => {
+    try {
+      const url = new URL(tab.url);
+      return url.pathname === '/watch' && url.searchParams.has('v');
+    } catch {
+      return false;
+    }
+  });
 
-  const newTab = await chrome.tabs.create({ url, active: true });
-  return newTab;
+  if (existingTab) {
+    // Navigate existing tab to the video instead of opening new one
+    const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
+    console.log(`[YVO Background] Navigating existing tab ${existingTab.id} to ${videoId}`);
+    await chrome.tabs.update(existingTab.id, { url: url });
+    return existingTab;
+  }
+
+  // No YouTube tab found - return null to indicate user needs to open video
+  console.log(`[YVO Background] No YouTube tab found for video ${videoId}`);
+  return null;
 }
 
 /**
