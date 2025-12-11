@@ -375,9 +375,24 @@ async function handleCaptureForWizard(message, sendResponse) {
 
     // Try to get info from existing tab
     if (targetTab) {
-      const videoInfo = await chrome.tabs.sendMessage(targetTab.id, {
-        action: 'getVideoInfo'
-      });
+      let videoInfo;
+      try {
+        videoInfo = await chrome.tabs.sendMessage(targetTab.id, {
+          action: 'getVideoInfo'
+        });
+      } catch (sendError) {
+        console.warn(`[YVO Background] Content script not ready on tab ${targetTab.id}: ${sendError.message}`);
+        // Content script not loaded - wait and retry once
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
+          videoInfo = await chrome.tabs.sendMessage(targetTab.id, {
+            action: 'getVideoInfo'
+          });
+        } catch (retryError) {
+          console.warn(`[YVO Background] Retry failed, using basic info`);
+          videoInfo = { success: true, videoInfo: await getBasicVideoInfo(videoId, youtubeUrl) };
+        }
+      }
 
       if (!videoInfo?.success) {
         sendResponse({
