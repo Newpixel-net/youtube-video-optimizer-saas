@@ -139,7 +139,18 @@
 
     } catch (error) {
       console.error('[YVO Extension] Capture error:', error);
-      sendResponse(requestId, { success: false, error: error.message });
+
+      // Provide user-friendly error messages for common issues
+      let userMessage = error.message;
+      if (error.message.includes('Receiving end does not exist') ||
+          error.message.includes('Extension context invalidated') ||
+          error.message.includes('Could not establish connection')) {
+        userMessage = 'Extension service worker not responding. Please try: (1) Refresh this page, ' +
+                      '(2) Check that the extension is enabled in chrome://extensions, ' +
+                      '(3) If the issue persists, reinstall the extension.';
+      }
+
+      sendResponse(requestId, { success: false, error: userMessage });
     }
   }
 
