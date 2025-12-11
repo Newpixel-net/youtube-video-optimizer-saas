@@ -91,227 +91,131 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         downloadedFile = segmentFile;
         console.log(`[${jobId}] Extracted segment from ${job.startTime}s to ${job.endTime}s`);
       }
-    } else if (job.hasExtensionStream && job.extensionStreamData?.videoUrl) {
-      // Extension-captured video - check if we should try these URLs
-      // IMPORTANT: Extension stream URLs are IP-restricted to user's browser IP
-      // When running on server (Cloud Run), these ALWAYS fail with 403, so skip them
+    } else {
+      // YouTube video - BROWSER EXTENSION v1.6+ WITH MEDIARECORDER CAPTURE IS REQUIRED
+      // All other download methods fail due to YouTube bot detection
+      // The extension captures video via MediaRecorder and uploads to Firebase Storage
 
       const extensionStreamSource = job.extensionStreamData?.source || 'unknown';
       const isUploadedCapture = extensionStreamSource === 'mediarecorder_capture' &&
-                                 job.extensionStreamData?.uploadedToStorage;
+                                 job.extensionStreamData?.uploadedToStorage === true;
+      const hasExtensionData = job.hasExtensionStream && job.extensionStreamData?.videoUrl;
 
-      if (isUploadedCapture) {
-        // MediaRecorder capture was uploaded to our storage - use it directly
-        console.log(`[${jobId}] Using MediaRecorder captured video from storage (bypasses IP restriction)`);
-        await updateProgress(jobRef, 10, 'Downloading captured video...');
+      console.log(`[${jobId}] YouTube video download - checking extension capture status:`);
+      console.log(`[${jobId}]   - hasExtensionData: ${hasExtensionData}`);
+      console.log(`[${jobId}]   - extensionStreamSource: ${extensionStreamSource}`);
+      console.log(`[${jobId}]   - uploadedToStorage: ${job.extensionStreamData?.uploadedToStorage}`);
+      console.log(`[${jobId}]   - isUploadedCapture: ${isUploadedCapture}`);
 
-        try {
-          const response = await fetch(job.extensionStreamData.videoUrl);
-          if (!response.ok) {
-            throw new Error(`Failed to download captured video: ${response.status}`);
-          }
-
-          const buffer = await response.arrayBuffer();
-          const capturedFile = path.join(workDir, 'captured.webm');
-          fs.writeFileSync(capturedFile, Buffer.from(buffer));
-          console.log(`[${jobId}] Downloaded MediaRecorder capture: ${fs.statSync(capturedFile).size} bytes`);
-
-          // Check if we need to extract a specific segment from the captured video
-          // The extension may have captured more than needed (e.g., full 5 minutes)
-          // while the clip only needs a portion (e.g., 30 seconds at 2:00)
-          const capturedStart = job.extensionStreamData?.captureStartTime || 0;
-          const capturedEnd = job.extensionStreamData?.captureEndTime || 300;
-          const clipStart = job.startTime || 0;
-          const clipEnd = job.endTime || (clipStart + 60);
-
-          // Calculate if segment extraction is needed
-          const needsExtraction = (clipStart > capturedStart) || (clipEnd < capturedEnd);
-
-          if (needsExtraction && clipStart >= capturedStart && clipEnd <= capturedEnd) {
-            // Extract the specific segment from the captured video
-            const relativeStart = clipStart - capturedStart;
-            const relativeEnd = clipEnd - capturedStart;
-            console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s from captured video`);
-            await updateProgress(jobRef, 15, 'Extracting clip segment...');
-
-            downloadedFile = path.join(workDir, 'source.webm');
-            await new Promise((resolve, reject) => {
-              const ffmpeg = spawn('ffmpeg', [
-                '-i', capturedFile,
-                '-ss', String(relativeStart),
-                '-to', String(relativeEnd),
-                '-c', 'copy',
-                '-avoid_negative_ts', 'make_zero',
-                '-y',
-                downloadedFile
-              ]);
-
-              let stderr = '';
-              ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
-              ffmpeg.on('close', (code) => {
-                if (code === 0 && fs.existsSync(downloadedFile)) {
-                  console.log(`[${jobId}] Segment extracted: ${fs.statSync(downloadedFile).size} bytes`);
-                  resolve();
-                } else {
-                  reject(new Error(`FFmpeg segment extraction failed: ${stderr.slice(-200)}`));
-                }
-              });
-              ffmpeg.on('error', reject);
-            });
-
-            // Cleanup captured file
-            try { fs.unlinkSync(capturedFile); } catch (e) {}
-          } else {
-            // Use the captured file directly (segment already matches or no extraction needed)
-            downloadedFile = capturedFile;
-            console.log(`[${jobId}] Using captured video directly (segment matches or full capture)`);
-          }
-        } catch (captureError) {
-          console.warn(`[${jobId}] MediaRecorder capture download failed: ${captureError.message}`);
-          console.log(`[${jobId}] Falling back to Video Download API...`);
-          await updateProgress(jobRef, 12, 'Capture failed, using download API...');
-
-          downloadedFile = await downloadVideoSegment({
-            jobId,
-            videoId: job.videoId,
-            startTime: job.startTime,
-            endTime: job.endTime,
-            workDir,
-            youtubeAuth
-          });
-        }
-      } else if (isRunningOnServer) {
-        // Running on server - skip extension stream URLs (they're IP-restricted and will always fail)
-        console.log(`[${jobId}] Running on server - skipping extension stream URLs (IP-restricted)`);
-        console.log(`[${jobId}] Extension stream source: ${extensionStreamSource}`);
-        console.log(`[${jobId}] Going directly to Video Download API for reliability`);
-        await updateProgress(jobRef, 10, 'Downloading video...');
-
-        downloadedFile = await downloadVideoSegment({
-          jobId,
-          videoId: job.videoId,
-          startTime: job.startTime,
-          endTime: job.endTime,
-          workDir,
-          youtubeAuth
-        });
-      } else {
-        // Not on server (local dev) - can try extension streams
-        console.log(`[${jobId}] Local environment - attempting extension stream URLs`);
-        await updateProgress(jobRef, 10, 'Trying extension capture...');
-
-        try {
-          downloadedFile = await downloadFromExtensionStream({
-            jobId,
-            extensionStreamData: job.extensionStreamData,
-            startTime: job.startTime,
-            endTime: job.endTime,
-            workDir
-          });
-          console.log(`[${jobId}] Extension stream download succeeded`);
-        } catch (extStreamError) {
-          console.warn(`[${jobId}] Extension stream failed (${extStreamError.message}), falling back to server download...`);
-          await updateProgress(jobRef, 12, 'Extension failed, trying server download...');
-
-          downloadedFile = await downloadVideoSegment({
-            jobId,
-            videoId: job.videoId,
-            startTime: job.startTime,
-            endTime: job.endTime,
-            workDir,
-            youtubeAuth
-          });
-        }
+      if (!hasExtensionData) {
+        // No extension data at all - fail immediately
+        console.error(`[${jobId}] FATAL: No browser extension capture data available`);
+        console.error(`[${jobId}] The Video Wizard browser extension v1.6+ is REQUIRED for YouTube video export`);
+        throw new Error(
+          'Browser extension required for YouTube video export. ' +
+          'Please install the Video Wizard extension v1.6+ and ensure the video is captured before exporting. ' +
+          'The extension captures video directly from your browser to bypass YouTube restrictions.'
+        );
       }
-    } else {
-      // YouTube video - use CACHING for cost optimization
-      // This reduces download costs by ~75% for multi-clip projects
-      await updateProgress(jobRef, 10, 'Checking video cache...');
 
-      // Check if we have a cached full video
-      const cache = await checkVideoCache(job.videoId);
+      if (!isUploadedCapture) {
+        // Extension data exists but MediaRecorder capture failed or wasn't uploaded
+        const captureError = job.extensionStreamData?.captureError || job.extensionStreamData?.uploadError;
+        const captureMethod = job.extensionStreamData?.captureMethod || 'unknown';
 
-      if (cache.exists) {
-        // CACHE HIT - Download from cache and extract segment locally (FREE!)
-        console.log(`[${jobId}] CACHE HIT: Using cached video for ${job.videoId}`);
-        await updateProgress(jobRef, 12, 'Using cached video (cost savings!)...');
+        console.error(`[${jobId}] FATAL: Extension capture not uploaded to storage`);
+        console.error(`[${jobId}]   - captureMethod: ${captureMethod}`);
+        console.error(`[${jobId}]   - captureError: ${captureError || 'none'}`);
+        console.error(`[${jobId}] Raw stream URLs are IP-restricted and cannot be used on server`);
 
-        const cachedVideoPath = path.join(workDir, 'cached_source.mp4');
-        await downloadFromCache({
-          videoId: job.videoId,
-          cacheUrl: cache.url,
-          outputPath: cachedVideoPath,
-          jobId
-        });
-
-        // Extract segment locally (FREE - no API cost!)
-        downloadedFile = path.join(workDir, 'source.mp4');
-        await extractSegmentFromCache({
-          inputPath: cachedVideoPath,
-          outputPath: downloadedFile,
-          startTime: job.startTime,
-          endTime: job.endTime,
-          jobId
-        });
-
-        // Cleanup cached source to save disk space
-        try { fs.unlinkSync(cachedVideoPath); } catch (e) {}
-
-        console.log(`[${jobId}] CACHE: Segment extracted locally - ZERO download cost!`);
-
-      } else {
-        // CACHE MISS - Download full video and cache it for future clips
-        console.log(`[${jobId}] CACHE MISS: Downloading and caching full video...`);
-        await updateProgress(jobRef, 12, 'Downloading full video for caching...');
-
-        try {
-          // Download full video (cheaper than segment download!)
-          const fullVideoPath = path.join(workDir, 'full_video.mp4');
-          const downloadResult = await downloadFullVideo({
-            jobId,
-            videoId: job.videoId,
-            workDir,
-            outputFile: fullVideoPath
-          });
-
-          // Cache the full video for future clips
-          await updateProgress(jobRef, 18, 'Caching video for future clips...');
-          await saveToVideoCache({
-            videoId: job.videoId,
-            localPath: fullVideoPath,
-            storage,
-            bucketName
-          });
-
-          // Extract segment locally
-          downloadedFile = path.join(workDir, 'source.mp4');
-          await extractSegmentFromCache({
-            inputPath: fullVideoPath,
-            outputPath: downloadedFile,
-            startTime: job.startTime,
-            endTime: job.endTime,
-            jobId
-          });
-
-          // Cleanup full video to save disk space
-          try { fs.unlinkSync(fullVideoPath); } catch (e) {}
-
-          console.log(`[${jobId}] CACHE: Full video cached - future clips will be FREE!`);
-
-        } catch (cacheError) {
-          // Fallback to segment download if caching fails
-          console.warn(`[${jobId}] CACHE: Caching failed (${cacheError.message}), falling back to segment download...`);
-          await updateProgress(jobRef, 15, 'Downloading video segment...');
-
-          downloadedFile = await downloadVideoSegment({
-            jobId,
-            videoId: job.videoId,
-            startTime: job.startTime,
-            endTime: job.endTime,
-            workDir,
-            youtubeAuth
-          });
+        let errorMessage = 'Video capture failed. ';
+        if (captureError) {
+          errorMessage += `Error: ${captureError}. `;
         }
+        errorMessage +=
+          'The browser extension MediaRecorder capture must successfully upload the video to storage. ' +
+          'Please ensure: (1) You have Video Wizard extension v1.6+ installed, ' +
+          '(2) The YouTube video tab is open and playing, ' +
+          '(3) The capture completes without errors. ' +
+          'Check the browser console for detailed error messages.';
+
+        throw new Error(errorMessage);
+      }
+
+      // SUCCESS: MediaRecorder capture was uploaded to our storage - use it directly
+      console.log(`[${jobId}] Using MediaRecorder captured video from Firebase Storage`);
+      console.log(`[${jobId}] Storage URL: ${job.extensionStreamData.videoUrl}`);
+      await updateProgress(jobRef, 10, 'Downloading captured video from storage...');
+
+      const response = await fetch(job.extensionStreamData.videoUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download captured video from storage: ${response.status} ${response.statusText}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      const capturedFile = path.join(workDir, 'captured.webm');
+      fs.writeFileSync(capturedFile, Buffer.from(buffer));
+      console.log(`[${jobId}] Downloaded MediaRecorder capture: ${fs.statSync(capturedFile).size} bytes`);
+
+      // Check if we need to extract a specific segment from the captured video
+      // The extension may have captured more than needed (e.g., full 5 minutes)
+      // while the clip only needs a portion (e.g., 30 seconds at 2:00)
+      const capturedStart = job.extensionStreamData?.captureStartTime || 0;
+      const capturedEnd = job.extensionStreamData?.captureEndTime || 300;
+      const clipStart = job.startTime || 0;
+      const clipEnd = job.endTime || (clipStart + 60);
+
+      console.log(`[${jobId}] Capture range: ${capturedStart}s - ${capturedEnd}s`);
+      console.log(`[${jobId}] Clip range: ${clipStart}s - ${clipEnd}s`);
+
+      // Calculate if segment extraction is needed
+      const needsExtraction = (clipStart > capturedStart) || (clipEnd < capturedEnd);
+
+      if (needsExtraction && clipStart >= capturedStart && clipEnd <= capturedEnd) {
+        // Extract the specific segment from the captured video
+        const relativeStart = clipStart - capturedStart;
+        const relativeEnd = clipEnd - capturedStart;
+        console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s from captured video`);
+        await updateProgress(jobRef, 15, 'Extracting clip segment...');
+
+        downloadedFile = path.join(workDir, 'source.webm');
+        await new Promise((resolve, reject) => {
+          const ffmpeg = spawn('ffmpeg', [
+            '-i', capturedFile,
+            '-ss', String(relativeStart),
+            '-to', String(relativeEnd),
+            '-c', 'copy',
+            '-avoid_negative_ts', 'make_zero',
+            '-y',
+            downloadedFile
+          ]);
+
+          let stderr = '';
+          ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
+          ffmpeg.on('close', (code) => {
+            if (code === 0 && fs.existsSync(downloadedFile)) {
+              console.log(`[${jobId}] Segment extracted: ${fs.statSync(downloadedFile).size} bytes`);
+              resolve();
+            } else {
+              reject(new Error(`FFmpeg segment extraction failed: ${stderr.slice(-200)}`));
+            }
+          });
+          ffmpeg.on('error', reject);
+        });
+
+        // Cleanup captured file
+        try { fs.unlinkSync(capturedFile); } catch (e) {}
+      } else if (clipStart < capturedStart || clipEnd > capturedEnd) {
+        // Clip is outside the captured range - this is a fatal error
+        console.error(`[${jobId}] FATAL: Clip range (${clipStart}s-${clipEnd}s) is outside captured range (${capturedStart}s-${capturedEnd}s)`);
+        throw new Error(
+          `The requested clip (${clipStart}s-${clipEnd}s) is outside the captured video range (${capturedStart}s-${capturedEnd}s). ` +
+          'Please re-capture the video with the correct time range using the browser extension.'
+        );
+      } else {
+        // Use the captured file directly (segment already matches or no extraction needed)
+        downloadedFile = capturedFile;
+        console.log(`[${jobId}] Using captured video directly (segment matches or full capture)`);
       }
     }
 
@@ -343,23 +247,16 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         console.log(`[${jobId}] Secondary video downloaded: ${fs.statSync(secondaryFile).size} bytes`);
 
       } else if (secondarySource.type === 'youtube' && secondarySource.youtubeVideoId) {
-        // Download from YouTube
-        console.log(`[${jobId}] Downloading secondary video from YouTube: ${secondarySource.youtubeVideoId}`);
-        const { downloadFullVideo } = await import('./youtube-downloader.js');
-        secondaryFile = path.join(workDir, 'secondary_youtube.mp4');
-
-        try {
-          await downloadFullVideo({
-            jobId: `${jobId}_secondary`,
-            videoId: secondarySource.youtubeVideoId,
-            workDir,
-            outputFile: secondaryFile
-          });
-        } catch (ytError) {
-          console.error(`[${jobId}] Failed to download secondary YouTube video: ${ytError.message}`);
-          // DON'T silently fall back - throw error so user knows
-          throw new Error(`Could not download secondary YouTube video. Please try uploading the video file directly instead of using YouTube URL. Error: ${ytError.message}`);
-        }
+        // Secondary YouTube videos are NOT supported - must be uploaded directly
+        // YouTube downloads fail due to bot detection, only browser extension capture works
+        console.error(`[${jobId}] FATAL: Secondary YouTube video not supported`);
+        console.error(`[${jobId}] YouTube video ID: ${secondarySource.youtubeVideoId}`);
+        console.error(`[${jobId}] Secondary videos must be uploaded directly, not via YouTube URL`);
+        throw new Error(
+          'Secondary YouTube videos are not supported due to YouTube restrictions. ' +
+          'Please download the video to your device and upload it directly using the "Upload Video" option. ' +
+          'Only the primary video can use the browser extension capture method.'
+        );
       } else {
         // Unknown secondary source type
         console.error(`[${jobId}] Unknown secondary source type: ${secondarySource.type}`);

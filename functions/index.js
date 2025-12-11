@@ -16052,18 +16052,21 @@ exports.wizardAnalyzeVideo = functions
       };
 
       // Store extension stream data for later use in processing
+      // CRITICAL: Preserve ALL fields from streamData, especially source and uploadedToStorage
+      // These fields are needed by the video processor to determine the download method
       if (extensionData.streamData) {
         videoData.extensionStreamData = {
-          videoUrl: extensionData.streamData.videoUrl,
-          audioUrl: extensionData.streamData.audioUrl,
-          quality: extensionData.streamData.quality,
-          mimeType: extensionData.streamData.mimeType,
-          capturedAt: Date.now()
+          ...extensionData.streamData,  // Preserve ALL fields from extension
+          capturedAt: extensionData.streamData.capturedAt || Date.now()
         };
-        console.log('[wizardAnalyzeVideo] Extension stream URLs stored:', {
+        console.log('[wizardAnalyzeVideo] Extension stream data stored:', {
           hasVideoUrl: !!extensionData.streamData.videoUrl,
           hasAudioUrl: !!extensionData.streamData.audioUrl,
-          quality: extensionData.streamData.quality
+          quality: extensionData.streamData.quality,
+          source: extensionData.streamData.source,
+          uploadedToStorage: extensionData.streamData.uploadedToStorage,
+          captureStartTime: extensionData.streamData.captureStartTime,
+          captureEndTime: extensionData.streamData.captureEndTime
         });
       }
 

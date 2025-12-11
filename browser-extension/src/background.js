@@ -299,6 +299,9 @@ async function handleCaptureForWizard(message, sendResponse) {
           mimeType: 'video/mp4',
           capturedAt: intercepted?.capturedAt || Date.now(),
           source: source,
+          uploadedToStorage: false,  // Explicitly mark as NOT uploaded
+          uploadFailed: true,        // Flag for wizard-bridge.js to detect
+          uploadError: uploadResult.error,
           captureMethod: 'fallback_urls',
           captureError: uploadResult.error
         },
@@ -1225,17 +1228,33 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     }
 
     console.log(`[YVO Background] Injecting MediaRecorder capture (${captureStart}s to ${captureEnd}s)...`);
+    console.log(`[YVO Background] Target tab: ${youtubeTab.id}, URL: ${youtubeTab.url}`);
 
     // Inject and run the capture function
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: youtubeTab.id },
-      world: 'MAIN',
-      func: captureVideoSegmentWithMediaRecorder,
-      args: [captureStart, captureEnd]
-    });
+    let results;
+    try {
+      results = await chrome.scripting.executeScript({
+        target: { tabId: youtubeTab.id },
+        world: 'MAIN',
+        func: captureVideoSegmentWithMediaRecorder,
+        args: [captureStart, captureEnd]
+      });
+    } catch (scriptError) {
+      console.error(`[YVO Background] Script injection failed:`, scriptError);
+      throw new Error(`Script injection failed: ${scriptError.message}. Tab may not be fully loaded or accessible.`);
+    }
 
-    if (!results || results.length === 0 || !results[0].result) {
-      throw new Error('MediaRecorder capture script failed to execute');
+    console.log(`[YVO Background] Script execution returned:`, results ? `${results.length} result(s)` : 'null');
+
+    if (!results || results.length === 0) {
+      throw new Error('MediaRecorder capture script returned no results - tab may be restricted');
+    }
+
+    if (!results[0].result) {
+      // Check if there was an error in the injected script
+      const errorMsg = results[0].error ? `Script error: ${results[0].error}` : 'Script returned null/undefined result';
+      console.error(`[YVO Background] Script result issue:`, results[0]);
+      throw new Error(`MediaRecorder capture script failed: ${errorMsg}`);
     }
 
     const captureResult = results[0].result;
