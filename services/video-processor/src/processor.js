@@ -622,7 +622,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   }
 
   // Build FFmpeg filter chain
-  let filters = buildFilterChain({
+  const filterResult = buildFilterChain({
     inputWidth: videoInfo.width,
     inputHeight: videoInfo.height,
     targetWidth,
@@ -634,11 +634,22 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     colorGrade: settings.colorGrade
   });
 
+  let { filterString, isComplex, outputLabel } = filterResult;
+
   // Add subtitle filter if captions were generated
   if (captionFile && fs.existsSync(captionFile)) {
     // Escape special characters in path for FFmpeg
     const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
-    filters = `${filters},ass='${escapedPath}'`;
+
+    if (isComplex) {
+      // For complex filters, apply ASS to the output stream
+      // Replace [outv] with [outv_nosub], then apply subtitles to get [outv]
+      filterString = filterString.replace('[outv]', '[outv_nosub]');
+      filterString += `;[outv_nosub]ass='${escapedPath}'[outv]`;
+    } else {
+      // For simple filters, just append the ASS filter
+      filterString = `${filterString},ass='${escapedPath}'`;
+    }
     console.log(`[${jobId}] Adding captions from: ${captionFile}`);
   }
 
@@ -650,22 +661,45 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   });
 
   return new Promise((resolve, reject) => {
-    const args = [
-      '-i', inputFile,
-      '-vf', filters,
-      '-af', audioFilters,
-      '-c:v', 'libx264',
-      '-preset', 'fast',
-      '-crf', '23',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-r', output.fps.toString(),
-      '-movflags', '+faststart',
-      '-y',
-      outputFile
-    ];
+    let args;
 
-    console.log(`[${jobId}] FFmpeg command: ffmpeg ${args.join(' ')}`);
+    if (isComplex) {
+      // Complex filter graph - use -filter_complex with stream mapping
+      args = [
+        '-i', inputFile,
+        '-filter_complex', filterString,
+        '-map', '[outv]',
+        '-map', '0:a',
+        '-af', audioFilters,
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '23',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-r', output.fps.toString(),
+        '-movflags', '+faststart',
+        '-y',
+        outputFile
+      ];
+    } else {
+      // Simple filter - use -vf
+      args = [
+        '-i', inputFile,
+        '-vf', filterString,
+        '-af', audioFilters,
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '23',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-r', output.fps.toString(),
+        '-movflags', '+faststart',
+        '-y',
+        outputFile
+      ];
+    }
+
+    console.log(`[${jobId}] FFmpeg command (${isComplex ? 'complex' : 'simple'}): ffmpeg ${args.join(' ')}`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -699,6 +733,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
 /**
  * Build FFmpeg video filter chain
+ * Returns { filterString, isComplex } where isComplex indicates if -filter_complex is needed
  */
 function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, reframeMode, cropPosition, autoZoom, vignette, colorGrade }) {
   const filters = [];
@@ -708,31 +743,36 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
   // Normalize reframe mode names (frontend uses 'broll_split', backend used 'b_roll')
   const normalizedMode = reframeMode === 'broll_split' ? 'b_roll' : reframeMode;
 
+  // Determine if this mode requires complex filter graph
+  const isComplexFilter = ['split_screen', 'three_person'].includes(normalizedMode);
+
   // Step 1: Reframe/Crop based on mode
   switch (normalizedMode) {
     case 'split_screen':
       // Split screen: Show left and right speakers stacked vertically (for podcasts)
       // Take left 1/3 and right 1/3 of the video, stack them
+      // This requires -filter_complex with proper stream naming
       const splitCropW = Math.floor(inputWidth / 3);
       const splitHalfH = Math.floor(targetHeight / 2);
-      filters.push(`split[left][right]`);
+      filters.push(`[0:v]split[left][right]`);
       filters.push(`[left]crop=${splitCropW}:${inputHeight}:0:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[l]`);
       filters.push(`[right]crop=${splitCropW}:${inputHeight}:${inputWidth - splitCropW}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[r]`);
-      filters.push(`[l][r]vstack`);
+      filters.push(`[l][r]vstack[outv]`);
       break;
 
     case 'three_person':
       // Three person: Show three speakers - top (center), bottom-left, bottom-right
+      // This requires -filter_complex with proper stream naming
       const thirdW = Math.floor(inputWidth / 3);
       const topH = Math.floor(targetHeight * 0.55);
       const bottomH = targetHeight - topH;
       const halfTargetW = Math.floor(targetWidth / 2);
-      filters.push(`split=3[center][bl][br]`);
+      filters.push(`[0:v]split=3[center][bl][br]`);
       filters.push(`[center]crop=${thirdW}:${inputHeight}:${thirdW}:0,scale=${targetWidth}:${topH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topH}[c]`);
       filters.push(`[bl]crop=${thirdW}:${inputHeight}:0:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[left]`);
       filters.push(`[br]crop=${thirdW}:${inputHeight}:${2 * thirdW}:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[right]`);
       filters.push(`[left][right]hstack[bottom]`);
-      filters.push(`[c][bottom]vstack`);
+      filters.push(`[c][bottom]vstack[outv]`);
       break;
 
     case 'gameplay':
@@ -799,8 +839,6 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
   }
 
   // Step 2: Apply visual effects (but not for complex filter chains)
-  const isComplexFilter = ['split_screen', 'three_person'].includes(normalizedMode);
-
   if (!isComplexFilter) {
     if (autoZoom && normalizedMode !== 'b_roll') {
       // Subtle zoom pulse effect
@@ -819,7 +857,14 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
     }
   }
 
-  return filters.join(',');
+  // Return both filter string and whether it's complex
+  // Complex filters use ';' as separator and need -filter_complex
+  // Simple filters use ',' as separator and use -vf
+  return {
+    filterString: isComplexFilter ? filters.join(';') : filters.join(','),
+    isComplex: isComplexFilter,
+    outputLabel: isComplexFilter ? '[outv]' : null
+  };
 }
 
 /**
