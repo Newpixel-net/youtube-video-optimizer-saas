@@ -549,13 +549,13 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
     };
 
     try {
-      // Open the YouTube video in a new tab
+      // Open the YouTube video in a new tab - MUST be active for autoplay to work
       captureTab = await chrome.tabs.create({
         url: url,
-        active: false // Open in background so user can continue working
+        active: true // Tab must be active for YouTube to autoplay
       });
 
-      console.log(`[YVO Background] Opened capture tab ${captureTab.id}`);
+      console.log(`[YVO Background] Opened capture tab ${captureTab.id} (active)`);
 
       // Track this tab for the video ID
       tabVideoMap.set(captureTab.id, videoId);
@@ -1332,6 +1332,22 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       captureStart = 0;
       captureEnd = Math.min(MAX_CAPTURE_DURATION, videoDuration);
       console.log(`[YVO Background] No segment specified, capturing first ${captureEnd}s of video`);
+    }
+
+    // Make sure tab is active and video is playing before capture
+    console.log(`[YVO Background] Ensuring tab is active and video is playing...`);
+    try {
+      // Focus the tab to ensure video can play
+      await chrome.tabs.update(youtubeTab.id, { active: true });
+
+      // Trigger playback via content script
+      await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
+      console.log(`[YVO Background] Playback triggered, waiting for video to start...`);
+
+      // Wait for video to actually start playing
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    } catch (e) {
+      console.log(`[YVO Background] Could not trigger playback: ${e.message}`);
     }
 
     console.log(`[YVO Background] Injecting MediaRecorder capture (${captureStart}s to ${captureEnd}s)...`);
