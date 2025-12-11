@@ -10855,6 +10855,81 @@
                 state.downloadModal = null;
             },
 
+            // Show capture error in the download modal (instead of closing it)
+            showCaptureErrorInModal: function(errorMessage) {
+                var modalBody = document.querySelector('.download-modal-body');
+                if (!modalBody) return;
+
+                // Hide all content and show error
+                modalBody.innerHTML = `
+                    <div class="capture-error-container" style="text-align: center; padding: 2rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">❌</div>
+                        <h3 style="color: #ff6b6b; margin-bottom: 1rem;">Video Capture Failed</h3>
+                        <p style="color: rgba(255,255,255,0.8); margin-bottom: 1.5rem; line-height: 1.6;">
+                            ${errorMessage}
+                        </p>
+                        <div style="background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                            <p style="color: rgba(255,255,255,0.7); font-size: 0.9rem; margin: 0;">
+                                <strong>To fix this:</strong><br>
+                                1. Open the YouTube video in another browser tab<br>
+                                2. Make sure the video plays (at least for a few seconds)<br>
+                                3. Return here and try again
+                            </p>
+                        </div>
+                        <button class="btn-primary" onclick="app.closeDownloadModal()" style="margin-right: 0.5rem;">Close</button>
+                        <button class="btn-secondary" onclick="app.retryCapture()">🔄 Retry</button>
+                    </div>
+                `;
+            },
+
+            // Retry the capture after error
+            retryCapture: function() {
+                // Save clipId before closing modal
+                var clipId = state.downloadModal ? state.downloadModal.clipId : null;
+                app.closeDownloadModal();
+                // Re-open the modal which will trigger fresh capture
+                if (clipId) {
+                    setTimeout(function() {
+                        app.showDownloadModal(clipId);
+                    }, 500);
+                }
+            },
+
+            // Show capturing/processing state in the modal
+            showCapturingStateInModal: function(message) {
+                var modalBody = document.querySelector('.download-modal-body');
+                var modalActions = document.querySelector('.download-modal-actions');
+                if (!modalBody) return;
+
+                // Replace body content with capturing state
+                modalBody.innerHTML = `
+                    <div class="capturing-state" style="text-align: center; padding: 2rem;">
+                        <div class="capturing-spinner" style="width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.1); border-top-color: #8b5cf6; border-radius: 50%; margin: 0 auto 1.5rem; animation: spin 1s linear infinite;"></div>
+                        <h3 style="color: white; margin-bottom: 0.5rem;">Capturing Video...</h3>
+                        <p style="color: rgba(255,255,255,0.7); margin-bottom: 1rem;" id="capture-status-text">${message || 'Please wait while we capture your video segment'}</p>
+                        <div style="background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 8px; padding: 1rem;">
+                            <p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin: 0;">
+                                This may take 15-30 seconds depending on clip length.<br>
+                                The video is being captured at high speed and uploaded.
+                            </p>
+                        </div>
+                    </div>
+                `;
+
+                // Hide action buttons during capture
+                if (modalActions) {
+                    modalActions.style.display = 'none';
+                }
+            },
+
+            // Update capture status text
+            updateCaptureStatus: function(message) {
+                var statusText = document.getElementById('capture-status-text');
+                if (statusText) {
+                    statusText.textContent = message;
+                }
+            },
+
             openClipInYouTube: function() {
                 if (!state.downloadModal) return;
                 var info = state.downloadModal;
@@ -10941,7 +11016,10 @@
 
                 if (!isUploadedVideo && state.extension.installed && state.videoInput.videoData?.videoId) {
                     console.log('[Video Wizard] Extension installed - triggering MediaRecorder capture for clip...');
-                    utils.showToast('Capturing video segment (this may take a moment)...', 'info');
+
+                    // Show capturing state in modal
+                    var clipDuration = clipEndTime - clipStartTime;
+                    app.showCapturingStateInModal('Capturing ' + Math.round(clipDuration) + ' seconds of video...');
 
                     try {
                         // Request fresh capture from extension with specific clip timing
@@ -10958,7 +11036,6 @@
 
                             // Check if MediaRecorder capture actually worked and uploaded to storage
                             var uploadedToStorage = captureResult.streamData.uploadedToStorage || false;
-                            var captureFailedButHasFallback = captureResult.streamData.uploadFailed || false;
 
                             if (uploadedToStorage) {
                                 // Success! Video was captured and uploaded to our storage
@@ -10974,25 +11051,24 @@
                                     captureEndTime: captureResult.streamData.captureEndTime || clipEndTime
                                 };
                                 utils.showToast('Video captured and ready for processing!', 'success');
-                            } else if (captureFailedButHasFallback) {
-                                // MediaRecorder failed - show clear error
-                                var captureError = captureResult.streamData.uploadError || captureResult.message || 'Capture failed';
-                                console.error('[Video Wizard] MediaRecorder capture failed:', captureError);
-                                utils.showToast('Video capture failed. Please ensure YouTube is open in another tab and try again.', 'error');
-                                // Don't set extensionCaptureData - let server try fallbacks (though they'll likely fail)
                             } else {
-                                // Old-style intercepted URLs without upload - these won't work on server
-                                console.warn('[Video Wizard] Extension returned intercepted URLs (not uploaded to storage) - server will attempt fallback methods');
-                                utils.showToast('Capture incomplete, trying server methods (may be slower)...', 'warning');
-                                // Don't set extensionCaptureData - the intercepted URLs are IP-restricted
+                                // Capture returned but no upload - show error in modal and abort
+                                var captureError = 'Video capture incomplete. Please ensure the YouTube video is open in a browser tab.';
+                                console.error('[Video Wizard] Capture returned but not uploaded:', captureError);
+                                app.showCaptureErrorInModal(captureError);
+                                return; // ABORT - don't submit invalid job
                             }
                         } else {
-                            console.warn('[Video Wizard] Extension capture failed:', captureResult?.error || 'Unknown error');
-                            utils.showToast('Extension capture failed, using server fallback...', 'warning');
+                            // Capture failed completely - show error in modal and abort
+                            var errorMsg = captureResult?.error || captureResult?.message || 'Unknown capture error';
+                            console.error('[Video Wizard] Extension capture failed:', errorMsg);
+                            app.showCaptureErrorInModal(errorMsg);
+                            return; // ABORT - don't submit invalid job
                         }
                     } catch (captureError) {
-                        console.warn('[Video Wizard] Extension capture error:', captureError.message);
-                        utils.showToast('Extension timeout, using server fallback...', 'warning');
+                        console.error('[Video Wizard] Extension capture exception:', captureError.message);
+                        app.showCaptureErrorInModal('Capture timeout: ' + captureError.message);
+                        return; // ABORT - don't submit invalid job
                     }
                 } else if (!isUploadedVideo && !state.extension.installed) {
                     console.log('[Video Wizard] Extension not installed - server will attempt YouTube download (may fail)');
