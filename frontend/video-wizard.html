@@ -7742,12 +7742,14 @@
             var showSecondarySource = ['split_screen', 'three_person', 'gameplay', 'broll_split'].indexOf(settings.reframeMode) !== -1;
             if (showSecondarySource) {
                 var secondarySource = settings.secondarySource || { enabled: false, inputTab: 'upload' };
+                var tertiarySource = settings.tertiarySource || { enabled: false, inputTab: 'upload' };
                 var audioMix = settings.audioMix || { primaryVolume: 100, secondaryVolume: 0, primaryMuted: false, secondaryMuted: true };
+                var isThreePersonMode = settings.reframeMode === 'three_person';
 
                 html += '<div class="customization-panel">';
                 html += '<div class="panel-header">';
                 html += '<span class="panel-icon">🎬</span>';
-                html += '<span class="panel-title">SECONDARY SOURCE</span>';
+                html += '<span class="panel-title">' + (isThreePersonMode ? 'VIDEO SOURCES' : 'SECONDARY SOURCE') + '</span>';
                 html += '</div>';
 
                 html += '<div class="secondary-source-panel">';
@@ -7758,7 +7760,7 @@
                 html += '<span>○</span> Split primary video';
                 html += '</button>';
                 html += '<button class="source-toggle-btn' + (secondarySource.enabled ? ' active' : '') + '" onclick="app.toggleSecondarySource(true)">';
-                html += '<span>●</span> Add second video';
+                html += '<span>●</span> ' + (isThreePersonMode ? 'Add Video 2' : 'Add second video');
                 html += '</button>';
                 html += '</div>';
 
@@ -7958,6 +7960,104 @@
                         html += '<button class="audio-mix-preset" onclick="app.applyAudioMixPreset(\'mix\')">50/50 Mix</button>';
                         html += '<button class="audio-mix-preset" onclick="app.applyAudioMixPreset(\'background\')">Primary + BG</button>';
                         html += '</div>';
+
+                        html += '</div>';
+                    }
+                }
+
+                // TERTIARY SOURCE (Video 3) - Only for three_person mode
+                if (isThreePersonMode && secondarySource.enabled) {
+                    var hasSecondarySource = secondarySource.type && (secondarySource.fileName || secondarySource.youtubeVideoId || secondarySource.uploadedUrl);
+
+                    if (hasSecondarySource) {
+                        html += '<div class="tertiary-source-section" style="margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,0.1)">';
+                        html += '<div style="font-size:0.8rem;font-weight:600;color:rgba(255,255,255,0.9);margin-bottom:0.75rem">🎬 Video 3 (Third Position)</div>';
+
+                        // Toggle for tertiary source
+                        html += '<div class="secondary-source-toggle">';
+                        html += '<button class="source-toggle-btn' + (!tertiarySource.enabled ? ' active' : '') + '" onclick="app.toggleTertiarySource(false)">';
+                        html += '<span>○</span> Use primary video';
+                        html += '</button>';
+                        html += '<button class="source-toggle-btn' + (tertiarySource.enabled ? ' active' : '') + '" onclick="app.toggleTertiarySource(true)">';
+                        html += '<span>●</span> Add Video 3';
+                        html += '</button>';
+                        html += '</div>';
+
+                        if (tertiarySource.enabled) {
+                            var hasTertiarySource = tertiarySource.type && (tertiarySource.fileName || tertiarySource.youtubeVideoId);
+
+                            if (!hasTertiarySource) {
+                                // Input tabs for tertiary
+                                html += '<div class="secondary-source-input">';
+                                html += '<div class="source-input-tabs">';
+                                html += '<button class="source-input-tab' + (tertiarySource.inputTab === 'upload' ? ' active' : '') + '" onclick="app.setTertiaryInputTab(\'upload\')">';
+                                html += '📤 Upload File';
+                                html += '</button>';
+                                html += '<button class="source-input-tab' + (tertiarySource.inputTab === 'youtube' ? ' active' : '') + '" onclick="app.setTertiaryInputTab(\'youtube\')">';
+                                html += '🔗 YouTube URL';
+                                html += '</button>';
+                                html += '</div>';
+
+                                if (tertiarySource.inputTab === 'upload') {
+                                    html += '<div class="upload-dropzone" id="tertiary-upload-dropzone" onclick="document.getElementById(\'tertiary-file-input\').click()">';
+                                    html += '<div class="upload-dropzone-icon">📁</div>';
+                                    html += '<div class="upload-dropzone-text">Click or drag video file here</div>';
+                                    html += '<div class="upload-dropzone-hint">MP4, MOV, WebM up to 500MB</div>';
+                                    html += '</div>';
+                                    html += '<input type="file" id="tertiary-file-input" accept="video/*" style="display:none" onchange="app.handleTertiaryFileSelect(this.files)">';
+                                } else {
+                                    html += '<div class="youtube-url-input-container">';
+                                    html += '<input type="text" class="youtube-url-input" id="tertiary-youtube-url" placeholder="https://www.youtube.com/watch?v=...">';
+                                    html += '<button class="youtube-load-btn" onclick="app.loadTertiaryYouTube()">Load</button>';
+                                    html += '</div>';
+                                }
+                                html += '</div>';
+                            } else {
+                                // Show tertiary source preview
+                                html += '<div class="secondary-source-preview">';
+                                html += '<div class="source-preview-thumb">';
+                                if (tertiarySource.type === 'youtube' && tertiarySource.youtubeThumbnail) {
+                                    html += '<img src="' + tertiarySource.youtubeThumbnail + '" alt="thumbnail">';
+                                } else {
+                                    html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:1.5rem">📹</div>';
+                                }
+                                html += '</div>';
+                                html += '<div class="source-preview-info">';
+                                var tertiaryName = tertiarySource.type === 'youtube'
+                                    ? (tertiarySource.youtubeTitle || 'YouTube Video')
+                                    : (tertiarySource.metadata?.title || tertiarySource.fileName || 'Uploaded Video');
+                                html += '<div class="source-preview-name">' + utils.escapeHtml(tertiaryName) + '</div>';
+                                html += '<div class="source-preview-meta">';
+                                if (tertiarySource.uploading) {
+                                    html += '<span class="source-preview-status" style="color:#f59e0b">⏳ Uploading ' + (tertiarySource.uploadProgress || 0) + '%</span>';
+                                } else if (tertiarySource.uploadedUrl || tertiarySource.youtubeVideoId) {
+                                    html += '<span class="source-preview-status">✓ Ready</span>';
+                                }
+                                html += '</div>';
+                                html += '</div>';
+                                html += '<button class="source-preview-remove" onclick="app.removeTertiarySource()" title="Remove"' + (tertiarySource.uploading ? ' disabled style="opacity:0.5"' : '') + '>×</button>';
+                                html += '</div>';
+
+                                // Position for tertiary (fixed to bottom-right in three_person)
+                                html += '<div class="secondary-source-options">';
+                                html += '<div class="source-option-row">';
+                                html += '<span class="source-option-label">📍 Position</span>';
+                                html += '<span style="color:rgba(255,255,255,0.6);font-size:0.8rem">Bottom Right (fixed)</span>';
+                                html += '</div>';
+
+                                // Time sync offset for tertiary
+                                html += '<div class="source-option-row">';
+                                html += '<span class="source-option-label">⏱️ Sync offset</span>';
+                                html += '<div class="source-offset-control">';
+                                html += '<button class="source-offset-btn" onclick="app.adjustTertiaryOffset(-0.5)">−</button>';
+                                var tertiaryOffsetSign = tertiarySource.timeOffset >= 0 ? '+' : '';
+                                html += '<span class="source-offset-value">' + tertiaryOffsetSign + tertiarySource.timeOffset.toFixed(1) + 's</span>';
+                                html += '<button class="source-offset-btn" onclick="app.adjustTertiaryOffset(0.5)">+</button>';
+                                html += '</div>';
+                                html += '</div>';
+                                html += '</div>';
+                            }
+                        }
 
                         html += '</div>';
                     }
@@ -8453,6 +8553,23 @@
                     youtubeTitle: null,       // YouTube video title
                     position: 'bottom',       // 'top', 'bottom', 'left', 'right', 'corner'
                     timeOffset: 0             // Sync offset in seconds (-10 to +10)
+                },
+
+                // Third source settings (for three_person mode - supports 3 different videos)
+                tertiarySource: {
+                    enabled: false,
+                    inputTab: 'upload',
+                    type: null,
+                    file: null,
+                    fileName: null,
+                    fileSize: null,
+                    uploadedUrl: null,
+                    youtubeUrl: null,
+                    youtubeVideoId: null,
+                    youtubeThumbnail: null,
+                    youtubeTitle: null,
+                    position: 'bottom-right', // Default for third video in three_person
+                    timeOffset: 0
                 },
 
                 // Audio mixing (when secondary source is enabled)
@@ -9881,6 +9998,204 @@
                     var current = state.clipSettings[activeClip.id].secondarySource.timeOffset || 0;
                     var newOffset = Math.max(-10, Math.min(10, current + delta));
                     state.clipSettings[activeClip.id].secondarySource.timeOffset = newOffset;
+                }
+                render();
+            },
+
+            // =============================================
+            // TERTIARY SOURCE (Video 3 for three_person mode)
+            // =============================================
+
+            toggleTertiarySource: function(enabled) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                }
+                state.clipSettings[activeClip.id].tertiarySource.enabled = enabled;
+                render();
+            },
+
+            setTertiaryInputTab: function(tab) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                }
+                state.clipSettings[activeClip.id].tertiarySource.inputTab = tab;
+                render();
+            },
+
+            handleTertiaryFileSelect: async function(files) {
+                if (!files || files.length === 0) return;
+                var file = files[0];
+
+                if (!file.type.startsWith('video/')) {
+                    utils.showToast('Please select a video file', 'error');
+                    return;
+                }
+
+                var maxSize = 500 * 1024 * 1024;
+                if (file.size > maxSize) {
+                    utils.showToast('File too large. Maximum size is 500MB', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                }
+
+                state.clipSettings[activeClip.id].tertiarySource.type = 'upload';
+                state.clipSettings[activeClip.id].tertiarySource.file = file;
+                state.clipSettings[activeClip.id].tertiarySource.fileName = file.name;
+                state.clipSettings[activeClip.id].tertiarySource.fileSize = file.size;
+                state.clipSettings[activeClip.id].tertiarySource.uploading = true;
+                state.clipSettings[activeClip.id].tertiarySource.uploadProgress = 0;
+                state.clipSettings[activeClip.id].tertiarySource.position = 'bottom-right'; // Fixed for three_person
+
+                render();
+                utils.showToast('Uploading Video 3...', 'info');
+
+                try {
+                    var timestamp = Date.now();
+                    var safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                    var storagePath = 'tertiary_videos/' + state.user.uid + '/' + activeClip.id + '_' + timestamp + '_' + safeName;
+                    var storageRef = storage.ref(storagePath);
+
+                    var uploadTask = storageRef.put(file);
+
+                    uploadTask.on('state_changed',
+                        function(snapshot) {
+                            var progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                            if (state.clipSettings[activeClip.id]?.tertiarySource) {
+                                state.clipSettings[activeClip.id].tertiarySource.uploadProgress = progress;
+                            }
+                            if (progress % 20 === 0 || progress === 100) {
+                                render();
+                            }
+                        },
+                        function(error) {
+                            console.error('Tertiary video upload error:', error);
+                            utils.showToast('Upload failed: ' + error.message, 'error');
+                            if (state.clipSettings[activeClip.id]?.tertiarySource) {
+                                state.clipSettings[activeClip.id].tertiarySource.uploading = false;
+                                state.clipSettings[activeClip.id].tertiarySource.uploadProgress = 0;
+                            }
+                            render();
+                        },
+                        async function() {
+                            var downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+
+                            if (state.clipSettings[activeClip.id]?.tertiarySource) {
+                                state.clipSettings[activeClip.id].tertiarySource.uploading = false;
+                                state.clipSettings[activeClip.id].tertiarySource.uploadProgress = 100;
+                                state.clipSettings[activeClip.id].tertiarySource.uploadedUrl = downloadURL;
+                            }
+
+                            console.log('Tertiary video uploaded:', downloadURL);
+                            utils.showToast('Video 3 uploaded successfully!', 'success');
+                            render();
+                        }
+                    );
+                } catch (uploadError) {
+                    console.error('Tertiary video upload error:', uploadError);
+                    utils.showToast('Upload failed: ' + uploadError.message, 'error');
+                    if (state.clipSettings[activeClip.id]?.tertiarySource) {
+                        state.clipSettings[activeClip.id].tertiarySource.uploading = false;
+                    }
+                    render();
+                }
+            },
+
+            loadTertiaryYouTube: function() {
+                var urlInput = document.getElementById('tertiary-youtube-url');
+                if (!urlInput) return;
+
+                var url = urlInput.value.trim();
+                if (!url) {
+                    utils.showToast('Please enter a YouTube URL', 'error');
+                    return;
+                }
+
+                var videoId = null;
+                var patterns = [
+                    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+                    /^([a-zA-Z0-9_-]{11})$/
+                ];
+                for (var i = 0; i < patterns.length; i++) {
+                    var match = url.match(patterns[i]);
+                    if (match) {
+                        videoId = match[1];
+                        break;
+                    }
+                }
+
+                if (!videoId) {
+                    utils.showToast('Invalid YouTube URL', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                }
+
+                state.clipSettings[activeClip.id].tertiarySource.type = 'youtube';
+                state.clipSettings[activeClip.id].tertiarySource.youtubeUrl = url;
+                state.clipSettings[activeClip.id].tertiarySource.youtubeVideoId = videoId;
+                state.clipSettings[activeClip.id].tertiarySource.youtubeThumbnail = 'https://img.youtube.com/vi/' + videoId + '/mqdefault.jpg';
+                state.clipSettings[activeClip.id].tertiarySource.youtubeTitle = 'YouTube Video';
+                state.clipSettings[activeClip.id].tertiarySource.position = 'bottom-right'; // Fixed for three_person
+
+                utils.showToast('Video 3 loaded from YouTube', 'success');
+                render();
+            },
+
+            removeTertiarySource: function() {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (state.clipSettings[activeClip.id] && state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                    state.clipSettings[activeClip.id].tertiarySource.enabled = true;
+                }
+                utils.showToast('Video 3 removed', 'info');
+                render();
+            },
+
+            adjustTertiaryOffset: function(delta) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (state.clipSettings[activeClip.id] && state.clipSettings[activeClip.id].tertiarySource) {
+                    var current = state.clipSettings[activeClip.id].tertiarySource.timeOffset || 0;
+                    var newOffset = Math.max(-10, Math.min(10, current + delta));
+                    state.clipSettings[activeClip.id].tertiarySource.timeOffset = newOffset;
                 }
                 render();
             },
