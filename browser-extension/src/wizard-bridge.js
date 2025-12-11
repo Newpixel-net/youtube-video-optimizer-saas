@@ -47,6 +47,7 @@
 
     switch (action) {
       case 'getVideoFromYouTube':
+      case 'captureVideoForWizard':  // Support both action names for compatibility
         handleGetVideoRequest(data, requestId);
         break;
 
@@ -59,7 +60,8 @@
         break;
 
       default:
-        sendResponse(requestId, { error: 'Unknown action' });
+        console.warn('[YVO Extension] Unknown action:', action);
+        sendResponse(requestId, { error: 'Unknown action: ' + action });
     }
   }
 
@@ -69,19 +71,19 @@
    * Now supports segment capture with startTime/endTime parameters
    */
   async function handleGetVideoRequest(data, requestId) {
-    const { youtubeUrl, autoCapture = true, startTime, endTime } = data || {};
+    const { youtubeUrl, autoCapture = true, startTime, endTime, videoId: providedVideoId } = data || {};
 
-    if (!youtubeUrl) {
-      sendResponse(requestId, { error: 'No YouTube URL provided' });
+    if (!youtubeUrl && !providedVideoId) {
+      sendResponse(requestId, { error: 'No YouTube URL or video ID provided' });
       return;
     }
 
     try {
-      // Extract video ID from URL
-      const videoId = extractVideoId(youtubeUrl);
+      // Use provided video ID or extract from URL
+      const videoId = providedVideoId || extractVideoId(youtubeUrl);
 
       if (!videoId) {
-        sendResponse(requestId, { error: 'Invalid YouTube URL' });
+        sendResponse(requestId, { error: 'Invalid YouTube URL or video ID' });
         return;
       }
 

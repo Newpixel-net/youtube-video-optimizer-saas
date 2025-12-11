@@ -10926,7 +10926,67 @@
                 console.log('Audio Mix:', JSON.stringify(clipSettings.audioMix, null, 2));
                 console.log('=============================');
 
-                utils.showToast('Starting video processing...', 'info');
+                // Get clip timing info for extension capture
+                var clip = state.clips.find(function(c) { return c.id === clipId; });
+                var clipStartTime = clip ? clip.startTime : 0;
+                var clipEndTime = clip ? clip.endTime : 60;
+
+                // Check if this is an uploaded video (no need for extension capture)
+                var isUploadedVideo = state.videoInput.isUpload || false;
+
+                // PRIORITY: Use browser extension for YouTube videos (most reliable method)
+                // The extension captures video using MediaRecorder and uploads to storage,
+                // bypassing all YouTube download restrictions
+                var extensionCaptureData = null;
+
+                if (!isUploadedVideo && state.extension.installed && state.videoInput.videoData?.videoId) {
+                    console.log('[Video Wizard] Extension installed - triggering MediaRecorder capture for clip...');
+                    utils.showToast('Capturing video segment (this may take a moment)...', 'info');
+
+                    try {
+                        // Request fresh capture from extension with specific clip timing
+                        var captureResult = await sendExtensionRequest('captureVideoForWizard', {
+                            videoId: state.videoInput.videoData.videoId,
+                            youtubeUrl: state.videoInput.url || ('https://www.youtube.com/watch?v=' + state.videoInput.videoData.videoId),
+                            autoCapture: true,
+                            startTime: clipStartTime,
+                            endTime: clipEndTime
+                        });
+
+                        if (captureResult && captureResult.success && captureResult.streamData) {
+                            console.log('[Video Wizard] Extension capture successful:', captureResult.streamData.source);
+                            extensionCaptureData = {
+                                videoUrl: captureResult.streamData.videoUrl,
+                                audioUrl: captureResult.streamData.audioUrl || null,
+                                quality: captureResult.streamData.quality || 'captured',
+                                mimeType: captureResult.streamData.mimeType || 'video/webm',
+                                capturedAt: captureResult.streamData.capturedAt || Date.now(),
+                                source: captureResult.streamData.source || 'mediarecorder_capture',
+                                uploadedToStorage: captureResult.streamData.uploadedToStorage || false,
+                                captureStartTime: captureResult.streamData.captureStartTime || clipStartTime,
+                                captureEndTime: captureResult.streamData.captureEndTime || clipEndTime
+                            };
+
+                            if (extensionCaptureData.uploadedToStorage) {
+                                utils.showToast('Video captured and ready for processing!', 'success');
+                            } else {
+                                console.warn('[Video Wizard] Extension capture did not upload to storage');
+                                utils.showToast('Capture ready, starting processing...', 'info');
+                            }
+                        } else {
+                            console.warn('[Video Wizard] Extension capture failed:', captureResult?.error || 'Unknown error');
+                            utils.showToast('Extension capture failed, using server fallback...', 'warning');
+                        }
+                    } catch (captureError) {
+                        console.warn('[Video Wizard] Extension capture error:', captureError.message);
+                        utils.showToast('Extension timeout, using server fallback...', 'warning');
+                    }
+                } else if (!isUploadedVideo && !state.extension.installed) {
+                    console.log('[Video Wizard] Extension not installed - server will attempt YouTube download (may fail)');
+                    utils.showToast('Starting processing (extension not installed - may be slower)...', 'info');
+                } else {
+                    utils.showToast('Starting video processing...', 'info');
+                }
 
                 try {
                     var wizardProcessClip = functions.httpsCallable('wizardProcessClip');
@@ -10934,7 +10994,8 @@
                         projectId: state.projectId,
                         clipId: clipId,
                         quality: quality,
-                        settings: clipSettings
+                        settings: clipSettings,
+                        extensionCaptureData: extensionCaptureData  // Pass captured data to backend
                     });
 
                     if (result.data.success) {
