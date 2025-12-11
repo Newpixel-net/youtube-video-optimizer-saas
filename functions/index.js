@@ -18966,3 +18966,122 @@ Respond ONLY with valid JSON, no markdown or explanation.`;
       throw new functions.https.HttpsError('internal', `Failed to extract metadata: ${error.message}`);
     }
   });
+
+// ==============================================
+// EXTENSION: Video Upload Endpoint
+// Receives captured video from browser extension and stores in Firebase Storage
+// This is a fallback when Cloud Run video-processor is not available
+// ==============================================
+
+const Busboy = require('busboy');
+
+exports.extensionUploadVideo = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: '1GB'
+  })
+  .https.onRequest(async (req, res) => {
+    // Set CORS headers
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      return res.status(204).send('');
+    }
+
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    console.log('[ExtensionUpload] Received upload request');
+
+    try {
+      const busboy = Busboy({ headers: req.headers });
+
+      let videoBuffer = null;
+      let videoId = null;
+      let fileType = 'video';
+      let mimeType = 'video/webm';
+      let captureStart = 0;
+      let captureEnd = 0;
+
+      const filePromise = new Promise((resolve, reject) => {
+        busboy.on('field', (name, val) => {
+          if (name === 'videoId') videoId = val;
+          if (name === 'type') fileType = val;
+          if (name === 'captureStart') captureStart = parseFloat(val) || 0;
+          if (name === 'captureEnd') captureEnd = parseFloat(val) || 0;
+        });
+
+        busboy.on('file', (name, file, info) => {
+          mimeType = info.mimeType || 'video/webm';
+          const chunks = [];
+          file.on('data', (data) => chunks.push(data));
+          file.on('end', () => {
+            videoBuffer = Buffer.concat(chunks);
+            console.log(`[ExtensionUpload] File received: ${(videoBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+          });
+        });
+
+        busboy.on('finish', () => resolve());
+        busboy.on('error', reject);
+      });
+
+      if (req.rawBody) {
+        busboy.end(req.rawBody);
+      } else {
+        req.pipe(busboy);
+      }
+
+      await filePromise;
+
+      if (!videoBuffer) {
+        return res.status(400).json({ error: 'No video file provided' });
+      }
+
+      if (!videoId) {
+        return res.status(400).json({ error: 'videoId is required' });
+      }
+
+      const timestamp = Date.now();
+      const extension = mimeType.includes('webm') ? 'webm' : 'mp4';
+      const fileName = `extension-uploads/${videoId}/${fileType}_${timestamp}.${extension}`;
+
+      console.log(`[ExtensionUpload] Uploading to storage: ${fileName}`);
+
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(fileName);
+
+      await file.save(videoBuffer, {
+        metadata: {
+          contentType: mimeType,
+          metadata: {
+            videoId: videoId,
+            type: fileType,
+            captureStart: String(captureStart),
+            captureEnd: String(captureEnd),
+            uploadedAt: new Date().toISOString(),
+            source: 'browser-extension'
+          }
+        }
+      });
+
+      await file.makePublic();
+
+      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+      console.log(`[ExtensionUpload] Upload successful: ${publicUrl}`);
+
+      return res.status(200).json({
+        success: true,
+        url: publicUrl,
+        videoId: videoId,
+        type: fileType,
+        size: videoBuffer.length
+      });
+
+    } catch (error) {
+      console.error('[ExtensionUpload] Error:', error);
+      return res.status(500).json({ error: error.message || 'Upload failed' });
+    }
+  });

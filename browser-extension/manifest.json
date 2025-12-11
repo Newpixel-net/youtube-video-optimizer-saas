@@ -21,7 +21,8 @@
     "https://ytseo.siteuo.com/*",
     "https://youtube-video-optimizer.web.app/*",
     "https://ytseo-6d1b0.web.app/*",
-    "https://video-processor-867328435695.us-central1.run.app/*"
+    "https://video-processor-867328435695.us-central1.run.app/*",
+    "https://us-central1-ytseo-6d1b0.cloudfunctions.net/*"
   ],
 
   "background": {
