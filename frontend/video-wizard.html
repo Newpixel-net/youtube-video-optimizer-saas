@@ -9190,9 +9190,59 @@
 
                 // Call Cloud Function with progress simulation
                 try {
-                    // NOTE: Extension capture is NOT done here during analysis
-                    // The extension is only used during Export phase when downloading clips
-                    // Analysis uses YouTube API via Cloud Function
+                    // If extension is installed and we have a YouTube URL, request capture
+                    var extensionData = null;
+                    if (state.extension.installed && url && !uploadedFile) {
+                        try {
+                            console.log('[Video Wizard] Requesting video capture from extension...');
+                            utils.showToast('Extension capturing video (may open YouTube tab)...', 'info');
+
+                            // Extract video ID from URL
+                            var videoId = null;
+                            try {
+                                var urlObj = new URL(url);
+                                if (urlObj.hostname.includes('youtube.com')) {
+                                    videoId = urlObj.searchParams.get('v');
+                                    if (!videoId && urlObj.pathname.startsWith('/shorts/')) {
+                                        videoId = urlObj.pathname.split('/shorts/')[1];
+                                    }
+                                } else if (urlObj.hostname === 'youtu.be') {
+                                    videoId = urlObj.pathname.slice(1).split('/')[0];
+                                }
+                            } catch (e) {
+                                console.warn('[Video Wizard] Could not parse URL:', e);
+                            }
+
+                            if (videoId) {
+                                var captureResult = await sendExtensionRequest('getVideoFromYouTube', {
+                                    youtubeUrl: url,
+                                    videoId: videoId,
+                                    autoCapture: true  // Enable auto-capture feature
+                                });
+
+                                if (captureResult && captureResult.success) {
+                                    extensionData = {
+                                        videoInfo: captureResult.videoInfo,
+                                        streamData: captureResult.streamData
+                                    };
+                                    var captureSource = captureResult.captureSource || 'unknown';
+                                    console.log('[Video Wizard] Extension captured video (source: ' + captureSource + '):', extensionData);
+
+                                    if (extensionData.streamData) {
+                                        utils.showToast('Video streams captured successfully!', 'success');
+                                    } else {
+                                        utils.showToast('Video info captured (server will download video)', 'info');
+                                    }
+                                } else {
+                                    console.warn('[Video Wizard] Extension capture failed:', captureResult?.error);
+                                    utils.showToast('Extension capture failed, using server fallback', 'warning');
+                                }
+                            }
+                        } catch (extError) {
+                            console.warn('[Video Wizard] Extension capture error (will try server):', extError);
+                            utils.showToast('Extension timeout, using server download', 'warning');
+                        }
+                    }
 
                     // Simulate progress steps during API call
                     var progressInterval = setInterval(function() {
@@ -9226,8 +9276,14 @@
                         requestData.uploadedVideoPath = uploadedFile.storagePath;
                         requestData.uploadedVideoName = uploadedFile.name;
                     } else {
-                        // Use YouTube URL - Cloud Function will fetch metadata via YouTube API
+                        // Use YouTube URL
                         requestData.videoUrl = url;
+
+                        // Include extension-captured data if available
+                        if (extensionData) {
+                            requestData.extensionData = extensionData;
+                            requestData.useExtension = true;
+                        }
                     }
 
                     var result = await wizardAnalyzeVideo(requestData);

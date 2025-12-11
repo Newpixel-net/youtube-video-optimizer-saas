@@ -91,211 +91,240 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         downloadedFile = segmentFile;
         console.log(`[${jobId}] Extracted segment from ${job.startTime}s to ${job.endTime}s`);
       }
-    } else {
-      // YouTube video - BROWSER EXTENSION v1.6+ WITH MEDIARECORDER CAPTURE IS REQUIRED
-      // All other download methods fail due to YouTube bot detection
-      // The extension captures video via MediaRecorder and uploads to Firebase Storage
+    } else if (job.hasExtensionStream && job.extensionStreamData?.videoUrl) {
+      // Extension-captured video - check if we should try these URLs
+      // IMPORTANT: Extension stream URLs are IP-restricted to user's browser IP
+      // When running on server (Cloud Run), these ALWAYS fail with 403, so skip them
 
       const extensionStreamSource = job.extensionStreamData?.source || 'unknown';
       const isUploadedCapture = extensionStreamSource === 'mediarecorder_capture' &&
-                                 job.extensionStreamData?.uploadedToStorage === true;
-      const hasExtensionData = job.hasExtensionStream && job.extensionStreamData?.videoUrl;
+                                 job.extensionStreamData?.uploadedToStorage;
 
-      console.log(`[${jobId}] YouTube video download - checking extension capture status:`);
-      console.log(`[${jobId}]   - hasExtensionData: ${hasExtensionData}`);
-      console.log(`[${jobId}]   - extensionStreamSource: ${extensionStreamSource}`);
-      console.log(`[${jobId}]   - uploadedToStorage: ${job.extensionStreamData?.uploadedToStorage}`);
-      console.log(`[${jobId}]   - isUploadedCapture: ${isUploadedCapture}`);
+      if (isUploadedCapture) {
+        // MediaRecorder capture was uploaded to our storage - use it directly
+        console.log(`[${jobId}] Using MediaRecorder captured video from storage (bypasses IP restriction)`);
+        await updateProgress(jobRef, 10, 'Downloading captured video...');
 
-      if (!hasExtensionData) {
-        // No extension data at all - fail immediately
-        console.error(`[${jobId}] FATAL: No browser extension capture data available`);
-        console.error(`[${jobId}] The Video Wizard browser extension v1.6+ is REQUIRED for YouTube video export`);
-        throw new Error(
-          'Browser extension required for YouTube video export. ' +
-          'Please install the Video Wizard extension v1.6+ and ensure the video is captured before exporting. ' +
-          'The extension captures video directly from your browser to bypass YouTube restrictions.'
-        );
-      }
+        try {
+          const response = await fetch(job.extensionStreamData.videoUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to download captured video: ${response.status}`);
+          }
 
-      if (!isUploadedCapture) {
-        // Extension data exists but MediaRecorder capture failed or wasn't uploaded
-        const captureError = job.extensionStreamData?.captureError || job.extensionStreamData?.uploadError;
-        const captureMethod = job.extensionStreamData?.captureMethod || 'unknown';
+          const buffer = await response.arrayBuffer();
+          const capturedFile = path.join(workDir, 'captured.webm');
+          fs.writeFileSync(capturedFile, Buffer.from(buffer));
+          console.log(`[${jobId}] Downloaded MediaRecorder capture: ${fs.statSync(capturedFile).size} bytes`);
 
-        console.error(`[${jobId}] FATAL: Extension capture not uploaded to storage`);
-        console.error(`[${jobId}]   - captureMethod: ${captureMethod}`);
-        console.error(`[${jobId}]   - captureError: ${captureError || 'none'}`);
-        console.error(`[${jobId}] Raw stream URLs are IP-restricted and cannot be used on server`);
+          // Check if we need to extract a specific segment from the captured video
+          // The extension may have captured more than needed (e.g., full 5 minutes)
+          // while the clip only needs a portion (e.g., 30 seconds at 2:00)
+          const capturedStart = job.extensionStreamData?.captureStartTime || 0;
+          const capturedEnd = job.extensionStreamData?.captureEndTime || 300;
+          const clipStart = job.startTime || 0;
+          const clipEnd = job.endTime || (clipStart + 60);
 
-        let errorMessage = 'Video capture failed. ';
-        if (captureError) {
-          errorMessage += `Error: ${captureError}. `;
-        }
-        errorMessage +=
-          'The browser extension MediaRecorder capture must successfully upload the video to storage. ' +
-          'Please ensure: (1) You have Video Wizard extension v1.6+ installed, ' +
-          '(2) The YouTube video tab is open and playing, ' +
-          '(3) The capture completes without errors. ' +
-          'Check the browser console for detailed error messages.';
+          // Calculate if segment extraction is needed
+          const needsExtraction = (clipStart > capturedStart) || (clipEnd < capturedEnd);
 
-        throw new Error(errorMessage);
-      }
+          if (needsExtraction && clipStart >= capturedStart && clipEnd <= capturedEnd) {
+            // Extract the specific segment from the captured video
+            const relativeStart = clipStart - capturedStart;
+            const relativeEnd = clipEnd - capturedStart;
+            console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s from captured video`);
+            await updateProgress(jobRef, 15, 'Extracting clip segment...');
 
-      // SUCCESS: MediaRecorder capture was uploaded to our storage - use it directly
-      console.log(`[${jobId}] Using MediaRecorder captured video from Firebase Storage`);
-      console.log(`[${jobId}] Storage URL: ${job.extensionStreamData.videoUrl}`);
-      await updateProgress(jobRef, 10, 'Downloading captured video from storage...');
+            downloadedFile = path.join(workDir, 'source.webm');
+            await new Promise((resolve, reject) => {
+              const ffmpeg = spawn('ffmpeg', [
+                '-i', capturedFile,
+                '-ss', String(relativeStart),
+                '-to', String(relativeEnd),
+                '-c', 'copy',
+                '-avoid_negative_ts', 'make_zero',
+                '-y',
+                downloadedFile
+              ]);
 
-      const response = await fetch(job.extensionStreamData.videoUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to download captured video from storage: ${response.status} ${response.statusText}`);
-      }
+              let stderr = '';
+              ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
+              ffmpeg.on('close', (code) => {
+                if (code === 0 && fs.existsSync(downloadedFile)) {
+                  console.log(`[${jobId}] Segment extracted: ${fs.statSync(downloadedFile).size} bytes`);
+                  resolve();
+                } else {
+                  reject(new Error(`FFmpeg segment extraction failed: ${stderr.slice(-200)}`));
+                }
+              });
+              ffmpeg.on('error', reject);
+            });
 
-      const buffer = await response.arrayBuffer();
-      const capturedFile = path.join(workDir, 'captured.webm');
-      fs.writeFileSync(capturedFile, Buffer.from(buffer));
-      console.log(`[${jobId}] Downloaded MediaRecorder capture: ${fs.statSync(capturedFile).size} bytes`);
+            // Cleanup captured file
+            try { fs.unlinkSync(capturedFile); } catch (e) {}
+          } else {
+            // Use the captured file directly (segment already matches or no extraction needed)
+            downloadedFile = capturedFile;
+            console.log(`[${jobId}] Using captured video directly (segment matches or full capture)`);
+          }
+        } catch (captureError) {
+          console.warn(`[${jobId}] MediaRecorder capture download failed: ${captureError.message}`);
+          console.log(`[${jobId}] Falling back to Video Download API...`);
+          await updateProgress(jobRef, 12, 'Capture failed, using download API...');
 
-      // Check if we need to extract a specific segment from the captured video
-      // The extension may have captured more than needed (e.g., full 5 minutes)
-      // while the clip only needs a portion (e.g., 30 seconds at 2:00)
-      const capturedStart = job.extensionStreamData?.captureStartTime || 0;
-      const capturedEnd = job.extensionStreamData?.captureEndTime || 300;
-      const clipStart = job.startTime || 0;
-      const clipEnd = job.endTime || (clipStart + 60);
-
-      console.log(`[${jobId}] Capture range: ${capturedStart}s - ${capturedEnd}s`);
-      console.log(`[${jobId}] Clip range: ${clipStart}s - ${clipEnd}s`);
-
-      // Calculate if segment extraction is needed
-      const needsExtraction = (clipStart > capturedStart) || (clipEnd < capturedEnd);
-
-      if (needsExtraction && clipStart >= capturedStart && clipEnd <= capturedEnd) {
-        // Extract the specific segment from the captured video
-        const relativeStart = clipStart - capturedStart;
-        const relativeEnd = clipEnd - capturedStart;
-        console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s from captured video`);
-        await updateProgress(jobRef, 15, 'Extracting clip segment...');
-
-        downloadedFile = path.join(workDir, 'source.webm');
-        await new Promise((resolve, reject) => {
-          const ffmpeg = spawn('ffmpeg', [
-            '-i', capturedFile,
-            '-ss', String(relativeStart),
-            '-to', String(relativeEnd),
-            '-c', 'copy',
-            '-avoid_negative_ts', 'make_zero',
-            '-y',
-            downloadedFile
-          ]);
-
-          let stderr = '';
-          ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
-          ffmpeg.on('close', (code) => {
-            if (code === 0 && fs.existsSync(downloadedFile)) {
-              console.log(`[${jobId}] Segment extracted: ${fs.statSync(downloadedFile).size} bytes`);
-              resolve();
-            } else {
-              reject(new Error(`FFmpeg segment extraction failed: ${stderr.slice(-200)}`));
-            }
+          downloadedFile = await downloadVideoSegment({
+            jobId,
+            videoId: job.videoId,
+            startTime: job.startTime,
+            endTime: job.endTime,
+            workDir,
+            youtubeAuth
           });
-          ffmpeg.on('error', reject);
+        }
+      } else if (isRunningOnServer) {
+        // Running on server - skip extension stream URLs (they're IP-restricted and will always fail)
+        console.log(`[${jobId}] Running on server - skipping extension stream URLs (IP-restricted)`);
+        console.log(`[${jobId}] Extension stream source: ${extensionStreamSource}`);
+        console.log(`[${jobId}] Going directly to Video Download API for reliability`);
+        await updateProgress(jobRef, 10, 'Downloading video...');
+
+        downloadedFile = await downloadVideoSegment({
+          jobId,
+          videoId: job.videoId,
+          startTime: job.startTime,
+          endTime: job.endTime,
+          workDir,
+          youtubeAuth
+        });
+      } else {
+        // Not on server (local dev) - can try extension streams
+        console.log(`[${jobId}] Local environment - attempting extension stream URLs`);
+        await updateProgress(jobRef, 10, 'Trying extension capture...');
+
+        try {
+          downloadedFile = await downloadFromExtensionStream({
+            jobId,
+            extensionStreamData: job.extensionStreamData,
+            startTime: job.startTime,
+            endTime: job.endTime,
+            workDir
+          });
+          console.log(`[${jobId}] Extension stream download succeeded`);
+        } catch (extStreamError) {
+          console.warn(`[${jobId}] Extension stream failed (${extStreamError.message}), falling back to server download...`);
+          await updateProgress(jobRef, 12, 'Extension failed, trying server download...');
+
+          downloadedFile = await downloadVideoSegment({
+            jobId,
+            videoId: job.videoId,
+            startTime: job.startTime,
+            endTime: job.endTime,
+            workDir,
+            youtubeAuth
+          });
+        }
+      }
+    } else {
+      // YouTube video - use CACHING for cost optimization
+      // This reduces download costs by ~75% for multi-clip projects
+      await updateProgress(jobRef, 10, 'Checking video cache...');
+
+      // Check if we have a cached full video
+      const cache = await checkVideoCache(job.videoId);
+
+      if (cache.exists) {
+        // CACHE HIT - Download from cache and extract segment locally (FREE!)
+        console.log(`[${jobId}] CACHE HIT: Using cached video for ${job.videoId}`);
+        await updateProgress(jobRef, 12, 'Using cached video (cost savings!)...');
+
+        const cachedVideoPath = path.join(workDir, 'cached_source.mp4');
+        await downloadFromCache({
+          videoId: job.videoId,
+          cacheUrl: cache.url,
+          outputPath: cachedVideoPath,
+          jobId
         });
 
-        // Cleanup captured file
-        try { fs.unlinkSync(capturedFile); } catch (e) {}
-      } else if (clipStart < capturedStart || clipEnd > capturedEnd) {
-        // Clip is outside the captured range - this is a fatal error
-        console.error(`[${jobId}] FATAL: Clip range (${clipStart}s-${clipEnd}s) is outside captured range (${capturedStart}s-${capturedEnd}s)`);
-        throw new Error(
-          `The requested clip (${clipStart}s-${clipEnd}s) is outside the captured video range (${capturedStart}s-${capturedEnd}s). ` +
-          'Please re-capture the video with the correct time range using the browser extension.'
-        );
+        // Extract segment locally (FREE - no API cost!)
+        downloadedFile = path.join(workDir, 'source.mp4');
+        await extractSegmentFromCache({
+          inputPath: cachedVideoPath,
+          outputPath: downloadedFile,
+          startTime: job.startTime,
+          endTime: job.endTime,
+          jobId
+        });
+
+        // Cleanup cached source to save disk space
+        try { fs.unlinkSync(cachedVideoPath); } catch (e) {}
+
+        console.log(`[${jobId}] CACHE: Segment extracted locally - ZERO download cost!`);
+
       } else {
-        // Use the captured file directly (segment already matches or no extraction needed)
-        downloadedFile = capturedFile;
-        console.log(`[${jobId}] Using captured video directly (segment matches or full capture)`);
+        // CACHE MISS - Download full video and cache it for future clips
+        console.log(`[${jobId}] CACHE MISS: Downloading and caching full video...`);
+        await updateProgress(jobRef, 12, 'Downloading full video for caching...');
+
+        try {
+          // Download full video (cheaper than segment download!)
+          const fullVideoPath = path.join(workDir, 'full_video.mp4');
+          const downloadResult = await downloadFullVideo({
+            jobId,
+            videoId: job.videoId,
+            workDir,
+            outputFile: fullVideoPath
+          });
+
+          // Cache the full video for future clips
+          await updateProgress(jobRef, 18, 'Caching video for future clips...');
+          await saveToVideoCache({
+            videoId: job.videoId,
+            localPath: fullVideoPath,
+            storage,
+            bucketName
+          });
+
+          // Extract segment locally
+          downloadedFile = path.join(workDir, 'source.mp4');
+          await extractSegmentFromCache({
+            inputPath: fullVideoPath,
+            outputPath: downloadedFile,
+            startTime: job.startTime,
+            endTime: job.endTime,
+            jobId
+          });
+
+          // Cleanup full video to save disk space
+          try { fs.unlinkSync(fullVideoPath); } catch (e) {}
+
+          console.log(`[${jobId}] CACHE: Full video cached - future clips will be FREE!`);
+
+        } catch (cacheError) {
+          // Fallback to segment download if caching fails
+          console.warn(`[${jobId}] CACHE: Caching failed (${cacheError.message}), falling back to segment download...`);
+          await updateProgress(jobRef, 15, 'Downloading video segment...');
+
+          downloadedFile = await downloadVideoSegment({
+            jobId,
+            videoId: job.videoId,
+            startTime: job.startTime,
+            endTime: job.endTime,
+            workDir,
+            youtubeAuth
+          });
+        }
       }
     }
 
     await updateProgress(jobRef, 30, 'Processing video...');
 
-    // Check for multi-source split screen
-    let processedFile;
-    const hasSecondarySource = job.settings?.secondarySource?.enabled &&
-      (job.settings.secondarySource.uploadedUrl || job.settings.secondarySource.youtubeVideoId);
-
-    if (hasSecondarySource) {
-      // Multi-source mode: Download secondary video and combine
-      console.log(`[${jobId}] Multi-source mode detected - downloading secondary video...`);
-      await updateProgress(jobRef, 35, 'Downloading secondary video...');
-
-      let secondaryFile;
-      const secondarySource = job.settings.secondarySource;
-
-      if (secondarySource.type === 'upload' && secondarySource.uploadedUrl) {
-        // Download from uploaded URL
-        console.log(`[${jobId}] Downloading secondary video from upload URL...`);
-        const response = await fetch(secondarySource.uploadedUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to download secondary video: ${response.status}`);
-        }
-        const buffer = await response.arrayBuffer();
-        secondaryFile = path.join(workDir, 'secondary_source.mp4');
-        fs.writeFileSync(secondaryFile, Buffer.from(buffer));
-        console.log(`[${jobId}] Secondary video downloaded: ${fs.statSync(secondaryFile).size} bytes`);
-
-      } else if (secondarySource.type === 'youtube' && secondarySource.youtubeVideoId) {
-        // Secondary YouTube videos are NOT supported - must be uploaded directly
-        // YouTube downloads fail due to bot detection, only browser extension capture works
-        console.error(`[${jobId}] FATAL: Secondary YouTube video not supported`);
-        console.error(`[${jobId}] YouTube video ID: ${secondarySource.youtubeVideoId}`);
-        console.error(`[${jobId}] Secondary videos must be uploaded directly, not via YouTube URL`);
-        throw new Error(
-          'Secondary YouTube videos are not supported due to YouTube restrictions. ' +
-          'Please download the video to your device and upload it directly using the "Upload Video" option. ' +
-          'Only the primary video can use the browser extension capture method.'
-        );
-      } else {
-        // Unknown secondary source type
-        console.error(`[${jobId}] Unknown secondary source type: ${secondarySource.type}`);
-        throw new Error(`Invalid secondary source configuration. Type: ${secondarySource.type}, has upload URL: ${!!secondarySource.uploadedUrl}, has YouTube ID: ${!!secondarySource.youtubeVideoId}`);
-      }
-
-      // Verify secondary file exists
-      if (!secondaryFile || !fs.existsSync(secondaryFile)) {
-        throw new Error(`Secondary video file not found after download. Please try again or use a different video.`);
-      }
-
-      // Verify file has content
-      const secondarySize = fs.statSync(secondaryFile).size;
-      if (secondarySize < 1000) {
-        throw new Error(`Secondary video file is too small (${secondarySize} bytes). The download may have failed. Please try again.`);
-      }
-
-      console.log(`[${jobId}] Secondary video verified: ${secondarySize} bytes`);
-
-      // Process with multi-source
-      await updateProgress(jobRef, 45, 'Combining video sources...');
-      processedFile = await processMultiSourceVideo({
-        jobId,
-        primaryFile: downloadedFile,
-        secondaryFile,
-        settings: job.settings,
-        output: job.output,
-        workDir
-      });
-    } else {
-      // Step 2: Process the video (crop to 9:16, apply effects)
-      processedFile = await processVideoFile({
-        jobId,
-        inputFile: downloadedFile,
-        settings: job.settings,
-        output: job.output,
-        workDir
-      });
-    }
+    // Step 2: Process the video (crop to 9:16, apply effects)
+    const processedFile = await processVideoFile({
+      jobId,
+      inputFile: downloadedFile,
+      settings: job.settings,
+      output: job.output,
+      workDir
+    });
 
     await updateProgress(jobRef, 70, 'Applying effects...');
 
@@ -491,26 +520,13 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   // Generate captions if requested
   let captionFile = null;
   if (settings.captionStyle && settings.captionStyle !== 'none') {
-    // Map frontend caption style IDs to backend style keys
-    // Frontend uses different names than backend caption-renderer.js expects
-    const captionStyleMap = {
-      'karaoke': 'karaoke',   // Matches
-      'beasty': 'bold',       // Frontend "MrBeast" → Backend "bold"
-      'deepdiver': 'minimal', // Frontend "Minimal" → Backend "minimal"
-      'podp': 'podcast',      // Frontend "Podcast" → Backend "podcast"
-      'hormozi': 'hormozi',   // Matches
-      'ali': 'ali',           // Matches
-      'custom': 'custom'      // Matches
-    };
-    const backendStyle = captionStyleMap[settings.captionStyle] || settings.captionStyle;
-
-    console.log(`[${jobId}] Generating captions with style: ${settings.captionStyle} → ${backendStyle}`);
+    console.log(`[${jobId}] Generating captions with style: ${settings.captionStyle}`);
     try {
       captionFile = await generateCaptions({
         jobId,
         videoFile: inputFile,
         workDir,
-        captionStyle: backendStyle,
+        captionStyle: settings.captionStyle,
         customStyle: settings.customCaptionStyle
       });
     } catch (captionError) {
@@ -542,8 +558,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   // Build audio filters
   const audioFilters = buildAudioFilters({
     enhanceAudio: settings.enhanceAudio,
-    removeFiller: settings.removeFiller,
-    voiceVolume: settings.voiceVolume
+    removeFiller: settings.removeFiller
   });
 
   return new Promise((resolve, reject) => {
@@ -722,14 +737,8 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 /**
  * Build FFmpeg audio filter chain
  */
-function buildAudioFilters({ enhanceAudio, removeFiller, voiceVolume }) {
+function buildAudioFilters({ enhanceAudio, removeFiller }) {
   const filters = [];
-
-  // Apply voice volume adjustment (100 = normal, 150 = +50%, 50 = -50%)
-  if (voiceVolume !== undefined && voiceVolume !== 100) {
-    const volumeMultiplier = voiceVolume / 100;
-    filters.push(`volume=${volumeMultiplier.toFixed(2)}`);
-  }
 
   if (enhanceAudio) {
     // Audio normalization
@@ -746,251 +755,6 @@ function buildAudioFilters({ enhanceAudio, removeFiller, voiceVolume }) {
   }
 
   return filters.join(',');
-}
-
-/**
- * Build FFmpeg complex filter for multi-source split screen
- * Combines two video inputs into a single output with audio mixing
- */
-function buildMultiSourceFilter({
-  primaryWidth, primaryHeight,
-  secondaryWidth, secondaryHeight,
-  targetWidth, targetHeight,
-  reframeMode, position, audioMix
-}) {
-  const filters = [];
-  const topH = Math.floor(targetHeight / 2);
-  const bottomH = targetHeight - topH;
-
-  // Determine which video goes where based on position
-  // position: 'top', 'bottom', 'facecam', 'game', 'main', 'broll'
-  const primaryIsTop = position === 'bottom' || position === 'facecam' || position === 'broll';
-
-  if (reframeMode === 'split_screen') {
-    // Two videos stacked vertically
-    if (primaryIsTop) {
-      // Primary on top, secondary on bottom
-      filters.push(`[0:v]scale=${targetWidth}:${topH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topH}[v0]`);
-      filters.push(`[1:v]scale=${targetWidth}:${bottomH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${bottomH}[v1]`);
-      filters.push(`[v0][v1]vstack[outv]`);
-    } else {
-      // Secondary on top, primary on bottom
-      filters.push(`[1:v]scale=${targetWidth}:${topH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topH}[v1]`);
-      filters.push(`[0:v]scale=${targetWidth}:${bottomH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${bottomH}[v0]`);
-      filters.push(`[v1][v0]vstack[outv]`);
-    }
-  } else if (reframeMode === 'gameplay') {
-    // Main game fills most, facecam in corner
-    const facecamSize = Math.floor(targetWidth * 0.35);
-    const facecamPadding = 20;
-
-    if (position === 'facecam') {
-      // Secondary is the facecam overlay
-      filters.push(`[0:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${targetHeight}[base]`);
-      filters.push(`[1:v]scale=${facecamSize}:${facecamSize}:force_original_aspect_ratio=increase,crop=${facecamSize}:${facecamSize}[overlay]`);
-      filters.push(`[base][overlay]overlay=${facecamPadding}:${targetHeight - facecamSize - facecamPadding}[outv]`);
-    } else {
-      // Secondary is the game, primary is facecam
-      filters.push(`[1:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${targetHeight}[base]`);
-      filters.push(`[0:v]scale=${facecamSize}:${facecamSize}:force_original_aspect_ratio=increase,crop=${facecamSize}:${facecamSize}[overlay]`);
-      filters.push(`[base][overlay]overlay=${facecamPadding}:${targetHeight - facecamSize - facecamPadding}[outv]`);
-    }
-  } else if (reframeMode === 'three_person') {
-    // More complex three-person layout
-    const mainH = Math.floor(targetHeight * 0.55);
-    const bottomsH = targetHeight - mainH;
-    const halfW = Math.floor(targetWidth / 2);
-
-    // For simplicity, secondary replaces one of the positions
-    if (position === 'top') {
-      // Secondary is main speaker on top
-      filters.push(`[1:v]scale=${targetWidth}:${mainH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${mainH}[vtop]`);
-      filters.push(`[0:v]split[bl][br]`);
-      filters.push(`[bl]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
-      filters.push(`[br]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
-      filters.push(`[vbl][vbr]hstack[vbottom]`);
-      filters.push(`[vtop][vbottom]vstack[outv]`);
-    } else {
-      // Primary on top, secondary on one bottom panel
-      filters.push(`[0:v]scale=${targetWidth}:${mainH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${mainH}[vtop]`);
-      if (position === 'bottom-left') {
-        filters.push(`[1:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
-        filters.push(`[0:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
-      } else {
-        filters.push(`[0:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
-        filters.push(`[1:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
-      }
-      filters.push(`[vbl][vbr]hstack[vbottom]`);
-      filters.push(`[vtop][vbottom]vstack[outv]`);
-    }
-  } else if (reframeMode === 'broll_split') {
-    // Main speaker with B-roll overlay
-    const mainH = Math.floor(targetHeight * 0.65);
-    const brollH = targetHeight - mainH;
-
-    if (position === 'broll') {
-      // Secondary is B-roll
-      filters.push(`[0:v]scale=${targetWidth}:${mainH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${mainH}[vmain]`);
-      filters.push(`[1:v]scale=${targetWidth}:${brollH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${brollH}[vbroll]`);
-      filters.push(`[vmain][vbroll]vstack[outv]`);
-    } else {
-      // Secondary is main speaker
-      filters.push(`[1:v]scale=${targetWidth}:${mainH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${mainH}[vmain]`);
-      filters.push(`[0:v]scale=${targetWidth}:${brollH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${brollH}[vbroll]`);
-      filters.push(`[vmain][vbroll]vstack[outv]`);
-    }
-  }
-
-  // Audio mixing based on audioMix settings
-  const primaryVol = audioMix?.primaryMuted ? 0 : (audioMix?.primaryVolume ?? 100) / 100;
-  const secondaryVol = audioMix?.secondaryMuted ? 0 : (audioMix?.secondaryVolume ?? 0) / 100;
-
-  if (primaryVol === 0 && secondaryVol === 0) {
-    // Both muted - output silence
-    filters.push(`anullsrc=r=44100:cl=stereo[outa]`);
-  } else if (secondaryVol === 0) {
-    // Only primary audio
-    filters.push(`[0:a]volume=${primaryVol.toFixed(2)}[outa]`);
-  } else if (primaryVol === 0) {
-    // Only secondary audio
-    filters.push(`[1:a]volume=${secondaryVol.toFixed(2)}[outa]`);
-  } else {
-    // Mix both audio tracks
-    filters.push(`[0:a]volume=${primaryVol.toFixed(2)}[a0]`);
-    filters.push(`[1:a]volume=${secondaryVol.toFixed(2)}[a1]`);
-    filters.push(`[a0][a1]amix=inputs=2:duration=shortest:normalize=0[outa]`);
-  }
-
-  return filters.join(';');
-}
-
-/**
- * Process video with two sources (multi-source split screen)
- */
-async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, settings, output, workDir }) {
-  const outputFile = path.join(workDir, 'processed_multisource.mp4');
-
-  // Get info for both videos
-  const primaryInfo = await getVideoInfo(primaryFile);
-  const secondaryInfo = await getVideoInfo(secondaryFile);
-
-  console.log(`[${jobId}] Multi-source: Primary ${primaryInfo.width}x${primaryInfo.height}, Secondary ${secondaryInfo.width}x${secondaryInfo.height}`);
-
-  const targetWidth = output.resolution.width;
-  const targetHeight = output.resolution.height;
-
-  // Generate captions from PRIMARY audio (the main speaker)
-  let captionFile = null;
-  if (settings.captionStyle && settings.captionStyle !== 'none') {
-    // Map frontend caption style IDs to backend style keys
-    const captionStyleMap = {
-      'karaoke': 'karaoke',
-      'beasty': 'bold',
-      'deepdiver': 'minimal',
-      'podp': 'podcast',
-      'hormozi': 'hormozi',
-      'ali': 'ali',
-      'custom': 'custom'
-    };
-    const backendStyle = captionStyleMap[settings.captionStyle] || settings.captionStyle;
-
-    console.log(`[${jobId}] Multi-source: Generating captions with style: ${settings.captionStyle} → ${backendStyle}`);
-    try {
-      captionFile = await generateCaptions({
-        jobId,
-        videoFile: primaryFile,  // Use primary video for audio transcription
-        workDir,
-        captionStyle: backendStyle,
-        customStyle: settings.customCaptionStyle
-      });
-      console.log(`[${jobId}] Multi-source: Captions generated: ${captionFile}`);
-    } catch (captionError) {
-      console.error(`[${jobId}] Multi-source: Caption generation failed (continuing without captions):`, captionError.message);
-    }
-  }
-
-  // Build complex filter for multi-source
-  let complexFilter = buildMultiSourceFilter({
-    primaryWidth: primaryInfo.width,
-    primaryHeight: primaryInfo.height,
-    secondaryWidth: secondaryInfo.width,
-    secondaryHeight: secondaryInfo.height,
-    targetWidth,
-    targetHeight,
-    reframeMode: settings.reframeMode,
-    position: settings.secondarySource?.position || 'bottom',
-    audioMix: settings.audioMix
-  });
-
-  // Add subtitle filter if captions were generated
-  if (captionFile && fs.existsSync(captionFile)) {
-    // Escape special characters in path for FFmpeg
-    const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
-    // In complex filter, we need to apply ass to the output video
-    // Replace [outv] with intermediate, apply subtitles, then output as [outv]
-    complexFilter = complexFilter.replace('[outv]', '[outv_nosub]');
-    complexFilter += `;[outv_nosub]ass='${escapedPath}'[outv]`;
-    console.log(`[${jobId}] Multi-source: Adding captions from: ${captionFile}`);
-  }
-
-  // Handle time offset for secondary source
-  const timeOffset = settings.secondarySource?.timeOffset || 0;
-  const secondaryInputArgs = timeOffset !== 0
-    ? ['-ss', String(Math.abs(timeOffset)), '-i', secondaryFile]
-    : ['-i', secondaryFile];
-
-  // If offset is positive, we delay secondary (already handled by -ss)
-  // If offset is negative, we need to delay primary
-  const primaryInputArgs = timeOffset < 0
-    ? ['-ss', String(Math.abs(timeOffset)), '-i', primaryFile]
-    : ['-i', primaryFile];
-
-  return new Promise((resolve, reject) => {
-    const args = [
-      ...primaryInputArgs,
-      ...secondaryInputArgs,
-      '-filter_complex', complexFilter,
-      '-map', '[outv]',
-      '-map', '[outa]',
-      '-c:v', 'libx264',
-      '-preset', 'fast',
-      '-crf', '23',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-r', output.fps.toString(),
-      '-movflags', '+faststart',
-      '-y',
-      outputFile
-    ];
-
-    console.log(`[${jobId}] Multi-source FFmpeg: ffmpeg ${args.slice(0, 20).join(' ')}...`);
-
-    const ffmpegProcess = spawn('ffmpeg', args);
-    let stderr = '';
-
-    ffmpegProcess.stderr.on('data', (data) => {
-      stderr += data.toString();
-      const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
-      if (match) {
-        console.log(`[${jobId}] Multi-source progress: ${match[1]}`);
-      }
-    });
-
-    ffmpegProcess.on('close', (code) => {
-      if (code === 0 && fs.existsSync(outputFile)) {
-        console.log(`[${jobId}] Multi-source processing completed: ${outputFile}`);
-        resolve(outputFile);
-      } else {
-        console.error(`[${jobId}] Multi-source FFmpeg failed. Code: ${code}`);
-        console.error(`[${jobId}] stderr: ${stderr.slice(-1000)}`);
-        reject(new Error(`Multi-source video processing failed: ${code}`));
-      }
-    });
-
-    ffmpegProcess.on('error', (error) => {
-      reject(new Error(`Failed to start FFmpeg: ${error.message}`));
-    });
-  });
 }
 
 /**
