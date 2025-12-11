@@ -320,24 +320,14 @@ async function handleCaptureForWizard(message, sendResponse) {
       };
     }
 
-    // Both methods failed
+    // Both methods failed - return failure so frontend can handle properly
     console.error(`[YVO Background] ✗ All capture methods failed`);
     console.error(`[YVO Background] Last error: ${uploadResult.error}`);
     return {
-      success: true,  // Return success:true so we can include error details
+      success: false,  // Return failure so frontend knows capture failed
+      error: `All capture methods failed. ${uploadResult.error || 'Please ensure YouTube video is open in a browser tab and try again.'}`,
       videoInfo: videoInfo,
-      streamData: {
-        videoUrl: intercepted?.videoUrl || null,
-        audioUrl: intercepted?.audioUrl || null,
-        quality: 'intercepted',
-        mimeType: 'video/mp4',
-        capturedAt: intercepted?.capturedAt || Date.now(),
-        source: source,
-        captureMethod: 'fallback_urls',
-        captureError: uploadResult.error,
-        uploadFailed: true,
-        uploadError: `All capture methods failed. Please ensure YouTube video is open in a browser tab and try again.`
-      },
+      captureError: uploadResult.error,
       message: `Capture failed: ${uploadResult.error}. Please ensure YouTube is open in another tab and try again.`
     };
   }
@@ -925,44 +915,63 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
     });
   }
 
-  // Helper function to download with proper headers
-  async function downloadStream(url, type) {
+  // Helper function to download with proper headers and retry logic
+  async function downloadStream(url, type, maxRetries = 3) {
     console.log(`[YVO Injected] Downloading ${type} stream...`);
 
-    // Use XMLHttpRequest for better control over headers and progress
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', url, true);
-      xhr.responseType = 'blob';
+    // Retry with exponential backoff
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const blob = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', url, true);
+          xhr.responseType = 'blob';
 
-      // Set headers that YouTube's player uses
-      xhr.setRequestHeader('Accept', '*/*');
-      xhr.setRequestHeader('Accept-Language', 'en-US,en;q=0.9');
-      // Note: Origin and Referer are automatically set by the browser
+          // Set headers that YouTube's player uses
+          xhr.setRequestHeader('Accept', '*/*');
+          xhr.setRequestHeader('Accept-Language', 'en-US,en;q=0.9');
+          // Note: Origin and Referer are automatically set by the browser
 
-      xhr.onload = function() {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          console.log(`[YVO Injected] ${type} downloaded: ${(xhr.response.size / 1024 / 1024).toFixed(2)}MB`);
-          resolve(xhr.response);
+          xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              console.log(`[YVO Injected] ${type} downloaded: ${(xhr.response.size / 1024 / 1024).toFixed(2)}MB`);
+              resolve(xhr.response);
+            } else {
+              reject(new Error(`${type} download failed: ${xhr.status} ${xhr.statusText}`));
+            }
+          };
+
+          xhr.onerror = function() {
+            reject(new Error(`${type} download network error`));
+          };
+
+          xhr.onprogress = function(e) {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              if (percent % 25 === 0) {  // Log less frequently
+                console.log(`[YVO Injected] ${type} progress: ${percent}%`);
+              }
+            }
+          };
+
+          xhr.withCredentials = true;  // Include cookies
+          xhr.send();
+        });
+
+        return blob;  // Success - return immediately
+      } catch (error) {
+        console.warn(`[YVO Injected] ${type} download attempt ${attempt}/${maxRetries} failed:`, error.message);
+
+        if (attempt < maxRetries) {
+          // Wait with exponential backoff: 1s, 2s, 4s
+          const waitTime = Math.pow(2, attempt - 1) * 1000;
+          console.log(`[YVO Injected] Retrying in ${waitTime/1000}s...`);
+          await new Promise(r => setTimeout(r, waitTime));
         } else {
-          reject(new Error(`${type} download failed: ${xhr.status} ${xhr.statusText}`));
+          throw error;  // Final attempt failed
         }
-      };
-
-      xhr.onerror = function() {
-        reject(new Error(`${type} download network error`));
-      };
-
-      xhr.onprogress = function(e) {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100);
-          console.log(`[YVO Injected] ${type} progress: ${percent}%`);
-        }
-      };
-
-      xhr.withCredentials = true;  // Include cookies
-      xhr.send();
-    });
+      }
+    }
   }
 
   try {
@@ -1397,7 +1406,7 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
       throw new Error('No YouTube tab found. Please have YouTube open in a tab.');
     }
 
-    // Try to find the tab with the specific video (best match for IP-bound URLs)
+    // Find the tab with this specific video (REQUIRED - URLs are IP-bound to specific sessions)
     let youtubeTab = tabs.find(tab => {
       try {
         const url = new URL(tab.url);
@@ -1409,13 +1418,14 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
       }
     });
 
-    // Fall back to any YouTube tab if specific video tab not found
+    // STRICT: Require exact video tab match - URLs are session-bound
     if (!youtubeTab) {
-      youtubeTab = tabs[0];
-      console.log(`[YVO Background] Video-specific tab not found, using tab ${youtubeTab.id}`);
-    } else {
-      console.log(`[YVO Background] Found video-specific tab ${youtubeTab.id} for ${videoId}`);
+      // Don't fall back to wrong tab - this would download wrong video or get 403
+      console.error(`[YVO Background] No tab found with video ${videoId}. Available tabs:`, tabs.map(t => t.url));
+      throw new Error(`YouTube tab with video ${videoId} not found. Please ensure the video is open in a YouTube tab.`);
     }
+
+    console.log(`[YVO Background] Found video-specific tab ${youtubeTab.id} for ${videoId}`);
 
     // Use chrome.scripting.executeScript to run download code directly in the page's MAIN world
     // CRITICAL: world: 'MAIN' is required to access page cookies for cross-origin requests
