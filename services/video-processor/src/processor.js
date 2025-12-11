@@ -343,6 +343,10 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
     const hasSecondarySource = job.settings?.secondarySource?.enabled &&
       (job.settings.secondarySource.uploadedUrl || job.settings.secondarySource.youtubeVideoId);
 
+    // Check for tertiary source (Video 3 for three_person mode)
+    const hasTertiarySource = job.settings?.tertiarySource?.enabled &&
+      (job.settings.tertiarySource.uploadedUrl || job.settings.tertiarySource.youtubeVideoId);
+
     if (hasSecondarySource) {
       // Multi-source mode: Download secondary video and combine
       console.log(`[${jobId}] Multi-source mode detected - downloading secondary video...`);
@@ -400,12 +404,59 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
       console.log(`[${jobId}] Secondary video verified: ${secondarySize} bytes`);
 
-      // Process with multi-source
+      // Download tertiary source if present (for three_person mode with 3 different videos)
+      let tertiaryFile = null;
+      if (hasTertiarySource && job.settings.reframeMode === 'three_person') {
+        console.log(`[${jobId}] Three-source mode: Downloading tertiary video...`);
+        await updateProgress(jobRef, 40, 'Downloading Video 3...');
+
+        const tertiarySource = job.settings.tertiarySource;
+
+        if (tertiarySource.type === 'upload' && tertiarySource.uploadedUrl) {
+          const response = await fetch(tertiarySource.uploadedUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to download tertiary video: ${response.status}`);
+          }
+          const buffer = await response.arrayBuffer();
+          tertiaryFile = path.join(workDir, 'tertiary_source.mp4');
+          fs.writeFileSync(tertiaryFile, Buffer.from(buffer));
+          console.log(`[${jobId}] Tertiary video downloaded: ${fs.statSync(tertiaryFile).size} bytes`);
+
+        } else if (tertiarySource.type === 'youtube' && tertiarySource.youtubeVideoId) {
+          const { downloadFullVideo } = await import('./youtube-downloader.js');
+          tertiaryFile = path.join(workDir, 'tertiary_youtube.mp4');
+
+          try {
+            await downloadFullVideo({
+              jobId: `${jobId}_tertiary`,
+              videoId: tertiarySource.youtubeVideoId,
+              workDir,
+              outputFile: tertiaryFile
+            });
+          } catch (ytError) {
+            console.error(`[${jobId}] Failed to download tertiary YouTube video: ${ytError.message}`);
+            throw new Error(`Could not download Video 3 from YouTube. Error: ${ytError.message}`);
+          }
+        }
+
+        if (tertiaryFile && fs.existsSync(tertiaryFile)) {
+          const tertiarySize = fs.statSync(tertiaryFile).size;
+          if (tertiarySize < 1000) {
+            console.warn(`[${jobId}] Tertiary video too small, will use primary for third position`);
+            tertiaryFile = null;
+          } else {
+            console.log(`[${jobId}] Tertiary video verified: ${tertiarySize} bytes`);
+          }
+        }
+      }
+
+      // Process with multi-source (2 or 3 sources)
       await updateProgress(jobRef, 45, 'Combining video sources...');
       processedFile = await processMultiSourceVideo({
         jobId,
         primaryFile: downloadedFile,
         secondaryFile,
+        tertiaryFile,  // null if not three_person or no tertiary source
         settings: job.settings,
         output: job.output,
         workDir
@@ -924,11 +975,14 @@ function buildAudioFilters({ enhanceAudio, removeFiller, voiceVolume }) {
 
 /**
  * Build FFmpeg complex filter for multi-source split screen
- * Combines two video inputs into a single output with audio mixing
+ * Combines 2 or 3 video inputs into a single output with audio mixing
+ * @param {boolean} hasThirdSource - Whether there's a third video input (for three_person)
  */
 function buildMultiSourceFilter({
   primaryWidth, primaryHeight,
   secondaryWidth, secondaryHeight,
+  tertiaryWidth, tertiaryHeight,
+  hasThirdSource,
   targetWidth, targetHeight,
   reframeMode, position, audioMix
 }) {
@@ -954,48 +1008,61 @@ function buildMultiSourceFilter({
       filters.push(`[v1][v0]vstack[outv]`);
     }
   } else if (reframeMode === 'gameplay') {
-    // Main game fills most, facecam in corner
-    const facecamSize = Math.floor(targetWidth * 0.35);
+    // Main game fills most, facecam in corner (rounded rectangle style)
+    const facecamW = Math.floor(targetWidth * 0.35);
+    const facecamH = Math.floor(facecamW * 1.2); // Slightly taller for portrait face
     const facecamPadding = 20;
+    const cornerRadius = 15;
 
     if (position === 'facecam') {
-      // Secondary is the facecam overlay
+      // Primary is game, secondary is facecam overlay
       filters.push(`[0:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${targetHeight}[base]`);
-      filters.push(`[1:v]scale=${facecamSize}:${facecamSize}:force_original_aspect_ratio=increase,crop=${facecamSize}:${facecamSize}[overlay]`);
-      filters.push(`[base][overlay]overlay=${facecamPadding}:${targetHeight - facecamSize - facecamPadding}[outv]`);
+      // Scale facecam and add rounded corner effect
+      filters.push(`[1:v]scale=${facecamW}:${facecamH}:force_original_aspect_ratio=increase,crop=${facecamW}:${facecamH},format=rgba,geq=lum='lum(X,Y)':a='if(lt((X-${cornerRadius})*(X-${cornerRadius})+(Y-${cornerRadius})*(Y-${cornerRadius}),${cornerRadius}*${cornerRadius})*not(gt(X,${cornerRadius}))*not(gt(Y,${cornerRadius}))+lt((X-(W-${cornerRadius}))*(X-(W-${cornerRadius}))+(Y-${cornerRadius})*(Y-${cornerRadius}),${cornerRadius}*${cornerRadius})*not(lt(X,W-${cornerRadius}))*not(gt(Y,${cornerRadius}))+lt((X-${cornerRadius})*(X-${cornerRadius})+(Y-(H-${cornerRadius}))*(Y-(H-${cornerRadius})),${cornerRadius}*${cornerRadius})*not(gt(X,${cornerRadius}))*not(lt(Y,H-${cornerRadius}))+lt((X-(W-${cornerRadius}))*(X-(W-${cornerRadius}))+(Y-(H-${cornerRadius}))*(Y-(H-${cornerRadius})),${cornerRadius}*${cornerRadius})*not(lt(X,W-${cornerRadius}))*not(lt(Y,H-${cornerRadius})),0,255)'[overlay]`);
+      filters.push(`[base][overlay]overlay=${facecamPadding}:${targetHeight - facecamH - facecamPadding}[outv]`);
     } else {
-      // Secondary is the game, primary is facecam
+      // Primary is facecam, secondary is game
       filters.push(`[1:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${targetHeight}[base]`);
-      filters.push(`[0:v]scale=${facecamSize}:${facecamSize}:force_original_aspect_ratio=increase,crop=${facecamSize}:${facecamSize}[overlay]`);
-      filters.push(`[base][overlay]overlay=${facecamPadding}:${targetHeight - facecamSize - facecamPadding}[outv]`);
+      filters.push(`[0:v]scale=${facecamW}:${facecamH}:force_original_aspect_ratio=increase,crop=${facecamW}:${facecamH}[overlay]`);
+      filters.push(`[base][overlay]overlay=${facecamPadding}:${targetHeight - facecamH - facecamPadding}[outv]`);
     }
   } else if (reframeMode === 'three_person') {
-    // More complex three-person layout
+    // Three-person layout: Main speaker on top (55%), two smaller on bottom
     const mainH = Math.floor(targetHeight * 0.55);
     const bottomsH = targetHeight - mainH;
     const halfW = Math.floor(targetWidth / 2);
 
-    // For simplicity, secondary replaces one of the positions
-    if (position === 'top') {
-      // Secondary is main speaker on top
-      filters.push(`[1:v]scale=${targetWidth}:${mainH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${mainH}[vtop]`);
-      filters.push(`[0:v]split[bl][br]`);
-      filters.push(`[bl]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
-      filters.push(`[br]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
+    if (hasThirdSource) {
+      // TRUE three-source mode: Each position gets a different video
+      // Input 0 = primary (top), Input 1 = secondary (bottom-left), Input 2 = tertiary (bottom-right)
+      filters.push(`[0:v]scale=${targetWidth}:${mainH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${mainH}[vtop]`);
+      filters.push(`[1:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
+      filters.push(`[2:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
       filters.push(`[vbl][vbr]hstack[vbottom]`);
       filters.push(`[vtop][vbottom]vstack[outv]`);
     } else {
-      // Primary on top, secondary on one bottom panel
-      filters.push(`[0:v]scale=${targetWidth}:${mainH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${mainH}[vtop]`);
-      if (position === 'bottom-left') {
-        filters.push(`[1:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
-        filters.push(`[0:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
+      // Two-source mode: Secondary replaces one bottom position
+      if (position === 'top') {
+        // Secondary is main speaker on top
+        filters.push(`[1:v]scale=${targetWidth}:${mainH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${mainH}[vtop]`);
+        filters.push(`[0:v]split[bl][br]`);
+        filters.push(`[bl]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
+        filters.push(`[br]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
+        filters.push(`[vbl][vbr]hstack[vbottom]`);
+        filters.push(`[vtop][vbottom]vstack[outv]`);
       } else {
-        filters.push(`[0:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
-        filters.push(`[1:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
+        // Primary on top, secondary on one bottom panel
+        filters.push(`[0:v]scale=${targetWidth}:${mainH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${mainH}[vtop]`);
+        if (position === 'bottom-left') {
+          filters.push(`[1:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
+          filters.push(`[0:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
+        } else {
+          filters.push(`[0:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbl]`);
+          filters.push(`[1:v]scale=${halfW}:${bottomsH}:force_original_aspect_ratio=increase,crop=${halfW}:${bottomsH}[vbr]`);
+        }
+        filters.push(`[vbl][vbr]hstack[vbottom]`);
+        filters.push(`[vtop][vbottom]vstack[outv]`);
       }
-      filters.push(`[vbl][vbr]hstack[vbottom]`);
-      filters.push(`[vtop][vbottom]vstack[outv]`);
     }
   } else if (reframeMode === 'broll_split') {
     // Main speaker with B-roll overlay
@@ -1039,16 +1106,24 @@ function buildMultiSourceFilter({
 }
 
 /**
- * Process video with two sources (multi-source split screen)
+ * Process video with multiple sources (2 or 3 sources for split screen modes)
+ * @param {string} tertiaryFile - Optional third video file for three_person mode
  */
-async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, settings, output, workDir }) {
+async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, tertiaryFile, settings, output, workDir }) {
   const outputFile = path.join(workDir, 'processed_multisource.mp4');
 
-  // Get info for both videos
+  // Get info for all videos
   const primaryInfo = await getVideoInfo(primaryFile);
   const secondaryInfo = await getVideoInfo(secondaryFile);
+  let tertiaryInfo = null;
 
-  console.log(`[${jobId}] Multi-source: Primary ${primaryInfo.width}x${primaryInfo.height}, Secondary ${secondaryInfo.width}x${secondaryInfo.height}`);
+  const hasThirdSource = tertiaryFile && fs.existsSync(tertiaryFile);
+  if (hasThirdSource) {
+    tertiaryInfo = await getVideoInfo(tertiaryFile);
+    console.log(`[${jobId}] Three-source mode: Primary ${primaryInfo.width}x${primaryInfo.height}, Secondary ${secondaryInfo.width}x${secondaryInfo.height}, Tertiary ${tertiaryInfo.width}x${tertiaryInfo.height}`);
+  } else {
+    console.log(`[${jobId}] Multi-source: Primary ${primaryInfo.width}x${primaryInfo.height}, Secondary ${secondaryInfo.width}x${secondaryInfo.height}`);
+  }
 
   const targetWidth = output.resolution.width;
   const targetHeight = output.resolution.height;
@@ -1083,12 +1158,15 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
     }
   }
 
-  // Build complex filter for multi-source
+  // Build complex filter for multi-source (2 or 3 inputs)
   let complexFilter = buildMultiSourceFilter({
     primaryWidth: primaryInfo.width,
     primaryHeight: primaryInfo.height,
     secondaryWidth: secondaryInfo.width,
     secondaryHeight: secondaryInfo.height,
+    tertiaryWidth: tertiaryInfo?.width,
+    tertiaryHeight: tertiaryInfo?.height,
+    hasThirdSource,
     targetWidth,
     targetHeight,
     reframeMode: settings.reframeMode,
@@ -1122,10 +1200,20 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
     ? ['-ss', String(Math.abs(timeOffset)), '-i', primaryFile]
     : ['-i', primaryFile];
 
+  // Handle tertiary input if present
+  let tertiaryInputArgs = [];
+  if (hasThirdSource) {
+    const tertiaryOffset = settings.tertiarySource?.timeOffset || 0;
+    tertiaryInputArgs = tertiaryOffset !== 0
+      ? ['-ss', String(Math.abs(tertiaryOffset)), '-i', tertiaryFile]
+      : ['-i', tertiaryFile];
+  }
+
   return new Promise((resolve, reject) => {
     const args = [
       ...primaryInputArgs,
       ...secondaryInputArgs,
+      ...tertiaryInputArgs,
       '-filter_complex', complexFilter,
       '-map', '[outv]',
       '-map', '[outa]',
