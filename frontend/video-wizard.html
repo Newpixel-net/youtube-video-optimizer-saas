@@ -9228,25 +9228,19 @@
                                     var captureSource = captureResult.captureSource || 'unknown';
                                     console.log('[Video Wizard] Extension captured video (source: ' + captureSource + '):', extensionData);
 
-                                    if (extensionData.streamData && extensionData.streamData.uploadedToStorage) {
-                                        utils.showToast('Video captured and uploaded successfully!', 'success');
-                                    } else if (extensionData.streamData) {
-                                        utils.showToast('Video captured (uploading...)', 'info');
+                                    if (extensionData.streamData) {
+                                        utils.showToast('Video streams captured successfully!', 'success');
                                     } else {
-                                        // streamData is null - capture failed
-                                        var captureMsg = captureResult.message || 'Capture incomplete';
-                                        console.warn('[Video Wizard] Capture returned without stream data:', captureMsg);
-                                        utils.showToast('Video capture incomplete: ' + captureMsg, 'warning');
+                                        utils.showToast('Video info captured (server will download video)', 'info');
                                     }
                                 } else {
-                                    var errorMsg = captureResult?.error || 'Unknown error';
-                                    console.error('[Video Wizard] Extension capture failed:', errorMsg);
-                                    utils.showToast('Video capture failed: ' + errorMsg, 'error');
+                                    console.warn('[Video Wizard] Extension capture failed:', captureResult?.error);
+                                    utils.showToast('Extension capture failed, using server fallback', 'warning');
                                 }
                             }
                         } catch (extError) {
-                            console.error('[Video Wizard] Extension capture error:', extError);
-                            utils.showToast('Extension error: ' + extError.message, 'error');
+                            console.warn('[Video Wizard] Extension capture error (will try server):', extError);
+                            utils.showToast('Extension timeout, using server download', 'warning');
                         }
                     }
 
@@ -11864,29 +11858,20 @@
 
         function sendExtensionRequest(action, data) {
             return new Promise(function(resolve, reject) {
-                // CRITICAL: Check if extension is ready before sending request
-                // This prevents "Receiving end does not exist" errors
-                if (!state.extension.installed && !window.__YVO_EXTENSION_INSTALLED__) {
-                    console.error('[Video Wizard] Extension not installed or not ready');
-                    reject(new Error('Browser extension not installed or not ready. Please install Video Wizard extension v1.6+ and refresh the page.'));
-                    return;
-                }
-
                 var requestId = 'req_' + (++extensionRequestId) + '_' + Date.now();
 
                 // Set up callback
                 extensionCallbacks[requestId] = { resolve: resolve, reject: reject };
 
-                // Timeout after 30 seconds (extended for auto-capture which opens YouTube tab)
+                // Timeout after 20 seconds (extended for auto-capture which opens YouTube tab)
                 setTimeout(function() {
                     if (extensionCallbacks[requestId]) {
                         delete extensionCallbacks[requestId];
-                        reject(new Error('Extension request timeout after 30 seconds. The extension may have encountered an error. Check browser console (F12) for details.'));
+                        reject(new Error('Extension request timeout - auto-capture may have failed'));
                     }
-                }, 30000);
+                }, 20000);
 
                 // Send request to extension
-                console.log('[Video Wizard] Sending extension request:', action, requestId);
                 window.dispatchEvent(new CustomEvent('yvo-extension-request', {
                     detail: {
                         action: action,
@@ -11939,15 +11924,14 @@
                 return;
             }
 
-            // Give extension more time to load (it may load after page with document_idle)
-            // 5 seconds is more reliable for slow browsers or busy systems
+            // Give extension time to load (it may load after page)
             setTimeout(function() {
                 if (!state.extension.installed) {
                     state.extension.checking = false;
-                    console.log('[Video Wizard] Extension not detected after 5 seconds');
+                    console.log('[Video Wizard] Extension not detected');
                     render();
                 }
-            }, 5000);
+            }, 2000);
         }
 
         // Check for YouTube URL in query params (from extension)
