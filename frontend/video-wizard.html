@@ -10870,72 +10870,16 @@
                 console.log('Audio Mix:', JSON.stringify(clipSettings.audioMix, null, 2));
                 console.log('=============================');
 
-                // For YouTube videos, we need to capture the clip segment using the browser extension
-                var extensionCaptureData = null;
-                var videoId = state.videoInput.videoData?.videoId || info.videoId;
-                var isUploadedVideo = state.videoInput.isUpload || !videoId || videoId.startsWith('upload_');
-
-                if (!isUploadedVideo && state.extension.installed && videoId) {
-                    // Capture the specific clip segment using the extension
-                    utils.showToast('Capturing video clip...', 'info');
-                    console.log('[Export] Starting extension capture for clip:', clipId);
-                    console.log('[Export] Video ID:', videoId);
-                    console.log('[Export] Segment:', info.startTime, '-', info.endTime);
-
-                    try {
-                        var youtubeUrl = 'https://www.youtube.com/watch?v=' + videoId;
-                        var captureResult = await sendExtensionRequest('getVideoFromYouTube', {
-                            youtubeUrl: youtubeUrl,
-                            videoId: videoId,
-                            startTime: info.startTime,
-                            endTime: info.endTime,
-                            autoCapture: true
-                        });
-
-                        if (captureResult && captureResult.success && captureResult.streamData) {
-                            extensionCaptureData = {
-                                videoUrl: captureResult.streamData.videoUrl,
-                                source: captureResult.streamData.source,
-                                uploadedToStorage: captureResult.streamData.uploadedToStorage,
-                                mimeType: captureResult.streamData.mimeType,
-                                capturedAt: captureResult.streamData.capturedAt,
-                                capturedSegment: captureResult.streamData.capturedSegment
-                            };
-                            console.log('[Export] ✓ Extension capture successful:', extensionCaptureData);
-                            utils.showToast('Video captured! Processing...', 'success');
-                        } else {
-                            var captureError = captureResult?.error || 'Unknown capture error';
-                            console.error('[Export] Extension capture failed:', captureError);
-                            utils.showToast('Capture failed: ' + captureError, 'error');
-                            return;
-                        }
-                    } catch (captureErr) {
-                        console.error('[Export] Extension capture exception:', captureErr);
-                        utils.showToast('Capture error: ' + (captureErr.message || 'Unknown error'), 'error');
-                        return;
-                    }
-                } else if (!isUploadedVideo) {
-                    utils.showToast('Browser extension required for YouTube video export. Please install the Video Wizard extension.', 'error');
-                    return;
-                } else {
-                    utils.showToast('Processing uploaded video...', 'info');
-                }
+                utils.showToast('Starting video processing...', 'info');
 
                 try {
                     var wizardProcessClip = functions.httpsCallable('wizardProcessClip');
-                    var requestData = {
+                    var result = await wizardProcessClip({
                         projectId: state.projectId,
                         clipId: clipId,
                         quality: quality,
                         settings: clipSettings
-                    };
-
-                    // Include extension capture data if available
-                    if (extensionCaptureData) {
-                        requestData.extensionCaptureData = extensionCaptureData;
-                    }
-
-                    var result = await wizardProcessClip(requestData);
+                    });
 
                     if (result.data.success) {
                         // Store job info
