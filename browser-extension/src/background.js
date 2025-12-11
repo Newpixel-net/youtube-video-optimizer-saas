@@ -1271,6 +1271,75 @@ function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
 }
 
 /**
+ * Wait for a YouTube tab to be fully stable and ready for script injection
+ * This is crucial to avoid "Frame with ID 0 was removed" errors
+ *
+ * @param {number} tabId - Tab ID to wait for
+ * @param {string} videoId - Expected video ID
+ * @param {number} maxWaitMs - Maximum wait time in milliseconds
+ * @returns {Promise<{ready: boolean, error?: string}>}
+ */
+async function waitForTabStable(tabId, videoId, maxWaitMs = 15000) {
+  const startTime = Date.now();
+  const checkInterval = 500;
+
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      // Check tab still exists and get its current state
+      const tabInfo = await chrome.tabs.get(tabId);
+
+      // Check if tab is complete
+      if (tabInfo.status !== 'complete') {
+        console.log(`[YVO Background] Tab ${tabId} still loading (status: ${tabInfo.status})...`);
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        continue;
+      }
+
+      // Verify URL is still a YouTube video page with expected video
+      try {
+        const url = new URL(tabInfo.url);
+        const currentVideoId = url.searchParams.get('v');
+        if (!currentVideoId) {
+          console.log(`[YVO Background] Tab ${tabId} URL has no video ID, waiting...`);
+          await new Promise(resolve => setTimeout(resolve, checkInterval));
+          continue;
+        }
+        if (currentVideoId !== videoId) {
+          console.warn(`[YVO Background] Tab ${tabId} has different video (${currentVideoId} vs ${videoId})`);
+          // This is actually okay - use whatever video is loaded
+        }
+      } catch (urlError) {
+        console.log(`[YVO Background] Tab ${tabId} URL parse error, waiting...`);
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        continue;
+      }
+
+      // Try to verify video element exists via content script
+      try {
+        const response = await chrome.tabs.sendMessage(tabId, { action: 'getVideoInfo' });
+        if (response?.success && response?.videoInfo?.duration > 0) {
+          console.log(`[YVO Background] Tab ${tabId} is stable: video duration = ${response.videoInfo.duration}s`);
+          return { ready: true, videoInfo: response.videoInfo };
+        }
+      } catch (msgError) {
+        // Content script might not be ready yet
+        console.log(`[YVO Background] Tab ${tabId} content script not ready yet...`);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+    } catch (tabError) {
+      // Tab was closed or became invalid
+      console.error(`[YVO Background] Tab ${tabId} error:`, tabError.message);
+      return { ready: false, error: `Tab no longer exists: ${tabError.message}` };
+    }
+  }
+
+  // Timeout - but still return ready=true to attempt capture anyway
+  console.warn(`[YVO Background] Tab ${tabId} stability timeout after ${maxWaitMs}ms, proceeding anyway...`);
+  return { ready: true, timedOut: true };
+}
+
+/**
  * Capture and upload video using MediaRecorder
  * This is the main entry point for the capture process
  *
@@ -1306,21 +1375,40 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       console.log(`[YVO Background] Opening YouTube tab for capture...`);
       const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
       youtubeTab = await chrome.tabs.create({ url, active: true });
-
-      // Wait for page to load
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      console.log(`[YVO Background] Created new tab ${youtubeTab.id}, waiting for it to load...`);
+    } else {
+      console.log(`[YVO Background] Found existing tab ${youtubeTab.id} for video ${videoId}`);
     }
 
-    // Get video duration from content script
-    let videoInfo;
-    try {
-      videoInfo = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
-    } catch (e) {
-      console.log('[YVO Background] Could not get video info, using defaults');
-      videoInfo = { success: true, videoInfo: { duration: 60 } };
+    // CRITICAL: Wait for tab to be fully stable before proceeding
+    // This prevents "Frame with ID 0 was removed" errors
+    console.log(`[YVO Background] Waiting for tab ${youtubeTab.id} to be stable...`);
+    const stabilityCheck = await waitForTabStable(youtubeTab.id, videoId, 15000);
+
+    if (!stabilityCheck.ready) {
+      // Tab is not ready - need to open a fresh tab
+      console.warn(`[YVO Background] Tab ${youtubeTab.id} not stable: ${stabilityCheck.error}`);
+      console.log(`[YVO Background] Opening fresh tab for capture...`);
+      const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
+      youtubeTab = await chrome.tabs.create({ url, active: true });
+
+      // Wait for the new tab to be stable
+      const newStabilityCheck = await waitForTabStable(youtubeTab.id, videoId, 20000);
+      if (!newStabilityCheck.ready) {
+        throw new Error(`Could not get a stable YouTube tab: ${newStabilityCheck.error}`);
+      }
     }
 
-    const videoDuration = videoInfo?.videoInfo?.duration || 300;
+    // Get video duration from stability check or fetch fresh
+    let videoDuration = stabilityCheck.videoInfo?.duration || 300;
+    if (!stabilityCheck.videoInfo) {
+      try {
+        const videoInfo = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
+        videoDuration = videoInfo?.videoInfo?.duration || 300;
+      } catch (e) {
+        console.log('[YVO Background] Could not get video info, using default duration');
+      }
+    }
 
     // Determine capture range:
     // - If segment times provided: use those (from Video Wizard clip selection)
@@ -1351,35 +1439,75 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     // Make sure tab is active and video is playing before capture
     console.log(`[YVO Background] Ensuring tab is active and video is playing...`);
+
     try {
       // Focus the tab to ensure video can play
       await chrome.tabs.update(youtubeTab.id, { active: true });
+
+      // Small delay to let the tab activation complete
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Trigger playback via content script
       await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
       console.log(`[YVO Background] Playback triggered, waiting for video to start...`);
 
       // Wait for video to actually start playing
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (e) {
       console.log(`[YVO Background] Could not trigger playback: ${e.message}`);
     }
 
     console.log(`[YVO Background] Injecting MediaRecorder capture (${captureStart}s to ${captureEnd}s)...`);
-    console.log(`[YVO Background] Target tab: ${youtubeTab.id}, URL: ${youtubeTab.url}`);
+    console.log(`[YVO Background] Target tab: ${youtubeTab.id}`);
 
-    // Inject and run the capture function
+    // Inject and run the capture function with retry logic
     let results;
-    try {
-      results = await chrome.scripting.executeScript({
-        target: { tabId: youtubeTab.id },
-        world: 'MAIN',
-        func: captureVideoSegmentWithMediaRecorder,
-        args: [captureStart, captureEnd]
-      });
-    } catch (scriptError) {
-      console.error(`[YVO Background] Script injection failed:`, scriptError);
-      throw new Error(`Script injection failed: ${scriptError.message}. Tab may not be fully loaded or accessible.`);
+    let lastError;
+    const maxRetries = 3;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[YVO Background] Script injection attempt ${attempt}/${maxRetries}...`);
+
+        // Double-check tab is still valid before injection
+        const tabCheck = await chrome.tabs.get(youtubeTab.id);
+        if (tabCheck.status !== 'complete') {
+          console.log(`[YVO Background] Tab status is ${tabCheck.status}, waiting...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        results = await chrome.scripting.executeScript({
+          target: { tabId: youtubeTab.id },
+          world: 'MAIN',
+          func: captureVideoSegmentWithMediaRecorder,
+          args: [captureStart, captureEnd]
+        });
+        break; // Success, exit retry loop
+      } catch (scriptError) {
+        lastError = scriptError;
+        console.error(`[YVO Background] Script injection attempt ${attempt} failed:`, scriptError.message);
+
+        if (attempt < maxRetries) {
+          // Wait before retrying, with exponential backoff
+          const waitTime = attempt * 2000;
+          console.log(`[YVO Background] Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+
+          // Re-check if tab is still valid
+          try {
+            await chrome.tabs.get(youtubeTab.id);
+          } catch (tabError) {
+            console.log(`[YVO Background] Tab no longer valid, opening new tab...`);
+            const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
+            youtubeTab = await chrome.tabs.create({ url, active: true });
+            await waitForTabStable(youtubeTab.id, videoId, 10000);
+          }
+        }
+      }
+    }
+
+    if (!results) {
+      throw new Error(`Script injection failed after ${maxRetries} attempts: ${lastError?.message}`);
     }
 
     console.log(`[YVO Background] Script execution returned:`, results ? `${results.length} result(s)` : 'null');
