@@ -372,11 +372,14 @@ async function handleCaptureForWizard(message, sendResponse) {
     if (!targetTab && autoCapture) {
       console.log(`[YVO Background] No YouTube tab found, opening video to capture streams...`);
 
+      let captureTabId = null;
       try {
         const captureResult = await openAndCaptureStreams(videoId, youtubeUrl);
+        captureTabId = captureResult.captureTabId;  // Save tab ID to close later
 
         if (captureResult.success && captureResult.streamData) {
           // Process the captured streams - download and upload to server
+          // The capture tab is still open so downloadAndUploadStream can use it!
           const interceptedData = {
             videoUrl: captureResult.streamData.videoUrl,
             audioUrl: captureResult.streamData.audioUrl,
@@ -385,14 +388,29 @@ async function handleCaptureForWizard(message, sendResponse) {
           const result = await processAndUploadStreams(interceptedData, 'network_intercept_auto');
           // Merge video info from capture result
           result.videoInfo = captureResult.videoInfo || result.videoInfo;
+
+          // NOW close the capture tab (after download/upload is complete)
+          if (captureTabId) {
+            console.log(`[YVO Background] Closing capture tab ${captureTabId}`);
+            try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
+          }
+
           sendResponse(result);
           return;
         } else {
           console.warn(`[YVO Background] Auto-capture failed:`, captureResult.error);
+          // Close the tab if capture failed
+          if (captureTabId) {
+            try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
+          }
           // Continue to try other methods
         }
       } catch (autoCaptureError) {
         console.warn(`[YVO Background] Auto-capture error:`, autoCaptureError.message);
+        // Close the tab if there was an error
+        if (captureTabId) {
+          try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
+        }
         // Continue to try other methods
       }
 
@@ -623,15 +641,11 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
             console.warn('[YVO Background] Could not get video info from tab:', e.message);
           }
 
-          // Close the capture tab after a short delay
-          setTimeout(() => {
-            try {
-              chrome.tabs.remove(captureTab.id).catch(() => {});
-            } catch (e) {}
-          }, 1000);
-
+          // DON'T close the tab yet - caller will close it after download/upload
+          // Return the tab ID so caller can close it when done
           resolve({
             success: true,
+            captureTabId: captureTab.id,  // Return tab ID for caller to close later
             videoInfo: videoInfo || {
               videoId: videoId,
               url: url,
