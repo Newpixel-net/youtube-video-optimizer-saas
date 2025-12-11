@@ -29,6 +29,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleCaptureForWizard(message, sendResponse);
       return true;
 
+    case 'getCaptureStatus':
+      // Get capture status from storage
+      chrome.storage.local.get([`captureStatus_${message.videoId}`]).then(result => {
+        const status = result[`captureStatus_${message.videoId}`];
+        sendResponse(status || { status: 'not_found' });
+      });
+      return true;
+
+    case 'clearCaptureStatus':
+      // Clear capture status after it's been retrieved
+      chrome.storage.local.remove([`captureStatus_${message.videoId}`]).then(() => {
+        sendResponse({ success: true });
+      });
+      return true;
+
     case 'getStoredVideoData':
       sendResponse({ videoData: storedVideoData });
       return false;
@@ -65,19 +80,60 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 /**
  * Main entry point for Video Wizard capture requests
- * SIMPLIFIED: Goes directly to MediaRecorder capture
+ * Uses async storage-based approach to avoid Chrome message channel timeouts
  */
 async function handleCaptureForWizard(message, sendResponse) {
   const { videoId, youtubeUrl, startTime, endTime } = message;
 
-  // Wrap everything in try-catch to ALWAYS call sendResponse
-  try {
-    if (!videoId || !isValidVideoId(videoId)) {
-      sendResponse({ success: false, error: 'Invalid video ID' });
-      return;
-    }
+  if (!videoId || !isValidVideoId(videoId)) {
+    sendResponse({ success: false, error: 'Invalid video ID' });
+    return;
+  }
 
-    console.log(`[YVO Background] Capture request for video: ${videoId}`);
+  // Generate unique capture ID
+  const captureId = `capture_${videoId}_${Date.now()}`;
+  console.log(`[YVO Background] Starting capture ${captureId} for video: ${videoId}`);
+
+  // Store initial status
+  await chrome.storage.local.set({
+    [`captureStatus_${videoId}`]: {
+      captureId,
+      status: 'started',
+      progress: 0,
+      startedAt: Date.now()
+    }
+  });
+
+  // IMPORTANT: Respond immediately to avoid Chrome message channel timeout
+  // The actual capture continues in background
+  sendResponse({
+    success: true,
+    captureStarted: true,
+    captureId: captureId,
+    message: 'Capture started - check status for progress'
+  });
+
+  // Run capture async (after sendResponse)
+  runCaptureAsync(captureId, videoId, youtubeUrl, startTime, endTime);
+}
+
+/**
+ * Run capture asynchronously and store result in chrome.storage
+ * This avoids Chrome's message channel timeout issues
+ */
+async function runCaptureAsync(captureId, videoId, youtubeUrl, startTime, endTime) {
+  const statusKey = `captureStatus_${videoId}`;
+
+  try {
+    // Update status: capturing
+    await chrome.storage.local.set({
+      [statusKey]: {
+        captureId,
+        status: 'capturing',
+        progress: 10,
+        startedAt: Date.now()
+      }
+    });
 
     // Get basic video info
     const videoInfo = {
@@ -86,39 +142,68 @@ async function handleCaptureForWizard(message, sendResponse) {
       thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`
     };
 
-    // Capture using MediaRecorder
+    // Run the actual capture
     const captureResult = await captureVideo(videoId, youtubeUrl, startTime, endTime);
 
     if (captureResult.success) {
-      console.log(`[YVO Background] Capture successful!`);
-      sendResponse({
-        success: true,
-        videoInfo: videoInfo,
-        streamData: {
-          videoUrl: captureResult.videoStorageUrl,
-          quality: 'captured',
-          mimeType: captureResult.mimeType || 'video/webm',
-          capturedAt: Date.now(),
-          source: 'mediarecorder_capture',
-          uploadedToStorage: true,
-          capturedSegment: captureResult.capturedSegment
-        },
-        message: 'Video captured and uploaded successfully.'
+      console.log(`[YVO Background] Capture ${captureId} successful!`);
+
+      // Store successful result
+      await chrome.storage.local.set({
+        [statusKey]: {
+          captureId,
+          status: 'completed',
+          progress: 100,
+          completedAt: Date.now(),
+          result: {
+            success: true,
+            videoInfo: videoInfo,
+            streamData: {
+              videoUrl: captureResult.videoStorageUrl,
+              quality: 'captured',
+              mimeType: captureResult.mimeType || 'video/webm',
+              capturedAt: Date.now(),
+              source: 'mediarecorder_capture',
+              uploadedToStorage: true,
+              capturedSegment: captureResult.capturedSegment
+            },
+            message: 'Video captured and uploaded successfully.'
+          }
+        }
       });
     } else {
-      console.error(`[YVO Background] Capture failed:`, captureResult.error);
-      sendResponse({
-        success: false,
-        error: captureResult.error
+      console.error(`[YVO Background] Capture ${captureId} failed:`, captureResult.error);
+
+      // Store failure result
+      await chrome.storage.local.set({
+        [statusKey]: {
+          captureId,
+          status: 'failed',
+          progress: 0,
+          completedAt: Date.now(),
+          result: {
+            success: false,
+            error: captureResult.error
+          }
+        }
       });
     }
   } catch (error) {
-    console.error('[YVO Background] Capture error:', error);
-    try {
-      sendResponse({ success: false, error: error.message || 'Unknown capture error' });
-    } catch (responseError) {
-      console.error('[YVO Background] Failed to send error response:', responseError);
-    }
+    console.error(`[YVO Background] Capture ${captureId} error:`, error);
+
+    // Store error result
+    await chrome.storage.local.set({
+      [statusKey]: {
+        captureId,
+        status: 'failed',
+        progress: 0,
+        completedAt: Date.now(),
+        result: {
+          success: false,
+          error: error.message || 'Unknown capture error'
+        }
+      }
+    });
   }
 }
 
