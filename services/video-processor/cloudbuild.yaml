@@ -49,7 +49,7 @@ steps:
       - '--max-instances'
       - '10'
       - '--set-env-vars'
-      - 'BUCKET_NAME=$PROJECT_ID.appspot.com,NODE_ENV=production,RAPIDAPI_KEY=${_RAPIDAPI_KEY}'
+      - 'BUCKET_NAME=ytseo-6d1b0.firebasestorage.app,NODE_ENV=production,RAPIDAPI_KEY=${_RAPIDAPI_KEY},VIDEO_DOWNLOAD_API_KEY=${_VIDEO_DOWNLOAD_API_KEY}'
       - '--allow-unauthenticated'
 
 images:
@@ -62,6 +62,7 @@ options:
 
 timeout: '1800s'
 
-# Substitution variables (optional)
+# Substitution variables (set these in Cloud Build triggers or command line)
 substitutions:
   _RAPIDAPI_KEY: ''
+  _VIDEO_DOWNLOAD_API_KEY: ''
