@@ -221,7 +221,7 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
     if (!tab) {
       return {
         success: false,
-        error: 'Please open the YouTube video in a browser tab first, then try again.'
+        error: 'Please open this video on YouTube in another tab first, then click Start Processing again.'
       };
     }
 
@@ -231,10 +231,9 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
     await waitForTabComplete(tab.id);
     console.log(`[YVO Background] Tab ${tab.id} is complete`);
 
-    // Step 3: Make sure the tab is active (required for video autoplay)
-    // Chrome blocks autoplay in background tabs, so we must focus it
-    await chrome.tabs.update(tab.id, { active: true });
-    await sleep(500);
+    // Step 3: Do NOT focus the tab - capture works in background
+    // The video should already be playing since user was previewing it
+    await sleep(300);
 
     // Step 4: Try to get video info (don't wait for playback - injection will handle it)
     let videoDuration = 300;
@@ -331,8 +330,9 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
 }
 
 /**
- * Find an existing YouTube tab with the video
- * Does NOT create new tabs - requires user to have video open
+ * Find an existing YouTube tab with the EXACT video already open
+ * Does NOT create new tabs or navigate existing tabs
+ * Does NOT focus/switch to the tab
  */
 async function ensureYouTubeTab(videoId, youtubeUrl) {
   // Look for existing tab with exact video
@@ -340,8 +340,8 @@ async function ensureYouTubeTab(videoId, youtubeUrl) {
     url: ['*://www.youtube.com/*', '*://youtube.com/*']
   });
 
-  // First, try to find tab with exact video ID
-  let existingTab = tabs.find(tab => {
+  // ONLY find tab with exact video ID - no navigation
+  const existingTab = tabs.find(tab => {
     try {
       const url = new URL(tab.url);
       return url.searchParams.get('v') === videoId;
@@ -355,26 +355,8 @@ async function ensureYouTubeTab(videoId, youtubeUrl) {
     return existingTab;
   }
 
-  // If no exact match, use any YouTube tab that's on a watch page
-  existingTab = tabs.find(tab => {
-    try {
-      const url = new URL(tab.url);
-      return url.pathname === '/watch' && url.searchParams.has('v');
-    } catch {
-      return false;
-    }
-  });
-
-  if (existingTab) {
-    // Navigate existing tab to the video instead of opening new one
-    const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
-    console.log(`[YVO Background] Navigating existing tab ${existingTab.id} to ${videoId}`);
-    await chrome.tabs.update(existingTab.id, { url: url });
-    return existingTab;
-  }
-
-  // No YouTube tab found - return null to indicate user needs to open video
-  console.log(`[YVO Background] No YouTube tab found for video ${videoId}`);
+  // No exact match found - do NOT navigate other tabs
+  console.log(`[YVO Background] No tab found with video ${videoId} - user must open it first`);
   return null;
 }
 
@@ -434,8 +416,26 @@ async function injectAndCapture(tabId, startTime, endTime) {
       console.log(`[YVO Capture] Video found: ${video.videoWidth}x${video.videoHeight}, readyState: ${video.readyState}`);
 
       // Function to start the actual recording
-      const startCapture = () => {
+      const startCapture = async () => {
         console.log(`[YVO Capture] Video ready, starting MediaRecorder...`);
+
+        // Seek to start position FIRST
+        video.currentTime = startTime;
+        video.muted = true;
+        video.playbackRate = 1; // Start at normal speed, will increase after
+
+        // Wait for seek to complete
+        await new Promise(r => setTimeout(r, 500));
+
+        // Wait for video to be playing and stable
+        try {
+          await video.play();
+        } catch (e) {
+          console.log('[YVO Capture] Play failed, trying to continue anyway:', e.message);
+        }
+
+        // Wait for video to stabilize (avoid "Tracks were added" error)
+        await new Promise(r => setTimeout(r, 1000));
 
         // Capture stream from video
         let stream;
@@ -450,6 +450,9 @@ async function injectAndCapture(tabId, startTime, endTime) {
           resolve({ success: false, error: 'Failed to capture video stream' });
           return;
         }
+
+        // Wait for stream tracks to stabilize
+        await new Promise(r => setTimeout(r, 500));
 
         // Find supported mime type
         let mimeType = 'video/webm;codecs=vp9,opus';
@@ -513,44 +516,39 @@ async function injectAndCapture(tabId, startTime, endTime) {
 
         recorder.onerror = (e) => {
           video.playbackRate = 1;
-          resolve({ success: false, error: `Recorder error: ${e.error?.message}` });
+          resolve({ success: false, error: `Recorder error: ${e.error?.message || 'Unknown error'}` });
         };
 
-        // Seek to start position
-        video.currentTime = startTime;
-        video.muted = true;
+        // Now set playback speed for faster capture
         video.playbackRate = PLAYBACK_SPEED;
 
-        // Wait a bit for seek, then start
-        setTimeout(() => {
-          try {
-            recorder.start(500);
-            video.play().catch(() => {});
-            console.log(`[YVO Capture] Recording started at ${PLAYBACK_SPEED}x speed`);
-          } catch (e) {
-            resolve({ success: false, error: `Failed to start: ${e.message}` });
-            return;
-          }
+        // Start recording
+        try {
+          recorder.start(500);
+          console.log(`[YVO Capture] Recording started at ${PLAYBACK_SPEED}x speed`);
+        } catch (e) {
+          resolve({ success: false, error: `Failed to start recording: ${e.message}` });
+          return;
+        }
 
-          // Stop when we reach end
-          const checkEnd = setInterval(() => {
-            if (video.currentTime >= endTime || video.ended) {
-              clearInterval(checkEnd);
-              if (recorder.state === 'recording') {
-                recorder.stop();
-              }
-            }
-          }, 100);
-
-          // Safety timeout
-          const captureTimeMs = (duration / PLAYBACK_SPEED) * 1000;
-          setTimeout(() => {
+        // Stop when we reach end
+        const checkEnd = setInterval(() => {
+          if (video.currentTime >= endTime || video.ended) {
             clearInterval(checkEnd);
             if (recorder.state === 'recording') {
               recorder.stop();
             }
-          }, captureTimeMs + 10000);
-        }, 1000);
+          }
+        }, 100);
+
+        // Safety timeout
+        const captureTimeMs = (duration / PLAYBACK_SPEED) * 1000;
+        setTimeout(() => {
+          clearInterval(checkEnd);
+          if (recorder.state === 'recording') {
+            recorder.stop();
+          }
+        }, captureTimeMs + 10000);
       };
 
       // Force video to play
