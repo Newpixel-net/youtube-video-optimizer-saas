@@ -289,6 +289,7 @@ async function handleCaptureForWizard(message, sendResponse) {
     } else {
       // MediaRecorder failed - return stream URLs as last resort (will likely fail on server)
       console.warn(`[YVO Background] MediaRecorder capture failed: ${uploadResult.error}`);
+      console.warn(`[YVO Background] ⚠️ Falling back to intercepted URLs - these are IP-restricted and will NOT work on server!`);
       return {
         success: true,
         videoInfo: videoInfo,
@@ -300,9 +301,11 @@ async function handleCaptureForWizard(message, sendResponse) {
           capturedAt: intercepted?.capturedAt || Date.now(),
           source: source,
           captureMethod: 'fallback_urls',
-          captureError: uploadResult.error
+          captureError: uploadResult.error,
+          uploadFailed: true,  // Flag so frontend knows this won't work on server
+          uploadError: `MediaRecorder capture failed: ${uploadResult.error}. Please ensure YouTube video is open in a browser tab.`
         },
-        message: 'Capture failed. Server will attempt direct download (may fail due to restrictions).'
+        message: `MediaRecorder capture failed: ${uploadResult.error}. Please ensure YouTube is open in another tab and try again.`
       };
     }
   }
@@ -1176,14 +1179,28 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }
     });
 
-    // If no tab with this video, open one
+    // If no tab with this video, open one at the correct timestamp
     if (!youtubeTab) {
-      console.log(`[YVO Background] Opening YouTube tab for capture...`);
-      const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
+      // Use requestedStartTime if provided, otherwise start from beginning
+      const openAtTime = requestedStartTime || 0;
+      console.log(`[YVO Background] Opening YouTube tab for capture at ${openAtTime}s...`);
+      // Open at the start timestamp so video loads at the right position
+      const startSeconds = Math.floor(openAtTime);
+      let url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
+      // Add or update the timestamp parameter
+      if (url.includes('?')) {
+        // Remove existing t= parameter if present
+        url = url.replace(/[&?]t=\d+/g, '');
+        url += `&t=${startSeconds}`;
+      } else {
+        url += `?t=${startSeconds}`;
+      }
+      console.log(`[YVO Background] Opening URL: ${url}`);
       youtubeTab = await chrome.tabs.create({ url, active: true });
 
-      // Wait for page to load
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Wait longer for page to load and video to buffer at the target position
+      console.log(`[YVO Background] Waiting for video to load at timestamp...`);
+      await new Promise(resolve => setTimeout(resolve, 8000));
     }
 
     // Get video duration from content script
