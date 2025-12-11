@@ -547,10 +547,9 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
 
     try {
       // Open the YouTube video in a new tab
-      // IMPORTANT: Must be active: true for video to load and MediaRecorder to work
       captureTab = await chrome.tabs.create({
         url: url,
-        active: true  // Must be active for Chrome to allow video playback
+        active: false // Open in background so user can continue working
       });
 
       console.log(`[YVO Background] Opened capture tab ${captureTab.id}`);
