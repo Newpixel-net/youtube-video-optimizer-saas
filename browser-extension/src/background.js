@@ -299,25 +299,54 @@ async function handleCaptureForWizard(message, sendResponse) {
     }
 
     if (uploadResult.success) {
-      console.log(`[YVO Background] ✓ MediaRecorder capture and upload successful!`);
       const capturedSegment = uploadResult.capturedSegment || {};
-      return {
-        success: true,
-        videoInfo: videoInfo,
-        streamData: {
-          videoUrl: uploadResult.videoStorageUrl,
-          quality: 'captured',
-          mimeType: uploadResult.mimeType || 'video/webm',
-          capturedAt: Date.now(),
-          source: 'mediarecorder_capture',
-          uploadedToStorage: true,
-          capturedSegment: capturedSegment,
-          captureStartTime: capturedSegment.startTime,
-          captureEndTime: capturedSegment.endTime,
-          captureDuration: capturedSegment.duration
-        },
-        message: `Video segment (${capturedSegment.startTime || 0}s-${capturedSegment.endTime || '?'}s) captured and uploaded.`
-      };
+
+      // Check if we have server storage URL or local fallback
+      if (uploadResult.uploadedToStorage && uploadResult.videoStorageUrl) {
+        // Server upload succeeded
+        console.log(`[YVO Background] ✓ MediaRecorder capture and upload successful!`);
+        return {
+          success: true,
+          videoInfo: videoInfo,
+          streamData: {
+            videoUrl: uploadResult.videoStorageUrl,
+            quality: 'captured',
+            mimeType: uploadResult.mimeType || 'video/webm',
+            capturedAt: Date.now(),
+            source: 'mediarecorder_capture',
+            uploadedToStorage: true,
+            capturedSegment: capturedSegment,
+            captureStartTime: capturedSegment.startTime,
+            captureEndTime: capturedSegment.endTime,
+            captureDuration: capturedSegment.duration
+          },
+          message: `Video segment (${capturedSegment.startTime || 0}s-${capturedSegment.endTime || '?'}s) captured and uploaded.`
+        };
+      } else if (uploadResult.videoData) {
+        // Capture succeeded but server upload failed - return video data for direct download
+        console.log(`[YVO Background] ✓ MediaRecorder capture successful, but server unavailable. Returning video data for direct download.`);
+        console.log(`[YVO Background] Server error: ${uploadResult.uploadError}`);
+        return {
+          success: true,
+          videoInfo: videoInfo,
+          streamData: {
+            videoUrl: uploadResult.blobUrl || null,
+            videoData: uploadResult.videoData,  // Base64 encoded video
+            videoSize: uploadResult.videoSize,
+            quality: 'captured_local',
+            mimeType: uploadResult.mimeType || 'video/webm',
+            capturedAt: Date.now(),
+            source: 'mediarecorder_local',
+            uploadedToStorage: false,
+            uploadError: uploadResult.uploadError,
+            capturedSegment: capturedSegment,
+            captureStartTime: capturedSegment.startTime,
+            captureEndTime: capturedSegment.endTime,
+            captureDuration: capturedSegment.duration
+          },
+          message: `Video captured successfully but server is unavailable. Video ready for direct download.`
+        };
+      }
     }
 
     // Both methods failed - return failure so frontend can handle properly
@@ -1333,25 +1362,63 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     console.log(`[YVO Background] Uploading captured video to server (${captureStart}s-${captureEnd}s)...`);
 
-    const uploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
-      method: 'POST',
-      body: formData
-    });
+    // Try uploading to server - if it fails, fall back to direct blob URL
+    let uploadResult = null;
+    let uploadError = null;
 
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
+    try {
+      const uploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        uploadError = `Server upload failed: ${uploadResponse.status} - ${errorText.substring(0, 100)}`;
+        console.error(`[YVO Background] ${uploadError}`);
+      } else {
+        uploadResult = await uploadResponse.json();
+        console.log(`[YVO Background] Upload successful: ${uploadResult.url}`);
+      }
+    } catch (serverError) {
+      uploadError = `Server connection failed: ${serverError.message}`;
+      console.error(`[YVO Background] ${uploadError}`);
     }
 
-    const uploadResult = await uploadResponse.json();
-    console.log(`[YVO Background] Upload successful: ${uploadResult.url}`);
+    // If server upload succeeded, return the storage URL
+    if (uploadResult && uploadResult.url) {
+      return {
+        success: true,
+        videoStorageUrl: uploadResult.url,
+        mimeType: captureResult.mimeType,
+        captureMethod: 'mediarecorder',
+        uploadedToStorage: true,
+        capturedSegment: {
+          startTime: captureStart,
+          endTime: captureEnd,
+          duration: capturedDuration
+        }
+      };
+    }
 
+    // Server upload failed - create a blob URL as fallback
+    // This allows the frontend to download the video directly
+    console.log(`[YVO Background] Server unavailable, creating direct blob URL...`);
+
+    // Store the blob in memory and create a URL that can be accessed
+    const blobUrl = URL.createObjectURL(videoBlob);
+
+    // Also save the raw base64 data for direct transfer
     return {
       success: true,
-      videoStorageUrl: uploadResult.url,
+      videoStorageUrl: null,
+      blobUrl: blobUrl,
+      videoData: captureResult.videoData,  // Base64 encoded
+      videoSize: captureResult.videoSize,
       mimeType: captureResult.mimeType,
-      captureMethod: 'mediarecorder',
-      // Include segment info in response for server processing
+      captureMethod: 'mediarecorder_local',
+      uploadedToStorage: false,
+      uploadError: uploadError,
       capturedSegment: {
         startTime: captureStart,
         endTime: captureEnd,
