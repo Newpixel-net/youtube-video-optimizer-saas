@@ -287,8 +287,46 @@ async function handleCaptureForWizard(message, sendResponse) {
         message: `Video segment (${capturedSegment.startTime || 0}s-${capturedSegment.endTime || '?'}s) captured and uploaded.`
       };
     } else {
-      // MediaRecorder failed - return stream URLs as last resort (will likely fail on server)
+      // MediaRecorder failed - try browser-side download as fallback
       console.warn(`[YVO Background] MediaRecorder capture failed: ${uploadResult.error}`);
+      console.log(`[YVO Background] Trying browser-side download fallback (uses existing YouTube tab)...`);
+
+      // Try downloadAndUploadStream - downloads in browser context and uploads to server
+      // This works without MediaRecorder, just needs ANY YouTube tab open
+      if (intercepted?.videoUrl) {
+        try {
+          const browserDownloadResult = await downloadAndUploadStream(
+            videoId,
+            intercepted.videoUrl,
+            intercepted.audioUrl
+          );
+
+          if (browserDownloadResult.success) {
+            console.log(`[YVO Background] Browser-side download and upload successful!`);
+            return {
+              success: true,
+              videoInfo: videoInfo,
+              streamData: {
+                videoUrl: browserDownloadResult.videoStorageUrl,
+                audioUrl: browserDownloadResult.audioStorageUrl || null,
+                quality: 'browser_download',
+                mimeType: 'video/mp4',
+                capturedAt: Date.now(),
+                source: 'browser_download',
+                uploadedToStorage: true
+              },
+              message: 'Video downloaded and uploaded via browser.'
+            };
+          } else {
+            console.warn(`[YVO Background] Browser-side download failed: ${browserDownloadResult.error}`);
+          }
+        } catch (browserDownloadError) {
+          console.warn(`[YVO Background] Browser-side download threw: ${browserDownloadError.message}`);
+        }
+      }
+
+      // Final fallback - return stream URLs (will likely fail on server due to IP restriction)
+      console.warn(`[YVO Background] All capture methods failed, returning raw URLs as last resort`);
       return {
         success: true,
         videoInfo: videoInfo,

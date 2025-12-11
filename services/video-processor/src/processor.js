@@ -97,12 +97,13 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       // When running on server (Cloud Run), these ALWAYS fail with 403, so skip them
 
       const extensionStreamSource = job.extensionStreamData?.source || 'unknown';
-      const isUploadedCapture = extensionStreamSource === 'mediarecorder_capture' &&
+      // Both mediarecorder_capture and browser_download are uploaded to storage
+      const isUploadedCapture = (extensionStreamSource === 'mediarecorder_capture' || extensionStreamSource === 'browser_download') &&
                                  job.extensionStreamData?.uploadedToStorage;
 
       if (isUploadedCapture) {
-        // MediaRecorder capture was uploaded to our storage - use it directly
-        console.log(`[${jobId}] Using MediaRecorder captured video from storage (bypasses IP restriction)`);
+        // Captured/downloaded video was uploaded to our storage - use it directly
+        console.log(`[${jobId}] Using ${extensionStreamSource} video from storage (bypasses IP restriction)`);
         await updateProgress(jobRef, 10, 'Downloading captured video...');
 
         try {
@@ -112,9 +113,11 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           }
 
           const buffer = await response.arrayBuffer();
-          const capturedFile = path.join(workDir, 'captured.webm');
+          // MediaRecorder produces webm, browser_download produces mp4
+          const fileExt = extensionStreamSource === 'browser_download' ? 'mp4' : 'webm';
+          const capturedFile = path.join(workDir, `captured.${fileExt}`);
           fs.writeFileSync(capturedFile, Buffer.from(buffer));
-          console.log(`[${jobId}] Downloaded MediaRecorder capture: ${fs.statSync(capturedFile).size} bytes`);
+          console.log(`[${jobId}] Downloaded ${extensionStreamSource}: ${fs.statSync(capturedFile).size} bytes`);
 
           // Check if we need to extract a specific segment from the captured video
           // The extension may have captured more than needed (e.g., full 5 minutes)
@@ -134,7 +137,7 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
             console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s from captured video`);
             await updateProgress(jobRef, 15, 'Extracting clip segment...');
 
-            downloadedFile = path.join(workDir, 'source.webm');
+            downloadedFile = path.join(workDir, `source.${fileExt}`);
             await new Promise((resolve, reject) => {
               const ffmpeg = spawn('ffmpeg', [
                 '-i', capturedFile,
@@ -167,7 +170,7 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
             console.log(`[${jobId}] Using captured video directly (segment matches or full capture)`);
           }
         } catch (captureError) {
-          console.warn(`[${jobId}] MediaRecorder capture download failed: ${captureError.message}`);
+          console.warn(`[${jobId}] Extension capture download failed: ${captureError.message}`);
           console.log(`[${jobId}] Falling back to Video Download API...`);
           await updateProgress(jobRef, 12, 'Capture failed, using download API...');
 
