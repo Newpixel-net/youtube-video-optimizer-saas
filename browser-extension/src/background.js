@@ -15,6 +15,7 @@ let storedVideoData = null;
 
 // Constants
 const VIDEO_PROCESSOR_URL = 'https://video-processor-867328435695.us-central1.run.app';
+const CLOUD_FUNCTION_UPLOAD_URL = 'https://us-central1-ytseo-6d1b0.cloudfunctions.net/extensionUploadVideo';
 const MAX_CAPTURE_DURATION = 300; // 5 minutes max
 
 /**
@@ -165,29 +166,53 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
       return { success: false, error: result.error };
     }
 
-    // Step 7: Upload to server
+    // Step 7: Upload to server (try Cloud Run first, then Cloud Function as fallback)
     console.log(`[YVO Background] Uploading ${(result.videoSize / 1024 / 1024).toFixed(2)}MB...`);
 
     const videoBlob = base64ToBlob(result.videoData, result.mimeType);
-    const formData = new FormData();
-    formData.append('video', videoBlob, `captured_${videoId}.webm`);
-    formData.append('videoId', videoId);
-    formData.append('type', 'video');
-    formData.append('captureStart', String(captureStart));
-    formData.append('captureEnd', String(captureEnd));
 
-    const uploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
-      method: 'POST',
-      body: formData
-    });
+    // Try Cloud Run first
+    let uploadResult = null;
+    let uploadSuccess = false;
 
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      return { success: false, error: `Upload failed: ${uploadResponse.status} - ${errorText}` };
+    const uploadUrls = [
+      `${VIDEO_PROCESSOR_URL}/upload-stream`,
+      CLOUD_FUNCTION_UPLOAD_URL
+    ];
+
+    for (const uploadUrl of uploadUrls) {
+      try {
+        console.log(`[YVO Background] Trying upload to: ${uploadUrl}`);
+
+        const formData = new FormData();
+        formData.append('video', videoBlob, `captured_${videoId}.webm`);
+        formData.append('videoId', videoId);
+        formData.append('type', 'video');
+        formData.append('captureStart', String(captureStart));
+        formData.append('captureEnd', String(captureEnd));
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (uploadResponse.ok) {
+          uploadResult = await uploadResponse.json();
+          uploadSuccess = true;
+          console.log(`[YVO Background] Upload successful: ${uploadResult.url}`);
+          break;
+        } else {
+          const errorText = await uploadResponse.text();
+          console.warn(`[YVO Background] Upload to ${uploadUrl} failed: ${uploadResponse.status}`);
+        }
+      } catch (uploadError) {
+        console.warn(`[YVO Background] Upload to ${uploadUrl} error:`, uploadError.message);
+      }
     }
 
-    const uploadResult = await uploadResponse.json();
-    console.log(`[YVO Background] Upload successful: ${uploadResult.url}`);
+    if (!uploadSuccess || !uploadResult) {
+      return { success: false, error: 'Upload failed to all endpoints. Please try again.' };
+    }
 
     return {
       success: true,
