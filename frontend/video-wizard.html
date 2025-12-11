@@ -10955,23 +10955,36 @@
 
                         if (captureResult && captureResult.success && captureResult.streamData) {
                             console.log('[Video Wizard] Extension capture successful:', captureResult.streamData.source);
-                            extensionCaptureData = {
-                                videoUrl: captureResult.streamData.videoUrl,
-                                audioUrl: captureResult.streamData.audioUrl || null,
-                                quality: captureResult.streamData.quality || 'captured',
-                                mimeType: captureResult.streamData.mimeType || 'video/webm',
-                                capturedAt: captureResult.streamData.capturedAt || Date.now(),
-                                source: captureResult.streamData.source || 'mediarecorder_capture',
-                                uploadedToStorage: captureResult.streamData.uploadedToStorage || false,
-                                captureStartTime: captureResult.streamData.captureStartTime || clipStartTime,
-                                captureEndTime: captureResult.streamData.captureEndTime || clipEndTime
-                            };
 
-                            if (extensionCaptureData.uploadedToStorage) {
+                            // Check if MediaRecorder capture actually worked and uploaded to storage
+                            var uploadedToStorage = captureResult.streamData.uploadedToStorage || false;
+                            var captureFailedButHasFallback = captureResult.streamData.uploadFailed || false;
+
+                            if (uploadedToStorage) {
+                                // Success! Video was captured and uploaded to our storage
+                                extensionCaptureData = {
+                                    videoUrl: captureResult.streamData.videoUrl,
+                                    audioUrl: captureResult.streamData.audioUrl || null,
+                                    quality: captureResult.streamData.quality || 'captured',
+                                    mimeType: captureResult.streamData.mimeType || 'video/webm',
+                                    capturedAt: captureResult.streamData.capturedAt || Date.now(),
+                                    source: captureResult.streamData.source || 'mediarecorder_capture',
+                                    uploadedToStorage: true,
+                                    captureStartTime: captureResult.streamData.captureStartTime || clipStartTime,
+                                    captureEndTime: captureResult.streamData.captureEndTime || clipEndTime
+                                };
                                 utils.showToast('Video captured and ready for processing!', 'success');
+                            } else if (captureFailedButHasFallback) {
+                                // MediaRecorder failed - show clear error
+                                var captureError = captureResult.streamData.uploadError || captureResult.message || 'Capture failed';
+                                console.error('[Video Wizard] MediaRecorder capture failed:', captureError);
+                                utils.showToast('Video capture failed. Please ensure YouTube is open in another tab and try again.', 'error');
+                                // Don't set extensionCaptureData - let server try fallbacks (though they'll likely fail)
                             } else {
-                                console.warn('[Video Wizard] Extension capture did not upload to storage');
-                                utils.showToast('Capture ready, starting processing...', 'info');
+                                // Old-style intercepted URLs without upload - these won't work on server
+                                console.warn('[Video Wizard] Extension returned intercepted URLs (not uploaded to storage) - server will attempt fallback methods');
+                                utils.showToast('Capture incomplete, trying server methods (may be slower)...', 'warning');
+                                // Don't set extensionCaptureData - the intercepted URLs are IP-restricted
                             }
                         } else {
                             console.warn('[Video Wizard] Extension capture failed:', captureResult?.error || 'Unknown error');
