@@ -242,8 +242,9 @@ async function handleCaptureForWizard(message, sendResponse) {
   console.log(`[YVO Background] Capture request for video: ${videoId}`);
 
   // Helper function to process captured streams - NOW USES MEDIARECORDER CAPTURE
-  async function processAndUploadStreams(intercepted, source) {
-    console.log(`[YVO Background] processAndUploadStreams called with source: ${source}`);
+  // captureTabId is optional - if provided, MediaRecorder will use that tab instead of opening a new one
+  async function processAndUploadStreams(intercepted, source, captureTabId = null) {
+    console.log(`[YVO Background] processAndUploadStreams called with source: ${source}, captureTabId: ${captureTabId}`);
 
     const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
 
@@ -257,8 +258,8 @@ async function handleCaptureForWizard(message, sendResponse) {
 
     let uploadResult;
     try {
-      // Pass segment times to capture function (uses closure from outer handleCaptureForWizard)
-      uploadResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
+      // Pass segment times and tab ID to capture function
+      uploadResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime, captureTabId);
       console.log(`[YVO Background] MediaRecorder capture returned:`, uploadResult.success, uploadResult.error || 'no error');
     } catch (captureError) {
       console.error(`[YVO Background] MediaRecorder capture threw exception:`, captureError);
@@ -380,14 +381,22 @@ async function handleCaptureForWizard(message, sendResponse) {
 
         if (captureResult.success && captureResult.streamData) {
           // Process the captured streams - download and upload to server
+          // IMPORTANT: Pass the captureTabId so MediaRecorder can reuse that tab
           const interceptedData = {
             videoUrl: captureResult.streamData.videoUrl,
             audioUrl: captureResult.streamData.audioUrl,
             capturedAt: captureResult.streamData.capturedAt
           };
-          const result = await processAndUploadStreams(interceptedData, 'network_intercept_auto');
+          console.log(`[YVO Background] Passing capture tab ${captureResult.captureTabId} to processAndUploadStreams`);
+          const result = await processAndUploadStreams(interceptedData, 'network_intercept_auto', captureResult.captureTabId);
           // Merge video info from capture result
           result.videoInfo = captureResult.videoInfo || result.videoInfo;
+          sendResponse(result);
+          return;
+        } else if (captureResult.captureTabId) {
+          // Stream interception failed, but we have a tab - try MediaRecorder directly
+          console.log(`[YVO Background] Stream capture failed (${captureResult.error}), trying MediaRecorder with tab ${captureResult.captureTabId}`);
+          const result = await processAndUploadStreams(null, 'mediarecorder_fallback', captureResult.captureTabId);
           sendResponse(result);
           return;
         } else {
@@ -626,15 +635,13 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
             console.warn('[YVO Background] Could not get video info from tab:', e.message);
           }
 
-          // Close the capture tab after a short delay
-          setTimeout(() => {
-            try {
-              chrome.tabs.remove(captureTab.id).catch(() => {});
-            } catch (e) {}
-          }, 1000);
+          // DON'T close the tab yet - we need it for MediaRecorder capture
+          // The tab will be closed by captureAndUploadWithMediaRecorder after capture
+          console.log(`[YVO Background] Keeping capture tab ${captureTab.id} open for MediaRecorder`);
 
           resolve({
             success: true,
+            captureTabId: captureTab.id,  // Pass tab ID for MediaRecorder to use
             videoInfo: videoInfo || {
               videoId: videoId,
               url: url,
@@ -685,13 +692,12 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
           cleanup();
           console.warn(`[YVO Background] Stream capture timeout after ${maxAttempts * 0.5}s`);
 
-          // Close the capture tab
-          try {
-            chrome.tabs.remove(captureTab.id).catch(() => {});
-          } catch (e) {}
+          // DON'T close the tab - MediaRecorder can still try using it
+          console.log(`[YVO Background] Keeping tab ${captureTab.id} for MediaRecorder fallback`);
 
           resolve({
             success: false,
+            captureTabId: captureTab.id,  // Pass tab ID even on failure
             error: 'Stream capture timeout. The video may require manual playback or has playback restrictions.'
           });
         }
@@ -701,11 +707,13 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
       timeoutId = setTimeout(() => {
         cleanup();
         console.warn('[YVO Background] Absolute timeout reached for stream capture');
-        try {
-          if (captureTab) chrome.tabs.remove(captureTab.id).catch(() => {});
-        } catch (e) {}
+
+        // DON'T close the tab - MediaRecorder can still try using it
+        console.log(`[YVO Background] Keeping tab ${captureTab?.id} for MediaRecorder fallback`);
+
         resolve({
           success: false,
+          captureTabId: captureTab?.id,  // Pass tab ID even on failure
           error: 'Stream capture timeout - video may have restrictions'
         });
       }, 20000);
@@ -1192,33 +1200,58 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
  * @param {number} [requestedStartTime] - Optional segment start time in seconds
  * @param {number} [requestedEndTime] - Optional segment end time in seconds
  */
-async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedStartTime, requestedEndTime) {
+async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedStartTime, requestedEndTime, existingTabId = null) {
   const hasSegmentRequest = requestedStartTime !== undefined && requestedEndTime !== undefined;
   const segmentInfo = hasSegmentRequest
     ? `segment ${requestedStartTime}s-${requestedEndTime}s`
     : 'auto-detect';
-  console.log(`[YVO Background] Starting MediaRecorder capture for ${videoId} (${segmentInfo})`);
+  console.log(`[YVO Background] Starting MediaRecorder capture for ${videoId} (${segmentInfo}), existingTabId: ${existingTabId}`);
+
+  let tabToClose = null;  // Track if we need to close a tab we used
 
   try {
-    // Find or open YouTube tab with this video
-    const tabs = await chrome.tabs.query({
-      url: ['*://www.youtube.com/*', '*://youtube.com/*']
-    });
+    let youtubeTab = null;
 
-    let youtubeTab = tabs.find(tab => {
+    // First, try to use the existing tab ID if provided
+    if (existingTabId) {
       try {
-        const url = new URL(tab.url);
-        return url.searchParams.get('v') === videoId;
-      } catch {
-        return false;
-      }
-    });
+        youtubeTab = await chrome.tabs.get(existingTabId);
+        console.log(`[YVO Background] Reusing existing capture tab ${existingTabId}`);
 
-    // If no tab with this video, open one
+        // Make sure the tab is active for capture to work
+        await chrome.tabs.update(existingTabId, { active: true });
+        tabToClose = existingTabId;  // Mark for cleanup after capture
+
+        // Give the tab a moment to become active and video to load
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (e) {
+        console.warn(`[YVO Background] Existing tab ${existingTabId} not available, will search for another`);
+        youtubeTab = null;
+      }
+    }
+
+    // If no existing tab, search for a YouTube tab with this video
+    if (!youtubeTab) {
+      const tabs = await chrome.tabs.query({
+        url: ['*://www.youtube.com/*', '*://youtube.com/*']
+      });
+
+      youtubeTab = tabs.find(tab => {
+        try {
+          const url = new URL(tab.url);
+          return url.searchParams.get('v') === videoId;
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    // If still no tab with this video, open one
     if (!youtubeTab) {
       console.log(`[YVO Background] Opening YouTube tab for capture...`);
       const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
       youtubeTab = await chrome.tabs.create({ url, active: true });
+      tabToClose = youtubeTab.id;  // Mark for cleanup after capture
 
       // Wait for page to load
       await new Promise(resolve => setTimeout(resolve, 5000));
@@ -1312,6 +1345,16 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     const uploadResult = await uploadResponse.json();
     console.log(`[YVO Background] Upload successful: ${uploadResult.url}`);
 
+    // Clean up the capture tab if we opened/used one
+    if (tabToClose) {
+      console.log(`[YVO Background] Closing capture tab ${tabToClose}`);
+      try {
+        await chrome.tabs.remove(tabToClose);
+      } catch (e) {
+        console.warn(`[YVO Background] Could not close tab ${tabToClose}:`, e.message);
+      }
+    }
+
     return {
       success: true,
       videoStorageUrl: uploadResult.url,
@@ -1327,6 +1370,17 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
   } catch (error) {
     console.error(`[YVO Background] MediaRecorder capture failed:`, error);
+
+    // Clean up the capture tab even on error
+    if (tabToClose) {
+      console.log(`[YVO Background] Closing capture tab ${tabToClose} after error`);
+      try {
+        await chrome.tabs.remove(tabToClose);
+      } catch (e) {
+        // Ignore tab close errors
+      }
+    }
+
     return {
       success: false,
       error: error.message

@@ -103,6 +103,16 @@
         endTime: endTime         // Segment end time in seconds
       });
 
+      console.log('[YVO Extension] Background script returned:', response?.success ? 'SUCCESS' : 'FAILED');
+      console.log('[YVO Extension] Response details:', JSON.stringify({
+        success: response?.success,
+        source: response?.streamData?.source,
+        uploadedToStorage: response?.streamData?.uploadedToStorage,
+        captureError: response?.streamData?.captureError,
+        error: response?.error,
+        hasVideoUrl: !!response?.streamData?.videoUrl
+      }));
+
       if (response?.success) {
         // Log the capture source for debugging
         const source = response.streamData?.source || 'none';
