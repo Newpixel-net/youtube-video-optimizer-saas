@@ -146,9 +146,10 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
     await waitForTabComplete(tab.id);
     console.log(`[YVO Background] Tab ${tab.id} is complete`);
 
-    // Step 3: Make sure the tab is focused (helps with autoplay)
-    await chrome.tabs.update(tab.id, { active: true });
-    await sleep(500); // Reduced from 1000ms
+    // Step 3: Do NOT switch focus to the tab - capture works in background
+    // The video is muted anyway, and switching focus is disruptive to user
+    // Only needed: ensure the tab is not discarded (Chrome may suspend background tabs)
+    await sleep(300); // Brief wait for tab stability
 
     // Step 4: Try to get video info (don't wait for playback - injection will handle it)
     let videoDuration = 300;

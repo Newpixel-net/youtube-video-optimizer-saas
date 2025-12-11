@@ -9195,7 +9195,7 @@
                     if (state.extension.installed && url && !uploadedFile) {
                         try {
                             console.log('[Video Wizard] Requesting video capture from extension...');
-                            utils.showToast('Extension capturing video (may open YouTube tab)...', 'info');
+                            utils.showToast('Extension capturing video from YouTube tab...', 'info');
 
                             // Extract video ID from URL
                             var videoId = null;
@@ -9234,8 +9234,14 @@
                                         utils.showToast('Video info captured (server will download video)', 'info');
                                     }
                                 } else {
-                                    console.warn('[Video Wizard] Extension capture failed:', captureResult?.error);
-                                    utils.showToast('Extension capture failed, using server fallback', 'warning');
+                                    var extError = captureResult?.error || 'Unknown error';
+                                    console.warn('[Video Wizard] Extension capture failed:', extError);
+                                    // Show specific error if it's about needing YouTube tab open
+                                    if (extError.includes('open the YouTube video')) {
+                                        utils.showToast(extError, 'warning');
+                                    } else {
+                                        utils.showToast('Extension capture failed: ' + extError, 'warning');
+                                    }
                                 }
                             }
                         } catch (extError) {
@@ -11644,6 +11650,16 @@
                             }
                         }, 500);
 
+                        // Safety timeout: stop checking after 60 seconds to prevent infinite loop
+                        setTimeout(function() {
+                            clearInterval(checkPopupClosed);
+                            if (state.youtubeConnection.loading) {
+                                state.youtubeConnection.loading = false;
+                                state.youtubeConnection.error = 'OAuth popup timed out. Please try again.';
+                                render();
+                            }
+                        }, 60000);
+
                     } else {
                         throw new Error('Failed to generate authorization URL');
                     }
@@ -11863,13 +11879,14 @@
                 // Set up callback
                 extensionCallbacks[requestId] = { resolve: resolve, reject: reject };
 
-                // Timeout after 20 seconds (extended for auto-capture which opens YouTube tab)
+                // Timeout after 180 seconds (3 minutes) for video capture
+                // Capture at 4x speed: 5 min video = 75s capture + upload time
                 setTimeout(function() {
                     if (extensionCallbacks[requestId]) {
                         delete extensionCallbacks[requestId];
-                        reject(new Error('Extension request timeout - auto-capture may have failed'));
+                        reject(new Error('Extension capture timeout - please ensure YouTube video is open in another tab'));
                     }
-                }, 20000);
+                }, 180000);
 
                 // Send request to extension
                 window.dispatchEvent(new CustomEvent('yvo-extension-request', {
