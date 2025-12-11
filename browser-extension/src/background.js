@@ -214,18 +214,26 @@ async function runCaptureAsync(captureId, videoId, youtubeUrl, startTime, endTim
 async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
   console.log(`[YVO Background] Starting capture for ${videoId}`);
 
-  try {
-    // Step 1: Find a YouTube tab with the video (no new windows!)
-    const tab = await ensureYouTubeTab(videoId, youtubeUrl);
+  let createdTab = null; // Track if we created a tab (to clean up later)
 
-    if (!tab) {
+  try {
+    // Step 1: Find or create a YouTube tab with the video
+    const tabResult = await ensureYouTubeTab(videoId, youtubeUrl);
+
+    if (!tabResult || !tabResult.tab) {
       return {
         success: false,
-        error: 'Please open this video on YouTube in another tab first, then click Start Processing again.'
+        error: 'Failed to access YouTube tab. Please try again.'
       };
     }
 
-    console.log(`[YVO Background] Using tab ${tab.id}`);
+    const tab = tabResult.tab;
+    if (tabResult.created) {
+      createdTab = tab; // Remember to clean up this tab later
+      console.log(`[YVO Background] Created background tab ${tab.id} for capture`);
+    } else {
+      console.log(`[YVO Background] Using existing tab ${tab.id}`);
+    }
 
     // Step 2: Wait for tab to be fully loaded
     await waitForTabComplete(tab.id);
@@ -309,7 +317,22 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
     }
 
     if (!uploadSuccess || !uploadResult) {
+      // Clean up background tab on failure
+      if (createdTab) {
+        try {
+          await chrome.tabs.remove(createdTab.id);
+          console.log(`[YVO Background] Cleaned up background tab ${createdTab.id}`);
+        } catch (e) { /* Tab may already be closed */ }
+      }
       return { success: false, error: 'Upload failed to all endpoints. Please try again.' };
+    }
+
+    // SUCCESS! Clean up background tab if we created one
+    if (createdTab) {
+      try {
+        await chrome.tabs.remove(createdTab.id);
+        console.log(`[YVO Background] Cleaned up background tab ${createdTab.id} after successful capture`);
+      } catch (e) { /* Tab may already be closed */ }
     }
 
     return {
@@ -325,14 +348,21 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
 
   } catch (error) {
     console.error(`[YVO Background] Capture failed:`, error);
+    // Clean up background tab on error
+    if (createdTab) {
+      try {
+        await chrome.tabs.remove(createdTab.id);
+        console.log(`[YVO Background] Cleaned up background tab ${createdTab.id} after error`);
+      } catch (e) { /* Tab may already be closed */ }
+    }
     return { success: false, error: error.message };
   }
 }
 
 /**
- * Find an existing YouTube tab with the EXACT video already open
- * Does NOT create new tabs or navigate existing tabs
- * Does NOT focus/switch to the tab
+ * Find or create a YouTube tab with the video
+ * Creates tab in BACKGROUND if needed (user won't see it)
+ * Does NOT focus/switch to any tab
  */
 async function ensureYouTubeTab(videoId, youtubeUrl) {
   // Look for existing tab with exact video
@@ -340,7 +370,7 @@ async function ensureYouTubeTab(videoId, youtubeUrl) {
     url: ['*://www.youtube.com/*', '*://youtube.com/*']
   });
 
-  // ONLY find tab with exact video ID - no navigation
+  // First, try to find tab with exact video ID
   const existingTab = tabs.find(tab => {
     try {
       const url = new URL(tab.url);
@@ -351,13 +381,21 @@ async function ensureYouTubeTab(videoId, youtubeUrl) {
   });
 
   if (existingTab) {
-    console.log(`[YVO Background] Found exact tab ${existingTab.id} for video ${videoId}`);
-    return existingTab;
+    console.log(`[YVO Background] Found existing tab ${existingTab.id} for video ${videoId}`);
+    return { tab: existingTab, created: false };
   }
 
-  // No exact match found - do NOT navigate other tabs
-  console.log(`[YVO Background] No tab found with video ${videoId} - user must open it first`);
-  return null;
+  // No exact match - create a new tab in BACKGROUND (user won't see it)
+  const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
+  console.log(`[YVO Background] Creating background tab for video ${videoId}`);
+
+  const newTab = await chrome.tabs.create({
+    url: url,
+    active: false  // IMPORTANT: Opens in background, doesn't steal focus
+  });
+
+  console.log(`[YVO Background] Created background tab ${newTab.id}`);
+  return { tab: newTab, created: true };
 }
 
 /**
