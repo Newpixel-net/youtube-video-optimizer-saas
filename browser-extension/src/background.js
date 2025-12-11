@@ -989,10 +989,15 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
  * The video is sped up to 4x to minimize capture time.
  * For a 60-second clip, this takes only ~15 seconds.
  *
+ * IMPORTANT: This function must NEVER throw or reject - always return an object
+ * with success: true/false. This is because chrome.scripting.executeScript
+ * doesn't properly capture Promise rejections from injected scripts.
+ *
  * @param {number} startTime - Start time in seconds
  * @param {number} endTime - End time in seconds (captures duration = endTime - startTime)
+ * @returns {Promise<{success: boolean, videoData?: string, error?: string}>}
  */
-async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
+function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
   console.log(`[YVO Capture] Starting MediaRecorder capture from ${startTime}s to ${endTime}s`);
 
   const duration = endTime - startTime;
@@ -1001,149 +1006,221 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
 
   console.log(`[YVO Capture] Will capture ${duration}s of video at ${PLAYBACK_SPEED}x speed (${captureTime/1000}s real time)`);
 
-  return new Promise((resolve, reject) => {
+  // Helper to create error result (NEVER throw/reject)
+  const errorResult = (message) => {
+    console.error(`[YVO Capture] Error: ${message}`);
+    return { success: false, error: message };
+  };
+
+  return new Promise((resolve) => {
     try {
-      const videoElement = document.querySelector('video.html5-main-video');
+      // Find video element - try multiple selectors
+      let videoElement = document.querySelector('video.html5-main-video');
       if (!videoElement) {
-        reject(new Error('No video element found on page'));
+        videoElement = document.querySelector('video');
+      }
+      if (!videoElement) {
+        resolve(errorResult('No video element found on page. Make sure the YouTube video is loaded and playing.'));
         return;
       }
 
-      // Seek to start position
-      videoElement.currentTime = startTime;
+      console.log(`[YVO Capture] Found video element: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration: ${videoElement.duration}s`);
 
-      // Wait for seek to complete
-      const onSeeked = () => {
-        videoElement.removeEventListener('seeked', onSeeked);
-        startCapture();
-      };
+      // Check if video is ready
+      if (videoElement.readyState < 2) {
+        resolve(errorResult(`Video not ready (readyState: ${videoElement.readyState}). Please wait for video to load.`));
+        return;
+      }
 
-      const startCapture = () => {
-        try {
-          // Capture the video stream from the element
-          const stream = videoElement.captureStream();
+      // Check for captureStream support
+      if (typeof videoElement.captureStream !== 'function') {
+        resolve(errorResult('Browser does not support video capture. Please use Chrome or Edge.'));
+        return;
+      }
 
-          if (!stream || stream.getVideoTracks().length === 0) {
-            reject(new Error('Could not capture video stream - video may be DRM protected'));
-            return;
-          }
+      // Try to capture stream
+      let stream;
+      try {
+        stream = videoElement.captureStream();
+      } catch (captureError) {
+        resolve(errorResult(`Cannot capture video stream: ${captureError.message}. Video may be DRM protected.`));
+        return;
+      }
 
-          const chunks = [];
+      if (!stream || stream.getVideoTracks().length === 0) {
+        resolve(errorResult('Could not capture video stream - video may be DRM protected or not playing.'));
+        return;
+      }
 
-          // Try different codecs for best compatibility
-          let mimeType = 'video/webm;codecs=vp9,opus';
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = 'video/webm;codecs=vp8,opus';
-          }
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = 'video/webm';
-          }
+      console.log(`[YVO Capture] Got stream with ${stream.getVideoTracks().length} video tracks`);
 
-          console.log(`[YVO Capture] Using MIME type: ${mimeType}`);
+      const chunks = [];
 
-          const recorder = new MediaRecorder(stream, {
-            mimeType: mimeType,
-            videoBitsPerSecond: 8000000  // 8 Mbps for good quality
-          });
+      // Try different codecs for best compatibility
+      let mimeType = 'video/webm;codecs=vp9,opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm;codecs=vp8,opus';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        resolve(errorResult('No supported video codec found for MediaRecorder.'));
+        return;
+      }
 
-          recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-              chunks.push(e.data);
-            }
-          };
+      console.log(`[YVO Capture] Using MIME type: ${mimeType}`);
 
-          recorder.onstop = async () => {
-            // Restore normal speed
-            videoElement.playbackRate = 1;
-            videoElement.pause();
+      let recorder;
+      try {
+        recorder = new MediaRecorder(stream, {
+          mimeType: mimeType,
+          videoBitsPerSecond: 8000000  // 8 Mbps for good quality
+        });
+      } catch (recorderError) {
+        resolve(errorResult(`Failed to create MediaRecorder: ${recorderError.message}`));
+        return;
+      }
 
-            console.log(`[YVO Capture] Recording stopped, processing ${chunks.length} chunks...`);
-            const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
-            console.log(`[YVO Capture] Created blob: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
-
-            if (blob.size < 10000) {
-              reject(new Error('Captured video too small - capture may have failed'));
-              return;
-            }
-
-            // Convert to base64 for transfer
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              resolve({
-                success: true,
-                videoData: reader.result.split(',')[1],
-                videoSize: blob.size,
-                mimeType: mimeType.split(';')[0],
-                duration: duration,
-                captureMethod: 'mediarecorder'
-              });
-            };
-            reader.onerror = () => reject(new Error('Failed to convert video to base64'));
-            reader.readAsDataURL(blob);
-          };
-
-          recorder.onerror = (e) => {
-            videoElement.playbackRate = 1;
-            reject(new Error(`MediaRecorder error: ${e.error?.message || 'unknown'}`));
-          };
-
-          // Set playback speed and start
-          videoElement.playbackRate = PLAYBACK_SPEED;
-          videoElement.muted = true; // Mute to avoid audio issues
-
-          // Start recording
-          recorder.start(500); // Capture in 500ms chunks
-
-          // Start playing
-          videoElement.play().then(() => {
-            console.log(`[YVO Capture] Playback started at ${PLAYBACK_SPEED}x speed`);
-          }).catch(e => {
-            console.warn('[YVO Capture] Autoplay failed, user interaction may be needed:', e.message);
-          });
-
-          // Monitor progress
-          const progressInterval = setInterval(() => {
-            const progress = ((videoElement.currentTime - startTime) / duration * 100).toFixed(1);
-            console.log(`[YVO Capture] Progress: ${progress}% (at ${videoElement.currentTime.toFixed(1)}s)`);
-          }, 2000);
-
-          // Stop when we reach end time or after calculated capture time
-          const checkEnd = setInterval(() => {
-            if (videoElement.currentTime >= endTime || videoElement.ended) {
-              clearInterval(checkEnd);
-              clearInterval(progressInterval);
-              if (recorder.state === 'recording') {
-                console.log('[YVO Capture] Reached end, stopping recorder...');
-                recorder.stop();
-              }
-            }
-          }, 100);
-
-          // Safety timeout (add 50% buffer)
-          setTimeout(() => {
-            clearInterval(checkEnd);
-            clearInterval(progressInterval);
-            if (recorder.state === 'recording') {
-              console.log('[YVO Capture] Timeout reached, stopping recorder...');
-              recorder.stop();
-            }
-          }, captureTime * 1.5 + 5000);
-
-        } catch (captureError) {
-          reject(captureError);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
         }
       };
 
-      // Start the process
+      recorder.onstop = async () => {
+        // Restore normal speed
+        try {
+          videoElement.playbackRate = 1;
+          videoElement.pause();
+        } catch (e) {
+          console.warn('[YVO Capture] Could not restore video state:', e.message);
+        }
+
+        console.log(`[YVO Capture] Recording stopped, processing ${chunks.length} chunks...`);
+
+        if (chunks.length === 0) {
+          resolve(errorResult('No video data captured - recording may have failed.'));
+          return;
+        }
+
+        const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
+        console.log(`[YVO Capture] Created blob: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+
+        if (blob.size < 10000) {
+          resolve(errorResult(`Captured video too small (${blob.size} bytes) - capture may have failed.`));
+          return;
+        }
+
+        // Convert to base64 for transfer
+        try {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve({
+              success: true,
+              videoData: reader.result.split(',')[1],
+              videoSize: blob.size,
+              mimeType: mimeType.split(';')[0],
+              duration: duration,
+              captureMethod: 'mediarecorder'
+            });
+          };
+          reader.onerror = () => {
+            resolve(errorResult('Failed to convert video to base64.'));
+          };
+          reader.readAsDataURL(blob);
+        } catch (readerError) {
+          resolve(errorResult(`Failed to read video data: ${readerError.message}`));
+        }
+      };
+
+      recorder.onerror = (e) => {
+        try {
+          videoElement.playbackRate = 1;
+        } catch (err) {}
+        resolve(errorResult(`MediaRecorder error: ${e.error?.message || 'unknown error'}`));
+      };
+
+      // Seek to start position first
+      const startRecording = () => {
+        console.log(`[YVO Capture] Starting recording at position ${videoElement.currentTime.toFixed(1)}s`);
+
+        // Set playback speed and start
+        videoElement.playbackRate = PLAYBACK_SPEED;
+        videoElement.muted = true; // Mute to avoid audio issues
+
+        // Start recording
+        try {
+          recorder.start(500); // Capture in 500ms chunks
+        } catch (startError) {
+          resolve(errorResult(`Failed to start recording: ${startError.message}`));
+          return;
+        }
+
+        // Start playing
+        videoElement.play().then(() => {
+          console.log(`[YVO Capture] Playback started at ${PLAYBACK_SPEED}x speed`);
+        }).catch(e => {
+          console.warn('[YVO Capture] Autoplay warning:', e.message);
+          // Don't fail - video might still be playing
+        });
+
+        // Monitor progress
+        const progressInterval = setInterval(() => {
+          const progress = ((videoElement.currentTime - startTime) / duration * 100).toFixed(1);
+          console.log(`[YVO Capture] Progress: ${progress}% (at ${videoElement.currentTime.toFixed(1)}s)`);
+        }, 2000);
+
+        // Stop when we reach end time
+        const checkEnd = setInterval(() => {
+          if (videoElement.currentTime >= endTime || videoElement.ended) {
+            clearInterval(checkEnd);
+            clearInterval(progressInterval);
+            if (recorder.state === 'recording') {
+              console.log('[YVO Capture] Reached end, stopping recorder...');
+              recorder.stop();
+            }
+          }
+        }, 100);
+
+        // Safety timeout
+        setTimeout(() => {
+          clearInterval(checkEnd);
+          clearInterval(progressInterval);
+          if (recorder.state === 'recording') {
+            console.log('[YVO Capture] Timeout reached, stopping recorder...');
+            recorder.stop();
+          }
+        }, captureTime * 1.5 + 5000);
+      };
+
+      // Seek to start if needed
       if (Math.abs(videoElement.currentTime - startTime) < 1) {
-        startCapture();
+        startRecording();
       } else {
-        videoElement.addEventListener('seeked', onSeeked);
+        console.log(`[YVO Capture] Seeking to ${startTime}s...`);
+        const onSeeked = () => {
+          videoElement.removeEventListener('seeked', onSeeked);
+          startRecording();
+        };
+
+        // Add timeout for seek operation
+        const seekTimeout = setTimeout(() => {
+          videoElement.removeEventListener('seeked', onSeeked);
+          console.warn('[YVO Capture] Seek timeout, starting anyway...');
+          startRecording();
+        }, 5000);
+
+        videoElement.addEventListener('seeked', () => {
+          clearTimeout(seekTimeout);
+          onSeeked();
+        }, { once: true });
+
         videoElement.currentTime = startTime;
       }
 
     } catch (error) {
-      reject(error);
+      resolve(errorResult(`Unexpected error: ${error.message}`));
     }
   });
 }
@@ -1247,20 +1324,38 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     console.log(`[YVO Background] Script execution returned:`, results ? `${results.length} result(s)` : 'null');
 
     if (!results || results.length === 0) {
-      throw new Error('MediaRecorder capture script returned no results - tab may be restricted');
+      throw new Error('MediaRecorder capture script returned no results - tab may be restricted or not a valid YouTube page');
     }
 
-    if (!results[0].result) {
-      // Check if there was an error in the injected script
-      const errorMsg = results[0].error ? `Script error: ${results[0].error}` : 'Script returned null/undefined result';
-      console.error(`[YVO Background] Script result issue:`, results[0]);
-      throw new Error(`MediaRecorder capture script failed: ${errorMsg}`);
+    // Log the full result for debugging
+    const injectionResult = results[0];
+    console.log(`[YVO Background] Injection result:`, {
+      hasResult: !!injectionResult.result,
+      hasError: !!injectionResult.error,
+      frameId: injectionResult.frameId,
+      documentId: injectionResult.documentId
+    });
+
+    if (injectionResult.error) {
+      console.error(`[YVO Background] Script execution error:`, injectionResult.error);
+      throw new Error(`Script execution failed: ${injectionResult.error}`);
     }
 
-    const captureResult = results[0].result;
+    if (!injectionResult.result) {
+      console.error(`[YVO Background] Script returned no result. Full injection result:`, JSON.stringify(injectionResult));
+      throw new Error('MediaRecorder capture script returned no result - the script may have timed out or encountered an error');
+    }
+
+    const captureResult = injectionResult.result;
+    console.log(`[YVO Background] Capture result:`, {
+      success: captureResult.success,
+      error: captureResult.error,
+      videoSize: captureResult.videoSize,
+      mimeType: captureResult.mimeType
+    });
 
     if (!captureResult.success) {
-      throw new Error(captureResult.error || 'Capture failed');
+      throw new Error(captureResult.error || 'Capture failed for unknown reason');
     }
 
     const capturedDuration = captureEnd - captureStart;
