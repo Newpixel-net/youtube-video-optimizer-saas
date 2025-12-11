@@ -215,6 +215,7 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
   console.log(`[YVO Background] Starting capture for ${videoId}`);
 
   let createdTab = null; // Track if we created a tab (to clean up later)
+  let originalTabId = null; // Track original tab to restore focus
 
   try {
     // Step 1: Find or create a YouTube tab with the video
@@ -230,7 +231,8 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
     const tab = tabResult.tab;
     if (tabResult.created) {
       createdTab = tab; // Remember to clean up this tab later
-      console.log(`[YVO Background] Created background tab ${tab.id} for capture`);
+      originalTabId = tabResult.originalTabId; // Remember where user was
+      console.log(`[YVO Background] Created tab ${tab.id} for capture (will restore to ${originalTabId})`);
     } else {
       console.log(`[YVO Background] Using existing tab ${tab.id}`);
     }
@@ -239,9 +241,13 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
     await waitForTabComplete(tab.id);
     console.log(`[YVO Background] Tab ${tab.id} is complete`);
 
-    // Step 3: Do NOT focus the tab - capture works in background
-    // The video should already be playing since user was previewing it
-    await sleep(300);
+    // Step 3: For newly created tabs, wait extra time for video to load
+    if (tabResult.created) {
+      console.log(`[YVO Background] Waiting for video to initialize in new tab...`);
+      await sleep(3000); // Give YouTube time to load and start video
+    } else {
+      await sleep(500);
+    }
 
     // Step 4: Try to get video info (don't wait for playback - injection will handle it)
     let videoDuration = 300;
@@ -317,23 +323,13 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
     }
 
     if (!uploadSuccess || !uploadResult) {
-      // Clean up background tab on failure
-      if (createdTab) {
-        try {
-          await chrome.tabs.remove(createdTab.id);
-          console.log(`[YVO Background] Cleaned up background tab ${createdTab.id}`);
-        } catch (e) { /* Tab may already be closed */ }
-      }
+      // Clean up and restore on failure
+      await cleanupCaptureTab(createdTab, originalTabId);
       return { success: false, error: 'Upload failed to all endpoints. Please try again.' };
     }
 
-    // SUCCESS! Clean up background tab if we created one
-    if (createdTab) {
-      try {
-        await chrome.tabs.remove(createdTab.id);
-        console.log(`[YVO Background] Cleaned up background tab ${createdTab.id} after successful capture`);
-      } catch (e) { /* Tab may already be closed */ }
-    }
+    // SUCCESS! Clean up and restore focus
+    await cleanupCaptureTab(createdTab, originalTabId);
 
     return {
       success: true,
@@ -348,21 +344,36 @@ async function captureVideo(videoId, youtubeUrl, startTime, endTime) {
 
   } catch (error) {
     console.error(`[YVO Background] Capture failed:`, error);
-    // Clean up background tab on error
-    if (createdTab) {
-      try {
-        await chrome.tabs.remove(createdTab.id);
-        console.log(`[YVO Background] Cleaned up background tab ${createdTab.id} after error`);
-      } catch (e) { /* Tab may already be closed */ }
-    }
+    // Clean up on error
+    await cleanupCaptureTab(createdTab, originalTabId);
     return { success: false, error: error.message };
   }
 }
 
 /**
+ * Clean up the capture tab and restore focus to original tab
+ */
+async function cleanupCaptureTab(createdTab, originalTabId) {
+  if (createdTab) {
+    try {
+      await chrome.tabs.remove(createdTab.id);
+      console.log(`[YVO Background] Closed capture tab ${createdTab.id}`);
+    } catch (e) { /* Tab may already be closed */ }
+  }
+
+  // Restore focus to original tab
+  if (originalTabId) {
+    try {
+      await chrome.tabs.update(originalTabId, { active: true });
+      console.log(`[YVO Background] Restored focus to original tab ${originalTabId}`);
+    } catch (e) { /* Original tab may be closed */ }
+  }
+}
+
+/**
  * Find or create a YouTube tab with the video
- * Creates tab in BACKGROUND if needed (user won't see it)
- * Does NOT focus/switch to any tab
+ * If creating new tab, it must be active for video to load (Chrome restriction)
+ * Returns originalTabId so we can restore focus after capture
  */
 async function ensureYouTubeTab(videoId, youtubeUrl) {
   // Look for existing tab with exact video
@@ -382,20 +393,27 @@ async function ensureYouTubeTab(videoId, youtubeUrl) {
 
   if (existingTab) {
     console.log(`[YVO Background] Found existing tab ${existingTab.id} for video ${videoId}`);
-    return { tab: existingTab, created: false };
+    // Focus the existing tab so video can play
+    await chrome.tabs.update(existingTab.id, { active: true });
+    return { tab: existingTab, created: false, originalTabId: null };
   }
 
-  // No exact match - create a new tab in BACKGROUND (user won't see it)
+  // No exact match - need to create a new tab
+  // IMPORTANT: Chrome requires active tab for video to load (readyState > 0)
+  // Remember current tab so we can return to it after capture
+  const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const originalTabId = currentTab?.id || null;
+
   const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
-  console.log(`[YVO Background] Creating background tab for video ${videoId}`);
+  console.log(`[YVO Background] Creating tab for video ${videoId} (will auto-close after capture)`);
 
   const newTab = await chrome.tabs.create({
     url: url,
-    active: false  // IMPORTANT: Opens in background, doesn't steal focus
+    active: true  // Must be active for video to load in Chrome
   });
 
-  console.log(`[YVO Background] Created background tab ${newTab.id}`);
-  return { tab: newTab, created: true };
+  console.log(`[YVO Background] Created tab ${newTab.id}, original tab was ${originalTabId}`);
+  return { tab: newTab, created: true, originalTabId };
 }
 
 /**
@@ -611,7 +629,7 @@ async function injectAndCapture(tabId, startTime, endTime) {
         forcePlay();
 
         let attempts = 0;
-        const maxAttempts = 40; // 20 seconds
+        const maxAttempts = 60; // 30 seconds (more time for newly created tabs)
 
         const checkReady = () => {
           attempts++;
