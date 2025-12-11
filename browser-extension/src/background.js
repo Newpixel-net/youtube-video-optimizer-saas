@@ -591,12 +591,13 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
             console.warn('[YVO Background] Could not get video info from tab:', e.message);
           }
 
-          // Close the capture tab after a short delay
-          setTimeout(() => {
-            try {
-              chrome.tabs.remove(captureTab.id).catch(() => {});
-            } catch (e) {}
-          }, 1000);
+          // DON'T close the tab here - MediaRecorder capture will use it
+          // The tab will be closed after captureAndUploadWithMediaRecorder is done
+          // setTimeout(() => {
+          //   try {
+          //     chrome.tabs.remove(captureTab.id).catch(() => {});
+          //   } catch (e) {}
+          // }, 1000);
 
           resolve({
             success: true,
