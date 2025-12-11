@@ -1232,32 +1232,87 @@ function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
       }
       }; // End of proceedWithCapture
 
+      // Helper function to aggressively trigger video playback
+      const forcePlayVideo = () => {
+        console.log('[YVO Capture] Attempting to force video playback...');
+
+        // Method 1: Click the large play button overlay
+        const bigPlayButton = document.querySelector('.ytp-large-play-button');
+        if (bigPlayButton) {
+          console.log('[YVO Capture] Clicking large play button');
+          bigPlayButton.click();
+        }
+
+        // Method 2: Click the regular play button
+        const playButton = document.querySelector('.ytp-play-button');
+        if (playButton && playButton.getAttribute('data-title-no-tooltip') === 'Play') {
+          console.log('[YVO Capture] Clicking play button');
+          playButton.click();
+        }
+
+        // Method 3: Click on the video itself to dismiss any overlays
+        const videoContainer = document.querySelector('.html5-video-container');
+        if (videoContainer) {
+          videoContainer.click();
+        }
+
+        // Method 4: Try to skip ads
+        const skipAdButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button');
+        if (skipAdButton) {
+          console.log('[YVO Capture] Skipping ad');
+          skipAdButton.click();
+        }
+
+        // Method 5: Dismiss consent dialogs
+        const consentButtons = document.querySelectorAll('[aria-label*="Accept"], [aria-label*="Agree"], button[aria-label*="consent"]');
+        consentButtons.forEach(btn => btn.click());
+
+        // Method 6: Direct video manipulation
+        try {
+          videoElement.muted = true; // Muting often helps with autoplay
+          videoElement.play().catch(() => {});
+        } catch(e) {}
+      };
+
       // Check if video is ready, wait if needed
-      if (videoElement.readyState >= 2) {
-        // Video is ready, proceed immediately
-        console.log('[YVO Capture] Video ready, starting capture');
+      if (videoElement.readyState >= 2 && !videoElement.paused) {
+        // Video is ready AND playing, proceed immediately
+        console.log('[YVO Capture] Video ready and playing, starting capture');
         proceedWithCapture();
       } else {
-        // Video not ready, wait for it (up to 10 seconds)
-        console.log(`[YVO Capture] Waiting for video to be ready (readyState: ${videoElement.readyState})...`);
+        // Video not ready or not playing, try to start it
+        console.log(`[YVO Capture] Waiting for video to be ready (readyState: ${videoElement.readyState}, paused: ${videoElement.paused})...`);
+
+        // Try to force playback immediately
+        forcePlayVideo();
+
         let waited = 0;
-        const maxWait = 10000;
+        const maxWait = 15000; // Increased to 15 seconds
         const checkInterval = 500;
 
         const checkReady = () => {
-          if (videoElement.readyState >= 2) {
+          console.log(`[YVO Capture] Check: readyState=${videoElement.readyState}, paused=${videoElement.paused}, currentTime=${videoElement.currentTime.toFixed(1)}`);
+
+          // Ready if video has data AND is either playing or has started
+          if (videoElement.readyState >= 2 && (videoElement.currentTime > 0 || !videoElement.paused)) {
             console.log(`[YVO Capture] Video ready after ${waited}ms`);
             proceedWithCapture();
             return;
           }
           waited += checkInterval;
           if (waited >= maxWait) {
-            resolve(errorResult(`Video not ready after ${maxWait/1000}s (readyState: ${videoElement.readyState}). Please ensure video is playing.`));
+            // Last ditch effort - try to proceed anyway if readyState >= 1
+            if (videoElement.readyState >= 1) {
+              console.warn(`[YVO Capture] Timeout but readyState=${videoElement.readyState}, attempting capture anyway...`);
+              proceedWithCapture();
+              return;
+            }
+            resolve(errorResult(`Video not ready after ${maxWait/1000}s (readyState: ${videoElement.readyState}). The video may have restrictions or require manual interaction.`));
             return;
           }
-          // Try to trigger playback
-          if (waited === 2000 || waited === 5000) {
-            try { videoElement.play().catch(() => {}); } catch(e) {}
+          // Try to trigger playback every 2 seconds
+          if (waited % 2000 === 0) {
+            forcePlayVideo();
           }
           setTimeout(checkReady, checkInterval);
         };

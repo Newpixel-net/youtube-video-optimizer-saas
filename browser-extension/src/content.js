@@ -136,6 +136,7 @@ function blobToBase64(blob) {
 /**
  * Trigger video playback to enable stream interception
  * This is called when we need to capture streams but video isn't playing
+ * Uses multiple aggressive methods to ensure playback starts
  */
 async function triggerVideoPlayback() {
   try {
@@ -147,33 +148,61 @@ async function triggerVideoPlayback() {
     }
 
     // Check if video is already playing
-    if (!video.paused && !video.ended) {
+    if (!video.paused && !video.ended && video.readyState >= 2) {
       console.log('[YVO Content] Video already playing');
-      return { success: true, alreadyPlaying: true };
+      return { success: true, alreadyPlaying: true, readyState: video.readyState };
     }
 
-    // Try multiple methods to start playback
-    console.log('[YVO Content] Triggering video playback...');
+    console.log(`[YVO Content] Triggering video playback... (readyState: ${video.readyState}, paused: ${video.paused})`);
 
-    // Method 1: Click play button
-    const playButton = document.querySelector('.ytp-play-button, button.ytp-play-button');
-    if (playButton) {
-      playButton.click();
+    // Method 1: Skip any ads first
+    const skipAdButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-slot');
+    if (skipAdButton) {
+      console.log('[YVO Content] Skipping ad...');
+      skipAdButton.click();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // Method 2: Click large play button (center overlay)
+    const largePlayButton = document.querySelector('.ytp-large-play-button');
+    if (largePlayButton) {
+      console.log('[YVO Content] Clicking large play button');
+      largePlayButton.click();
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    // Method 2: Direct video.play()
-    if (video.paused) {
-      try {
-        await video.play();
-      } catch (e) {
-        console.log('[YVO Content] Direct play failed (autoplay restrictions):', e.message);
+    // Method 3: Click regular play button
+    const playButton = document.querySelector('.ytp-play-button');
+    if (playButton) {
+      const title = playButton.getAttribute('data-title-no-tooltip') || playButton.getAttribute('title') || '';
+      if (title.toLowerCase().includes('play') || video.paused) {
+        console.log('[YVO Content] Clicking play button');
+        playButton.click();
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
-    // Method 3: Simulate user interaction and try again
+    // Method 4: Mute and try direct play (helps with autoplay restrictions)
     if (video.paused) {
-      // Trigger a user-like interaction
+      try {
+        video.muted = true;
+        await video.play();
+        console.log('[YVO Content] Direct muted play succeeded');
+      } catch (e) {
+        console.log('[YVO Content] Direct play failed:', e.message);
+      }
+    }
+
+    // Method 5: Click on video container
+    const videoContainer = document.querySelector('.html5-video-container');
+    if (videoContainer && video.paused) {
+      console.log('[YVO Content] Clicking video container');
+      videoContainer.click();
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    // Method 6: Simulate user interaction on video element
+    if (video.paused) {
       video.dispatchEvent(new MouseEvent('click', {
         bubbles: true,
         cancelable: true,
@@ -182,23 +211,31 @@ async function triggerVideoPlayback() {
       await new Promise(resolve => setTimeout(resolve, 300));
 
       try {
+        video.muted = true;
         await video.play();
       } catch (e) {
-        console.log('[YVO Content] Simulated interaction play failed:', e.message);
+        console.log('[YVO Content] Post-click play failed:', e.message);
       }
     }
 
-    // Check result
+    // Method 7: Try pressing keyboard shortcut (space or k)
+    if (video.paused) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', code: 'KeyK', bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Check result after all attempts
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const isPlaying = !video.paused && !video.ended;
-    console.log('[YVO Content] Playback trigger result:', isPlaying ? 'playing' : 'not playing');
+    console.log(`[YVO Content] Playback result: ${isPlaying ? 'playing' : 'not playing'}, readyState: ${video.readyState}`);
 
     return {
       success: true,
       isPlaying: isPlaying,
       currentTime: video.currentTime,
-      duration: video.duration
+      duration: video.duration,
+      readyState: video.readyState
     };
 
   } catch (error) {
