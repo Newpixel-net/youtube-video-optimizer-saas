@@ -41,6 +41,26 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
     fs.mkdirSync(workDir, { recursive: true });
     console.log(`[${jobId}] Created work directory: ${workDir}`);
 
+    // Calculate actual timing including user's trim settings
+    // trimStart/trimEnd are relative to the clip (0 = start of clip)
+    // So actual video times = clip.startTime + trimStart/trimEnd
+    const clipDuration = (job.endTime || 60) - (job.startTime || 0);
+    const userTrimStart = job.settings?.trimStart || 0;
+    const userTrimEnd = job.settings?.trimEnd || clipDuration;
+
+    // Calculate actual video timing
+    const actualStartTime = (job.startTime || 0) + userTrimStart;
+    const actualEndTime = (job.startTime || 0) + userTrimEnd;
+    const actualDuration = actualEndTime - actualStartTime;
+
+    console.log(`[${jobId}] Clip timing: ${job.startTime}s - ${job.endTime}s (${clipDuration}s)`);
+    console.log(`[${jobId}] User trim: ${userTrimStart}s - ${userTrimEnd}s`);
+    console.log(`[${jobId}] Actual timing: ${actualStartTime}s - ${actualEndTime}s (${actualDuration}s)`);
+
+    // Store calculated timing for use throughout processing
+    const effectiveStartTime = actualStartTime;
+    const effectiveEndTime = actualEndTime;
+
     let downloadedFile;
 
     // Detect if running on server (Cloud Run) - extension URLs won't work due to IP restriction
@@ -64,15 +84,16 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       fs.writeFileSync(downloadedFile, Buffer.from(buffer));
       console.log(`[${jobId}] Downloaded uploaded video: ${fs.statSync(downloadedFile).size} bytes`);
 
-      // For uploaded videos, we need to extract the segment
-      if (job.startTime > 0 || job.endTime < job.duration) {
+      // For uploaded videos, we need to extract the segment based on effective timing
+      // This applies both the clip selection AND user's custom trim
+      if (effectiveStartTime > 0 || effectiveEndTime < job.duration) {
         const segmentFile = path.join(workDir, 'segment.mp4');
         await new Promise((resolve, reject) => {
           const { spawn } = require('child_process');
           const ffmpeg = spawn('ffmpeg', [
             '-i', downloadedFile,
-            '-ss', String(job.startTime),
-            '-to', String(job.endTime),
+            '-ss', String(effectiveStartTime),
+            '-to', String(effectiveEndTime),
             '-c', 'copy',
             '-avoid_negative_ts', 'make_zero',
             '-y',
@@ -119,18 +140,17 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           // Check if we need to extract a specific segment from the captured video
           // The extension may have captured more than needed (e.g., full 5 minutes)
           // while the clip only needs a portion (e.g., 30 seconds at 2:00)
+          // Use effectiveStartTime/effectiveEndTime to apply user's trim settings too
           const capturedStart = job.extensionStreamData?.captureStartTime || 0;
           const capturedEnd = job.extensionStreamData?.captureEndTime || 300;
-          const clipStart = job.startTime || 0;
-          const clipEnd = job.endTime || (clipStart + 60);
 
-          // Calculate if segment extraction is needed
-          const needsExtraction = (clipStart > capturedStart) || (clipEnd < capturedEnd);
+          // Calculate if segment extraction is needed (using effective timing which includes user's trim)
+          const needsExtraction = (effectiveStartTime > capturedStart) || (effectiveEndTime < capturedEnd);
 
-          if (needsExtraction && clipStart >= capturedStart && clipEnd <= capturedEnd) {
+          if (needsExtraction && effectiveStartTime >= capturedStart && effectiveEndTime <= capturedEnd) {
             // Extract the specific segment from the captured video
-            const relativeStart = clipStart - capturedStart;
-            const relativeEnd = clipEnd - capturedStart;
+            const relativeStart = effectiveStartTime - capturedStart;
+            const relativeEnd = effectiveEndTime - capturedStart;
             console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s from captured video`);
             await updateProgress(jobRef, 15, 'Extracting clip segment...');
 
@@ -174,8 +194,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           downloadedFile = await downloadVideoSegment({
             jobId,
             videoId: job.videoId,
-            startTime: job.startTime,
-            endTime: job.endTime,
+            startTime: effectiveStartTime,
+            endTime: effectiveEndTime,
             workDir,
             youtubeAuth
           });
@@ -190,8 +210,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         downloadedFile = await downloadVideoSegment({
           jobId,
           videoId: job.videoId,
-          startTime: job.startTime,
-          endTime: job.endTime,
+          startTime: effectiveStartTime,
+          endTime: effectiveEndTime,
           workDir,
           youtubeAuth
         });
@@ -204,8 +224,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           downloadedFile = await downloadFromExtensionStream({
             jobId,
             extensionStreamData: job.extensionStreamData,
-            startTime: job.startTime,
-            endTime: job.endTime,
+            startTime: effectiveStartTime,
+            endTime: effectiveEndTime,
             workDir
           });
           console.log(`[${jobId}] Extension stream download succeeded`);
@@ -216,8 +236,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           downloadedFile = await downloadVideoSegment({
             jobId,
             videoId: job.videoId,
-            startTime: job.startTime,
-            endTime: job.endTime,
+            startTime: effectiveStartTime,
+            endTime: effectiveEndTime,
             workDir,
             youtubeAuth
           });
@@ -245,12 +265,13 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         });
 
         // Extract segment locally (FREE - no API cost!)
+        // Use effective timing to apply both clip selection and user's custom trim
         downloadedFile = path.join(workDir, 'source.mp4');
         await extractSegmentFromCache({
           inputPath: cachedVideoPath,
           outputPath: downloadedFile,
-          startTime: job.startTime,
-          endTime: job.endTime,
+          startTime: effectiveStartTime,
+          endTime: effectiveEndTime,
           jobId
         });
 
@@ -283,13 +304,13 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
             bucketName
           });
 
-          // Extract segment locally
+          // Extract segment locally with effective timing
           downloadedFile = path.join(workDir, 'source.mp4');
           await extractSegmentFromCache({
             inputPath: fullVideoPath,
             outputPath: downloadedFile,
-            startTime: job.startTime,
-            endTime: job.endTime,
+            startTime: effectiveStartTime,
+            endTime: effectiveEndTime,
             jobId
           });
 
@@ -306,8 +327,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           downloadedFile = await downloadVideoSegment({
             jobId,
             videoId: job.videoId,
-            startTime: job.startTime,
-            endTime: job.endTime,
+            startTime: effectiveStartTime,
+            endTime: effectiveEndTime,
             workDir,
             youtubeAuth
           });
@@ -638,8 +659,13 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
   // Add subtitle filter if captions were generated
   if (captionFile && fs.existsSync(captionFile)) {
-    // Escape special characters in path for FFmpeg
-    const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
+    // Escape special characters in path for FFmpeg filter syntax
+    // In FFmpeg filters: \ becomes \\, : becomes \:, ' becomes \'
+    // For Linux paths, we mainly need to escape colons (rare) and handle backslashes
+    const escapedPath = captionFile
+      .replace(/\\/g, '/')           // Convert backslashes to forward slashes
+      .replace(/'/g, "\\'")          // Escape single quotes for FFmpeg
+      .replace(/:/g, '\\:');         // Escape colons for FFmpeg filter syntax
 
     if (isComplex) {
       // For complex filters, apply ASS to the output stream
@@ -1072,8 +1098,11 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
 
   // Add subtitle filter if captions were generated
   if (captionFile && fs.existsSync(captionFile)) {
-    // Escape special characters in path for FFmpeg
-    const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
+    // Escape special characters in path for FFmpeg filter syntax
+    const escapedPath = captionFile
+      .replace(/\\/g, '/')           // Convert backslashes to forward slashes
+      .replace(/'/g, "\\'")          // Escape single quotes for FFmpeg
+      .replace(/:/g, '\\:');         // Escape colons for FFmpeg filter syntax
     // In complex filter, we need to apply ass to the output video
     // Replace [outv] with intermediate, apply subtitles, then output as [outv]
     complexFilter = complexFilter.replace('[outv]', '[outv_nosub]');

@@ -49,7 +49,7 @@ steps:
       - '--max-instances'
       - '10'
       - '--set-env-vars'
-      - 'BUCKET_NAME=$PROJECT_ID.appspot.com,NODE_ENV=production,RAPIDAPI_KEY=${_RAPIDAPI_KEY}'
+      - 'BUCKET_NAME=$PROJECT_ID.appspot.com,NODE_ENV=production,RAPIDAPI_KEY=${_RAPIDAPI_KEY},OPENAI_API_KEY=${_OPENAI_API_KEY}'
       - '--allow-unauthenticated'
 
 images:
@@ -63,5 +63,7 @@ options:
 timeout: '1800s'
 
 # Substitution variables (optional)
+# Pass these when running: gcloud builds submit --substitutions=_RAPIDAPI_KEY=xxx,_OPENAI_API_KEY=xxx
 substitutions:
   _RAPIDAPI_KEY: ''
+  _OPENAI_API_KEY: ''

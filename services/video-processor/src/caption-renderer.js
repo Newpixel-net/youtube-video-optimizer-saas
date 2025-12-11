@@ -174,13 +174,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 /**
  * Get style configuration for caption style
+ * Note: Using Linux-compatible fonts (DejaVu Sans, FreeSans) instead of Windows fonts (Arial, Impact)
  */
 function getStyleConfig(captionStyle, customStyle) {
   const styles = {
     // Karaoke style - word-by-word highlight
     karaoke: {
       styleName: 'Karaoke',
-      styleLine: 'Style: Karaoke,Arial,72,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,2,50,50,120,1',
+      styleLine: 'Style: Karaoke,DejaVu Sans,72,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,2,50,50,120,1',
       wordsPerLine: 4,
       useKaraoke: true,
       highlightColor: '&H00FFFF00' // Yellow
@@ -189,7 +190,7 @@ function getStyleConfig(captionStyle, customStyle) {
     // MrBeast/Bold style - big bold text with background
     bold: {
       styleName: 'Bold',
-      styleLine: 'Style: Bold,Impact,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,6,3,2,50,50,120,1',
+      styleLine: 'Style: Bold,DejaVu Sans,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,6,3,2,50,50,120,1',
       wordsPerLine: 3,
       useKaraoke: false,
       uppercase: true
@@ -198,7 +199,7 @@ function getStyleConfig(captionStyle, customStyle) {
     // Hormozi style - clean with keyword highlights
     hormozi: {
       styleName: 'Hormozi',
-      styleLine: 'Style: Hormozi,Arial,68,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,2,50,50,120,1',
+      styleLine: 'Style: Hormozi,DejaVu Sans,68,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,2,50,50,120,1',
       wordsPerLine: 4,
       useKaraoke: false,
       highlightKeywords: true,
@@ -208,7 +209,7 @@ function getStyleConfig(captionStyle, customStyle) {
     // Ali Abdaal style - soft glow
     ali: {
       styleName: 'Ali',
-      styleLine: 'Style: Ali,Arial,64,&H00FFFFFF,&H00FFFFFF,&H00FFCCAA,&H40000000,0,0,0,0,100,100,0,0,1,5,4,2,50,50,120,1',
+      styleLine: 'Style: Ali,DejaVu Sans,64,&H00FFFFFF,&H00FFFFFF,&H00FFCCAA,&H40000000,0,0,0,0,100,100,0,0,1,5,4,2,50,50,120,1',
       wordsPerLine: 5,
       useKaraoke: false
     },
@@ -216,7 +217,7 @@ function getStyleConfig(captionStyle, customStyle) {
     // Podcast style - simple clean
     podcast: {
       styleName: 'Podcast',
-      styleLine: 'Style: Podcast,Arial,60,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,2,2,50,50,120,1',
+      styleLine: 'Style: Podcast,DejaVu Sans,60,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,2,2,50,50,120,1',
       wordsPerLine: 5,
       useKaraoke: false
     },
@@ -224,7 +225,7 @@ function getStyleConfig(captionStyle, customStyle) {
     // Minimal style - small and subtle
     minimal: {
       styleName: 'Minimal',
-      styleLine: 'Style: Minimal,Arial,48,&H00FFFFFF,&H00FFFFFF,&H00000000,&H60000000,0,0,0,0,100,100,0,0,1,2,1,2,50,50,100,1',
+      styleLine: 'Style: Minimal,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00000000,&H60000000,0,0,0,0,100,100,0,0,1,2,1,2,50,50,100,1',
       wordsPerLine: 6,
       useKaraoke: false
     },
@@ -243,9 +244,19 @@ function getStyleConfig(captionStyle, customStyle) {
 
 /**
  * Build custom style line from user options
+ * Maps common font names to Linux-compatible equivalents
  */
 function buildCustomStyleLine(customStyle) {
-  const fontName = customStyle?.fontFamily || 'Arial';
+  // Map Windows fonts to Linux equivalents
+  const fontMap = {
+    'Arial': 'DejaVu Sans',
+    'Impact': 'DejaVu Sans',
+    'Helvetica': 'DejaVu Sans',
+    'Times New Roman': 'DejaVu Serif',
+    'Courier New': 'DejaVu Sans Mono'
+  };
+  const requestedFont = customStyle?.fontFamily || 'DejaVu Sans';
+  const fontName = fontMap[requestedFont] || requestedFont;
   const fontSize = Math.round((customStyle?.fontSize || 1) * 64);
   const color = hexToASS(customStyle?.color || '#ffffff');
   const bgColor = customStyle?.background ? '&H80000000' : '&H00000000';

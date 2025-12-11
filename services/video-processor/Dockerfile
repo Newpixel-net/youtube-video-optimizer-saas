@@ -4,8 +4,13 @@
 FROM node:20-slim
 
 # Install FFmpeg, Python, git, Chromium (for POT server), and other dependencies
+# Including fonts for ASS subtitle rendering (Arial, Impact, etc.)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    libass9 \
+    fontconfig \
+    fonts-freefont-ttf \
+    fonts-dejavu-core \
     python3 \
     python3-pip \
     python3-venv \
