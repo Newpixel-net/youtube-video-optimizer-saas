@@ -1532,14 +1532,11 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // Server upload failed - return local data for frontend to upload
     console.log(`[EXT][UPLOAD] Server unavailable, returning local data for frontend upload`);
 
-    // Store the blob in memory and create a URL that can be accessed
-    const blobUrl = URL.createObjectURL(videoBlob);
-
-    // Return base64 data for frontend to upload to Firebase Storage
+    // NOTE: URL.createObjectURL is NOT available in Service Workers (Manifest V3)
+    // Return base64 data directly for frontend to upload to Firebase Storage
     return {
       success: true,
       videoStorageUrl: null,
-      blobUrl: blobUrl,
       videoData: captureResult.videoData,  // Base64 encoded for frontend upload
       videoSize: captureResult.videoSize,
       mimeType: captureResult.mimeType,
