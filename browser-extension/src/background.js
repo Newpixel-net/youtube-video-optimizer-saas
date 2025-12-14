@@ -483,53 +483,80 @@ async function handleCaptureForWizard(message, sendResponse) {
         }
       }
 
-      // Log what we captured
-      if (streamData) {
-        console.log(`[EXT][BG] Captured streams (${streamData.source}):`, {
-          hasVideo: !!streamData.videoUrl,
-          hasAudio: !!streamData.audioUrl,
-          quality: streamData.quality
-        });
+      // CRITICAL FIX: Always use MediaRecorder as primary capture method
+      // Network-intercepted streams are IP-restricted and often fail on server
+      // MediaRecorder captures directly from the video element - no IP restrictions
 
-        // CRITICAL: Process and upload the streams to bypass IP-restriction
-        const interceptedData = {
-          videoUrl: streamData.videoUrl,
-          audioUrl: streamData.audioUrl,
-          capturedAt: streamData.capturedAt || Date.now()
-        };
-        const result = await processAndUploadStreams(interceptedData, streamData.source);
-        result.videoInfo = videoInfo.videoInfo || result.videoInfo;
+      console.log(`[EXT][CAPTURE] YouTube tab found - using MediaRecorder as PRIMARY capture method`);
+      console.log(`[EXT][CAPTURE] Stream URLs available: ${streamData ? 'yes' : 'no'} (not needed for MediaRecorder)`);
 
-        // Store for later retrieval
-        storedVideoData = {
+      // Call MediaRecorder capture directly - this is the reliable path
+      try {
+        const mediaRecorderResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
+
+        if (mediaRecorderResult.success) {
+          console.log(`[EXT][CAPTURE] MediaRecorder capture successful`);
+
+          const result = {
+            success: true,
+            videoInfo: videoInfo.videoInfo,
+            streamData: {
+              videoUrl: mediaRecorderResult.videoStorageUrl || null,
+              videoData: mediaRecorderResult.videoData || null,
+              videoSize: mediaRecorderResult.videoSize || null,
+              storagePath: mediaRecorderResult.storagePath || null,
+              quality: 'captured',
+              mimeType: mediaRecorderResult.mimeType || 'video/webm',
+              capturedAt: Date.now(),
+              source: 'mediarecorder_primary',
+              uploadedToStorage: mediaRecorderResult.uploadedToStorage || false,
+              uploadError: mediaRecorderResult.uploadError || null,
+              capturedSegment: mediaRecorderResult.capturedSegment || null,
+              captureStartTime: mediaRecorderResult.capturedSegment?.startTime,
+              captureEndTime: mediaRecorderResult.capturedSegment?.endTime,
+              captureDuration: mediaRecorderResult.capturedSegment?.duration
+            },
+            message: mediaRecorderResult.uploadedToStorage
+              ? 'Video captured and uploaded successfully.'
+              : 'Video captured locally. Frontend will upload to storage.'
+          };
+
+          // Store for later retrieval
+          storedVideoData = {
+            videoInfo: videoInfo.videoInfo,
+            streamData: result.streamData,
+            capturedAt: Date.now()
+          };
+
+          sendResponse(result);
+          return;
+        } else {
+          // MediaRecorder failed - return the specific error
+          console.error(`[EXT][CAPTURE] MediaRecorder failed: ${mediaRecorderResult.error}`);
+          sendResponse({
+            success: false,
+            videoInfo: videoInfo.videoInfo,
+            error: mediaRecorderResult.error || 'Video capture failed',
+            code: mediaRecorderResult.code || 'MEDIARECORDER_FAILED',
+            details: {
+              message: 'MediaRecorder capture failed. Please ensure the video is playing and try again.'
+            }
+          });
+          return;
+        }
+      } catch (captureError) {
+        console.error(`[EXT][CAPTURE] MediaRecorder exception: ${captureError.message}`);
+        sendResponse({
+          success: false,
           videoInfo: videoInfo.videoInfo,
-          streamData: result.streamData,
-          capturedAt: Date.now()
-        };
-
-        sendResponse(result);
+          error: captureError.message,
+          code: 'CAPTURE_EXCEPTION',
+          details: {
+            message: 'An error occurred during video capture.'
+          }
+        });
         return;
-      } else {
-        console.warn(`[EXT][BG] No stream URLs captured for ${videoId}`);
       }
-
-      // Store for later retrieval (without streams)
-      storedVideoData = {
-        videoInfo: videoInfo.videoInfo,
-        streamData: null,
-        capturedAt: Date.now()
-      };
-
-      // CRITICAL: Return false when we couldn't capture streams
-      // Frontend needs to know capture failed so it can show appropriate error
-      sendResponse({
-        success: false,
-        videoInfo: videoInfo.videoInfo,
-        streamData: null,
-        error: 'Could not capture streams from existing tab. Try playing the video first.',
-        message: 'Could not capture streams from existing tab.'
-      });
-      return;
       }  // end if (targetTab && videoInfo?.success)
     }  // end if (targetTab)
 
