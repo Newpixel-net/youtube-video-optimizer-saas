@@ -5,6 +5,8 @@
  * Security: Validates all inputs, uses secure fetch, sanitizes data
  */
 
+console.log('[EXT][BG] Service worker starting...');
+
 // State
 let currentCapture = null;
 let isCapturing = false;
@@ -223,6 +225,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
   }
 });
+
+console.log('[EXT][BG] Service worker ready, message listener registered');
 
 /**
  * Handle video capture request from Video Wizard
