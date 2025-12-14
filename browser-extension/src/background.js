@@ -442,14 +442,15 @@ async function handleCaptureForWizard(message, sendResponse) {
 
       // CRITICAL FIX: Network interception failed - try MediaRecorder capture
       // This is the key fallback that makes export work reliably
+      // BUG FIX: Use correct variable names (startTime/endTime, not requestedStartTime/requestedEndTime)
       if (captureTabId || targetTab) {
         console.log(`[YVO Background] Network interception failed, trying MediaRecorder capture...`);
         try {
           const mediaRecorderResult = await captureAndUploadWithMediaRecorder(
             videoId,
             youtubeUrl,
-            requestedStartTime,
-            requestedEndTime
+            startTime,   // FIX: was requestedStartTime (undefined)
+            endTime      // FIX: was requestedEndTime (undefined)
           );
 
           // Close the capture tab after MediaRecorder completes
@@ -460,7 +461,33 @@ async function handleCaptureForWizard(message, sendResponse) {
 
           if (mediaRecorderResult.success) {
             console.log(`[YVO Background] MediaRecorder capture succeeded!`);
-            sendResponse(mediaRecorderResult);
+            // Format the response properly with videoInfo and streamData
+            const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
+            const capturedSegment = mediaRecorderResult.capturedSegment || {};
+
+            sendResponse({
+              success: true,
+              videoInfo: videoInfo,
+              streamData: {
+                videoUrl: mediaRecorderResult.videoStorageUrl || mediaRecorderResult.blobUrl || null,
+                videoData: mediaRecorderResult.videoData || null,  // Base64 for local capture
+                videoSize: mediaRecorderResult.videoSize || 0,
+                quality: mediaRecorderResult.uploadedToStorage ? 'captured' : 'captured_local',
+                mimeType: mediaRecorderResult.mimeType || 'video/webm',
+                capturedAt: Date.now(),
+                source: mediaRecorderResult.uploadedToStorage ? 'mediarecorder_capture' : 'mediarecorder_local',
+                uploadedToStorage: mediaRecorderResult.uploadedToStorage || false,
+                storagePath: mediaRecorderResult.storagePath || null,
+                uploadError: mediaRecorderResult.uploadError || null,
+                capturedSegment: capturedSegment,
+                captureStartTime: capturedSegment.startTime,
+                captureEndTime: capturedSegment.endTime,
+                captureDuration: capturedSegment.duration
+              },
+              message: mediaRecorderResult.uploadedToStorage
+                ? 'Video captured and uploaded successfully.'
+                : 'Video captured locally (server upload unavailable).'
+            });
             return;
           } else {
             console.warn(`[YVO Background] MediaRecorder capture also failed:`, mediaRecorderResult.error);
