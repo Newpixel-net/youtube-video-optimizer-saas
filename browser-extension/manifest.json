@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "1.9.0",
-  "description": "User-initiated video capture - requires YouTube video to be open in a tab",
+  "version": "2.0.0",
+  "description": "User-initiated capture with auto content script injection",
 
   "permissions": [
     "activeTab",
