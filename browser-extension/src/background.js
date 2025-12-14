@@ -392,6 +392,8 @@ async function handleCaptureForWizard(message, sendResponse) {
       console.log(`[YVO Background] No YouTube tab found, opening video to capture streams...`);
 
       let captureTabId = null;
+      let captureSucceeded = false;
+
       try {
         const captureResult = await openAndCaptureStreams(videoId, youtubeUrl);
         captureTabId = captureResult.captureTabId;  // Save tab ID to close later
@@ -417,29 +419,78 @@ async function handleCaptureForWizard(message, sendResponse) {
           sendResponse(result);
           return;
         } else {
-          console.warn(`[YVO Background] Auto-capture failed:`, captureResult.error);
-          // Close the tab if capture failed
-          if (captureTabId) {
-            try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
-          }
-          // Continue to try other methods
+          console.warn(`[YVO Background] Network interception failed:`, captureResult.error);
+          // DON'T close the tab yet - try MediaRecorder as fallback
+          console.log(`[YVO Background] Trying MediaRecorder capture as fallback...`);
         }
       } catch (autoCaptureError) {
         console.warn(`[YVO Background] Auto-capture error:`, autoCaptureError.message);
-        // Close the tab if there was an error
-        if (captureTabId) {
-          try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
-        }
-        // Continue to try other methods
+        // DON'T close the tab yet - try MediaRecorder as fallback
       }
 
       // Re-check for intercepted streams after auto-capture attempt
       intercepted = getInterceptedStreams(videoId);
       if (intercepted && intercepted.videoUrl) {
         const result = await processAndUploadStreams(intercepted, 'network_intercept_auto');
+        // Close tab after success
+        if (captureTabId) {
+          try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
+        }
         sendResponse(result);
         return;
       }
+
+      // CRITICAL FIX: Network interception failed - try MediaRecorder capture
+      // This is the key fallback that makes export work reliably
+      if (captureTabId || targetTab) {
+        console.log(`[YVO Background] Network interception failed, trying MediaRecorder capture...`);
+        try {
+          const mediaRecorderResult = await captureAndUploadWithMediaRecorder(
+            videoId,
+            youtubeUrl,
+            requestedStartTime,
+            requestedEndTime
+          );
+
+          // Close the capture tab after MediaRecorder completes
+          if (captureTabId) {
+            console.log(`[YVO Background] Closing capture tab ${captureTabId} after MediaRecorder`);
+            try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
+          }
+
+          if (mediaRecorderResult.success) {
+            console.log(`[YVO Background] MediaRecorder capture succeeded!`);
+            sendResponse(mediaRecorderResult);
+            return;
+          } else {
+            console.warn(`[YVO Background] MediaRecorder capture also failed:`, mediaRecorderResult.error);
+            // Continue to return failure below
+          }
+        } catch (mediaRecorderError) {
+          console.error(`[YVO Background] MediaRecorder error:`, mediaRecorderError.message);
+          // Close tab on error
+          if (captureTabId) {
+            try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
+          }
+        }
+      } else {
+        // No tab available - close any lingering capture tab
+        if (captureTabId) {
+          try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
+        }
+      }
+
+      // All capture methods failed - return explicit failure
+      console.error(`[YVO Background] All capture methods failed (network + MediaRecorder)`);
+      const basicInfo = await getBasicVideoInfo(videoId, youtubeUrl);
+      sendResponse({
+        success: false,  // CRITICAL: Return false so frontend knows capture failed
+        videoInfo: basicInfo,
+        streamData: null,
+        error: 'Could not capture video streams. Please ensure the YouTube video loads and plays in your browser, then try again.',
+        message: 'All capture methods failed. Server-side download may not be configured.'
+      });
+      return;
     }
 
     // Try to get info from existing tab
@@ -555,22 +606,30 @@ async function handleCaptureForWizard(message, sendResponse) {
         capturedAt: Date.now()
       };
 
+      // CRITICAL: Return false when we couldn't capture streams
+      // Frontend needs to know capture failed so it can show appropriate error
       sendResponse({
-        success: true,
+        success: false,
         videoInfo: videoInfo.videoInfo,
         streamData: null,
+        error: 'Could not capture streams from existing tab. Try playing the video first.',
         message: 'Could not capture streams from existing tab.'
       });
       return;
     }
 
-    // No tab and auto-capture failed - return basic info without streams
+    // No tab and auto-capture wasn't enabled - return failure
+    // This path is reached when autoCapture=false and there's no existing YouTube tab
+    console.log(`[YVO Background] No tab available and autoCapture=${autoCapture}`);
     const basicInfo = await getBasicVideoInfo(videoId, youtubeUrl);
     sendResponse({
-      success: true,
+      success: autoCapture ? false : true,  // Only success if autoCapture was disabled (analysis mode)
       videoInfo: basicInfo,
       streamData: null,
-      message: 'Could not capture streams. The video will be downloaded server-side.'
+      error: autoCapture ? 'No YouTube tab found and capture failed.' : null,
+      message: autoCapture
+        ? 'Could not capture streams. Please open the YouTube video in another tab.'
+        : 'Video info retrieved. Stream capture not requested.'
     });
 
   } catch (error) {
