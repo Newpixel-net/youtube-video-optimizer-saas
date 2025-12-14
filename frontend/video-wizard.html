@@ -11058,7 +11058,7 @@
                 // Re-open the modal which will trigger fresh capture
                 if (clipId) {
                     setTimeout(function() {
-                        app.showDownloadModal(clipId);
+                        app.downloadClip(clipId);
                     }, 500);
                 }
             },
@@ -11264,7 +11264,7 @@
                 // Export ONLY works via the browser extension capture/upload pipeline
                 // No fallbacks, no server-side download, no alternative methods
 
-                console.log('[EXPORT][EXT] bridgeReady=' + !!window.__YVO_EXTENSION_INSTALLED__ + ' extensionDetected=' + state.extension.installed);
+                console.log('[EXPORT][EXT] extensionDetected=' + state.extension.installed);
                 console.log('[EXPORT][EXT] isUploadedVideo=' + isUploadedVideo + ' clipStart=' + clipStartTime + ' clipEnd=' + clipEndTime);
 
                 // For uploaded videos, proceed directly to backend (no extension capture needed)
@@ -11278,17 +11278,6 @@
                             'Extension Not Available\n\n' +
                             'The YouTube Video Optimizer browser extension is required for exporting YouTube videos.\n\n' +
                             'Please install the extension and reload this page to continue.'
-                        );
-                        return;
-                    }
-
-                    // Check if bridge is ready
-                    if (!window.__YVO_EXTENSION_INSTALLED__) {
-                        console.error('[EXPORT][EXT] HARD FAIL: Bridge not ready');
-                        app.showCaptureErrorInModal(
-                            'Extension Bridge Not Ready\n\n' +
-                            'The browser extension is installed but not responding.\n\n' +
-                            'Please refresh the page and try again.'
                         );
                         return;
                     }
