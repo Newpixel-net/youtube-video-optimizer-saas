@@ -1041,23 +1041,46 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
         return;
       }
 
-      console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s`);
+      console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s, paused=${videoElement.paused}`);
 
-      // Check if video is ready
-      if (videoElement.readyState < 2) {
-        console.log('[EXT][CAPTURE] Waiting for video to be ready...');
+      // Ensure video is not paused
+      if (videoElement.paused) {
+        console.log('[EXT][CAPTURE] Video is paused, attempting to play...');
+        videoElement.play().catch(e => console.warn('[EXT][CAPTURE] Play failed:', e.message));
       }
 
-      // Seek to start position
-      console.log(`[EXT][CAPTURE] Seeking to ${startTime}s...`);
-      videoElement.currentTime = startTime;
-
-      // Wait for seek to complete
-      const onSeeked = () => {
-        videoElement.removeEventListener('seeked', onSeeked);
-        console.log(`[EXT][CAPTURE] Seek complete, currentTime=${videoElement.currentTime.toFixed(1)}s`);
-        startCapture();
+      // Wait for video to be ready (have enough data)
+      const waitForReady = () => {
+        return new Promise((res) => {
+          if (videoElement.readyState >= 3) {
+            res();
+          } else {
+            console.log(`[EXT][CAPTURE] Waiting for video data (readyState=${videoElement.readyState})...`);
+            const onCanPlay = () => {
+              videoElement.removeEventListener('canplay', onCanPlay);
+              res();
+            };
+            videoElement.addEventListener('canplay', onCanPlay);
+            // Timeout after 10 seconds
+            setTimeout(() => {
+              videoElement.removeEventListener('canplay', onCanPlay);
+              res();
+            }, 10000);
+          }
+        });
       };
+
+      waitForReady().then(() => {
+        // Seek to start position
+        console.log(`[EXT][CAPTURE] Seeking to ${startTime}s...`);
+        videoElement.currentTime = startTime;
+
+        // Wait for seek to complete
+        const onSeeked = () => {
+          videoElement.removeEventListener('seeked', onSeeked);
+          console.log(`[EXT][CAPTURE] Seek complete, currentTime=${videoElement.currentTime.toFixed(1)}s`);
+          startCapture();
+        };
 
       const startCapture = () => {
         try {
@@ -1202,21 +1225,22 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
         }
       };
 
-      // Start the process
-      if (Math.abs(videoElement.currentTime - startTime) < 1) {
-        startCapture();
-      } else {
-        videoElement.addEventListener('seeked', onSeeked);
-        videoElement.currentTime = startTime;
+        // Start the process
+        if (Math.abs(videoElement.currentTime - startTime) < 1) {
+          startCapture();
+        } else {
+          videoElement.addEventListener('seeked', onSeeked);
+          videoElement.currentTime = startTime;
 
-        // Fallback if seeked event doesn't fire
-        setTimeout(() => {
-          if (videoElement.currentTime >= startTime - 1) {
-            videoElement.removeEventListener('seeked', onSeeked);
-            startCapture();
-          }
-        }, 3000);
-      }
+          // Fallback if seeked event doesn't fire
+          setTimeout(() => {
+            if (videoElement.currentTime >= startTime - 1) {
+              videoElement.removeEventListener('seeked', onSeeked);
+              startCapture();
+            }
+          }, 3000);
+        }
+      }); // end waitForReady().then()
 
     } catch (error) {
       console.error(`[EXT][CAPTURE] FAIL: Top-level exception: ${error.message}`);
@@ -1256,6 +1280,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }
     });
 
+    // Track if we created a new tab (so we know to close it later)
+    let createdNewTab = false;
+
     // If no tab with this video, open one at the correct timestamp
     if (!youtubeTab) {
       // Use requestedStartTime if provided, otherwise start from beginning
@@ -1272,15 +1299,37 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       } else {
         url += `?t=${startSeconds}`;
       }
+      // Add autoplay parameter to help start video automatically
+      if (!url.includes('autoplay=')) {
+        url += '&autoplay=1';
+      }
       console.log(`[EXT][CAPTURE] Opening URL: ${url}`);
-      // CRITICAL: Open in background (active: false) to avoid stealing focus from Video Wizard
-      youtubeTab = await chrome.tabs.create({ url, active: false });
+      // IMPORTANT: Open tab as ACTIVE to ensure video can play (background tabs throttle media)
+      // We'll switch back after capture
+      youtubeTab = await chrome.tabs.create({ url, active: true });
+      createdNewTab = true;
 
-      // Wait longer for page to load and video to buffer at the target position
-      console.log(`[EXT][CAPTURE] Waiting for video to load (8s)...`);
-      await new Promise(resolve => setTimeout(resolve, 8000));
+      // Wait for page to load and video to buffer
+      console.log(`[EXT][CAPTURE] Waiting for video to load (6s)...`);
+      await new Promise(resolve => setTimeout(resolve, 6000));
     } else {
       console.log(`[EXT][CAPTURE] Using existing YouTube tab ${youtubeTab.id}`);
+      // Make the existing tab active for capture
+      try {
+        await chrome.tabs.update(youtubeTab.id, { active: true });
+      } catch (e) {
+        console.log(`[EXT][CAPTURE] Could not activate tab: ${e.message}`);
+      }
+    }
+
+    // Trigger video playback before capture
+    console.log(`[EXT][CAPTURE] Triggering video playback...`);
+    try {
+      await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
+      // Give it a moment to start playing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (e) {
+      console.log(`[EXT][CAPTURE] Playback trigger failed: ${e.message}, continuing anyway`);
     }
 
     // Get video duration from content script
@@ -1384,11 +1433,22 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
     }
 
+    // Close the capture tab if we created it
+    if (createdNewTab && youtubeTab) {
+      console.log(`[EXT][CAPTURE] Closing capture tab ${youtubeTab.id}`);
+      try {
+        await chrome.tabs.remove(youtubeTab.id);
+      } catch (e) {
+        console.log(`[EXT][CAPTURE] Could not close tab: ${e.message}`);
+      }
+    }
+
     // If server upload succeeded, return the storage URL
     if (uploadResult && uploadResult.url) {
       return {
         success: true,
         videoStorageUrl: uploadResult.url,
+        storagePath: uploadResult.storagePath || null,
         mimeType: captureResult.mimeType,
         captureMethod: 'mediarecorder',
         uploadedToStorage: true,
