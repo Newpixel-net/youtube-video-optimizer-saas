@@ -390,8 +390,27 @@ async function handleCaptureForWizard(message, sendResponse) {
         });
       } catch (msgError) {
         console.warn(`[EXT][CAPTURE] Could not communicate with existing tab: ${msgError.message}`);
-        // Content script not loaded - treat as if no tab exists
-        targetTab = null;
+
+        // Content script not loaded - try to inject it
+        console.log(`[EXT][CAPTURE] Injecting content script into tab ${targetTab.id}...`);
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: targetTab.id },
+            files: ['src/content.js']
+          });
+
+          // Wait a moment for script to initialize
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Try again
+          videoInfo = await chrome.tabs.sendMessage(targetTab.id, {
+            action: 'getVideoInfo'
+          });
+          console.log(`[EXT][CAPTURE] Content script injection successful`);
+        } catch (injectError) {
+          console.error(`[EXT][CAPTURE] Content script injection failed: ${injectError.message}`);
+          targetTab = null;
+        }
       }
 
       if (targetTab && !videoInfo?.success) {
