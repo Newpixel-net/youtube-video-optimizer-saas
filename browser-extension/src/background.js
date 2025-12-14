@@ -515,84 +515,28 @@ async function handleCaptureForWizard(message, sendResponse) {
     }  // end if (targetTab)
 
     // No existing YouTube tab with this video
-    // If autoCapture is enabled, use MediaRecorder capture (opens tab in BACKGROUND - no visible window switching)
-    if (autoCapture) {
-      console.log(`[EXT][CAPTURE] No YouTube tab found, using MediaRecorder capture (background tab)...`);
+    // USER-INITIATED CAPTURE: Don't auto-open tabs - require user to have video open
+    console.log(`[EXT][CAPTURE] No YouTube tab found with video ${videoId}`);
+    console.log(`[EXT][CAPTURE] User must open the video on YouTube first`);
 
-      // MediaRecorder capture opens tab with active: false - NO visible window switching
-      try {
-        const mediaResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
-
-        if (mediaResult.success) {
-          console.log(`[EXT][CAPTURE] MediaRecorder capture succeeded!`);
-          const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-          const capturedSegment = mediaResult.capturedSegment || {};
-
-          sendResponse({
-            success: true,
-            videoInfo: videoInfo,
-            streamData: {
-              videoUrl: mediaResult.videoStorageUrl || null,
-              storagePath: mediaResult.storagePath || null,
-              videoData: mediaResult.videoData || null,
-              videoSize: mediaResult.videoSize || 0,
-              quality: mediaResult.uploadedToStorage ? 'captured' : 'captured_local',
-              mimeType: mediaResult.mimeType || 'video/webm',
-              capturedAt: Date.now(),
-              source: mediaResult.uploadedToStorage ? 'mediarecorder_capture' : 'mediarecorder_local',
-              uploadedToStorage: mediaResult.uploadedToStorage || false,
-              uploadError: mediaResult.uploadError || null,
-              capturedSegment: capturedSegment,
-              captureStartTime: capturedSegment.startTime,
-              captureEndTime: capturedSegment.endTime,
-              captureDuration: capturedSegment.duration
-            },
-            message: mediaResult.uploadedToStorage
-              ? `Video segment (${capturedSegment.startTime || 0}s-${capturedSegment.endTime || '?'}s) captured and uploaded.`
-              : 'Video captured locally. Frontend will upload to storage.'
-          });
-          return;
-        } else {
-          // MediaRecorder capture failed
-          console.error(`[EXT][CAPTURE] MediaRecorder capture failed: ${mediaResult.error}`);
-          sendResponse({
-            success: false,
-            error: mediaResult.error || 'Could not capture video streams',
-            code: mediaResult.code || 'CAPTURE_FAILED',
-            videoInfo: await getBasicVideoInfo(videoId, youtubeUrl),
-            details: {
-              message: 'Please ensure the YouTube video loads and plays in your browser, then try again.'
-            }
-          });
-          return;
-        }
-      } catch (captureError) {
-        console.error(`[EXT][CAPTURE] MediaRecorder exception: ${captureError.message}`);
-        sendResponse({
-          success: false,
-          error: captureError.message || 'Video capture failed',
-          code: 'CAPTURE_EXCEPTION',
-          videoInfo: await getBasicVideoInfo(videoId, youtubeUrl)
-        });
-        return;
-      }
-    }
-
-    // autoCapture is disabled - just return basic info
-    console.log(`[EXT][CAPTURE] No tab available and autoCapture=${autoCapture}`);
-    const basicInfo = await getBasicVideoInfo(videoId, youtubeUrl);
     sendResponse({
-      success: true,  // Success because autoCapture was disabled (analysis mode)
-      videoInfo: basicInfo,
-      streamData: null,
-      message: 'Video info retrieved. Stream capture not requested.'
+      success: false,
+      error: 'Please open this video on YouTube first, then try exporting again.',
+      code: 'NO_YOUTUBE_TAB',
+      videoInfo: await getBasicVideoInfo(videoId, youtubeUrl),
+      details: {
+        message: 'The extension needs the video to be open in a YouTube tab to capture it.',
+        youtubeUrl: youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`
+      }
     });
+    return;
 
   } catch (error) {
     console.error('[EXT][BG] Capture for wizard error:', error);
     sendResponse({ success: false, error: error.message });
   }
 }
+
 
 /**
  * Get basic video info without requiring a tab
@@ -1399,40 +1343,17 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }
     });
 
-    // Track if we created a new tab (so we know to close it later)
-    let createdNewTab = false;
-
-    // If no tab with this video, open one at the correct timestamp
+    // USER-INITIATED CAPTURE: Don't auto-open tabs - require user to have video open
     if (!youtubeTab) {
-      // Use requestedStartTime if provided, otherwise start from beginning
-      const openAtTime = requestedStartTime || 0;
-      console.log(`[EXT][CAPTURE] Opening YouTube tab at ${openAtTime}s...`);
-      // Open at the start timestamp so video loads at the right position
-      const startSeconds = Math.floor(openAtTime);
-      let url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
-      // Add or update the timestamp parameter
-      if (url.includes('?')) {
-        // Remove existing t= parameter if present
-        url = url.replace(/[&?]t=\d+/g, '');
-        url += `&t=${startSeconds}`;
-      } else {
-        url += `?t=${startSeconds}`;
-      }
-      // Add autoplay parameter to help start video automatically
-      if (!url.includes('autoplay=')) {
-        url += '&autoplay=1';
-      }
-      console.log(`[EXT][CAPTURE] Opening URL: ${url}`);
-      // Open in background to not disrupt user
-      youtubeTab = await chrome.tabs.create({ url, active: false });
-      createdNewTab = true;
-
-      // Wait for page to load and video to buffer
-      console.log(`[EXT][CAPTURE] Waiting for video to load (8s)...`);
-      await new Promise(resolve => setTimeout(resolve, 8000));
-    } else {
-      console.log(`[EXT][CAPTURE] Using existing YouTube tab ${youtubeTab.id}`);
+      console.log(`[EXT][CAPTURE] No YouTube tab found with video ${videoId}`);
+      return {
+        success: false,
+        error: 'Please open this video on YouTube first, then try exporting again.',
+        code: 'NO_YOUTUBE_TAB'
+      };
     }
+
+    console.log(`[EXT][CAPTURE] Using existing YouTube tab ${youtubeTab.id}`)
 
     // Trigger video playback
     console.log(`[EXT][CAPTURE] Triggering video playback...`);
@@ -1543,16 +1464,6 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     } catch (serverError) {
       uploadError = `Connection failed: ${serverError.message}`;
       console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
-    }
-
-    // Close the capture tab if we created it
-    if (createdNewTab && youtubeTab) {
-      console.log(`[EXT][CAPTURE] Closing capture tab ${youtubeTab.id}`);
-      try {
-        await chrome.tabs.remove(youtubeTab.id);
-      } catch (e) {
-        console.log(`[EXT][CAPTURE] Could not close tab: ${e.message}`);
-      }
     }
 
     // If server upload succeeded, return the storage URL
