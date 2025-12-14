@@ -97,8 +97,13 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       // When running on server (Cloud Run), these ALWAYS fail with 403, so skip them
 
       const extensionStreamSource = job.extensionStreamData?.source || 'unknown';
-      // Both mediarecorder_capture and browser_download are uploaded to storage
-      const isUploadedCapture = (extensionStreamSource === 'mediarecorder_capture' || extensionStreamSource === 'browser_download') &&
+      // These capture methods upload video to storage and bypass IP-restriction:
+      // - mediarecorder_primary: Primary capture method (v2.1+)
+      // - mediarecorder_capture: Legacy capture method
+      // - mediarecorder_local: Captured but server unavailable (frontend uploaded)
+      // - browser_download: Direct download method
+      const uploadedCaptureSources = ['mediarecorder_primary', 'mediarecorder_capture', 'mediarecorder_local', 'browser_download'];
+      const isUploadedCapture = uploadedCaptureSources.includes(extensionStreamSource) &&
                                  job.extensionStreamData?.uploadedToStorage;
 
       if (isUploadedCapture) {

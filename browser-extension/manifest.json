@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.0.0",
-  "description": "User-initiated capture with auto content script injection",
+  "version": "2.1.0",
+  "description": "MediaRecorder as primary capture method - reliable video capture",
 
   "permissions": [
     "activeTab",
