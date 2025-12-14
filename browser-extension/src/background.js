@@ -167,7 +167,7 @@ setInterval(() => {
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Log for debugging
-  console.log('[YVO Background] Message:', message.action, 'from:', sender?.url || 'unknown');
+  console.log('[EXT][BG] Message:', message.action, 'from:', sender?.url || 'unknown');
 
   switch (message.action) {
     // Video Wizard integration
@@ -394,24 +394,31 @@ async function handleCaptureForWizard(message, sendResponse) {
 
     // Try to get info from existing tab
     if (targetTab) {
-      const videoInfo = await chrome.tabs.sendMessage(targetTab.id, {
-        action: 'getVideoInfo'
-      });
-
-      if (!videoInfo?.success) {
-        sendResponse({
-          success: false,
-          error: videoInfo?.error || 'Failed to get video info from YouTube'
+      let videoInfo;
+      try {
+        videoInfo = await chrome.tabs.sendMessage(targetTab.id, {
+          action: 'getVideoInfo'
         });
-        return;
+      } catch (msgError) {
+        console.warn(`[EXT][CAPTURE] Could not communicate with existing tab: ${msgError.message}`);
+        // Content script not loaded - treat as if no tab exists
+        targetTab = null;
       }
+
+      if (targetTab && !videoInfo?.success) {
+        // Tab exists but returned error - still try to proceed with autoCapture
+        console.warn(`[EXT][CAPTURE] Tab responded but failed: ${videoInfo?.error || 'Unknown error'}`);
+        targetTab = null;
+      }
+
+      if (targetTab && videoInfo?.success) {
 
       // Check for intercepted streams again (in case video started playing)
       intercepted = getInterceptedStreams(videoId);
       let streamData = null;
 
       if (intercepted && intercepted.videoUrl) {
-        console.log(`[YVO Background] Using INTERCEPTED stream URLs for ${videoId}`);
+        console.log(`[EXT][BG] Using INTERCEPTED stream URLs for ${videoId}`);
         streamData = {
           videoUrl: intercepted.videoUrl,
           audioUrl: intercepted.audioUrl,
@@ -422,7 +429,7 @@ async function handleCaptureForWizard(message, sendResponse) {
         };
       } else {
         // Try content script extraction (may fail due to signature cipher)
-        console.log(`[YVO Background] No intercepted streams, trying content script...`);
+        console.log(`[EXT][BG] No intercepted streams, trying content script...`);
         try {
           const streamResponse = await chrome.tabs.sendMessage(targetTab.id, {
             action: 'getVideoStream',
@@ -439,13 +446,13 @@ async function handleCaptureForWizard(message, sendResponse) {
             };
           }
         } catch (streamError) {
-          console.warn('[YVO Background] Content script stream capture failed:', streamError.message);
+          console.warn('[EXT][BG] Content script stream capture failed:', streamError.message);
         }
       }
 
       // If still no streams and autoCapture is enabled, trigger playback
       if (!streamData && autoCapture) {
-        console.log(`[YVO Background] No streams yet, triggering video playback...`);
+        console.log(`[EXT][BG] No streams yet, triggering video playback...`);
         try {
           await chrome.tabs.sendMessage(targetTab.id, { action: 'triggerPlayback' });
 
@@ -464,13 +471,13 @@ async function handleCaptureForWizard(message, sendResponse) {
             };
           }
         } catch (playError) {
-          console.warn('[YVO Background] Trigger playback failed:', playError.message);
+          console.warn('[EXT][BG] Trigger playback failed:', playError.message);
         }
       }
 
       // Log what we captured
       if (streamData) {
-        console.log(`[YVO Background] Captured streams (${streamData.source}):`, {
+        console.log(`[EXT][BG] Captured streams (${streamData.source}):`, {
           hasVideo: !!streamData.videoUrl,
           hasAudio: !!streamData.audioUrl,
           quality: streamData.quality
@@ -495,7 +502,7 @@ async function handleCaptureForWizard(message, sendResponse) {
         sendResponse(result);
         return;
       } else {
-        console.warn(`[YVO Background] No stream URLs captured for ${videoId}`);
+        console.warn(`[EXT][BG] No stream URLs captured for ${videoId}`);
       }
 
       // Store for later retrieval (without streams)
@@ -515,7 +522,8 @@ async function handleCaptureForWizard(message, sendResponse) {
         message: 'Could not capture streams from existing tab.'
       });
       return;
-    }
+      }  // end if (targetTab && videoInfo?.success)
+    }  // end if (targetTab)
 
     // No existing YouTube tab with this video
     // If autoCapture is enabled, open a NEW background tab and capture via network interception
@@ -636,7 +644,7 @@ async function handleCaptureForWizard(message, sendResponse) {
     });
 
   } catch (error) {
-    console.error('[YVO Background] Capture for wizard error:', error);
+    console.error('[EXT][BG] Capture for wizard error:', error);
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -666,8 +674,8 @@ async function getBasicVideoInfo(videoId, youtubeUrl) {
 async function openAndCaptureStreams(videoId, youtubeUrl) {
   const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
 
-  console.log(`[YVO Background] Opening YouTube tab for stream capture: ${videoId}`);
-  console.log(`[YVO Background] Note: Captured URLs may be IP-restricted`);
+  console.log(`[EXT][BG] Opening YouTube tab for stream capture: ${videoId}`);
+  console.log(`[EXT][BG] Note: Captured URLs may be IP-restricted`);
 
   return new Promise(async (resolve) => {
     let captureTab = null;
@@ -686,7 +694,7 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
         active: false // Open in background so user can continue working
       });
 
-      console.log(`[YVO Background] Opened capture tab ${captureTab.id}`);
+      console.log(`[EXT][BG] Opened capture tab ${captureTab.id}`);
 
       // Track this tab for the video ID
       tabVideoMap.set(captureTab.id, videoId);
@@ -704,9 +712,9 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
 
         if (intercepted && intercepted.videoUrl) {
           cleanup();
-          console.log(`[YVO Background] Streams captured after ${attempts} checks (${attempts * 0.5}s)`);
-          console.log(`[YVO Background] Video URLs: ${intercepted.allVideoUrls?.length || 1}`);
-          console.log(`[YVO Background] Audio URLs: ${intercepted.allAudioUrls?.length || 1}`);
+          console.log(`[EXT][BG] Streams captured after ${attempts} checks (${attempts * 0.5}s)`);
+          console.log(`[EXT][BG] Video URLs: ${intercepted.allVideoUrls?.length || 1}`);
+          console.log(`[EXT][BG] Audio URLs: ${intercepted.allAudioUrls?.length || 1}`);
 
           // Try to get video info from the tab
           let videoInfo = null;
@@ -716,10 +724,10 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
             });
             if (infoResponse?.success) {
               videoInfo = infoResponse.videoInfo;
-              console.log(`[YVO Background] Got video info: ${videoInfo.title}`);
+              console.log(`[EXT][BG] Got video info: ${videoInfo.title}`);
             }
           } catch (e) {
-            console.warn('[YVO Background] Could not get video info from tab:', e.message);
+            console.warn('[EXT][BG] Could not get video info from tab:', e.message);
           }
 
           // DON'T close the tab yet - caller will close it after download/upload
@@ -752,12 +760,12 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
         if (!playbackTriggered && attempts >= 3) {
           try {
             await chrome.tabs.sendMessage(captureTab.id, { action: 'triggerPlayback' });
-            console.log(`[YVO Background] Triggered playback at attempt ${attempts}`);
+            console.log(`[EXT][BG] Triggered playback at attempt ${attempts}`);
             playbackTriggered = true;
           } catch (e) {
             // Tab might not be ready yet - this is expected
             if (attempts === 3 || attempts === 6 || attempts === 10) {
-              console.log(`[YVO Background] Playback trigger failed (attempt ${attempts}), tab may not be ready`);
+              console.log(`[EXT][BG] Playback trigger failed (attempt ${attempts}), tab may not be ready`);
             }
           }
         }
@@ -766,7 +774,7 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
         if (playbackTriggered && (attempts === 12 || attempts === 18 || attempts === 24)) {
           try {
             await chrome.tabs.sendMessage(captureTab.id, { action: 'triggerPlayback' });
-            console.log(`[YVO Background] Re-triggered playback at attempt ${attempts}`);
+            console.log(`[EXT][BG] Re-triggered playback at attempt ${attempts}`);
           } catch (e) {
             // Ignore
           }
@@ -775,7 +783,7 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
         // Check if we've exceeded max attempts
         if (attempts >= maxAttempts) {
           cleanup();
-          console.warn(`[YVO Background] Stream capture timeout after ${maxAttempts * 0.5}s`);
+          console.warn(`[EXT][BG] Stream capture timeout after ${maxAttempts * 0.5}s`);
 
           // Close the capture tab
           try {
@@ -792,7 +800,7 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
       // Set absolute timeout (20 seconds)
       timeoutId = setTimeout(() => {
         cleanup();
-        console.warn('[YVO Background] Absolute timeout reached for stream capture');
+        console.warn('[EXT][BG] Absolute timeout reached for stream capture');
         try {
           if (captureTab) chrome.tabs.remove(captureTab.id).catch(() => {});
         } catch (e) {}
@@ -804,7 +812,7 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
 
     } catch (error) {
       cleanup();
-      console.error('[YVO Background] Failed to open capture tab:', error);
+      console.error('[EXT][BG] Failed to open capture tab:', error);
       resolve({
         success: false,
         error: `Failed to open YouTube tab: ${error.message}`
@@ -1618,8 +1626,8 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
  * @returns {Promise<{success: boolean, videoStorageUrl?: string, audioStorageUrl?: string, error?: string}>}
  */
 async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
-  console.log(`[YVO Background] Starting browser-side download for ${videoId}`);
-  console.log(`[YVO Background] Will use content script for download (has page cookie access)`);
+  console.log(`[EXT][BG] Starting browser-side download for ${videoId}`);
+  console.log(`[EXT][BG] Will use content script for download (has page cookie access)`);
 
   if (!videoUrl) {
     return { success: false, error: 'No video URL provided' };
@@ -1636,7 +1644,7 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
   try {
     // Find the best YouTube tab for downloading
     // Prefer the tab that's playing this specific video (has the stream URLs bound to it)
-    console.log(`[YVO Background] Finding YouTube tab for in-page download...`);
+    console.log(`[EXT][BG] Finding YouTube tab for in-page download...`);
     const tabs = await chrome.tabs.query({
       url: ['*://www.youtube.com/*', '*://youtube.com/*']
     });
@@ -1660,15 +1668,15 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
     // STRICT: Require exact video tab match - URLs are session-bound
     if (!youtubeTab) {
       // Don't fall back to wrong tab - this would download wrong video or get 403
-      console.error(`[YVO Background] No tab found with video ${videoId}. Available tabs:`, tabs.map(t => t.url));
+      console.error(`[EXT][BG] No tab found with video ${videoId}. Available tabs:`, tabs.map(t => t.url));
       throw new Error(`YouTube tab with video ${videoId} not found. Please ensure the video is open in a YouTube tab.`);
     }
 
-    console.log(`[YVO Background] Found video-specific tab ${youtubeTab.id} for ${videoId}`);
+    console.log(`[EXT][BG] Found video-specific tab ${youtubeTab.id} for ${videoId}`);
 
     // Use chrome.scripting.executeScript to run download code directly in the page's MAIN world
     // CRITICAL: world: 'MAIN' is required to access page cookies for cross-origin requests
-    console.log(`[YVO Background] Injecting download code into YouTube tab (MAIN world)...`);
+    console.log(`[EXT][BG] Injecting download code into YouTube tab (MAIN world)...`);
 
     const injectionResults = await chrome.scripting.executeScript({
       target: { tabId: youtubeTab.id },
@@ -1687,14 +1695,14 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
       throw new Error(downloadResult.error || 'In-page download failed');
     }
 
-    console.log(`[YVO Background] In-page download successful: ${(downloadResult.videoSize / 1024 / 1024).toFixed(2)}MB`);
+    console.log(`[EXT][BG] In-page download successful: ${(downloadResult.videoSize / 1024 / 1024).toFixed(2)}MB`);
 
     // Convert base64 back to Blob for upload
     const videoBlob = base64ToBlob(downloadResult.videoData, 'video/mp4');
-    console.log(`[YVO Background] Converted to blob: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
+    console.log(`[EXT][BG] Converted to blob: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
 
     // Step 2: Upload video to our server
-    console.log(`[YVO Background] Uploading video to server...`);
+    console.log(`[EXT][BG] Uploading video to server...`);
     const videoFormData = new FormData();
     videoFormData.append('video', videoBlob, 'video.mp4');
     videoFormData.append('videoId', videoId);
@@ -1711,14 +1719,14 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
     }
 
     const videoUploadResult = await videoUploadResponse.json();
-    console.log(`[YVO Background] Video uploaded successfully: ${videoUploadResult.url}`);
+    console.log(`[EXT][BG] Video uploaded successfully: ${videoUploadResult.url}`);
 
     let audioStorageUrl = null;
 
     // Step 3: Upload audio if content script downloaded it
     if (downloadResult.audioData) {
       try {
-        console.log(`[YVO Background] Content script also downloaded audio, uploading...`);
+        console.log(`[EXT][BG] Content script also downloaded audio, uploading...`);
         const audioBlob = base64ToBlob(downloadResult.audioData, 'audio/mp4');
 
         const audioFormData = new FormData();
@@ -1734,10 +1742,10 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
         if (audioUploadResponse.ok) {
           const audioUploadResult = await audioUploadResponse.json();
           audioStorageUrl = audioUploadResult.url;
-          console.log(`[YVO Background] Audio uploaded successfully: ${audioStorageUrl}`);
+          console.log(`[EXT][BG] Audio uploaded successfully: ${audioStorageUrl}`);
         }
       } catch (audioError) {
-        console.warn(`[YVO Background] Audio upload failed (non-fatal):`, audioError.message);
+        console.warn(`[EXT][BG] Audio upload failed (non-fatal):`, audioError.message);
       }
     }
 
@@ -1748,7 +1756,7 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
     };
 
   } catch (error) {
-    console.error(`[YVO Background] Download/upload failed:`, error);
+    console.error(`[EXT][BG] Download/upload failed:`, error);
 
     // Provide a helpful error message based on the failure type
     let userFriendlyError = error.message;
