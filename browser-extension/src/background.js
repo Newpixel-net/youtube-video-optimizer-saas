@@ -691,12 +691,20 @@ async function getBasicVideoInfo(videoId, youtubeUrl) {
  * can access YouTube through a similar network path.
  */
 async function openAndCaptureStreams(videoId, youtubeUrl) {
-  // Use EMBED URL with autoplay - embed has more lenient autoplay policies
-  // The embed player is designed for cross-site embedding and autoplays more reliably
-  const url = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&enablejsapi=1`;
+  // Use regular watch URL - embed often fails with "Error 153" when embedding is disabled
+  let url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
 
-  console.log(`[EXT][BG] Opening YouTube EMBED tab for stream capture: ${videoId}`);
-  console.log(`[EXT][BG] Embed URL: ${url}`);
+  // Add autoplay parameter
+  try {
+    const urlObj = new URL(url);
+    urlObj.searchParams.set('autoplay', '1');
+    url = urlObj.toString();
+  } catch (e) {
+    url += (url.includes('?') ? '&' : '?') + 'autoplay=1';
+  }
+
+  console.log(`[EXT][BG] Opening YouTube tab for stream capture: ${videoId}`);
+  console.log(`[EXT][BG] URL: ${url}`);
 
   return new Promise(async (resolve) => {
     let captureTab = null;
@@ -800,24 +808,38 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
           console.log(`[EXT][BG] Still waiting for streams... attempt ${attempts}/${maxAttempts}`);
         }
 
-        // For embed URLs, autoplay should work. But if still no streams after 4s,
-        // try using chrome.scripting to inject a play command directly
-        if (!playbackTriggered && attempts >= 8) {
-          playbackTriggered = true;
-          console.log(`[EXT][BG] Injecting play script into embed at attempt ${attempts}`);
+        // Try to trigger playback via content script (works on watch pages)
+        // Start at attempt 6 (3 seconds) to give page time to load
+        if (attempts >= 6 && attempts <= 20 && attempts % 3 === 0) {
+          console.log(`[EXT][BG] Triggering playback via content script at attempt ${attempts}`);
           try {
-            await chrome.scripting.executeScript({
-              target: { tabId: captureTab.id },
-              func: () => {
-                const video = document.querySelector('video');
-                if (video) {
-                  video.muted = true;
-                  video.play().catch(e => console.log('Play failed:', e.message));
-                }
-              }
-            });
+            const result = await chrome.tabs.sendMessage(captureTab.id, { action: 'triggerPlayback' });
+            if (result?.isPlaying) {
+              console.log(`[EXT][BG] Video now playing! Waiting for streams...`);
+              playbackTriggered = true;
+            } else {
+              console.log(`[EXT][BG] triggerPlayback returned: isPlaying=${result?.isPlaying}`);
+            }
           } catch (e) {
-            console.log(`[EXT][BG] Script injection failed: ${e.message}`);
+            console.log(`[EXT][BG] Content script not ready: ${e.message}`);
+            // Fallback: direct script injection
+            if (attempts >= 10 && !playbackTriggered) {
+              try {
+                await chrome.scripting.executeScript({
+                  target: { tabId: captureTab.id },
+                  func: () => {
+                    const video = document.querySelector('video');
+                    if (video) {
+                      video.muted = true;
+                      video.play().catch(() => {});
+                    }
+                  }
+                });
+                playbackTriggered = true;
+              } catch (scriptError) {
+                // Ignore
+              }
+            }
           }
         }
 
