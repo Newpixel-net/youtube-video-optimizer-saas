@@ -9332,6 +9332,12 @@
                         // Store isUpload flag for uploaded videos
                         state.videoInput.isUpload = result.data.isUpload || false;
 
+                        // For uploaded videos, sourceAsset is created from the uploaded file
+                        if (result.data.sourceAsset) {
+                            state.sourceAsset = result.data.sourceAsset;
+                            console.log('[Video Wizard] sourceAsset received from backend:', state.sourceAsset.source);
+                        }
+
                         // Log analysis results for debugging
                         console.log('[Video Wizard] Analysis complete:', {
                             projectId: state.projectId,
@@ -10967,17 +10973,9 @@
                     <div class="capture-error-container" style="text-align: center; padding: 2rem;">
                         <div style="font-size: 3rem; margin-bottom: 1rem;">❌</div>
                         <h3 style="color: #ff6b6b; margin-bottom: 1rem;">Video Capture Failed</h3>
-                        <p style="color: rgba(255,255,255,0.8); margin-bottom: 1.5rem; line-height: 1.6;">
+                        <p style="color: rgba(255,255,255,0.8); margin-bottom: 1.5rem; line-height: 1.6; white-space: pre-line;">
                             ${errorMessage}
                         </p>
-                        <div style="background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
-                            <p style="color: rgba(255,255,255,0.7); font-size: 0.9rem; margin: 0;">
-                                <strong>To fix this:</strong><br>
-                                1. Open the YouTube video in another browser tab<br>
-                                2. Make sure the video plays (at least for a few seconds)<br>
-                                3. Return here and try again
-                            </p>
-                        </div>
                         <button class="btn-primary" onclick="app.closeDownloadModal()" style="margin-right: 0.5rem;">Close</button>
                         <button class="btn-secondary" onclick="app.retryCapture()">🔄 Retry</button>
                     </div>
@@ -11194,27 +11192,69 @@
                 // Check if this is an uploaded video
                 var isUploadedVideo = state.videoInput.isUpload || false;
 
-                // ===== CANONICAL SOURCE ASSET ARCHITECTURE =====
-                // Export uses the sourceAsset captured during analysis
-                // NO re-capture at export time - this is the key architectural change
-                // that makes export reliable
+                // ===== SOURCE ASSET WITH FALLBACK CAPTURE =====
+                // Primary: use sourceAsset captured during analysis
+                // Fallback: capture now if sourceAsset is missing (YouTube videos only)
 
                 console.log('[Video Wizard] Export check:', {
                     hasSourceAsset: !!state.sourceAsset,
                     isUploadedVideo: isUploadedVideo,
+                    hasExtension: state.extension.installed,
                     clipStart: clipStartTime,
                     clipEnd: clipEndTime
                 });
 
-                // Validate we have a source asset (captured during analysis)
+                // For YouTube videos without sourceAsset, try to capture now
+                var extensionCaptureData = null;
                 if (!isUploadedVideo && !state.sourceAsset) {
-                    console.error('[Video Wizard] No sourceAsset available for export');
-                    app.showCaptureErrorInModal(
-                        'Video source not captured yet.\n\n' +
-                        'The video needs to be captured during analysis before you can export clips.\n\n' +
-                        'Please go back to "Video Input", re-enter the URL, and wait for the capture to complete.'
-                    );
-                    return;
+                    console.log('[Video Wizard] No sourceAsset - attempting fallback capture...');
+
+                    // Check if we have extension installed
+                    if (state.extension.installed && state.videoInput.videoData?.videoId) {
+                        utils.showToast('Capturing video source...', 'info');
+                        app.showCapturingStateInModal('Capturing video source for export...');
+
+                        try {
+                            var videoDuration = state.videoInput.videoData?.duration || 300;
+                            var captureResult = await sendExtensionRequest('captureVideoForWizard', {
+                                videoId: state.videoInput.videoData.videoId,
+                                youtubeUrl: state.videoInput.url || ('https://www.youtube.com/watch?v=' + state.videoInput.videoData.videoId),
+                                autoCapture: true
+                            });
+
+                            if (captureResult && captureResult.success && captureResult.streamData?.uploadedToStorage) {
+                                console.log('[Video Wizard] Fallback capture successful');
+                                extensionCaptureData = captureResult;
+
+                                // Also store it locally for future exports
+                                state.sourceAsset = {
+                                    storageUrl: captureResult.streamData.videoUrl,
+                                    storagePath: captureResult.streamData.storagePath || null,
+                                    duration: videoDuration,
+                                    format: captureResult.streamData.mimeType || 'video/mp4',
+                                    source: 'extension_capture_fallback'
+                                };
+                            } else {
+                                console.warn('[Video Wizard] Fallback capture failed:', captureResult?.error);
+                            }
+                        } catch (captureErr) {
+                            console.warn('[Video Wizard] Fallback capture error:', captureErr.message);
+                        }
+                    }
+
+                    // If still no source after fallback attempt, show error
+                    if (!extensionCaptureData && !state.sourceAsset) {
+                        console.error('[Video Wizard] No video source available for export');
+                        app.showCaptureErrorInModal(
+                            'Video source not available.\n\n' +
+                            'The video capture could not be completed. This may happen if:\n' +
+                            '• The browser extension is not installed\n' +
+                            '• The video is age-restricted or unavailable\n' +
+                            '• Network issues during capture\n\n' +
+                            'Please try re-analyzing the video or use an uploaded video file instead.'
+                        );
+                        return;
+                    }
                 }
 
                 // Show processing state
@@ -11222,16 +11262,21 @@
                 app.showCapturingStateInModal('Sending to processor...');
 
                 try {
-                    // Call backend with clip timing - backend will use stored sourceAsset
-                    // NO extensionCaptureData needed - backend reads from project.sourceAsset
+                    // Call backend - pass extensionCaptureData if we captured at export time
                     var wizardProcessClip = functions.httpsCallable('wizardProcessClip');
-                    var result = await wizardProcessClip({
+                    var requestData = {
                         projectId: state.projectId,
                         clipId: clipId,
                         quality: quality,
                         settings: clipSettings
-                        // NOTE: extensionCaptureData removed - backend uses sourceAsset from project
-                    });
+                    };
+
+                    // Include fallback capture data if we captured at export time
+                    if (extensionCaptureData) {
+                        requestData.extensionCaptureData = extensionCaptureData;
+                    }
+
+                    var result = await wizardProcessClip(requestData);
 
                     if (result.data.success) {
                         // Store job info
@@ -11263,9 +11308,11 @@
                     // Check for 'failed-precondition' error (sourceAsset missing)
                     if (error.code === 'failed-precondition' || errorMessage.includes('Video source not available')) {
                         app.showCaptureErrorInModal(
-                            'Video source not captured.\n\n' +
-                            'Please go back to "Video Input" and re-analyze the video.\n' +
-                            'Make sure to wait for the video capture to complete before proceeding to clips.'
+                            'Video source not available.\n\n' +
+                            'The video capture may have failed. Please try:\n' +
+                            '• Re-analyzing the video\n' +
+                            '• Using an uploaded video file instead\n' +
+                            '• Checking if the browser extension is installed'
                         );
                     } else {
                         // Generic error
@@ -12189,7 +12236,7 @@
                 setTimeout(function() {
                     if (extensionCallbacks[requestId]) {
                         delete extensionCallbacks[requestId];
-                        reject(new Error('Extension capture timeout - please ensure YouTube video is open in another tab'));
+                        reject(new Error('Extension capture timeout - the video may be too long or network issues occurred'));
                     }
                 }, 180000);
 
