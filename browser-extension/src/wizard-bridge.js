@@ -43,7 +43,7 @@
 
     if (!action || !requestId) return;
 
-    console.log('[YVO Extension] Received request:', action);
+    console.log('[EXT][BRIDGE] Received request:', action);
 
     switch (action) {
       case 'getVideoFromYouTube':
@@ -60,7 +60,7 @@
         break;
 
       default:
-        console.warn('[YVO Extension] Unknown action:', action);
+        console.warn('[EXT][BRIDGE] Unknown action:', action);
         sendResponse(requestId, { error: 'Unknown action: ' + action });
     }
   }
