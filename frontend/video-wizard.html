@@ -11260,134 +11260,195 @@
                 // Check if this is an uploaded video
                 var isUploadedVideo = state.videoInput.isUpload || false;
 
-                // ===== SOURCE ASSET WITH FALLBACK CAPTURE =====
-                // Primary: use sourceAsset captured during analysis
-                // Fallback: capture now if sourceAsset is missing (YouTube videos only)
+                // ===== EXTENSION-ONLY EXPORT =====
+                // Export ONLY works via the browser extension capture/upload pipeline
+                // No fallbacks, no server-side download, no alternative methods
 
-                console.log('[Video Wizard] Export check:', {
-                    hasSourceAsset: !!state.sourceAsset,
-                    isUploadedVideo: isUploadedVideo,
-                    hasExtension: state.extension.installed,
-                    clipStart: clipStartTime,
-                    clipEnd: clipEndTime
-                });
+                console.log('[EXPORT][EXT] bridgeReady=' + !!window.__YVO_EXTENSION_INSTALLED__ + ' extensionDetected=' + state.extension.installed);
+                console.log('[EXPORT][EXT] isUploadedVideo=' + isUploadedVideo + ' clipStart=' + clipStartTime + ' clipEnd=' + clipEndTime);
 
-                // For YouTube videos without sourceAsset, try to capture now
+                // For uploaded videos, proceed directly to backend (no extension capture needed)
                 var extensionCaptureData = null;
-                if (!isUploadedVideo && !state.sourceAsset) {
-                    console.log('[Video Wizard] No sourceAsset - attempting fallback capture...');
 
-                    // Check if we have extension installed
-                    if (state.extension.installed && state.videoInput.videoData?.videoId) {
-                        utils.showToast('Capturing video source...', 'info');
-                        app.showCapturingStateInModal('Capturing video source for export...');
-
-                        try {
-                            var videoDuration = state.videoInput.videoData?.duration || 300;
-                            var captureResult = await sendExtensionRequest('captureVideoForWizard', {
-                                videoId: state.videoInput.videoData.videoId,
-                                youtubeUrl: state.videoInput.url || ('https://www.youtube.com/watch?v=' + state.videoInput.videoData.videoId),
-                                autoCapture: true
-                            });
-
-                            console.log('[Video Wizard] Fallback capture result:', {
-                                success: captureResult?.success,
-                                hasStreamData: !!captureResult?.streamData,
-                                uploadedToStorage: captureResult?.streamData?.uploadedToStorage,
-                                hasVideoData: !!captureResult?.streamData?.videoData
-                            });
-
-                            // Check if capture was successful (either uploaded to storage OR has local video data)
-                            var fallbackSuccess = captureResult && captureResult.success && captureResult.streamData;
-                            var fallbackHasStorageUrl = captureResult?.streamData?.uploadedToStorage && captureResult?.streamData?.videoUrl;
-                            var fallbackHasLocalData = captureResult?.streamData?.videoData;
-
-                            if (fallbackSuccess && (fallbackHasStorageUrl || fallbackHasLocalData)) {
-                                var fallbackStorageUrl = captureResult.streamData.videoUrl;
-                                var fallbackStoragePath = captureResult.streamData.storagePath || null;
-
-                                // If we have local data but no storage URL, upload to Firebase Storage from frontend
-                                if (!fallbackHasStorageUrl && fallbackHasLocalData) {
-                                    console.log('[Video Wizard] Fallback captured locally, uploading to Firebase Storage...');
-                                    app.showCapturingStateInModal('Uploading captured video...');
-
-                                    try {
-                                        // Convert base64 to blob
-                                        var base64Data = captureResult.streamData.videoData;
-                                        var mimeType = captureResult.streamData.mimeType || 'video/webm';
-                                        var byteCharacters = atob(base64Data);
-                                        var byteNumbers = new Array(byteCharacters.length);
-                                        for (var i = 0; i < byteCharacters.length; i++) {
-                                            byteNumbers[i] = byteCharacters.charCodeAt(i);
-                                        }
-                                        var byteArray = new Uint8Array(byteNumbers);
-                                        var videoBlob = new Blob([byteArray], { type: mimeType });
-
-                                        console.log('[Video Wizard] Created blob for fallback:', (videoBlob.size / 1024 / 1024).toFixed(2) + 'MB');
-
-                                        // Upload to Firebase Storage
-                                        var videoId = state.videoInput.videoData.videoId;
-                                        var timestamp = Date.now();
-                                        var extension = mimeType.includes('webm') ? 'webm' : 'mp4';
-                                        fallbackStoragePath = 'captured-videos/' + videoId + '/fallback_' + timestamp + '.' + extension;
-
-                                        var storageRef = storage.ref(fallbackStoragePath);
-                                        var uploadTask = await storageRef.put(videoBlob, {
-                                            contentType: mimeType,
-                                            customMetadata: {
-                                                videoId: videoId,
-                                                source: 'frontend_fallback_upload',
-                                                capturedAt: String(timestamp)
-                                            }
-                                        });
-
-                                        fallbackStorageUrl = await uploadTask.ref.getDownloadURL();
-                                        console.log('[Video Wizard] Fallback uploaded to Firebase Storage:', fallbackStorageUrl);
-                                    } catch (uploadError) {
-                                        console.error('[Video Wizard] Fallback frontend upload failed:', uploadError);
-                                        fallbackStorageUrl = null;
-                                    }
-                                }
-
-                                if (fallbackStorageUrl) {
-                                    console.log('[Video Wizard] Fallback capture successful');
-                                    extensionCaptureData = captureResult;
-                                    // Update streamData with the correct URL
-                                    extensionCaptureData.streamData.videoUrl = fallbackStorageUrl;
-                                    extensionCaptureData.streamData.storagePath = fallbackStoragePath;
-                                    extensionCaptureData.streamData.uploadedToStorage = true;
-
-                                    // Also store it locally for future exports
-                                    state.sourceAsset = {
-                                        storageUrl: fallbackStorageUrl,
-                                        storagePath: fallbackStoragePath,
-                                        duration: videoDuration,
-                                        format: captureResult.streamData.mimeType || 'video/mp4',
-                                        source: 'extension_capture_fallback'
-                                    };
-                                }
-                            } else {
-                                console.warn('[Video Wizard] Fallback capture failed:', captureResult?.error);
-                            }
-                        } catch (captureErr) {
-                            console.warn('[Video Wizard] Fallback capture error:', captureErr.message);
-                        }
+                if (!isUploadedVideo) {
+                    // HARD REQUIREMENT: Extension must be installed for YouTube video export
+                    if (!state.extension.installed) {
+                        console.error('[EXPORT][EXT] HARD FAIL: Extension not available');
+                        app.showCaptureErrorInModal(
+                            'Extension Not Available\n\n' +
+                            'The YouTube Video Optimizer browser extension is required for exporting YouTube videos.\n\n' +
+                            'Please install the extension and reload this page to continue.'
+                        );
+                        return;
                     }
 
-                    // If still no source after fallback attempt, show error
-                    if (!extensionCaptureData && !state.sourceAsset) {
-                        console.error('[Video Wizard] No video source available for export');
+                    // Check if bridge is ready
+                    if (!window.__YVO_EXTENSION_INSTALLED__) {
+                        console.error('[EXPORT][EXT] HARD FAIL: Bridge not ready');
                         app.showCaptureErrorInModal(
-                            'Video source not available.\n\n' +
-                            'The video capture could not be completed. This may happen if:\n' +
-                            '• The browser extension is not installed\n' +
-                            '• The video is age-restricted or unavailable\n' +
-                            '• Network issues during capture\n\n' +
-                            'Please try re-analyzing the video or use an uploaded video file instead.'
+                            'Extension Bridge Not Ready\n\n' +
+                            'The browser extension is installed but not responding.\n\n' +
+                            'Please refresh the page and try again.'
+                        );
+                        return;
+                    }
+
+                    // Get video ID
+                    var videoId = state.videoInput.videoData?.videoId;
+                    if (!videoId) {
+                        console.error('[EXPORT][EXT] HARD FAIL: No video ID');
+                        app.showCaptureErrorInModal(
+                            'Video ID Not Found\n\n' +
+                            'Could not determine the YouTube video ID.\n\n' +
+                            'Please re-analyze the video and try again.'
+                        );
+                        return;
+                    }
+
+                    // Show capturing state
+                    utils.showToast('Capturing video via extension...', 'info');
+                    app.showCapturingStateInModal('Extension is capturing video...');
+
+                    // Build capture request payload
+                    var capturePayload = {
+                        videoId: videoId,
+                        youtubeUrl: state.videoInput.url || ('https://www.youtube.com/watch?v=' + videoId),
+                        clipStart: clipStartTime,
+                        clipEnd: clipEndTime,
+                        quality: quality,
+                        autoCapture: true
+                    };
+
+                    console.log('[EXPORT][EXT] sending captureVideoForWizard payload=' + JSON.stringify(capturePayload));
+
+                    try {
+                        // Call extension to capture video
+                        var captureResult = await sendExtensionRequest('captureVideoForWizard', capturePayload);
+
+                        console.log('[EXPORT][EXT] response received success=' + captureResult?.success + ' error=' + (captureResult?.error || 'none'));
+
+                        // Check capture result
+                        if (!captureResult || !captureResult.success) {
+                            var errorMessage = captureResult?.error || 'Unknown capture error';
+                            console.error('[EXPORT][EXT] HARD FAIL: Capture failed - ' + errorMessage);
+                            app.showCaptureErrorInModal(
+                                'Extension Capture Failed\n\n' +
+                                errorMessage + '\n\n' +
+                                'Please ensure:\n' +
+                                '• The YouTube video loads and plays in your browser\n' +
+                                '• The video is not age-restricted or unavailable\n' +
+                                '• You have a stable internet connection'
+                            );
+                            return;
+                        }
+
+                        // Check for valid stream data
+                        if (!captureResult.streamData) {
+                            console.error('[EXPORT][EXT] HARD FAIL: No stream data returned');
+                            app.showCaptureErrorInModal(
+                                'Extension Capture Failed\n\n' +
+                                'The extension captured the video but returned no data.\n\n' +
+                                'Please try again or check extension logs for details.'
+                            );
+                            return;
+                        }
+
+                        // Check if uploaded to storage or has local data
+                        var hasStorageUrl = captureResult.streamData.uploadedToStorage && captureResult.streamData.videoUrl;
+                        var hasLocalData = captureResult.streamData.videoData;
+
+                        console.log('[EXPORT][EXT] uploadedToStorage=' + !!hasStorageUrl + ' hasLocalData=' + !!hasLocalData);
+
+                        if (!hasStorageUrl && !hasLocalData) {
+                            console.error('[EXPORT][EXT] HARD FAIL: No video URL or data');
+                            app.showCaptureErrorInModal(
+                                'Extension Capture Failed\n\n' +
+                                'Video was captured but could not be uploaded to storage.\n\n' +
+                                'Upload error: ' + (captureResult.streamData.uploadError || 'Unknown')
+                            );
+                            return;
+                        }
+
+                        var storageUrl = captureResult.streamData.videoUrl;
+                        var storagePath = captureResult.streamData.storagePath || null;
+
+                        // If we have local data but no storage URL, upload to Firebase Storage from frontend
+                        if (!hasStorageUrl && hasLocalData) {
+                            console.log('[EXPORT][EXT] upload started - local data to Firebase Storage');
+                            app.showCapturingStateInModal('Uploading captured video to storage...');
+
+                            try {
+                                // Convert base64 to blob
+                                var base64Data = captureResult.streamData.videoData;
+                                var mimeType = captureResult.streamData.mimeType || 'video/webm';
+                                var byteCharacters = atob(base64Data);
+                                var byteNumbers = new Array(byteCharacters.length);
+                                for (var i = 0; i < byteCharacters.length; i++) {
+                                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                }
+                                var byteArray = new Uint8Array(byteNumbers);
+                                var videoBlob = new Blob([byteArray], { type: mimeType });
+
+                                console.log('[EXPORT][EXT] Created blob: ' + (videoBlob.size / 1024 / 1024).toFixed(2) + 'MB');
+
+                                // Upload to Firebase Storage
+                                var timestamp = Date.now();
+                                var ext = mimeType.includes('webm') ? 'webm' : 'mp4';
+                                storagePath = 'captured-videos/' + videoId + '/export_' + timestamp + '.' + ext;
+
+                                var storageRef = storage.ref(storagePath);
+                                var uploadTask = await storageRef.put(videoBlob, {
+                                    contentType: mimeType,
+                                    customMetadata: {
+                                        videoId: videoId,
+                                        source: 'extension_export_upload',
+                                        capturedAt: String(timestamp)
+                                    }
+                                });
+
+                                storageUrl = await uploadTask.ref.getDownloadURL();
+                                console.log('[EXPORT][EXT] upload completed url=' + storageUrl);
+                            } catch (uploadError) {
+                                console.error('[EXPORT][EXT] HARD FAIL: Frontend upload failed - ' + uploadError.message);
+                                app.showCaptureErrorInModal(
+                                    'Upload Failed\n\n' +
+                                    'Video was captured but could not be uploaded to storage.\n\n' +
+                                    'Error: ' + uploadError.message
+                                );
+                                return;
+                            }
+                        }
+
+                        // Final validation
+                        if (!storageUrl) {
+                            console.error('[EXPORT][EXT] HARD FAIL: No storage URL after upload');
+                            app.showCaptureErrorInModal(
+                                'Upload Failed\n\n' +
+                                'Could not obtain storage URL for the captured video.\n\n' +
+                                'Please try again.'
+                            );
+                            return;
+                        }
+
+                        console.log('[EXPORT][EXT] Capture and upload successful, URL=' + storageUrl);
+
+                        // Build extension capture data for backend
+                        extensionCaptureData = captureResult;
+                        extensionCaptureData.streamData.videoUrl = storageUrl;
+                        extensionCaptureData.streamData.storagePath = storagePath;
+                        extensionCaptureData.streamData.uploadedToStorage = true;
+
+                    } catch (captureErr) {
+                        console.error('[EXPORT][EXT] HARD FAIL: Exception - ' + captureErr.message);
+                        app.showCaptureErrorInModal(
+                            'Extension Capture Failed\n\n' +
+                            captureErr.message + '\n\n' +
+                            'Please check extension logs for more details.'
                         );
                         return;
                     }
                 }
+                // ===== END EXTENSION-ONLY EXPORT =====
 
                 // Show processing state
                 utils.showToast('Starting video processing...', 'info');

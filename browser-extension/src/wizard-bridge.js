@@ -21,18 +21,18 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '1.6.2',
+        version: '1.7.0',
         extensionId: EXTENSION_ID,
-        features: ['auto_capture', 'network_intercept', 'stream_cache', 'server_fallback', 'browser_upload']
+        features: ['extension_only_capture', 'mediarecorder', 'browser_upload']
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '1.6.2';
-    window.__YVO_EXTENSION_FEATURES__ = ['auto_capture', 'network_intercept', 'stream_cache', 'server_fallback', 'browser_upload'];
+    window.__YVO_EXTENSION_VERSION__ = '1.7.0';
+    window.__YVO_EXTENSION_FEATURES__ = ['extension_only_capture', 'mediarecorder', 'browser_upload'];
 
-    console.log('[YVO Extension] Bridge ready - Video Wizard integration active (v1.6.2 - MediaRecorder fallback fix)');
+    console.log('[EXT] Bridge ready - Extension-only capture v1.7.0');
   }
 
   /**
@@ -52,7 +52,7 @@
         break;
 
       case 'checkExtension':
-        sendResponse(requestId, { installed: true, version: '1.6.2' });
+        sendResponse(requestId, { installed: true, version: '1.7.0' });
         break;
 
       case 'getStoredVideo':
@@ -67,14 +67,25 @@
 
   /**
    * Handle request to capture video from YouTube
-   * Enhanced to support auto-capture when no streams are immediately available
-   * Now supports segment capture with startTime/endTime parameters
+   * EXTENSION-ONLY CAPTURE - No fallbacks
+   * Supports segment capture with startTime/endTime parameters (clipStart/clipEnd from frontend)
    */
   async function handleGetVideoRequest(data, requestId) {
-    const { youtubeUrl, autoCapture = true, startTime, endTime, videoId: providedVideoId } = data || {};
+    const { youtubeUrl, autoCapture = true, startTime, endTime, clipStart, clipEnd, videoId: providedVideoId, quality } = data || {};
+
+    // Support both startTime/endTime and clipStart/clipEnd parameter names
+    const captureStart = startTime !== undefined ? startTime : clipStart;
+    const captureEnd = endTime !== undefined ? endTime : clipEnd;
+
+    console.log(`[EXT][CAPTURE] start videoId=${providedVideoId} url=${youtubeUrl?.substring(0, 50)}...`);
 
     if (!youtubeUrl && !providedVideoId) {
-      sendResponse(requestId, { error: 'No YouTube URL or video ID provided' });
+      console.error('[EXT][CAPTURE] FAIL: No YouTube URL or video ID provided');
+      sendResponse(requestId, {
+        success: false,
+        error: 'No YouTube URL or video ID provided',
+        code: 'MISSING_VIDEO_ID'
+      });
       return;
     }
 
@@ -83,45 +94,47 @@
       const videoId = providedVideoId || extractVideoId(youtubeUrl);
 
       if (!videoId) {
-        sendResponse(requestId, { error: 'Invalid YouTube URL or video ID' });
+        console.error('[EXT][CAPTURE] FAIL: Invalid YouTube URL or video ID');
+        sendResponse(requestId, {
+          success: false,
+          error: 'Invalid YouTube URL or video ID',
+          code: 'INVALID_VIDEO_ID'
+        });
         return;
       }
 
       // Log segment info if provided
-      const segmentInfo = (startTime !== undefined && endTime !== undefined)
-        ? `segment ${startTime}s-${endTime}s`
+      const segmentInfo = (captureStart !== undefined && captureEnd !== undefined)
+        ? `segment ${captureStart}s-${captureEnd}s`
         : 'full video (up to 5 min)';
-      console.log(`[YVO Extension] Capturing video: ${videoId}, ${segmentInfo}, autoCapture: ${autoCapture}`);
+      console.log(`[EXT][CAPTURE] Capturing video: ${videoId}, ${segmentInfo}, autoCapture: ${autoCapture}, quality: ${quality || 'default'}`);
 
       // Send message to background script to capture video
-      // This may take a few seconds if auto-capture needs to open a new tab
       // Pass segment times if provided for precise capture
       const response = await chrome.runtime.sendMessage({
         action: 'captureVideoForWizard',
         videoId: videoId,
         youtubeUrl: youtubeUrl,
         autoCapture: autoCapture,
-        startTime: startTime,    // Segment start time in seconds
-        endTime: endTime         // Segment end time in seconds
+        startTime: captureStart,    // Segment start time in seconds
+        endTime: captureEnd,        // Segment end time in seconds
+        quality: quality
       });
 
       if (response?.success) {
         // Log the capture source for debugging
         const source = response.streamData?.source || 'none';
         const uploadedToStorage = response.streamData?.uploadedToStorage || false;
-        const uploadFailed = response.streamData?.uploadFailed || false;
-        const uploadError = response.streamData?.uploadError || null;
+        const videoUrl = response.streamData?.videoUrl || null;
+        const videoSize = response.streamData?.videoSize || 0;
+        const hasVideoData = !!response.streamData?.videoData;
 
-        console.log(`[YVO Extension] Capture successful, source: ${source}`);
+        console.log(`[EXT][CAPTURE] SUCCESS source=${source} uploadedToStorage=${uploadedToStorage}`);
 
-        if (uploadedToStorage) {
-          console.log(`[YVO Extension] ✓ Video uploaded to Firebase Storage (bypasses IP-restriction)`);
-          console.log(`[YVO Extension] Storage URL: ${response.streamData?.videoUrl}`);
-        } else if (uploadFailed) {
-          console.warn(`[YVO Extension] ✗ Browser upload FAILED: ${uploadError}`);
-          console.warn(`[YVO Extension] Falling back to stream URLs (will likely fail due to IP-restriction)`);
-        } else {
-          console.warn(`[YVO Extension] ⚠ No upload attempted - using raw stream URLs`);
+        if (uploadedToStorage && videoUrl) {
+          console.log(`[EXT][UPLOAD] success url=${videoUrl}`);
+        } else if (hasVideoData) {
+          console.log(`[EXT][CAPTURE] Local capture success, size=${(videoSize / 1024 / 1024).toFixed(2)}MB`);
         }
 
         sendResponse(requestId, {
@@ -132,16 +145,24 @@
           captureSource: source
         });
       } else {
-        console.warn('[YVO Extension] Capture failed:', response?.error);
+        const errorMsg = response?.error || 'Failed to capture video';
+        console.error(`[EXT][CAPTURE] FAIL: ${errorMsg}`);
         sendResponse(requestId, {
           success: false,
-          error: response?.error || 'Failed to capture video'
+          error: errorMsg,
+          code: response?.code || 'CAPTURE_FAILED',
+          details: response?.details || null
         });
       }
 
     } catch (error) {
-      console.error('[YVO Extension] Capture error:', error);
-      sendResponse(requestId, { success: false, error: error.message });
+      console.error(`[EXT][CAPTURE] EXCEPTION: ${error.message}`);
+      sendResponse(requestId, {
+        success: false,
+        error: error.message,
+        code: 'EXCEPTION',
+        details: error.stack
+      });
     }
   }
 
