@@ -1267,7 +1267,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     if (!youtubeTab) {
       // Use requestedStartTime if provided, otherwise start from beginning
       const openAtTime = requestedStartTime || 0;
-      console.log(`[YVO Background] Opening YouTube tab for capture at ${openAtTime}s...`);
+      console.log(`[YVO Background] Opening YouTube tab for MediaRecorder capture at ${openAtTime}s...`);
       // Open at the start timestamp so video loads at the right position
       const startSeconds = Math.floor(openAtTime);
       let url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
@@ -1280,7 +1280,8 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         url += `?t=${startSeconds}`;
       }
       console.log(`[YVO Background] Opening URL: ${url}`);
-      youtubeTab = await chrome.tabs.create({ url, active: true });
+      // CRITICAL: Open in background (active: false) to avoid stealing focus from Video Wizard
+      youtubeTab = await chrome.tabs.create({ url, active: false });
 
       // Wait longer for page to load and video to buffer at the target position
       console.log(`[YVO Background] Waiting for video to load at timestamp...`);
