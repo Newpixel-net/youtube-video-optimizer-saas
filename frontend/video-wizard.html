@@ -11319,15 +11319,30 @@
                         // Check capture result
                         if (!captureResult || !captureResult.success) {
                             var errorMessage = captureResult?.error || 'Unknown capture error';
-                            console.error('[EXPORT][EXT] HARD FAIL: Capture failed - ' + errorMessage);
-                            app.showCaptureErrorInModal(
-                                'Extension Capture Failed\n\n' +
-                                errorMessage + '\n\n' +
-                                'Please ensure:\n' +
-                                '• The YouTube video loads and plays in your browser\n' +
-                                '• The video is not age-restricted or unavailable\n' +
-                                '• You have a stable internet connection'
-                            );
+                            var errorCode = captureResult?.code || 'UNKNOWN';
+                            console.error('[EXPORT][EXT] HARD FAIL: Capture failed - ' + errorMessage + ' (code: ' + errorCode + ')');
+
+                            // Special handling for NO_YOUTUBE_TAB error - user needs to open video first
+                            if (errorCode === 'NO_YOUTUBE_TAB') {
+                                var youtubeUrl = captureResult?.details?.youtubeUrl || ('https://www.youtube.com/watch?v=' + videoId);
+                                app.showCaptureErrorInModal(
+                                    'Video Not Open\n\n' +
+                                    'Please open this video on YouTube first:\n\n' +
+                                    '1. Click the button below to open the video\n' +
+                                    '2. Wait for the video to load (you can pause it)\n' +
+                                    '3. Return here and click Export again\n\n' +
+                                    '<a href="' + youtubeUrl + '" target="_blank" style="display:inline-block;padding:10px 20px;background:#ff0000;color:white;text-decoration:none;border-radius:5px;margin-top:10px;">Open on YouTube</a>'
+                                );
+                            } else {
+                                app.showCaptureErrorInModal(
+                                    'Extension Capture Failed\n\n' +
+                                    errorMessage + '\n\n' +
+                                    'Please ensure:\n' +
+                                    '• The YouTube video is open in another tab\n' +
+                                    '• The video is not age-restricted or unavailable\n' +
+                                    '• You have a stable internet connection'
+                                );
+                            }
                             return;
                         }
 
