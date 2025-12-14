@@ -6561,7 +6561,12 @@
                 features: [],        // Extension capabilities (auto_capture, network_intercept, etc.)
                 checking: true,      // Initially checking for extension
                 capturedVideo: null  // Video data captured by extension
-            }
+            },
+
+            // Canonical Source Asset - stored video for reliable export
+            // Captured during analysis and saved to Firebase Storage
+            // Export uses this instead of re-capturing at export time
+            sourceAsset: null  // { storageUrl, storagePath, duration, format, capturedAt, source }
         };
 
         // Mock data for testing
@@ -9346,6 +9351,69 @@
 
                         render();
 
+                        // ===== CANONICAL SOURCE ASSET CAPTURE =====
+                        // After analysis, capture and upload the full video as sourceAsset
+                        // This is required for export to work reliably
+                        if (state.extension.installed && !state.videoInput.isUpload && state.videoInput.videoData?.videoId) {
+                            console.log('[Video Wizard] Starting source asset capture...');
+                            state.analysis.steps.push({ name: 'Capturing video for export...', status: 'processing' });
+                            render();
+
+                            try {
+                                var videoDuration = state.videoInput.videoData?.duration || 300;
+                                utils.showToast('Capturing video for export (this may take 1-2 minutes)...', 'info');
+
+                                // Capture full video (not segment) for sourceAsset
+                                var sourceCapture = await sendExtensionRequest('captureVideoForWizard', {
+                                    videoId: state.videoInput.videoData.videoId,
+                                    youtubeUrl: state.videoInput.url || ('https://www.youtube.com/watch?v=' + state.videoInput.videoData.videoId),
+                                    autoCapture: true
+                                    // No startTime/endTime - capture full video
+                                });
+
+                                if (sourceCapture && sourceCapture.success && sourceCapture.streamData?.uploadedToStorage) {
+                                    console.log('[Video Wizard] Source asset captured successfully');
+
+                                    // Save sourceAsset to project
+                                    var wizardUpdateSourceAsset = functions.httpsCallable('wizardUpdateSourceAsset');
+                                    var updateResult = await wizardUpdateSourceAsset({
+                                        projectId: state.projectId,
+                                        sourceAsset: {
+                                            storageUrl: sourceCapture.streamData.videoUrl,
+                                            storagePath: sourceCapture.streamData.storagePath || null,
+                                            duration: videoDuration,
+                                            format: sourceCapture.streamData.mimeType || 'video/mp4',
+                                            fileSize: sourceCapture.streamData.fileSize || 0,
+                                            capturedAt: Date.now(),
+                                            source: sourceCapture.streamData.source || 'extension_capture'
+                                        }
+                                    });
+
+                                    if (updateResult.data.success) {
+                                        state.sourceAsset = updateResult.data.sourceAsset;
+                                        console.log('[Video Wizard] Source asset saved to project');
+                                        utils.showToast('Video captured! Ready for export.', 'success');
+                                    }
+
+                                    state.analysis.steps[state.analysis.steps.length - 1].status = 'done';
+                                    render();
+                                } else {
+                                    // Source capture failed - warn user but allow them to proceed
+                                    // They can try capturing again at export time (legacy fallback)
+                                    console.warn('[Video Wizard] Source asset capture failed:', sourceCapture?.error);
+                                    state.analysis.steps[state.analysis.steps.length - 1].status = 'warning';
+                                    utils.showToast('Video capture incomplete. You may need to capture again during export.', 'warning');
+                                    render();
+                                }
+                            } catch (captureError) {
+                                console.warn('[Video Wizard] Source asset capture error:', captureError.message);
+                                state.analysis.steps[state.analysis.steps.length - 1].status = 'warning';
+                                utils.showToast('Video capture incomplete. You may need to capture again during export.', 'warning');
+                                render();
+                            }
+                        }
+                        // ===== END SOURCE ASSET CAPTURE =====
+
                         // Transition to clip selection after a moment
                         setTimeout(function() {
                             state.currentStep = 3;
@@ -11118,96 +11186,51 @@
                 console.log('Audio Mix:', JSON.stringify(clipSettings.audioMix, null, 2));
                 console.log('=============================');
 
-                // Get clip timing info for extension capture
+                // Get clip timing info
                 var clip = state.clips.find(function(c) { return c.id === clipId; });
                 var clipStartTime = clip ? clip.startTime : 0;
                 var clipEndTime = clip ? clip.endTime : 60;
 
-                // Check if this is an uploaded video (no need for extension capture)
+                // Check if this is an uploaded video
                 var isUploadedVideo = state.videoInput.isUpload || false;
 
-                // PRIORITY: Use browser extension for YouTube videos (most reliable method)
-                // The extension captures video using MediaRecorder and uploads to storage,
-                // bypassing all YouTube download restrictions
-                var extensionCaptureData = null;
+                // ===== CANONICAL SOURCE ASSET ARCHITECTURE =====
+                // Export uses the sourceAsset captured during analysis
+                // NO re-capture at export time - this is the key architectural change
+                // that makes export reliable
 
-                if (!isUploadedVideo && state.extension.installed && state.videoInput.videoData?.videoId) {
-                    console.log('[Video Wizard] Extension installed - triggering MediaRecorder capture for clip...');
+                console.log('[Video Wizard] Export check:', {
+                    hasSourceAsset: !!state.sourceAsset,
+                    isUploadedVideo: isUploadedVideo,
+                    clipStart: clipStartTime,
+                    clipEnd: clipEndTime
+                });
 
-                    // Show capturing state in modal
-                    var clipDuration = clipEndTime - clipStartTime;
-                    app.showCapturingStateInModal('Capturing ' + Math.round(clipDuration) + ' seconds of video...');
-
-                    try {
-                        // Request fresh capture from extension with specific clip timing
-                        var captureResult = await sendExtensionRequest('captureVideoForWizard', {
-                            videoId: state.videoInput.videoData.videoId,
-                            youtubeUrl: state.videoInput.url || ('https://www.youtube.com/watch?v=' + state.videoInput.videoData.videoId),
-                            autoCapture: true,
-                            startTime: clipStartTime,
-                            endTime: clipEndTime
-                        });
-
-                        if (captureResult && captureResult.success && captureResult.streamData) {
-                            console.log('[Video Wizard] Extension capture successful:', captureResult.streamData.source);
-
-                            // Check if MediaRecorder capture actually worked and uploaded to storage
-                            var uploadedToStorage = captureResult.streamData.uploadedToStorage || false;
-
-                            if (uploadedToStorage) {
-                                // Success! Video was captured and uploaded to our storage
-                                extensionCaptureData = {
-                                    videoUrl: captureResult.streamData.videoUrl,
-                                    audioUrl: captureResult.streamData.audioUrl || null,
-                                    quality: captureResult.streamData.quality || 'captured',
-                                    mimeType: captureResult.streamData.mimeType || 'video/webm',
-                                    capturedAt: captureResult.streamData.capturedAt || Date.now(),
-                                    source: captureResult.streamData.source || 'mediarecorder_capture',
-                                    uploadedToStorage: true,
-                                    captureStartTime: captureResult.streamData.captureStartTime || clipStartTime,
-                                    captureEndTime: captureResult.streamData.captureEndTime || clipEndTime
-                                };
-                                utils.showToast('Video captured and ready for processing!', 'success');
-                            } else if (captureResult.streamData.videoData) {
-                                // Capture succeeded but server upload failed - offer direct download
-                                console.warn('[Video Wizard] Server unavailable, offering direct download');
-                                console.warn('[Video Wizard] Server error:', captureResult.streamData.uploadError);
-                                app.showServerUnavailableModal(captureResult.streamData, clipId);
-                                return; // Wait for user action
-                            } else {
-                                // Capture returned but no upload and no video data
-                                var captureError = captureResult.streamData.uploadError || 'Video capture incomplete. Please ensure the YouTube video is open in a browser tab.';
-                                console.error('[Video Wizard] Capture returned but not uploaded:', captureError);
-                                app.showCaptureErrorInModal(captureError);
-                                return; // ABORT - don't submit invalid job
-                            }
-                        } else {
-                            // Capture failed completely - show error in modal and abort
-                            var errorMsg = captureResult?.error || captureResult?.message || 'Unknown capture error';
-                            console.error('[Video Wizard] Extension capture failed:', errorMsg);
-                            app.showCaptureErrorInModal(errorMsg);
-                            return; // ABORT - don't submit invalid job
-                        }
-                    } catch (captureError) {
-                        console.error('[Video Wizard] Extension capture exception:', captureError.message);
-                        app.showCaptureErrorInModal('Capture timeout: ' + captureError.message);
-                        return; // ABORT - don't submit invalid job
-                    }
-                } else if (!isUploadedVideo && !state.extension.installed) {
-                    console.log('[Video Wizard] Extension not installed - server will attempt YouTube download (may fail)');
-                    utils.showToast('Starting processing (extension not installed - may be slower)...', 'info');
-                } else {
-                    utils.showToast('Starting video processing...', 'info');
+                // Validate we have a source asset (captured during analysis)
+                if (!isUploadedVideo && !state.sourceAsset) {
+                    console.error('[Video Wizard] No sourceAsset available for export');
+                    app.showCaptureErrorInModal(
+                        'Video source not captured yet.\n\n' +
+                        'The video needs to be captured during analysis before you can export clips.\n\n' +
+                        'Please go back to "Video Input", re-enter the URL, and wait for the capture to complete.'
+                    );
+                    return;
                 }
 
+                // Show processing state
+                utils.showToast('Starting video processing...', 'info');
+                app.showCapturingStateInModal('Sending to processor...');
+
                 try {
+                    // Call backend with clip timing - backend will use stored sourceAsset
+                    // NO extensionCaptureData needed - backend reads from project.sourceAsset
                     var wizardProcessClip = functions.httpsCallable('wizardProcessClip');
                     var result = await wizardProcessClip({
                         projectId: state.projectId,
                         clipId: clipId,
                         quality: quality,
-                        settings: clipSettings,
-                        extensionCaptureData: extensionCaptureData  // Pass captured data to backend
+                        settings: clipSettings
+                        // NOTE: extensionCaptureData removed - backend uses sourceAsset from project
                     });
 
                     if (result.data.success) {
@@ -11233,7 +11256,22 @@
                     }
                 } catch (error) {
                     console.error('Video processing error:', error);
-                    utils.showToast('Error: ' + (error.message || 'Failed to start processing'), 'error');
+
+                    // Handle specific error types with better messages
+                    var errorMessage = error.message || 'Failed to start processing';
+
+                    // Check for 'failed-precondition' error (sourceAsset missing)
+                    if (error.code === 'failed-precondition' || errorMessage.includes('Video source not available')) {
+                        app.showCaptureErrorInModal(
+                            'Video source not captured.\n\n' +
+                            'Please go back to "Video Input" and re-analyze the video.\n' +
+                            'Make sure to wait for the video capture to complete before proceeding to clips.'
+                        );
+                    } else {
+                        // Generic error
+                        app.closeDownloadModal();
+                        utils.showToast('Export Error: ' + errorMessage, 'error');
+                    }
                 }
             },
 

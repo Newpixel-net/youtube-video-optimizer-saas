@@ -16338,7 +16338,13 @@ IMPORTANT:
       contentType: analysisResult.contentType || 'general',
       status: 'analyzed',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+
+      // CANONICAL SOURCE ASSET - for reliable export
+      // This is the single source of truth for video data during export
+      // If present, export will use this instead of re-capturing
+      sourceAsset: null,  // Will be populated by frontend after capture upload
+      isUpload: false     // Will be set to true for uploaded videos
     };
 
     const projectRef = await db.collection('wizardProjects').add(projectData);
@@ -16358,6 +16364,77 @@ IMPORTANT:
     console.error('Wizard analyze video error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to analyze video.'));
+  }
+});
+
+/**
+ * wizardUpdateSourceAsset - Updates project with canonical source asset
+ * Called by frontend after successfully capturing and uploading video during analysis
+ *
+ * The sourceAsset is the single source of truth for export operations.
+ * Once set, export will use this asset instead of re-capturing.
+ */
+exports.wizardUpdateSourceAsset = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sourceAsset } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  if (!sourceAsset || !sourceAsset.storageUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Valid sourceAsset with storageUrl required');
+  }
+
+  try {
+    // Verify project ownership
+    const projectRef = db.collection('wizardProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Validate sourceAsset structure
+    const validatedSourceAsset = {
+      storageUrl: sourceAsset.storageUrl,        // Firebase Storage download URL
+      storagePath: sourceAsset.storagePath || null,  // gs:// path if available
+      duration: sourceAsset.duration || project.videoData?.duration || 0,
+      format: sourceAsset.format || 'video/mp4',
+      fileSize: sourceAsset.fileSize || 0,
+      capturedAt: sourceAsset.capturedAt || Date.now(),
+      source: sourceAsset.source || 'extension_capture'  // 'extension_capture' | 'direct_upload' | 'server_download'
+    };
+
+    console.log(`[wizardUpdateSourceAsset] Updating project ${projectId} with sourceAsset:`, {
+      storageUrl: validatedSourceAsset.storageUrl.substring(0, 80) + '...',
+      duration: validatedSourceAsset.duration,
+      source: validatedSourceAsset.source
+    });
+
+    // Update project with sourceAsset
+    await projectRef.update({
+      sourceAsset: validatedSourceAsset,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`[wizardUpdateSourceAsset] Project ${projectId} sourceAsset updated successfully`);
+
+    return {
+      success: true,
+      message: 'Source asset saved. Video is ready for export.',
+      sourceAsset: validatedSourceAsset
+    };
+
+  } catch (error) {
+    console.error('[wizardUpdateSourceAsset] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to update source asset');
   }
 });
 
@@ -18054,12 +18131,18 @@ exports.wizardUpdateProjectStatus = functions.https.onCall(async (data, context)
 /**
  * wizardProcessClip - Creates a video processing job for a clip
  * This sets up the infrastructure for FFmpeg-based video processing
+ *
+ * CANONICAL SOURCE ASSET ARCHITECTURE:
+ * Export REQUIRES a sourceAsset (video file stored in our storage).
+ * The sourceAsset is created during analysis when user captures video.
+ * This eliminates unreliable re-capture at export time.
  */
 exports.wizardProcessClip = functions
   .runWith({ timeoutSeconds: 540, memory: '2GB' })
   .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { projectId, clipId, quality, settings, extensionCaptureData } = data;
+  const { projectId, clipId, quality, settings } = data;
+  // NOTE: extensionCaptureData is no longer used - we use sourceAsset from project
 
   if (!projectId || !clipId) {
     throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
@@ -18088,24 +18171,43 @@ exports.wizardProcessClip = functions
     // Get clip settings (from project or from request)
     const clipSettings = settings || project.clipSettings?.[clipId] || {};
 
-    // PRIORITY: Use extension capture data from request (captured during export)
-    // This is the clip-specific capture done when user clicks "Start Processing"
-    // Falls back to project-level extension data if available
-    let extensionStreamData = null;
-    if (extensionCaptureData && extensionCaptureData.videoUrl) {
-      console.log(`[wizardProcessClip] Using fresh extension capture for ${clipId}:`, {
-        hasVideoUrl: true,
-        source: extensionCaptureData.source,
-        uploadedToStorage: extensionCaptureData.uploadedToStorage,
-        capturedAt: extensionCaptureData.capturedAt
-      });
-      extensionStreamData = extensionCaptureData;
-    } else if (project.videoData?.extensionStreamData) {
-      console.log(`[wizardProcessClip] Using project-level extension data for ${clipId}`);
-      extensionStreamData = project.videoData.extensionStreamData;
+    // CANONICAL SOURCE ASSET CHECK
+    // Export REQUIRES sourceAsset - no more unreliable re-capture at export time
+    const sourceAsset = project.sourceAsset;
+    const isUploadedVideo = project.isUpload && project.videoData?.uploadedVideoUrl;
+
+    console.log(`[wizardProcessClip] Checking source for ${clipId}:`, {
+      hasSourceAsset: !!sourceAsset,
+      sourceAssetUrl: sourceAsset?.storageUrl?.substring(0, 60) + '...' || 'none',
+      isUploadedVideo,
+      projectId
+    });
+
+    // Validate source asset exists
+    if (!sourceAsset && !isUploadedVideo) {
+      console.error(`[wizardProcessClip] ERROR: No sourceAsset for project ${projectId}`);
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Video source not available. Please go back to Analysis and capture the video first. ' +
+        'Make sure the capture completes before proceeding to clip selection.'
+      );
     }
 
-    // Create processing job record
+    // Determine the video source URL for processing
+    let videoSourceUrl = null;
+    let videoSourceType = 'unknown';
+
+    if (sourceAsset && sourceAsset.storageUrl) {
+      videoSourceUrl = sourceAsset.storageUrl;
+      videoSourceType = 'source_asset';
+      console.log(`[wizardProcessClip] Using sourceAsset: ${videoSourceUrl.substring(0, 60)}...`);
+    } else if (isUploadedVideo) {
+      videoSourceUrl = project.videoData.uploadedVideoUrl;
+      videoSourceType = 'uploaded_video';
+      console.log(`[wizardProcessClip] Using uploaded video: ${videoSourceUrl.substring(0, 60)}...`);
+    }
+
+    // Create processing job record with canonical source
     const processingJob = {
       userId: uid,
       projectId,
@@ -18113,14 +18215,23 @@ exports.wizardProcessClip = functions
       videoId: project.videoId,
       videoUrl: project.videoUrl,
 
-      // For uploaded videos, include the upload info
+      // CANONICAL SOURCE - single source of truth for video data
+      videoSourceUrl: videoSourceUrl,
+      videoSourceType: videoSourceType,
+
+      // Legacy fields (for backward compatibility)
       isUpload: project.isUpload || false,
-      uploadedVideoUrl: project.videoData?.uploadedVideoUrl || project.videoUrl,
+      uploadedVideoUrl: videoSourceUrl,
       uploadedVideoPath: project.uploadedVideoPath || null,
 
-      // Extension stream data (from export capture or project)
-      extensionStreamData: extensionStreamData || null,
-      hasExtensionStream: !!extensionStreamData,
+      // Mark that we have a valid source (replaces extensionStreamData logic)
+      hasExtensionStream: true,  // Always true now since we require sourceAsset
+      extensionStreamData: {
+        videoUrl: videoSourceUrl,
+        source: videoSourceType,
+        uploadedToStorage: true,
+        capturedAt: sourceAsset?.capturedAt || Date.now()
+      },
 
       // Clip timing
       startTime: clip.startTime,
