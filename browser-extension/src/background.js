@@ -7,6 +7,15 @@
 
 console.log('[EXT][BG] Service worker starting...');
 
+// Global error handler to catch any unhandled errors
+self.addEventListener('error', (event) => {
+  console.error('[EXT][BG] Unhandled error:', event.error);
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  console.error('[EXT][BG] Unhandled promise rejection:', event.reason);
+});
+
 // State
 let currentCapture = null;
 let isCapturing = false;
@@ -166,14 +175,18 @@ setInterval(() => {
  * Message handler for extension communication
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Log for debugging
-  console.log('[EXT][BG] Message:', message.action, 'from:', sender?.url || 'unknown');
+  // Log EVERY message for debugging
+  console.log('[EXT][BG] === MESSAGE RECEIVED ===');
+  console.log('[EXT][BG] Action:', message?.action);
+  console.log('[EXT][BG] From:', sender?.url || sender?.origin || 'unknown');
 
-  switch (message.action) {
-    // Video Wizard integration
-    case 'captureVideoForWizard':
-      handleCaptureForWizard(message, sendResponse);
-      return true;
+  try {
+    switch (message.action) {
+      // Video Wizard integration
+      case 'captureVideoForWizard':
+        console.log('[EXT][BG] Handling captureVideoForWizard...');
+        handleCaptureForWizard(message, sendResponse);
+        return true;
 
     case 'getStoredVideoData':
       sendResponse({ videoData: storedVideoData });
@@ -222,7 +235,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     default:
+      console.log('[EXT][BG] Unknown action:', message?.action);
       return false;
+    }
+  } catch (error) {
+    console.error('[EXT][BG] Error in message handler:', error);
+    sendResponse({ success: false, error: error.message });
+    return false;
   }
 });
 
