@@ -730,8 +730,10 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
 
       console.log(`[EXT][BG] Opened capture tab ${captureTab.id} (active for autoplay)`);
 
-      // Immediately switch back to the original tab (within 100ms)
-      // The brief activation is enough to grant autoplay permission
+      // Wait 2 seconds before switching back - YouTube needs time to:
+      // 1. Load the page
+      // 2. Initialize the video player
+      // 3. Start autoplay (only works while tab is active/focused)
       if (originalTabId) {
         setTimeout(async () => {
           try {
@@ -740,7 +742,7 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
           } catch (e) {
             // Original tab might have been closed
           }
-        }, 100);
+        }, 2000);  // 2 seconds delay for autoplay to trigger
       }
 
       // Track this tab for the video ID
