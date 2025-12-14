@@ -226,75 +226,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 /**
  * Handle video capture request from Video Wizard
- * This captures video info and stream URLs to pass to the wizard
+ * EXTENSION-ONLY CAPTURE - MediaRecorder is the primary method
  *
- * ENHANCED: If no streams are available, automatically opens YouTube tab to capture them
  * NOW SUPPORTS: Segment capture with startTime/endTime parameters
  */
 async function handleCaptureForWizard(message, sendResponse) {
-  const { videoId, youtubeUrl, autoCapture = true, startTime, endTime } = message;
+  const { videoId, youtubeUrl, autoCapture = true, startTime, endTime, quality } = message;
+
+  console.log(`[EXT][CAPTURE] start videoId=${videoId} startTime=${startTime} endTime=${endTime}`);
 
   if (!videoId || !isValidVideoId(videoId)) {
-    sendResponse({ success: false, error: 'Invalid video ID' });
+    console.error('[EXT][CAPTURE] FAIL: Invalid video ID');
+    sendResponse({ success: false, error: 'Invalid video ID', code: 'INVALID_VIDEO_ID' });
     return;
   }
 
-  console.log(`[YVO Background] Capture request for video: ${videoId}`);
+  console.log(`[EXT][CAPTURE] Capture request for video: ${videoId}, autoCapture=${autoCapture}`);
 
   // Helper function to process captured streams
-  // PRIORITY: Try browser-side download first (works in background), then MediaRecorder as backup
+  // PRIMARY: Use MediaRecorder capture (most reliable for extension-only export)
   async function processAndUploadStreams(intercepted, source) {
-    console.log(`[YVO Background] processAndUploadStreams called with source: ${source}`);
+    console.log(`[EXT][CAPTURE] processAndUploadStreams source=${source}`);
 
     const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
 
-    // METHOD 1: Try browser-side download and upload (PREFERRED - works in background!)
-    // This downloads the intercepted stream URLs in the browser (same IP as YouTube)
-    // and uploads to our server. Works without opening new tabs.
-    if (intercepted?.videoUrl) {
-      console.log(`[YVO Background] Trying browser-side download (preferred method - works in background)`);
-
-      try {
-        const downloadResult = await downloadAndUploadStream(videoId, intercepted.videoUrl, intercepted.audioUrl);
-
-        if (downloadResult.success) {
-          console.log(`[YVO Background] ✓ Browser-side download and upload successful!`);
-          return {
-            success: true,
-            videoInfo: videoInfo,
-            streamData: {
-              videoUrl: downloadResult.videoStorageUrl,
-              audioUrl: downloadResult.audioStorageUrl || null,
-              quality: 'downloaded',
-              mimeType: 'video/mp4',
-              capturedAt: Date.now(),
-              source: 'browser_download',
-              uploadedToStorage: true
-            },
-            message: 'Video downloaded and uploaded successfully.'
-          };
-        } else {
-          console.warn(`[YVO Background] Browser-side download failed: ${downloadResult.error}`);
-          console.log(`[YVO Background] Falling back to MediaRecorder capture...`);
-        }
-      } catch (downloadError) {
-        console.warn(`[YVO Background] Browser-side download threw exception: ${downloadError.message}`);
-        console.log(`[YVO Background] Falling back to MediaRecorder capture...`);
-      }
-    }
-
-    // METHOD 2: MediaRecorder capture (backup - requires YouTube tab at specific timestamp)
+    // PRIMARY METHOD: MediaRecorder capture (most reliable - captures directly from video element)
+    // This bypasses all URL restrictions because we capture what the player displays
     const segmentInfo = (startTime !== undefined && endTime !== undefined)
       ? `segment ${startTime}s-${endTime}s`
       : 'auto (up to 5 min)';
-    console.log(`[YVO Background] Trying MediaRecorder capture - ${segmentInfo}`);
+    console.log(`[EXT][CAPTURE] MediaRecorder capture - ${segmentInfo}`);
 
     let uploadResult;
     try {
       uploadResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
-      console.log(`[YVO Background] MediaRecorder capture returned:`, uploadResult.success, uploadResult.error || 'no error');
+      console.log(`[EXT][CAPTURE] MediaRecorder returned: success=${uploadResult.success} error=${uploadResult.error || 'none'}`);
     } catch (captureError) {
-      console.error(`[YVO Background] MediaRecorder capture threw exception:`, captureError);
+      console.error(`[EXT][CAPTURE] MediaRecorder exception: ${captureError.message}`);
       uploadResult = { success: false, error: captureError.message };
     }
 
@@ -304,12 +272,13 @@ async function handleCaptureForWizard(message, sendResponse) {
       // Check if we have server storage URL or local fallback
       if (uploadResult.uploadedToStorage && uploadResult.videoStorageUrl) {
         // Server upload succeeded
-        console.log(`[YVO Background] ✓ MediaRecorder capture and upload successful!`);
+        console.log(`[EXT][UPLOAD] success url=${uploadResult.videoStorageUrl}`);
         return {
           success: true,
           videoInfo: videoInfo,
           streamData: {
             videoUrl: uploadResult.videoStorageUrl,
+            storagePath: uploadResult.storagePath || null,
             quality: 'captured',
             mimeType: uploadResult.mimeType || 'video/webm',
             capturedAt: Date.now(),
@@ -323,15 +292,15 @@ async function handleCaptureForWizard(message, sendResponse) {
           message: `Video segment (${capturedSegment.startTime || 0}s-${capturedSegment.endTime || '?'}s) captured and uploaded.`
         };
       } else if (uploadResult.videoData) {
-        // Capture succeeded but server upload failed - return video data for direct download
-        console.log(`[YVO Background] ✓ MediaRecorder capture successful, but server unavailable. Returning video data for direct download.`);
-        console.log(`[YVO Background] Server error: ${uploadResult.uploadError}`);
+        // Capture succeeded but server upload failed - return video data for frontend to upload
+        console.log(`[EXT][CAPTURE] blob size=${(uploadResult.videoSize / 1024 / 1024).toFixed(2)}MB`);
+        console.warn(`[EXT][UPLOAD] server unavailable: ${uploadResult.uploadError}`);
         return {
           success: true,
           videoInfo: videoInfo,
           streamData: {
             videoUrl: uploadResult.blobUrl || null,
-            videoData: uploadResult.videoData,  // Base64 encoded video
+            videoData: uploadResult.videoData,  // Base64 encoded video for frontend upload
             videoSize: uploadResult.videoSize,
             quality: 'captured_local',
             mimeType: uploadResult.mimeType || 'video/webm',
@@ -344,34 +313,54 @@ async function handleCaptureForWizard(message, sendResponse) {
             captureEndTime: capturedSegment.endTime,
             captureDuration: capturedSegment.duration
           },
-          message: `Video captured successfully but server is unavailable. Video ready for direct download.`
+          message: `Video captured locally. Frontend will upload to storage.`
         };
       }
     }
 
-    // Both methods failed - return failure so frontend can handle properly
-    console.error(`[YVO Background] ✗ All capture methods failed`);
-    console.error(`[YVO Background] Last error: ${uploadResult.error}`);
+    // Capture failed - return detailed error
+    const errorMsg = uploadResult.error || 'MediaRecorder capture failed';
+    console.error(`[EXT][CAPTURE] FAIL: ${errorMsg}`);
     return {
-      success: false,  // Return failure so frontend knows capture failed
-      error: `All capture methods failed. ${uploadResult.error || 'Please ensure YouTube video is open in a browser tab and try again.'}`,
+      success: false,
+      error: errorMsg,
+      code: 'CAPTURE_FAILED',
       videoInfo: videoInfo,
-      captureError: uploadResult.error,
-      message: `Capture failed: ${uploadResult.error}. Please ensure YouTube is open in another tab and try again.`
+      details: {
+        captureError: uploadResult.error,
+        message: 'Please ensure the YouTube video loads and plays in your browser.'
+      }
     };
   }
 
   try {
-    // PRIORITY 1: Check if we already have intercepted streams (from previous playback)
-    let intercepted = getInterceptedStreams(videoId);
-    if (intercepted && intercepted.videoUrl) {
-      console.log(`[YVO Background] Using cached intercepted streams for ${videoId}`);
-      const result = await processAndUploadStreams(intercepted, 'network_intercept_cached');
-      sendResponse(result);
-      return;
-    }
+    // EXTENSION-ONLY CAPTURE: Use MediaRecorder directly (most reliable method)
+    // MediaRecorder captures directly from the video element, bypassing all URL restrictions
 
-    // Find existing YouTube tab with this video
+    console.log(`[EXT][CAPTURE] Starting MediaRecorder capture for ${videoId}`);
+
+    // Call MediaRecorder capture directly - it will handle opening a tab if needed
+    const result = await processAndUploadStreams(null, 'mediarecorder_direct');
+    sendResponse(result);
+    return;
+  } catch (captureError) {
+    console.error(`[EXT][CAPTURE] FAIL: ${captureError.message}`);
+    const basicInfo = await getBasicVideoInfo(videoId, youtubeUrl);
+    sendResponse({
+      success: false,
+      error: captureError.message,
+      code: 'CAPTURE_EXCEPTION',
+      videoInfo: basicInfo,
+      details: { stack: captureError.stack }
+    });
+    return;
+  }
+
+  // Legacy code paths below are kept for reference but should not be reached
+  // The code above handles all cases via MediaRecorder
+
+  try {
+    // Find existing YouTube tab with this video (legacy fallback)
     const tabs = await chrome.tabs.query({
       url: ['*://www.youtube.com/*', '*://youtube.com/*']
     });
@@ -386,139 +375,6 @@ async function handleCaptureForWizard(message, sendResponse) {
         return false;
       }
     });
-
-    // If no tab exists and autoCapture is enabled, open a new tab to capture streams
-    if (!targetTab && autoCapture) {
-      console.log(`[YVO Background] No YouTube tab found, opening video to capture streams...`);
-
-      let captureTabId = null;
-      let captureSucceeded = false;
-
-      try {
-        const captureResult = await openAndCaptureStreams(videoId, youtubeUrl);
-        captureTabId = captureResult.captureTabId;  // Save tab ID to close later
-
-        if (captureResult.success && captureResult.streamData) {
-          // Process the captured streams - download and upload to server
-          // The capture tab is still open so downloadAndUploadStream can use it!
-          const interceptedData = {
-            videoUrl: captureResult.streamData.videoUrl,
-            audioUrl: captureResult.streamData.audioUrl,
-            capturedAt: captureResult.streamData.capturedAt
-          };
-          const result = await processAndUploadStreams(interceptedData, 'network_intercept_auto');
-          // Merge video info from capture result
-          result.videoInfo = captureResult.videoInfo || result.videoInfo;
-
-          // NOW close the capture tab (after download/upload is complete)
-          if (captureTabId) {
-            console.log(`[YVO Background] Closing capture tab ${captureTabId}`);
-            try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
-          }
-
-          sendResponse(result);
-          return;
-        } else {
-          console.warn(`[YVO Background] Network interception failed:`, captureResult.error);
-          // DON'T close the tab yet - try MediaRecorder as fallback
-          console.log(`[YVO Background] Trying MediaRecorder capture as fallback...`);
-        }
-      } catch (autoCaptureError) {
-        console.warn(`[YVO Background] Auto-capture error:`, autoCaptureError.message);
-        // DON'T close the tab yet - try MediaRecorder as fallback
-      }
-
-      // Re-check for intercepted streams after auto-capture attempt
-      intercepted = getInterceptedStreams(videoId);
-      if (intercepted && intercepted.videoUrl) {
-        const result = await processAndUploadStreams(intercepted, 'network_intercept_auto');
-        // Close tab after success
-        if (captureTabId) {
-          try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
-        }
-        sendResponse(result);
-        return;
-      }
-
-      // CRITICAL FIX: Network interception failed - try MediaRecorder capture
-      // This is the key fallback that makes export work reliably
-      // BUG FIX: Use correct variable names (startTime/endTime, not requestedStartTime/requestedEndTime)
-      if (captureTabId || targetTab) {
-        console.log(`[YVO Background] Network interception failed, trying MediaRecorder capture...`);
-        try {
-          const mediaRecorderResult = await captureAndUploadWithMediaRecorder(
-            videoId,
-            youtubeUrl,
-            startTime,   // FIX: was requestedStartTime (undefined)
-            endTime      // FIX: was requestedEndTime (undefined)
-          );
-
-          // Close the capture tab after MediaRecorder completes
-          if (captureTabId) {
-            console.log(`[YVO Background] Closing capture tab ${captureTabId} after MediaRecorder`);
-            try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
-          }
-
-          if (mediaRecorderResult.success) {
-            console.log(`[YVO Background] MediaRecorder capture succeeded!`);
-            // Format the response properly with videoInfo and streamData
-            const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-            const capturedSegment = mediaRecorderResult.capturedSegment || {};
-
-            sendResponse({
-              success: true,
-              videoInfo: videoInfo,
-              streamData: {
-                videoUrl: mediaRecorderResult.videoStorageUrl || mediaRecorderResult.blobUrl || null,
-                videoData: mediaRecorderResult.videoData || null,  // Base64 for local capture
-                videoSize: mediaRecorderResult.videoSize || 0,
-                quality: mediaRecorderResult.uploadedToStorage ? 'captured' : 'captured_local',
-                mimeType: mediaRecorderResult.mimeType || 'video/webm',
-                capturedAt: Date.now(),
-                source: mediaRecorderResult.uploadedToStorage ? 'mediarecorder_capture' : 'mediarecorder_local',
-                uploadedToStorage: mediaRecorderResult.uploadedToStorage || false,
-                storagePath: mediaRecorderResult.storagePath || null,
-                uploadError: mediaRecorderResult.uploadError || null,
-                capturedSegment: capturedSegment,
-                captureStartTime: capturedSegment.startTime,
-                captureEndTime: capturedSegment.endTime,
-                captureDuration: capturedSegment.duration
-              },
-              message: mediaRecorderResult.uploadedToStorage
-                ? 'Video captured and uploaded successfully.'
-                : 'Video captured locally (server upload unavailable).'
-            });
-            return;
-          } else {
-            console.warn(`[YVO Background] MediaRecorder capture also failed:`, mediaRecorderResult.error);
-            // Continue to return failure below
-          }
-        } catch (mediaRecorderError) {
-          console.error(`[YVO Background] MediaRecorder error:`, mediaRecorderError.message);
-          // Close tab on error
-          if (captureTabId) {
-            try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
-          }
-        }
-      } else {
-        // No tab available - close any lingering capture tab
-        if (captureTabId) {
-          try { chrome.tabs.remove(captureTabId).catch(() => {}); } catch (e) {}
-        }
-      }
-
-      // All capture methods failed - return explicit failure
-      console.error(`[YVO Background] All capture methods failed (network + MediaRecorder)`);
-      const basicInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-      sendResponse({
-        success: false,  // CRITICAL: Return false so frontend knows capture failed
-        videoInfo: basicInfo,
-        streamData: null,
-        error: 'Could not capture video streams. Please ensure the YouTube video loads and plays in your browser, then try again.',
-        message: 'All capture methods failed. Server-side download may not be configured.'
-      });
-      return;
-    }
 
     // Try to get info from existing tab
     if (targetTab) {
@@ -1148,7 +1004,7 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
 }
 
 /**
- * INGENIOUS SOLUTION: Capture video using MediaRecorder as it plays
+ * EXTENSION-ONLY: Capture video using MediaRecorder
  *
  * This function is injected into the YouTube page and captures the video element's
  * output directly. This bypasses ALL URL restrictions because:
@@ -1163,38 +1019,72 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
  * @param {number} endTime - End time in seconds (captures duration = endTime - startTime)
  */
 async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
-  console.log(`[YVO Capture] Starting MediaRecorder capture from ${startTime}s to ${endTime}s`);
+  console.log(`[EXT][CAPTURE] MediaRecorder start=${startTime}s end=${endTime}s`);
 
   const duration = endTime - startTime;
   const PLAYBACK_SPEED = 4; // 4x speed for faster capture
   const captureTime = (duration / PLAYBACK_SPEED) * 1000; // in milliseconds
 
-  console.log(`[YVO Capture] Will capture ${duration}s of video at ${PLAYBACK_SPEED}x speed (${captureTime/1000}s real time)`);
+  console.log(`[EXT][CAPTURE] Will capture ${duration}s at ${PLAYBACK_SPEED}x (${(captureTime/1000).toFixed(1)}s real time)`);
 
   return new Promise((resolve, reject) => {
     try {
-      const videoElement = document.querySelector('video.html5-main-video');
+      // Find the video element - try multiple selectors
+      let videoElement = document.querySelector('video.html5-main-video');
       if (!videoElement) {
-        reject(new Error('No video element found on page'));
+        videoElement = document.querySelector('video');
+      }
+
+      if (!videoElement) {
+        console.error('[EXT][CAPTURE] FAIL: No video element found');
+        reject(new Error('No video element found on page. Please ensure the YouTube video is loaded.'));
         return;
       }
 
+      console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s`);
+
+      // Check if video is ready
+      if (videoElement.readyState < 2) {
+        console.log('[EXT][CAPTURE] Waiting for video to be ready...');
+      }
+
       // Seek to start position
+      console.log(`[EXT][CAPTURE] Seeking to ${startTime}s...`);
       videoElement.currentTime = startTime;
 
       // Wait for seek to complete
       const onSeeked = () => {
         videoElement.removeEventListener('seeked', onSeeked);
+        console.log(`[EXT][CAPTURE] Seek complete, currentTime=${videoElement.currentTime.toFixed(1)}s`);
         startCapture();
       };
 
       const startCapture = () => {
         try {
           // Capture the video stream from the element
-          const stream = videoElement.captureStream();
+          console.log('[EXT][CAPTURE] stream acquired - calling captureStream()');
+          let stream;
+          try {
+            stream = videoElement.captureStream();
+          } catch (captureStreamError) {
+            console.error(`[EXT][CAPTURE] FAIL: captureStream() error: ${captureStreamError.message}`);
+            reject(new Error(`Could not capture video stream: ${captureStreamError.message}. The video may be DRM protected or unavailable.`));
+            return;
+          }
 
-          if (!stream || stream.getVideoTracks().length === 0) {
-            reject(new Error('Could not capture video stream - video may be DRM protected'));
+          if (!stream) {
+            console.error('[EXT][CAPTURE] FAIL: captureStream() returned null');
+            reject(new Error('captureStream() returned null - video may be DRM protected'));
+            return;
+          }
+
+          const videoTracks = stream.getVideoTracks();
+          const audioTracks = stream.getAudioTracks();
+          console.log(`[EXT][CAPTURE] Stream tracks: video=${videoTracks.length}, audio=${audioTracks.length}`);
+
+          if (videoTracks.length === 0) {
+            console.error('[EXT][CAPTURE] FAIL: No video tracks in stream');
+            reject(new Error('No video tracks available - video may be DRM protected or not playing'));
             return;
           }
 
@@ -1209,7 +1099,7 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
             mimeType = 'video/webm';
           }
 
-          console.log(`[YVO Capture] Using MIME type: ${mimeType}`);
+          console.log(`[EXT][CAPTURE] MediaRecorder started mimeType=${mimeType}`);
 
           const recorder = new MediaRecorder(stream, {
             mimeType: mimeType,
@@ -1227,11 +1117,12 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
             videoElement.playbackRate = 1;
             videoElement.pause();
 
-            console.log(`[YVO Capture] Recording stopped, processing ${chunks.length} chunks...`);
+            console.log(`[EXT][CAPTURE] Recording stopped, chunks=${chunks.length}`);
             const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
-            console.log(`[YVO Capture] Created blob: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+            console.log(`[EXT][CAPTURE] blob size=${(blob.size / 1024 / 1024).toFixed(2)}MB`);
 
             if (blob.size < 10000) {
+              console.error('[EXT][CAPTURE] FAIL: Blob too small');
               reject(new Error('Captured video too small - capture may have failed'));
               return;
             }
@@ -1239,6 +1130,7 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
             // Convert to base64 for transfer
             const reader = new FileReader();
             reader.onloadend = () => {
+              console.log('[EXT][CAPTURE] SUCCESS - Video captured and encoded');
               resolve({
                 success: true,
                 videoData: reader.result.split(',')[1],
@@ -1248,12 +1140,16 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
                 captureMethod: 'mediarecorder'
               });
             };
-            reader.onerror = () => reject(new Error('Failed to convert video to base64'));
+            reader.onerror = () => {
+              console.error('[EXT][CAPTURE] FAIL: Base64 encoding error');
+              reject(new Error('Failed to convert video to base64'));
+            };
             reader.readAsDataURL(blob);
           };
 
           recorder.onerror = (e) => {
             videoElement.playbackRate = 1;
+            console.error(`[EXT][CAPTURE] FAIL: MediaRecorder error: ${e.error?.message || 'unknown'}`);
             reject(new Error(`MediaRecorder error: ${e.error?.message || 'unknown'}`));
           };
 
@@ -1263,18 +1159,19 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
 
           // Start recording
           recorder.start(500); // Capture in 500ms chunks
+          console.log('[EXT][CAPTURE] Recording started');
 
           // Start playing
           videoElement.play().then(() => {
-            console.log(`[YVO Capture] Playback started at ${PLAYBACK_SPEED}x speed`);
+            console.log(`[EXT][CAPTURE] Playback started at ${PLAYBACK_SPEED}x speed`);
           }).catch(e => {
-            console.warn('[YVO Capture] Autoplay failed, user interaction may be needed:', e.message);
+            console.warn(`[EXT][CAPTURE] Autoplay blocked: ${e.message} - continuing anyway`);
           });
 
           // Monitor progress
           const progressInterval = setInterval(() => {
             const progress = ((videoElement.currentTime - startTime) / duration * 100).toFixed(1);
-            console.log(`[YVO Capture] Progress: ${progress}% (at ${videoElement.currentTime.toFixed(1)}s)`);
+            console.log(`[EXT][CAPTURE] Progress: ${progress}% (at ${videoElement.currentTime.toFixed(1)}s)`);
           }, 2000);
 
           // Stop when we reach end time or after calculated capture time
@@ -1283,7 +1180,7 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
               clearInterval(checkEnd);
               clearInterval(progressInterval);
               if (recorder.state === 'recording') {
-                console.log('[YVO Capture] Reached end, stopping recorder...');
+                console.log('[EXT][CAPTURE] Reached end, stopping recorder...');
                 recorder.stop();
               }
             }
@@ -1294,12 +1191,13 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
             clearInterval(checkEnd);
             clearInterval(progressInterval);
             if (recorder.state === 'recording') {
-              console.log('[YVO Capture] Timeout reached, stopping recorder...');
+              console.log('[EXT][CAPTURE] Timeout reached, stopping recorder...');
               recorder.stop();
             }
           }, captureTime * 1.5 + 5000);
 
         } catch (captureError) {
+          console.error(`[EXT][CAPTURE] FAIL: Exception in startCapture: ${captureError.message}`);
           reject(captureError);
         }
       };
@@ -1310,16 +1208,25 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
       } else {
         videoElement.addEventListener('seeked', onSeeked);
         videoElement.currentTime = startTime;
+
+        // Fallback if seeked event doesn't fire
+        setTimeout(() => {
+          if (videoElement.currentTime >= startTime - 1) {
+            videoElement.removeEventListener('seeked', onSeeked);
+            startCapture();
+          }
+        }, 3000);
       }
 
     } catch (error) {
+      console.error(`[EXT][CAPTURE] FAIL: Top-level exception: ${error.message}`);
       reject(error);
     }
   });
 }
 
 /**
- * Capture and upload video using MediaRecorder
+ * EXTENSION-ONLY: Capture and upload video using MediaRecorder
  * This is the main entry point for the capture process
  *
  * @param {string} videoId - YouTube video ID
@@ -1332,7 +1239,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
   const segmentInfo = hasSegmentRequest
     ? `segment ${requestedStartTime}s-${requestedEndTime}s`
     : 'auto-detect';
-  console.log(`[YVO Background] Starting MediaRecorder capture for ${videoId} (${segmentInfo})`);
+  console.log(`[EXT][CAPTURE] captureAndUploadWithMediaRecorder videoId=${videoId} ${segmentInfo}`);
 
   try {
     // Find or open YouTube tab with this video
@@ -1353,7 +1260,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     if (!youtubeTab) {
       // Use requestedStartTime if provided, otherwise start from beginning
       const openAtTime = requestedStartTime || 0;
-      console.log(`[YVO Background] Opening YouTube tab for MediaRecorder capture at ${openAtTime}s...`);
+      console.log(`[EXT][CAPTURE] Opening YouTube tab at ${openAtTime}s...`);
       // Open at the start timestamp so video loads at the right position
       const startSeconds = Math.floor(openAtTime);
       let url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
@@ -1365,21 +1272,24 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       } else {
         url += `?t=${startSeconds}`;
       }
-      console.log(`[YVO Background] Opening URL: ${url}`);
+      console.log(`[EXT][CAPTURE] Opening URL: ${url}`);
       // CRITICAL: Open in background (active: false) to avoid stealing focus from Video Wizard
       youtubeTab = await chrome.tabs.create({ url, active: false });
 
       // Wait longer for page to load and video to buffer at the target position
-      console.log(`[YVO Background] Waiting for video to load at timestamp...`);
+      console.log(`[EXT][CAPTURE] Waiting for video to load (8s)...`);
       await new Promise(resolve => setTimeout(resolve, 8000));
+    } else {
+      console.log(`[EXT][CAPTURE] Using existing YouTube tab ${youtubeTab.id}`);
     }
 
     // Get video duration from content script
     let videoInfo;
     try {
       videoInfo = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
+      console.log(`[EXT][CAPTURE] Got video info: duration=${videoInfo?.videoInfo?.duration}s`);
     } catch (e) {
-      console.log('[YVO Background] Could not get video info, using defaults');
+      console.log(`[EXT][CAPTURE] Could not get video info: ${e.message}, using defaults`);
       videoInfo = { success: true, videoInfo: { duration: 60 } };
     }
 
@@ -1400,19 +1310,19 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       // Validate segment duration
       const segmentDuration = captureEnd - captureStart;
       if (segmentDuration > MAX_CAPTURE_DURATION) {
-        console.warn(`[YVO Background] Requested segment (${segmentDuration}s) exceeds max (${MAX_CAPTURE_DURATION}s), limiting...`);
+        console.warn(`[EXT][CAPTURE] Segment ${segmentDuration}s exceeds max ${MAX_CAPTURE_DURATION}s, limiting`);
         captureEnd = captureStart + MAX_CAPTURE_DURATION;
       }
 
-      console.log(`[YVO Background] Using requested segment: ${captureStart}s to ${captureEnd}s (${captureEnd - captureStart}s duration)`);
+      console.log(`[EXT][CAPTURE] Segment: ${captureStart}s to ${captureEnd}s (${captureEnd - captureStart}s)`);
     } else {
       // No segment specified - capture from start, up to max duration
       captureStart = 0;
       captureEnd = Math.min(MAX_CAPTURE_DURATION, videoDuration);
-      console.log(`[YVO Background] No segment specified, capturing first ${captureEnd}s of video`);
+      console.log(`[EXT][CAPTURE] No segment, capturing first ${captureEnd}s`);
     }
 
-    console.log(`[YVO Background] Injecting MediaRecorder capture (${captureStart}s to ${captureEnd}s)...`);
+    console.log(`[EXT][CAPTURE] Injecting MediaRecorder (${captureStart}s to ${captureEnd}s)...`);
 
     // Inject and run the capture function
     const results = await chrome.scripting.executeScript({
@@ -1423,17 +1333,19 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     });
 
     if (!results || results.length === 0 || !results[0].result) {
+      console.error('[EXT][CAPTURE] FAIL: Script execution failed');
       throw new Error('MediaRecorder capture script failed to execute');
     }
 
     const captureResult = results[0].result;
 
     if (!captureResult.success) {
+      console.error(`[EXT][CAPTURE] FAIL: ${captureResult.error}`);
       throw new Error(captureResult.error || 'Capture failed');
     }
 
     const capturedDuration = captureEnd - captureStart;
-    console.log(`[YVO Background] Capture successful: ${(captureResult.videoSize / 1024 / 1024).toFixed(2)}MB (${capturedDuration}s)`);
+    console.log(`[EXT][CAPTURE] blob size=${(captureResult.videoSize / 1024 / 1024).toFixed(2)}MB duration=${capturedDuration}s`);
 
     // Upload to server with segment metadata
     const videoBlob = base64ToBlob(captureResult.videoData, captureResult.mimeType);
@@ -1447,9 +1359,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     formData.append('captureEnd', String(captureEnd));
     formData.append('capturedDuration', String(capturedDuration));
 
-    console.log(`[YVO Background] Uploading captured video to server (${captureStart}s-${captureEnd}s)...`);
+    console.log(`[EXT][UPLOAD] Uploading to server (${captureStart}s-${captureEnd}s)...`);
 
-    // Try uploading to server - if it fails, fall back to direct blob URL
+    // Try uploading to server - if it fails, return local data for frontend upload
     let uploadResult = null;
     let uploadError = null;
 
@@ -1461,15 +1373,15 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
-        uploadError = `Server upload failed: ${uploadResponse.status} - ${errorText.substring(0, 100)}`;
-        console.error(`[YVO Background] ${uploadError}`);
+        uploadError = `Server ${uploadResponse.status}: ${errorText.substring(0, 100)}`;
+        console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
       } else {
         uploadResult = await uploadResponse.json();
-        console.log(`[YVO Background] Upload successful: ${uploadResult.url}`);
+        console.log(`[EXT][UPLOAD] success url=${uploadResult.url}`);
       }
     } catch (serverError) {
-      uploadError = `Server connection failed: ${serverError.message}`;
-      console.error(`[YVO Background] ${uploadError}`);
+      uploadError = `Connection failed: ${serverError.message}`;
+      console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
     }
 
     // If server upload succeeded, return the storage URL
@@ -1488,19 +1400,18 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       };
     }
 
-    // Server upload failed - create a blob URL as fallback
-    // This allows the frontend to download the video directly
-    console.log(`[YVO Background] Server unavailable, creating direct blob URL...`);
+    // Server upload failed - return local data for frontend to upload
+    console.log(`[EXT][UPLOAD] Server unavailable, returning local data for frontend upload`);
 
     // Store the blob in memory and create a URL that can be accessed
     const blobUrl = URL.createObjectURL(videoBlob);
 
-    // Also save the raw base64 data for direct transfer
+    // Return base64 data for frontend to upload to Firebase Storage
     return {
       success: true,
       videoStorageUrl: null,
       blobUrl: blobUrl,
-      videoData: captureResult.videoData,  // Base64 encoded
+      videoData: captureResult.videoData,  // Base64 encoded for frontend upload
       videoSize: captureResult.videoSize,
       mimeType: captureResult.mimeType,
       captureMethod: 'mediarecorder_local',
@@ -1514,10 +1425,11 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     };
 
   } catch (error) {
-    console.error(`[YVO Background] MediaRecorder capture failed:`, error);
+    console.error(`[EXT][CAPTURE] FAIL: ${error.message}`);
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      code: 'CAPTURE_EXCEPTION'
     };
   }
 }
