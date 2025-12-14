@@ -16022,9 +16022,23 @@ exports.wizardAnalyzeVideo = functions
     let stats = {};
     let durationSeconds = 0;
 
-    // If extension provided video info, use it; otherwise fetch from YouTube API
-    if (hasExtensionData && extensionData.videoInfo) {
-      const extInfo = extensionData.videoInfo;
+    // Check if extension provided USEFUL video info (not just empty/sparse data)
+    // We need at least a real title AND duration to skip the YouTube API
+    const extInfo = extensionData?.videoInfo;
+    const hasUsefulExtensionData = hasExtensionData && extInfo &&
+      extInfo.title && extInfo.title !== 'YouTube Video' && // Has real title
+      (extInfo.duration && extInfo.duration !== 0); // Has real duration
+
+    console.log('[wizardAnalyzeVideo] Extension data check:', {
+      hasExtensionData,
+      hasVideoInfo: !!extInfo,
+      title: extInfo?.title || 'none',
+      duration: extInfo?.duration || 'none',
+      hasUsefulExtensionData
+    });
+
+    // If extension provided USEFUL video info, use it; otherwise fetch from YouTube API
+    if (hasUsefulExtensionData) {
       console.log('[wizardAnalyzeVideo] Using extension-provided video info:', extInfo.title);
 
       // Parse duration from extension format (e.g., "10:30" or "1:05:30" or seconds)
@@ -16041,7 +16055,7 @@ exports.wizardAnalyzeVideo = functions
 
       videoData = {
         videoId,
-        title: extInfo.title || 'YouTube Video',
+        title: extInfo.title,
         description: '', // Extension doesn't capture description
         channelTitle: extInfo.channel || extInfo.channelTitle || 'Unknown Channel',
         thumbnail: extInfo.thumbnail || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
@@ -16078,8 +16092,8 @@ exports.wizardAnalyzeVideo = functions
       };
       stats = { viewCount: 0, likeCount: 0 };
     } else {
-      // Fallback to YouTube API
-      console.log('[wizardAnalyzeVideo] Fetching video metadata from YouTube API');
+      // Fallback to YouTube API (extension didn't provide useful data)
+      console.log('[wizardAnalyzeVideo] Fetching video metadata from YouTube API (extension data was sparse or missing)');
       const videoResponse = await youtube.videos.list({
         part: ['snippet', 'statistics', 'contentDetails'],
         id: [videoId]
@@ -16104,6 +16118,12 @@ exports.wizardAnalyzeVideo = functions
         viewCount: parseInt(stats.viewCount || 0),
         likeCount: parseInt(stats.likeCount || 0)
       };
+
+      console.log('[wizardAnalyzeVideo] YouTube API returned:', {
+        title: videoData.title,
+        duration: videoData.duration,
+        channel: videoData.channelTitle
+      });
     }
 
     // Get actual transcript using the working getVideoTranscript function

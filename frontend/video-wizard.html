@@ -9285,10 +9285,24 @@
                         // Use YouTube URL
                         requestData.videoUrl = url;
 
-                        // Include extension-captured data if available
-                        if (extensionData) {
+                        // Include extension-captured data ONLY if it has useful info
+                        // Don't pass sparse data that would cause backend to skip YouTube API
+                        var hasUsefulExtensionData = extensionData &&
+                            extensionData.videoInfo &&
+                            extensionData.videoInfo.title &&
+                            extensionData.videoInfo.duration;
+
+                        if (hasUsefulExtensionData) {
+                            console.log('[Video Wizard] Passing useful extension data to backend:', {
+                                title: extensionData.videoInfo.title,
+                                duration: extensionData.videoInfo.duration,
+                                hasStreamData: !!extensionData.streamData
+                            });
                             requestData.extensionData = extensionData;
                             requestData.useExtension = true;
+                        } else {
+                            console.log('[Video Wizard] Extension data is sparse, backend will use YouTube API');
+                            // Don't pass extensionData - let backend fetch from YouTube API
                         }
                     }
 
