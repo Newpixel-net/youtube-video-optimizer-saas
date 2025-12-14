@@ -244,14 +244,43 @@ async function handleCaptureForWizard(message, sendResponse) {
   console.log(`[EXT][CAPTURE] Capture request for video: ${videoId}, autoCapture=${autoCapture}`);
 
   // Helper function to process captured streams
-  // PRIMARY: Use MediaRecorder capture (most reliable for extension-only export)
+  // Uses downloadAndUploadStream if we have intercepted URLs, otherwise MediaRecorder
   async function processAndUploadStreams(intercepted, source) {
-    console.log(`[EXT][CAPTURE] processAndUploadStreams source=${source}`);
+    console.log(`[EXT][CAPTURE] processAndUploadStreams source=${source} hasIntercepted=${!!(intercepted?.videoUrl)}`);
 
     const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
 
-    // PRIMARY METHOD: MediaRecorder capture (most reliable - captures directly from video element)
-    // This bypasses all URL restrictions because we capture what the player displays
+    // If we have intercepted stream URLs, download them directly (PREFERRED - faster)
+    if (intercepted && intercepted.videoUrl) {
+      console.log(`[EXT][CAPTURE] Downloading intercepted stream URLs...`);
+      try {
+        const downloadResult = await downloadAndUploadStream(videoId, intercepted.videoUrl, intercepted.audioUrl);
+
+        if (downloadResult.success) {
+          console.log(`[EXT][UPLOAD] success url=${downloadResult.videoStorageUrl}`);
+          return {
+            success: true,
+            videoInfo: videoInfo,
+            streamData: {
+              videoUrl: downloadResult.videoStorageUrl,
+              audioUrl: downloadResult.audioStorageUrl || null,
+              quality: 'downloaded',
+              mimeType: 'video/mp4',
+              capturedAt: Date.now(),
+              source: source || 'network_intercept_download',
+              uploadedToStorage: true
+            },
+            message: 'Video downloaded and uploaded successfully.'
+          };
+        } else {
+          console.warn(`[EXT][CAPTURE] Download failed: ${downloadResult.error}, falling back to MediaRecorder`);
+        }
+      } catch (downloadError) {
+        console.warn(`[EXT][CAPTURE] Download exception: ${downloadError.message}, falling back to MediaRecorder`);
+      }
+    }
+
+    // FALLBACK: MediaRecorder capture (when download fails or no intercepted URLs)
     const segmentInfo = (startTime !== undefined && endTime !== undefined)
       ? `segment ${startTime}s-${endTime}s`
       : 'auto (up to 5 min)';
