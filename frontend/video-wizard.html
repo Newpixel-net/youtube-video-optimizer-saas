@@ -9190,12 +9190,15 @@
 
                 // Call Cloud Function with progress simulation
                 try {
-                    // If extension is installed and we have a YouTube URL, request capture
+                    // If extension is installed and we have a YouTube URL, request video info
+                    // NOTE: During analysis, we only need video metadata - NOT full stream capture
+                    // Stream capture is done later during export (startVideoProcessing)
+                    // This prevents opening unnecessary browser tabs during analysis
                     var extensionData = null;
                     if (state.extension.installed && url && !uploadedFile) {
                         try {
-                            console.log('[Video Wizard] Requesting video capture from extension...');
-                            utils.showToast('Extension capturing video (may open YouTube tab)...', 'info');
+                            console.log('[Video Wizard] Requesting video info from extension (analysis mode)...');
+                            utils.showToast('Getting video info...', 'info');
 
                             // Extract video ID from URL
                             var videoId = null;
@@ -9214,10 +9217,13 @@
                             }
 
                             if (videoId) {
+                                // CRITICAL FIX: autoCapture: false prevents opening new browser tabs
+                                // We only need cached streams or basic video info for analysis
+                                // Full capture happens during export (startVideoProcessing)
                                 var captureResult = await sendExtensionRequest('getVideoFromYouTube', {
                                     youtubeUrl: url,
                                     videoId: videoId,
-                                    autoCapture: true  // Enable auto-capture feature
+                                    autoCapture: false  // DISABLED - don't open new tabs during analysis
                                 });
 
                                 if (captureResult && captureResult.success) {
@@ -9225,22 +9231,22 @@
                                         videoInfo: captureResult.videoInfo,
                                         streamData: captureResult.streamData
                                     };
-                                    var captureSource = captureResult.captureSource || 'unknown';
-                                    console.log('[Video Wizard] Extension captured video (source: ' + captureSource + '):', extensionData);
+                                    var captureSource = captureResult.captureSource || 'cached';
+                                    console.log('[Video Wizard] Extension returned video info (source: ' + captureSource + '):', extensionData);
 
-                                    if (extensionData.streamData) {
-                                        utils.showToast('Video streams captured successfully!', 'success');
-                                    } else {
-                                        utils.showToast('Video info captured (server will download video)', 'info');
+                                    if (extensionData.streamData && extensionData.streamData.uploadedToStorage) {
+                                        utils.showToast('Video streams ready!', 'success');
+                                    } else if (extensionData.videoInfo) {
+                                        utils.showToast('Video info retrieved', 'success');
                                     }
                                 } else {
-                                    console.warn('[Video Wizard] Extension capture failed:', captureResult?.error);
-                                    utils.showToast('Extension capture failed, using server fallback', 'warning');
+                                    console.warn('[Video Wizard] Extension info request failed:', captureResult?.error);
+                                    // This is OK - backend will fetch from YouTube API
                                 }
                             }
                         } catch (extError) {
-                            console.warn('[Video Wizard] Extension capture error (will try server):', extError);
-                            utils.showToast('Extension timeout, using server download', 'warning');
+                            console.warn('[Video Wizard] Extension request error (will try server):', extError);
+                            // This is OK - backend will fetch from YouTube API
                         }
                     }
 
@@ -9306,6 +9312,20 @@
 
                         // Store isUpload flag for uploaded videos
                         state.videoInput.isUpload = result.data.isUpload || false;
+
+                        // Log analysis results for debugging
+                        console.log('[Video Wizard] Analysis complete:', {
+                            projectId: state.projectId,
+                            clipCount: state.clips.length,
+                            videoTitle: state.videoInput.videoData?.title,
+                            hasVideoData: !!state.videoInput.videoData
+                        });
+
+                        // Warn if no clips were found
+                        if (state.clips.length === 0) {
+                            console.warn('[Video Wizard] WARNING: No clips returned from analysis');
+                            utils.showToast('Analysis complete but no viral clips found. Try a different video.', 'warning');
+                        }
 
                         // Auto-select top 5 clips
                         state.selectedClipIds = state.clips.slice(0, 5).map(function(c) { return c.id; });
