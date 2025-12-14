@@ -15945,6 +15945,17 @@ exports.wizardAnalyzeVideo = functions
 
     // For uploaded files, we'll create a project and process it differently
     // The video processor will handle extracting duration and generating clips
+    // IMPORTANT: Create sourceAsset from the uploaded file - this is the canonical source for export
+    const sourceAsset = {
+      storageUrl: uploadedVideoUrl,
+      storagePath: uploadedVideoPath || null,
+      duration: 0, // Will be updated by video processor
+      format: 'video/mp4',
+      fileSize: 0,
+      capturedAt: Date.now(),
+      source: 'direct_upload'
+    };
+
     const projectData = {
       userId: uid,
       videoId,
@@ -15954,6 +15965,7 @@ exports.wizardAnalyzeVideo = functions
       isUpload: true,
       uploadedVideoPath,
       uploadedVideoName: uploadedVideoName || 'Uploaded Video',
+      sourceAsset, // Canonical source for export - uses the uploaded file
       options: options || {},
       status: 'pending_processing', // Needs video processor to analyze
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -16006,6 +16018,7 @@ exports.wizardAnalyzeVideo = functions
       videoData: projectData.videoData,
       clips: projectData.clips,
       isUpload: true,
+      sourceAsset: sourceAsset, // Return sourceAsset so frontend can store it
       message: 'Uploaded video ready for processing'
     };
   }
@@ -18141,8 +18154,8 @@ exports.wizardProcessClip = functions
   .runWith({ timeoutSeconds: 540, memory: '2GB' })
   .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { projectId, clipId, quality, settings } = data;
-  // NOTE: extensionCaptureData is no longer used - we use sourceAsset from project
+  const { projectId, clipId, quality, settings, extensionCaptureData } = data;
+  // extensionCaptureData is used as fallback when sourceAsset is missing (e.g., extension capture failed during analysis)
 
   if (!projectId || !clipId) {
     throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
@@ -18171,25 +18184,57 @@ exports.wizardProcessClip = functions
     // Get clip settings (from project or from request)
     const clipSettings = settings || project.clipSettings?.[clipId] || {};
 
-    // CANONICAL SOURCE ASSET CHECK
-    // Export REQUIRES sourceAsset - no more unreliable re-capture at export time
-    const sourceAsset = project.sourceAsset;
+    // SOURCE ASSET CHECK with FALLBACK
+    // Primary: use sourceAsset stored during analysis
+    // Fallback: use extensionCaptureData passed at export time (if capture failed during analysis)
+    let sourceAsset = project.sourceAsset;
     const isUploadedVideo = project.isUpload && project.videoData?.uploadedVideoUrl;
+
+    // Check if we have a fallback from extensionCaptureData
+    const hasExtensionFallback = extensionCaptureData &&
+      extensionCaptureData.streamData &&
+      extensionCaptureData.streamData.uploadedToStorage &&
+      extensionCaptureData.streamData.videoUrl;
 
     console.log(`[wizardProcessClip] Checking source for ${clipId}:`, {
       hasSourceAsset: !!sourceAsset,
       sourceAssetUrl: sourceAsset?.storageUrl?.substring(0, 60) + '...' || 'none',
       isUploadedVideo,
+      hasExtensionFallback,
       projectId
     });
 
-    // Validate source asset exists
+    // If no sourceAsset but we have extensionCaptureData fallback, create sourceAsset from it
+    if (!sourceAsset && hasExtensionFallback) {
+      console.log(`[wizardProcessClip] Using extensionCaptureData fallback for ${projectId}`);
+      sourceAsset = {
+        storageUrl: extensionCaptureData.streamData.videoUrl,
+        storagePath: extensionCaptureData.streamData.storagePath || null,
+        duration: extensionCaptureData.streamData.duration || project.videoData?.duration || 0,
+        format: extensionCaptureData.streamData.mimeType || 'video/mp4',
+        fileSize: extensionCaptureData.streamData.fileSize || 0,
+        capturedAt: Date.now(),
+        source: 'extension_capture_fallback'
+      };
+
+      // Also save this sourceAsset to the project for future exports
+      try {
+        await db.collection('wizardProjects').doc(projectId).update({
+          sourceAsset: sourceAsset,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`[wizardProcessClip] Saved fallback sourceAsset to project ${projectId}`);
+      } catch (saveErr) {
+        console.warn(`[wizardProcessClip] Could not save fallback sourceAsset: ${saveErr.message}`);
+      }
+    }
+
+    // Validate we have a video source
     if (!sourceAsset && !isUploadedVideo) {
       console.error(`[wizardProcessClip] ERROR: No sourceAsset for project ${projectId}`);
       throw new functions.https.HttpsError(
         'failed-precondition',
-        'Video source not available. Please go back to Analysis and capture the video first. ' +
-        'Make sure the capture completes before proceeding to clip selection.'
+        'Video source not available. The video capture may have failed. Please try re-analyzing the video.'
       );
     }
 
