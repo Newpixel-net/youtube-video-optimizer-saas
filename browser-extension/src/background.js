@@ -334,33 +334,16 @@ async function handleCaptureForWizard(message, sendResponse) {
   }
 
   try {
-    // EXTENSION-ONLY CAPTURE: Use MediaRecorder directly (most reliable method)
-    // MediaRecorder captures directly from the video element, bypassing all URL restrictions
+    // STEP 1: Check if we already have intercepted streams (from previous playback)
+    let intercepted = getInterceptedStreams(videoId);
+    if (intercepted && intercepted.videoUrl) {
+      console.log(`[EXT][CAPTURE] Using cached intercepted streams for ${videoId}`);
+      const result = await processAndUploadStreams(intercepted, 'network_intercept_cached');
+      sendResponse(result);
+      return;
+    }
 
-    console.log(`[EXT][CAPTURE] Starting MediaRecorder capture for ${videoId}`);
-
-    // Call MediaRecorder capture directly - it will handle opening a tab if needed
-    const result = await processAndUploadStreams(null, 'mediarecorder_direct');
-    sendResponse(result);
-    return;
-  } catch (captureError) {
-    console.error(`[EXT][CAPTURE] FAIL: ${captureError.message}`);
-    const basicInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-    sendResponse({
-      success: false,
-      error: captureError.message,
-      code: 'CAPTURE_EXCEPTION',
-      videoInfo: basicInfo,
-      details: { stack: captureError.stack }
-    });
-    return;
-  }
-
-  // Legacy code paths below are kept for reference but should not be reached
-  // The code above handles all cases via MediaRecorder
-
-  try {
-    // Find existing YouTube tab with this video (legacy fallback)
+    // STEP 2: Find existing YouTube tab with this video
     const tabs = await chrome.tabs.query({
       url: ['*://www.youtube.com/*', '*://youtube.com/*']
     });
@@ -501,18 +484,122 @@ async function handleCaptureForWizard(message, sendResponse) {
       return;
     }
 
-    // No tab and auto-capture wasn't enabled - return failure
-    // This path is reached when autoCapture=false and there's no existing YouTube tab
-    console.log(`[YVO Background] No tab available and autoCapture=${autoCapture}`);
+    // No existing YouTube tab with this video
+    // If autoCapture is enabled, open a NEW background tab and capture via network interception
+    if (autoCapture) {
+      console.log(`[EXT][CAPTURE] No YouTube tab found, opening BACKGROUND tab for network interception...`);
+
+      const captureResult = await openAndCaptureStreams(videoId, youtubeUrl);
+
+      if (captureResult.success && captureResult.streamData) {
+        // We have intercepted streams! Now download and upload them
+        console.log(`[EXT][CAPTURE] Streams intercepted successfully, downloading...`);
+        const interceptedData = {
+          videoUrl: captureResult.streamData.videoUrl,
+          audioUrl: captureResult.streamData.audioUrl,
+          capturedAt: captureResult.streamData.capturedAt
+        };
+
+        // Download the streams (in the BACKGROUND tab that has the session)
+        try {
+          const downloadResult = await downloadAndUploadStream(
+            videoId,
+            interceptedData.videoUrl,
+            interceptedData.audioUrl
+          );
+
+          // Close the capture tab
+          if (captureResult.captureTabId) {
+            console.log(`[EXT][CAPTURE] Closing capture tab ${captureResult.captureTabId}`);
+            try { await chrome.tabs.remove(captureResult.captureTabId); } catch (e) {}
+          }
+
+          if (downloadResult.success) {
+            console.log(`[EXT][CAPTURE] Download and upload successful!`);
+            const videoInfo = captureResult.videoInfo || await getBasicVideoInfo(videoId, youtubeUrl);
+            sendResponse({
+              success: true,
+              videoInfo: videoInfo,
+              streamData: {
+                videoUrl: downloadResult.videoStorageUrl,
+                audioUrl: downloadResult.audioStorageUrl || null,
+                quality: 'downloaded',
+                mimeType: 'video/mp4',
+                capturedAt: Date.now(),
+                source: 'network_intercept_download',
+                uploadedToStorage: true
+              },
+              message: 'Video captured and uploaded successfully.'
+            });
+            return;
+          } else {
+            // Download failed - try MediaRecorder as fallback
+            console.warn(`[EXT][CAPTURE] Download failed: ${downloadResult.error}, trying MediaRecorder...`);
+          }
+        } catch (downloadError) {
+          console.warn(`[EXT][CAPTURE] Download exception: ${downloadError.message}, trying MediaRecorder...`);
+          // Close the capture tab
+          if (captureResult.captureTabId) {
+            try { await chrome.tabs.remove(captureResult.captureTabId); } catch (e) {}
+          }
+        }
+
+        // FALLBACK: Try MediaRecorder capture
+        console.log(`[EXT][CAPTURE] Falling back to MediaRecorder capture...`);
+        try {
+          const mediaResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
+          if (mediaResult.success) {
+            console.log(`[EXT][CAPTURE] MediaRecorder fallback succeeded!`);
+            const videoInfo = captureResult.videoInfo || await getBasicVideoInfo(videoId, youtubeUrl);
+            sendResponse({
+              success: true,
+              videoInfo: videoInfo,
+              streamData: {
+                videoUrl: mediaResult.videoStorageUrl || null,
+                videoData: mediaResult.videoData || null,
+                videoSize: mediaResult.videoSize || 0,
+                quality: mediaResult.uploadedToStorage ? 'captured' : 'captured_local',
+                mimeType: mediaResult.mimeType || 'video/webm',
+                capturedAt: Date.now(),
+                source: mediaResult.uploadedToStorage ? 'mediarecorder_capture' : 'mediarecorder_local',
+                uploadedToStorage: mediaResult.uploadedToStorage || false,
+                uploadError: mediaResult.uploadError || null
+              },
+              message: 'Video captured via MediaRecorder.'
+            });
+            return;
+          }
+        } catch (mediaError) {
+          console.error(`[EXT][CAPTURE] MediaRecorder fallback failed: ${mediaError.message}`);
+        }
+
+        // All methods failed
+        sendResponse({
+          success: false,
+          error: 'All capture methods failed. Please ensure the YouTube video can play in your browser.',
+          videoInfo: captureResult.videoInfo
+        });
+        return;
+      } else {
+        // Stream interception failed
+        console.warn(`[EXT][CAPTURE] Stream interception failed: ${captureResult.error}`);
+        sendResponse({
+          success: false,
+          error: captureResult.error || 'Could not capture video streams',
+          videoInfo: await getBasicVideoInfo(videoId, youtubeUrl)
+        });
+        return;
+      }
+    }
+
+    // autoCapture is disabled - just return basic info
+    console.log(`[EXT][CAPTURE] No tab available and autoCapture=${autoCapture}`);
     const basicInfo = await getBasicVideoInfo(videoId, youtubeUrl);
     sendResponse({
-      success: autoCapture ? false : true,  // Only success if autoCapture was disabled (analysis mode)
+      success: true,  // Success because autoCapture was disabled (analysis mode)
       videoInfo: basicInfo,
       streamData: null,
-      error: autoCapture ? 'No YouTube tab found and capture failed.' : null,
-      message: autoCapture
-        ? 'Could not capture streams. Please open the YouTube video in another tab.'
-        : 'Video info retrieved. Stream capture not requested.'
+      message: 'Video info retrieved. Stream capture not requested.'
     });
 
   } catch (error) {
@@ -1041,23 +1128,46 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
         return;
       }
 
-      console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s`);
+      console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s, paused=${videoElement.paused}`);
 
-      // Check if video is ready
-      if (videoElement.readyState < 2) {
-        console.log('[EXT][CAPTURE] Waiting for video to be ready...');
+      // Ensure video is not paused
+      if (videoElement.paused) {
+        console.log('[EXT][CAPTURE] Video is paused, attempting to play...');
+        videoElement.play().catch(e => console.warn('[EXT][CAPTURE] Play failed:', e.message));
       }
 
-      // Seek to start position
-      console.log(`[EXT][CAPTURE] Seeking to ${startTime}s...`);
-      videoElement.currentTime = startTime;
-
-      // Wait for seek to complete
-      const onSeeked = () => {
-        videoElement.removeEventListener('seeked', onSeeked);
-        console.log(`[EXT][CAPTURE] Seek complete, currentTime=${videoElement.currentTime.toFixed(1)}s`);
-        startCapture();
+      // Wait for video to be ready (have enough data)
+      const waitForReady = () => {
+        return new Promise((res) => {
+          if (videoElement.readyState >= 3) {
+            res();
+          } else {
+            console.log(`[EXT][CAPTURE] Waiting for video data (readyState=${videoElement.readyState})...`);
+            const onCanPlay = () => {
+              videoElement.removeEventListener('canplay', onCanPlay);
+              res();
+            };
+            videoElement.addEventListener('canplay', onCanPlay);
+            // Timeout after 10 seconds
+            setTimeout(() => {
+              videoElement.removeEventListener('canplay', onCanPlay);
+              res();
+            }, 10000);
+          }
+        });
       };
+
+      waitForReady().then(() => {
+        // Seek to start position
+        console.log(`[EXT][CAPTURE] Seeking to ${startTime}s...`);
+        videoElement.currentTime = startTime;
+
+        // Wait for seek to complete
+        const onSeeked = () => {
+          videoElement.removeEventListener('seeked', onSeeked);
+          console.log(`[EXT][CAPTURE] Seek complete, currentTime=${videoElement.currentTime.toFixed(1)}s`);
+          startCapture();
+        };
 
       const startCapture = () => {
         try {
@@ -1202,21 +1312,22 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
         }
       };
 
-      // Start the process
-      if (Math.abs(videoElement.currentTime - startTime) < 1) {
-        startCapture();
-      } else {
-        videoElement.addEventListener('seeked', onSeeked);
-        videoElement.currentTime = startTime;
+        // Start the process
+        if (Math.abs(videoElement.currentTime - startTime) < 1) {
+          startCapture();
+        } else {
+          videoElement.addEventListener('seeked', onSeeked);
+          videoElement.currentTime = startTime;
 
-        // Fallback if seeked event doesn't fire
-        setTimeout(() => {
-          if (videoElement.currentTime >= startTime - 1) {
-            videoElement.removeEventListener('seeked', onSeeked);
-            startCapture();
-          }
-        }, 3000);
-      }
+          // Fallback if seeked event doesn't fire
+          setTimeout(() => {
+            if (videoElement.currentTime >= startTime - 1) {
+              videoElement.removeEventListener('seeked', onSeeked);
+              startCapture();
+            }
+          }, 3000);
+        }
+      }); // end waitForReady().then()
 
     } catch (error) {
       console.error(`[EXT][CAPTURE] FAIL: Top-level exception: ${error.message}`);
@@ -1256,6 +1367,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }
     });
 
+    // Track if we created a new tab (so we know to close it later)
+    let createdNewTab = false;
+
     // If no tab with this video, open one at the correct timestamp
     if (!youtubeTab) {
       // Use requestedStartTime if provided, otherwise start from beginning
@@ -1272,15 +1386,30 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       } else {
         url += `?t=${startSeconds}`;
       }
+      // Add autoplay parameter to help start video automatically
+      if (!url.includes('autoplay=')) {
+        url += '&autoplay=1';
+      }
       console.log(`[EXT][CAPTURE] Opening URL: ${url}`);
-      // CRITICAL: Open in background (active: false) to avoid stealing focus from Video Wizard
+      // Open in background to not disrupt user
       youtubeTab = await chrome.tabs.create({ url, active: false });
+      createdNewTab = true;
 
-      // Wait longer for page to load and video to buffer at the target position
+      // Wait for page to load and video to buffer
       console.log(`[EXT][CAPTURE] Waiting for video to load (8s)...`);
       await new Promise(resolve => setTimeout(resolve, 8000));
     } else {
       console.log(`[EXT][CAPTURE] Using existing YouTube tab ${youtubeTab.id}`);
+    }
+
+    // Trigger video playback
+    console.log(`[EXT][CAPTURE] Triggering video playback...`);
+    try {
+      await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
+      // Give it a moment to start playing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (e) {
+      console.log(`[EXT][CAPTURE] Playback trigger failed: ${e.message}, continuing anyway`);
     }
 
     // Get video duration from content script
@@ -1384,11 +1513,22 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
     }
 
+    // Close the capture tab if we created it
+    if (createdNewTab && youtubeTab) {
+      console.log(`[EXT][CAPTURE] Closing capture tab ${youtubeTab.id}`);
+      try {
+        await chrome.tabs.remove(youtubeTab.id);
+      } catch (e) {
+        console.log(`[EXT][CAPTURE] Could not close tab: ${e.message}`);
+      }
+    }
+
     // If server upload succeeded, return the storage URL
     if (uploadResult && uploadResult.url) {
       return {
         success: true,
         videoStorageUrl: uploadResult.url,
+        storagePath: uploadResult.storagePath || null,
         mimeType: captureResult.mimeType,
         captureMethod: 'mediarecorder',
         uploadedToStorage: true,
