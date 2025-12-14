@@ -266,44 +266,14 @@ async function handleCaptureForWizard(message, sendResponse) {
 
   console.log(`[EXT][CAPTURE] Capture request for video: ${videoId}, autoCapture=${autoCapture}`);
 
-  // Helper function to process captured streams
-  // Uses downloadAndUploadStream if we have intercepted URLs, otherwise MediaRecorder
+  // Helper function to process captured streams using MediaRecorder
+  // MediaRecorder is the primary capture method - no visible window switching
   async function processAndUploadStreams(intercepted, source) {
-    console.log(`[EXT][CAPTURE] processAndUploadStreams source=${source} hasIntercepted=${!!(intercepted?.videoUrl)}`);
+    console.log(`[EXT][CAPTURE] processAndUploadStreams using MediaRecorder (background capture)`);
 
     const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
 
-    // If we have intercepted stream URLs, download them directly (PREFERRED - faster)
-    if (intercepted && intercepted.videoUrl) {
-      console.log(`[EXT][CAPTURE] Downloading intercepted stream URLs...`);
-      try {
-        const downloadResult = await downloadAndUploadStream(videoId, intercepted.videoUrl, intercepted.audioUrl);
-
-        if (downloadResult.success) {
-          console.log(`[EXT][UPLOAD] success url=${downloadResult.videoStorageUrl}`);
-          return {
-            success: true,
-            videoInfo: videoInfo,
-            streamData: {
-              videoUrl: downloadResult.videoStorageUrl,
-              audioUrl: downloadResult.audioStorageUrl || null,
-              quality: 'downloaded',
-              mimeType: 'video/mp4',
-              capturedAt: Date.now(),
-              source: source || 'network_intercept_download',
-              uploadedToStorage: true
-            },
-            message: 'Video downloaded and uploaded successfully.'
-          };
-        } else {
-          console.warn(`[EXT][CAPTURE] Download failed: ${downloadResult.error}, falling back to MediaRecorder`);
-        }
-      } catch (downloadError) {
-        console.warn(`[EXT][CAPTURE] Download exception: ${downloadError.message}, falling back to MediaRecorder`);
-      }
-    }
-
-    // FALLBACK: MediaRecorder capture (when download fails or no intercepted URLs)
+    // Use MediaRecorder capture - opens tab in background (active: false)
     const segmentInfo = (startTime !== undefined && endTime !== undefined)
       ? `segment ${startTime}s-${endTime}s`
       : 'auto (up to 5 min)';
@@ -545,107 +515,63 @@ async function handleCaptureForWizard(message, sendResponse) {
     }  // end if (targetTab)
 
     // No existing YouTube tab with this video
-    // If autoCapture is enabled, open a NEW background tab and capture via network interception
+    // If autoCapture is enabled, use MediaRecorder capture (opens tab in BACKGROUND - no visible window switching)
     if (autoCapture) {
-      console.log(`[EXT][CAPTURE] No YouTube tab found, opening BACKGROUND tab for network interception...`);
+      console.log(`[EXT][CAPTURE] No YouTube tab found, using MediaRecorder capture (background tab)...`);
 
-      const captureResult = await openAndCaptureStreams(videoId, youtubeUrl);
+      // MediaRecorder capture opens tab with active: false - NO visible window switching
+      try {
+        const mediaResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
 
-      if (captureResult.success && captureResult.streamData) {
-        // We have intercepted streams! Now download and upload them
-        console.log(`[EXT][CAPTURE] Streams intercepted successfully, downloading...`);
-        const interceptedData = {
-          videoUrl: captureResult.streamData.videoUrl,
-          audioUrl: captureResult.streamData.audioUrl,
-          capturedAt: captureResult.streamData.capturedAt
-        };
+        if (mediaResult.success) {
+          console.log(`[EXT][CAPTURE] MediaRecorder capture succeeded!`);
+          const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
+          const capturedSegment = mediaResult.capturedSegment || {};
 
-        // Download the streams (in the BACKGROUND tab that has the session)
-        try {
-          const downloadResult = await downloadAndUploadStream(
-            videoId,
-            interceptedData.videoUrl,
-            interceptedData.audioUrl
-          );
-
-          // Close the capture tab
-          if (captureResult.captureTabId) {
-            console.log(`[EXT][CAPTURE] Closing capture tab ${captureResult.captureTabId}`);
-            try { await chrome.tabs.remove(captureResult.captureTabId); } catch (e) {}
-          }
-
-          if (downloadResult.success) {
-            console.log(`[EXT][CAPTURE] Download and upload successful!`);
-            const videoInfo = captureResult.videoInfo || await getBasicVideoInfo(videoId, youtubeUrl);
-            sendResponse({
-              success: true,
-              videoInfo: videoInfo,
-              streamData: {
-                videoUrl: downloadResult.videoStorageUrl,
-                audioUrl: downloadResult.audioStorageUrl || null,
-                quality: 'downloaded',
-                mimeType: 'video/mp4',
-                capturedAt: Date.now(),
-                source: 'network_intercept_download',
-                uploadedToStorage: true
-              },
-              message: 'Video captured and uploaded successfully.'
-            });
-            return;
-          } else {
-            // Download failed - try MediaRecorder as fallback
-            console.warn(`[EXT][CAPTURE] Download failed: ${downloadResult.error}, trying MediaRecorder...`);
-          }
-        } catch (downloadError) {
-          console.warn(`[EXT][CAPTURE] Download exception: ${downloadError.message}, trying MediaRecorder...`);
-          // Close the capture tab
-          if (captureResult.captureTabId) {
-            try { await chrome.tabs.remove(captureResult.captureTabId); } catch (e) {}
-          }
+          sendResponse({
+            success: true,
+            videoInfo: videoInfo,
+            streamData: {
+              videoUrl: mediaResult.videoStorageUrl || null,
+              storagePath: mediaResult.storagePath || null,
+              videoData: mediaResult.videoData || null,
+              videoSize: mediaResult.videoSize || 0,
+              quality: mediaResult.uploadedToStorage ? 'captured' : 'captured_local',
+              mimeType: mediaResult.mimeType || 'video/webm',
+              capturedAt: Date.now(),
+              source: mediaResult.uploadedToStorage ? 'mediarecorder_capture' : 'mediarecorder_local',
+              uploadedToStorage: mediaResult.uploadedToStorage || false,
+              uploadError: mediaResult.uploadError || null,
+              capturedSegment: capturedSegment,
+              captureStartTime: capturedSegment.startTime,
+              captureEndTime: capturedSegment.endTime,
+              captureDuration: capturedSegment.duration
+            },
+            message: mediaResult.uploadedToStorage
+              ? `Video segment (${capturedSegment.startTime || 0}s-${capturedSegment.endTime || '?'}s) captured and uploaded.`
+              : 'Video captured locally. Frontend will upload to storage.'
+          });
+          return;
+        } else {
+          // MediaRecorder capture failed
+          console.error(`[EXT][CAPTURE] MediaRecorder capture failed: ${mediaResult.error}`);
+          sendResponse({
+            success: false,
+            error: mediaResult.error || 'Could not capture video streams',
+            code: mediaResult.code || 'CAPTURE_FAILED',
+            videoInfo: await getBasicVideoInfo(videoId, youtubeUrl),
+            details: {
+              message: 'Please ensure the YouTube video loads and plays in your browser, then try again.'
+            }
+          });
+          return;
         }
-
-        // FALLBACK: Try MediaRecorder capture
-        console.log(`[EXT][CAPTURE] Falling back to MediaRecorder capture...`);
-        try {
-          const mediaResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
-          if (mediaResult.success) {
-            console.log(`[EXT][CAPTURE] MediaRecorder fallback succeeded!`);
-            const videoInfo = captureResult.videoInfo || await getBasicVideoInfo(videoId, youtubeUrl);
-            sendResponse({
-              success: true,
-              videoInfo: videoInfo,
-              streamData: {
-                videoUrl: mediaResult.videoStorageUrl || null,
-                videoData: mediaResult.videoData || null,
-                videoSize: mediaResult.videoSize || 0,
-                quality: mediaResult.uploadedToStorage ? 'captured' : 'captured_local',
-                mimeType: mediaResult.mimeType || 'video/webm',
-                capturedAt: Date.now(),
-                source: mediaResult.uploadedToStorage ? 'mediarecorder_capture' : 'mediarecorder_local',
-                uploadedToStorage: mediaResult.uploadedToStorage || false,
-                uploadError: mediaResult.uploadError || null
-              },
-              message: 'Video captured via MediaRecorder.'
-            });
-            return;
-          }
-        } catch (mediaError) {
-          console.error(`[EXT][CAPTURE] MediaRecorder fallback failed: ${mediaError.message}`);
-        }
-
-        // All methods failed
+      } catch (captureError) {
+        console.error(`[EXT][CAPTURE] MediaRecorder exception: ${captureError.message}`);
         sendResponse({
           success: false,
-          error: 'All capture methods failed. Please ensure the YouTube video can play in your browser.',
-          videoInfo: captureResult.videoInfo
-        });
-        return;
-      } else {
-        // Stream interception failed
-        console.warn(`[EXT][CAPTURE] Stream interception failed: ${captureResult.error}`);
-        sendResponse({
-          success: false,
-          error: captureResult.error || 'Could not capture video streams',
+          error: captureError.message || 'Video capture failed',
+          code: 'CAPTURE_EXCEPTION',
           videoInfo: await getBasicVideoInfo(videoId, youtubeUrl)
         });
         return;

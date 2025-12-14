@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "1.7.0",
-  "description": "Extension-only video capture via MediaRecorder - no fallbacks, no server-side download",
+  "version": "1.8.0",
+  "description": "Video capture via MediaRecorder - background capture without visible window switching",
 
   "permissions": [
     "activeTab",
