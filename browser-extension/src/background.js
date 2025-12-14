@@ -690,13 +690,31 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
     };
 
     try {
-      // Open the YouTube video in a new tab
+      // Get the current active tab so we can switch back to it
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const originalTabId = currentTab?.id;
+
+      // Open the YouTube video - must be ACTIVE briefly for autoplay to work
+      // Chrome's autoplay policy requires the tab to have "user activation"
       captureTab = await chrome.tabs.create({
         url: url,
-        active: false // Open in background so user can continue working
+        active: true  // Must be active for autoplay to trigger
       });
 
-      console.log(`[EXT][BG] Opened capture tab ${captureTab.id}`);
+      console.log(`[EXT][BG] Opened capture tab ${captureTab.id} (active for autoplay)`);
+
+      // Immediately switch back to the original tab (within 100ms)
+      // The brief activation is enough to grant autoplay permission
+      if (originalTabId) {
+        setTimeout(async () => {
+          try {
+            await chrome.tabs.update(originalTabId, { active: true });
+            console.log(`[EXT][BG] Switched back to original tab ${originalTabId}`);
+          } catch (e) {
+            // Original tab might have been closed
+          }
+        }, 100);
+      }
 
       // Track this tab for the video ID
       tabVideoMap.set(captureTab.id, videoId);
