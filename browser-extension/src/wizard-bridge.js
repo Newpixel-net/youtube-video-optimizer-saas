@@ -21,7 +21,7 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '1.6.0',
+        version: '1.6.1',
         extensionId: EXTENSION_ID,
         features: ['auto_capture', 'network_intercept', 'stream_cache', 'server_fallback', 'browser_upload']
       }
@@ -29,10 +29,10 @@
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '1.6.0';
+    window.__YVO_EXTENSION_VERSION__ = '1.6.1';
     window.__YVO_EXTENSION_FEATURES__ = ['auto_capture', 'network_intercept', 'stream_cache', 'server_fallback', 'browser_upload'];
 
-    console.log('[YVO Extension] Bridge ready - Video Wizard integration active (v1.6.0 with segment capture)');
+    console.log('[YVO Extension] Bridge ready - Video Wizard integration active (v1.6.1 - no-tab-during-analysis fix)');
   }
 
   /**
@@ -52,7 +52,7 @@
         break;
 
       case 'checkExtension':
-        sendResponse(requestId, { installed: true, version: '1.6.0' });
+        sendResponse(requestId, { installed: true, version: '1.6.1' });
         break;
 
       case 'getStoredVideo':
