@@ -756,27 +756,23 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
           return;
         }
 
-        // Try to trigger playback more aggressively
-        if (!playbackTriggered && attempts >= 3) {
+        // Try to trigger playback - wait for YouTube page to fully load (at least 3s)
+        // Then retry frequently since muted autoplay should work in background tabs
+        if (attempts >= 6 && attempts <= 26 && attempts % 2 === 0) {
           try {
-            await chrome.tabs.sendMessage(captureTab.id, { action: 'triggerPlayback' });
-            console.log(`[EXT][BG] Triggered playback at attempt ${attempts}`);
-            playbackTriggered = true;
-          } catch (e) {
-            // Tab might not be ready yet - this is expected
-            if (attempts === 3 || attempts === 6 || attempts === 10) {
-              console.log(`[EXT][BG] Playback trigger failed (attempt ${attempts}), tab may not be ready`);
+            const playResult = await chrome.tabs.sendMessage(captureTab.id, { action: 'triggerPlayback' });
+            if (!playbackTriggered) {
+              console.log(`[EXT][BG] First playback trigger at attempt ${attempts} (${attempts * 0.5}s)`);
+              playbackTriggered = true;
             }
-          }
-        }
-
-        // Re-try playback trigger periodically
-        if (playbackTriggered && (attempts === 12 || attempts === 18 || attempts === 24)) {
-          try {
-            await chrome.tabs.sendMessage(captureTab.id, { action: 'triggerPlayback' });
-            console.log(`[EXT][BG] Re-triggered playback at attempt ${attempts}`);
+            if (playResult?.isPlaying) {
+              console.log(`[EXT][BG] Video now playing (muted=${playResult.muted})`);
+            }
           } catch (e) {
-            // Ignore
+            // Tab/content script might not be ready yet
+            if (attempts === 6 || attempts === 10 || attempts === 14) {
+              console.log(`[EXT][BG] Playback trigger failed (attempt ${attempts}): ${e.message}`);
+            }
           }
         }
 

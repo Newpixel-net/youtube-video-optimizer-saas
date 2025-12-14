@@ -152,26 +152,47 @@ async function triggerVideoPlayback() {
       return { success: true, alreadyPlaying: true };
     }
 
-    // Try multiple methods to start playback
-    console.log('[YVO Content] Triggering video playback...');
+    // CRITICAL: Mute the video first - muted videos CAN autoplay in background tabs!
+    // Chrome's autoplay policy allows muted videos to play without user interaction
+    console.log('[YVO Content] Muting video for background autoplay...');
+    video.muted = true;
 
-    // Method 1: Click play button
-    const playButton = document.querySelector('.ytp-play-button, button.ytp-play-button');
-    if (playButton) {
-      playButton.click();
-      await new Promise(resolve => setTimeout(resolve, 500));
+    // Also click YouTube's mute button if present (for consistency with UI state)
+    const muteButton = document.querySelector('.ytp-mute-button');
+    if (muteButton && muteButton.getAttribute('data-title-no-tooltip') !== 'Unmute') {
+      try { muteButton.click(); } catch (e) {}
     }
 
-    // Method 2: Direct video.play()
+    // Try multiple methods to start playback
+    console.log('[YVO Content] Triggering video playback (muted)...');
+
+    // Method 1: Direct video.play() - should work now that video is muted
+    try {
+      await video.play();
+      console.log('[YVO Content] Muted autoplay succeeded');
+    } catch (e) {
+      console.log('[YVO Content] Muted play failed:', e.message);
+    }
+
+    // Method 2: Click play button if still paused
+    if (video.paused) {
+      const playButton = document.querySelector('.ytp-play-button, button.ytp-play-button');
+      if (playButton) {
+        playButton.click();
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    // Method 3: Try direct play again
     if (video.paused) {
       try {
         await video.play();
       } catch (e) {
-        console.log('[YVO Content] Direct play failed (autoplay restrictions):', e.message);
+        console.log('[YVO Content] Second play attempt failed:', e.message);
       }
     }
 
-    // Method 3: Simulate user interaction and try again
+    // Method 4: Simulate user interaction and try again
     if (video.paused) {
       // Trigger a user-like interaction
       video.dispatchEvent(new MouseEvent('click', {
@@ -197,6 +218,7 @@ async function triggerVideoPlayback() {
     return {
       success: true,
       isPlaying: isPlaying,
+      muted: video.muted,
       currentTime: video.currentTime,
       duration: video.duration
     };
