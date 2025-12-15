@@ -312,20 +312,57 @@ async function handleCaptureForWizard(message) {
       return;
     }
     responseSent = true;
-    console.log(`[EXT][CAPTURE] === RESULT === success=${response?.success} error=${response?.error || 'none'}`);
+
+    // Calculate response size for diagnostics
+    let responseSize = 0;
+    try {
+      responseSize = JSON.stringify(response).length;
+    } catch (e) {
+      responseSize = -1;
+    }
+    const sizeMB = (responseSize / 1024 / 1024).toFixed(2);
+    console.log(`[EXT][CAPTURE] === RESULT === success=${response?.success} error=${response?.error || 'none'} size=${sizeMB}MB`);
 
     // Store result in chrome.storage - this is the PRIMARY communication method
     if (bridgeRequestId) {
       try {
-        await chrome.storage.local.set({
+        const storagePayload = {
           [`bridge_result_${bridgeRequestId}`]: {
             response: response,
             timestamp: Date.now()
           }
-        });
-        console.log(`[EXT][CAPTURE] Result stored in chrome.storage (bridgeRequestId=${bridgeRequestId})`);
+        };
+        await chrome.storage.local.set(storagePayload);
+        console.log(`[EXT][CAPTURE] Result stored in chrome.storage (bridgeRequestId=${bridgeRequestId}, size=${sizeMB}MB)`);
       } catch (storageError) {
         console.error('[EXT][CAPTURE] CRITICAL: Failed to store result in chrome.storage:', storageError.message);
+
+        // If storage fails due to quota, try storing without video data
+        if (response?.streamData?.videoData && (storageError.message.includes('quota') || storageError.message.includes('QUOTA'))) {
+          console.log('[EXT][CAPTURE] Storage quota exceeded, trying to store without video data...');
+          try {
+            const lightResponse = {
+              ...response,
+              streamData: {
+                ...response.streamData,
+                videoData: null,
+                videoDataTooLarge: true,
+                originalVideoSize: response.streamData.videoSize
+              }
+            };
+            await chrome.storage.local.set({
+              [`bridge_result_${bridgeRequestId}`]: {
+                response: lightResponse,
+                timestamp: Date.now()
+              }
+            });
+            console.log(`[EXT][CAPTURE] Light result stored (without video data)`);
+            return;
+          } catch (lightError) {
+            console.error('[EXT][CAPTURE] Even light storage failed:', lightError.message);
+          }
+        }
+
         // Try one more time after a short delay
         try {
           await new Promise(resolve => setTimeout(resolve, 500));
