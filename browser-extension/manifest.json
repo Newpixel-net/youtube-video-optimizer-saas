@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.2.7",
-  "description": "Fix video capture waiting for video to be ready before capturing",
+  "version": "2.2.8",
+  "description": "Comprehensive video capture fixes: clone tracks, wait for ready state, improve playback init",
 
   "permissions": [
     "activeTab",
