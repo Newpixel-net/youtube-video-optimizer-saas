@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.5.0",
-  "description": "Simplified capture flow, removed unreliable stream interception, direct MediaRecorder path",
+  "version": "2.5.2",
+  "description": "Reliable capture result flow with chrome.storage backup, fixes message channel issues",
 
   "permissions": [
     "activeTab",

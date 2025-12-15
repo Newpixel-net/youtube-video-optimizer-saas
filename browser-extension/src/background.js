@@ -2177,29 +2177,75 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // Generate a unique capture ID for this request
     const captureId = `capture_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Set up a Promise that resolves when we receive the capture result via message
+    // Clear any previous result for this capture ID
+    await chrome.storage.local.remove([`capture_result_${captureId}`]);
+
+    // Set up a Promise that resolves when we receive the capture result
+    // Uses BOTH message passing AND chrome.storage polling for reliability
     const captureResultPromise = new Promise((resolveCapture, rejectCapture) => {
+      let resolved = false;
+
+      // Timeout handler
       const messageTimeout = setTimeout(() => {
-        chrome.runtime.onMessage.removeListener(messageHandler);
-        rejectCapture(new Error(`Capture timed out after ${(captureTimeout / 1000).toFixed(0)} seconds`));
+        if (!resolved) {
+          resolved = true;
+          chrome.runtime.onMessage.removeListener(messageHandler);
+          rejectCapture(new Error(`Capture timed out after ${(captureTimeout / 1000).toFixed(0)} seconds`));
+        }
       }, captureTimeout);
 
+      // Poll chrome.storage as fallback (in case message passing fails)
+      const storagePoller = setInterval(async () => {
+        if (resolved) {
+          clearInterval(storagePoller);
+          return;
+        }
+        try {
+          const stored = await chrome.storage.local.get([`capture_result_${captureId}`]);
+          const result = stored[`capture_result_${captureId}`];
+          if (result) {
+            console.log(`[EXT][CAPTURE] Retrieved result from storage (fallback)`);
+            resolved = true;
+            clearTimeout(messageTimeout);
+            clearInterval(storagePoller);
+            chrome.runtime.onMessage.removeListener(messageHandler);
+            // Clean up storage
+            chrome.storage.local.remove([`capture_result_${captureId}`]);
+            if (result.error) {
+              rejectCapture(new Error(result.error));
+            } else {
+              resolveCapture(result.result);
+            }
+          }
+        } catch (e) {
+          // Ignore storage errors
+        }
+      }, 1000); // Check every second
+
+      // Message handler (primary method)
       function messageHandler(message, sender, sendResponse) {
         if (message.captureId === captureId) {
           if (message.type === 'CAPTURE_STARTED') {
             console.log(`[EXT][CAPTURE] Received CAPTURE_STARTED - function is running!`);
-            // IMPORTANT: Must call sendResponse when returning true
             sendResponse({ received: true });
             return true;
           }
 
           if (message.type === 'CAPTURE_RESULT') {
-            console.log(`[EXT][CAPTURE] Received CAPTURE_RESULT`);
+            if (resolved) {
+              sendResponse({ received: true, alreadyHandled: true });
+              return true;
+            }
+            console.log(`[EXT][CAPTURE] Received CAPTURE_RESULT via message`);
+            resolved = true;
             clearTimeout(messageTimeout);
+            clearInterval(storagePoller);
             chrome.runtime.onMessage.removeListener(messageHandler);
 
-            // IMPORTANT: Must call sendResponse when returning true
             sendResponse({ received: true });
+
+            // Clean up storage (in case relay also stored it)
+            chrome.storage.local.remove([`capture_result_${captureId}`]);
 
             if (message.error) {
               rejectCapture(new Error(message.error));
@@ -2209,7 +2255,6 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             return true;
           }
         }
-        // Return false for messages we don't handle
         return false;
       }
 
@@ -2218,6 +2263,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     // First, inject a message relay script into the content script context
     // This listens for postMessage from the MAIN world and forwards to service worker
+    // ALSO stores result in chrome.storage as a reliable backup
     await chrome.scripting.executeScript({
       target: { tabId: youtubeTab.id },
       world: 'ISOLATED',
@@ -2242,8 +2288,24 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
               }).then(response => {
                 console.log(`[EXT][RELAY] Start notification acknowledged`);
               }).catch(e => console.warn('[EXT][RELAY] Start notification error (non-fatal):', e.message));
+
             } else if (event.data.type === 'YVO_CAPTURE_RESULT') {
-              // Forward result to service worker
+              // CRITICAL: Store result in chrome.storage FIRST (reliable backup)
+              const storageKey = `capture_result_${cid}`;
+              const resultData = {
+                result: event.data.result,
+                error: event.data.error,
+                timestamp: Date.now()
+              };
+
+              console.log(`[EXT][RELAY] Storing result in chrome.storage (key=${storageKey})`);
+              chrome.storage.local.set({ [storageKey]: resultData }).then(() => {
+                console.log(`[EXT][RELAY] Result stored in chrome.storage`);
+              }).catch(e => {
+                console.error(`[EXT][RELAY] Failed to store in chrome.storage:`, e.message);
+              });
+
+              // Also send via message (may fail, but storage is backup)
               console.log(`[EXT][RELAY] Forwarding result to service worker (success=${!!event.data.result?.success}, error=${event.data.error || 'none'})`);
               chrome.runtime.sendMessage({
                 type: 'CAPTURE_RESULT',
@@ -2251,8 +2313,11 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
                 result: event.data.result,
                 error: event.data.error
               }).then(response => {
-                console.log(`[EXT][RELAY] Result forwarded successfully`);
-              }).catch(e => console.error('[EXT][RELAY] Failed to forward result:', e.message));
+                console.log(`[EXT][RELAY] Result forwarded via message`);
+              }).catch(e => {
+                console.warn('[EXT][RELAY] Message failed, but result is in storage:', e.message);
+              });
+
               // Clean up
               window.removeEventListener('message', window.__captureMessageHandler);
             }
@@ -2262,7 +2327,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         };
 
         window.addEventListener('message', window.__captureMessageHandler);
-        console.log(`[EXT][RELAY] Message relay installed for capture ${cid}`);
+        console.log(`[EXT][RELAY] Message relay installed for capture ${cid} (with storage backup)`);
       },
       args: [captureId]
     });
