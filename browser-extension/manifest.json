@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.3.0",
-  "description": "Fixed async capture with YouTube player API for loading videos",
+  "version": "2.3.1",
+  "description": "Tab focus, aggressive retry loop for video loading, better diagnostics",
 
   "permissions": [
     "activeTab",
