@@ -2188,6 +2188,8 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         if (message.captureId === captureId) {
           if (message.type === 'CAPTURE_STARTED') {
             console.log(`[EXT][CAPTURE] Received CAPTURE_STARTED - function is running!`);
+            // IMPORTANT: Must call sendResponse when returning true
+            sendResponse({ received: true });
             return true;
           }
 
@@ -2195,6 +2197,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             console.log(`[EXT][CAPTURE] Received CAPTURE_RESULT`);
             clearTimeout(messageTimeout);
             chrome.runtime.onMessage.removeListener(messageHandler);
+
+            // IMPORTANT: Must call sendResponse when returning true
+            sendResponse({ received: true });
 
             if (message.error) {
               rejectCapture(new Error(message.error));
@@ -2204,6 +2209,8 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             return true;
           }
         }
+        // Return false for messages we don't handle
+        return false;
       }
 
       chrome.runtime.onMessage.addListener(messageHandler);
@@ -2232,7 +2239,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
               chrome.runtime.sendMessage({
                 type: 'CAPTURE_STARTED',
                 captureId: cid
-              }).catch(e => console.error('[EXT][RELAY] Failed to forward start:', e.message));
+              }).then(response => {
+                console.log(`[EXT][RELAY] Start notification acknowledged`);
+              }).catch(e => console.warn('[EXT][RELAY] Start notification error (non-fatal):', e.message));
             } else if (event.data.type === 'YVO_CAPTURE_RESULT') {
               // Forward result to service worker
               console.log(`[EXT][RELAY] Forwarding result to service worker (success=${!!event.data.result?.success}, error=${event.data.error || 'none'})`);
@@ -2241,6 +2250,8 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
                 captureId: cid,
                 result: event.data.result,
                 error: event.data.error
+              }).then(response => {
+                console.log(`[EXT][RELAY] Result forwarded successfully`);
               }).catch(e => console.error('[EXT][RELAY] Failed to forward result:', e.message));
               // Clean up
               window.removeEventListener('message', window.__captureMessageHandler);
