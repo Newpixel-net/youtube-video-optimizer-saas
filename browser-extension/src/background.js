@@ -289,31 +289,55 @@ console.log('[EXT][BG] Service worker ready, message listener registered');
  * NOW SUPPORTS: Segment capture with startTime/endTime parameters
  */
 async function handleCaptureForWizard(message, sendResponse) {
-  const { videoId, youtubeUrl, autoCapture = true, startTime, endTime, quality } = message;
+  const { videoId, youtubeUrl, autoCapture = true, startTime, endTime, quality, autoOpenTab = false } = message;
 
-  console.log(`[EXT][CAPTURE] start videoId=${videoId} startTime=${startTime} endTime=${endTime} autoCapture=${autoCapture}`);
+  console.log(`[EXT][CAPTURE] === START === videoId=${videoId} autoCapture=${autoCapture} autoOpenTab=${autoOpenTab}`);
 
+  // CRITICAL: Ensure sendResponse is ALWAYS called
+  let responseSent = false;
+  const safeResponse = (response) => {
+    if (responseSent) {
+      console.log('[EXT][CAPTURE] Response already sent, ignoring duplicate');
+      return;
+    }
+    responseSent = true;
+    console.log(`[EXT][CAPTURE] === RESPONSE === success=${response?.success} error=${response?.error || 'none'}`);
+    try {
+      sendResponse(response);
+    } catch (e) {
+      console.error('[EXT][CAPTURE] Failed to send response:', e.message);
+    }
+  };
+
+  // Helper: Promise with timeout
+  const withTimeout = (promise, ms, errorMsg) => {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms))
+    ]);
+  };
+
+  // Validate video ID
   if (!videoId || !isValidVideoId(videoId)) {
     console.error('[EXT][CAPTURE] FAIL: Invalid video ID');
-    sendResponse({ success: false, error: 'Invalid video ID', code: 'INVALID_VIDEO_ID' });
+    safeResponse({ success: false, error: 'Invalid video ID', code: 'INVALID_VIDEO_ID' });
     return;
   }
 
-  // FIX: If autoCapture is false, only return video metadata without capturing
-  // This is used during analysis mode to avoid long waits
+  // If autoCapture is false, only return video metadata
   if (autoCapture === false) {
-    console.log(`[EXT][CAPTURE] autoCapture=false - returning metadata only (no capture)`);
+    console.log(`[EXT][CAPTURE] autoCapture=false - returning metadata only`);
     try {
       const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-      sendResponse({
+      safeResponse({
         success: true,
         videoInfo: videoInfo,
-        streamData: null, // No stream data - no capture was performed
+        streamData: null,
         message: 'Video info retrieved (capture skipped - autoCapture=false)'
       });
     } catch (infoError) {
       console.error(`[EXT][CAPTURE] Failed to get video info: ${infoError.message}`);
-      sendResponse({
+      safeResponse({
         success: false,
         error: `Failed to get video info: ${infoError.message}`,
         code: 'VIDEO_INFO_FAILED'
@@ -322,113 +346,14 @@ async function handleCaptureForWizard(message, sendResponse) {
     return;
   }
 
-  console.log(`[EXT][CAPTURE] Capture request for video: ${videoId}, autoCapture=${autoCapture}`);
-
-  // Helper function to process captured streams using MediaRecorder
-  // MediaRecorder is the primary capture method - no visible window switching
-  async function processAndUploadStreams(intercepted, source) {
-    console.log(`[EXT][CAPTURE] processAndUploadStreams using MediaRecorder (background capture)`);
-
-    const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-
-    // Use MediaRecorder capture - opens tab in background (active: false)
-    const segmentInfo = (startTime !== undefined && endTime !== undefined)
-      ? `segment ${startTime}s-${endTime}s`
-      : 'auto (up to 5 min)';
-    console.log(`[EXT][CAPTURE] MediaRecorder capture - ${segmentInfo}`);
-
-    let uploadResult;
-    try {
-      uploadResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
-      console.log(`[EXT][CAPTURE] MediaRecorder returned: success=${uploadResult.success} error=${uploadResult.error || 'none'}`);
-    } catch (captureError) {
-      console.error(`[EXT][CAPTURE] MediaRecorder exception: ${captureError.message}`);
-      uploadResult = { success: false, error: captureError.message };
-    }
-
-    if (uploadResult.success) {
-      const capturedSegment = uploadResult.capturedSegment || {};
-
-      // Check if we have server storage URL or local fallback
-      if (uploadResult.uploadedToStorage && uploadResult.videoStorageUrl) {
-        // Server upload succeeded
-        console.log(`[EXT][UPLOAD] success url=${uploadResult.videoStorageUrl}`);
-        return {
-          success: true,
-          videoInfo: videoInfo,
-          streamData: {
-            videoUrl: uploadResult.videoStorageUrl,
-            storagePath: uploadResult.storagePath || null,
-            quality: 'captured',
-            mimeType: uploadResult.mimeType || 'video/webm',
-            capturedAt: Date.now(),
-            source: 'mediarecorder_capture',
-            uploadedToStorage: true,
-            capturedSegment: capturedSegment,
-            captureStartTime: capturedSegment.startTime,
-            captureEndTime: capturedSegment.endTime,
-            captureDuration: capturedSegment.duration
-          },
-          message: `Video segment (${capturedSegment.startTime || 0}s-${capturedSegment.endTime || '?'}s) captured and uploaded.`
-        };
-      } else if (uploadResult.videoData) {
-        // Capture succeeded but server upload failed - return video data for frontend to upload
-        console.log(`[EXT][CAPTURE] blob size=${(uploadResult.videoSize / 1024 / 1024).toFixed(2)}MB`);
-        console.warn(`[EXT][UPLOAD] server unavailable: ${uploadResult.uploadError}`);
-        return {
-          success: true,
-          videoInfo: videoInfo,
-          streamData: {
-            videoUrl: uploadResult.blobUrl || null,
-            videoData: uploadResult.videoData,  // Base64 encoded video for frontend upload
-            videoSize: uploadResult.videoSize,
-            quality: 'captured_local',
-            mimeType: uploadResult.mimeType || 'video/webm',
-            capturedAt: Date.now(),
-            source: 'mediarecorder_local',
-            uploadedToStorage: false,
-            uploadError: uploadResult.uploadError,
-            capturedSegment: capturedSegment,
-            captureStartTime: capturedSegment.startTime,
-            captureEndTime: capturedSegment.endTime,
-            captureDuration: capturedSegment.duration
-          },
-          message: `Video captured locally. Frontend will upload to storage.`
-        };
-      }
-    }
-
-    // Capture failed - return detailed error
-    const errorMsg = uploadResult.error || 'MediaRecorder capture failed';
-    console.error(`[EXT][CAPTURE] FAIL: ${errorMsg}`);
-    return {
-      success: false,
-      error: errorMsg,
-      code: 'CAPTURE_FAILED',
-      videoInfo: videoInfo,
-      details: {
-        captureError: uploadResult.error,
-        message: 'Please ensure the YouTube video loads and plays in your browser.'
-      }
-    };
-  }
-
   try {
-    // STEP 1: Check if we already have intercepted streams (from previous playback)
-    let intercepted = getInterceptedStreams(videoId);
-    if (intercepted && intercepted.videoUrl) {
-      console.log(`[EXT][CAPTURE] Using cached intercepted streams for ${videoId}`);
-      const result = await processAndUploadStreams(intercepted, 'network_intercept_cached');
-      sendResponse(result);
-      return;
-    }
-
-    // STEP 2: Find existing YouTube tab with this video
+    // STEP 1: Find YouTube tab with this video
+    console.log(`[EXT][CAPTURE] Looking for YouTube tab with video ${videoId}...`);
     const tabs = await chrome.tabs.query({
       url: ['*://www.youtube.com/*', '*://youtube.com/*']
     });
 
-    let targetTab = tabs.find(tab => {
+    let youtubeTab = tabs.find(tab => {
       try {
         const url = new URL(tab.url);
         return url.searchParams.get('v') === videoId ||
@@ -439,205 +364,243 @@ async function handleCaptureForWizard(message, sendResponse) {
       }
     });
 
-    // Try to get info from existing tab
-    if (targetTab) {
-      let videoInfo;
-      try {
-        videoInfo = await chrome.tabs.sendMessage(targetTab.id, {
-          action: 'getVideoInfo'
-        });
-      } catch (msgError) {
-        console.warn(`[EXT][CAPTURE] Could not communicate with existing tab: ${msgError.message}`);
+    // Track if we auto-opened a tab (so we can close it after capture)
+    let autoOpenedTabId = null;
 
-        // Content script not loaded - try to inject it
-        console.log(`[EXT][CAPTURE] Injecting content script into tab ${targetTab.id}...`);
+    if (!youtubeTab) {
+      console.log(`[EXT][CAPTURE] No YouTube tab found with video ${videoId}`);
+
+      if (autoOpenTab) {
+        // AUTO-OPEN: Create a new tab with the video
+        console.log(`[EXT][CAPTURE] autoOpenTab=true, opening new YouTube tab...`);
+        const videoUrl = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
+
         try {
-          await chrome.scripting.executeScript({
-            target: { tabId: targetTab.id },
-            files: ['src/content.js']
+          // Create tab (active: true to ensure video loads properly)
+          const newTab = await chrome.tabs.create({
+            url: videoUrl,
+            active: true
           });
+          autoOpenedTabId = newTab.id;
+          youtubeTab = newTab;
 
-          // Wait a moment for script to initialize
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.log(`[EXT][CAPTURE] Created new tab ${newTab.id}, waiting for video to load...`);
 
-          // Try again
-          videoInfo = await chrome.tabs.sendMessage(targetTab.id, {
-            action: 'getVideoInfo'
-          });
-          console.log(`[EXT][CAPTURE] Content script injection successful`);
-        } catch (injectError) {
-          console.error(`[EXT][CAPTURE] Content script injection failed: ${injectError.message}`);
-          targetTab = null;
-        }
-      }
+          // Wait for the page to load and video to initialize
+          // We need to wait longer for YouTube to fully load its player
+          await new Promise(resolve => setTimeout(resolve, 5000));
 
-      if (targetTab && !videoInfo?.success) {
-        // Tab exists but returned error - still try to proceed with autoCapture
-        console.warn(`[EXT][CAPTURE] Tab responded but failed: ${videoInfo?.error || 'Unknown error'}`);
-        targetTab = null;
-      }
-
-      if (targetTab && videoInfo?.success) {
-
-      // Check for intercepted streams again (in case video started playing)
-      intercepted = getInterceptedStreams(videoId);
-      let streamData = null;
-
-      if (intercepted && intercepted.videoUrl) {
-        console.log(`[EXT][BG] Using INTERCEPTED stream URLs for ${videoId}`);
-        streamData = {
-          videoUrl: intercepted.videoUrl,
-          audioUrl: intercepted.audioUrl,
-          quality: 'intercepted',
-          mimeType: 'video/mp4',
-          capturedAt: intercepted.capturedAt,
-          source: 'network_intercept'
-        };
-      } else {
-        // Try content script extraction (may fail due to signature cipher)
-        console.log(`[EXT][BG] No intercepted streams, trying content script...`);
-        try {
-          const streamResponse = await chrome.tabs.sendMessage(targetTab.id, {
-            action: 'getVideoStream',
-            quality: '720'
-          });
-
-          if (streamResponse?.success && streamResponse.videoUrl) {
-            streamData = {
-              videoUrl: streamResponse.videoUrl,
-              audioUrl: streamResponse.audioUrl,
-              quality: streamResponse.quality,
-              mimeType: streamResponse.mimeType,
-              source: 'content_script'
-            };
+          // Inject content script into the new tab
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: newTab.id },
+              files: ['src/content.js']
+            });
+            console.log(`[EXT][CAPTURE] Content script injected into new tab`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } catch (injectError) {
+            console.warn(`[EXT][CAPTURE] Content script injection into new tab failed: ${injectError.message}`);
           }
-        } catch (streamError) {
-          console.warn('[EXT][BG] Content script stream capture failed:', streamError.message);
-        }
-      }
 
-      // If still no streams and autoCapture is enabled, trigger playback
-      if (!streamData && autoCapture) {
-        console.log(`[EXT][BG] No streams yet, triggering video playback...`);
-        try {
-          await chrome.tabs.sendMessage(targetTab.id, { action: 'triggerPlayback' });
-
-          // Wait for playback to trigger network interception
-          await new Promise(resolve => setTimeout(resolve, 3000));
-
-          intercepted = getInterceptedStreams(videoId);
-          if (intercepted && intercepted.videoUrl) {
-            streamData = {
-              videoUrl: intercepted.videoUrl,
-              audioUrl: intercepted.audioUrl,
-              quality: 'intercepted',
-              mimeType: 'video/mp4',
-              capturedAt: intercepted.capturedAt,
-              source: 'network_intercept_triggered'
-            };
-          }
-        } catch (playError) {
-          console.warn('[EXT][BG] Trigger playback failed:', playError.message);
-        }
-      }
-
-      // CRITICAL FIX: Always use MediaRecorder as primary capture method
-      // Network-intercepted streams are IP-restricted and often fail on server
-      // MediaRecorder captures directly from the video element - no IP restrictions
-
-      console.log(`[EXT][CAPTURE] YouTube tab found - using MediaRecorder as PRIMARY capture method`);
-      console.log(`[EXT][CAPTURE] Stream URLs available: ${streamData ? 'yes' : 'no'} (not needed for MediaRecorder)`);
-
-      // Call MediaRecorder capture directly - this is the reliable path
-      try {
-        const mediaRecorderResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
-
-        if (mediaRecorderResult.success) {
-          console.log(`[EXT][CAPTURE] MediaRecorder capture successful`);
-
-          const result = {
-            success: true,
-            videoInfo: videoInfo.videoInfo,
-            streamData: {
-              videoUrl: mediaRecorderResult.videoStorageUrl || null,
-              videoData: mediaRecorderResult.videoData || null,
-              videoSize: mediaRecorderResult.videoSize || null,
-              storagePath: mediaRecorderResult.storagePath || null,
-              quality: 'captured',
-              mimeType: mediaRecorderResult.mimeType || 'video/webm',
-              capturedAt: Date.now(),
-              source: 'mediarecorder_primary',
-              uploadedToStorage: mediaRecorderResult.uploadedToStorage || false,
-              uploadError: mediaRecorderResult.uploadError || null,
-              capturedSegment: mediaRecorderResult.capturedSegment || null,
-              captureStartTime: mediaRecorderResult.capturedSegment?.startTime,
-              captureEndTime: mediaRecorderResult.capturedSegment?.endTime,
-              captureDuration: mediaRecorderResult.capturedSegment?.duration
-            },
-            message: mediaRecorderResult.uploadedToStorage
-              ? 'Video captured and uploaded successfully.'
-              : 'Video captured locally. Frontend will upload to storage.'
-          };
-
-          // Store for later retrieval
-          storedVideoData = {
-            videoInfo: videoInfo.videoInfo,
-            streamData: result.streamData,
-            capturedAt: Date.now()
-          };
-
-          sendResponse(result);
-          return;
-        } else {
-          // MediaRecorder failed - return the specific error
-          console.error(`[EXT][CAPTURE] MediaRecorder failed: ${mediaRecorderResult.error}`);
-          sendResponse({
-            success: false,
-            videoInfo: videoInfo.videoInfo,
-            error: mediaRecorderResult.error || 'Video capture failed',
-            code: mediaRecorderResult.code || 'MEDIARECORDER_FAILED',
-            details: {
-              message: 'MediaRecorder capture failed. Please ensure the video is playing and try again.'
+          // Verify the tab has the video loaded
+          let videoReady = false;
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            console.log(`[EXT][CAPTURE] Checking video readiness (attempt ${attempt}/5)...`);
+            try {
+              const checkResult = await withTimeout(
+                chrome.tabs.sendMessage(newTab.id, { action: 'getVideoInfo' }),
+                3000,
+                'Video check timeout'
+              );
+              if (checkResult?.success && checkResult?.videoInfo?.readyState >= 2) {
+                videoReady = true;
+                console.log(`[EXT][CAPTURE] Video is ready! readyState=${checkResult.videoInfo.readyState}`);
+                break;
+              }
+              console.log(`[EXT][CAPTURE] Video not ready yet: readyState=${checkResult?.videoInfo?.readyState || 0}`);
+            } catch (e) {
+              console.log(`[EXT][CAPTURE] Video check failed: ${e.message}`);
             }
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+
+          if (!videoReady) {
+            console.warn(`[EXT][CAPTURE] Video may not be fully loaded, proceeding anyway...`);
+          }
+
+        } catch (tabError) {
+          console.error(`[EXT][CAPTURE] Failed to create YouTube tab: ${tabError.message}`);
+          safeResponse({
+            success: false,
+            error: 'Failed to open YouTube video tab: ' + tabError.message,
+            code: 'TAB_OPEN_FAILED',
+            videoInfo: await getBasicVideoInfo(videoId, youtubeUrl)
           });
           return;
         }
-      } catch (captureError) {
-        console.error(`[EXT][CAPTURE] MediaRecorder exception: ${captureError.message}`);
-        sendResponse({
+      } else {
+        // No autoOpenTab, return error asking user to open the video
+        safeResponse({
           success: false,
-          videoInfo: videoInfo.videoInfo,
-          error: captureError.message,
-          code: 'CAPTURE_EXCEPTION',
+          error: 'Please open this video on YouTube first, then try exporting again.',
+          code: 'NO_YOUTUBE_TAB',
+          videoInfo: await getBasicVideoInfo(videoId, youtubeUrl),
           details: {
-            message: 'An error occurred during video capture.'
+            message: 'The extension needs the video to be open in a YouTube tab to capture it.',
+            youtubeUrl: youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`,
+            canAutoOpen: true  // Tell frontend it can retry with autoOpenTab=true
           }
         });
         return;
       }
-      }  // end if (targetTab && videoInfo?.success)
-    }  // end if (targetTab)
+    }
 
-    // No existing YouTube tab with this video
-    // USER-INITIATED CAPTURE: Don't auto-open tabs - require user to have video open
-    console.log(`[EXT][CAPTURE] No YouTube tab found with video ${videoId}`);
-    console.log(`[EXT][CAPTURE] User must open the video on YouTube first`);
+    console.log(`[EXT][CAPTURE] Using YouTube tab ${youtubeTab.id} (autoOpened=${!!autoOpenedTabId})`);
 
-    sendResponse({
-      success: false,
-      error: 'Please open this video on YouTube first, then try exporting again.',
-      code: 'NO_YOUTUBE_TAB',
-      videoInfo: await getBasicVideoInfo(videoId, youtubeUrl),
-      details: {
-        message: 'The extension needs the video to be open in a YouTube tab to capture it.',
-        youtubeUrl: youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`
+    // STEP 2: Ensure content script is loaded (with timeout)
+    console.log(`[EXT][CAPTURE] Ensuring content script is loaded...`);
+    let contentScriptReady = false;
+
+    try {
+      // Try to ping the content script
+      const pingResult = await withTimeout(
+        chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' }),
+        3000,
+        'Content script ping timeout'
+      );
+      contentScriptReady = pingResult?.success === true;
+      console.log(`[EXT][CAPTURE] Content script ping: ${contentScriptReady ? 'OK' : 'FAILED'}`);
+    } catch (pingError) {
+      console.log(`[EXT][CAPTURE] Content script not responding: ${pingError.message}`);
+    }
+
+    if (!contentScriptReady) {
+      // Inject content script
+      console.log(`[EXT][CAPTURE] Injecting content script...`);
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: youtubeTab.id },
+          files: ['src/content.js']
+        });
+        console.log(`[EXT][CAPTURE] Content script injected, waiting for init...`);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Verify injection worked
+        const verifyResult = await withTimeout(
+          chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' }),
+          3000,
+          'Content script verification timeout'
+        );
+        contentScriptReady = verifyResult?.success === true;
+        console.log(`[EXT][CAPTURE] Content script verification: ${contentScriptReady ? 'OK' : 'FAILED'}`);
+      } catch (injectError) {
+        console.error(`[EXT][CAPTURE] Content script injection failed: ${injectError.message}`);
       }
-    });
-    return;
+    }
+
+    // STEP 3: Skip directly to MediaRecorder capture
+    // Don't bother with stream interception or triggerPlayback - they're unreliable
+    console.log(`[EXT][CAPTURE] === STARTING MEDIARECORDER CAPTURE ===`);
+
+    let captureResult;
+    try {
+      captureResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
+      console.log(`[EXT][CAPTURE] MediaRecorder result: success=${captureResult?.success} error=${captureResult?.error || 'none'}`);
+    } catch (captureError) {
+      console.error(`[EXT][CAPTURE] MediaRecorder exception: ${captureError.message}`);
+      captureResult = { success: false, error: captureError.message };
+    }
+
+    // STEP 4: Process result
+    if (captureResult?.success) {
+      const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
+      const capturedSegment = captureResult.capturedSegment || {};
+
+      const response = {
+        success: true,
+        videoInfo: videoInfo,
+        streamData: {
+          videoUrl: captureResult.videoStorageUrl || null,
+          videoData: captureResult.videoData || null,
+          videoSize: captureResult.videoSize || null,
+          storagePath: captureResult.storagePath || null,
+          quality: 'captured',
+          mimeType: captureResult.mimeType || 'video/webm',
+          capturedAt: Date.now(),
+          source: 'mediarecorder_capture',
+          uploadedToStorage: captureResult.uploadedToStorage || false,
+          uploadError: captureResult.uploadError || null,
+          capturedSegment: capturedSegment,
+          captureStartTime: capturedSegment.startTime,
+          captureEndTime: capturedSegment.endTime,
+          captureDuration: capturedSegment.duration
+        },
+        message: captureResult.uploadedToStorage
+          ? 'Video captured and uploaded successfully.'
+          : 'Video captured locally. Frontend will upload to storage.'
+      };
+
+      // Store for later retrieval
+      storedVideoData = {
+        videoInfo: videoInfo,
+        streamData: response.streamData,
+        capturedAt: Date.now()
+      };
+
+      // Close auto-opened tab after successful capture
+      if (autoOpenedTabId) {
+        console.log(`[EXT][CAPTURE] Closing auto-opened tab ${autoOpenedTabId}...`);
+        try {
+          await chrome.tabs.remove(autoOpenedTabId);
+          console.log(`[EXT][CAPTURE] Auto-opened tab closed`);
+        } catch (closeError) {
+          console.warn(`[EXT][CAPTURE] Failed to close auto-opened tab: ${closeError.message}`);
+        }
+      }
+
+      safeResponse(response);
+    } else {
+      // Capture failed
+      const errorMsg = captureResult?.error || 'Video capture failed';
+
+      // Close auto-opened tab even on failure
+      if (autoOpenedTabId) {
+        console.log(`[EXT][CAPTURE] Closing auto-opened tab ${autoOpenedTabId} after failure...`);
+        try {
+          await chrome.tabs.remove(autoOpenedTabId);
+        } catch (closeError) {
+          console.warn(`[EXT][CAPTURE] Failed to close auto-opened tab: ${closeError.message}`);
+        }
+      }
+
+      safeResponse({
+        success: false,
+        error: errorMsg,
+        code: captureResult?.code || 'CAPTURE_FAILED',
+        videoInfo: await getBasicVideoInfo(videoId, youtubeUrl),
+        details: {
+          message: 'Please ensure the YouTube video is loaded and playing, then try again.'
+        }
+      });
+    }
 
   } catch (error) {
-    console.error('[EXT][BG] Capture for wizard error:', error);
-    sendResponse({ success: false, error: error.message });
+    console.error(`[EXT][CAPTURE] Unexpected error: ${error.message}`);
+
+    // Close auto-opened tab on unexpected error
+    if (autoOpenedTabId) {
+      try {
+        await chrome.tabs.remove(autoOpenedTabId);
+      } catch (closeError) {
+        // Ignore
+      }
+    }
+
+    safeResponse({
+      success: false,
+      error: error.message || 'Unexpected error during capture',
+      code: 'UNEXPECTED_ERROR'
+    });
   }
 }
 
