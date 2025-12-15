@@ -1338,100 +1338,126 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
           };
 
           recorder.onstop = async () => {
-            // Restore normal speed
-            videoElement.playbackRate = 1;
-            videoElement.pause();
+            try {
+              // Restore normal speed
+              videoElement.playbackRate = 1;
+              videoElement.pause();
 
-            console.log(`[EXT][CAPTURE] Recording stopped, chunks=${chunks.length}`);
-            const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
-            const blobSize = blob.size;
-            console.log(`[EXT][CAPTURE] blob size=${(blobSize / 1024 / 1024).toFixed(2)}MB`);
+              console.log(`[EXT][CAPTURE] Recording stopped, chunks=${chunks.length}`);
+              const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
+              const blobSize = blob.size;
+              console.log(`[EXT][CAPTURE] blob size=${(blobSize / 1024 / 1024).toFixed(2)}MB`);
 
-            if (blobSize < 10000) {
-              console.error('[EXT][CAPTURE] FAIL: Blob too small');
-              cleanup();
-              reject(new Error('Captured video too small - capture may have failed'));
-              return;
-            }
+              if (blobSize < 10000) {
+                console.error('[EXT][CAPTURE] FAIL: Blob too small');
+                cleanup();
+                reject(new Error('Captured video too small - capture may have failed'));
+                return;
+              }
 
-            // Track if we need to fall back to Base64
-            let directUploadSucceeded = false;
+              // Track if we need to fall back to Base64
+              let directUploadSucceeded = false;
 
-            // DECISION: Upload directly to server for large files to avoid 64MB message limit
-            if (blobSize > MAX_BASE64_SIZE && uploadUrl) {
-              console.log(`[EXT][CAPTURE] Large file (${(blobSize / 1024 / 1024).toFixed(2)}MB) - uploading directly to server`);
+              // DECISION: Upload directly to server for large files to avoid 64MB message limit
+              if (blobSize > MAX_BASE64_SIZE && uploadUrl) {
+                console.log(`[EXT][CAPTURE] Large file (${(blobSize / 1024 / 1024).toFixed(2)}MB) - uploading directly to server`);
 
-              try {
-                const formData = new FormData();
-                formData.append('video', blob, `captured_${videoId}.webm`);
-                formData.append('videoId', videoId);
-                formData.append('type', 'video');
-                formData.append('captureStart', String(startTime));
-                formData.append('captureEnd', String(endTime));
+                try {
+                  const formData = new FormData();
+                  formData.append('video', blob, `captured_${videoId}.webm`);
+                  formData.append('videoId', videoId);
+                  formData.append('type', 'video');
+                  formData.append('captureStart', String(startTime));
+                  formData.append('captureEnd', String(endTime));
 
-                const uploadResponse = await fetch(uploadUrl, {
-                  method: 'POST',
-                  body: formData
-                });
+                  const uploadResponse = await fetch(uploadUrl, {
+                    method: 'POST',
+                    body: formData
+                  });
 
-                if (!uploadResponse.ok) {
-                  const errorText = await uploadResponse.text();
-                  throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText.substring(0, 100)}`);
+                  if (!uploadResponse.ok) {
+                    const errorText = await uploadResponse.text();
+                    throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText.substring(0, 100)}`);
+                  }
+
+                  const uploadResult = await uploadResponse.json();
+                  console.log(`[EXT][CAPTURE] SUCCESS - Direct upload complete: ${uploadResult.url}`);
+
+                  directUploadSucceeded = true;
+                  captureCompleted = true;
+                  cleanup();
+                  resolve({
+                    success: true,
+                    uploadedDirectly: true,
+                    videoStorageUrl: uploadResult.url,
+                    videoSize: blobSize,
+                    mimeType: mimeType.split(';')[0],
+                    duration: duration,
+                    captureMethod: 'mediarecorder_direct_upload'
+                  });
+                  return; // Important: exit after successful direct upload
+                } catch (uploadError) {
+                  console.error(`[EXT][CAPTURE] Direct upload failed: ${uploadError.message}`);
+                  console.log('[EXT][CAPTURE] Attempting Base64 fallback (may fail for very large files)...');
+                  // Continue to Base64 fallback below
+                }
+              }
+
+              // SMALL FILE or FALLBACK after failed direct upload: Convert to Base64
+              if (!directUploadSucceeded) {
+                console.log(`[EXT][CAPTURE] Using Base64 transfer (${(blobSize / 1024 / 1024).toFixed(2)}MB)`);
+
+                // Warn if file is large (will likely hit 64MB message limit)
+                if (blobSize > MAX_BASE64_SIZE) {
+                  console.warn(`[EXT][CAPTURE] WARNING: File is ${(blobSize / 1024 / 1024).toFixed(2)}MB - may exceed Chrome message limit`);
                 }
 
-                const uploadResult = await uploadResponse.json();
-                console.log(`[EXT][CAPTURE] SUCCESS - Direct upload complete: ${uploadResult.url}`);
-
-                directUploadSucceeded = true;
-                captureCompleted = true;
-                cleanup();
-                resolve({
-                  success: true,
-                  uploadedDirectly: true,
-                  videoStorageUrl: uploadResult.url,
-                  videoSize: blobSize,
-                  mimeType: mimeType.split(';')[0],
-                  duration: duration,
-                  captureMethod: 'mediarecorder_direct_upload'
+                // Use a Promise wrapper for FileReader to ensure proper async handling
+                const base64Data = await new Promise((resolveReader, rejectReader) => {
+                  try {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      try {
+                        if (!reader.result) {
+                          rejectReader(new Error('FileReader result is null'));
+                          return;
+                        }
+                        const base64Parts = reader.result.split(',');
+                        if (base64Parts.length < 2) {
+                          rejectReader(new Error('Invalid base64 data format'));
+                          return;
+                        }
+                        resolveReader(base64Parts[1]);
+                      } catch (encodeError) {
+                        rejectReader(new Error('Failed to process base64: ' + encodeError.message));
+                      }
+                    };
+                    reader.onerror = () => {
+                      rejectReader(new Error('Failed to convert video to base64'));
+                    };
+                    reader.readAsDataURL(blob);
+                  } catch (readerError) {
+                    rejectReader(new Error('FileReader setup error: ' + readerError.message));
+                  }
                 });
-                return; // Important: exit after successful direct upload
-              } catch (uploadError) {
-                console.error(`[EXT][CAPTURE] Direct upload failed: ${uploadError.message}`);
-                console.log('[EXT][CAPTURE] Attempting Base64 fallback (may fail for very large files)...');
-                // Continue to Base64 fallback below
-              }
-            }
 
-            // SMALL FILE or FALLBACK after failed direct upload: Convert to Base64
-            if (!directUploadSucceeded) {
-              console.log(`[EXT][CAPTURE] Using Base64 transfer (${(blobSize / 1024 / 1024).toFixed(2)}MB)`);
-
-              // Warn if file is large (will likely hit 64MB message limit)
-              if (blobSize > MAX_BASE64_SIZE) {
-                console.warn(`[EXT][CAPTURE] WARNING: File is ${(blobSize / 1024 / 1024).toFixed(2)}MB - may exceed Chrome message limit`);
-              }
-
-              const reader = new FileReader();
-              reader.onloadend = () => {
                 console.log('[EXT][CAPTURE] SUCCESS - Video captured and encoded');
                 captureCompleted = true;
                 cleanup();
                 resolve({
                   success: true,
                   uploadedDirectly: false,
-                  videoData: reader.result.split(',')[1],
+                  videoData: base64Data,
                   videoSize: blobSize,
                   mimeType: mimeType.split(';')[0],
                   duration: duration,
                   captureMethod: 'mediarecorder'
                 });
-              };
-              reader.onerror = () => {
-                console.error('[EXT][CAPTURE] FAIL: Base64 encoding error');
-                cleanup();
-                reject(new Error('Failed to convert video to base64'));
-              };
-              reader.readAsDataURL(blob);
+              }
+            } catch (onstopError) {
+              console.error(`[EXT][CAPTURE] FAIL: Uncaught error in onstop: ${onstopError.message}`);
+              cleanup();
+              reject(new Error('Capture processing failed: ' + onstopError.message));
             }
           };
 
