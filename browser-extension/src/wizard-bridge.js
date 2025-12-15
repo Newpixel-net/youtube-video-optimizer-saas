@@ -21,18 +21,18 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '2.6.0',
+        version: '2.6.1',
         extensionId: EXTENSION_ID,
-        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow']
+        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback']
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '2.6.0';
-    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow'];
+    window.__YVO_EXTENSION_VERSION__ = '2.6.1';
+    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback'];
 
-    console.log('[EXT] Bridge ready - v2.6.0 with single capture flow');
+    console.log('[EXT] Bridge ready - v2.6.1 with storage fallback');
   }
 
   /**
@@ -54,8 +54,8 @@
       case 'checkExtension':
         sendResponse(requestId, {
           installed: true,
-          version: '2.6.0',
-          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow'],
+          version: '2.6.1',
+          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback'],
           maxBase64Size: 40 * 1024 * 1024 // 40MB - files larger than this upload directly
         });
         break;
@@ -72,7 +72,7 @@
 
   /**
    * Handle request to capture video from YouTube
-   * EXTENSION-ONLY CAPTURE - No fallbacks
+   * EXTENSION-ONLY CAPTURE - Uses chrome.storage as fallback for message channel issues
    * Supports segment capture with startTime/endTime parameters (clipStart/clipEnd from frontend)
    */
   async function handleGetVideoRequest(data, requestId) {
@@ -114,17 +114,70 @@
         : 'full video (up to 5 min)';
       console.log(`[EXT][CAPTURE] Capturing video: ${videoId}, ${segmentInfo}, autoCapture: ${autoCapture}, quality: ${quality || 'default'}`);
 
+      // Generate a unique bridge request ID for storage fallback
+      const bridgeRequestId = `bridge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Clear any previous result
+      await chrome.storage.local.remove([`bridge_result_${bridgeRequestId}`]);
+
       // Send message to background script to capture video
-      // Pass segment times if provided for precise capture
-      const response = await chrome.runtime.sendMessage({
-        action: 'captureVideoForWizard',
-        videoId: videoId,
-        youtubeUrl: youtubeUrl,
-        autoCapture: autoCapture,
-        startTime: captureStart,    // Segment start time in seconds
-        endTime: captureEnd,        // Segment end time in seconds
-        quality: quality
-      });
+      // Include bridgeRequestId so background can store result for fallback retrieval
+      let response = null;
+      let messageError = null;
+
+      try {
+        response = await chrome.runtime.sendMessage({
+          action: 'captureVideoForWizard',
+          videoId: videoId,
+          youtubeUrl: youtubeUrl,
+          autoCapture: autoCapture,
+          startTime: captureStart,
+          endTime: captureEnd,
+          quality: quality,
+          bridgeRequestId: bridgeRequestId  // For storage fallback
+        });
+      } catch (error) {
+        messageError = error;
+        console.warn(`[EXT][CAPTURE] Message channel error: ${error.message} - will poll storage for result`);
+      }
+
+      // If message failed, poll storage for result (background stores result there as fallback)
+      if (messageError && !response) {
+        console.log(`[EXT][CAPTURE] Polling storage for result (bridgeRequestId=${bridgeRequestId})...`);
+
+        // Poll for up to 120 seconds (capture can take a while)
+        const maxPolls = 120;
+        const pollInterval = 1000;
+
+        for (let i = 0; i < maxPolls; i++) {
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+          try {
+            const stored = await chrome.storage.local.get([`bridge_result_${bridgeRequestId}`]);
+            const result = stored[`bridge_result_${bridgeRequestId}`];
+
+            if (result) {
+              console.log(`[EXT][CAPTURE] Retrieved result from storage after ${i + 1}s`);
+              response = result.response;
+              // Clean up storage
+              chrome.storage.local.remove([`bridge_result_${bridgeRequestId}`]);
+              break;
+            }
+          } catch (e) {
+            // Ignore storage errors
+          }
+
+          // Log progress every 10 seconds
+          if ((i + 1) % 10 === 0) {
+            console.log(`[EXT][CAPTURE] Still polling storage... (${i + 1}s)`);
+          }
+        }
+
+        // If still no response after polling, use the original error
+        if (!response) {
+          throw messageError;
+        }
+      }
 
       if (response?.success) {
         // Log the capture source for debugging

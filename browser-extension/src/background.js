@@ -289,23 +289,41 @@ console.log('[EXT][BG] Service worker ready, message listener registered');
  * NOW SUPPORTS: Segment capture with startTime/endTime parameters
  */
 async function handleCaptureForWizard(message, sendResponse) {
-  const { videoId, youtubeUrl, autoCapture = true, startTime, endTime, quality, autoOpenTab = false } = message;
+  const { videoId, youtubeUrl, autoCapture = true, startTime, endTime, quality, autoOpenTab = false, bridgeRequestId } = message;
 
-  console.log(`[EXT][CAPTURE] === START === videoId=${videoId} autoCapture=${autoCapture} autoOpenTab=${autoOpenTab}`);
+  console.log(`[EXT][CAPTURE] === START === videoId=${videoId} autoCapture=${autoCapture} autoOpenTab=${autoOpenTab} bridgeRequestId=${bridgeRequestId || 'none'}`);
 
-  // CRITICAL: Ensure sendResponse is ALWAYS called
+  // CRITICAL: Ensure sendResponse is ALWAYS called AND result is stored in chrome.storage as fallback
   let responseSent = false;
-  const safeResponse = (response) => {
+  const safeResponse = async (response) => {
     if (responseSent) {
       console.log('[EXT][CAPTURE] Response already sent, ignoring duplicate');
       return;
     }
     responseSent = true;
     console.log(`[EXT][CAPTURE] === RESPONSE === success=${response?.success} error=${response?.error || 'none'}`);
+
+    // ALWAYS store result in chrome.storage as fallback for message channel issues
+    // This allows wizard-bridge to poll for the result if sendResponse fails
+    if (bridgeRequestId) {
+      try {
+        await chrome.storage.local.set({
+          [`bridge_result_${bridgeRequestId}`]: {
+            response: response,
+            timestamp: Date.now()
+          }
+        });
+        console.log(`[EXT][CAPTURE] Result stored in chrome.storage (bridgeRequestId=${bridgeRequestId})`);
+      } catch (storageError) {
+        console.warn('[EXT][CAPTURE] Failed to store result in chrome.storage:', storageError.message);
+      }
+    }
+
     try {
       sendResponse(response);
     } catch (e) {
       console.error('[EXT][CAPTURE] Failed to send response:', e.message);
+      // Response is already in chrome.storage, so wizard-bridge can poll for it
     }
   };
 
