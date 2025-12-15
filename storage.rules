@@ -1,5 +1,6 @@
 rules_version = '2';
 // [VERIFIED-FIX-2025-12-01] Added creative-studio folder access
+// [FIX-2025-12-15] Added captured-videos folder for Video Wizard extension captures
 service firebase.storage {
   match /b/{bucket}/o {
     // Thumbnails folder
@@ -41,6 +42,20 @@ service firebase.storage {
       // Limit file size to 500MB and only allow video types
       allow write: if request.auth != null
                    && request.auth.uid == userId
+                   && request.resource.size < 500 * 1024 * 1024
+                   && request.resource.contentType.matches('video/.*');
+    }
+
+    // Captured videos folder (for Video Wizard browser extension captures)
+    // Path: captured-videos/{videoId}/{fileName}
+    // Note: videoId is YouTube video ID, not userId - ownership verified by auth only
+    match /captured-videos/{videoId}/{fileName} {
+      // Allow authenticated users to read captured videos
+      allow read: if request.auth != null;
+
+      // Allow authenticated users to write captured videos
+      // Limit file size to 500MB and only allow video types
+      allow write: if request.auth != null
                    && request.resource.size < 500 * 1024 * 1024
                    && request.resource.contentType.matches('video/.*');
     }

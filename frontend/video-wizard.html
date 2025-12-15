@@ -9411,7 +9411,19 @@
                                             var byteArray = new Uint8Array(byteNumbers);
                                             var videoBlob = new Blob([byteArray], { type: mimeType });
 
-                                            console.log('[Video Wizard] Created blob:', (videoBlob.size / 1024 / 1024).toFixed(2) + 'MB');
+                                            var blobSizeMB = videoBlob.size / 1024 / 1024;
+                                            console.log('[Video Wizard] Created blob:', blobSizeMB.toFixed(2) + 'MB');
+
+                                            // Validate file size before upload (500MB limit)
+                                            var MAX_UPLOAD_SIZE = 500 * 1024 * 1024;
+                                            if (videoBlob.size > MAX_UPLOAD_SIZE) {
+                                                throw new Error('Video too large (' + blobSizeMB.toFixed(1) + 'MB). Maximum size is 500MB. Try a shorter clip.');
+                                            }
+
+                                            // Check if user is authenticated
+                                            if (!auth.currentUser) {
+                                                throw new Error('Please log in to upload videos.');
+                                            }
 
                                             // Upload to Firebase Storage
                                             var videoId = state.videoInput.videoData.videoId;
@@ -9420,19 +9432,45 @@
                                             storagePath = 'captured-videos/' + videoId + '/source_' + timestamp + '.' + extension;
 
                                             var storageRef = storage.ref(storagePath);
-                                            var uploadTask = await storageRef.put(videoBlob, {
+
+                                            // Upload with progress tracking
+                                            console.log('[Video Wizard] Starting upload to:', storagePath);
+                                            var uploadTask = storageRef.put(videoBlob, {
                                                 contentType: mimeType,
                                                 customMetadata: {
                                                     videoId: videoId,
                                                     source: 'frontend_upload',
-                                                    capturedAt: String(timestamp)
+                                                    capturedAt: String(timestamp),
+                                                    userId: auth.currentUser.uid
                                                 }
                                             });
 
-                                            storageUrl = await uploadTask.ref.getDownloadURL();
+                                            // Track upload progress
+                                            uploadTask.on('state_changed',
+                                                function(snapshot) {
+                                                    var progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                                                    console.log('[Video Wizard] Upload progress: ' + progress.toFixed(1) + '%');
+                                                },
+                                                function(error) {
+                                                    console.error('[Video Wizard] Upload error:', error.code, error.message);
+                                                }
+                                            );
+
+                                            await uploadTask;
+                                            storageUrl = await uploadTask.snapshot.ref.getDownloadURL();
                                             console.log('[Video Wizard] Uploaded to Firebase Storage:', storageUrl);
                                         } catch (uploadError) {
                                             console.error('[Video Wizard] Frontend upload failed:', uploadError);
+                                            // Provide specific error messages based on error type
+                                            var errorMsg = uploadError.message;
+                                            if (uploadError.code === 'storage/unauthorized') {
+                                                errorMsg = 'Upload permission denied. Please ensure you are logged in.';
+                                            } else if (uploadError.code === 'storage/canceled') {
+                                                errorMsg = 'Upload was canceled.';
+                                            } else if (uploadError.code === 'storage/unknown') {
+                                                errorMsg = 'Upload failed due to network error. Please try again.';
+                                            }
+                                            utils.showToast(errorMsg, 'error');
                                             // Continue without storage URL - will fail at export time
                                             storageUrl = null;
                                         }
@@ -11409,7 +11447,19 @@
                                 var byteArray = new Uint8Array(byteNumbers);
                                 var videoBlob = new Blob([byteArray], { type: mimeType });
 
-                                console.log('[EXPORT][EXT] Created blob: ' + (videoBlob.size / 1024 / 1024).toFixed(2) + 'MB');
+                                var blobSizeMB = videoBlob.size / 1024 / 1024;
+                                console.log('[EXPORT][EXT] Created blob: ' + blobSizeMB.toFixed(2) + 'MB');
+
+                                // Validate file size before upload (500MB limit)
+                                var MAX_UPLOAD_SIZE = 500 * 1024 * 1024;
+                                if (videoBlob.size > MAX_UPLOAD_SIZE) {
+                                    throw new Error('Video too large (' + blobSizeMB.toFixed(1) + 'MB). Maximum size is 500MB. Try a shorter clip.');
+                                }
+
+                                // Check if user is authenticated
+                                if (!auth.currentUser) {
+                                    throw new Error('Please log in to upload videos.');
+                                }
 
                                 // Upload to Firebase Storage
                                 var timestamp = Date.now();
@@ -11417,23 +11467,49 @@
                                 storagePath = 'captured-videos/' + videoId + '/export_' + timestamp + '.' + ext;
 
                                 var storageRef = storage.ref(storagePath);
-                                var uploadTask = await storageRef.put(videoBlob, {
+
+                                // Upload with progress tracking
+                                console.log('[EXPORT][EXT] Starting upload to:', storagePath);
+                                var uploadTask = storageRef.put(videoBlob, {
                                     contentType: mimeType,
                                     customMetadata: {
                                         videoId: videoId,
                                         source: 'extension_export_upload',
-                                        capturedAt: String(timestamp)
+                                        capturedAt: String(timestamp),
+                                        userId: auth.currentUser.uid
                                     }
                                 });
 
-                                storageUrl = await uploadTask.ref.getDownloadURL();
+                                // Track upload progress
+                                uploadTask.on('state_changed',
+                                    function(snapshot) {
+                                        var progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                                        console.log('[EXPORT][EXT] Upload progress: ' + progress.toFixed(1) + '%');
+                                        app.showCapturingStateInModal('Uploading: ' + progress.toFixed(0) + '%');
+                                    },
+                                    function(error) {
+                                        console.error('[EXPORT][EXT] Upload error:', error.code, error.message);
+                                    }
+                                );
+
+                                await uploadTask;
+                                storageUrl = await uploadTask.snapshot.ref.getDownloadURL();
                                 console.log('[EXPORT][EXT] upload completed url=' + storageUrl);
                             } catch (uploadError) {
                                 console.error('[EXPORT][EXT] HARD FAIL: Frontend upload failed - ' + uploadError.message);
+                                // Provide specific error messages based on error type
+                                var errorDetail = uploadError.message;
+                                if (uploadError.code === 'storage/unauthorized') {
+                                    errorDetail = 'Upload permission denied. Please ensure you are logged in and try again.';
+                                } else if (uploadError.code === 'storage/canceled') {
+                                    errorDetail = 'Upload was canceled.';
+                                } else if (uploadError.code === 'storage/unknown') {
+                                    errorDetail = 'Upload failed due to network error. Please check your connection and try again.';
+                                }
                                 app.showCaptureErrorInModal(
                                     'Upload Failed\n\n' +
                                     'Video was captured but could not be uploaded to storage.\n\n' +
-                                    'Error: ' + uploadError.message
+                                    'Error: ' + errorDetail
                                 );
                                 return;
                             }

@@ -85,10 +85,45 @@ chrome.webRequest.onBeforeRequest.addListener(
       if (range && range !== '0-') return;
 
       // Determine if video or audio based on mime type or itag
-      const isVideo = mime?.startsWith('video/') ||
-                      ['18', '22', '37', '38', '82', '83', '84', '85', '136', '137', '298', '299', '264', '271', '313', '315', '266', '138'].includes(itag);
-      const isAudio = mime?.startsWith('audio/') ||
-                      ['139', '140', '141', '171', '172', '249', '250', '251'].includes(itag);
+      // Extended itag list for comprehensive format coverage
+      const videoItags = [
+        // Legacy formats (progressive)
+        '18', '22', '37', '38',
+        // 3D formats
+        '82', '83', '84', '85',
+        // DASH video (H.264)
+        '133', '134', '135', '136', '137', '138', // 240p-4320p
+        '160', // 144p
+        '264', '266', // 1440p, 2160p
+        '298', '299', // 720p60, 1080p60
+        '304', '305', // 1440p60, 2160p60
+        // DASH video (VP9)
+        '242', '243', '244', '247', '248', // 240p-1080p
+        '271', '272', // 1440p, 2160p
+        '278', // 144p
+        '302', '303', // 720p60, 1080p60
+        '308', // 1440p60
+        '313', '315', // 2160p, 2160p60
+        // DASH video (VP9 HDR)
+        '330', '331', '332', '333', '334', '335', '336', '337',
+        // DASH video (AV1)
+        '394', '395', '396', '397', '398', '399', '400', '401', '402',
+        '571', '694', '695', '696', '697', '698', '699', '700', '701', '702'
+      ];
+      const audioItags = [
+        // DASH audio (AAC)
+        '139', '140', '141',
+        // DASH audio (Vorbis)
+        '171', '172',
+        // DASH audio (Opus)
+        '249', '250', '251',
+        // DASH audio (AAC HE)
+        '256', '258',
+        // DASH audio (AC3/EAC3)
+        '325', '328'
+      ];
+      const isVideo = mime?.startsWith('video/') || videoItags.includes(itag);
+      const isAudio = mime?.startsWith('audio/') || audioItags.includes(itag);
 
       if (!isVideo && !isAudio) return;
 
@@ -1124,15 +1159,24 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
  * The video is sped up to 4x to minimize capture time.
  * For a 60-second clip, this takes only ~15 seconds.
  *
+ * FIX: To avoid Chrome's 64MB message limit, this function now uploads directly
+ * to the server instead of returning Base64 data. For smaller videos (<40MB),
+ * it returns Base64 as a fallback.
+ *
  * @param {number} startTime - Start time in seconds
  * @param {number} endTime - End time in seconds (captures duration = endTime - startTime)
+ * @param {string} videoId - YouTube video ID for upload identification
+ * @param {string} uploadUrl - Server URL for direct upload
  */
-async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
-  console.log(`[EXT][CAPTURE] MediaRecorder start=${startTime}s end=${endTime}s`);
+async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId, uploadUrl) {
+  console.log(`[EXT][CAPTURE] MediaRecorder start=${startTime}s end=${endTime}s videoId=${videoId}`);
 
   const duration = endTime - startTime;
   const PLAYBACK_SPEED = 4; // 4x speed for faster capture
   const captureTime = (duration / PLAYBACK_SPEED) * 1000; // in milliseconds
+
+  // Maximum size for Base64 transfer (40MB to stay under 64MB limit after encoding)
+  const MAX_BASE64_SIZE = 40 * 1024 * 1024;
 
   console.log(`[EXT][CAPTURE] Will capture ${duration}s at ${PLAYBACK_SPEED}x (${(captureTime/1000).toFixed(1)}s real time)`);
 
@@ -1251,32 +1295,79 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime) {
 
             console.log(`[EXT][CAPTURE] Recording stopped, chunks=${chunks.length}`);
             const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
-            console.log(`[EXT][CAPTURE] blob size=${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+            const blobSize = blob.size;
+            console.log(`[EXT][CAPTURE] blob size=${(blobSize / 1024 / 1024).toFixed(2)}MB`);
 
-            if (blob.size < 10000) {
+            if (blobSize < 10000) {
               console.error('[EXT][CAPTURE] FAIL: Blob too small');
               reject(new Error('Captured video too small - capture may have failed'));
               return;
             }
 
-            // Convert to base64 for transfer
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              console.log('[EXT][CAPTURE] SUCCESS - Video captured and encoded');
-              resolve({
-                success: true,
-                videoData: reader.result.split(',')[1],
-                videoSize: blob.size,
-                mimeType: mimeType.split(';')[0],
-                duration: duration,
-                captureMethod: 'mediarecorder'
-              });
-            };
-            reader.onerror = () => {
-              console.error('[EXT][CAPTURE] FAIL: Base64 encoding error');
-              reject(new Error('Failed to convert video to base64'));
-            };
-            reader.readAsDataURL(blob);
+            // DECISION: Upload directly to server for large files, or return Base64 for small files
+            if (blobSize > MAX_BASE64_SIZE && uploadUrl) {
+              // LARGE FILE: Upload directly to server to avoid 64MB message limit
+              console.log(`[EXT][CAPTURE] Large file (${(blobSize / 1024 / 1024).toFixed(2)}MB) - uploading directly to server`);
+
+              try {
+                const formData = new FormData();
+                formData.append('video', blob, `captured_${videoId}.webm`);
+                formData.append('videoId', videoId);
+                formData.append('type', 'video');
+                formData.append('captureStart', String(startTime));
+                formData.append('captureEnd', String(endTime));
+
+                const uploadResponse = await fetch(uploadUrl, {
+                  method: 'POST',
+                  body: formData
+                });
+
+                if (!uploadResponse.ok) {
+                  const errorText = await uploadResponse.text();
+                  throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText.substring(0, 100)}`);
+                }
+
+                const uploadResult = await uploadResponse.json();
+                console.log(`[EXT][CAPTURE] SUCCESS - Direct upload complete: ${uploadResult.url}`);
+
+                resolve({
+                  success: true,
+                  uploadedDirectly: true,
+                  videoStorageUrl: uploadResult.url,
+                  videoSize: blobSize,
+                  mimeType: mimeType.split(';')[0],
+                  duration: duration,
+                  captureMethod: 'mediarecorder_direct_upload'
+                });
+              } catch (uploadError) {
+                console.error(`[EXT][CAPTURE] Direct upload failed: ${uploadError.message}`);
+                // Fall through to try Base64 as last resort (will likely fail for very large files)
+                console.log('[EXT][CAPTURE] Attempting Base64 fallback...');
+              }
+            }
+
+            // SMALL FILE or FALLBACK: Convert to Base64 for message transfer
+            if (blobSize <= MAX_BASE64_SIZE || !uploadUrl) {
+              console.log(`[EXT][CAPTURE] Using Base64 transfer (${(blobSize / 1024 / 1024).toFixed(2)}MB)`);
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                console.log('[EXT][CAPTURE] SUCCESS - Video captured and encoded');
+                resolve({
+                  success: true,
+                  uploadedDirectly: false,
+                  videoData: reader.result.split(',')[1],
+                  videoSize: blobSize,
+                  mimeType: mimeType.split(';')[0],
+                  duration: duration,
+                  captureMethod: 'mediarecorder'
+                });
+              };
+              reader.onerror = () => {
+                console.error('[EXT][CAPTURE] FAIL: Base64 encoding error');
+                reject(new Error('Failed to convert video to base64'));
+              };
+              reader.readAsDataURL(blob);
+            }
           };
 
           recorder.onerror = (e) => {
@@ -1452,12 +1543,15 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     console.log(`[EXT][CAPTURE] Injecting MediaRecorder (${captureStart}s to ${captureEnd}s)...`);
 
-    // Inject and run the capture function
+    // Prepare upload URL for direct upload from page context (for large files)
+    const uploadStreamUrl = `${VIDEO_PROCESSOR_URL}/upload-stream`;
+
+    // Inject and run the capture function with videoId and uploadUrl for direct upload
     const results = await chrome.scripting.executeScript({
       target: { tabId: youtubeTab.id },
       world: 'MAIN',
       func: captureVideoSegmentWithMediaRecorder,
-      args: [captureStart, captureEnd]
+      args: [captureStart, captureEnd, videoId, uploadStreamUrl]
     });
 
     if (!results || results.length === 0 || !results[0].result) {
@@ -1475,7 +1569,29 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     const capturedDuration = captureEnd - captureStart;
     console.log(`[EXT][CAPTURE] blob size=${(captureResult.videoSize / 1024 / 1024).toFixed(2)}MB duration=${capturedDuration}s`);
 
-    // Upload to server with segment metadata
+    // CHECK: Did the capture function upload directly (for large files)?
+    if (captureResult.uploadedDirectly && captureResult.videoStorageUrl) {
+      console.log(`[EXT][CAPTURE] Direct upload completed in page context`);
+      return {
+        success: true,
+        videoStorageUrl: captureResult.videoStorageUrl,
+        storagePath: null,
+        mimeType: captureResult.mimeType,
+        captureMethod: captureResult.captureMethod || 'mediarecorder_direct_upload',
+        uploadedToStorage: true,
+        capturedSegment: {
+          startTime: captureStart,
+          endTime: captureEnd,
+          duration: capturedDuration
+        }
+      };
+    }
+
+    // SMALL FILE PATH: Capture returned Base64 data, upload from service worker
+    if (!captureResult.videoData) {
+      throw new Error('No video data returned from capture');
+    }
+
     const videoBlob = base64ToBlob(captureResult.videoData, captureResult.mimeType);
 
     const formData = new FormData();
