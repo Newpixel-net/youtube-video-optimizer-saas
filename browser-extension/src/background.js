@@ -1294,7 +1294,67 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
     });
   }
 
-  try {
+  // Helper to wait with timeout
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Wrap main logic in async IIFE to support await
+  (async function() {
+    try {
+      // CRITICAL: Use YouTube's player API to ensure video is loaded and playing
+      // The video element alone may have readyState=0 if YouTube hasn't loaded media yet
+      const ytPlayer = document.querySelector('#movie_player');
+
+    console.log(`[EXT][CAPTURE] YouTube player element: ${ytPlayer ? 'found' : 'not found'}`);
+
+    // Try to use YouTube's player API to load and play the video
+    if (ytPlayer) {
+      try {
+        // Check if player has the expected methods
+        const hasPlayVideo = typeof ytPlayer.playVideo === 'function';
+        const hasGetPlayerState = typeof ytPlayer.getPlayerState === 'function';
+        const hasMute = typeof ytPlayer.mute === 'function';
+        const hasSeekTo = typeof ytPlayer.seekTo === 'function';
+
+        console.log(`[EXT][CAPTURE] YouTube API: playVideo=${hasPlayVideo}, getPlayerState=${hasGetPlayerState}, mute=${hasMute}, seekTo=${hasSeekTo}`);
+
+        if (hasPlayVideo) {
+          // Mute first to avoid autoplay policy issues
+          if (hasMute) {
+            ytPlayer.mute();
+            console.log('[EXT][CAPTURE] Muted YouTube player');
+          }
+
+          // Get current state (-1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued)
+          let playerState = -1;
+          if (hasGetPlayerState) {
+            playerState = ytPlayer.getPlayerState();
+            console.log(`[EXT][CAPTURE] YouTube player state: ${playerState}`);
+          }
+
+          // If video is unstarted or ended, play it
+          if (playerState === -1 || playerState === 0 || playerState === 2 || playerState === 5) {
+            console.log('[EXT][CAPTURE] Starting YouTube player via API...');
+            ytPlayer.playVideo();
+            await sleep(1500);
+
+            // Check state again
+            if (hasGetPlayerState) {
+              playerState = ytPlayer.getPlayerState();
+              console.log(`[EXT][CAPTURE] YouTube player state after play: ${playerState}`);
+            }
+          }
+
+          // If still not playing (state 1) or buffering (state 3), wait longer
+          if (hasGetPlayerState && (ytPlayer.getPlayerState() !== 1 && ytPlayer.getPlayerState() !== 3)) {
+            console.log('[EXT][CAPTURE] Player not playing, waiting for buffer...');
+            await sleep(2000);
+          }
+        }
+      } catch (ytError) {
+        console.warn('[EXT][CAPTURE] YouTube player API error:', ytError.message);
+      }
+    }
+
     // Find the video element
     let videoElement = document.querySelector('video.html5-main-video');
     if (!videoElement) {
@@ -1324,8 +1384,31 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
       console.warn('[EXT][CAPTURE] Video may be DRM-protected (has MediaKeys)');
     }
 
+    // If video still has readyState=0, try more aggressive loading
+    if (videoElement.readyState === 0) {
+      console.log('[EXT][CAPTURE] Video readyState=0, trying to force load...');
+
+      // Try clicking on the video element to trigger YouTube's lazy loading
+      videoElement.click();
+      await sleep(500);
+
+      // Try to play with muted
+      videoElement.muted = true;
+      try {
+        await videoElement.play();
+        console.log('[EXT][CAPTURE] Force play succeeded');
+      } catch (e) {
+        console.warn('[EXT][CAPTURE] Force play failed:', e.message);
+      }
+
+      // Wait a bit and check again
+      await sleep(1500);
+      console.log(`[EXT][CAPTURE] After force load: readyState=${videoElement.readyState}, paused=${videoElement.paused}`);
+    }
+
     // Ensure video is playing (helps with loading)
     if (videoElement.paused) {
+      videoElement.muted = true;
       videoElement.play().catch(e => console.warn('[EXT][CAPTURE] Play failed:', e.message));
     }
 
@@ -1583,10 +1666,11 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
       sendResult(null, waitError.message);
     });
 
-  } catch (error) {
-    console.error(`[EXT][CAPTURE] FAIL: ${error.message}`);
-    sendResult(null, error.message);
-  }
+    } catch (error) {
+      console.error(`[EXT][CAPTURE] FAIL: ${error.message}`);
+      sendResult(null, error.message);
+    }
+  })(); // End async IIFE
 }
 
 /**
