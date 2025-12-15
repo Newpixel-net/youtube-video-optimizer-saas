@@ -1307,7 +1307,22 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
       return;
     }
 
+    // Log comprehensive video element diagnostics
     console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s, readyState=${videoElement.readyState}`);
+    console.log(`[EXT][CAPTURE] Video state: paused=${videoElement.paused}, ended=${videoElement.ended}, networkState=${videoElement.networkState}, currentTime=${videoElement.currentTime}`);
+    console.log(`[EXT][CAPTURE] Video src: ${videoElement.src ? 'has src' : 'no src'}, currentSrc: ${videoElement.currentSrc ? 'has currentSrc' : 'no currentSrc'}`);
+
+    // Check for potential issues
+    if (videoElement.error) {
+      console.error(`[EXT][CAPTURE] Video has error: code=${videoElement.error.code}, message=${videoElement.error.message}`);
+      sendResult(null, `Video has error: ${videoElement.error.message || 'Unknown error'}`);
+      return;
+    }
+
+    // Check if video appears to be DRM-protected (check for encrypted event handler or MediaKeys)
+    if (videoElement.mediaKeys) {
+      console.warn('[EXT][CAPTURE] Video may be DRM-protected (has MediaKeys)');
+    }
 
     // Ensure video is playing (helps with loading)
     if (videoElement.paused) {
@@ -1335,8 +1350,18 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
             }
 
             if (!originalStream || originalStream.getVideoTracks().length === 0) {
+              // Log detailed stream info for debugging
               console.error('[EXT][CAPTURE] FAIL: No video tracks');
-              sendResult(null, 'No video tracks available');
+              console.error(`[EXT][CAPTURE] Stream info: ${originalStream ? 'stream exists' : 'no stream'}`);
+              if (originalStream) {
+                console.error(`[EXT][CAPTURE] Track count: video=${originalStream.getVideoTracks().length}, audio=${originalStream.getAudioTracks().length}`);
+                console.error(`[EXT][CAPTURE] Video element state: width=${readyVideoElement.videoWidth}, height=${readyVideoElement.videoHeight}, readyState=${readyVideoElement.readyState}`);
+              }
+              // Provide a more helpful error message
+              const errorMsg = readyVideoElement.mediaKeys
+                ? 'No video tracks available - this video may be DRM-protected'
+                : 'No video tracks available - please ensure the video is playing and not blocked';
+              sendResult(null, errorMsg);
               return;
             }
 
