@@ -384,20 +384,28 @@ async function handleCaptureForWizard(message, sendResponse) {
 
     // Track if we auto-opened a tab (so we can close it after capture)
     let autoOpenedTabId = null;
+    // Track the original tab (Video Wizard) to switch back to it
+    let originalTabId = null;
 
     if (!youtubeTab) {
       console.log(`[EXT][CAPTURE] No YouTube tab found with video ${videoId}`);
 
       if (autoOpenTab) {
         // AUTO-OPEN: Create a new tab with the video
-        console.log(`[EXT][CAPTURE] autoOpenTab=true, opening new YouTube tab...`);
+        console.log(`[EXT][CAPTURE] autoOpenTab=true, opening new YouTube tab in background...`);
         const videoUrl = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
 
         try {
-          // Create tab (active: true to ensure video loads properly)
+          // Save current tab so we can switch back to it
+          const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          originalTabId = currentTab?.id;
+          console.log(`[EXT][CAPTURE] Saved original tab ${originalTabId} (will switch back after video loads)`);
+
+          // Create tab - needs to be active briefly for Chrome autoplay policy
+          // But we'll switch back to Video Wizard immediately after video loads
           const newTab = await chrome.tabs.create({
             url: videoUrl,
-            active: true
+            active: true  // Briefly active for autoplay to work
           });
           autoOpenedTabId = newTab.id;
           youtubeTab = newTab;
@@ -446,9 +454,20 @@ async function handleCaptureForWizard(message, sendResponse) {
             console.warn(`[EXT][CAPTURE] Video may not be fully loaded, proceeding anyway...`);
           }
 
+          // IMMEDIATELY switch back to Video Wizard tab so user isn't disrupted
+          // The capture will continue in the background
+          if (originalTabId) {
+            try {
+              await chrome.tabs.update(originalTabId, { active: true });
+              console.log(`[EXT][CAPTURE] Switched back to Video Wizard tab ${originalTabId}`);
+            } catch (switchError) {
+              console.warn(`[EXT][CAPTURE] Could not switch back to original tab: ${switchError.message}`);
+            }
+          }
+
         } catch (tabError) {
           console.error(`[EXT][CAPTURE] Failed to create YouTube tab: ${tabError.message}`);
-          safeResponse({
+          await safeResponse({
             success: false,
             error: 'Failed to open YouTube video tab: ' + tabError.message,
             code: 'TAB_OPEN_FAILED',
@@ -1984,9 +2003,18 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     console.log(`[EXT][CAPTURE] Using existing YouTube tab ${youtubeTab.id}`)
 
-    // CRITICAL: Focus the tab to prevent Chrome from suspending media loading
+    // Save current tab (Video Wizard) so we can switch back after focusing YouTube
+    let savedOriginalTabId = null;
+    try {
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      savedOriginalTabId = currentTab?.id;
+    } catch (e) {
+      // Ignore
+    }
+
+    // CRITICAL: Focus the tab BRIEFLY to prevent Chrome from suspending media loading
     // Background tabs may have their video loading throttled or suspended
-    console.log(`[EXT][CAPTURE] Focusing YouTube tab to ensure video loads...`);
+    console.log(`[EXT][CAPTURE] Focusing YouTube tab briefly to ensure video loads...`);
     try {
       await chrome.tabs.update(youtubeTab.id, { active: true });
       // Also focus the window containing the tab
@@ -1996,6 +2024,16 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s for focus to take effect
     } catch (focusErr) {
       console.warn(`[EXT][CAPTURE] Could not focus tab: ${focusErr.message}`);
+    }
+
+    // IMMEDIATELY switch back to Video Wizard tab so user isn't disrupted
+    if (savedOriginalTabId && savedOriginalTabId !== youtubeTab.id) {
+      try {
+        await chrome.tabs.update(savedOriginalTabId, { active: true });
+        console.log(`[EXT][CAPTURE] Switched back to Video Wizard tab ${savedOriginalTabId}`);
+      } catch (switchErr) {
+        console.warn(`[EXT][CAPTURE] Could not switch back: ${switchErr.message}`);
+      }
     }
 
     // AGGRESSIVE VIDEO LOADING: Keep trying until video loads or we give up
