@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.6.4",
-  "description": "Fix: await storeResult to ensure storage completes (v2.6.4)",
+  "version": "2.6.5",
+  "description": "Fix: Add upload timeout to prevent hanging (v2.6.5)",
 
   "permissions": [
     "activeTab",

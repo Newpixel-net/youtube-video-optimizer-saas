@@ -567,6 +567,8 @@ async function handleCaptureForWizard(message) {
     }
 
     // STEP 4: Process result
+    console.log(`[EXT][CAPTURE] Processing result: success=${captureResult?.success}, hasVideoUrl=${!!captureResult?.videoStorageUrl}, hasVideoData=${!!captureResult?.videoData}`);
+
     if (captureResult?.success) {
       const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
       const capturedSegment = captureResult.capturedSegment || {};
@@ -614,6 +616,7 @@ async function handleCaptureForWizard(message) {
       }
 
       await storeResult(response);
+      console.log(`[EXT][CAPTURE] === COMPLETE === Result stored, wizard should receive it`);
     } else {
       // Capture failed
       const errorMsg = captureResult?.error || 'Video capture failed';
@@ -637,6 +640,7 @@ async function handleCaptureForWizard(message) {
           message: 'Please ensure the YouTube video is loaded and playing, then try again.'
         }
       });
+      console.log(`[EXT][CAPTURE] === COMPLETE (FAILURE) === Error stored, wizard should receive it`);
     }
 
   } catch (error) {
@@ -656,6 +660,7 @@ async function handleCaptureForWizard(message) {
       error: error.message || 'Unexpected error during capture',
       code: 'UNEXPECTED_ERROR'
     });
+    console.log(`[EXT][CAPTURE] === COMPLETE (EXCEPTION) === Error stored, wizard should receive it`);
   }
 }
 
@@ -2479,11 +2484,23 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     let uploadResult = null;
     let uploadError = null;
 
+    // CRITICAL: Add timeout to prevent hanging forever
+    // Use AbortController to cancel fetch after 60 seconds
+    const UPLOAD_TIMEOUT_MS = 60000;
+    const abortController = new AbortController();
+    const uploadTimeoutId = setTimeout(() => {
+      console.log(`[EXT][UPLOAD] Aborting upload after ${UPLOAD_TIMEOUT_MS / 1000}s timeout`);
+      abortController.abort();
+    }, UPLOAD_TIMEOUT_MS);
+
     try {
       const uploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: abortController.signal
       });
+
+      clearTimeout(uploadTimeoutId);
 
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
@@ -2494,7 +2511,12 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         console.log(`[EXT][UPLOAD] success url=${uploadResult.url}`);
       }
     } catch (serverError) {
-      uploadError = `Connection failed: ${serverError.message}`;
+      clearTimeout(uploadTimeoutId);
+      if (serverError.name === 'AbortError') {
+        uploadError = `Upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds`;
+      } else {
+        uploadError = `Connection failed: ${serverError.message}`;
+      }
       console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
     }
 
@@ -2639,10 +2661,29 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
     videoFormData.append('videoId', videoId);
     videoFormData.append('type', 'video');
 
-    const videoUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
-      method: 'POST',
-      body: videoFormData
-    });
+    // Add timeout to prevent hanging
+    const UPLOAD_TIMEOUT_MS = 60000;
+    const videoAbortController = new AbortController();
+    const videoUploadTimeoutId = setTimeout(() => {
+      console.log(`[EXT][BG] Aborting video upload after ${UPLOAD_TIMEOUT_MS / 1000}s timeout`);
+      videoAbortController.abort();
+    }, UPLOAD_TIMEOUT_MS);
+
+    let videoUploadResponse;
+    try {
+      videoUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
+        method: 'POST',
+        body: videoFormData,
+        signal: videoAbortController.signal
+      });
+      clearTimeout(videoUploadTimeoutId);
+    } catch (fetchError) {
+      clearTimeout(videoUploadTimeoutId);
+      if (fetchError.name === 'AbortError') {
+        throw new Error(`Video upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds`);
+      }
+      throw fetchError;
+    }
 
     if (!videoUploadResponse.ok) {
       const errorText = await videoUploadResponse.text();
@@ -2665,10 +2706,19 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
         audioFormData.append('videoId', videoId);
         audioFormData.append('type', 'audio');
 
+        // Add timeout for audio upload
+        const audioAbortController = new AbortController();
+        const audioUploadTimeoutId = setTimeout(() => {
+          console.log(`[EXT][BG] Aborting audio upload after 60s timeout`);
+          audioAbortController.abort();
+        }, 60000);
+
         const audioUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
           method: 'POST',
-          body: audioFormData
+          body: audioFormData,
+          signal: audioAbortController.signal
         });
+        clearTimeout(audioUploadTimeoutId);
 
         if (audioUploadResponse.ok) {
           const audioUploadResult = await audioUploadResponse.json();
