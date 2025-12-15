@@ -609,13 +609,19 @@ async function handleCaptureForWizard(message) {
     if (captureResult?.success) {
       const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
       const capturedSegment = captureResult.capturedSegment || {};
+      const hasLocalVideoData = !captureResult.uploadedToStorage && !!captureResult.videoData;
 
+      // CRITICAL: Don't include large videoData in chrome.storage response
+      // Instead, store it in-memory (storedVideoData) and let wizard retrieve via getStoredVideoData
+      // This avoids chrome.storage quota issues with large video files (>5MB)
       const response = {
         success: true,
         videoInfo: videoInfo,
         streamData: {
           videoUrl: captureResult.videoStorageUrl || null,
-          videoData: captureResult.videoData || null,
+          // Don't include videoData here - it goes in storedVideoData for separate retrieval
+          videoData: null,
+          videoDataAvailable: hasLocalVideoData,  // Flag to tell wizard to fetch via getStoredVideoData
           videoSize: captureResult.videoSize || null,
           storagePath: captureResult.storagePath || null,
           quality: 'captured',
@@ -631,15 +637,22 @@ async function handleCaptureForWizard(message) {
         },
         message: captureResult.uploadedToStorage
           ? 'Video captured and uploaded successfully.'
-          : 'Video captured locally. Frontend will upload to storage.'
+          : hasLocalVideoData
+            ? 'Video captured. Use getStoredVideoData to retrieve the video data.'
+            : 'Video captured locally. Frontend will upload to storage.'
       };
 
-      // Store for later retrieval
+      // Store full video data for later retrieval via getStoredVideoData message
+      // This keeps large video data out of chrome.storage
       storedVideoData = {
         videoInfo: videoInfo,
-        streamData: response.streamData,
+        streamData: {
+          ...response.streamData,
+          videoData: captureResult.videoData || null  // Include actual data here for message retrieval
+        },
         capturedAt: Date.now()
       };
+      console.log(`[EXT][CAPTURE] Video data stored in-memory (${(captureResult.videoSize / 1024 / 1024).toFixed(2)}MB), available via getStoredVideoData`);
 
       // Close auto-opened tab after successful capture
       if (autoOpenedTabId) {
