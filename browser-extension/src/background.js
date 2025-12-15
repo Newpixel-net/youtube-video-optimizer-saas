@@ -232,6 +232,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return false; // Channel can close now - we use storage for result
 
     case 'getStoredVideoData':
+      const hasData = !!storedVideoData?.streamData?.videoData;
+      const dataSize = storedVideoData?.streamData?.videoData?.length || 0;
+      console.log(`[EXT][BG] getStoredVideoData: hasData=${hasData}, size=${(dataSize / 1024 / 1024).toFixed(2)}MB`);
       sendResponse({ videoData: storedVideoData });
       return false;
 
@@ -312,20 +315,57 @@ async function handleCaptureForWizard(message) {
       return;
     }
     responseSent = true;
-    console.log(`[EXT][CAPTURE] === RESULT === success=${response?.success} error=${response?.error || 'none'}`);
+
+    // Calculate response size for diagnostics
+    let responseSize = 0;
+    try {
+      responseSize = JSON.stringify(response).length;
+    } catch (e) {
+      responseSize = -1;
+    }
+    const sizeMB = (responseSize / 1024 / 1024).toFixed(2);
+    console.log(`[EXT][CAPTURE] === RESULT === success=${response?.success} error=${response?.error || 'none'} size=${sizeMB}MB`);
 
     // Store result in chrome.storage - this is the PRIMARY communication method
     if (bridgeRequestId) {
       try {
-        await chrome.storage.local.set({
+        const storagePayload = {
           [`bridge_result_${bridgeRequestId}`]: {
             response: response,
             timestamp: Date.now()
           }
-        });
-        console.log(`[EXT][CAPTURE] Result stored in chrome.storage (bridgeRequestId=${bridgeRequestId})`);
+        };
+        await chrome.storage.local.set(storagePayload);
+        console.log(`[EXT][CAPTURE] Result stored in chrome.storage (bridgeRequestId=${bridgeRequestId}, size=${sizeMB}MB)`);
       } catch (storageError) {
         console.error('[EXT][CAPTURE] CRITICAL: Failed to store result in chrome.storage:', storageError.message);
+
+        // If storage fails due to quota, try storing without video data
+        if (response?.streamData?.videoData && (storageError.message.includes('quota') || storageError.message.includes('QUOTA'))) {
+          console.log('[EXT][CAPTURE] Storage quota exceeded, trying to store without video data...');
+          try {
+            const lightResponse = {
+              ...response,
+              streamData: {
+                ...response.streamData,
+                videoData: null,
+                videoDataTooLarge: true,
+                originalVideoSize: response.streamData.videoSize
+              }
+            };
+            await chrome.storage.local.set({
+              [`bridge_result_${bridgeRequestId}`]: {
+                response: lightResponse,
+                timestamp: Date.now()
+              }
+            });
+            console.log(`[EXT][CAPTURE] Light result stored (without video data)`);
+            return;
+          } catch (lightError) {
+            console.error('[EXT][CAPTURE] Even light storage failed:', lightError.message);
+          }
+        }
+
         // Try one more time after a short delay
         try {
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -567,16 +607,24 @@ async function handleCaptureForWizard(message) {
     }
 
     // STEP 4: Process result
+    console.log(`[EXT][CAPTURE] Processing result: success=${captureResult?.success}, hasVideoUrl=${!!captureResult?.videoStorageUrl}, hasVideoData=${!!captureResult?.videoData}`);
+
     if (captureResult?.success) {
       const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
       const capturedSegment = captureResult.capturedSegment || {};
+      const hasLocalVideoData = !captureResult.uploadedToStorage && !!captureResult.videoData;
 
+      // CRITICAL: Don't include large videoData in chrome.storage response
+      // Instead, store it in-memory (storedVideoData) and let wizard retrieve via getStoredVideoData
+      // This avoids chrome.storage quota issues with large video files (>5MB)
       const response = {
         success: true,
         videoInfo: videoInfo,
         streamData: {
           videoUrl: captureResult.videoStorageUrl || null,
-          videoData: captureResult.videoData || null,
+          // Don't include videoData here - it goes in storedVideoData for separate retrieval
+          videoData: null,
+          videoDataAvailable: hasLocalVideoData,  // Flag to tell wizard to fetch via getStoredVideoData
           videoSize: captureResult.videoSize || null,
           storagePath: captureResult.storagePath || null,
           quality: 'captured',
@@ -592,15 +640,23 @@ async function handleCaptureForWizard(message) {
         },
         message: captureResult.uploadedToStorage
           ? 'Video captured and uploaded successfully.'
-          : 'Video captured locally. Frontend will upload to storage.'
+          : hasLocalVideoData
+            ? 'Video captured. Use getStoredVideoData to retrieve the video data.'
+            : 'Video captured locally. Frontend will upload to storage.'
       };
 
-      // Store for later retrieval
+      // Store full video data for later retrieval via getStoredVideoData message
+      // This keeps large video data out of chrome.storage
+      const videoDataSize = captureResult.videoData ? captureResult.videoData.length : 0;
       storedVideoData = {
         videoInfo: videoInfo,
-        streamData: response.streamData,
+        streamData: {
+          ...response.streamData,
+          videoData: captureResult.videoData || null  // Include actual data here for message retrieval
+        },
         capturedAt: Date.now()
       };
+      console.log(`[EXT][CAPTURE] Video data stored in-memory (base64 size: ${(videoDataSize / 1024 / 1024).toFixed(2)}MB), available via getStoredVideoData`);
 
       // Close auto-opened tab after successful capture
       if (autoOpenedTabId) {
@@ -614,6 +670,7 @@ async function handleCaptureForWizard(message) {
       }
 
       await storeResult(response);
+      console.log(`[EXT][CAPTURE] === COMPLETE === Result stored, wizard should receive it`);
     } else {
       // Capture failed
       const errorMsg = captureResult?.error || 'Video capture failed';
@@ -637,6 +694,7 @@ async function handleCaptureForWizard(message) {
           message: 'Please ensure the YouTube video is loaded and playing, then try again.'
         }
       });
+      console.log(`[EXT][CAPTURE] === COMPLETE (FAILURE) === Error stored, wizard should receive it`);
     }
 
   } catch (error) {
@@ -656,6 +714,7 @@ async function handleCaptureForWizard(message) {
       error: error.message || 'Unexpected error during capture',
       code: 'UNEXPECTED_ERROR'
     });
+    console.log(`[EXT][CAPTURE] === COMPLETE (EXCEPTION) === Error stored, wizard should receive it`);
   }
 }
 
@@ -2479,11 +2538,23 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     let uploadResult = null;
     let uploadError = null;
 
+    // CRITICAL: Add timeout to prevent hanging forever
+    // Use AbortController to cancel fetch after 60 seconds
+    const UPLOAD_TIMEOUT_MS = 60000;
+    const abortController = new AbortController();
+    const uploadTimeoutId = setTimeout(() => {
+      console.log(`[EXT][UPLOAD] Aborting upload after ${UPLOAD_TIMEOUT_MS / 1000}s timeout`);
+      abortController.abort();
+    }, UPLOAD_TIMEOUT_MS);
+
     try {
       const uploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: abortController.signal
       });
+
+      clearTimeout(uploadTimeoutId);
 
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
@@ -2494,7 +2565,12 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         console.log(`[EXT][UPLOAD] success url=${uploadResult.url}`);
       }
     } catch (serverError) {
-      uploadError = `Connection failed: ${serverError.message}`;
+      clearTimeout(uploadTimeoutId);
+      if (serverError.name === 'AbortError') {
+        uploadError = `Upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds`;
+      } else {
+        uploadError = `Connection failed: ${serverError.message}`;
+      }
       console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
     }
 
@@ -2639,10 +2715,29 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
     videoFormData.append('videoId', videoId);
     videoFormData.append('type', 'video');
 
-    const videoUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
-      method: 'POST',
-      body: videoFormData
-    });
+    // Add timeout to prevent hanging
+    const UPLOAD_TIMEOUT_MS = 60000;
+    const videoAbortController = new AbortController();
+    const videoUploadTimeoutId = setTimeout(() => {
+      console.log(`[EXT][BG] Aborting video upload after ${UPLOAD_TIMEOUT_MS / 1000}s timeout`);
+      videoAbortController.abort();
+    }, UPLOAD_TIMEOUT_MS);
+
+    let videoUploadResponse;
+    try {
+      videoUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
+        method: 'POST',
+        body: videoFormData,
+        signal: videoAbortController.signal
+      });
+      clearTimeout(videoUploadTimeoutId);
+    } catch (fetchError) {
+      clearTimeout(videoUploadTimeoutId);
+      if (fetchError.name === 'AbortError') {
+        throw new Error(`Video upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds`);
+      }
+      throw fetchError;
+    }
 
     if (!videoUploadResponse.ok) {
       const errorText = await videoUploadResponse.text();
@@ -2665,10 +2760,19 @@ async function downloadAndUploadStream(videoId, videoUrl, audioUrl) {
         audioFormData.append('videoId', videoId);
         audioFormData.append('type', 'audio');
 
+        // Add timeout for audio upload
+        const audioAbortController = new AbortController();
+        const audioUploadTimeoutId = setTimeout(() => {
+          console.log(`[EXT][BG] Aborting audio upload after 60s timeout`);
+          audioAbortController.abort();
+        }, 60000);
+
         const audioUploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
           method: 'POST',
-          body: audioFormData
+          body: audioFormData,
+          signal: audioAbortController.signal
         });
+        clearTimeout(audioUploadTimeoutId);
 
         if (audioUploadResponse.ok) {
           const audioUploadResult = await audioUploadResponse.json();

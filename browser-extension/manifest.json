@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.6.4",
-  "description": "Fix: await storeResult to ensure storage completes (v2.6.4)",
+  "version": "2.6.6",
+  "description": "Fix: Avoid storing large video data in chrome.storage (v2.6.6)",
 
   "permissions": [
     "activeTab",
     "storage",
+    "unlimitedStorage",
     "downloads",
     "webRequest",
     "tabs",
