@@ -21,18 +21,18 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '2.1.1',
+        version: '2.2.0',
         extensionId: EXTENSION_ID,
-        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject']
+        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'direct_upload_large_files']
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '2.1.1';
-    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject'];
+    window.__YVO_EXTENSION_VERSION__ = '2.2.0';
+    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'direct_upload_large_files'];
 
-    console.log('[EXT] Bridge ready - MediaRecorder primary v2.1.0');
+    console.log('[EXT] Bridge ready - v2.2.0 with direct upload for large files');
   }
 
   /**
@@ -52,7 +52,12 @@
         break;
 
       case 'checkExtension':
-        sendResponse(requestId, { installed: true, version: '2.1.1' });
+        sendResponse(requestId, {
+          installed: true,
+          version: '2.2.0',
+          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'direct_upload_large_files'],
+          maxBase64Size: 40 * 1024 * 1024 // 40MB - files larger than this upload directly
+        });
         break;
 
       case 'getStoredVideo':

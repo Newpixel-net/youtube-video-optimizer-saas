@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.1.1",
-  "description": "Fix Service Worker compatibility - no URL.createObjectURL",
+  "version": "2.2.0",
+  "description": "Fix 64MB limit with direct upload, expanded itag detection",
 
   "permissions": [
     "activeTab",
