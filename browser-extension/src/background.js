@@ -232,6 +232,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return false; // Channel can close now - we use storage for result
 
     case 'getStoredVideoData':
+      const hasData = !!storedVideoData?.streamData?.videoData;
+      const dataSize = storedVideoData?.streamData?.videoData?.length || 0;
+      console.log(`[EXT][BG] getStoredVideoData: hasData=${hasData}, size=${(dataSize / 1024 / 1024).toFixed(2)}MB`);
       sendResponse({ videoData: storedVideoData });
       return false;
 
@@ -644,6 +647,7 @@ async function handleCaptureForWizard(message) {
 
       // Store full video data for later retrieval via getStoredVideoData message
       // This keeps large video data out of chrome.storage
+      const videoDataSize = captureResult.videoData ? captureResult.videoData.length : 0;
       storedVideoData = {
         videoInfo: videoInfo,
         streamData: {
@@ -652,7 +656,7 @@ async function handleCaptureForWizard(message) {
         },
         capturedAt: Date.now()
       };
-      console.log(`[EXT][CAPTURE] Video data stored in-memory (${(captureResult.videoSize / 1024 / 1024).toFixed(2)}MB), available via getStoredVideoData`);
+      console.log(`[EXT][CAPTURE] Video data stored in-memory (base64 size: ${(videoDataSize / 1024 / 1024).toFixed(2)}MB), available via getStoredVideoData`);
 
       // Close auto-opened tab after successful capture
       if (autoOpenedTabId) {
