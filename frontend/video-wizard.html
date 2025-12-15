@@ -12380,14 +12380,15 @@
                 // Set up callback
                 extensionCallbacks[requestId] = { resolve: resolve, reject: reject };
 
-                // Timeout after 180 seconds (3 minutes) for video capture
+                // Timeout after 210 seconds (3.5 minutes) for video capture
+                // The extension uses storage-based polling for 180s, so we add a buffer
                 // Capture at 4x speed: 5 min video = 75s capture + upload time
                 setTimeout(function() {
                     if (extensionCallbacks[requestId]) {
                         delete extensionCallbacks[requestId];
                         reject(new Error('Extension capture timeout - the video may be too long or network issues occurred'));
                     }
-                }, 180000);
+                }, 210000);
 
                 // Send request to extension
                 window.dispatchEvent(new CustomEvent('yvo-extension-request', {
