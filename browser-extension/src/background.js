@@ -291,11 +291,34 @@ console.log('[EXT][BG] Service worker ready, message listener registered');
 async function handleCaptureForWizard(message, sendResponse) {
   const { videoId, youtubeUrl, autoCapture = true, startTime, endTime, quality } = message;
 
-  console.log(`[EXT][CAPTURE] start videoId=${videoId} startTime=${startTime} endTime=${endTime}`);
+  console.log(`[EXT][CAPTURE] start videoId=${videoId} startTime=${startTime} endTime=${endTime} autoCapture=${autoCapture}`);
 
   if (!videoId || !isValidVideoId(videoId)) {
     console.error('[EXT][CAPTURE] FAIL: Invalid video ID');
     sendResponse({ success: false, error: 'Invalid video ID', code: 'INVALID_VIDEO_ID' });
+    return;
+  }
+
+  // FIX: If autoCapture is false, only return video metadata without capturing
+  // This is used during analysis mode to avoid long waits
+  if (autoCapture === false) {
+    console.log(`[EXT][CAPTURE] autoCapture=false - returning metadata only (no capture)`);
+    try {
+      const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
+      sendResponse({
+        success: true,
+        videoInfo: videoInfo,
+        streamData: null, // No stream data - no capture was performed
+        message: 'Video info retrieved (capture skipped - autoCapture=false)'
+      });
+    } catch (infoError) {
+      console.error(`[EXT][CAPTURE] Failed to get video info: ${infoError.message}`);
+      sendResponse({
+        success: false,
+        error: `Failed to get video info: ${infoError.message}`,
+        code: 'VIDEO_INFO_FAILED'
+      });
+    }
     return;
   }
 

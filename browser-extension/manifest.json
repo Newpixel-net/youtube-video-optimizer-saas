@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.2.1",
-  "description": "Fix capture timeout and fallback logic bugs",
+  "version": "2.2.2",
+  "description": "Fix autoCapture=false to skip video capture during analysis",
 
   "permissions": [
     "activeTab",
