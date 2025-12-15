@@ -1288,8 +1288,11 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
  * executeScript with world: 'MAIN' doesn't properly wait for Promises that
  * resolve via async callbacks (like FileReader or setTimeout).
  *
- * NEW IN v2.6.8: Uploads directly from the YouTube page context to avoid
- * message passing issues with large video data.
+ * v2.7.0 MAJOR REWRITE:
+ * - Better ad detection
+ * - Improved video state validation
+ * - More robust error handling
+ * - Direct upload from page context
  *
  * The video is sped up to 4x to minimize capture time.
  * For a 60-second clip, this takes only ~15 seconds.
@@ -1302,7 +1305,10 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
  */
 function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadUrl) {
   // IMMEDIATE LOG - if this doesn't appear, function isn't running at all
-  console.log(`[EXT][CAPTURE-PAGE] Function started! captureId=${captureId} uploadUrl=${uploadUrl ? 'provided' : 'none'}`);
+  console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.0 ======`);
+  console.log(`[EXT][CAPTURE-PAGE] captureId=${captureId}`);
+  console.log(`[EXT][CAPTURE-PAGE] startTime=${startTime}s, endTime=${endTime}s`);
+  console.log(`[EXT][CAPTURE-PAGE] uploadUrl=${uploadUrl ? 'provided' : 'none'}`);
 
   const duration = endTime - startTime;
   const PLAYBACK_SPEED = 4;
@@ -1318,27 +1324,48 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       return;
     }
     resultSent = true;
-    console.log(`[EXT][CAPTURE-PAGE] Posting result via postMessage (error=${error || 'none'})...`);
+
+    const errorCode = error ? (
+      error.includes('DRM') ? 'DRM_PROTECTED' :
+      error.includes('ad') || error.includes('Ad') ? 'AD_PLAYING' :
+      error.includes('not playing') ? 'VIDEO_NOT_PLAYING' :
+      error.includes('not found') ? 'VIDEO_NOT_FOUND' :
+      'CAPTURE_FAILED'
+    ) : null;
+
+    console.log(`[EXT][CAPTURE-PAGE] Posting result via postMessage (error=${error || 'none'}, code=${errorCode})...`);
     try {
       window.postMessage({
         type: 'YVO_CAPTURE_RESULT',
         captureId: captureId,
         result: result,
-        error: error
+        error: error,
+        errorCode: errorCode
       }, '*');
       console.log(`[EXT][CAPTURE-PAGE] Result posted (success=${!error})`);
     } catch (postError) {
       console.error(`[EXT][CAPTURE-PAGE] Failed to post result: ${postError.message}`);
+      // Fallback: try storing in localStorage for the relay to pick up
+      try {
+        localStorage.setItem(`yvo_capture_result_${captureId}`, JSON.stringify({
+          result: result,
+          error: error,
+          errorCode: errorCode
+        }));
+        console.log(`[EXT][CAPTURE-PAGE] Result stored in localStorage as fallback`);
+      } catch (e) {
+        console.error(`[EXT][CAPTURE-PAGE] LocalStorage fallback also failed`);
+      }
     }
   }
 
   // CRITICAL: Hard timeout to GUARANTEE we always send a response
   // This prevents the frontend from hanging forever
-  const HARD_TIMEOUT_MS = captureTime + 120000; // capture time + 120s buffer for upload
+  const HARD_TIMEOUT_MS = captureTime + 60000; // capture time + 60s buffer (reduced from 120s)
   const hardTimeoutId = setTimeout(() => {
     if (!resultSent) {
       console.error(`[EXT][CAPTURE-PAGE] HARD TIMEOUT after ${HARD_TIMEOUT_MS / 1000}s - forcing error response`);
-      sendResult(null, `Capture timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)} seconds. Please try again.`);
+      sendResult(null, `Capture timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)} seconds. The video may not be playing properly.`);
     }
   }, HARD_TIMEOUT_MS);
 
@@ -1348,91 +1375,238 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       type: 'YVO_CAPTURE_STARTED',
       captureId: captureId
     }, '*');
+    console.log(`[EXT][CAPTURE-PAGE] Start notification sent`);
   } catch (e) {
     console.error(`[EXT][CAPTURE-PAGE] Failed to send start notification: ${e.message}`);
   }
 
-  console.log(`[EXT][CAPTURE-PAGE] Will capture ${duration}s at ${PLAYBACK_SPEED}x start=${startTime}s end=${endTime}s (timeout=${Math.round(HARD_TIMEOUT_MS / 1000)}s)`);
+  console.log(`[EXT][CAPTURE-PAGE] Will capture ${duration}s at ${PLAYBACK_SPEED}x (timeout=${Math.round(HARD_TIMEOUT_MS / 1000)}s)`);
 
   // Helper to wait with timeout
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Helper to wait for video to be ready (has valid dimensions and duration)
-  async function waitForVideoReady(videoEl, maxWaitMs = 15000) {
+  // Check if an ad is currently playing
+  function isAdPlaying() {
+    // Check for YouTube ad indicators
+    const adIndicators = [
+      document.querySelector('.ytp-ad-player-overlay'),
+      document.querySelector('.ytp-ad-text'),
+      document.querySelector('.video-ads.ytp-ad-module'),
+      document.querySelector('.ytp-ad-preview-container'),
+      document.querySelector('[class*="ytp-ad-"]'),
+      document.querySelector('.ad-showing')
+    ];
+
+    const hasAdIndicator = adIndicators.some(el => el !== null);
+
+    // Also check player state
+    const ytPlayer = document.querySelector('#movie_player');
+    let isAdFromPlayer = false;
+    if (ytPlayer && typeof ytPlayer.getAdState === 'function') {
+      try {
+        // getAdState returns 1 if ad is playing
+        isAdFromPlayer = ytPlayer.getAdState() === 1;
+      } catch (e) {}
+    }
+
+    // Check if video has ad class
+    const videoContainer = document.querySelector('.html5-video-player');
+    const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
+                       videoContainer?.classList.contains('ad-interrupting');
+
+    const isAd = hasAdIndicator || isAdFromPlayer || hasAdClass;
+    if (isAd) {
+      console.log(`[EXT][CAPTURE] Ad detected! hasAdIndicator=${hasAdIndicator}, isAdFromPlayer=${isAdFromPlayer}, hasAdClass=${hasAdClass}`);
+    }
+    return isAd;
+  }
+
+  // Wait for ad to finish
+  async function waitForAdToFinish(maxWaitMs = 60000) {
     const startWait = Date.now();
+    let adDetected = false;
 
-    function isVideoReady() {
-      return (
-        videoEl.videoWidth > 0 &&
-        videoEl.videoHeight > 0 &&
-        isFinite(videoEl.duration) &&
-        videoEl.duration > 0 &&
-        videoEl.readyState >= 2  // HAVE_CURRENT_DATA - relaxed from 3 to be more forgiving
-      );
-    }
-
-    // Check immediately
-    if (isVideoReady()) {
-      console.log(`[EXT][CAPTURE] Video already ready: ${videoEl.videoWidth}x${videoEl.videoHeight}, duration=${videoEl.duration}s, readyState=${videoEl.readyState}`);
-      return videoEl;
-    }
-
-    console.log(`[EXT][CAPTURE] Video not ready yet: ${videoEl.videoWidth}x${videoEl.videoHeight}, duration=${videoEl.duration}s, readyState=${videoEl.readyState}. Waiting...`);
-
-    // Poll until ready or timeout
     while (Date.now() - startWait < maxWaitMs) {
-      await sleep(200);
-      if (isVideoReady()) {
-        console.log(`[EXT][CAPTURE] Video became ready: ${videoEl.videoWidth}x${videoEl.videoHeight}, duration=${videoEl.duration}s, readyState=${videoEl.readyState}`);
+      if (!isAdPlaying()) {
+        if (adDetected) {
+          console.log(`[EXT][CAPTURE] Ad finished after ${Date.now() - startWait}ms`);
+          // Wait a bit for main video to resume
+          await sleep(1500);
+        }
+        return true;
+      }
+
+      if (!adDetected) {
+        adDetected = true;
+        console.log(`[EXT][CAPTURE] Ad is playing, waiting for it to finish...`);
+
+        // Try to skip ad if skip button is available
+        const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, [class*="skip-button"]');
+        if (skipButton && skipButton.offsetParent !== null) {
+          console.log(`[EXT][CAPTURE] Skip button found, clicking...`);
+          skipButton.click();
+          await sleep(500);
+        }
+      }
+
+      // Keep checking for skip button
+      const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern');
+      if (skipButton && skipButton.offsetParent !== null) {
+        skipButton.click();
+      }
+
+      await sleep(1000);
+    }
+
+    return false; // Timed out waiting for ad
+  }
+
+  // Check if video is actually playing and has data
+  function isVideoActuallyPlaying(videoEl) {
+    // Must have valid dimensions
+    if (videoEl.videoWidth === 0 || videoEl.videoHeight === 0) {
+      console.log(`[EXT][CAPTURE] Video has no dimensions: ${videoEl.videoWidth}x${videoEl.videoHeight}`);
+      return false;
+    }
+
+    // Must not be paused
+    if (videoEl.paused) {
+      console.log(`[EXT][CAPTURE] Video is paused`);
+      return false;
+    }
+
+    // Must have enough data
+    if (videoEl.readyState < 2) {
+      console.log(`[EXT][CAPTURE] Video readyState too low: ${videoEl.readyState}`);
+      return false;
+    }
+
+    // Must have valid duration
+    if (!isFinite(videoEl.duration) || videoEl.duration === 0) {
+      console.log(`[EXT][CAPTURE] Video has invalid duration: ${videoEl.duration}`);
+      return false;
+    }
+
+    // Should have buffered data
+    if (videoEl.buffered.length === 0) {
+      console.log(`[EXT][CAPTURE] Video has no buffered data`);
+      return false;
+    }
+
+    return true;
+  }
+
+  // Wait for video to be ready and actually playing
+  async function waitForVideoReady(videoEl, maxWaitMs = 20000) {
+    const startWait = Date.now();
+    const ytPlayer = document.querySelector('#movie_player');
+
+    console.log(`[EXT][CAPTURE] Waiting for video to be ready (max ${maxWaitMs / 1000}s)...`);
+    console.log(`[EXT][CAPTURE] Initial state: ${videoEl.videoWidth}x${videoEl.videoHeight}, paused=${videoEl.paused}, readyState=${videoEl.readyState}`);
+
+    while (Date.now() - startWait < maxWaitMs) {
+      // First check for ads
+      if (isAdPlaying()) {
+        console.log(`[EXT][CAPTURE] Ad detected while waiting for video`);
+        const adFinished = await waitForAdToFinish(45000);
+        if (!adFinished) {
+          throw new Error('Ad is still playing after 45 seconds. Please wait for the ad to finish and try again.');
+        }
+        // Reset the video element reference after ad
+        videoEl = document.querySelector('video.html5-main-video') || document.querySelector('video');
+        if (!videoEl) {
+          throw new Error('Video element lost after ad finished');
+        }
+      }
+
+      // Check if video is ready
+      if (isVideoActuallyPlaying(videoEl)) {
+        console.log(`[EXT][CAPTURE] Video is ready and playing!`);
+        console.log(`[EXT][CAPTURE] Final state: ${videoEl.videoWidth}x${videoEl.videoHeight}, currentTime=${videoEl.currentTime}, duration=${videoEl.duration}`);
         return videoEl;
       }
+
+      // Try to start playback if not playing
+      if (videoEl.paused || videoEl.readyState < 2) {
+        console.log(`[EXT][CAPTURE] Video not playing, attempting to start...`);
+
+        // Mute for autoplay
+        videoEl.muted = true;
+
+        // Try YouTube player API first
+        if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
+          try {
+            if (typeof ytPlayer.mute === 'function') ytPlayer.mute();
+            ytPlayer.playVideo();
+          } catch (e) {}
+        }
+
+        // Then try direct play
+        try {
+          await videoEl.play();
+        } catch (e) {
+          console.log(`[EXT][CAPTURE] Direct play failed: ${e.message}`);
+        }
+
+        // Try clicking play button
+        const playBtn = document.querySelector('.ytp-play-button');
+        if (playBtn) {
+          const playState = playBtn.getAttribute('data-title-no-tooltip');
+          if (playState === 'Play' || playState === 'נגן') {
+            playBtn.click();
+          }
+        }
+      }
+
+      await sleep(500);
     }
 
-    // Timeout - throw error with detailed diagnostics
-    throw new Error(`Video not ready after ${maxWaitMs / 1000}s: dimensions=${videoEl.videoWidth}x${videoEl.videoHeight}, duration=${videoEl.duration}, readyState=${videoEl.readyState}`);
+    // Timeout - provide detailed error
+    const state = {
+      dimensions: `${videoEl.videoWidth}x${videoEl.videoHeight}`,
+      paused: videoEl.paused,
+      readyState: videoEl.readyState,
+      duration: videoEl.duration,
+      currentTime: videoEl.currentTime,
+      networkState: videoEl.networkState,
+      hasError: !!videoEl.error
+    };
+    console.error(`[EXT][CAPTURE] Video not ready after ${maxWaitMs / 1000}s:`, state);
+    throw new Error(`Video not playing after ${maxWaitMs / 1000}s. Please click play on the YouTube video and try again.`);
   }
 
   // Main async capture function
   async function doCapture() {
-    // CRITICAL: Use YouTube's player API to ensure video is loaded and playing
+    console.log(`[EXT][CAPTURE] === doCapture() started ===`);
+
+    // FIRST: Check for ads before anything else
+    if (isAdPlaying()) {
+      console.log(`[EXT][CAPTURE] Ad detected at start, waiting for it to finish...`);
+      const adFinished = await waitForAdToFinish(45000);
+      if (!adFinished) {
+        throw new Error('Ad is still playing. Please wait for the ad to finish and try again.');
+      }
+    }
+
+    // Get YouTube player API
     const ytPlayer = document.querySelector('#movie_player');
     console.log(`[EXT][CAPTURE] YouTube player element: ${ytPlayer ? 'found' : 'not found'}`);
 
-    // Try to use YouTube's player API to load and play the video
+    // Get player state info
     if (ytPlayer) {
       try {
         const hasPlayVideo = typeof ytPlayer.playVideo === 'function';
         const hasGetPlayerState = typeof ytPlayer.getPlayerState === 'function';
-        const hasMute = typeof ytPlayer.mute === 'function';
-        const hasSeekTo = typeof ytPlayer.seekTo === 'function';
+        const playerState = hasGetPlayerState ? ytPlayer.getPlayerState() : -1;
 
-        console.log(`[EXT][CAPTURE] YouTube API: playVideo=${hasPlayVideo}, getPlayerState=${hasGetPlayerState}, mute=${hasMute}, seekTo=${hasSeekTo}`);
+        console.log(`[EXT][CAPTURE] Player API available: playVideo=${hasPlayVideo}, state=${playerState}`);
 
-        if (hasPlayVideo) {
-          // Mute first to avoid autoplay policy issues
-          if (hasMute) {
-            ytPlayer.mute();
-            console.log('[EXT][CAPTURE] Muted YouTube player');
-          }
-
-          // Get current state (-1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued)
-          let playerState = hasGetPlayerState ? ytPlayer.getPlayerState() : -1;
-          console.log(`[EXT][CAPTURE] YouTube player state: ${playerState}`);
-
-          // If video is unstarted, ended, paused or cued - play it
-          if (playerState === -1 || playerState === 0 || playerState === 2 || playerState === 5) {
-            console.log('[EXT][CAPTURE] Starting YouTube player via API...');
-            ytPlayer.playVideo();
-            await sleep(1500);
-            playerState = hasGetPlayerState ? ytPlayer.getPlayerState() : -1;
-            console.log(`[EXT][CAPTURE] YouTube player state after play: ${playerState}`);
-          }
-
-          // If still not playing (state 1) or buffering (state 3), wait longer
-          if (hasGetPlayerState && (ytPlayer.getPlayerState() !== 1 && ytPlayer.getPlayerState() !== 3)) {
-            console.log('[EXT][CAPTURE] Player not playing, waiting for buffer...');
-            await sleep(2000);
-          }
+        // Ensure player is ready
+        if (hasPlayVideo && (playerState === -1 || playerState === 0 || playerState === 2 || playerState === 5)) {
+          console.log(`[EXT][CAPTURE] Player not in playing state, starting...`);
+          if (typeof ytPlayer.mute === 'function') ytPlayer.mute();
+          ytPlayer.playVideo();
+          await sleep(1000);
         }
       } catch (ytError) {
         console.warn('[EXT][CAPTURE] YouTube player API error:', ytError.message);
@@ -1449,113 +1623,80 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       throw new Error('No video element found on page. Please ensure the YouTube video is loaded.');
     }
 
-    // Log comprehensive video element diagnostics
-    console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s, readyState=${videoElement.readyState}`);
-    console.log(`[EXT][CAPTURE] Video state: paused=${videoElement.paused}, ended=${videoElement.ended}, networkState=${videoElement.networkState}, currentTime=${videoElement.currentTime}`);
+    console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
+    console.log(`[EXT][CAPTURE] Video state: paused=${videoElement.paused}, readyState=${videoElement.readyState}, duration=${videoElement.duration}`);
 
     // Check for video errors
     if (videoElement.error) {
-      throw new Error(`Video has error: ${videoElement.error.message || 'Unknown error (code ' + videoElement.error.code + ')'}`);
+      throw new Error(`Video has error: ${videoElement.error.message || 'Error code ' + videoElement.error.code}`);
     }
 
-    // If video has readyState=0, try aggressive loading
-    let loadAttempts = 0;
-    const MAX_LOAD_ATTEMPTS = 8;
-    while (videoElement.readyState === 0 && loadAttempts < MAX_LOAD_ATTEMPTS) {
-      loadAttempts++;
-      console.log(`[EXT][CAPTURE] Video readyState=0, trying to force load... (attempt ${loadAttempts}/${MAX_LOAD_ATTEMPTS})`);
-
-      // Method 1: Use YouTube player API
-      if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
-        try {
-          ytPlayer.playVideo();
-        } catch (e) {}
-      }
-
-      // Method 2: Click video element
-      videoElement.click();
-      await sleep(200);
-
-      // Method 3: Force muted play
-      videoElement.muted = true;
-      try {
-        await videoElement.play();
-        console.log('[EXT][CAPTURE] Force video.play() succeeded');
-      } catch (e) {
-        console.warn('[EXT][CAPTURE] Force video.play() failed:', e.message);
-      }
-
-      // Method 4: Click YouTube's play button
-      const playBtn = document.querySelector('.ytp-play-button');
-      if (playBtn) {
-        playBtn.click();
-      }
-
-      // Method 5: Click big play button if visible
-      const bigPlayBtn = document.querySelector('.ytp-large-play-button');
-      if (bigPlayBtn && getComputedStyle(bigPlayBtn).display !== 'none') {
-        bigPlayBtn.click();
-      }
-
-      await sleep(1500);
-      console.log(`[EXT][CAPTURE] After attempt ${loadAttempts}: readyState=${videoElement.readyState}, paused=${videoElement.paused}`);
-
-      if (videoElement.readyState > 0) {
-        console.log(`[EXT][CAPTURE] Video started loading! readyState=${videoElement.readyState}`);
-        break;
-      }
+    // Check for DRM (mediaKeys indicates EME/DRM is active)
+    if (videoElement.mediaKeys) {
+      console.warn(`[EXT][CAPTURE] WARNING: Video has DRM (mediaKeys present) - capture may fail`);
     }
 
-    if (videoElement.readyState === 0) {
-      throw new Error('Video failed to load after multiple attempts. This may be due to: an ad playing, video requires sign-in, video is region-restricted, or DRM protection.');
-    }
-
-    // Ensure video is playing
-    if (videoElement.paused) {
-      videoElement.muted = true;
-      try {
-        await videoElement.play();
-      } catch (e) {
-        console.warn('[EXT][CAPTURE] Play failed:', e.message);
-      }
-    }
-
-    // Wait for video to be fully ready
-    const readyVideoElement = await waitForVideoReady(videoElement, 15000);
+    // Wait for video to be ready and playing
+    videoElement = await waitForVideoReady(videoElement, 25000);
 
     // Seek to start position
     console.log(`[EXT][CAPTURE] Seeking to ${startTime}s...`);
-    readyVideoElement.currentTime = startTime;
+
+    // Use YouTube API for seeking if available (more reliable)
+    if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+      ytPlayer.seekTo(startTime, true);
+    } else {
+      videoElement.currentTime = startTime;
+    }
 
     // Wait for seek to complete
     await new Promise((resolve) => {
+      const startSeekTime = Date.now();
       const checkSeek = () => {
-        if (Math.abs(readyVideoElement.currentTime - startTime) < 2) {
+        if (Math.abs(videoElement.currentTime - startTime) < 3) {
           resolve();
+        } else if (Date.now() - startSeekTime > 5000) {
+          console.warn(`[EXT][CAPTURE] Seek timeout, proceeding anyway at ${videoElement.currentTime}s`);
+          resolve();
+        } else {
+          setTimeout(checkSeek, 100);
         }
       };
-      readyVideoElement.addEventListener('seeked', checkSeek, { once: true });
-      setTimeout(() => {
-        readyVideoElement.removeEventListener('seeked', checkSeek);
-        resolve(); // Resolve anyway after timeout
-      }, 3000);
+      videoElement.addEventListener('seeked', () => resolve(), { once: true });
+      checkSeek();
     });
-    console.log(`[EXT][CAPTURE] Seek complete, currentTime=${readyVideoElement.currentTime}s`);
+
+    console.log(`[EXT][CAPTURE] Seek complete, currentTime=${videoElement.currentTime.toFixed(1)}s`);
+
+    // Wait a moment for buffer after seek
+    await sleep(500);
 
     // Capture the video stream
     console.log('[EXT][CAPTURE] Calling captureStream()...');
     let originalStream;
     try {
-      originalStream = readyVideoElement.captureStream();
+      originalStream = videoElement.captureStream();
     } catch (e) {
-      throw new Error(`Could not capture video stream: ${e.message}. This video may be DRM-protected.`);
+      // DRM-protected videos throw here
+      if (e.message.includes('protected') || e.message.includes('DRM') || e.message.includes('not allowed')) {
+        throw new Error('This video is DRM-protected and cannot be captured. Please try a different video.');
+      }
+      throw new Error(`Could not capture video stream: ${e.message}`);
     }
 
     if (!originalStream || originalStream.getVideoTracks().length === 0) {
-      const errorMsg = readyVideoElement.mediaKeys
-        ? 'No video tracks available - this video is DRM-protected and cannot be captured'
-        : 'No video tracks available - please ensure the video is playing and not blocked';
-      throw new Error(errorMsg);
+      // Check if DRM
+      if (videoElement.mediaKeys) {
+        throw new Error('This video is DRM-protected and cannot be captured. Please try a different video.');
+      }
+      throw new Error('No video tracks available - please ensure the video is playing');
+    }
+
+    // Check if video track is actually active
+    const videoTracks = originalStream.getVideoTracks();
+    const firstVideoTrack = videoTracks[0];
+    if (firstVideoTrack.muted || !firstVideoTrack.enabled) {
+      console.warn(`[EXT][CAPTURE] Video track is muted=${firstVideoTrack.muted}, enabled=${firstVideoTrack.enabled}`);
     }
 
     // Clone tracks to prevent "Tracks in MediaStream were added" error
@@ -1565,7 +1706,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
     originalStream.getVideoTracks().forEach(track => {
       const clonedTrack = track.clone();
       stableStream.addTrack(clonedTrack);
-      console.log(`[EXT][CAPTURE] Cloned video track: ${track.label || 'unnamed'}`);
+      console.log(`[EXT][CAPTURE] Cloned video track: ${track.label || 'unnamed'}, enabled=${track.enabled}`);
     });
 
     originalStream.getAudioTracks().forEach(track => {
@@ -1574,7 +1715,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       console.log(`[EXT][CAPTURE] Cloned audio track: ${track.label || 'unnamed'}`);
     });
 
-    console.log(`[EXT][CAPTURE] Stable stream created: ${stableStream.getVideoTracks().length} video, ${stableStream.getAudioTracks().length} audio tracks`);
+    console.log(`[EXT][CAPTURE] Stable stream: ${stableStream.getVideoTracks().length} video, ${stableStream.getAudioTracks().length} audio tracks`);
 
     // Determine MIME type
     let mimeType = 'video/webm;codecs=vp9,opus';
@@ -1591,6 +1732,8 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
     const captureResult = await new Promise((resolve, reject) => {
       const chunks = [];
       let recorderStopped = false;
+      let dataReceived = false;
+      let lastDataTime = Date.now();
 
       const recorder = new MediaRecorder(stableStream, {
         mimeType: mimeType,
@@ -1601,9 +1744,10 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
         stableStream.getTracks().forEach(track => track.stop());
       };
 
-      const stopRecording = () => {
+      const stopRecording = (reason) => {
         if (!recorderStopped && recorder.state === 'recording') {
           recorderStopped = true;
+          console.log(`[EXT][CAPTURE] Stopping recorder (reason: ${reason})`);
           try {
             recorder.stop();
           } catch (e) {
@@ -1615,18 +1759,20 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunks.push(e.data);
+          dataReceived = true;
+          lastDataTime = Date.now();
         }
       };
 
       recorder.onstop = async () => {
-        readyVideoElement.playbackRate = 1;
-        readyVideoElement.pause();
+        videoElement.playbackRate = 1;
+        videoElement.pause();
         cleanupTracks();
 
-        console.log(`[EXT][CAPTURE] Recording stopped, chunks=${chunks.length}`);
+        console.log(`[EXT][CAPTURE] Recording stopped, chunks=${chunks.length}, dataReceived=${dataReceived}`);
 
-        if (chunks.length === 0) {
-          reject(new Error('No video data captured - recording produced empty result'));
+        if (chunks.length === 0 || !dataReceived) {
+          reject(new Error('No video data captured. The video may be DRM-protected or not playing properly.'));
           return;
         }
 
@@ -1635,11 +1781,11 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
         console.log(`[EXT][CAPTURE] Blob size=${(blobSize / 1024 / 1024).toFixed(2)}MB`);
 
         if (blobSize < 10000) {
-          reject(new Error('Captured video too small - may indicate playback issue'));
+          reject(new Error('Captured video too small - the video may not be playing correctly'));
           return;
         }
 
-        // NEW v2.6.8: Upload directly from page context if uploadUrl is provided
+        // NEW v2.7.0: Upload directly from page context if uploadUrl is provided
         if (uploadUrl) {
           console.log(`[EXT][CAPTURE] Uploading directly to server from page context...`);
           try {
@@ -1717,23 +1863,23 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       };
 
       recorder.onerror = (e) => {
-        readyVideoElement.playbackRate = 1;
+        videoElement.playbackRate = 1;
         cleanupTracks();
         const errorMsg = e.error?.message || e.error?.name || 'unknown';
         console.error(`[EXT][CAPTURE] MediaRecorder error: ${errorMsg}`);
 
         // Try to salvage what we have
         if (chunks.length > 0 && !recorderStopped) {
-          console.log(`[EXT][CAPTURE] Error occurred but have ${chunks.length} chunks, attempting to salvage...`);
-          stopRecording();
+          console.log(`[EXT][CAPTURE] Error occurred but have ${chunks.length} chunks, salvaging...`);
+          stopRecording('error_salvage');
         } else {
           reject(new Error(`MediaRecorder error: ${errorMsg}`));
         }
       };
 
       // Set playback speed and start
-      readyVideoElement.playbackRate = PLAYBACK_SPEED;
-      readyVideoElement.muted = true;
+      videoElement.playbackRate = PLAYBACK_SPEED;
+      videoElement.muted = true;
 
       // Start recording
       const startRecording = () => {
@@ -1745,16 +1891,30 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
         }
       };
 
-      // Ensure video is playing
-      const playPromise = readyVideoElement.play();
-      if (playPromise && typeof playPromise.then === 'function') {
-        playPromise.then(startRecording).catch((e) => {
-          console.warn('[EXT][CAPTURE] Play failed, trying to record anyway:', e.message);
+      // Ensure video is playing before starting
+      if (videoElement.paused) {
+        videoElement.play().then(startRecording).catch((e) => {
+          console.warn('[EXT][CAPTURE] Play failed, trying anyway:', e.message);
           startRecording();
         });
       } else {
         startRecording();
       }
+
+      // Monitor for data - detect if no data is being received
+      const dataMonitor = setInterval(() => {
+        if (recorderStopped) {
+          clearInterval(dataMonitor);
+          return;
+        }
+
+        const timeSinceData = Date.now() - lastDataTime;
+        if (timeSinceData > 10000 && !dataReceived) {
+          console.error(`[EXT][CAPTURE] No data received in ${timeSinceData}ms - video may be DRM protected`);
+          clearInterval(dataMonitor);
+          stopRecording('no_data');
+        }
+      }, 5000);
 
       // Monitor progress
       const progressInterval = setInterval(() => {
@@ -1762,17 +1922,18 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
           clearInterval(progressInterval);
           return;
         }
-        const progress = ((readyVideoElement.currentTime - startTime) / duration * 100).toFixed(1);
-        console.log(`[EXT][CAPTURE] Progress: ${progress}% (at ${readyVideoElement.currentTime.toFixed(1)}s)`);
+        const progress = ((videoElement.currentTime - startTime) / duration * 100).toFixed(1);
+        console.log(`[EXT][CAPTURE] Progress: ${progress}% (at ${videoElement.currentTime.toFixed(1)}s, chunks=${chunks.length})`);
       }, 3000);
 
       // Stop when we reach end time
       const checkEnd = setInterval(() => {
-        if (readyVideoElement.currentTime >= endTime || readyVideoElement.ended) {
+        if (videoElement.currentTime >= endTime || videoElement.ended) {
           clearInterval(checkEnd);
           clearInterval(progressInterval);
+          clearInterval(dataMonitor);
           console.log('[EXT][CAPTURE] Reached end, stopping recorder...');
-          stopRecording();
+          stopRecording('reached_end');
         }
       }, 100);
 
@@ -1780,9 +1941,10 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       const recordingTimeout = setTimeout(() => {
         clearInterval(checkEnd);
         clearInterval(progressInterval);
+        clearInterval(dataMonitor);
         if (!recorderStopped) {
           console.log('[EXT][CAPTURE] Recording timeout, stopping...');
-          stopRecording();
+          stopRecording('timeout');
         }
       }, captureTime * 1.5 + 10000);
 
@@ -1791,6 +1953,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
         clearTimeout(recordingTimeout);
         clearInterval(checkEnd);
         clearInterval(progressInterval);
+        clearInterval(dataMonitor);
       }, { once: true });
     });
 
@@ -2192,11 +2355,112 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }
     }
 
+    // v2.7.0: Check for ads FIRST before attempting video loading
+    console.log(`[EXT][CAPTURE] Checking for ads before video loading...`);
+    try {
+      const adCheckResult = await chrome.scripting.executeScript({
+        target: { tabId: youtubeTab.id },
+        world: 'MAIN',
+        func: () => {
+          // Check for YouTube ad indicators
+          const adIndicators = [
+            document.querySelector('.ytp-ad-player-overlay'),
+            document.querySelector('.ytp-ad-text'),
+            document.querySelector('.video-ads.ytp-ad-module'),
+            document.querySelector('.ytp-ad-preview-container'),
+            document.querySelector('[class*="ytp-ad-"]'),
+            document.querySelector('.ad-showing')
+          ];
+          const hasAdIndicator = adIndicators.some(el => el !== null);
+
+          const videoContainer = document.querySelector('.html5-video-player');
+          const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
+                             videoContainer?.classList.contains('ad-interrupting');
+
+          const ytPlayer = document.querySelector('#movie_player');
+          let isAdFromPlayer = false;
+          if (ytPlayer && typeof ytPlayer.getAdState === 'function') {
+            try {
+              isAdFromPlayer = ytPlayer.getAdState() === 1;
+            } catch (e) {}
+          }
+
+          return {
+            isAdPlaying: hasAdIndicator || hasAdClass || isAdFromPlayer,
+            hasAdIndicator,
+            hasAdClass,
+            isAdFromPlayer
+          };
+        }
+      });
+
+      const adStatus = adCheckResult[0]?.result;
+      if (adStatus?.isAdPlaying) {
+        console.log(`[EXT][CAPTURE] Ad is currently playing, waiting for it to finish...`);
+
+        // Wait for ad to finish (up to 60 seconds)
+        let adWaitAttempts = 0;
+        const MAX_AD_WAIT = 60;
+
+        while (adWaitAttempts < MAX_AD_WAIT) {
+          adWaitAttempts++;
+
+          // Try to skip ad
+          await chrome.scripting.executeScript({
+            target: { tabId: youtubeTab.id },
+            world: 'MAIN',
+            func: () => {
+              const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, [class*="skip-button"]');
+              if (skipButton && skipButton.offsetParent !== null) {
+                console.log('[YVO] Clicking skip button');
+                skipButton.click();
+              }
+            }
+          });
+
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Check if ad is still playing
+          const adRecheck = await chrome.scripting.executeScript({
+            target: { tabId: youtubeTab.id },
+            world: 'MAIN',
+            func: () => {
+              const adIndicators = [
+                document.querySelector('.ytp-ad-player-overlay'),
+                document.querySelector('.ad-showing'),
+                document.querySelector('.ytp-ad-text')
+              ];
+              return adIndicators.some(el => el !== null);
+            }
+          });
+
+          if (!adRecheck[0]?.result) {
+            console.log(`[EXT][CAPTURE] Ad finished after ${adWaitAttempts}s`);
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for video to resume
+            break;
+          }
+
+          if (adWaitAttempts % 10 === 0) {
+            console.log(`[EXT][CAPTURE] Still waiting for ad to finish (${adWaitAttempts}s)...`);
+          }
+        }
+
+        if (adWaitAttempts >= MAX_AD_WAIT) {
+          console.warn(`[EXT][CAPTURE] Ad still playing after ${MAX_AD_WAIT}s, proceeding anyway`);
+        }
+      } else {
+        console.log(`[EXT][CAPTURE] No ad detected, proceeding with video loading`);
+      }
+    } catch (adCheckError) {
+      console.warn(`[EXT][CAPTURE] Ad check failed: ${adCheckError.message}, continuing anyway`);
+    }
+
     // AGGRESSIVE VIDEO LOADING: Keep trying until video loads or we give up
     console.log(`[EXT][CAPTURE] Starting aggressive video loading sequence...`);
     let videoLoaded = false;
     let lastReadyState = 0;
-    const MAX_LOAD_ATTEMPTS = 10;
+    let lastIsPlaying = false;
+    const MAX_LOAD_ATTEMPTS = 12; // Increased from 10
     const LOAD_WAIT_MS = 2000;
 
     for (let attempt = 1; attempt <= MAX_LOAD_ATTEMPTS && !videoLoaded; attempt++) {
@@ -2206,18 +2470,24 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         // Trigger playback each attempt
         const playbackResult = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
         lastReadyState = playbackResult?.readyState || 0;
-        console.log(`[EXT][CAPTURE] Playback result: isPlaying=${playbackResult?.isPlaying}, readyState=${lastReadyState}, muted=${playbackResult?.muted}`);
+        lastIsPlaying = playbackResult?.isPlaying || false;
+        console.log(`[EXT][CAPTURE] Playback result: isPlaying=${lastIsPlaying}, readyState=${lastReadyState}, muted=${playbackResult?.muted}`);
 
-        // readyState >= 2 means we have current data, >= 3 means we have future data
-        if (lastReadyState >= 2) {
+        // v2.7.0: Require BOTH readyState >= 2 AND video not paused for better reliability
+        if (lastReadyState >= 2 && lastIsPlaying) {
           videoLoaded = true;
-          console.log(`[EXT][CAPTURE] Video loaded! readyState=${lastReadyState}`);
+          console.log(`[EXT][CAPTURE] Video loaded and playing! readyState=${lastReadyState}`);
           break;
         }
 
+        // If readyState is good but not playing, just need to start playback
+        if (lastReadyState >= 2 && !lastIsPlaying) {
+          console.log(`[EXT][CAPTURE] Video loaded but not playing, forcing play...`);
+        }
+
         // If still readyState=0 or 1, try clicking play button directly
-        if (lastReadyState <= 1) {
-          console.log(`[EXT][CAPTURE] Video not ready, injecting click handler...`);
+        if (lastReadyState <= 1 || !lastIsPlaying) {
+          console.log(`[EXT][CAPTURE] Video not ready/playing, injecting click handler...`);
           try {
             await chrome.scripting.executeScript({
               target: { tabId: youtubeTab.id },
@@ -2230,11 +2500,11 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
                   bigPlayBtn.click();
                 }
 
-                // Click regular play button
+                // Click regular play button - check both English and Hebrew
                 const playBtn = document.querySelector('.ytp-play-button');
                 if (playBtn) {
                   const state = playBtn.getAttribute('data-title-no-tooltip');
-                  if (state === 'Play') {
+                  if (state === 'Play' || state === 'נגן' || !state) {
                     console.log('[YVO] Clicking play button');
                     playBtn.click();
                   }
@@ -2272,15 +2542,16 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     // If video still not loaded after all attempts, return error early
     if (!videoLoaded) {
-      console.error(`[EXT][CAPTURE] FAIL: Video never loaded after ${MAX_LOAD_ATTEMPTS} attempts (readyState=${lastReadyState})`);
+      console.error(`[EXT][CAPTURE] FAIL: Video never loaded after ${MAX_LOAD_ATTEMPTS} attempts (readyState=${lastReadyState}, isPlaying=${lastIsPlaying})`);
       return {
         success: false,
         error: 'Could not load video. Please manually play the video on YouTube and try again.',
         code: 'VIDEO_NOT_LOADED',
         details: {
           readyState: lastReadyState,
+          isPlaying: lastIsPlaying,
           attempts: MAX_LOAD_ATTEMPTS,
-          message: 'The video element did not load. This can happen if: (1) An ad is playing, (2) The video requires sign-in, (3) The video is region-restricted.'
+          message: 'The video element did not load. This can happen if: (1) An ad is playing, (2) The video requires sign-in, (3) The video is region-restricted, (4) DRM protection.'
         }
       };
     }
@@ -2478,6 +2749,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // First, inject a message relay script into the content script context
     // This listens for postMessage from the MAIN world and forwards to service worker
     // ALSO stores result in chrome.storage as a reliable backup
+    // v2.7.0: Added localStorage polling as additional fallback
     await chrome.scripting.executeScript({
       target: { tabId: youtubeTab.id },
       world: 'ISOLATED',
@@ -2486,7 +2758,58 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         if (window.__captureMessageHandler) {
           window.removeEventListener('message', window.__captureMessageHandler);
         }
+        if (window.__captureLocalStoragePoller) {
+          clearInterval(window.__captureLocalStoragePoller);
+        }
 
+        let resultHandled = false;
+
+        // Function to store and forward result
+        const handleResult = (result, error, source) => {
+          if (resultHandled) {
+            console.log(`[EXT][RELAY] Result already handled, ignoring from ${source}`);
+            return;
+          }
+          resultHandled = true;
+
+          // Stop the localStorage poller
+          if (window.__captureLocalStoragePoller) {
+            clearInterval(window.__captureLocalStoragePoller);
+          }
+
+          // CRITICAL: Store result in chrome.storage FIRST (reliable backup)
+          const storageKey = `capture_result_${cid}`;
+          const resultData = {
+            result: result,
+            error: error,
+            timestamp: Date.now()
+          };
+
+          console.log(`[EXT][RELAY] Handling result from ${source}, storing in chrome.storage (key=${storageKey})`);
+          chrome.storage.local.set({ [storageKey]: resultData }).then(() => {
+            console.log(`[EXT][RELAY] Result stored in chrome.storage`);
+          }).catch(e => {
+            console.error(`[EXT][RELAY] Failed to store in chrome.storage:`, e.message);
+          });
+
+          // Also send via message (may fail, but storage is backup)
+          console.log(`[EXT][RELAY] Forwarding result to service worker (success=${!!result?.success}, error=${error || 'none'})`);
+          chrome.runtime.sendMessage({
+            type: 'CAPTURE_RESULT',
+            captureId: cid,
+            result: result,
+            error: error
+          }).then(response => {
+            console.log(`[EXT][RELAY] Result forwarded via message`);
+          }).catch(e => {
+            console.warn('[EXT][RELAY] Message failed, but result is in storage:', e.message);
+          });
+
+          // Clean up
+          window.removeEventListener('message', window.__captureMessageHandler);
+        };
+
+        // Listen for postMessage from MAIN world
         window.__captureMessageHandler = (event) => {
           // Only process messages from same origin with our captureId
           if (!event.data || typeof event.data !== 'object') return;
@@ -2504,36 +2827,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
               }).catch(e => console.warn('[EXT][RELAY] Start notification error (non-fatal):', e.message));
 
             } else if (event.data.type === 'YVO_CAPTURE_RESULT') {
-              // CRITICAL: Store result in chrome.storage FIRST (reliable backup)
-              const storageKey = `capture_result_${cid}`;
-              const resultData = {
-                result: event.data.result,
-                error: event.data.error,
-                timestamp: Date.now()
-              };
-
-              console.log(`[EXT][RELAY] Storing result in chrome.storage (key=${storageKey})`);
-              chrome.storage.local.set({ [storageKey]: resultData }).then(() => {
-                console.log(`[EXT][RELAY] Result stored in chrome.storage`);
-              }).catch(e => {
-                console.error(`[EXT][RELAY] Failed to store in chrome.storage:`, e.message);
-              });
-
-              // Also send via message (may fail, but storage is backup)
-              console.log(`[EXT][RELAY] Forwarding result to service worker (success=${!!event.data.result?.success}, error=${event.data.error || 'none'})`);
-              chrome.runtime.sendMessage({
-                type: 'CAPTURE_RESULT',
-                captureId: cid,
-                result: event.data.result,
-                error: event.data.error
-              }).then(response => {
-                console.log(`[EXT][RELAY] Result forwarded via message`);
-              }).catch(e => {
-                console.warn('[EXT][RELAY] Message failed, but result is in storage:', e.message);
-              });
-
-              // Clean up
-              window.removeEventListener('message', window.__captureMessageHandler);
+              handleResult(event.data.result, event.data.error, 'postMessage');
             }
           } catch (relayError) {
             console.error('[EXT][RELAY] Error in message handler:', relayError);
@@ -2541,7 +2835,30 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         };
 
         window.addEventListener('message', window.__captureMessageHandler);
-        console.log(`[EXT][RELAY] Message relay installed for capture ${cid} (with storage backup)`);
+
+        // FALLBACK: Also poll localStorage in case postMessage fails
+        // The capture function stores result in localStorage as a fallback
+        window.__captureLocalStoragePoller = setInterval(() => {
+          if (resultHandled) {
+            clearInterval(window.__captureLocalStoragePoller);
+            return;
+          }
+
+          try {
+            const lsKey = `yvo_capture_result_${cid}`;
+            const lsData = localStorage.getItem(lsKey);
+            if (lsData) {
+              console.log(`[EXT][RELAY] Found result in localStorage!`);
+              localStorage.removeItem(lsKey);
+              const parsed = JSON.parse(lsData);
+              handleResult(parsed.result, parsed.error, 'localStorage');
+            }
+          } catch (e) {
+            // Ignore localStorage errors
+          }
+        }, 500);
+
+        console.log(`[EXT][RELAY] Message relay installed for capture ${cid} (with storage + localStorage backup)`);
       },
       args: [captureId]
     });
