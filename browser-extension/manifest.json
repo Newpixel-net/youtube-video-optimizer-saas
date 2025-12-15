@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.2.0",
-  "description": "Fix 64MB limit with direct upload, expanded itag detection",
+  "version": "2.2.2",
+  "description": "Fix autoCapture=false to skip video capture during analysis",
 
   "permissions": [
     "activeTab",

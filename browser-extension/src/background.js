@@ -291,11 +291,34 @@ console.log('[EXT][BG] Service worker ready, message listener registered');
 async function handleCaptureForWizard(message, sendResponse) {
   const { videoId, youtubeUrl, autoCapture = true, startTime, endTime, quality } = message;
 
-  console.log(`[EXT][CAPTURE] start videoId=${videoId} startTime=${startTime} endTime=${endTime}`);
+  console.log(`[EXT][CAPTURE] start videoId=${videoId} startTime=${startTime} endTime=${endTime} autoCapture=${autoCapture}`);
 
   if (!videoId || !isValidVideoId(videoId)) {
     console.error('[EXT][CAPTURE] FAIL: Invalid video ID');
     sendResponse({ success: false, error: 'Invalid video ID', code: 'INVALID_VIDEO_ID' });
+    return;
+  }
+
+  // FIX: If autoCapture is false, only return video metadata without capturing
+  // This is used during analysis mode to avoid long waits
+  if (autoCapture === false) {
+    console.log(`[EXT][CAPTURE] autoCapture=false - returning metadata only (no capture)`);
+    try {
+      const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
+      sendResponse({
+        success: true,
+        videoInfo: videoInfo,
+        streamData: null, // No stream data - no capture was performed
+        message: 'Video info retrieved (capture skipped - autoCapture=false)'
+      });
+    } catch (infoError) {
+      console.error(`[EXT][CAPTURE] Failed to get video info: ${infoError.message}`);
+      sendResponse({
+        success: false,
+        error: `Failed to get video info: ${infoError.message}`,
+        code: 'VIDEO_INFO_FAILED'
+      });
+    }
     return;
   }
 
@@ -1181,6 +1204,23 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
   console.log(`[EXT][CAPTURE] Will capture ${duration}s at ${PLAYBACK_SPEED}x (${(captureTime/1000).toFixed(1)}s real time)`);
 
   return new Promise((resolve, reject) => {
+    // Hard timeout to prevent hanging forever
+    // Expected time: (duration / 4x speed) + 20s buffer for seek/upload
+    const HARD_TIMEOUT = ((duration / 4) * 1000) + 20000;
+    let timeoutId = null;
+    let captureCompleted = false;
+
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+
+    timeoutId = setTimeout(() => {
+      if (!captureCompleted) {
+        console.error(`[EXT][CAPTURE] FAIL: Hard timeout after ${HARD_TIMEOUT / 1000}s`);
+        reject(new Error('Capture timed out. Please ensure the video is playing and try again.'));
+      }
+    }, HARD_TIMEOUT);
+
     try {
       // Find the video element - try multiple selectors
       let videoElement = document.querySelector('video.html5-main-video');
@@ -1189,12 +1229,18 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
       }
 
       if (!videoElement) {
+        cleanup();
         console.error('[EXT][CAPTURE] FAIL: No video element found');
         reject(new Error('No video element found on page. Please ensure the YouTube video is loaded.'));
         return;
       }
 
-      console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s, paused=${videoElement.paused}`);
+      // Check if video has valid dimensions (indicates it's actually loaded)
+      if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+        console.warn('[EXT][CAPTURE] Video dimensions are 0 - video may not be fully loaded');
+      }
+
+      console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s, paused=${videoElement.paused}, readyState=${videoElement.readyState}`);
 
       // Ensure video is not paused
       if (videoElement.paused) {
@@ -1244,12 +1290,14 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
             stream = videoElement.captureStream();
           } catch (captureStreamError) {
             console.error(`[EXT][CAPTURE] FAIL: captureStream() error: ${captureStreamError.message}`);
+            cleanup();
             reject(new Error(`Could not capture video stream: ${captureStreamError.message}. The video may be DRM protected or unavailable.`));
             return;
           }
 
           if (!stream) {
             console.error('[EXT][CAPTURE] FAIL: captureStream() returned null');
+            cleanup();
             reject(new Error('captureStream() returned null - video may be DRM protected'));
             return;
           }
@@ -1260,6 +1308,7 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
 
           if (videoTracks.length === 0) {
             console.error('[EXT][CAPTURE] FAIL: No video tracks in stream');
+            cleanup();
             reject(new Error('No video tracks available - video may be DRM protected or not playing'));
             return;
           }
@@ -1300,13 +1349,16 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
 
             if (blobSize < 10000) {
               console.error('[EXT][CAPTURE] FAIL: Blob too small');
+              cleanup();
               reject(new Error('Captured video too small - capture may have failed'));
               return;
             }
 
-            // DECISION: Upload directly to server for large files, or return Base64 for small files
+            // Track if we need to fall back to Base64
+            let directUploadSucceeded = false;
+
+            // DECISION: Upload directly to server for large files to avoid 64MB message limit
             if (blobSize > MAX_BASE64_SIZE && uploadUrl) {
-              // LARGE FILE: Upload directly to server to avoid 64MB message limit
               console.log(`[EXT][CAPTURE] Large file (${(blobSize / 1024 / 1024).toFixed(2)}MB) - uploading directly to server`);
 
               try {
@@ -1330,6 +1382,9 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
                 const uploadResult = await uploadResponse.json();
                 console.log(`[EXT][CAPTURE] SUCCESS - Direct upload complete: ${uploadResult.url}`);
 
+                directUploadSucceeded = true;
+                captureCompleted = true;
+                cleanup();
                 resolve({
                   success: true,
                   uploadedDirectly: true,
@@ -1339,19 +1394,28 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
                   duration: duration,
                   captureMethod: 'mediarecorder_direct_upload'
                 });
+                return; // Important: exit after successful direct upload
               } catch (uploadError) {
                 console.error(`[EXT][CAPTURE] Direct upload failed: ${uploadError.message}`);
-                // Fall through to try Base64 as last resort (will likely fail for very large files)
-                console.log('[EXT][CAPTURE] Attempting Base64 fallback...');
+                console.log('[EXT][CAPTURE] Attempting Base64 fallback (may fail for very large files)...');
+                // Continue to Base64 fallback below
               }
             }
 
-            // SMALL FILE or FALLBACK: Convert to Base64 for message transfer
-            if (blobSize <= MAX_BASE64_SIZE || !uploadUrl) {
+            // SMALL FILE or FALLBACK after failed direct upload: Convert to Base64
+            if (!directUploadSucceeded) {
               console.log(`[EXT][CAPTURE] Using Base64 transfer (${(blobSize / 1024 / 1024).toFixed(2)}MB)`);
+
+              // Warn if file is large (will likely hit 64MB message limit)
+              if (blobSize > MAX_BASE64_SIZE) {
+                console.warn(`[EXT][CAPTURE] WARNING: File is ${(blobSize / 1024 / 1024).toFixed(2)}MB - may exceed Chrome message limit`);
+              }
+
               const reader = new FileReader();
               reader.onloadend = () => {
                 console.log('[EXT][CAPTURE] SUCCESS - Video captured and encoded');
+                captureCompleted = true;
+                cleanup();
                 resolve({
                   success: true,
                   uploadedDirectly: false,
@@ -1364,6 +1428,7 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
               };
               reader.onerror = () => {
                 console.error('[EXT][CAPTURE] FAIL: Base64 encoding error');
+                cleanup();
                 reject(new Error('Failed to convert video to base64'));
               };
               reader.readAsDataURL(blob);
@@ -1373,6 +1438,7 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
           recorder.onerror = (e) => {
             videoElement.playbackRate = 1;
             console.error(`[EXT][CAPTURE] FAIL: MediaRecorder error: ${e.error?.message || 'unknown'}`);
+            cleanup();
             reject(new Error(`MediaRecorder error: ${e.error?.message || 'unknown'}`));
           };
 
@@ -1546,13 +1612,31 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // Prepare upload URL for direct upload from page context (for large files)
     const uploadStreamUrl = `${VIDEO_PROCESSOR_URL}/upload-stream`;
 
+    // Calculate expected capture time and set timeout
+    // Capture time = (segment duration / playback speed) + buffer
+    const captureDuration = captureEnd - captureStart;
+    const PLAYBACK_SPEED = 4; // Must match the value in captureVideoSegmentWithMediaRecorder
+    const expectedCaptureTime = (captureDuration / PLAYBACK_SPEED) * 1000;
+    const captureTimeout = expectedCaptureTime + 30000; // Add 30 second buffer for setup/upload
+
+    console.log(`[EXT][CAPTURE] Expected capture time: ${(expectedCaptureTime / 1000).toFixed(1)}s, timeout: ${(captureTimeout / 1000).toFixed(1)}s`);
+
     // Inject and run the capture function with videoId and uploadUrl for direct upload
-    const results = await chrome.scripting.executeScript({
+    // Wrap in timeout to prevent hanging indefinitely
+    const capturePromise = chrome.scripting.executeScript({
       target: { tabId: youtubeTab.id },
       world: 'MAIN',
       func: captureVideoSegmentWithMediaRecorder,
       args: [captureStart, captureEnd, videoId, uploadStreamUrl]
     });
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Capture timed out after ${(captureTimeout / 1000).toFixed(0)} seconds. The video may not be playing or accessible.`));
+      }, captureTimeout);
+    });
+
+    const results = await Promise.race([capturePromise, timeoutPromise]);
 
     if (!results || results.length === 0 || !results[0].result) {
       console.error('[EXT][CAPTURE] FAIL: Script execution failed');
