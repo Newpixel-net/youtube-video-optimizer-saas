@@ -11322,9 +11322,10 @@
                                 }
 
                                 // Upload to Firebase Storage
+                                // Use uploads/{userId}/ path which is guaranteed by storage rules
                                 var timestamp = Date.now();
                                 var ext = mimeType.includes('webm') ? 'webm' : 'mp4';
-                                storagePath = 'captured-videos/' + videoId + '/export_' + timestamp + '.' + ext;
+                                storagePath = 'uploads/' + auth.currentUser.uid + '/export_' + videoId + '_' + timestamp + '.' + ext;
 
                                 var storageRef = storage.ref(storagePath);
 
