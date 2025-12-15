@@ -11363,13 +11363,36 @@
                             // Special handling for different error codes
                             if (errorCode === 'NO_YOUTUBE_TAB') {
                                 var youtubeUrl = captureResult?.details?.youtubeUrl || ('https://www.youtube.com/watch?v=' + videoId);
+                                var canAutoOpen = captureResult?.details?.canAutoOpen || false;
+
+                                // Store capture params for auto-open retry
+                                window.__pendingAutoCapture = {
+                                    videoId: videoId,
+                                    youtubeUrl: youtubeUrl,
+                                    clipStart: clipStartTime,
+                                    clipEnd: clipEndTime,
+                                    quality: quality,
+                                    sendExtensionRequest: sendExtensionRequest,
+                                    handleCaptureSuccess: function(result) {
+                                        // Continue with the export flow after auto-capture succeeds
+                                        // This will be implemented below
+                                    }
+                                };
+
+                                var autoOpenHtml = canAutoOpen
+                                    ? '<button onclick="window.triggerAutoCapture()" style="display:block;width:100%;padding:14px 20px;background:linear-gradient(135deg,#22c55e,#16a34a);color:white;border:none;border-radius:8px;margin:15px 0;cursor:pointer;font-weight:bold;font-size:16px;box-shadow:0 2px 8px rgba(34,197,94,0.3);">✨ Auto-Capture Video</button><p style="font-size:12px;color:#888;margin:5px 0 15px;">Opens YouTube, captures video, and closes the tab automatically</p>'
+                                    : '';
+
                                 app.showCaptureErrorInModal(
-                                    'Video Not Open\n\n' +
-                                    'Please open this video on YouTube first:\n\n' +
-                                    '1. Click the button below to open the video\n' +
-                                    '2. Wait for the video to load and start playing\n' +
-                                    '3. Return here and click Export again\n\n' +
-                                    '<a href="' + youtubeUrl + '" target="_blank" style="display:inline-block;padding:10px 20px;background:#ff0000;color:white;text-decoration:none;border-radius:5px;margin-top:10px;">Open on YouTube</a>'
+                                    '<div style="text-align:center;">' +
+                                    '<h3 style="margin:0 0 15px;color:#f59e0b;">⚠️ Video Tab Not Found</h3>' +
+                                    '<p style="margin:0 0 20px;color:#666;">The YouTube video needs to be open for capture.</p>' +
+                                    autoOpenHtml +
+                                    '<div style="border-top:1px solid #e5e5e5;padding-top:15px;margin-top:10px;">' +
+                                    '<p style="font-size:13px;color:#666;margin:0 0 10px;"><strong>Or open manually:</strong></p>' +
+                                    '<a href="' + youtubeUrl + '" target="_blank" style="display:inline-block;padding:10px 20px;background:#ef4444;color:white;text-decoration:none;border-radius:5px;">Open on YouTube</a>' +
+                                    '<p style="font-size:11px;color:#999;margin:10px 0 0;">Then return here and click Export again</p>' +
+                                    '</div></div>'
                                 );
                             } else if (errorCode === 'MEDIARECORDER_FAILED' || errorCode === 'CAPTURE_EXCEPTION') {
                                 // MediaRecorder capture failed - usually DRM or playback issue
@@ -12551,6 +12574,87 @@
                 callback.resolve(detail);
             }
         });
+
+        // Auto-capture function - opens YouTube tab automatically, captures, and closes
+        window.triggerAutoCapture = async function() {
+            var params = window.__pendingAutoCapture;
+            if (!params) {
+                console.error('[Video Wizard] No pending auto-capture params');
+                utils.showToast('Unable to start auto-capture. Please try exporting again.', 'error');
+                return;
+            }
+
+            console.log('[Video Wizard] Starting auto-capture for video:', params.videoId);
+
+            // Close any modal
+            app.hideModal && app.hideModal();
+
+            // Show progress indicator
+            utils.showToast('🚀 Opening YouTube and capturing video... Please wait (this may take 30-60 seconds)', 'info', 60000);
+
+            // Update UI to show capturing state
+            if (typeof app.showCapturingStateInModal === 'function') {
+                app.showCapturingStateInModal('Auto-capture in progress...<br><small>Opening YouTube tab, capturing video, then closing it automatically.</small>');
+            }
+
+            try {
+                // Call extension with autoOpenTab: true
+                var capturePayload = {
+                    videoId: params.videoId,
+                    youtubeUrl: params.youtubeUrl,
+                    clipStart: params.clipStart,
+                    clipEnd: params.clipEnd,
+                    quality: params.quality,
+                    autoCapture: true,
+                    autoOpenTab: true  // This triggers automatic tab opening
+                };
+
+                console.log('[Video Wizard] Sending auto-capture request:', capturePayload);
+                var captureResult = await sendExtensionRequest('captureVideoForWizard', capturePayload);
+
+                console.log('[Video Wizard] Auto-capture result:', captureResult?.success, captureResult?.error);
+
+                if (captureResult && captureResult.success && captureResult.streamData) {
+                    utils.showToast('✅ Video captured successfully!', 'success');
+
+                    // Store the captured data for the export flow
+                    state.capturedVideoData = captureResult;
+
+                    // Continue with export flow - this will use the captured video
+                    if (typeof processClipAfterCapture === 'function') {
+                        processClipAfterCapture(captureResult);
+                    } else {
+                        // Fallback: trigger export again
+                        utils.showToast('Video captured! Click Export again to continue.', 'info');
+                    }
+                } else {
+                    var errorMsg = captureResult?.error || 'Auto-capture failed';
+                    console.error('[Video Wizard] Auto-capture failed:', errorMsg);
+                    utils.showToast('❌ ' + errorMsg, 'error');
+
+                    app.showCaptureErrorInModal(
+                        '<div style="text-align:center;">' +
+                        '<h3 style="margin:0 0 15px;color:#ef4444;">❌ Auto-Capture Failed</h3>' +
+                        '<p style="margin:0 0 15px;color:#666;">' + errorMsg + '</p>' +
+                        '<p style="font-size:13px;color:#888;">Try opening the video manually on YouTube, wait for it to load, then click Export again.</p>' +
+                        '</div>'
+                    );
+                }
+            } catch (error) {
+                console.error('[Video Wizard] Auto-capture exception:', error);
+                utils.showToast('❌ Auto-capture error: ' + error.message, 'error');
+
+                app.showCaptureErrorInModal(
+                    '<div style="text-align:center;">' +
+                    '<h3 style="margin:0 0 15px;color:#ef4444;">❌ Auto-Capture Error</h3>' +
+                    '<p style="margin:0 0 15px;color:#666;">' + error.message + '</p>' +
+                    '</div>'
+                );
+            } finally {
+                // Clear pending params
+                window.__pendingAutoCapture = null;
+            }
+        };
 
         // Listen for extension ready event
         window.addEventListener('yvo-extension-ready', function(event) {
