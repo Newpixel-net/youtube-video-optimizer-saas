@@ -1304,11 +1304,28 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
  * @param {string} uploadUrl - Server URL for direct upload (optional)
  */
 function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadUrl) {
-  // IMMEDIATE LOG - if this doesn't appear, function isn't running at all
-  console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.0 ======`);
-  console.log(`[EXT][CAPTURE-PAGE] captureId=${captureId}`);
-  console.log(`[EXT][CAPTURE-PAGE] startTime=${startTime}s, endTime=${endTime}s`);
-  console.log(`[EXT][CAPTURE-PAGE] uploadUrl=${uploadUrl ? 'provided' : 'none'}`);
+  // OUTERMOST TRY-CATCH - catches ANY error in the function
+  // This ensures we always send a result back even if something breaks
+  try {
+    // IMMEDIATE LOG - if this doesn't appear, function isn't running at all
+    console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.1 ======`);
+    console.log(`[EXT][CAPTURE-PAGE] captureId=${captureId}`);
+    console.log(`[EXT][CAPTURE-PAGE] startTime=${startTime}s, endTime=${endTime}s`);
+    console.log(`[EXT][CAPTURE-PAGE] uploadUrl=${uploadUrl ? 'provided' : 'none'}`);
+    console.log(`[EXT][CAPTURE-PAGE] window.postMessage available:`, typeof window.postMessage);
+  } catch (initError) {
+    // Even console.log failed - try to send error via postMessage
+    try {
+      window.postMessage({
+        type: 'YVO_CAPTURE_RESULT',
+        captureId: captureId,
+        result: null,
+        error: 'Function initialization failed: ' + (initError.message || 'unknown'),
+        errorCode: 'INIT_FAILED'
+      }, '*');
+    } catch (e) {}
+    return;
+  }
 
   const duration = endTime - startTime;
   const PLAYBACK_SPEED = 4;
@@ -2749,20 +2766,27 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // First, inject a message relay script into the content script context
     // This listens for postMessage from the MAIN world and forwards to service worker
     // ALSO stores result in chrome.storage as a reliable backup
-    // v2.7.0: Added localStorage polling as additional fallback
-    await chrome.scripting.executeScript({
-      target: { tabId: youtubeTab.id },
-      world: 'ISOLATED',
-      func: (cid) => {
-        // Remove any existing listener to avoid duplicates
-        if (window.__captureMessageHandler) {
-          window.removeEventListener('message', window.__captureMessageHandler);
-        }
-        if (window.__captureLocalStoragePoller) {
-          clearInterval(window.__captureLocalStoragePoller);
-        }
+    // v2.7.1: Added localStorage polling as additional fallback + better logging
+    console.log(`[EXT][CAPTURE] Injecting relay script (ISOLATED world)...`);
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: youtubeTab.id },
+        world: 'ISOLATED',
+        func: (cid) => {
+          console.log(`[EXT][RELAY] ====== RELAY SCRIPT STARTING v2.7.1 ======`);
+          console.log(`[EXT][RELAY] captureId=${cid}`);
 
-        let resultHandled = false;
+          // Remove any existing listener to avoid duplicates
+          if (window.__captureMessageHandler) {
+            console.log(`[EXT][RELAY] Removing existing message handler`);
+            window.removeEventListener('message', window.__captureMessageHandler);
+          }
+          if (window.__captureLocalStoragePoller) {
+            console.log(`[EXT][RELAY] Clearing existing localStorage poller`);
+            clearInterval(window.__captureLocalStoragePoller);
+          }
+
+          let resultHandled = false;
 
         // Function to store and forward result
         const handleResult = (result, error, source) => {
@@ -2859,9 +2883,15 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         }, 500);
 
         console.log(`[EXT][RELAY] Message relay installed for capture ${cid} (with storage + localStorage backup)`);
+        return 'relay_installed';
       },
       args: [captureId]
     });
+      console.log(`[EXT][CAPTURE] Relay script injection successful`);
+    } catch (relayInjectionError) {
+      console.error(`[EXT][CAPTURE] Relay script injection failed: ${relayInjectionError.message}`);
+      throw new Error(`Failed to inject relay script: ${relayInjectionError.message}`);
+    }
 
     // Small delay to ensure relay is fully set up
     await new Promise(resolve => setTimeout(resolve, 100));

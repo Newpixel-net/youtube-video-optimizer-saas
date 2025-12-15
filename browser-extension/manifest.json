@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.7.0",
-  "description": "Major fix: Ad detection, improved video capture, reliable message passing (v2.7.0)",
+  "version": "2.7.1",
+  "description": "Fix: Better error handling and diagnostics for video capture (v2.7.1)",
 
   "permissions": [
     "activeTab",
