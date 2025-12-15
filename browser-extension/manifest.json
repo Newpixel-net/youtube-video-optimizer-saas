@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.2.6",
-  "description": "Add debugging and await executeScript for injection errors",
+  "version": "2.2.9",
+  "description": "Robust video capture with track cloning, improved relay, and diagnostics",
 
   "permissions": [
     "activeTab",

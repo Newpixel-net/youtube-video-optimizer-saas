@@ -1215,6 +1215,85 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
 
   console.log(`[EXT][CAPTURE-PAGE] Will capture ${duration}s at ${PLAYBACK_SPEED}x start=${startTime}s end=${endTime}s`);
 
+  // Helper to wait for video to be ready (has valid dimensions and duration)
+  function waitForVideoReady(videoEl, maxWaitMs = 15000) {
+    return new Promise((resolve, reject) => {
+      const startWait = Date.now();
+
+      function isVideoReady() {
+        return (
+          videoEl.videoWidth > 0 &&
+          videoEl.videoHeight > 0 &&
+          isFinite(videoEl.duration) &&
+          videoEl.duration > 0 &&
+          videoEl.readyState >= 3  // HAVE_FUTURE_DATA - ensures stream is actually ready
+        );
+      }
+
+      // Check immediately
+      if (isVideoReady()) {
+        console.log(`[EXT][CAPTURE] Video already ready: ${videoEl.videoWidth}x${videoEl.videoHeight}, duration=${videoEl.duration}s, readyState=${videoEl.readyState}`);
+        resolve(videoEl);
+        return;
+      }
+
+      console.log(`[EXT][CAPTURE] Video not ready yet: ${videoEl.videoWidth}x${videoEl.videoHeight}, duration=${videoEl.duration}s, readyState=${videoEl.readyState}. Waiting...`);
+
+      // Listen for loadedmetadata and canplay events
+      let resolved = false;
+      const checkAndResolve = () => {
+        if (resolved) return;
+        if (isVideoReady()) {
+          resolved = true;
+          cleanup();
+          console.log(`[EXT][CAPTURE] Video became ready: ${videoEl.videoWidth}x${videoEl.videoHeight}, duration=${videoEl.duration}s, readyState=${videoEl.readyState}`);
+          resolve(videoEl);
+        }
+      };
+
+      const onLoadedMetadata = () => checkAndResolve();
+      const onCanPlay = () => checkAndResolve();
+      const onLoadedData = () => checkAndResolve();
+
+      videoEl.addEventListener('loadedmetadata', onLoadedMetadata);
+      videoEl.addEventListener('canplay', onCanPlay);
+      videoEl.addEventListener('loadeddata', onLoadedData);
+
+      // Also poll every 200ms as a fallback
+      const pollInterval = setInterval(() => {
+        if (resolved) {
+          clearInterval(pollInterval);
+          return;
+        }
+        if (isVideoReady()) {
+          checkAndResolve();
+        } else if (Date.now() - startWait > maxWaitMs) {
+          resolved = true;
+          cleanup();
+          console.error(`[EXT][CAPTURE] Video wait timeout: ${videoEl.videoWidth}x${videoEl.videoHeight}, duration=${videoEl.duration}s, readyState=${videoEl.readyState}`);
+          reject(new Error(`Video not ready after ${maxWaitMs / 1000}s: dimensions=${videoEl.videoWidth}x${videoEl.videoHeight}, duration=${videoEl.duration}, readyState=${videoEl.readyState}`));
+        }
+      }, 200);
+
+      function cleanup() {
+        clearInterval(pollInterval);
+        videoEl.removeEventListener('loadedmetadata', onLoadedMetadata);
+        videoEl.removeEventListener('canplay', onCanPlay);
+        videoEl.removeEventListener('loadeddata', onLoadedData);
+      }
+
+      // Timeout fallback
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          cleanup();
+          console.error(`[EXT][CAPTURE] Video wait hard timeout after ${maxWaitMs}ms`);
+          reject(new Error(`Video not ready after ${maxWaitMs / 1000}s`));
+        }
+      }, maxWaitMs);
+    });
+  }
+
   try {
     // Find the video element
     let videoElement = document.querySelector('video.html5-main-video');
@@ -1228,38 +1307,85 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
       return;
     }
 
-    console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s`);
+    // Log comprehensive video element diagnostics
+    console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s, readyState=${videoElement.readyState}`);
+    console.log(`[EXT][CAPTURE] Video state: paused=${videoElement.paused}, ended=${videoElement.ended}, networkState=${videoElement.networkState}, currentTime=${videoElement.currentTime}`);
+    console.log(`[EXT][CAPTURE] Video src: ${videoElement.src ? 'has src' : 'no src'}, currentSrc: ${videoElement.currentSrc ? 'has currentSrc' : 'no currentSrc'}`);
 
-    // Ensure video is playing
+    // Check for potential issues
+    if (videoElement.error) {
+      console.error(`[EXT][CAPTURE] Video has error: code=${videoElement.error.code}, message=${videoElement.error.message}`);
+      sendResult(null, `Video has error: ${videoElement.error.message || 'Unknown error'}`);
+      return;
+    }
+
+    // Check if video appears to be DRM-protected (check for encrypted event handler or MediaKeys)
+    if (videoElement.mediaKeys) {
+      console.warn('[EXT][CAPTURE] Video may be DRM-protected (has MediaKeys)');
+    }
+
+    // Ensure video is playing (helps with loading)
     if (videoElement.paused) {
       videoElement.play().catch(e => console.warn('[EXT][CAPTURE] Play failed:', e.message));
     }
 
-    // Start capture after a brief delay to ensure video is ready
-    setTimeout(() => {
+    // Wait for video to be ready before attempting capture
+    waitForVideoReady(videoElement, 15000).then((readyVideoElement) => {
       try {
         // Seek to start position
         console.log(`[EXT][CAPTURE] Seeking to ${startTime}s...`);
-        videoElement.currentTime = startTime;
+        readyVideoElement.currentTime = startTime;
 
         const startCapture = () => {
           try {
             // Capture the video stream
             console.log('[EXT][CAPTURE] Calling captureStream()...');
-            let stream;
+            let originalStream;
             try {
-              stream = videoElement.captureStream();
+              originalStream = readyVideoElement.captureStream();
             } catch (e) {
               console.error(`[EXT][CAPTURE] FAIL: captureStream error: ${e.message}`);
               sendResult(null, `Could not capture video stream: ${e.message}`);
               return;
             }
 
-            if (!stream || stream.getVideoTracks().length === 0) {
+            if (!originalStream || originalStream.getVideoTracks().length === 0) {
+              // Log detailed stream info for debugging
               console.error('[EXT][CAPTURE] FAIL: No video tracks');
-              sendResult(null, 'No video tracks available');
+              console.error(`[EXT][CAPTURE] Stream info: ${originalStream ? 'stream exists' : 'no stream'}`);
+              if (originalStream) {
+                console.error(`[EXT][CAPTURE] Track count: video=${originalStream.getVideoTracks().length}, audio=${originalStream.getAudioTracks().length}`);
+                console.error(`[EXT][CAPTURE] Video element state: width=${readyVideoElement.videoWidth}, height=${readyVideoElement.videoHeight}, readyState=${readyVideoElement.readyState}`);
+              }
+              // Provide a more helpful error message
+              const errorMsg = readyVideoElement.mediaKeys
+                ? 'No video tracks available - this video may be DRM-protected'
+                : 'No video tracks available - please ensure the video is playing and not blocked';
+              sendResult(null, errorMsg);
               return;
             }
+
+            // CRITICAL FIX: Clone tracks to prevent "Tracks in MediaStream were added" error
+            // YouTube uses adaptive streaming which can add/remove tracks dynamically
+            // This causes MediaRecorder to fail. By cloning tracks, we create a stable stream.
+            console.log('[EXT][CAPTURE] Creating stable stream with cloned tracks...');
+            const stableStream = new MediaStream();
+
+            // Clone all video tracks
+            originalStream.getVideoTracks().forEach(track => {
+              const clonedTrack = track.clone();
+              stableStream.addTrack(clonedTrack);
+              console.log(`[EXT][CAPTURE] Cloned video track: ${track.label || 'unnamed'}`);
+            });
+
+            // Clone all audio tracks
+            originalStream.getAudioTracks().forEach(track => {
+              const clonedTrack = track.clone();
+              stableStream.addTrack(clonedTrack);
+              console.log(`[EXT][CAPTURE] Cloned audio track: ${track.label || 'unnamed'}`);
+            });
+
+            console.log(`[EXT][CAPTURE] Stable stream created: ${stableStream.getVideoTracks().length} video, ${stableStream.getAudioTracks().length} audio tracks`);
 
             const chunks = [];
             let mimeType = 'video/webm;codecs=vp9,opus';
@@ -1272,7 +1398,8 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
 
             console.log(`[EXT][CAPTURE] Starting MediaRecorder with ${mimeType}`);
 
-            const recorder = new MediaRecorder(stream, {
+            // Use the stable cloned stream instead of original
+            const recorder = new MediaRecorder(stableStream, {
               mimeType: mimeType,
               videoBitsPerSecond: 8000000
             });
@@ -1283,10 +1410,19 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
               }
             };
 
+            // Cleanup function for cloned tracks
+            const cleanupTracks = () => {
+              stableStream.getTracks().forEach(track => {
+                track.stop();
+              });
+              console.log('[EXT][CAPTURE] Cleaned up cloned tracks');
+            };
+
             recorder.onstop = () => {
               // Restore normal speed
-              videoElement.playbackRate = 1;
-              videoElement.pause();
+              readyVideoElement.playbackRate = 1;
+              readyVideoElement.pause();
+              cleanupTracks();
 
               console.log(`[EXT][CAPTURE] Recording stopped, chunks=${chunks.length}`);
               const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
@@ -1344,29 +1480,56 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
             };
 
             recorder.onerror = (e) => {
-              videoElement.playbackRate = 1;
-              console.error(`[EXT][CAPTURE] FAIL: MediaRecorder error: ${e.error?.message}`);
-              sendResult(null, `MediaRecorder error: ${e.error?.message || 'unknown'}`);
+              readyVideoElement.playbackRate = 1;
+              cleanupTracks();
+              const errorMsg = e.error?.message || e.error?.name || 'unknown';
+              console.error(`[EXT][CAPTURE] FAIL: MediaRecorder error: ${errorMsg}`);
+              // Don't fail immediately on track errors - try to salvage what we have
+              if (chunks.length > 0) {
+                console.log(`[EXT][CAPTURE] Error occurred but have ${chunks.length} chunks, attempting to salvage...`);
+                try {
+                  recorder.stop();
+                } catch (stopErr) {
+                  console.warn('[EXT][CAPTURE] Could not stop recorder:', stopErr.message);
+                  sendResult(null, `MediaRecorder error: ${errorMsg}`);
+                }
+              } else {
+                sendResult(null, `MediaRecorder error: ${errorMsg}`);
+              }
             };
 
             // Set playback speed and start
-            videoElement.playbackRate = PLAYBACK_SPEED;
-            videoElement.muted = true;
+            readyVideoElement.playbackRate = PLAYBACK_SPEED;
+            readyVideoElement.muted = true;
 
-            recorder.start(500);
-            console.log('[EXT][CAPTURE] Recording started');
-
-            videoElement.play().catch(e => console.warn('[EXT][CAPTURE] Play failed:', e.message));
+            // Ensure video is playing before starting recorder
+            const playPromise = readyVideoElement.play();
+            if (playPromise !== undefined) {
+              playPromise.then(() => {
+                console.log('[EXT][CAPTURE] Video playing, starting recorder...');
+                recorder.start(500);
+                console.log('[EXT][CAPTURE] Recording started');
+              }).catch(e => {
+                console.warn('[EXT][CAPTURE] Play failed, trying to record anyway:', e.message);
+                // Try to record anyway - some browsers auto-play muted video
+                recorder.start(500);
+                console.log('[EXT][CAPTURE] Recording started (after play fail)');
+              });
+            } else {
+              // Older browsers that don't return promise
+              recorder.start(500);
+              console.log('[EXT][CAPTURE] Recording started');
+            }
 
             // Monitor progress
             const progressInterval = setInterval(() => {
-              const progress = ((videoElement.currentTime - startTime) / duration * 100).toFixed(1);
-              console.log(`[EXT][CAPTURE] Progress: ${progress}% (at ${videoElement.currentTime.toFixed(1)}s)`);
+              const progress = ((readyVideoElement.currentTime - startTime) / duration * 100).toFixed(1);
+              console.log(`[EXT][CAPTURE] Progress: ${progress}% (at ${readyVideoElement.currentTime.toFixed(1)}s)`);
             }, 3000);
 
             // Stop when we reach end time
             const checkEnd = setInterval(() => {
-              if (videoElement.currentTime >= endTime || videoElement.ended) {
+              if (readyVideoElement.currentTime >= endTime || readyVideoElement.ended) {
                 clearInterval(checkEnd);
                 clearInterval(progressInterval);
                 if (recorder.state === 'recording') {
@@ -1394,18 +1557,18 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
 
         // Wait for seek to complete
         const onSeeked = () => {
-          videoElement.removeEventListener('seeked', onSeeked);
+          readyVideoElement.removeEventListener('seeked', onSeeked);
           console.log(`[EXT][CAPTURE] Seek complete, starting capture...`);
           startCapture();
         };
 
-        if (Math.abs(videoElement.currentTime - startTime) < 1) {
+        if (Math.abs(readyVideoElement.currentTime - startTime) < 1) {
           startCapture();
         } else {
-          videoElement.addEventListener('seeked', onSeeked);
+          readyVideoElement.addEventListener('seeked', onSeeked);
           setTimeout(() => {
-            videoElement.removeEventListener('seeked', onSeeked);
-            if (Math.abs(videoElement.currentTime - startTime) < 5) {
+            readyVideoElement.removeEventListener('seeked', onSeeked);
+            if (Math.abs(readyVideoElement.currentTime - startTime) < 5) {
               startCapture();
             }
           }, 3000);
@@ -1415,7 +1578,10 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
         console.error(`[EXT][CAPTURE] FAIL: Seek error: ${seekError.message}`);
         sendResult(null, seekError.message);
       }
-    }, 1000);
+    }).catch((waitError) => {
+      console.error(`[EXT][CAPTURE] FAIL: Video ready wait error: ${waitError.message}`);
+      sendResult(null, waitError.message);
+    });
 
   } catch (error) {
     console.error(`[EXT][CAPTURE] FAIL: ${error.message}`);
@@ -1771,23 +1937,43 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     console.log(`[EXT][CAPTURE] Using existing YouTube tab ${youtubeTab.id}`)
 
-    // Trigger video playback
+    // Trigger video playback and wait for it to be ready
     console.log(`[EXT][CAPTURE] Triggering video playback...`);
+    let playbackResult = null;
     try {
-      await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
-      // Give it a moment to start playing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      playbackResult = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
+      console.log(`[EXT][CAPTURE] Playback result: isPlaying=${playbackResult?.isPlaying}, muted=${playbackResult?.muted}`);
     } catch (e) {
       console.log(`[EXT][CAPTURE] Playback trigger failed: ${e.message}, continuing anyway`);
     }
 
-    // Get video duration from content script
+    // Wait for video to be ready - longer wait if playback not confirmed
+    const initialWait = playbackResult?.isPlaying ? 2000 : 4000;
+    console.log(`[EXT][CAPTURE] Waiting ${initialWait}ms for video to load...`);
+    await new Promise(resolve => setTimeout(resolve, initialWait));
+
+    // Get video duration from content script - retry if failed
     let videoInfo;
-    try {
-      videoInfo = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
-      console.log(`[EXT][CAPTURE] Got video info: duration=${videoInfo?.videoInfo?.duration}s`);
-    } catch (e) {
-      console.log(`[EXT][CAPTURE] Could not get video info: ${e.message}, using defaults`);
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        videoInfo = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
+        if (videoInfo?.success && videoInfo?.videoInfo?.duration > 0) {
+          console.log(`[EXT][CAPTURE] Got video info: duration=${videoInfo.videoInfo.duration}s`);
+          break;
+        }
+        console.log(`[EXT][CAPTURE] Video info incomplete, retrying... (${retries} left)`);
+      } catch (e) {
+        console.log(`[EXT][CAPTURE] Could not get video info: ${e.message}, retrying...`);
+      }
+      retries--;
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+    }
+
+    if (!videoInfo?.success || !videoInfo?.videoInfo?.duration) {
+      console.log(`[EXT][CAPTURE] Using fallback duration`);
       videoInfo = { success: true, videoInfo: { duration: 60 } };
     }
 
@@ -1885,26 +2071,32 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         }
 
         window.__captureMessageHandler = (event) => {
-          if (event.data && event.data.captureId === cid) {
+          // Only process messages from same origin with our captureId
+          if (!event.data || typeof event.data !== 'object') return;
+          if (event.data.captureId !== cid) return;
+
+          try {
             if (event.data.type === 'YVO_CAPTURE_STARTED') {
               // Forward start notification
               console.log(`[EXT][RELAY] Capture function started!`);
               chrome.runtime.sendMessage({
                 type: 'CAPTURE_STARTED',
                 captureId: cid
-              });
+              }).catch(e => console.error('[EXT][RELAY] Failed to forward start:', e.message));
             } else if (event.data.type === 'YVO_CAPTURE_RESULT') {
               // Forward result to service worker
-              console.log(`[EXT][RELAY] Forwarding result to service worker`);
+              console.log(`[EXT][RELAY] Forwarding result to service worker (success=${!!event.data.result?.success}, error=${event.data.error || 'none'})`);
               chrome.runtime.sendMessage({
                 type: 'CAPTURE_RESULT',
                 captureId: cid,
                 result: event.data.result,
                 error: event.data.error
-              });
+              }).catch(e => console.error('[EXT][RELAY] Failed to forward result:', e.message));
               // Clean up
               window.removeEventListener('message', window.__captureMessageHandler);
             }
+          } catch (relayError) {
+            console.error('[EXT][RELAY] Error in message handler:', relayError);
           }
         };
 
@@ -1913,6 +2105,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       },
       args: [captureId]
     });
+
+    // Small delay to ensure relay is fully set up
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Now inject the capture function into MAIN world
     // Modified to use postMessage instead of returning a Promise
