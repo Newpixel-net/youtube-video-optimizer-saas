@@ -207,19 +207,49 @@ setInterval(() => {
 }, 5 * 60 * 1000); // Every 5 minutes
 
 /**
+ * Keep service worker alive during operations
+ * Chrome service workers can terminate after 30s of inactivity
+ */
+let keepAliveInterval = null;
+
+function startKeepAlive() {
+  if (keepAliveInterval) return;
+  keepAliveInterval = setInterval(() => {
+    // Just access chrome.runtime to keep the service worker alive
+    chrome.runtime.getPlatformInfo(() => {});
+  }, 20000); // Every 20 seconds
+  console.log('[EXT][BG] Keep-alive started');
+}
+
+function stopKeepAlive() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+    console.log('[EXT][BG] Keep-alive stopped');
+  }
+}
+
+/**
  * Message handler for extension communication
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Log EVERY message for debugging
+  // Log EVERY message immediately for debugging
+  console.log('[EXT][BG] ========================================');
   console.log('[EXT][BG] === MESSAGE RECEIVED ===');
   console.log('[EXT][BG] Action:', message?.action);
   console.log('[EXT][BG] From:', sender?.url || sender?.origin || 'unknown');
+  console.log('[EXT][BG] ========================================');
 
   try {
     switch (message.action) {
       // Video Wizard integration
       case 'captureVideoForWizard':
         console.log('[EXT][BG] Handling captureVideoForWizard...');
+        console.log('[EXT][BG] Message details:', JSON.stringify(message).substring(0, 300));
+
+        // Start keep-alive to prevent service worker termination during capture
+        startKeepAlive();
+
         // IMMEDIATELY acknowledge the request - don't wait for capture to complete
         // This prevents "message channel closed" errors from Chrome's service worker limits
         // The actual result will be stored in chrome.storage and polled by wizard-bridge
@@ -228,6 +258,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Start capture asynchronously - result goes to chrome.storage
         handleCaptureForWizard(message).catch(err => {
           console.error('[EXT][BG] Capture error:', err.message);
+        }).finally(() => {
+          // Stop keep-alive when capture completes
+          stopKeepAlive();
         });
         return false; // Channel can close now - we use storage for result
 

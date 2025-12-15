@@ -21,7 +21,7 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '2.6.8',
+        version: '2.6.9',
         extensionId: EXTENSION_ID,
         features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm']
       }
@@ -29,10 +29,10 @@
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '2.6.8';
+    window.__YVO_EXTENSION_VERSION__ = '2.6.9';
     window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm'];
 
-    console.log('[EXT] Bridge ready - v2.6.8 with direct page context upload');
+    console.log('[EXT] Bridge ready - v2.6.9 with keep-alive and improved debugging');
   }
 
   /**
@@ -54,7 +54,7 @@
       case 'checkExtension':
         sendResponse(requestId, {
           installed: true,
-          version: '2.6.8',
+          version: '2.6.9',
           features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm'],
           maxBase64Size: 40 * 1024 * 1024 // 40MB - files larger than this upload directly
         });
@@ -127,9 +127,20 @@
       // timeout after ~30 seconds, causing "message channel closed" errors
       console.log(`[EXT][CAPTURE] Sending capture request (bridgeRequestId=${bridgeRequestId})...`);
 
+      // Check if chrome.runtime is available
+      if (!chrome.runtime || !chrome.runtime.sendMessage) {
+        console.error('[EXT][CAPTURE] CRITICAL: chrome.runtime.sendMessage not available!');
+        sendResponse(requestId, {
+          success: false,
+          error: 'Extension runtime not available. Please reload the page.',
+          code: 'RUNTIME_UNAVAILABLE'
+        });
+        return;
+      }
+
       // Fire-and-forget: send message but immediately start polling storage
       // The message response is just an acknowledgment, not the actual result
-      chrome.runtime.sendMessage({
+      const messagePayload = {
         action: 'captureVideoForWizard',
         videoId: videoId,
         youtubeUrl: youtubeUrl,
@@ -138,7 +149,11 @@
         endTime: captureEnd,
         quality: quality,
         bridgeRequestId: bridgeRequestId
-      }).then(ack => {
+      };
+
+      console.log(`[EXT][CAPTURE] Calling chrome.runtime.sendMessage with payload:`, JSON.stringify(messagePayload).substring(0, 200));
+
+      chrome.runtime.sendMessage(messagePayload).then(ack => {
         // Just log the acknowledgment, don't use it as the actual response
         if (ack?.acknowledged) {
           console.log(`[EXT][CAPTURE] Background acknowledged request`);
@@ -147,8 +162,16 @@
           console.log(`[EXT][CAPTURE] Background returned immediate error: ${ack.error}`);
         }
       }).catch(err => {
-        // Message channel errors are expected for long operations - we poll storage instead
-        console.log(`[EXT][CAPTURE] Message channel closed (expected for long captures): ${err.message}`);
+        // Log the error details for debugging
+        console.error(`[EXT][CAPTURE] sendMessage error: ${err.message}`);
+        console.error(`[EXT][CAPTURE] Error name: ${err.name}`);
+        console.error(`[EXT][CAPTURE] Full error:`, err);
+
+        // Check for specific error types
+        if (err.message?.includes('Extension context invalidated') ||
+            err.message?.includes('Could not establish connection')) {
+          console.error('[EXT][CAPTURE] CRITICAL: Extension disconnected - service worker may have terminated');
+        }
       });
 
       // ALWAYS poll storage for the result - this is the reliable path

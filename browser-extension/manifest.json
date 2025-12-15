@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.6.8",
-  "description": "Fix: Direct upload from page context - bypasses service worker (v2.6.8)",
+  "version": "2.6.9",
+  "description": "Fix: Keep-alive for service worker + better message debugging (v2.6.9)",
 
   "permissions": [
     "activeTab",
