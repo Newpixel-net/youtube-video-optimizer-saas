@@ -1187,7 +1187,8 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
  * @param {string} captureId - Unique ID to correlate the result message
  */
 function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
-  console.log(`[EXT][CAPTURE] MediaRecorder start=${startTime}s end=${endTime}s videoId=${videoId} captureId=${captureId}`);
+  // IMMEDIATE LOG - if this doesn't appear, function isn't running at all
+  console.log(`[EXT][CAPTURE-PAGE] Function started! captureId=${captureId}`);
 
   const duration = endTime - startTime;
   const PLAYBACK_SPEED = 4;
@@ -1196,16 +1197,23 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
 
   // Helper to send result back via postMessage
   function sendResult(result, error = null) {
+    console.log(`[EXT][CAPTURE-PAGE] Posting result via postMessage...`);
     window.postMessage({
       type: 'YVO_CAPTURE_RESULT',
       captureId: captureId,
       result: result,
       error: error
     }, '*');
-    console.log(`[EXT][CAPTURE] Result sent via postMessage (success=${!error})`);
+    console.log(`[EXT][CAPTURE-PAGE] Result posted (success=${!error})`);
   }
 
-  console.log(`[EXT][CAPTURE] Will capture ${duration}s at ${PLAYBACK_SPEED}x (${(captureTime/1000).toFixed(1)}s real time)`);
+  // Send immediate "started" notification so we know the function is running
+  window.postMessage({
+    type: 'YVO_CAPTURE_STARTED',
+    captureId: captureId
+  }, '*');
+
+  console.log(`[EXT][CAPTURE-PAGE] Will capture ${duration}s at ${PLAYBACK_SPEED}x start=${startTime}s end=${endTime}s`);
 
   try {
     // Find the video element
@@ -1841,16 +1849,24 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }, captureTimeout);
 
       function messageHandler(message, sender, sendResponse) {
-        if (message.type === 'CAPTURE_RESULT' && message.captureId === captureId) {
-          clearTimeout(messageTimeout);
-          chrome.runtime.onMessage.removeListener(messageHandler);
-
-          if (message.error) {
-            rejectCapture(new Error(message.error));
-          } else {
-            resolveCapture(message.result);
+        if (message.captureId === captureId) {
+          if (message.type === 'CAPTURE_STARTED') {
+            console.log(`[EXT][CAPTURE] Received CAPTURE_STARTED - function is running!`);
+            return true;
           }
-          return true;
+
+          if (message.type === 'CAPTURE_RESULT') {
+            console.log(`[EXT][CAPTURE] Received CAPTURE_RESULT`);
+            clearTimeout(messageTimeout);
+            chrome.runtime.onMessage.removeListener(messageHandler);
+
+            if (message.error) {
+              rejectCapture(new Error(message.error));
+            } else {
+              resolveCapture(message.result);
+            }
+            return true;
+          }
         }
       }
 
@@ -1869,16 +1885,26 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         }
 
         window.__captureMessageHandler = (event) => {
-          if (event.data && event.data.type === 'YVO_CAPTURE_RESULT' && event.data.captureId === cid) {
-            // Forward to service worker
-            chrome.runtime.sendMessage({
-              type: 'CAPTURE_RESULT',
-              captureId: cid,
-              result: event.data.result,
-              error: event.data.error
-            });
-            // Clean up
-            window.removeEventListener('message', window.__captureMessageHandler);
+          if (event.data && event.data.captureId === cid) {
+            if (event.data.type === 'YVO_CAPTURE_STARTED') {
+              // Forward start notification
+              console.log(`[EXT][RELAY] Capture function started!`);
+              chrome.runtime.sendMessage({
+                type: 'CAPTURE_STARTED',
+                captureId: cid
+              });
+            } else if (event.data.type === 'YVO_CAPTURE_RESULT') {
+              // Forward result to service worker
+              console.log(`[EXT][RELAY] Forwarding result to service worker`);
+              chrome.runtime.sendMessage({
+                type: 'CAPTURE_RESULT',
+                captureId: cid,
+                result: event.data.result,
+                error: event.data.error
+              });
+              // Clean up
+              window.removeEventListener('message', window.__captureMessageHandler);
+            }
           }
         };
 
@@ -1892,12 +1918,18 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // Modified to use postMessage instead of returning a Promise
     console.log(`[EXT][CAPTURE] Injecting capture function (captureId=${captureId})`);
 
-    chrome.scripting.executeScript({
-      target: { tabId: youtubeTab.id },
-      world: 'MAIN',
-      func: captureVideoWithMessage,
-      args: [captureStart, captureEnd, videoId, captureId]
-    });
+    try {
+      const injectionResult = await chrome.scripting.executeScript({
+        target: { tabId: youtubeTab.id },
+        world: 'MAIN',
+        func: captureVideoWithMessage,
+        args: [captureStart, captureEnd, videoId, captureId]
+      });
+      console.log(`[EXT][CAPTURE] Injection result:`, injectionResult);
+    } catch (injectionError) {
+      console.error(`[EXT][CAPTURE] FAIL: Script injection error: ${injectionError.message}`);
+      throw new Error(`Failed to inject capture script: ${injectionError.message}`);
+    }
 
     // Wait for the result via message passing
     const captureResult = await captureResultPromise;
