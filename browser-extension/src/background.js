@@ -220,8 +220,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Video Wizard integration
       case 'captureVideoForWizard':
         console.log('[EXT][BG] Handling captureVideoForWizard...');
-        handleCaptureForWizard(message, sendResponse);
-        return true;
+        // IMMEDIATELY acknowledge the request - don't wait for capture to complete
+        // This prevents "message channel closed" errors from Chrome's service worker limits
+        // The actual result will be stored in chrome.storage and polled by wizard-bridge
+        sendResponse({ acknowledged: true, bridgeRequestId: message.bridgeRequestId });
+
+        // Start capture asynchronously - result goes to chrome.storage
+        handleCaptureForWizard(message).catch(err => {
+          console.error('[EXT][BG] Capture error:', err.message);
+        });
+        return false; // Channel can close now - we use storage for result
 
     case 'getStoredVideoData':
       sendResponse({ videoData: storedVideoData });
@@ -285,26 +293,28 @@ console.log('[EXT][BG] Service worker ready, message listener registered');
 /**
  * Handle video capture request from Video Wizard
  * EXTENSION-ONLY CAPTURE - MediaRecorder is the primary method
+ * Results are stored in chrome.storage for wizard-bridge to poll
  *
  * NOW SUPPORTS: Segment capture with startTime/endTime parameters
  */
-async function handleCaptureForWizard(message, sendResponse) {
+async function handleCaptureForWizard(message) {
   const { videoId, youtubeUrl, autoCapture = true, startTime, endTime, quality, autoOpenTab = false, bridgeRequestId } = message;
 
   console.log(`[EXT][CAPTURE] === START === videoId=${videoId} autoCapture=${autoCapture} autoOpenTab=${autoOpenTab} bridgeRequestId=${bridgeRequestId || 'none'}`);
 
-  // CRITICAL: Ensure sendResponse is ALWAYS called AND result is stored in chrome.storage as fallback
+  // Store result in chrome.storage - wizard-bridge polls this for the result
+  // This is the ONLY reliable way to return results from long-running operations
+  // because Chrome's message channels timeout after ~30 seconds
   let responseSent = false;
-  const safeResponse = async (response) => {
+  const storeResult = async (response) => {
     if (responseSent) {
-      console.log('[EXT][CAPTURE] Response already sent, ignoring duplicate');
+      console.log('[EXT][CAPTURE] Result already stored, ignoring duplicate');
       return;
     }
     responseSent = true;
-    console.log(`[EXT][CAPTURE] === RESPONSE === success=${response?.success} error=${response?.error || 'none'}`);
+    console.log(`[EXT][CAPTURE] === RESULT === success=${response?.success} error=${response?.error || 'none'}`);
 
-    // ALWAYS store result in chrome.storage as fallback for message channel issues
-    // This allows wizard-bridge to poll for the result if sendResponse fails
+    // Store result in chrome.storage - this is the PRIMARY communication method
     if (bridgeRequestId) {
       try {
         await chrome.storage.local.set({
@@ -315,15 +325,23 @@ async function handleCaptureForWizard(message, sendResponse) {
         });
         console.log(`[EXT][CAPTURE] Result stored in chrome.storage (bridgeRequestId=${bridgeRequestId})`);
       } catch (storageError) {
-        console.warn('[EXT][CAPTURE] Failed to store result in chrome.storage:', storageError.message);
+        console.error('[EXT][CAPTURE] CRITICAL: Failed to store result in chrome.storage:', storageError.message);
+        // Try one more time after a short delay
+        try {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          await chrome.storage.local.set({
+            [`bridge_result_${bridgeRequestId}`]: {
+              response: response,
+              timestamp: Date.now()
+            }
+          });
+          console.log(`[EXT][CAPTURE] Result stored on retry`);
+        } catch (retryError) {
+          console.error('[EXT][CAPTURE] Storage retry also failed:', retryError.message);
+        }
       }
-    }
-
-    try {
-      sendResponse(response);
-    } catch (e) {
-      console.error('[EXT][CAPTURE] Failed to send response:', e.message);
-      // Response is already in chrome.storage, so wizard-bridge can poll for it
+    } else {
+      console.warn('[EXT][CAPTURE] No bridgeRequestId - result will be lost!');
     }
   };
 
@@ -338,7 +356,7 @@ async function handleCaptureForWizard(message, sendResponse) {
   // Validate video ID
   if (!videoId || !isValidVideoId(videoId)) {
     console.error('[EXT][CAPTURE] FAIL: Invalid video ID');
-    safeResponse({ success: false, error: 'Invalid video ID', code: 'INVALID_VIDEO_ID' });
+    storeResult({ success: false, error: 'Invalid video ID', code: 'INVALID_VIDEO_ID' });
     return;
   }
 
@@ -347,7 +365,7 @@ async function handleCaptureForWizard(message, sendResponse) {
     console.log(`[EXT][CAPTURE] autoCapture=false - returning metadata only`);
     try {
       const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-      safeResponse({
+      storeResult({
         success: true,
         videoInfo: videoInfo,
         streamData: null,
@@ -355,7 +373,7 @@ async function handleCaptureForWizard(message, sendResponse) {
       });
     } catch (infoError) {
       console.error(`[EXT][CAPTURE] Failed to get video info: ${infoError.message}`);
-      safeResponse({
+      storeResult({
         success: false,
         error: `Failed to get video info: ${infoError.message}`,
         code: 'VIDEO_INFO_FAILED'
@@ -467,7 +485,7 @@ async function handleCaptureForWizard(message, sendResponse) {
 
         } catch (tabError) {
           console.error(`[EXT][CAPTURE] Failed to create YouTube tab: ${tabError.message}`);
-          await safeResponse({
+          await storeResult({
             success: false,
             error: 'Failed to open YouTube video tab: ' + tabError.message,
             code: 'TAB_OPEN_FAILED',
@@ -477,7 +495,7 @@ async function handleCaptureForWizard(message, sendResponse) {
         }
       } else {
         // No autoOpenTab, return error asking user to open the video
-        safeResponse({
+        storeResult({
           success: false,
           error: 'Please open this video on YouTube first, then try exporting again.',
           code: 'NO_YOUTUBE_TAB',
@@ -595,7 +613,7 @@ async function handleCaptureForWizard(message, sendResponse) {
         }
       }
 
-      safeResponse(response);
+      storeResult(response);
     } else {
       // Capture failed
       const errorMsg = captureResult?.error || 'Video capture failed';
@@ -610,7 +628,7 @@ async function handleCaptureForWizard(message, sendResponse) {
         }
       }
 
-      safeResponse({
+      storeResult({
         success: false,
         error: errorMsg,
         code: captureResult?.code || 'CAPTURE_FAILED',
@@ -633,7 +651,7 @@ async function handleCaptureForWizard(message, sendResponse) {
       }
     }
 
-    safeResponse({
+    storeResult({
       success: false,
       error: error.message || 'Unexpected error during capture',
       code: 'UNEXPECTED_ERROR'
