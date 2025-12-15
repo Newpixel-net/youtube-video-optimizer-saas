@@ -139,6 +139,43 @@ function blobToBase64(blob) {
  */
 async function triggerVideoPlayback() {
   try {
+    console.log('[YVO Content] Starting playback trigger...');
+
+    // FIRST: Try using YouTube's player API (most reliable method)
+    const ytPlayer = document.querySelector('#movie_player');
+    if (ytPlayer) {
+      console.log('[YVO Content] Found YouTube player element');
+
+      const hasPlayVideo = typeof ytPlayer.playVideo === 'function';
+      const hasGetPlayerState = typeof ytPlayer.getPlayerState === 'function';
+      const hasMute = typeof ytPlayer.mute === 'function';
+
+      console.log(`[YVO Content] YouTube API available: playVideo=${hasPlayVideo}, getPlayerState=${hasGetPlayerState}, mute=${hasMute}`);
+
+      if (hasPlayVideo) {
+        // Mute first
+        if (hasMute) {
+          ytPlayer.mute();
+          console.log('[YVO Content] Muted via YouTube API');
+        }
+
+        // Get current state and start if needed
+        let state = hasGetPlayerState ? ytPlayer.getPlayerState() : -1;
+        console.log(`[YVO Content] YouTube player state: ${state}`);
+
+        // States: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
+        if (state !== 1 && state !== 3) {
+          console.log('[YVO Content] Starting video via YouTube API...');
+          ytPlayer.playVideo();
+          await new Promise(resolve => setTimeout(resolve, 1500));
+
+          state = hasGetPlayerState ? ytPlayer.getPlayerState() : -1;
+          console.log(`[YVO Content] YouTube player state after playVideo: ${state}`);
+        }
+      }
+    }
+
+    // Now check the video element
     const video = document.querySelector('video.html5-main-video');
 
     if (!video) {
@@ -146,14 +183,23 @@ async function triggerVideoPlayback() {
       return { success: false, error: 'No video element found' };
     }
 
+    console.log(`[YVO Content] Video element: readyState=${video.readyState}, paused=${video.paused}, src=${video.src ? 'yes' : 'no'}`);
+
     // Check if video is already playing
-    if (!video.paused && !video.ended) {
+    if (!video.paused && !video.ended && video.readyState >= 2) {
       console.log('[YVO Content] Video already playing');
-      return { success: true, alreadyPlaying: true };
+      return {
+        success: true,
+        alreadyPlaying: true,
+        isPlaying: true,
+        muted: video.muted,
+        currentTime: video.currentTime,
+        duration: video.duration,
+        readyState: video.readyState
+      };
     }
 
     // CRITICAL: Mute the video first - muted videos CAN autoplay in background tabs!
-    // Chrome's autoplay policy allows muted videos to play without user interaction
     console.log('[YVO Content] Muting video for background autoplay...');
     video.muted = true;
 
@@ -178,8 +224,9 @@ async function triggerVideoPlayback() {
     if (video.paused) {
       const playButton = document.querySelector('.ytp-play-button, button.ytp-play-button');
       if (playButton) {
+        console.log('[YVO Content] Clicking play button...');
         playButton.click();
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
@@ -200,7 +247,7 @@ async function triggerVideoPlayback() {
         cancelable: true,
         view: window
       }));
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       try {
         await video.play();
@@ -209,18 +256,20 @@ async function triggerVideoPlayback() {
       }
     }
 
-    // Check result
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Wait for video to potentially load
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
+    // Final status check
     const isPlaying = !video.paused && !video.ended;
-    console.log('[YVO Content] Playback trigger result:', isPlaying ? 'playing' : 'not playing');
+    console.log(`[YVO Content] Final status: isPlaying=${isPlaying}, readyState=${video.readyState}, duration=${video.duration}`);
 
     return {
       success: true,
       isPlaying: isPlaying,
       muted: video.muted,
       currentTime: video.currentTime,
-      duration: video.duration
+      duration: video.duration,
+      readyState: video.readyState
     };
 
   } catch (error) {

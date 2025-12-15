@@ -1294,7 +1294,67 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
     });
   }
 
-  try {
+  // Helper to wait with timeout
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Wrap main logic in async IIFE to support await
+  (async function() {
+    try {
+      // CRITICAL: Use YouTube's player API to ensure video is loaded and playing
+      // The video element alone may have readyState=0 if YouTube hasn't loaded media yet
+      const ytPlayer = document.querySelector('#movie_player');
+
+    console.log(`[EXT][CAPTURE] YouTube player element: ${ytPlayer ? 'found' : 'not found'}`);
+
+    // Try to use YouTube's player API to load and play the video
+    if (ytPlayer) {
+      try {
+        // Check if player has the expected methods
+        const hasPlayVideo = typeof ytPlayer.playVideo === 'function';
+        const hasGetPlayerState = typeof ytPlayer.getPlayerState === 'function';
+        const hasMute = typeof ytPlayer.mute === 'function';
+        const hasSeekTo = typeof ytPlayer.seekTo === 'function';
+
+        console.log(`[EXT][CAPTURE] YouTube API: playVideo=${hasPlayVideo}, getPlayerState=${hasGetPlayerState}, mute=${hasMute}, seekTo=${hasSeekTo}`);
+
+        if (hasPlayVideo) {
+          // Mute first to avoid autoplay policy issues
+          if (hasMute) {
+            ytPlayer.mute();
+            console.log('[EXT][CAPTURE] Muted YouTube player');
+          }
+
+          // Get current state (-1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued)
+          let playerState = -1;
+          if (hasGetPlayerState) {
+            playerState = ytPlayer.getPlayerState();
+            console.log(`[EXT][CAPTURE] YouTube player state: ${playerState}`);
+          }
+
+          // If video is unstarted or ended, play it
+          if (playerState === -1 || playerState === 0 || playerState === 2 || playerState === 5) {
+            console.log('[EXT][CAPTURE] Starting YouTube player via API...');
+            ytPlayer.playVideo();
+            await sleep(1500);
+
+            // Check state again
+            if (hasGetPlayerState) {
+              playerState = ytPlayer.getPlayerState();
+              console.log(`[EXT][CAPTURE] YouTube player state after play: ${playerState}`);
+            }
+          }
+
+          // If still not playing (state 1) or buffering (state 3), wait longer
+          if (hasGetPlayerState && (ytPlayer.getPlayerState() !== 1 && ytPlayer.getPlayerState() !== 3)) {
+            console.log('[EXT][CAPTURE] Player not playing, waiting for buffer...');
+            await sleep(2000);
+          }
+        }
+      } catch (ytError) {
+        console.warn('[EXT][CAPTURE] YouTube player API error:', ytError.message);
+      }
+    }
+
     // Find the video element
     let videoElement = document.querySelector('video.html5-main-video');
     if (!videoElement) {
@@ -1324,8 +1384,71 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
       console.warn('[EXT][CAPTURE] Video may be DRM-protected (has MediaKeys)');
     }
 
+    // If video still has readyState=0, try more aggressive loading with retry loop
+    let loadRetries = 5;
+    while (videoElement.readyState === 0 && loadRetries > 0) {
+      console.log(`[EXT][CAPTURE] Video readyState=0, trying to force load... (attempt ${6 - loadRetries}/5)`);
+
+      // Method 1: Use YouTube player API again
+      if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
+        try {
+          console.log('[EXT][CAPTURE] Calling ytPlayer.playVideo()...');
+          ytPlayer.playVideo();
+          await sleep(1000);
+        } catch (e) {
+          console.warn('[EXT][CAPTURE] ytPlayer.playVideo() failed:', e.message);
+        }
+      }
+
+      // Method 2: Try clicking on the video element to trigger YouTube's lazy loading
+      videoElement.click();
+      await sleep(300);
+
+      // Method 3: Try to play with muted
+      videoElement.muted = true;
+      try {
+        const playPromise = videoElement.play();
+        if (playPromise) {
+          await playPromise;
+          console.log('[EXT][CAPTURE] Force video.play() succeeded');
+        }
+      } catch (e) {
+        console.warn('[EXT][CAPTURE] Force video.play() failed:', e.message);
+      }
+
+      // Method 4: Click YouTube's play button if visible
+      const playBtn = document.querySelector('.ytp-play-button');
+      if (playBtn) {
+        console.log('[EXT][CAPTURE] Clicking YouTube play button...');
+        playBtn.click();
+      }
+
+      // Wait and check status
+      await sleep(1500);
+      console.log(`[EXT][CAPTURE] After attempt ${6 - loadRetries}: readyState=${videoElement.readyState}, paused=${videoElement.paused}`);
+
+      loadRetries--;
+
+      // If we got past readyState=0, break out of the loop
+      if (videoElement.readyState > 0) {
+        console.log(`[EXT][CAPTURE] Video started loading! readyState=${videoElement.readyState}`);
+        break;
+      }
+    }
+
+    // Final check - if still readyState=0 after all retries, log detailed diagnostics
+    if (videoElement.readyState === 0) {
+      console.error('[EXT][CAPTURE] CRITICAL: Video still has readyState=0 after all retry attempts');
+      console.error('[EXT][CAPTURE] This usually means:');
+      console.error('[EXT][CAPTURE] 1. The video is blocked (age-restricted, region-locked, or requires sign-in)');
+      console.error('[EXT][CAPTURE] 2. An ad is playing instead of the video');
+      console.error('[EXT][CAPTURE] 3. Network issue preventing video load');
+      console.error('[EXT][CAPTURE] 4. The video URL/ID is invalid');
+    }
+
     // Ensure video is playing (helps with loading)
     if (videoElement.paused) {
+      videoElement.muted = true;
       videoElement.play().catch(e => console.warn('[EXT][CAPTURE] Play failed:', e.message));
     }
 
@@ -1583,10 +1706,11 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
       sendResult(null, waitError.message);
     });
 
-  } catch (error) {
-    console.error(`[EXT][CAPTURE] FAIL: ${error.message}`);
-    sendResult(null, error.message);
-  }
+    } catch (error) {
+      console.error(`[EXT][CAPTURE] FAIL: ${error.message}`);
+      sendResult(null, error.message);
+    }
+  })(); // End async IIFE
 }
 
 /**
@@ -1937,19 +2061,51 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     console.log(`[EXT][CAPTURE] Using existing YouTube tab ${youtubeTab.id}`)
 
-    // Trigger video playback and wait for it to be ready
-    console.log(`[EXT][CAPTURE] Triggering video playback...`);
-    let playbackResult = null;
+    // CRITICAL: Focus the tab to prevent Chrome from suspending media loading
+    // Background tabs may have their video loading throttled or suspended
+    console.log(`[EXT][CAPTURE] Focusing YouTube tab to ensure video loads...`);
     try {
-      playbackResult = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
-      console.log(`[EXT][CAPTURE] Playback result: isPlaying=${playbackResult?.isPlaying}, muted=${playbackResult?.muted}`);
-    } catch (e) {
-      console.log(`[EXT][CAPTURE] Playback trigger failed: ${e.message}, continuing anyway`);
+      await chrome.tabs.update(youtubeTab.id, { active: true });
+      // Also focus the window containing the tab
+      if (youtubeTab.windowId) {
+        await chrome.windows.update(youtubeTab.windowId, { focused: true });
+      }
+      await new Promise(resolve => setTimeout(resolve, 500)); // Brief wait for focus to take effect
+    } catch (focusErr) {
+      console.warn(`[EXT][CAPTURE] Could not focus tab: ${focusErr.message}`);
     }
 
-    // Wait for video to be ready - longer wait if playback not confirmed
-    const initialWait = playbackResult?.isPlaying ? 2000 : 4000;
-    console.log(`[EXT][CAPTURE] Waiting ${initialWait}ms for video to load...`);
+    // Trigger video playback with retry logic for readyState=0
+    console.log(`[EXT][CAPTURE] Triggering video playback...`);
+    let playbackResult = null;
+    let playbackRetries = 3;
+
+    while (playbackRetries > 0) {
+      try {
+        playbackResult = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
+        console.log(`[EXT][CAPTURE] Playback result: isPlaying=${playbackResult?.isPlaying}, readyState=${playbackResult?.readyState}, muted=${playbackResult?.muted}`);
+
+        // If readyState > 0, video has at least some data - we can proceed
+        if (playbackResult?.readyState > 0) {
+          break;
+        }
+
+        // readyState=0 means no media loaded at all - retry
+        console.log(`[EXT][CAPTURE] Video not loaded (readyState=0), retrying... (${playbackRetries - 1} left)`);
+        playbackRetries--;
+        if (playbackRetries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s between retries
+        }
+      } catch (e) {
+        console.log(`[EXT][CAPTURE] Playback trigger failed: ${e.message}, continuing anyway`);
+        break;
+      }
+    }
+
+    // Wait for video to be ready - longer wait if readyState is still 0 or playback not confirmed
+    const videoNotLoaded = !playbackResult?.readyState || playbackResult.readyState === 0;
+    const initialWait = videoNotLoaded ? 5000 : (playbackResult?.isPlaying ? 2000 : 4000);
+    console.log(`[EXT][CAPTURE] Waiting ${initialWait}ms for video to load (readyState=${playbackResult?.readyState || 'unknown'})...`);
     await new Promise(resolve => setTimeout(resolve, initialWait));
 
     // Get video duration from content script - retry if failed
