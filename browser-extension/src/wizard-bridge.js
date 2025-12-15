@@ -21,18 +21,18 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '2.2.3',
+        version: '2.2.4',
         extensionId: EXTENSION_ID,
-        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'direct_upload_large_files', 'capture_timeout', 'skip_capture_analysis', 'async_onstop_fix']
+        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'sync_onstop_callback']
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '2.2.3';
-    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'direct_upload_large_files', 'capture_timeout', 'skip_capture_analysis', 'async_onstop_fix'];
+    window.__YVO_EXTENSION_VERSION__ = '2.2.4';
+    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'sync_onstop_callback'];
 
-    console.log('[EXT] Bridge ready - v2.2.3 with async capture fix');
+    console.log('[EXT] Bridge ready - v2.2.4 with sync callback fix');
   }
 
   /**
@@ -54,8 +54,8 @@
       case 'checkExtension':
         sendResponse(requestId, {
           installed: true,
-          version: '2.2.3',
-          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'direct_upload_large_files', 'capture_timeout', 'skip_capture_analysis', 'async_onstop_fix'],
+          version: '2.2.4',
+          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'sync_onstop_callback'],
           maxBase64Size: 40 * 1024 * 1024 // 40MB - files larger than this upload directly
         });
         break;
