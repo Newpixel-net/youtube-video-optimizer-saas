@@ -1255,6 +1255,9 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
  * executeScript with world: 'MAIN' doesn't properly wait for Promises that
  * resolve via async callbacks (like FileReader or setTimeout).
  *
+ * NEW IN v2.6.8: Uploads directly from the YouTube page context to avoid
+ * message passing issues with large video data.
+ *
  * The video is sped up to 4x to minimize capture time.
  * For a 60-second clip, this takes only ~15 seconds.
  *
@@ -1262,15 +1265,15 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
  * @param {number} endTime - End time in seconds
  * @param {string} videoId - YouTube video ID
  * @param {string} captureId - Unique ID to correlate the result message
+ * @param {string} uploadUrl - Server URL for direct upload (optional)
  */
-function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
+function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadUrl) {
   // IMMEDIATE LOG - if this doesn't appear, function isn't running at all
-  console.log(`[EXT][CAPTURE-PAGE] Function started! captureId=${captureId}`);
+  console.log(`[EXT][CAPTURE-PAGE] Function started! captureId=${captureId} uploadUrl=${uploadUrl ? 'provided' : 'none'}`);
 
   const duration = endTime - startTime;
   const PLAYBACK_SPEED = 4;
   const captureTime = (duration / PLAYBACK_SPEED) * 1000;
-  const MAX_BASE64_SIZE = 40 * 1024 * 1024;
 
   // CRITICAL: Track if we've sent a result to prevent duplicate sends
   let resultSent = false;
@@ -1298,7 +1301,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
 
   // CRITICAL: Hard timeout to GUARANTEE we always send a response
   // This prevents the frontend from hanging forever
-  const HARD_TIMEOUT_MS = captureTime + 60000; // capture time + 60s buffer
+  const HARD_TIMEOUT_MS = captureTime + 120000; // capture time + 120s buffer for upload
   const hardTimeoutId = setTimeout(() => {
     if (!resultSent) {
       console.error(`[EXT][CAPTURE-PAGE] HARD TIMEOUT after ${HARD_TIMEOUT_MS / 1000}s - forcing error response`);
@@ -1603,7 +1606,49 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
           return;
         }
 
-        // Convert to Base64
+        // NEW v2.6.8: Upload directly from page context if uploadUrl is provided
+        if (uploadUrl) {
+          console.log(`[EXT][CAPTURE] Uploading directly to server from page context...`);
+          try {
+            const formData = new FormData();
+            formData.append('video', blob, `captured_${videoId}.webm`);
+            formData.append('videoId', videoId);
+            formData.append('type', 'video');
+            formData.append('captureStart', String(startTime));
+            formData.append('captureEnd', String(endTime));
+            formData.append('capturedDuration', String(duration));
+
+            const uploadResponse = await fetch(uploadUrl, {
+              method: 'POST',
+              body: formData
+            });
+
+            if (!uploadResponse.ok) {
+              const errorText = await uploadResponse.text();
+              throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText.substring(0, 100)}`);
+            }
+
+            const uploadResult = await uploadResponse.json();
+            console.log(`[EXT][CAPTURE] Direct upload success! url=${uploadResult.url}`);
+
+            resolve({
+              success: true,
+              uploadedDirectly: true,
+              videoStorageUrl: uploadResult.url,
+              videoSize: blobSize,
+              mimeType: mimeType.split(';')[0],
+              duration: duration,
+              captureMethod: 'mediarecorder_direct'
+            });
+            return;
+          } catch (uploadError) {
+            console.error(`[EXT][CAPTURE] Direct upload failed: ${uploadError.message}`);
+            // Fall through to base64 fallback
+            console.log(`[EXT][CAPTURE] Falling back to base64 return...`);
+          }
+        }
+
+        // FALLBACK: Convert to Base64 if no uploadUrl or upload failed
         console.log('[EXT][CAPTURE] Converting to Base64...');
         try {
           const base64Data = await new Promise((res, rej) => {
@@ -1626,6 +1671,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
 
           resolve({
             success: true,
+            uploadedDirectly: false,
             videoData: base64Data,
             videoSize: blobSize,
             mimeType: mimeType.split(';')[0],
@@ -2471,15 +2517,17 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     await new Promise(resolve => setTimeout(resolve, 100));
 
     // Now inject the capture function into MAIN world
-    // Modified to use postMessage instead of returning a Promise
-    console.log(`[EXT][CAPTURE] Injecting capture function (captureId=${captureId})`);
+    // NEW v2.6.8: Pass upload URL so capture can upload directly from page context
+    // This avoids message passing issues with large video data
+    const directUploadUrl = `${VIDEO_PROCESSOR_URL}/upload-stream`;
+    console.log(`[EXT][CAPTURE] Injecting capture function (captureId=${captureId}, directUpload=true)`);
 
     try {
       const injectionResult = await chrome.scripting.executeScript({
         target: { tabId: youtubeTab.id },
         world: 'MAIN',
         func: captureVideoWithMessage,
-        args: [captureStart, captureEnd, videoId, captureId]
+        args: [captureStart, captureEnd, videoId, captureId, directUploadUrl]
       });
       console.log(`[EXT][CAPTURE] Injection result:`, injectionResult);
     } catch (injectionError) {
