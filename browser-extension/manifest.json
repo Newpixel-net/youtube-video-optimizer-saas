@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.2.4",
-  "description": "Fix executeScript Promise resolution with sync callback pattern",
+  "version": "2.2.5",
+  "description": "Use message passing for capture results instead of executeScript return",
 
   "permissions": [
     "activeTab",

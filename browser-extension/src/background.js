@@ -1171,25 +1171,255 @@ async function downloadVideoInPage(videoUrl, audioUrl) {
 }
 
 /**
- * EXTENSION-ONLY: Capture video using MediaRecorder
+ * EXTENSION-ONLY: Capture video using MediaRecorder with MESSAGE PASSING
  *
- * This function is injected into the YouTube page and captures the video element's
- * output directly. This bypasses ALL URL restrictions because:
- * - We're capturing what the player is already displaying
- * - No new network requests are made
- * - No CORS or IP-restriction issues
+ * This version uses window.postMessage() to send results back to the extension
+ * instead of returning a Promise. This works around a Chrome limitation where
+ * executeScript with world: 'MAIN' doesn't properly wait for Promises that
+ * resolve via async callbacks (like FileReader or setTimeout).
  *
  * The video is sped up to 4x to minimize capture time.
  * For a 60-second clip, this takes only ~15 seconds.
  *
- * FIX: To avoid Chrome's 64MB message limit, this function now uploads directly
- * to the server instead of returning Base64 data. For smaller videos (<40MB),
- * it returns Base64 as a fallback.
- *
  * @param {number} startTime - Start time in seconds
- * @param {number} endTime - End time in seconds (captures duration = endTime - startTime)
- * @param {string} videoId - YouTube video ID for upload identification
- * @param {string} uploadUrl - Server URL for direct upload
+ * @param {number} endTime - End time in seconds
+ * @param {string} videoId - YouTube video ID
+ * @param {string} captureId - Unique ID to correlate the result message
+ */
+function captureVideoWithMessage(startTime, endTime, videoId, captureId) {
+  console.log(`[EXT][CAPTURE] MediaRecorder start=${startTime}s end=${endTime}s videoId=${videoId} captureId=${captureId}`);
+
+  const duration = endTime - startTime;
+  const PLAYBACK_SPEED = 4;
+  const captureTime = (duration / PLAYBACK_SPEED) * 1000;
+  const MAX_BASE64_SIZE = 40 * 1024 * 1024;
+
+  // Helper to send result back via postMessage
+  function sendResult(result, error = null) {
+    window.postMessage({
+      type: 'YVO_CAPTURE_RESULT',
+      captureId: captureId,
+      result: result,
+      error: error
+    }, '*');
+    console.log(`[EXT][CAPTURE] Result sent via postMessage (success=${!error})`);
+  }
+
+  console.log(`[EXT][CAPTURE] Will capture ${duration}s at ${PLAYBACK_SPEED}x (${(captureTime/1000).toFixed(1)}s real time)`);
+
+  try {
+    // Find the video element
+    let videoElement = document.querySelector('video.html5-main-video');
+    if (!videoElement) {
+      videoElement = document.querySelector('video');
+    }
+
+    if (!videoElement) {
+      console.error('[EXT][CAPTURE] FAIL: No video element found');
+      sendResult(null, 'No video element found on page');
+      return;
+    }
+
+    console.log(`[EXT][CAPTURE] Video element found: ${videoElement.videoWidth}x${videoElement.videoHeight}, duration=${videoElement.duration}s`);
+
+    // Ensure video is playing
+    if (videoElement.paused) {
+      videoElement.play().catch(e => console.warn('[EXT][CAPTURE] Play failed:', e.message));
+    }
+
+    // Start capture after a brief delay to ensure video is ready
+    setTimeout(() => {
+      try {
+        // Seek to start position
+        console.log(`[EXT][CAPTURE] Seeking to ${startTime}s...`);
+        videoElement.currentTime = startTime;
+
+        const startCapture = () => {
+          try {
+            // Capture the video stream
+            console.log('[EXT][CAPTURE] Calling captureStream()...');
+            let stream;
+            try {
+              stream = videoElement.captureStream();
+            } catch (e) {
+              console.error(`[EXT][CAPTURE] FAIL: captureStream error: ${e.message}`);
+              sendResult(null, `Could not capture video stream: ${e.message}`);
+              return;
+            }
+
+            if (!stream || stream.getVideoTracks().length === 0) {
+              console.error('[EXT][CAPTURE] FAIL: No video tracks');
+              sendResult(null, 'No video tracks available');
+              return;
+            }
+
+            const chunks = [];
+            let mimeType = 'video/webm;codecs=vp9,opus';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+              mimeType = 'video/webm;codecs=vp8,opus';
+            }
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+              mimeType = 'video/webm';
+            }
+
+            console.log(`[EXT][CAPTURE] Starting MediaRecorder with ${mimeType}`);
+
+            const recorder = new MediaRecorder(stream, {
+              mimeType: mimeType,
+              videoBitsPerSecond: 8000000
+            });
+
+            recorder.ondataavailable = (e) => {
+              if (e.data.size > 0) {
+                chunks.push(e.data);
+              }
+            };
+
+            recorder.onstop = () => {
+              // Restore normal speed
+              videoElement.playbackRate = 1;
+              videoElement.pause();
+
+              console.log(`[EXT][CAPTURE] Recording stopped, chunks=${chunks.length}`);
+              const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
+              const blobSize = blob.size;
+              console.log(`[EXT][CAPTURE] Blob size=${(blobSize / 1024 / 1024).toFixed(2)}MB`);
+
+              if (blobSize < 10000) {
+                console.error('[EXT][CAPTURE] FAIL: Blob too small');
+                sendResult(null, 'Captured video too small');
+                return;
+              }
+
+              if (blobSize > MAX_BASE64_SIZE) {
+                console.warn(`[EXT][CAPTURE] Large file ${(blobSize / 1024 / 1024).toFixed(2)}MB may exceed message limit`);
+              }
+
+              // Convert to Base64
+              console.log('[EXT][CAPTURE] Converting to Base64...');
+              const reader = new FileReader();
+
+              reader.onloadend = () => {
+                try {
+                  if (!reader.result) {
+                    sendResult(null, 'FileReader result is null');
+                    return;
+                  }
+
+                  const base64Parts = reader.result.split(',');
+                  if (base64Parts.length < 2) {
+                    sendResult(null, 'Invalid base64 format');
+                    return;
+                  }
+
+                  console.log('[EXT][CAPTURE] SUCCESS - Sending result via postMessage');
+                  sendResult({
+                    success: true,
+                    videoData: base64Parts[1],
+                    videoSize: blobSize,
+                    mimeType: mimeType.split(';')[0],
+                    duration: duration,
+                    captureMethod: 'mediarecorder'
+                  });
+                } catch (err) {
+                  console.error('[EXT][CAPTURE] FAIL: Base64 error:', err.message);
+                  sendResult(null, 'Base64 conversion error: ' + err.message);
+                }
+              };
+
+              reader.onerror = () => {
+                console.error('[EXT][CAPTURE] FAIL: FileReader error');
+                sendResult(null, 'FileReader failed');
+              };
+
+              reader.readAsDataURL(blob);
+            };
+
+            recorder.onerror = (e) => {
+              videoElement.playbackRate = 1;
+              console.error(`[EXT][CAPTURE] FAIL: MediaRecorder error: ${e.error?.message}`);
+              sendResult(null, `MediaRecorder error: ${e.error?.message || 'unknown'}`);
+            };
+
+            // Set playback speed and start
+            videoElement.playbackRate = PLAYBACK_SPEED;
+            videoElement.muted = true;
+
+            recorder.start(500);
+            console.log('[EXT][CAPTURE] Recording started');
+
+            videoElement.play().catch(e => console.warn('[EXT][CAPTURE] Play failed:', e.message));
+
+            // Monitor progress
+            const progressInterval = setInterval(() => {
+              const progress = ((videoElement.currentTime - startTime) / duration * 100).toFixed(1);
+              console.log(`[EXT][CAPTURE] Progress: ${progress}% (at ${videoElement.currentTime.toFixed(1)}s)`);
+            }, 3000);
+
+            // Stop when we reach end time
+            const checkEnd = setInterval(() => {
+              if (videoElement.currentTime >= endTime || videoElement.ended) {
+                clearInterval(checkEnd);
+                clearInterval(progressInterval);
+                if (recorder.state === 'recording') {
+                  console.log('[EXT][CAPTURE] Reached end, stopping recorder...');
+                  recorder.stop();
+                }
+              }
+            }, 100);
+
+            // Safety timeout
+            setTimeout(() => {
+              clearInterval(checkEnd);
+              clearInterval(progressInterval);
+              if (recorder.state === 'recording') {
+                console.log('[EXT][CAPTURE] Timeout, stopping recorder...');
+                recorder.stop();
+              }
+            }, captureTime * 1.5 + 5000);
+
+          } catch (captureError) {
+            console.error(`[EXT][CAPTURE] FAIL: ${captureError.message}`);
+            sendResult(null, captureError.message);
+          }
+        };
+
+        // Wait for seek to complete
+        const onSeeked = () => {
+          videoElement.removeEventListener('seeked', onSeeked);
+          console.log(`[EXT][CAPTURE] Seek complete, starting capture...`);
+          startCapture();
+        };
+
+        if (Math.abs(videoElement.currentTime - startTime) < 1) {
+          startCapture();
+        } else {
+          videoElement.addEventListener('seeked', onSeeked);
+          setTimeout(() => {
+            videoElement.removeEventListener('seeked', onSeeked);
+            if (Math.abs(videoElement.currentTime - startTime) < 5) {
+              startCapture();
+            }
+          }, 3000);
+        }
+
+      } catch (seekError) {
+        console.error(`[EXT][CAPTURE] FAIL: Seek error: ${seekError.message}`);
+        sendResult(null, seekError.message);
+      }
+    }, 1000);
+
+  } catch (error) {
+    console.error(`[EXT][CAPTURE] FAIL: ${error.message}`);
+    sendResult(null, error.message);
+  }
+}
+
+/**
+ * LEGACY: Capture video using MediaRecorder (returns Promise)
+ * Kept for compatibility but no longer used by captureAndUploadWithMediaRecorder
+ *
+ * @deprecated Use captureVideoWithMessage instead
  */
 async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId, uploadUrl) {
   console.log(`[EXT][CAPTURE] MediaRecorder start=${startTime}s end=${endTime}s videoId=${videoId}`);
@@ -1597,28 +1827,80 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     console.log(`[EXT][CAPTURE] Expected capture time: ${(expectedCaptureTime / 1000).toFixed(1)}s, timeout: ${(captureTimeout / 1000).toFixed(1)}s`);
 
     // Inject and run the capture function with videoId and uploadUrl for direct upload
-    // Wrap in timeout to prevent hanging indefinitely
-    const capturePromise = chrome.scripting.executeScript({
+    // SOLUTION: Use message passing instead of relying on executeScript return value
+    // executeScript with world: 'MAIN' doesn't properly wait for Promises that resolve via callbacks
+
+    // Generate a unique capture ID for this request
+    const captureId = `capture_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Set up a Promise that resolves when we receive the capture result via message
+    const captureResultPromise = new Promise((resolveCapture, rejectCapture) => {
+      const messageTimeout = setTimeout(() => {
+        chrome.runtime.onMessage.removeListener(messageHandler);
+        rejectCapture(new Error(`Capture timed out after ${(captureTimeout / 1000).toFixed(0)} seconds`));
+      }, captureTimeout);
+
+      function messageHandler(message, sender, sendResponse) {
+        if (message.type === 'CAPTURE_RESULT' && message.captureId === captureId) {
+          clearTimeout(messageTimeout);
+          chrome.runtime.onMessage.removeListener(messageHandler);
+
+          if (message.error) {
+            rejectCapture(new Error(message.error));
+          } else {
+            resolveCapture(message.result);
+          }
+          return true;
+        }
+      }
+
+      chrome.runtime.onMessage.addListener(messageHandler);
+    });
+
+    // First, inject a message relay script into the content script context
+    // This listens for postMessage from the MAIN world and forwards to service worker
+    await chrome.scripting.executeScript({
+      target: { tabId: youtubeTab.id },
+      world: 'ISOLATED',
+      func: (cid) => {
+        // Remove any existing listener to avoid duplicates
+        if (window.__captureMessageHandler) {
+          window.removeEventListener('message', window.__captureMessageHandler);
+        }
+
+        window.__captureMessageHandler = (event) => {
+          if (event.data && event.data.type === 'YVO_CAPTURE_RESULT' && event.data.captureId === cid) {
+            // Forward to service worker
+            chrome.runtime.sendMessage({
+              type: 'CAPTURE_RESULT',
+              captureId: cid,
+              result: event.data.result,
+              error: event.data.error
+            });
+            // Clean up
+            window.removeEventListener('message', window.__captureMessageHandler);
+          }
+        };
+
+        window.addEventListener('message', window.__captureMessageHandler);
+        console.log(`[EXT][RELAY] Message relay installed for capture ${cid}`);
+      },
+      args: [captureId]
+    });
+
+    // Now inject the capture function into MAIN world
+    // Modified to use postMessage instead of returning a Promise
+    console.log(`[EXT][CAPTURE] Injecting capture function (captureId=${captureId})`);
+
+    chrome.scripting.executeScript({
       target: { tabId: youtubeTab.id },
       world: 'MAIN',
-      func: captureVideoSegmentWithMediaRecorder,
-      args: [captureStart, captureEnd, videoId, uploadStreamUrl]
+      func: captureVideoWithMessage,
+      args: [captureStart, captureEnd, videoId, captureId]
     });
 
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Capture timed out after ${(captureTimeout / 1000).toFixed(0)} seconds. The video may not be playing or accessible.`));
-      }, captureTimeout);
-    });
-
-    const results = await Promise.race([capturePromise, timeoutPromise]);
-
-    if (!results || results.length === 0 || !results[0].result) {
-      console.error('[EXT][CAPTURE] FAIL: Script execution failed');
-      throw new Error('MediaRecorder capture script failed to execute');
-    }
-
-    const captureResult = results[0].result;
+    // Wait for the result via message passing
+    const captureResult = await captureResultPromise;
 
     if (!captureResult.success) {
       console.error(`[EXT][CAPTURE] FAIL: ${captureResult.error}`);
