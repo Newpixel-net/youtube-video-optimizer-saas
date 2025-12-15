@@ -348,6 +348,8 @@ async function extractVideoInfo(videoId) {
     const videoDetails = playerData.videoDetails;
 
     if (videoDetails) {
+      // Also get video element state for debugging
+      const video = document.querySelector('video.html5-main-video');
       return {
         videoId: videoId,
         url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -356,7 +358,13 @@ async function extractVideoInfo(videoId) {
         duration: parseInt(videoDetails.lengthSeconds, 10) || 0,
         thumbnail: getThumbnailUrl(videoId),
         isLive: videoDetails.isLiveContent || false,
-        isPrivate: videoDetails.isPrivate || false
+        isPrivate: videoDetails.isPrivate || false,
+        // Video element state for debugging
+        readyState: video?.readyState || 0,
+        currentTime: video?.currentTime || 0,
+        paused: video?.paused ?? true,
+        videoWidth: video?.videoWidth || 0,
+        videoHeight: video?.videoHeight || 0
       };
     }
   }
@@ -368,6 +376,7 @@ async function extractVideoInfo(videoId) {
   }
 
   // Method 3: Basic info from page
+  const video = document.querySelector('video.html5-main-video');
   return {
     videoId: videoId,
     url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -376,7 +385,13 @@ async function extractVideoInfo(videoId) {
     duration: getVideoDuration(),
     thumbnail: getThumbnailUrl(videoId),
     isLive: false,
-    isPrivate: false
+    isPrivate: false,
+    // Video element state for debugging
+    readyState: video?.readyState || 0,
+    currentTime: video?.currentTime || 0,
+    paused: video?.paused ?? true,
+    videoWidth: video?.videoWidth || 0,
+    videoHeight: video?.videoHeight || 0
   };
 }
 

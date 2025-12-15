@@ -2070,67 +2070,152 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       if (youtubeTab.windowId) {
         await chrome.windows.update(youtubeTab.windowId, { focused: true });
       }
-      await new Promise(resolve => setTimeout(resolve, 500)); // Brief wait for focus to take effect
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s for focus to take effect
     } catch (focusErr) {
       console.warn(`[EXT][CAPTURE] Could not focus tab: ${focusErr.message}`);
     }
 
-    // Trigger video playback with retry logic for readyState=0
-    console.log(`[EXT][CAPTURE] Triggering video playback...`);
-    let playbackResult = null;
-    let playbackRetries = 3;
+    // AGGRESSIVE VIDEO LOADING: Keep trying until video loads or we give up
+    console.log(`[EXT][CAPTURE] Starting aggressive video loading sequence...`);
+    let videoLoaded = false;
+    let lastReadyState = 0;
+    const MAX_LOAD_ATTEMPTS = 10;
+    const LOAD_WAIT_MS = 2000;
 
-    while (playbackRetries > 0) {
+    for (let attempt = 1; attempt <= MAX_LOAD_ATTEMPTS && !videoLoaded; attempt++) {
+      console.log(`[EXT][CAPTURE] Video load attempt ${attempt}/${MAX_LOAD_ATTEMPTS}...`);
+
       try {
-        playbackResult = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
-        console.log(`[EXT][CAPTURE] Playback result: isPlaying=${playbackResult?.isPlaying}, readyState=${playbackResult?.readyState}, muted=${playbackResult?.muted}`);
+        // Trigger playback each attempt
+        const playbackResult = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'triggerPlayback' });
+        lastReadyState = playbackResult?.readyState || 0;
+        console.log(`[EXT][CAPTURE] Playback result: isPlaying=${playbackResult?.isPlaying}, readyState=${lastReadyState}, muted=${playbackResult?.muted}`);
 
-        // If readyState > 0, video has at least some data - we can proceed
-        if (playbackResult?.readyState > 0) {
+        // readyState >= 2 means we have current data, >= 3 means we have future data
+        if (lastReadyState >= 2) {
+          videoLoaded = true;
+          console.log(`[EXT][CAPTURE] Video loaded! readyState=${lastReadyState}`);
           break;
         }
 
-        // readyState=0 means no media loaded at all - retry
-        console.log(`[EXT][CAPTURE] Video not loaded (readyState=0), retrying... (${playbackRetries - 1} left)`);
-        playbackRetries--;
-        if (playbackRetries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s between retries
+        // If still readyState=0 or 1, try clicking play button directly
+        if (lastReadyState <= 1) {
+          console.log(`[EXT][CAPTURE] Video not ready, injecting click handler...`);
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: youtubeTab.id },
+              world: 'MAIN',
+              func: () => {
+                // Click YouTube's big play button if visible
+                const bigPlayBtn = document.querySelector('.ytp-large-play-button');
+                if (bigPlayBtn && bigPlayBtn.offsetParent !== null) {
+                  console.log('[YVO] Clicking big play button');
+                  bigPlayBtn.click();
+                }
+
+                // Click regular play button
+                const playBtn = document.querySelector('.ytp-play-button');
+                if (playBtn) {
+                  const state = playBtn.getAttribute('data-title-no-tooltip');
+                  if (state === 'Play') {
+                    console.log('[YVO] Clicking play button');
+                    playBtn.click();
+                  }
+                }
+
+                // Try YouTube player API
+                const ytPlayer = document.querySelector('#movie_player');
+                if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
+                  console.log('[YVO] Calling ytPlayer.playVideo()');
+                  try { ytPlayer.mute && ytPlayer.mute(); } catch(e) {}
+                  ytPlayer.playVideo();
+                }
+
+                // Direct video element play
+                const video = document.querySelector('video.html5-main-video');
+                if (video) {
+                  video.muted = true;
+                  video.play().catch(() => {});
+                }
+              }
+            });
+          } catch (clickErr) {
+            console.warn(`[EXT][CAPTURE] Click inject failed: ${clickErr.message}`);
+          }
         }
       } catch (e) {
-        console.log(`[EXT][CAPTURE] Playback trigger failed: ${e.message}, continuing anyway`);
-        break;
+        console.log(`[EXT][CAPTURE] Playback trigger failed: ${e.message}`);
+      }
+
+      // Wait before next attempt
+      if (attempt < MAX_LOAD_ATTEMPTS) {
+        await new Promise(resolve => setTimeout(resolve, LOAD_WAIT_MS));
       }
     }
 
-    // Wait for video to be ready - longer wait if readyState is still 0 or playback not confirmed
-    const videoNotLoaded = !playbackResult?.readyState || playbackResult.readyState === 0;
-    const initialWait = videoNotLoaded ? 5000 : (playbackResult?.isPlaying ? 2000 : 4000);
-    console.log(`[EXT][CAPTURE] Waiting ${initialWait}ms for video to load (readyState=${playbackResult?.readyState || 'unknown'})...`);
-    await new Promise(resolve => setTimeout(resolve, initialWait));
+    // If video still not loaded after all attempts, return error early
+    if (!videoLoaded) {
+      console.error(`[EXT][CAPTURE] FAIL: Video never loaded after ${MAX_LOAD_ATTEMPTS} attempts (readyState=${lastReadyState})`);
+      return {
+        success: false,
+        error: 'Could not load video. Please manually play the video on YouTube and try again.',
+        code: 'VIDEO_NOT_LOADED',
+        details: {
+          readyState: lastReadyState,
+          attempts: MAX_LOAD_ATTEMPTS,
+          message: 'The video element did not load. This can happen if: (1) An ad is playing, (2) The video requires sign-in, (3) The video is region-restricted.'
+        }
+      };
+    }
 
-    // Get video duration from content script - retry if failed
+    // CRITICAL: If capturing from a specific position (not 0), pre-seek BEFORE capture
+    if (hasSegmentRequest && requestedStartTime > 5) {
+      console.log(`[EXT][CAPTURE] Pre-seeking to ${requestedStartTime}s before capture...`);
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: youtubeTab.id },
+          world: 'MAIN',
+          func: (seekTime) => {
+            const ytPlayer = document.querySelector('#movie_player');
+            if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+              console.log(`[YVO] Seeking to ${seekTime}s via YouTube API`);
+              ytPlayer.seekTo(seekTime, true);
+            } else {
+              const video = document.querySelector('video.html5-main-video');
+              if (video) {
+                console.log(`[YVO] Seeking to ${seekTime}s via video element`);
+                video.currentTime = seekTime;
+              }
+            }
+          },
+          args: [requestedStartTime]
+        });
+
+        // Wait for seek and buffering
+        console.log(`[EXT][CAPTURE] Waiting for seek and buffering...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Verify we're at the right position
+        const seekCheck = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
+        console.log(`[EXT][CAPTURE] After seek: currentTime=${seekCheck?.videoInfo?.currentTime || 'unknown'}s, readyState=${seekCheck?.videoInfo?.readyState || 'unknown'}`);
+      } catch (seekErr) {
+        console.warn(`[EXT][CAPTURE] Pre-seek failed: ${seekErr.message}, continuing anyway`);
+      }
+    }
+
+    // Get video duration from content script
     let videoInfo;
-    let retries = 3;
-    while (retries > 0) {
-      try {
-        videoInfo = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
-        if (videoInfo?.success && videoInfo?.videoInfo?.duration > 0) {
-          console.log(`[EXT][CAPTURE] Got video info: duration=${videoInfo.videoInfo.duration}s`);
-          break;
-        }
-        console.log(`[EXT][CAPTURE] Video info incomplete, retrying... (${retries} left)`);
-      } catch (e) {
-        console.log(`[EXT][CAPTURE] Could not get video info: ${e.message}, retrying...`);
+    try {
+      videoInfo = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
+      if (videoInfo?.success && videoInfo?.videoInfo?.duration > 0) {
+        console.log(`[EXT][CAPTURE] Got video info: duration=${videoInfo.videoInfo.duration}s`);
+      } else {
+        console.log(`[EXT][CAPTURE] Video info incomplete, using fallback`);
+        videoInfo = { success: true, videoInfo: { duration: 300 } };
       }
-      retries--;
-      if (retries > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      }
-    }
-
-    if (!videoInfo?.success || !videoInfo?.videoInfo?.duration) {
-      console.log(`[EXT][CAPTURE] Using fallback duration`);
-      videoInfo = { success: true, videoInfo: { duration: 60 } };
+    } catch (e) {
+      console.log(`[EXT][CAPTURE] Could not get video info: ${e.message}, using fallback`);
+      videoInfo = { success: true, videoInfo: { duration: 300 } };
     }
 
     const videoDuration = videoInfo?.videoInfo?.duration || 300;
