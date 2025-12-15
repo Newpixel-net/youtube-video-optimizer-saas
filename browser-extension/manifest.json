@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.6.6",
-  "description": "Fix: Avoid storing large video data in chrome.storage (v2.6.6)",
+  "version": "2.6.7",
+  "description": "Fix: Upload retry logic and increased timeout (v2.6.7)",
 
   "permissions": [
     "activeTab",

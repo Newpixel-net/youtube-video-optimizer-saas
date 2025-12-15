@@ -2538,40 +2538,53 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     let uploadResult = null;
     let uploadError = null;
 
-    // CRITICAL: Add timeout to prevent hanging forever
-    // Use AbortController to cancel fetch after 60 seconds
-    const UPLOAD_TIMEOUT_MS = 60000;
-    const abortController = new AbortController();
-    const uploadTimeoutId = setTimeout(() => {
-      console.log(`[EXT][UPLOAD] Aborting upload after ${UPLOAD_TIMEOUT_MS / 1000}s timeout`);
-      abortController.abort();
-    }, UPLOAD_TIMEOUT_MS);
+    // Upload with retry logic - Cloud Run can have cold starts
+    const UPLOAD_TIMEOUT_MS = 90000; // 90 seconds per attempt
+    const MAX_RETRIES = 2;
 
-    try {
-      const uploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
-        method: 'POST',
-        body: formData,
-        signal: abortController.signal
-      });
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      console.log(`[EXT][UPLOAD] Attempt ${attempt}/${MAX_RETRIES}...`);
 
-      clearTimeout(uploadTimeoutId);
+      const abortController = new AbortController();
+      const uploadTimeoutId = setTimeout(() => {
+        console.log(`[EXT][UPLOAD] Aborting upload after ${UPLOAD_TIMEOUT_MS / 1000}s timeout`);
+        abortController.abort();
+      }, UPLOAD_TIMEOUT_MS);
 
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        uploadError = `Server ${uploadResponse.status}: ${errorText.substring(0, 100)}`;
-        console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
-      } else {
-        uploadResult = await uploadResponse.json();
-        console.log(`[EXT][UPLOAD] success url=${uploadResult.url}`);
+      try {
+        const uploadResponse = await fetch(`${VIDEO_PROCESSOR_URL}/upload-stream`, {
+          method: 'POST',
+          body: formData,
+          signal: abortController.signal
+        });
+
+        clearTimeout(uploadTimeoutId);
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          uploadError = `Server ${uploadResponse.status}: ${errorText.substring(0, 100)}`;
+          console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
+        } else {
+          uploadResult = await uploadResponse.json();
+          console.log(`[EXT][UPLOAD] success url=${uploadResult.url}`);
+          break; // Success - exit retry loop
+        }
+      } catch (serverError) {
+        clearTimeout(uploadTimeoutId);
+        if (serverError.name === 'AbortError') {
+          uploadError = `Upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds`;
+        } else {
+          uploadError = `Connection failed: ${serverError.message}`;
+        }
+        console.error(`[EXT][UPLOAD] FAIL attempt ${attempt}: ${uploadError}`);
       }
-    } catch (serverError) {
-      clearTimeout(uploadTimeoutId);
-      if (serverError.name === 'AbortError') {
-        uploadError = `Upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds`;
-      } else {
-        uploadError = `Connection failed: ${serverError.message}`;
+
+      // If not last attempt and failed, wait before retry
+      if (attempt < MAX_RETRIES && !uploadResult) {
+        const waitTime = attempt * 2000; // 2s, 4s, etc.
+        console.log(`[EXT][UPLOAD] Waiting ${waitTime / 1000}s before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
-      console.error(`[EXT][UPLOAD] FAIL: ${uploadError}`);
     }
 
     // If server upload succeeded, return the storage URL
