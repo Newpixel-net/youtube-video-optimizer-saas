@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.2.6",
-  "description": "Add debugging and await executeScript for injection errors",
+  "version": "2.2.7",
+  "description": "Fix video capture waiting for video to be ready before capturing",
 
   "permissions": [
     "activeTab",
