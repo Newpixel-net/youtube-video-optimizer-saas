@@ -2223,18 +2223,20 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }, 1000); // Check every second
 
       // Message handler (primary method)
+      // NOTE: Return false after sendResponse to properly close the message channel
+      // Returning true after sendResponse causes "message channel closed" errors
       function messageHandler(message, sender, sendResponse) {
         if (message.captureId === captureId) {
           if (message.type === 'CAPTURE_STARTED') {
             console.log(`[EXT][CAPTURE] Received CAPTURE_STARTED - function is running!`);
             sendResponse({ received: true });
-            return true;
+            return false; // Channel can close - response already sent
           }
 
           if (message.type === 'CAPTURE_RESULT') {
             if (resolved) {
               sendResponse({ received: true, alreadyHandled: true });
-              return true;
+              return false; // Channel can close - response already sent
             }
             console.log(`[EXT][CAPTURE] Received CAPTURE_RESULT via message`);
             resolved = true;
@@ -2252,7 +2254,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             } else {
               resolveCapture(message.result);
             }
-            return true;
+            return false; // Channel can close - response already sent
           }
         }
         return false;
