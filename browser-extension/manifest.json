@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.2.8",
-  "description": "Comprehensive video capture fixes: clone tracks, wait for ready state, improve playback init",
+  "version": "2.2.9",
+  "description": "Robust video capture with track cloning, improved relay, and diagnostics",
 
   "permissions": [
     "activeTab",

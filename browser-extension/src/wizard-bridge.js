@@ -21,18 +21,18 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '2.2.8',
+        version: '2.2.9',
         extensionId: EXTENSION_ID,
-        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning']
+        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling']
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '2.2.8';
-    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning'];
+    window.__YVO_EXTENSION_VERSION__ = '2.2.9';
+    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling'];
 
-    console.log('[EXT] Bridge ready - v2.2.8 with track cloning fix');
+    console.log('[EXT] Bridge ready - v2.2.9 with robust relay and track cloning');
   }
 
   /**
@@ -54,8 +54,8 @@
       case 'checkExtension':
         sendResponse(requestId, {
           installed: true,
-          version: '2.2.8',
-          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning'],
+          version: '2.2.9',
+          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling'],
           maxBase64Size: 40 * 1024 * 1024 // 40MB - files larger than this upload directly
         });
         break;

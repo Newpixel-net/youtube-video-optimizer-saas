@@ -2071,26 +2071,32 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         }
 
         window.__captureMessageHandler = (event) => {
-          if (event.data && event.data.captureId === cid) {
+          // Only process messages from same origin with our captureId
+          if (!event.data || typeof event.data !== 'object') return;
+          if (event.data.captureId !== cid) return;
+
+          try {
             if (event.data.type === 'YVO_CAPTURE_STARTED') {
               // Forward start notification
               console.log(`[EXT][RELAY] Capture function started!`);
               chrome.runtime.sendMessage({
                 type: 'CAPTURE_STARTED',
                 captureId: cid
-              });
+              }).catch(e => console.error('[EXT][RELAY] Failed to forward start:', e.message));
             } else if (event.data.type === 'YVO_CAPTURE_RESULT') {
               // Forward result to service worker
-              console.log(`[EXT][RELAY] Forwarding result to service worker`);
+              console.log(`[EXT][RELAY] Forwarding result to service worker (success=${!!event.data.result?.success}, error=${event.data.error || 'none'})`);
               chrome.runtime.sendMessage({
                 type: 'CAPTURE_RESULT',
                 captureId: cid,
                 result: event.data.result,
                 error: event.data.error
-              });
+              }).catch(e => console.error('[EXT][RELAY] Failed to forward result:', e.message));
               // Clean up
               window.removeEventListener('message', window.__captureMessageHandler);
             }
+          } catch (relayError) {
+            console.error('[EXT][RELAY] Error in message handler:', relayError);
           }
         };
 
@@ -2099,6 +2105,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       },
       args: [captureId]
     });
+
+    // Small delay to ensure relay is fully set up
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Now inject the capture function into MAIN world
     // Modified to use postMessage instead of returning a Promise
