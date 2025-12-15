@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.4.0",
-  "description": "Hard timeout guarantee, async capture with proper error handling, prevents hang on export",
+  "version": "2.5.0",
+  "description": "Simplified capture flow, removed unreliable stream interception, direct MediaRecorder path",
 
   "permissions": [
     "activeTab",
