@@ -356,7 +356,7 @@ async function handleCaptureForWizard(message) {
   // Validate video ID
   if (!videoId || !isValidVideoId(videoId)) {
     console.error('[EXT][CAPTURE] FAIL: Invalid video ID');
-    storeResult({ success: false, error: 'Invalid video ID', code: 'INVALID_VIDEO_ID' });
+    await storeResult({ success: false, error: 'Invalid video ID', code: 'INVALID_VIDEO_ID' });
     return;
   }
 
@@ -365,7 +365,7 @@ async function handleCaptureForWizard(message) {
     console.log(`[EXT][CAPTURE] autoCapture=false - returning metadata only`);
     try {
       const videoInfo = await getBasicVideoInfo(videoId, youtubeUrl);
-      storeResult({
+      await storeResult({
         success: true,
         videoInfo: videoInfo,
         streamData: null,
@@ -373,7 +373,7 @@ async function handleCaptureForWizard(message) {
       });
     } catch (infoError) {
       console.error(`[EXT][CAPTURE] Failed to get video info: ${infoError.message}`);
-      storeResult({
+      await storeResult({
         success: false,
         error: `Failed to get video info: ${infoError.message}`,
         code: 'VIDEO_INFO_FAILED'
@@ -495,7 +495,7 @@ async function handleCaptureForWizard(message) {
         }
       } else {
         // No autoOpenTab, return error asking user to open the video
-        storeResult({
+        await storeResult({
           success: false,
           error: 'Please open this video on YouTube first, then try exporting again.',
           code: 'NO_YOUTUBE_TAB',
@@ -613,7 +613,7 @@ async function handleCaptureForWizard(message) {
         }
       }
 
-      storeResult(response);
+      await storeResult(response);
     } else {
       // Capture failed
       const errorMsg = captureResult?.error || 'Video capture failed';
@@ -628,7 +628,7 @@ async function handleCaptureForWizard(message) {
         }
       }
 
-      storeResult({
+      await storeResult({
         success: false,
         error: errorMsg,
         code: captureResult?.code || 'CAPTURE_FAILED',
@@ -651,7 +651,7 @@ async function handleCaptureForWizard(message) {
       }
     }
 
-    storeResult({
+    await storeResult({
       success: false,
       error: error.message || 'Unexpected error during capture',
       code: 'UNEXPECTED_ERROR'
