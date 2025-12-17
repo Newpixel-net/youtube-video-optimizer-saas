@@ -22,6 +22,49 @@ import {
 } from './video-cache.js';
 import { generateCaptions } from './caption-renderer.js';
 
+// Feature flag for PTS rescaling fix
+// Set PTS_RESCALE_ENABLED=true to enable timestamp correction for MediaRecorder captures
+const PTS_RESCALE_ENABLED = process.env.PTS_RESCALE_ENABLED === 'true';
+
+/**
+ * Get packet-level PTS span for a stream (video or audio)
+ * Returns the actual timestamp span from first to last packet
+ *
+ * @param {string} filePath - Path to video file
+ * @param {string} streamType - 'v' for video, 'a' for audio
+ * @returns {Object} { firstPts, lastPts, ptsSpan, packetCount, isValid }
+ */
+function getPacketPTSSpan(filePath, streamType = 'v') {
+  try {
+    const cmd = `ffprobe -v error -select_streams ${streamType}:0 -show_entries packet=pts_time -of csv=p=0 "${filePath}"`;
+    const result = execSync(cmd, { encoding: 'utf8', timeout: 60000 });
+
+    const lines = result.trim().split('\n').filter(line => line.trim() && line.trim() !== 'N/A');
+    if (lines.length === 0) {
+      return { firstPts: null, lastPts: null, ptsSpan: null, packetCount: 0, isValid: false };
+    }
+
+    const timestamps = lines.map(line => parseFloat(line)).filter(t => !isNaN(t) && t >= 0);
+    if (timestamps.length === 0) {
+      return { firstPts: null, lastPts: null, ptsSpan: null, packetCount: lines.length, isValid: false };
+    }
+
+    const firstPts = timestamps[0];
+    const lastPts = timestamps[timestamps.length - 1];
+    const ptsSpan = lastPts - firstPts;
+
+    return {
+      firstPts,
+      lastPts,
+      ptsSpan,
+      packetCount: timestamps.length,
+      isValid: ptsSpan > 0
+    };
+  } catch (err) {
+    return { firstPts: null, lastPts: null, ptsSpan: null, packetCount: 0, isValid: false, error: err.message };
+  }
+}
+
 /**
  * DIAGNOSTIC: Probe PACKET-LEVEL PTS timestamps from a video file
  * This examines individual frame timestamps to distinguish:
@@ -592,31 +635,113 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               console.log(`[${jobId}] Converting webm to mp4 for reliable processing...`);
               downloadedFile = path.join(workDir, 'source.mp4');
 
-              // FIRST PRINCIPLES APPROACH:
               // =============================
-              // Video playback speed is determined by PTS (Presentation Timestamps), NOT frame rate.
-              // MediaRecorder SHOULD write correct timestamps based on real wall-clock time.
+              // PTS RESCALING FIX (Feature Flag: PTS_RESCALE_ENABLED)
+              // =============================
+              // Root cause identified: MediaRecorder writes timestamps that are compressed
+              // relative to real-world time. The PTS span (~7.5s) doesn't match the actual
+              // capture duration (~30s), causing 4x playback speed.
               //
-              // Previous "fixes" used setpts=N/FPS/TB which DESTROYS original timestamps.
-              // If original timestamps were correct, setpts was CREATING the speed problem.
-              //
-              // Strategy: Simple transcode first, preserving original timestamps.
-              // Do NOT manipulate timestamps unless we have proof they are broken.
+              // Solution: Rescale PTS by factor = realWorldDuration / actualPtsSpan
+              // This preserves relative frame timing while stretching to correct duration.
 
-              console.log(`[${jobId}] Simple transcode (preserving original timestamps)...`);
-              console.log(`[${jobId}] Input probe: frames=${capturedFrameCount}, audioDur=${capturedAudioDuration.toFixed(2)}s`);
+              // Get real-world duration from job (clip endTime - startTime)
+              const realWorldDuration = clipDuration; // Already calculated above
+              console.log(`[${jobId}] Real-world clip duration: ${realWorldDuration.toFixed(2)}s`);
+
+              // Get actual PTS span from packet-level timestamps
+              const videoPtsInfo = getPacketPTSSpan(capturedFile, 'v');
+              const audioPtsInfo = getPacketPTSSpan(capturedFile, 'a');
+
+              console.log(`[${jobId}] VIDEO PTS: span=${videoPtsInfo.ptsSpan?.toFixed(3) ?? 'N/A'}s, packets=${videoPtsInfo.packetCount}, first=${videoPtsInfo.firstPts?.toFixed(3) ?? 'N/A'}s, last=${videoPtsInfo.lastPts?.toFixed(3) ?? 'N/A'}s`);
+              console.log(`[${jobId}] AUDIO PTS: span=${audioPtsInfo.ptsSpan?.toFixed(3) ?? 'N/A'}s, packets=${audioPtsInfo.packetCount}, first=${audioPtsInfo.firstPts?.toFixed(3) ?? 'N/A'}s, last=${audioPtsInfo.lastPts?.toFixed(3) ?? 'N/A'}s`);
+
+              // Determine if PTS rescaling is needed and calculate scale factor
+              let useRescaling = false;
+              let scaleFactor = 1.0;
+              let videoFilter = null;
+              let audioFilter = null;
+
+              if (PTS_RESCALE_ENABLED && videoPtsInfo.isValid && videoPtsInfo.ptsSpan > 0) {
+                // Check if PTS span significantly differs from real-world duration (>10% difference)
+                const ptsDelta = Math.abs(videoPtsInfo.ptsSpan - realWorldDuration);
+                const ptsRatio = realWorldDuration / videoPtsInfo.ptsSpan;
+
+                console.log(`[${jobId}] PTS ANALYSIS: ptsSpan=${videoPtsInfo.ptsSpan.toFixed(3)}s, realWorld=${realWorldDuration.toFixed(2)}s, ratio=${ptsRatio.toFixed(3)}, delta=${ptsDelta.toFixed(3)}s`);
+
+                if (ptsDelta > realWorldDuration * 0.1) {
+                  // PTS span differs by more than 10% - rescaling needed
+                  useRescaling = true;
+                  scaleFactor = ptsRatio;
+
+                  // Video filter: scale PTS by factor
+                  // setpts=PTS*scaleFactor stretches timestamps proportionally
+                  videoFilter = `setpts=PTS*${scaleFactor.toFixed(6)}`;
+
+                  // Audio: check if it has same compression factor
+                  if (audioPtsInfo.isValid && audioPtsInfo.ptsSpan > 0) {
+                    const audioRatio = realWorldDuration / audioPtsInfo.ptsSpan;
+                    const audioVideoDelta = Math.abs(audioRatio - ptsRatio);
+
+                    console.log(`[${jobId}] AUDIO PTS ratio: ${audioRatio.toFixed(3)}, video ratio: ${ptsRatio.toFixed(3)}, delta: ${audioVideoDelta.toFixed(3)}`);
+
+                    if (audioVideoDelta < 0.1) {
+                      // Audio has same compression - rescale it too
+                      audioFilter = `atempo=${(1/scaleFactor).toFixed(6)}`;
+                      // Note: atempo only supports 0.5-2.0 range, may need chaining for larger factors
+                      if (scaleFactor > 2.0) {
+                        // For 4x scaling, need to chain: atempo=0.5,atempo=0.5
+                        const atempoValue = 1 / scaleFactor;
+                        if (atempoValue < 0.5) {
+                          // Chain multiple atempo filters
+                          const chainCount = Math.ceil(Math.log(scaleFactor) / Math.log(2));
+                          const singleAtempo = Math.pow(atempoValue, 1/chainCount);
+                          audioFilter = Array(chainCount).fill(`atempo=${singleAtempo.toFixed(6)}`).join(',');
+                        }
+                      }
+                      console.log(`[${jobId}] AUDIO: Same compression detected, applying atempo filter`);
+                    } else {
+                      console.log(`[${jobId}] AUDIO: Different compression ratio - may cause A/V desync`);
+                      // Don't filter audio - it might already be correct
+                      audioFilter = null;
+                    }
+                  } else {
+                    console.log(`[${jobId}] AUDIO: No valid PTS span - skipping audio rescaling`);
+                  }
+
+                  console.log(`[${jobId}] PTS RESCALING: scaleFactor=${scaleFactor.toFixed(3)} (${videoPtsInfo.ptsSpan.toFixed(2)}s → ${realWorldDuration.toFixed(2)}s)`);
+                  console.log(`[${jobId}] Video filter: ${videoFilter}`);
+                  console.log(`[${jobId}] Audio filter: ${audioFilter || 'none'}`);
+                } else {
+                  console.log(`[${jobId}] PTS span within 10% of real-world duration - no rescaling needed`);
+                }
+              } else if (!PTS_RESCALE_ENABLED) {
+                console.log(`[${jobId}] PTS_RESCALE_ENABLED=false - skipping timestamp correction`);
+              } else {
+                console.log(`[${jobId}] Invalid video PTS span - cannot rescale`);
+              }
+
+              // Build FFmpeg arguments
+              const ffmpegArgs = ['-i', capturedFile];
+
+              if (useRescaling && videoFilter) {
+                ffmpegArgs.push('-vf', videoFilter);
+                if (audioFilter) {
+                  ffmpegArgs.push('-af', audioFilter);
+                }
+              }
+
+              ffmpegArgs.push(
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
+                '-c:a', 'aac', '-b:a', '192k',
+                '-y',
+                downloadedFile
+              );
+
+              console.log(`[${jobId}] FFmpeg transcode: ${ffmpegArgs.join(' ')}`);
 
               await new Promise((resolve, reject) => {
-                const ffmpeg = spawn('ffmpeg', [
-                  '-i', capturedFile,
-                  // NO setpts - preserve original timestamps
-                  // NO -r flag - let FFmpeg use source frame rate
-                  // NO -vsync cfr - don't force constant frame rate
-                  '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
-                  '-c:a', 'aac', '-b:a', '192k',
-                  '-y',
-                  downloadedFile
-                ]);
+                const ffmpeg = spawn('ffmpeg', ffmpegArgs);
 
                 let stderr = '';
                 ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
@@ -626,8 +751,39 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                     console.log(`[${jobId}] Converted to mp4: ${fileSize} bytes`);
 
                     // DIAGNOSTIC STAGE 2: Probe AFTER transcode (WebM → MP4)
-                    // Compare with STAGE_1 to see if transcode altered timestamps
                     probePTS(jobId, downloadedFile, 'STAGE_2_AFTER_TRANSCODE');
+
+                    // VALIDATION GATE: Verify PTS span matches expected duration
+                    if (useRescaling) {
+                      const outputVideoPts = getPacketPTSSpan(downloadedFile, 'v');
+                      const outputAudioPts = getPacketPTSSpan(downloadedFile, 'a');
+
+                      console.log(`[${jobId}] ========== POST-FIX VALIDATION ==========`);
+                      console.log(`[${jobId}] OUTPUT VIDEO PTS: span=${outputVideoPts.ptsSpan?.toFixed(3) ?? 'N/A'}s, expected=${realWorldDuration.toFixed(2)}s`);
+                      console.log(`[${jobId}] OUTPUT AUDIO PTS: span=${outputAudioPts.ptsSpan?.toFixed(3) ?? 'N/A'}s`);
+
+                      if (outputVideoPts.isValid) {
+                        const outputDelta = Math.abs(outputVideoPts.ptsSpan - realWorldDuration);
+                        const tolerance = realWorldDuration * 0.05; // 5% tolerance
+
+                        if (outputDelta <= tolerance) {
+                          console.log(`[${jobId}] VALIDATION PASSED: Output PTS span within 5% of expected (delta=${outputDelta.toFixed(3)}s)`);
+                        } else {
+                          console.warn(`[${jobId}] VALIDATION WARNING: Output PTS span differs by ${outputDelta.toFixed(3)}s (>${tolerance.toFixed(3)}s tolerance)`);
+                        }
+
+                        // Check A/V sync if both streams exist
+                        if (outputAudioPts.isValid) {
+                          const avDelta = Math.abs(outputVideoPts.ptsSpan - outputAudioPts.ptsSpan);
+                          if (avDelta <= 0.5) {
+                            console.log(`[${jobId}] A/V SYNC: OK (delta=${avDelta.toFixed(3)}s)`);
+                          } else {
+                            console.warn(`[${jobId}] A/V SYNC WARNING: Video/Audio span differ by ${avDelta.toFixed(3)}s`);
+                          }
+                        }
+                      }
+                      console.log(`[${jobId}] ========== END VALIDATION ==========`);
+                    }
 
                     try { fs.unlinkSync(capturedFile); } catch (e) {}
                     resolve();
