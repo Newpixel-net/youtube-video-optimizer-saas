@@ -31,9 +31,16 @@ function getOpenAIClient() {
  * @returns {Promise<string|null>} Path to ASS subtitle file, or null if captions disabled
  */
 export async function generateCaptions({ jobId, videoFile, workDir, captionStyle, customStyle }) {
+  console.log(`[${jobId}] ========== CAPTION GENERATION ==========`);
+  console.log(`[${jobId}] Caption style requested: "${captionStyle}"`);
+  console.log(`[${jobId}] Video file: ${videoFile}`);
+  console.log(`[${jobId}] Work directory: ${workDir}`);
+  console.log(`[${jobId}] Custom style: ${customStyle ? JSON.stringify(customStyle) : 'none'}`);
+
   // Skip if no captions requested
   if (!captionStyle || captionStyle === 'none') {
-    console.log(`[${jobId}] No captions requested, skipping`);
+    console.log(`[${jobId}] No captions requested (style is "${captionStyle}"), skipping`);
+    console.log(`[${jobId}] ========================================`);
     return null;
   }
 
@@ -56,11 +63,23 @@ export async function generateCaptions({ jobId, videoFile, workDir, captionStyle
     const assFile = path.join(workDir, 'captions.ass');
     await generateASSFile(jobId, transcription.words, captionStyle, customStyle, assFile);
 
-    console.log(`[${jobId}] Captions generated: ${assFile}`);
-    return assFile;
+    // Verify the ASS file was created
+    if (fs.existsSync(assFile)) {
+      const assSize = fs.statSync(assFile).size;
+      console.log(`[${jobId}] Caption file created: ${assFile} (${assSize} bytes)`);
+      console.log(`[${jobId}] Caption generation SUCCESS`);
+      console.log(`[${jobId}] ========================================`);
+      return assFile;
+    } else {
+      console.error(`[${jobId}] Caption file was not created at: ${assFile}`);
+      console.log(`[${jobId}] ========================================`);
+      return null;
+    }
 
   } catch (error) {
-    console.error(`[${jobId}] Caption generation failed:`, error.message);
+    console.error(`[${jobId}] Caption generation FAILED:`, error.message);
+    console.error(`[${jobId}] Stack:`, error.stack);
+    console.log(`[${jobId}] ========================================`);
     // Don't fail the whole job, just skip captions
     return null;
   }

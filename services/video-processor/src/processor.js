@@ -29,54 +29,116 @@ import { generateCaptions } from './caption-renderer.js';
  * @param {Object} params.secondarySource - Secondary source configuration
  * @param {string} params.workDir - Working directory
  * @param {number} params.primaryDuration - Duration of primary clip (for matching)
+ * @param {Object} [params.youtubeAuth] - Optional YouTube OAuth credentials
  * @returns {Promise<string|null>} Path to downloaded secondary video, or null
  */
-async function downloadSecondarySource({ jobId, secondarySource, workDir, primaryDuration }) {
+async function downloadSecondarySource({ jobId, secondarySource, workDir, primaryDuration, youtubeAuth }) {
   if (!secondarySource || !secondarySource.enabled) {
+    console.log(`[${jobId}] Secondary source not enabled or not provided`);
     return null;
   }
 
-  console.log(`[${jobId}] Downloading secondary source: type=${secondarySource.type}`);
+  console.log(`[${jobId}] ========== SECONDARY SOURCE DOWNLOAD ==========`);
+  console.log(`[${jobId}] Secondary source config:`, JSON.stringify(secondarySource, null, 2));
+  console.log(`[${jobId}] Primary duration: ${primaryDuration}s`);
+
   const secondaryFile = path.join(workDir, 'secondary.mp4');
 
   try {
     if (secondarySource.uploadedUrl) {
       // Download from Firebase Storage (uploaded video)
-      console.log(`[${jobId}] Downloading secondary from storage: ${secondarySource.uploadedUrl.substring(0, 60)}...`);
+      console.log(`[${jobId}] Downloading secondary from storage URL...`);
+      console.log(`[${jobId}] URL: ${secondarySource.uploadedUrl.substring(0, 100)}...`);
+
       const response = await fetch(secondarySource.uploadedUrl);
       if (!response.ok) {
-        throw new Error(`Failed to download secondary video: ${response.status}`);
+        throw new Error(`Failed to download secondary video: HTTP ${response.status}`);
       }
       const buffer = await response.arrayBuffer();
       fs.writeFileSync(secondaryFile, Buffer.from(buffer));
-      console.log(`[${jobId}] Secondary video downloaded: ${fs.statSync(secondaryFile).size} bytes`);
+
+      const fileSize = fs.statSync(secondaryFile).size;
+      console.log(`[${jobId}] Secondary video downloaded: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
 
     } else if (secondarySource.youtubeVideoId) {
-      // Download from YouTube
+      // Download from YouTube - use a separate subdirectory to avoid overwriting primary
       console.log(`[${jobId}] Downloading secondary YouTube video: ${secondarySource.youtubeVideoId}`);
-      const downloadedPath = await downloadVideoSegment({
-        jobId: `${jobId}-secondary`,
-        videoId: secondarySource.youtubeVideoId,
-        startTime: secondarySource.timeOffset || 0,
-        endTime: (secondarySource.timeOffset || 0) + primaryDuration,
-        workDir
-      });
 
-      // Move/rename to secondary.mp4
-      if (downloadedPath !== secondaryFile) {
-        fs.renameSync(downloadedPath, secondaryFile);
+      // Create subdirectory for secondary download to avoid file conflicts
+      const secondaryWorkDir = path.join(workDir, 'secondary_temp');
+      fs.mkdirSync(secondaryWorkDir, { recursive: true });
+
+      const timeOffset = secondarySource.timeOffset || 0;
+      console.log(`[${jobId}] Secondary video segment: ${timeOffset}s to ${timeOffset + primaryDuration}s`);
+
+      try {
+        const downloadedPath = await downloadVideoSegment({
+          jobId: `${jobId}-secondary`,
+          videoId: secondarySource.youtubeVideoId,
+          startTime: timeOffset,
+          endTime: timeOffset + primaryDuration,
+          workDir: secondaryWorkDir,  // Use separate directory!
+          youtubeAuth  // Pass youtube auth for better download success
+        });
+
+        // Move the downloaded file to our target path
+        // downloadVideoSegment saves to 'source.mp4' in the workDir
+        const expectedPath = path.join(secondaryWorkDir, 'source.mp4');
+        if (fs.existsSync(expectedPath)) {
+          fs.renameSync(expectedPath, secondaryFile);
+          console.log(`[${jobId}] Secondary video moved to: ${secondaryFile}`);
+        } else if (fs.existsSync(downloadedPath) && downloadedPath !== secondaryFile) {
+          fs.renameSync(downloadedPath, secondaryFile);
+          console.log(`[${jobId}] Secondary video renamed to: ${secondaryFile}`);
+        }
+
+        // Cleanup temp directory
+        try {
+          fs.rmSync(secondaryWorkDir, { recursive: true, force: true });
+        } catch (cleanupErr) {
+          console.warn(`[${jobId}] Could not cleanup secondary temp dir: ${cleanupErr.message}`);
+        }
+
+        const fileSize = fs.statSync(secondaryFile).size;
+        console.log(`[${jobId}] Secondary YouTube video downloaded: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
+
+      } catch (ytError) {
+        console.error(`[${jobId}] YouTube secondary download failed: ${ytError.message}`);
+        // Cleanup temp directory on error
+        try {
+          fs.rmSync(secondaryWorkDir, { recursive: true, force: true });
+        } catch (e) {}
+        throw ytError;
       }
-      console.log(`[${jobId}] Secondary YouTube video downloaded: ${fs.statSync(secondaryFile).size} bytes`);
 
     } else {
-      console.log(`[${jobId}] No valid secondary source URL or video ID`);
+      console.log(`[${jobId}] No valid secondary source URL or video ID found`);
+      console.log(`[${jobId}] uploadedUrl: ${secondarySource.uploadedUrl}`);
+      console.log(`[${jobId}] youtubeVideoId: ${secondarySource.youtubeVideoId}`);
+      console.log(`[${jobId}] youtubeUrl: ${secondarySource.youtubeUrl}`);
       return null;
     }
 
+    // Verify file exists and has content
+    if (!fs.existsSync(secondaryFile)) {
+      console.error(`[${jobId}] Secondary file does not exist after download`);
+      return null;
+    }
+
+    const finalSize = fs.statSync(secondaryFile).size;
+    if (finalSize < 1000) {
+      console.error(`[${jobId}] Secondary file too small: ${finalSize} bytes`);
+      return null;
+    }
+
+    console.log(`[${jobId}] Secondary source download SUCCESS: ${secondaryFile}`);
+    console.log(`[${jobId}] ========== END SECONDARY SOURCE DOWNLOAD ==========`);
     return secondaryFile;
 
   } catch (error) {
-    console.error(`[${jobId}] Failed to download secondary source:`, error.message);
+    console.error(`[${jobId}] ========== SECONDARY SOURCE DOWNLOAD FAILED ==========`);
+    console.error(`[${jobId}] Error: ${error.message}`);
+    console.error(`[${jobId}] Stack: ${error.stack}`);
     return null;
   }
 }
@@ -1190,13 +1252,30 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
     let processedFile;
     const secondarySource = job.settings?.secondarySource;
     const reframeMode = job.settings?.reframeMode || 'auto_center';
+
+    // Detailed logging for multi-source detection
+    console.log(`[${jobId}] ========== MULTI-SOURCE MODE CHECK ==========`);
+    console.log(`[${jobId}] Reframe mode: ${reframeMode}`);
+    console.log(`[${jobId}] Secondary source exists: ${!!secondarySource}`);
+    if (secondarySource) {
+      console.log(`[${jobId}] Secondary enabled: ${secondarySource.enabled}`);
+      console.log(`[${jobId}] Secondary type: ${secondarySource.type}`);
+      console.log(`[${jobId}] Secondary uploadedUrl: ${secondarySource.uploadedUrl ? 'YES' : 'NO'}`);
+      console.log(`[${jobId}] Secondary youtubeVideoId: ${secondarySource.youtubeVideoId || 'NO'}`);
+      console.log(`[${jobId}] Secondary youtubeUrl: ${secondarySource.youtubeUrl || 'NO'}`);
+      console.log(`[${jobId}] Secondary position: ${secondarySource.position}`);
+    }
+
     const isMultiSourceMode = secondarySource?.enabled &&
                                (secondarySource.uploadedUrl || secondarySource.youtubeVideoId) &&
                                ['split_screen', 'broll_split'].includes(reframeMode);
 
+    console.log(`[${jobId}] Is multi-source mode: ${isMultiSourceMode}`);
+    console.log(`[${jobId}] ========================================`);
+
     if (isMultiSourceMode) {
       // Multi-source split screen processing
-      console.log(`[${jobId}] Multi-source mode detected: ${reframeMode}`);
+      console.log(`[${jobId}] Starting multi-source processing with mode: ${reframeMode}`);
       await updateProgress(jobRef, 35, 'Downloading secondary video...');
 
       const primaryDuration = (job.endTime || 60) - (job.startTime || 0);
@@ -1204,10 +1283,12 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         jobId,
         secondarySource,
         workDir,
-        primaryDuration
+        primaryDuration,
+        youtubeAuth  // Pass youtube auth for better download success
       });
 
       if (secondaryFile) {
+        console.log(`[${jobId}] Secondary source downloaded successfully, starting multi-source processing`);
         await updateProgress(jobRef, 50, 'Processing split screen...');
         processedFile = await processMultiSourceVideo({
           jobId,
@@ -1219,7 +1300,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         });
       } else {
         // Fallback to single-source if secondary download failed
-        console.log(`[${jobId}] Secondary source download failed, falling back to single-source`);
+        console.error(`[${jobId}] FALLBACK: Secondary source download failed, using single-source processing`);
+        console.error(`[${jobId}] This will show the primary video split in half instead of two different videos`);
         await updateProgress(jobRef, 40, 'Processing video (single source fallback)...');
         processedFile = await processVideoFile({
           jobId,
@@ -1231,6 +1313,7 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       }
     } else {
       // Standard single-source processing
+      console.log(`[${jobId}] Using standard single-source processing`);
       processedFile = await processVideoFile({
         jobId,
         inputFile: downloadedFile,
