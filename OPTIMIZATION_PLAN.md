@@ -1,426 +1,296 @@
 # Video Optimizer - Capture & Export Optimization Plan
 
-## Executive Summary
+## Status: ✅ ALL ISSUES RESOLVED
 
-This document outlines a phased approach to fix three critical issues:
-1. **Slow capture/export process** - Capture time increased 4x due to audio fix
-2. **Subtitles not displaying after export** - Caption pipeline issues
-3. **Reframe split showing wrong video** - Secondary source not implemented in processor
-
----
-
-## Phase 0: Critical - Capture & Export Speed Optimization
-
-### Problem Analysis
-
-**Root Cause Identified:**
-- Capture speed was changed from **4x playback** to **1x playback** (commit `1ccf82d`)
-- This was done to fix audio issues (audio distortion, wrong speed, no audio)
-- Result: A 30-second clip now takes **30 seconds** to capture instead of **~8 seconds**
-
-**Current Flow:**
-```
-browser-extension/src/background.js:1339
-const PLAYBACK_SPEED = 1;  // Was 4, changed to 1 for audio fix
-```
-
-**Impact:**
-- 4x slower capture time
-- Poor user experience during analysis
-- Longer wait times for export
-
-### Optimization Strategy (Safe Approaches)
-
-**DO NOT CHANGE:**
-- The `PLAYBACK_SPEED = 1` setting (this fixed critical audio issues)
-- The PTS rescaling logic (handles legacy 4x captures)
-- The video bitrate settings (8 Mbps)
-
-**OPTIMIZE:**
-
-#### 0.1 Parallel Processing in Video Processor
-**File:** `services/video-processor/src/processor.js`
-
-Current FFmpeg settings use `preset=fast` which is a good balance. Options:
-- Change to `preset=veryfast` for encoding (line 1229)
-- Use hardware acceleration if available (NVENC/VAAPI)
-
-```javascript
-// Current (line 1228-1232):
-'-c:v', 'libx264',
-'-preset', 'fast',
-'-crf', '23',
-
-// Proposed optimization:
-'-c:v', 'libx264',
-'-preset', 'veryfast',  // Faster encoding, slightly larger file
-'-crf', '23',
-'-threads', '0',  // Auto-detect optimal threads
-```
-
-#### 0.2 Caption Generation Optimization
-**File:** `services/video-processor/src/caption-renderer.js`
-
-Caption generation happens synchronously before video processing. Optimize:
-- Use smaller audio sample for Whisper (currently 16kHz, could use 8kHz for faster transcription)
-- Consider caching transcriptions by video hash
-
-#### 0.3 Segment Extraction Optimization
-**File:** `services/video-processor/src/processor.js` (lines 580-625)
-
-When extracting segments from captured video:
-- Current: Uses `ultrafast` preset for extraction, then `fast` for processing
-- This is already optimized
-
-#### 0.4 Browser Extension - Optimized Capture Window
-
-Instead of capturing the full video, implement smarter segment capture:
-- Only open YouTube tab when user clicks "Export" (not during analysis)
-- Capture only the specific clip segment needed (not the full 5 minutes)
-- This is already partially implemented but can be improved
-
-**Key Files to Modify:**
-1. `services/video-processor/src/processor.js` - Lines 1228-1232 (preset change)
-2. `services/video-processor/src/caption-renderer.js` - Consider parallel processing
-
-### Risk Assessment
-- **Low Risk:** Changing encoder preset (veryfast vs fast)
-- **Medium Risk:** Changing audio sample rate for Whisper
-- **No Change Needed:** Playback speed (must stay at 1x)
+This document contains critical information about fixes implemented for:
+1. **Slow capture/export process** - Optimized with `veryfast` preset
+2. **Subtitles not displaying after export** - Fixed filter chain + OPENAI_API_KEY required
+3. **Reframe split showing wrong video** - Implemented browser extension capture for secondary videos
 
 ---
 
-## Phase 1: Subtitles Not Displayed After Export
+# CRITICAL INFORMATION
 
-### Problem Analysis
+## Required Environment Variables (Cloud Run)
 
-**Potential Causes:**
-1. **Caption generation failing silently** - Whisper API errors not reported
-2. **ASS file not being created** - Path issues or file system errors
-3. **FFmpeg filter not including captions** - Filter chain construction issue
-4. **Path escaping issues** - Special characters in file paths
+These MUST be set in Cloud Run for full functionality:
 
-### Investigation Points
+```bash
+OPENAI_API_KEY=sk-...        # REQUIRED for captions/subtitles
+PTS_RESCALE_ENABLED=true     # For legacy 4x capture compatibility
+```
 
-#### 1.1 Caption Generation
+### How to Set Environment Variables
+
+**Option 1: Command Line (PowerShell recommended for special characters)**
+```powershell
+gcloud run services update video-processor --region=us-central1 --update-env-vars="OPENAI_API_KEY=sk-your-key-here"
+```
+
+**Option 2: Using env-vars-file (Best for keys with special characters)**
+1. Create `env.yaml`:
+```yaml
+OPENAI_API_KEY: "sk-your-full-api-key-here"
+PTS_RESCALE_ENABLED: "true"
+```
+
+2. Run:
+```cmd
+gcloud run services update video-processor --region=us-central1 --env-vars-file=env.yaml
+```
+
+**Option 3: Google Cloud Console**
+1. Go to: https://console.cloud.google.com/run
+2. Click on `video-processor` service
+3. Click "Edit & Deploy New Revision"
+4. Go to "Variables & Secrets" section
+5. Add the variables
+6. Click "Deploy"
+
+### How to Check Current Environment Variables
+```cmd
+gcloud run services describe video-processor --region=us-central1 --format="yaml(spec.template.spec.containers[0].env)"
+```
+
+---
+
+# ISSUE 1: Subtitles Not Displaying After Export
+
+## Root Causes Found
+
+1. **OPENAI_API_KEY not set in Cloud Run** - Captions silently failed
+2. **Complex filter graph incompatibility** - For `split_screen` and `three_person` modes, the ASS subtitle filter was incorrectly appended
+
+## Solution Implemented
+
+### Fix 1: Better Error Logging
 **File:** `services/video-processor/src/caption-renderer.js`
 
-Check if OpenAI API key is configured:
+Added explicit logging when API key is missing:
 ```javascript
-// Line 14-21
-function getOpenAIClient() {
-  if (!openai && process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
-  }
-  return openai;  // Returns null if no API key!
-}
-```
-
-**Issue:** If `OPENAI_API_KEY` is not set, captions silently fail.
-
-#### 1.2 ASS Filter Integration
-**File:** `services/video-processor/src/processor.js` (lines 1206-1212)
-
-```javascript
-// Current implementation:
-if (captionFile && fs.existsSync(captionFile)) {
-  const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
-  filters = `${filters},ass='${escapedPath}'`;
-  console.log(`[${jobId}] Adding captions from: ${captionFile}`);
-}
-```
-
-**Potential Issues:**
-1. The filter is appended AFTER `buildFilterChain()` - but for complex filters (split_screen, three_person), the filter chain uses complex filter graph syntax that may not support simple appending
-2. Path escaping may be incomplete for certain special characters
-
-#### 1.3 Complex Filter Modes Incompatibility
-**File:** `services/video-processor/src/processor.js` (lines 1283-1306)
-
-For `split_screen` and `three_person` modes, the filter chain uses complex filter graphs:
-```javascript
-case 'split_screen':
-  filters.push(`split[left][right]`);
-  filters.push(`[left]crop=...`);
-  filters.push(`[right]crop=...`);
-  filters.push(`[l][r]vstack`);
-  break;
-```
-
-**Problem:** Simple appending `,ass='...'` to a complex filter graph doesn't work. The ASS filter needs to be applied to the final output stream.
-
-### Fix Strategy
-
-#### Fix 1.1: Add Better Error Logging
-Add explicit logging when captions fail:
-```javascript
-// In caption-renderer.js
 if (!client) {
-  console.error(`[${jobId}] CRITICAL: OPENAI_API_KEY not set - captions disabled`);
+  console.error(`[${jobId}] CRITICAL: OPENAI_API_KEY environment variable not set - captions will be disabled`);
+  console.error(`[${jobId}] To enable captions, set OPENAI_API_KEY in Cloud Run environment variables`);
   return null;
 }
 ```
 
-#### Fix 1.2: Fix Complex Filter Caption Integration
-For complex filter modes, captions need to be added differently:
+### Fix 2: Complex Filter Graph Handling
+**File:** `services/video-processor/src/processor.js`
+
+For complex modes (`split_screen`, `three_person`):
+- Now uses `-filter_complex` instead of `-vf`
+- Properly labels output streams for caption overlay
 
 ```javascript
-// Current (broken for complex filters):
-filters = `${filters},ass='${escapedPath}'`;
-
-// Fixed approach:
+// Determine filter type
 const isComplexFilter = ['split_screen', 'three_person'].includes(normalizedMode);
-if (isComplexFilter) {
-  // For complex filters, add ass filter to the final vstack output
-  // The filter chain ends with a labeled output, add ass after it
-  const lastFilter = filters[filters.length - 1];
-  if (lastFilter.includes('vstack')) {
-    filters[filters.length - 1] = `${lastFilter}[out];[out]ass='${escapedPath}'`;
-  }
-} else {
-  filters = `${filters},ass='${escapedPath}'`;
+const filterFlag = isComplexFilter ? '-filter_complex' : '-vf';
+
+// For complex filters, label output and add captions
+if (isComplexFilter && captionFile) {
+  filters = `${filters}[vout];[vout]ass='${escapedCaptionPath}'`;
 }
 ```
 
-#### Fix 1.3: Verify Caption File Exists
-Add verification before FFmpeg command:
-```javascript
-if (captionFile) {
-  if (fs.existsSync(captionFile)) {
-    const fileSize = fs.statSync(captionFile).size;
-    console.log(`[${jobId}] Caption file exists: ${captionFile} (${fileSize} bytes)`);
-  } else {
-    console.error(`[${jobId}] Caption file NOT FOUND: ${captionFile}`);
-  }
-}
+## Verification
+
+Check Cloud Run logs for:
+```
+[jobId] ========== CAPTION GENERATION ==========
+[jobId] Caption style requested: "karaoke"
+[jobId] Generating captions with style: karaoke
+[jobId] Transcribing with Whisper...
+[jobId] Caption file created: /tmp/.../captions.ass (1234 bytes)
+[jobId] Caption generation SUCCESS
 ```
 
-### Files to Modify
-1. `services/video-processor/src/processor.js` - Lines 1193-1212 (filter chain)
-2. `services/video-processor/src/caption-renderer.js` - Add error logging
+If you see `CRITICAL: OPENAI_API_KEY environment variable not set`, the API key is missing.
 
 ---
 
-## Phase 2: Reframe Split - Second Video Issue
+# ISSUE 2: Reframe Split Showing Wrong Video
 
-### Problem Analysis
+## Root Cause Found
 
-**Critical Finding: Secondary source processing is NOT implemented!**
+**CRITICAL BUG:** Server-side YouTube download fails due to bot detection!
 
-The frontend correctly:
-- Tracks `secondarySource` settings (youtubeVideoId, uploadedUrl, position)
-- Passes settings to `wizardProcessClip`
-- Stores in processing job (lines 18313-18321 in functions/index.js)
-
-But the processor:
-- Receives `settings.secondarySource`
-- **NEVER uses it!**
-- `processVideoFile()` only processes single input file
-- `buildFilterChain()` for split_screen just splits the PRIMARY video
-
-**Current `split_screen` behavior:**
-```javascript
-case 'split_screen':
-  // Takes left 1/3 and right 1/3 of the SAME video
-  const splitCropW = Math.floor(inputWidth / 3);
-  filters.push(`split[left][right]`);
-  filters.push(`[left]crop=${splitCropW}:...`);
-  filters.push(`[right]crop=${splitCropW}:...`);
-  filters.push(`[l][r]vstack`);
+The logs showed:
+```
+yt-dlp failed (bot_detection)
+Video Download API key: NOT CONFIGURED
 ```
 
-This is designed for podcast layouts where one video has multiple speakers - NOT for two different videos.
+YouTube blocks all server-side download attempts (yt-dlp, youtubei.js, etc.) even with POT server.
 
-### Implementation Plan
+## Solution Implemented
 
-#### 2.1 Download Secondary Video Source
-Add function to download secondary video:
+**Capture secondary YouTube videos via browser extension** - same method as primary video.
+
+### Implementation Details
+
+**File:** `frontend/video-wizard.html` (lines 11410-11511)
+
+When exporting with a YouTube secondary source:
+1. Detect if secondary source is a YouTube URL
+2. Capture via browser extension (uses user's authenticated session)
+3. Upload to Firebase Storage
+4. Use the storage URL for processing
 
 ```javascript
-// In processor.js
+// ===== SECONDARY VIDEO CAPTURE (if YouTube URL) =====
+if (clipSettings.secondarySource &&
+    clipSettings.secondarySource.enabled &&
+    clipSettings.secondarySource.type === 'youtube' &&
+    clipSettings.secondarySource.youtubeVideoId &&
+    !clipSettings.secondarySource.uploadedUrl) {
 
-async function downloadSecondarySource({ jobId, secondarySource, workDir }) {
-  if (!secondarySource || !secondarySource.enabled) {
-    return null;
-  }
-
-  const secondaryFile = path.join(workDir, 'secondary.mp4');
-
-  if (secondarySource.uploadedUrl) {
-    // Download from Firebase Storage
-    const response = await fetch(secondarySource.uploadedUrl);
-    const buffer = await response.arrayBuffer();
-    fs.writeFileSync(secondaryFile, Buffer.from(buffer));
-  } else if (secondarySource.youtubeVideoId) {
-    // Download YouTube video segment
-    // Need to implement or reuse existing download logic
-    await downloadVideoSegment({
-      jobId,
-      videoId: secondarySource.youtubeVideoId,
-      startTime: 0,
-      endTime: 300, // Or based on primary clip duration
-      workDir,
-      outputFile: secondaryFile
+    // Capture via extension
+    var secCaptureResult = await sendExtensionRequest('captureVideoForWizard', {
+        videoId: secVideoId,
+        youtubeUrl: clipSettings.secondarySource.youtubeUrl,
+        clipStart: secTimeOffset,
+        clipEnd: secTimeOffset + clipDuration,
+        quality: quality,
+        autoCapture: true,
+        autoOpenTab: true  // Auto-open YouTube tab
     });
-  }
 
-  return secondaryFile;
+    // Upload to storage and update settings
+    if (secCaptureResult.success) {
+        clipSettings.secondarySource.uploadedUrl = secStorageUrl;
+    }
 }
 ```
 
-#### 2.2 Multi-Input FFmpeg Filter
-Create new filter chain for multi-source:
+### Why This Works
+
+- Primary video works because it's captured via browser extension
+- Browser extension uses user's authenticated YouTube session
+- Bypasses all bot detection (user is a real human with real cookies)
+- Secondary video now uses the same proven method
+
+### Backend Changes
+
+**File:** `services/video-processor/src/processor.js`
+
+1. Added `downloadSecondarySource()` function
+2. Added `processMultiSourceVideo()` for two-input FFmpeg processing
+3. Uses separate temp directory to avoid overwriting primary video
+4. Supports audio mixing between primary/secondary
 
 ```javascript
-async function processMultiSourceVideo({
-  jobId,
-  primaryFile,
-  secondaryFile,
-  settings,
-  output,
-  workDir
-}) {
-  const outputFile = path.join(workDir, 'processed.mp4');
-  const targetWidth = output?.resolution?.width || 1080;
-  const targetHeight = output?.resolution?.height || 1920;
-  const halfHeight = Math.floor(targetHeight / 2);
-
-  const position = settings.secondarySource?.position || 'bottom';
-  const audioMix = settings.audioMix || { primaryVolume: 100, secondaryVolume: 0 };
-
-  // Build filter complex for two inputs
-  let filterComplex = '';
-
-  if (position === 'top') {
-    filterComplex = `
-      [0:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight}[primary];
-      [1:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight}[secondary];
-      [secondary][primary]vstack[outv]
-    `;
-  } else {
-    // Default: secondary on bottom
-    filterComplex = `
-      [0:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight}[primary];
-      [1:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight}[secondary];
-      [primary][secondary]vstack[outv]
-    `;
-  }
-
-  // Audio mixing
-  const primaryVol = audioMix.primaryVolume / 100;
-  const secondaryVol = audioMix.secondaryVolume / 100;
-  filterComplex += `;
-    [0:a]volume=${primaryVol}[a0];
-    [1:a]volume=${secondaryVol}[a1];
-    [a0][a1]amix=inputs=2:duration=first[outa]
-  `;
-
-  const args = [
-    '-i', primaryFile,
-    '-i', secondaryFile,
-    '-filter_complex', filterComplex,
-    '-map', '[outv]',
-    '-map', '[outa]',
-    '-c:v', 'libx264',
-    '-preset', 'fast',
-    '-crf', '23',
-    '-c:a', 'aac',
-    '-y',
-    outputFile
-  ];
-
-  // Execute FFmpeg...
-}
+// Create subdirectory for secondary download to avoid file conflicts
+const secondaryWorkDir = path.join(workDir, 'secondary_temp');
+fs.mkdirSync(secondaryWorkDir, { recursive: true });
 ```
 
-#### 2.3 Integrate into Main Processing Flow
-Modify `processVideo()` to handle secondary sources:
+---
+
+# ISSUE 3: Slow Capture/Export Process
+
+## Root Cause
+
+Capture speed was changed from 4x to 1x playback to fix audio issues.
+
+**DO NOT CHANGE `PLAYBACK_SPEED = 1`** - This fixed critical audio problems.
+
+## Optimizations Implemented
+
+**File:** `services/video-processor/src/processor.js`
+
+1. Changed FFmpeg preset from `fast` to `veryfast`
+2. Added multi-threading with `-threads 0`
 
 ```javascript
-// After downloading primary video, check for secondary
-let secondaryFile = null;
-if (job.settings?.secondarySource?.enabled) {
-  secondaryFile = await downloadSecondarySource({
-    jobId,
-    secondarySource: job.settings.secondarySource,
-    workDir
-  });
-}
-
-// Use multi-source processing if secondary exists
-if (secondaryFile && ['split_screen', 'broll_split'].includes(job.settings?.reframeMode)) {
-  processedFile = await processMultiSourceVideo({
-    jobId,
-    primaryFile: downloadedFile,
-    secondaryFile,
-    settings: job.settings,
-    output: job.output,
-    workDir
-  });
-} else {
-  // Existing single-source processing
-  processedFile = await processVideoFile({...});
-}
+const args = [
+  '-i', inputFile,
+  filterFlag, filters,
+  '-c:v', 'libx264',
+  '-preset', 'veryfast',     // Optimized: faster encoding
+  '-crf', '23',
+  '-threads', '0',           // Auto-detect optimal thread count
+  // ...
+];
 ```
 
-### Files to Modify
-1. `services/video-processor/src/processor.js` - Add multi-source support
-2. `functions/index.js` - Ensure secondarySource is properly passed (already done)
+Applied to:
+- Main video processing
+- Transition encoding
+- Multi-source processing
 
 ---
 
-## Implementation Priority
+# Files Modified
 
-| Phase | Issue | Complexity | Impact | Priority |
-|-------|-------|------------|--------|----------|
-| 0 | Capture Speed | Medium | High | 1 |
-| 1 | Subtitles | Low | High | 2 |
-| 2 | Split Video | High | Medium | 3 |
-
-### Recommended Order:
-1. **Phase 1 first** - Quick fix, high impact, low risk
-2. **Phase 0 next** - Medium effort, addresses core complaint
-3. **Phase 2 last** - Most complex, requires new functionality
+| File | Changes |
+|------|---------|
+| `services/video-processor/src/processor.js` | Multi-source support, optimized encoding, fixed filter chains |
+| `services/video-processor/src/caption-renderer.js` | Better error logging for missing API key |
+| `frontend/video-wizard.html` | Secondary video capture via browser extension |
 
 ---
 
-## Testing Checklist
+# Debugging
 
-### Phase 0 Tests
-- [ ] Export a 30-second clip and measure total time
-- [ ] Compare with previous export times
-- [ ] Verify audio quality is preserved
-- [ ] Check video quality at different presets
-
-### Phase 1 Tests
-- [ ] Export with karaoke captions - verify text appears
-- [ ] Export with bold captions - verify styling
-- [ ] Export with split_screen mode + captions
-- [ ] Check Cloud Run logs for caption generation errors
-
-### Phase 2 Tests
-- [ ] Create split_screen with YouTube secondary video
-- [ ] Create split_screen with uploaded secondary video
-- [ ] Verify correct video appears in top/bottom positions
-- [ ] Test audio mixing between primary/secondary
-
----
-
-## Rollback Plan
-
-If any phase causes issues:
-1. **Phase 0:** Revert preset change (fast vs veryfast)
-2. **Phase 1:** Caption errors are already non-blocking
-3. **Phase 2:** Feature flag for multi-source processing
-
----
-
-## Environment Variables Required
-
-Ensure these are set in Cloud Run:
+## Check Multi-Source Detection
+Look for in Cloud Run logs:
 ```
-OPENAI_API_KEY=sk-...  # Required for captions
-PTS_RESCALE_ENABLED=true  # For legacy 4x captures
+========== MULTI-SOURCE MODE CHECK ==========
+Reframe mode: split_screen
+Secondary source exists: true
+Secondary enabled: true
+Secondary uploadedUrl: YES  <-- This should be YES after extension capture
+Is multi-source mode: true
+========================================
+```
+
+## Check Secondary Download
+```
+========== SECONDARY SOURCE DOWNLOAD ==========
+Downloading secondary from storage URL...
+Secondary video downloaded: X.XX MB
+Secondary source download SUCCESS
+========================================
+```
+
+## Check Caption Generation
+```
+========== CAPTION GENERATION ==========
+Caption style requested: "karaoke"
+Caption file created: /tmp/.../captions.ass (1234 bytes)
+Caption generation SUCCESS
+========================================
+```
+
+---
+
+# Common Issues & Solutions
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Subtitles missing | `OPENAI_API_KEY` not set | Add to Cloud Run env vars |
+| Split shows same video twice | Secondary YouTube download failed | Extension now captures secondary video |
+| Secondary download fails with "bot_detection" | YouTube blocks server-side downloads | Use uploaded file or extension capture |
+| Captions missing on split_screen | Wrong FFmpeg filter flag | Fixed: uses `-filter_complex` for complex modes |
+
+---
+
+# Testing Checklist
+
+- [x] Export with captions - verify subtitles appear
+- [x] Export split_screen with YouTube secondary - verify two different videos
+- [x] Export split_screen with uploaded secondary - verify correct positioning
+- [x] Check Cloud Run logs show caption generation success
+- [x] Verify encoding uses `veryfast` preset
+
+---
+
+# Commits
+
+```
+dc135f9 feat: Capture secondary YouTube videos via browser extension
+fa05ac2 fix: Critical fixes for secondary source and improved debugging
+f0e71be fix: Implement capture/export optimization and fix subtitle/split issues
+e5bfd19 docs: Add comprehensive optimization plan for capture/export issues
 ```
