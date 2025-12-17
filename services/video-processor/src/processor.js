@@ -698,19 +698,20 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
                     if (audioVideoDelta < 0.1) {
                       // Audio has same compression - rescale it too
-                      audioFilter = `atempo=${(1/scaleFactor).toFixed(6)}`;
-                      // Note: atempo only supports 0.5-2.0 range, may need chaining for larger factors
-                      if (scaleFactor > 2.0) {
-                        // For 4x scaling, need to chain: atempo=0.5,atempo=0.5
-                        const atempoValue = 1 / scaleFactor;
-                        if (atempoValue < 0.5) {
-                          // Chain multiple atempo filters
-                          const chainCount = Math.ceil(Math.log(scaleFactor) / Math.log(2));
-                          const singleAtempo = Math.pow(atempoValue, 1/chainCount);
-                          audioFilter = Array(chainCount).fill(`atempo=${singleAtempo.toFixed(6)}`).join(',');
-                        }
-                      }
-                      console.log(`[${jobId}] AUDIO: Same compression detected, applying atempo filter`);
+                      // IMPORTANT: The audio was captured at 4x playback speed, so it's BOTH
+                      // faster AND higher pitched (like a tape played too fast).
+                      //
+                      // atempo PRESERVES pitch (wrong - keeps high pitch)
+                      // asetrate CHANGES pitch (correct - lowers pitch back to normal)
+                      //
+                      // Use asetrate to slow down AND lower pitch, then aresample to restore sample rate.
+                      // Formula: asetrate=RATE/scaleFactor,aresample=RATE
+                      // For 4x: asetrate=48000/4=12000,aresample=48000
+                      const sampleRate = 48000; // WebM typically uses 48kHz (Opus codec)
+                      const newRate = Math.round(sampleRate / scaleFactor);
+                      audioFilter = `asetrate=${newRate},aresample=${sampleRate}`;
+                      console.log(`[${jobId}] AUDIO: Using asetrate (${sampleRate}→${newRate}→${sampleRate}) for speed+pitch correction`);
+                      console.log(`[${jobId}] AUDIO: Same compression detected, applying asetrate filter`);
                     } else {
                       console.log(`[${jobId}] AUDIO: Different compression ratio - may cause A/V desync`);
                       // Don't filter audio - it might already be correct
