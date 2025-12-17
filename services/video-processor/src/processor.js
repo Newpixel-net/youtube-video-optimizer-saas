@@ -697,21 +697,20 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                     console.log(`[${jobId}] AUDIO PTS ratio: ${audioRatio.toFixed(3)}, video ratio: ${ptsRatio.toFixed(3)}, delta: ${audioVideoDelta.toFixed(3)}`);
 
                     if (audioVideoDelta < 0.1) {
-                      // Audio has same compression - rescale it too
-                      // IMPORTANT: The audio was captured at 4x playback speed, so it's BOTH
-                      // faster AND higher pitched (like a tape played too fast).
+                      // Audio captured via captureStream() while video played at 4x.
+                      // The video element was muted during capture.
                       //
-                      // atempo PRESERVES pitch (wrong - keeps high pitch)
-                      // asetrate CHANGES pitch (correct - lowers pitch back to normal)
+                      // CRITICAL INSIGHT: The audio CONTENT is at normal speed!
+                      // Only the TIMESTAMPS are compressed (same as video).
                       //
-                      // Use asetrate to slow down AND lower pitch, then aresample to restore sample rate.
-                      // Formula: asetrate=RATE/scaleFactor,aresample=RATE
-                      // For 4x: asetrate=48000/4=12000,aresample=48000
-                      const sampleRate = 48000; // WebM typically uses 48kHz (Opus codec)
-                      const newRate = Math.round(sampleRate / scaleFactor);
-                      audioFilter = `asetrate=${newRate},aresample=${sampleRate}`;
-                      console.log(`[${jobId}] AUDIO: Using asetrate (${sampleRate}→${newRate}→${sampleRate}) for speed+pitch correction`);
-                      console.log(`[${jobId}] AUDIO: Same compression detected, applying asetrate filter`);
+                      // - atempo: changes content speed (WRONG - makes audio 4x slower)
+                      // - asetrate: changes content speed + pitch (WRONG)
+                      // - asetpts: changes ONLY timestamps (CORRECT - same as setpts for video)
+                      //
+                      // Use asetpts to stretch audio timestamps without changing content speed.
+                      audioFilter = `asetpts=PTS*${scaleFactor.toFixed(6)}`;
+                      console.log(`[${jobId}] AUDIO: Using asetpts (timestamps only, not content speed)`);
+                      console.log(`[${jobId}] AUDIO: Same compression detected, applying asetpts filter`);
                     } else {
                       console.log(`[${jobId}] AUDIO: Different compression ratio - may cause A/V desync`);
                       // Don't filter audio - it might already be correct
