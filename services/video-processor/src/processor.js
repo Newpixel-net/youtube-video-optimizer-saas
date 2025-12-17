@@ -106,7 +106,9 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       // - mediarecorder_capture: Legacy capture method
       // - mediarecorder_local: Captured but server unavailable (frontend uploaded)
       // - browser_download: Direct download method
-      const uploadedCaptureSources = ['mediarecorder_primary', 'mediarecorder_capture', 'mediarecorder_local', 'browser_download'];
+      // - source_asset: Video stored as sourceAsset in project (v2.7+)
+      // - extension_capture_fallback: Fallback capture from extension at export time
+      const uploadedCaptureSources = ['mediarecorder_primary', 'mediarecorder_capture', 'mediarecorder_local', 'browser_download', 'source_asset', 'extension_capture_fallback'];
       const isUploadedCapture = uploadedCaptureSources.includes(extensionStreamSource) &&
                                  job.extensionStreamData?.uploadedToStorage;
 
@@ -122,8 +124,16 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           }
 
           const buffer = await response.arrayBuffer();
-          // MediaRecorder produces webm, browser_download produces mp4
-          const fileExt = extensionStreamSource === 'browser_download' ? 'mp4' : 'webm';
+          // Determine file extension from URL or source type
+          // - MediaRecorder produces webm
+          // - browser_download and source_asset could be mp4 or webm
+          const videoUrl = job.extensionStreamData.videoUrl || '';
+          let fileExt = 'webm';
+          if (videoUrl.includes('.mp4') || extensionStreamSource === 'browser_download') {
+            fileExt = 'mp4';
+          } else if (videoUrl.includes('.webm')) {
+            fileExt = 'webm';
+          }
           const capturedFile = path.join(workDir, `captured.${fileExt}`);
           fs.writeFileSync(capturedFile, Buffer.from(buffer));
           console.log(`[${jobId}] Downloaded ${extensionStreamSource}: ${fs.statSync(capturedFile).size} bytes`);
