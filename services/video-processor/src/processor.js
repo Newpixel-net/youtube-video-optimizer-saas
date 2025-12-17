@@ -195,22 +195,24 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
             // For webm files, we MUST re-encode because -c copy doesn't work reliably
             // Also need to fix timestamps which are often broken in MediaRecorder webm
-            // CRITICAL: -r 30 BEFORE -i forces correct timestamp interpretation
+            // Use setpts filter to force linear timestamps, then trim
             // For mp4 files, try stream copy first for speed
             const useReencode = fileExt === 'webm';
 
             const ffmpegArgs = [
-              ...(useReencode ? ['-fflags', '+genpts+igndts'] : []),  // Fix webm timestamps
-              ...(useReencode ? ['-r', '30'] : []),  // BEFORE -i: Force INPUT at 30fps for webm
-              '-ss', String(relativeStart),  // Seek before input for faster processing
               '-i', capturedFile,
-              '-t', String(duration),        // Duration instead of -to for accuracy
               ...(useReencode
-                ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
+                ? ['-vf', `setpts=N/30/TB`,     // Force linear timestamps at 30fps
+                   '-af', 'asetpts=N/SR/TB',    // Force linear audio timestamps
+                   '-ss', String(relativeStart),// Seek AFTER filter (works on fixed timestamps)
+                   '-t', String(duration),
+                   '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                    '-c:a', 'aac', '-b:a', '192k',
-                   '-r', '30',               // Output at 30fps
-                   '-vsync', 'cfr']          // Constant frame rate output
-                : ['-c', 'copy']),
+                   '-r', '30',
+                   '-vsync', 'cfr']
+                : ['-ss', String(relativeStart),
+                   '-t', String(duration),
+                   '-c', 'copy']),
               '-avoid_negative_ts', 'make_zero',
               '-y',
               downloadedFile
@@ -256,18 +258,18 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               // MediaRecorder webm files have BROKEN timestamps causing 4x speed issues
               // The webm timestamps are compressed (30s content = 7.5s timestamps)
               //
-              // CRITICAL: -r 30 BEFORE -i forces FFmpeg to interpret input at 30fps
-              // This ignores the broken webm timestamps entirely
-              // Without this, FFmpeg trusts the webm timestamps and outputs wrong duration
+              // FIX: Use setpts filter to FORCE linear timestamps based on frame count
+              // setpts=N/30/TB means: timestamp = frame_number / 30fps / timebase
+              // This completely ignores the broken webm timestamps
               await new Promise((resolve, reject) => {
                 const ffmpeg = spawn('ffmpeg', [
-                  '-fflags', '+genpts+igndts',  // Regenerate PTS, ignore broken DTS
-                  '-r', '30',                   // BEFORE -i: Force INPUT interpretation at 30fps
                   '-i', capturedFile,
+                  '-vf', 'setpts=N/30/TB',        // Force linear video timestamps at 30fps
+                  '-af', 'asetpts=N/SR/TB',       // Force linear audio timestamps
+                  '-r', '30',                      // Output at 30fps
                   '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                   '-c:a', 'aac', '-b:a', '192k',
-                  '-r', '30',                   // AFTER filters: Ensure 30fps output
-                  '-vsync', 'cfr',              // Constant frame rate output
+                  '-vsync', 'cfr',                 // Constant frame rate
                   '-y',
                   downloadedFile
                 ]);
@@ -282,7 +284,7 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                     resolve();
                   } else {
                     // Conversion failed, try using webm directly
-                    console.warn(`[${jobId}] webm->mp4 conversion failed, using webm directly`);
+                    console.warn(`[${jobId}] webm->mp4 conversion failed: ${stderr.slice(-200)}`);
                     downloadedFile = capturedFile;
                     resolve();
                   }
