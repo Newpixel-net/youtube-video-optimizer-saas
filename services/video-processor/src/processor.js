@@ -342,12 +342,14 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
     // Step 3: Apply transitions if specified
     let finalFile = processedFile;
-    if (job.settings.introTransition !== 'none' || job.settings.outroTransition !== 'none') {
+    const introTransition = job.settings?.introTransition || 'none';
+    const outroTransition = job.settings?.outroTransition || 'none';
+    if (introTransition !== 'none' || outroTransition !== 'none') {
       finalFile = await applyTransitions({
         jobId,
         inputFile: processedFile,
-        introTransition: job.settings.introTransition,
-        outroTransition: job.settings.outroTransition,
+        introTransition,
+        outroTransition,
         workDir
       });
     }
@@ -524,22 +526,25 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   const videoInfo = await getVideoInfo(inputFile);
   console.log(`[${jobId}] Input video: ${videoInfo.width}x${videoInfo.height}, ${videoInfo.duration}s`);
 
-  // Calculate crop for 9:16 aspect ratio
-  const targetWidth = output.resolution.width;   // 720 or 1080
-  const targetHeight = output.resolution.height; // 1280 or 1920
+  // Calculate crop for 9:16 aspect ratio (with safe defaults)
+  const targetWidth = output?.resolution?.width || 1080;   // Default to 1080
+  const targetHeight = output?.resolution?.height || 1920; // Default to 1920
   const targetAspect = 9 / 16;
+
+  // Ensure settings has defaults to prevent crashes
+  const safeSettings = settings || {};
 
   // Generate captions if requested
   let captionFile = null;
-  if (settings.captionStyle && settings.captionStyle !== 'none') {
-    console.log(`[${jobId}] Generating captions with style: ${settings.captionStyle}`);
+  if (safeSettings.captionStyle && safeSettings.captionStyle !== 'none') {
+    console.log(`[${jobId}] Generating captions with style: ${safeSettings.captionStyle}`);
     try {
       captionFile = await generateCaptions({
         jobId,
         videoFile: inputFile,
         workDir,
-        captionStyle: settings.captionStyle,
-        customStyle: settings.customCaptionStyle
+        captionStyle: safeSettings.captionStyle,
+        customStyle: safeSettings.customCaptionStyle
       });
     } catch (captionError) {
       console.error(`[${jobId}] Caption generation failed (continuing without captions):`, captionError.message);
@@ -552,11 +557,11 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     inputHeight: videoInfo.height,
     targetWidth,
     targetHeight,
-    reframeMode: settings.reframeMode,
-    cropPosition: settings.cropPosition || 'center',
-    autoZoom: settings.autoZoom,
-    vignette: settings.vignette,
-    colorGrade: settings.colorGrade
+    reframeMode: safeSettings.reframeMode || 'auto_center',
+    cropPosition: safeSettings.cropPosition || 'center',
+    autoZoom: safeSettings.autoZoom,
+    vignette: safeSettings.vignette,
+    colorGrade: safeSettings.colorGrade
   });
 
   // Add subtitle filter if captions were generated
@@ -569,9 +574,12 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
   // Build audio filters
   const audioFilters = buildAudioFilters({
-    enhanceAudio: settings.enhanceAudio,
-    removeFiller: settings.removeFiller
+    enhanceAudio: safeSettings.enhanceAudio,
+    removeFiller: safeSettings.removeFiller
   });
+
+  // Get FPS with safe default
+  const targetFps = output?.fps || 30;
 
   return new Promise((resolve, reject) => {
     const args = [
@@ -583,7 +591,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       '-crf', '23',
       '-c:a', 'aac',
       '-b:a', '128k',
-      '-r', output.fps.toString(),
+      '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
       outputFile
