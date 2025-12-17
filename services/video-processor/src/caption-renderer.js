@@ -105,7 +105,8 @@ async function transcribeWithWhisper(jobId, audioFile) {
   // Check if OpenAI API key is available
   const client = getOpenAIClient();
   if (!client) {
-    console.log(`[${jobId}] OPENAI_API_KEY not set, skipping transcription`);
+    console.error(`[${jobId}] CRITICAL: OPENAI_API_KEY environment variable not set - captions will be disabled`);
+    console.error(`[${jobId}] To enable captions, set OPENAI_API_KEY in Cloud Run environment variables`);
     return null;
   }
 

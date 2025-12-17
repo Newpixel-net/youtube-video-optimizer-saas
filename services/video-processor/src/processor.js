@@ -22,6 +22,224 @@ import {
 } from './video-cache.js';
 import { generateCaptions } from './caption-renderer.js';
 
+/**
+ * Download secondary source video for multi-source split screen
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {Object} params.secondarySource - Secondary source configuration
+ * @param {string} params.workDir - Working directory
+ * @param {number} params.primaryDuration - Duration of primary clip (for matching)
+ * @returns {Promise<string|null>} Path to downloaded secondary video, or null
+ */
+async function downloadSecondarySource({ jobId, secondarySource, workDir, primaryDuration }) {
+  if (!secondarySource || !secondarySource.enabled) {
+    return null;
+  }
+
+  console.log(`[${jobId}] Downloading secondary source: type=${secondarySource.type}`);
+  const secondaryFile = path.join(workDir, 'secondary.mp4');
+
+  try {
+    if (secondarySource.uploadedUrl) {
+      // Download from Firebase Storage (uploaded video)
+      console.log(`[${jobId}] Downloading secondary from storage: ${secondarySource.uploadedUrl.substring(0, 60)}...`);
+      const response = await fetch(secondarySource.uploadedUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download secondary video: ${response.status}`);
+      }
+      const buffer = await response.arrayBuffer();
+      fs.writeFileSync(secondaryFile, Buffer.from(buffer));
+      console.log(`[${jobId}] Secondary video downloaded: ${fs.statSync(secondaryFile).size} bytes`);
+
+    } else if (secondarySource.youtubeVideoId) {
+      // Download from YouTube
+      console.log(`[${jobId}] Downloading secondary YouTube video: ${secondarySource.youtubeVideoId}`);
+      const downloadedPath = await downloadVideoSegment({
+        jobId: `${jobId}-secondary`,
+        videoId: secondarySource.youtubeVideoId,
+        startTime: secondarySource.timeOffset || 0,
+        endTime: (secondarySource.timeOffset || 0) + primaryDuration,
+        workDir
+      });
+
+      // Move/rename to secondary.mp4
+      if (downloadedPath !== secondaryFile) {
+        fs.renameSync(downloadedPath, secondaryFile);
+      }
+      console.log(`[${jobId}] Secondary YouTube video downloaded: ${fs.statSync(secondaryFile).size} bytes`);
+
+    } else {
+      console.log(`[${jobId}] No valid secondary source URL or video ID`);
+      return null;
+    }
+
+    return secondaryFile;
+
+  } catch (error) {
+    console.error(`[${jobId}] Failed to download secondary source:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Process video with two sources for split screen modes
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {string} params.primaryFile - Path to primary video file
+ * @param {string} params.secondaryFile - Path to secondary video file
+ * @param {Object} params.settings - Processing settings
+ * @param {Object} params.output - Output specifications
+ * @param {string} params.workDir - Working directory
+ * @returns {Promise<string>} Path to processed output file
+ */
+async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, settings, output, workDir }) {
+  const outputFile = path.join(workDir, 'processed.mp4');
+
+  console.log(`[${jobId}] Processing multi-source video`);
+  console.log(`[${jobId}] Primary: ${primaryFile}`);
+  console.log(`[${jobId}] Secondary: ${secondaryFile}`);
+
+  // Get video info for both inputs
+  const primaryInfo = await getVideoInfo(primaryFile);
+  const secondaryInfo = await getVideoInfo(secondaryFile);
+
+  console.log(`[${jobId}] Primary: ${primaryInfo.width}x${primaryInfo.height}, ${primaryInfo.duration}s`);
+  console.log(`[${jobId}] Secondary: ${secondaryInfo.width}x${secondaryInfo.height}, ${secondaryInfo.duration}s`);
+
+  const targetWidth = output?.resolution?.width || 1080;
+  const targetHeight = output?.resolution?.height || 1920;
+  const halfHeight = Math.floor(targetHeight / 2);
+  const targetFps = output?.fps || 30;
+
+  const safeSettings = settings || {};
+  const position = safeSettings.secondarySource?.position || 'bottom';
+  const audioMix = safeSettings.audioMix || {
+    primaryVolume: 100,
+    secondaryVolume: 0,
+    primaryMuted: false,
+    secondaryMuted: true
+  };
+
+  // Generate captions if requested (from primary audio)
+  let captionFile = null;
+  if (safeSettings.captionStyle && safeSettings.captionStyle !== 'none') {
+    console.log(`[${jobId}] Generating captions with style: ${safeSettings.captionStyle}`);
+    try {
+      captionFile = await generateCaptions({
+        jobId,
+        videoFile: primaryFile,
+        workDir,
+        captionStyle: safeSettings.captionStyle,
+        customStyle: safeSettings.customCaptionStyle
+      });
+    } catch (captionError) {
+      console.error(`[${jobId}] Caption generation failed:`, captionError.message);
+    }
+  }
+
+  // Build complex filter graph for two inputs
+  // [0:v] = primary video, [1:v] = secondary video
+  // [0:a] = primary audio, [1:a] = secondary audio
+  let filterComplex = '';
+
+  // Determine video positions based on settings
+  // 'top' means secondary on top, primary on bottom
+  // 'bottom' means primary on top, secondary on bottom (default)
+  if (position === 'top') {
+    filterComplex = `
+      [0:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight},setsar=1[primary];
+      [1:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight},setsar=1[secondary];
+      [secondary][primary]vstack=inputs=2[vout]
+    `.replace(/\n\s*/g, '');
+  } else {
+    // Default: primary on top, secondary on bottom
+    filterComplex = `
+      [0:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight},setsar=1[primary];
+      [1:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight},setsar=1[secondary];
+      [primary][secondary]vstack=inputs=2[vout]
+    `.replace(/\n\s*/g, '');
+  }
+
+  // Add caption filter if captions were generated
+  if (captionFile && fs.existsSync(captionFile)) {
+    const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
+    filterComplex += `;[vout]ass='${escapedPath}'[vfinal]`;
+    console.log(`[${jobId}] Adding captions to multi-source output`);
+  } else {
+    // Just rename the output
+    filterComplex = filterComplex.replace('[vout]', '[vfinal]');
+  }
+
+  // Audio mixing
+  const primaryVol = audioMix.primaryMuted ? 0 : (audioMix.primaryVolume || 100) / 100;
+  const secondaryVol = audioMix.secondaryMuted ? 0 : (audioMix.secondaryVolume || 0) / 100;
+
+  // Add audio filters
+  if (primaryVol > 0 && secondaryVol > 0) {
+    // Mix both audio tracks
+    filterComplex += `;[0:a]volume=${primaryVol}[a0];[1:a]volume=${secondaryVol}[a1];[a0][a1]amix=inputs=2:duration=first[aout]`;
+  } else if (primaryVol > 0) {
+    // Only primary audio
+    filterComplex += `;[0:a]volume=${primaryVol}[aout]`;
+  } else if (secondaryVol > 0) {
+    // Only secondary audio
+    filterComplex += `;[1:a]volume=${secondaryVol}[aout]`;
+  } else {
+    // Both muted - still need audio output (silent)
+    filterComplex += `;[0:a]volume=0[aout]`;
+  }
+
+  console.log(`[${jobId}] Multi-source filter complex: ${filterComplex.substring(0, 200)}...`);
+
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-i', primaryFile,
+      '-i', secondaryFile,
+      '-filter_complex', filterComplex,
+      '-map', '[vfinal]',
+      '-map', '[aout]',
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-crf', '23',
+      '-threads', '0',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-r', targetFps.toString(),
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    ];
+
+    console.log(`[${jobId}] FFmpeg multi-source command: ffmpeg ${args.slice(0, 10).join(' ')}...`);
+
+    const ffmpegProcess = spawn('ffmpeg', args);
+
+    let stderr = '';
+    ffmpegProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+      const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
+      if (match) {
+        console.log(`[${jobId}] FFmpeg progress: ${match[1]}`);
+      }
+    });
+
+    ffmpegProcess.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outputFile)) {
+        console.log(`[${jobId}] Multi-source processing completed: ${outputFile}`);
+        resolve(outputFile);
+      } else {
+        console.error(`[${jobId}] Multi-source FFmpeg failed. Code: ${code}`);
+        console.error(`[${jobId}] stderr: ${stderr.slice(-500)}`);
+        reject(new Error(`Multi-source video processing failed: ${code}`));
+      }
+    });
+
+    ffmpegProcess.on('error', (error) => {
+      reject(new Error(`Failed to start FFmpeg: ${error.message}`));
+    });
+  });
+}
+
 // Feature flag for PTS rescaling fix
 // Set PTS_RESCALE_ENABLED=true to enable timestamp correction for MediaRecorder captures
 const PTS_RESCALE_ENABLED = process.env.PTS_RESCALE_ENABLED === 'true';
@@ -968,14 +1186,59 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
     await updateProgress(jobRef, 30, 'Processing video...');
 
-    // Step 2: Process the video (crop to 9:16, apply effects)
-    const processedFile = await processVideoFile({
-      jobId,
-      inputFile: downloadedFile,
-      settings: job.settings,
-      output: job.output,
-      workDir
-    });
+    // Step 2: Check for secondary source (multi-source split screen)
+    let processedFile;
+    const secondarySource = job.settings?.secondarySource;
+    const reframeMode = job.settings?.reframeMode || 'auto_center';
+    const isMultiSourceMode = secondarySource?.enabled &&
+                               (secondarySource.uploadedUrl || secondarySource.youtubeVideoId) &&
+                               ['split_screen', 'broll_split'].includes(reframeMode);
+
+    if (isMultiSourceMode) {
+      // Multi-source split screen processing
+      console.log(`[${jobId}] Multi-source mode detected: ${reframeMode}`);
+      await updateProgress(jobRef, 35, 'Downloading secondary video...');
+
+      const primaryDuration = (job.endTime || 60) - (job.startTime || 0);
+      const secondaryFile = await downloadSecondarySource({
+        jobId,
+        secondarySource,
+        workDir,
+        primaryDuration
+      });
+
+      if (secondaryFile) {
+        await updateProgress(jobRef, 50, 'Processing split screen...');
+        processedFile = await processMultiSourceVideo({
+          jobId,
+          primaryFile: downloadedFile,
+          secondaryFile,
+          settings: job.settings,
+          output: job.output,
+          workDir
+        });
+      } else {
+        // Fallback to single-source if secondary download failed
+        console.log(`[${jobId}] Secondary source download failed, falling back to single-source`);
+        await updateProgress(jobRef, 40, 'Processing video (single source fallback)...');
+        processedFile = await processVideoFile({
+          jobId,
+          inputFile: downloadedFile,
+          settings: job.settings,
+          output: job.output,
+          workDir
+        });
+      }
+    } else {
+      // Standard single-source processing
+      processedFile = await processVideoFile({
+        jobId,
+        inputFile: downloadedFile,
+        settings: job.settings,
+        output: job.output,
+        workDir
+      });
+    }
 
     await updateProgress(jobRef, 70, 'Applying effects...');
 
@@ -1190,13 +1453,18 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     }
   }
 
+  // Determine if this is a complex filter mode (uses labeled streams)
+  const reframeMode = safeSettings.reframeMode || 'auto_center';
+  const normalizedMode = reframeMode === 'broll_split' ? 'b_roll' : reframeMode;
+  const isComplexFilter = ['split_screen', 'three_person'].includes(normalizedMode);
+
   // Build FFmpeg filter chain
   let filters = buildFilterChain({
     inputWidth: videoInfo.width,
     inputHeight: videoInfo.height,
     targetWidth,
     targetHeight,
-    reframeMode: safeSettings.reframeMode || 'auto_center',
+    reframeMode: reframeMode,
     cropPosition: safeSettings.cropPosition || 'center',
     autoZoom: safeSettings.autoZoom,
     vignette: safeSettings.vignette,
@@ -1204,11 +1472,29 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   });
 
   // Add subtitle filter if captions were generated
-  if (captionFile && fs.existsSync(captionFile)) {
-    // Escape special characters in path for FFmpeg
-    const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
-    filters = `${filters},ass='${escapedPath}'`;
-    console.log(`[${jobId}] Adding captions from: ${captionFile}`);
+  let escapedCaptionPath = null;
+  if (captionFile) {
+    if (fs.existsSync(captionFile)) {
+      const captionSize = fs.statSync(captionFile).size;
+      console.log(`[${jobId}] Caption file verified: ${captionFile} (${captionSize} bytes)`);
+      // Escape special characters in path for FFmpeg
+      escapedCaptionPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
+
+      if (isComplexFilter) {
+        // For complex filter graphs (split_screen, three_person), we need to:
+        // 1. Label the final output of the filter chain
+        // 2. Apply ASS filter to that labeled output
+        // The filter ends with 'vstack' - we need to add output label and ASS filter
+        filters = `${filters}[vout];[vout]ass='${escapedCaptionPath}'`;
+        console.log(`[${jobId}] Adding captions to complex filter chain`);
+      } else {
+        // For simple filter chains, just append the ASS filter
+        filters = `${filters},ass='${escapedCaptionPath}'`;
+        console.log(`[${jobId}] Adding captions to simple filter chain`);
+      }
+    } else {
+      console.error(`[${jobId}] Caption file NOT FOUND: ${captionFile} - video will be exported without captions`);
+    }
   }
 
   // Build audio filters
@@ -1221,13 +1507,18 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   const targetFps = output?.fps || 30;
 
   return new Promise((resolve, reject) => {
+    // For complex filter graphs with labeled streams, use -filter_complex
+    // For simple linear chains, use -vf
+    const filterFlag = isComplexFilter ? '-filter_complex' : '-vf';
+
     const args = [
       '-i', inputFile,
-      '-vf', filters,
+      filterFlag, filters,
       '-af', audioFilters,
       '-c:v', 'libx264',
-      '-preset', 'fast',
+      '-preset', 'veryfast',     // Optimized: faster encoding with minimal quality loss
       '-crf', '23',
+      '-threads', '0',           // Auto-detect optimal thread count
       '-c:a', 'aac',
       '-b:a', '128k',
       '-r', targetFps.toString(),
@@ -1452,8 +1743,9 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
       '-i', inputFile,
       '-vf', filters.join(','),
       '-c:v', 'libx264',
-      '-preset', 'fast',
+      '-preset', 'veryfast',     // Optimized: faster encoding
       '-crf', '23',
+      '-threads', '0',           // Auto-detect optimal thread count
       '-c:a', 'copy',
       '-y',
       outputFile
