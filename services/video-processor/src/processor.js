@@ -667,7 +667,18 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                 const ptsDelta = Math.abs(videoPtsInfo.ptsSpan - realWorldDuration);
                 const ptsRatio = realWorldDuration / videoPtsInfo.ptsSpan;
 
+                // IMPORTANT: The browser extension captures at 4x playback speed to reduce capture time.
+                // This means a 30-second clip is captured in ~7.5 seconds of real time.
+                // MediaRecorder writes timestamps for the actual capture time (~7.5s), not the video time (30s).
+                // We MUST rescale PTS to match the intended clip duration.
+                //
+                // Example: 23s clip → captured in ~5.75s → PTS span ~5.7s → ratio ~4x
+                // The "25 fps" we see is NOT natural - it's 6 fps captured at 4x speed.
+
+                const inferredFps = videoPtsInfo.packetCount / videoPtsInfo.ptsSpan;
+
                 console.log(`[${jobId}] PTS ANALYSIS: ptsSpan=${videoPtsInfo.ptsSpan.toFixed(3)}s, realWorld=${realWorldDuration.toFixed(2)}s, ratio=${ptsRatio.toFixed(3)}, delta=${ptsDelta.toFixed(3)}s`);
+                console.log(`[${jobId}] FRAME RATE CHECK: ${videoPtsInfo.packetCount} frames / ${videoPtsInfo.ptsSpan.toFixed(3)}s = ${inferredFps.toFixed(2)} fps (likely 4x speedup artifact)`);
 
                 if (ptsDelta > realWorldDuration * 0.1) {
                   // PTS span differs by more than 10% - rescaling needed
