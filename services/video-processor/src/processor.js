@@ -23,6 +23,111 @@ import {
 import { generateCaptions } from './caption-renderer.js';
 
 /**
+ * DIAGNOSTIC: Probe PTS timestamps from a video file
+ * This function extracts actual PTS values to identify where timing invariants are violated.
+ *
+ * The invariant: PTS span (last_PTS - first_PTS) must equal real-world capture duration
+ *
+ * @param {string} jobId - Job ID for logging
+ * @param {string} filePath - Path to video file
+ * @param {string} stage - Description of pipeline stage (e.g., "RAW_WEBM", "AFTER_TRANSCODE")
+ * @returns {Object} Diagnostic data
+ */
+function probePTS(jobId, filePath, stage) {
+  console.log(`[${jobId}] ========== PTS DIAGNOSTIC: ${stage} ==========`);
+  console.log(`[${jobId}] File: ${filePath}`);
+
+  try {
+    // Get comprehensive stream and format info
+    const probeCmd = `ffprobe -v error -show_entries stream=codec_type,duration,nb_frames,avg_frame_rate,time_base,start_time,start_pts -show_entries format=duration,start_time -of json "${filePath}"`;
+    const probeResult = execSync(probeCmd, { encoding: 'utf8', timeout: 30000 });
+    const probeData = JSON.parse(probeResult);
+
+    const result = {
+      stage,
+      file: filePath,
+      format: {
+        duration: parseFloat(probeData.format?.duration || 0),
+        startTime: parseFloat(probeData.format?.start_time || 0)
+      },
+      video: null,
+      audio: null
+    };
+
+    for (const stream of probeData.streams || []) {
+      const streamInfo = {
+        duration: parseFloat(stream.duration || 0),
+        nbFrames: parseInt(stream.nb_frames || 0),
+        timeBase: stream.time_base,
+        startTime: parseFloat(stream.start_time || 0),
+        startPts: parseInt(stream.start_pts || 0),
+        avgFrameRate: stream.avg_frame_rate
+      };
+
+      // Calculate PTS span if we have frame count and timebase
+      if (stream.time_base && streamInfo.nbFrames > 0) {
+        const [tbNum, tbDen] = stream.time_base.split('/').map(Number);
+        const timebaseValue = tbNum / tbDen;
+        streamInfo.timebaseSeconds = timebaseValue;
+      }
+
+      if (stream.codec_type === 'video') {
+        // Parse frame rate
+        if (stream.avg_frame_rate) {
+          const [frNum, frDen] = stream.avg_frame_rate.split('/').map(Number);
+          streamInfo.fps = frDen ? frNum / frDen : frNum;
+          streamInfo.computedDuration = streamInfo.nbFrames / streamInfo.fps;
+        }
+        result.video = streamInfo;
+      } else if (stream.codec_type === 'audio') {
+        result.audio = streamInfo;
+      }
+    }
+
+    // Log diagnostic output
+    console.log(`[${jobId}] FORMAT: duration=${result.format.duration.toFixed(3)}s, startTime=${result.format.startTime.toFixed(3)}s`);
+
+    if (result.video) {
+      console.log(`[${jobId}] VIDEO: duration=${result.video.duration.toFixed(3)}s, frames=${result.video.nbFrames}, fps=${result.video.fps?.toFixed(2) || 'N/A'}, timebase=${result.video.timeBase}`);
+      console.log(`[${jobId}] VIDEO: computedDuration (frames/fps)=${result.video.computedDuration?.toFixed(3) || 'N/A'}s, startTime=${result.video.startTime.toFixed(3)}s`);
+    } else {
+      console.log(`[${jobId}] VIDEO: No video stream found`);
+    }
+
+    if (result.audio) {
+      console.log(`[${jobId}] AUDIO: duration=${result.audio.duration.toFixed(3)}s, timebase=${result.audio.timeBase}, startTime=${result.audio.startTime.toFixed(3)}s`);
+    } else {
+      console.log(`[${jobId}] AUDIO: No audio stream found`);
+    }
+
+    // Key diagnostic: Compare video duration to audio duration
+    if (result.video && result.audio) {
+      const avDelta = Math.abs(result.video.duration - result.audio.duration);
+      console.log(`[${jobId}] A/V DELTA: |video - audio| = ${avDelta.toFixed(3)}s`);
+      if (avDelta > 0.1) {
+        console.log(`[${jobId}] WARNING: A/V duration mismatch exceeds 0.1s threshold`);
+      }
+    }
+
+    // Key diagnostic: Compare computed duration to reported duration
+    if (result.video?.computedDuration && result.video?.duration) {
+      const compDelta = Math.abs(result.video.computedDuration - result.video.duration);
+      console.log(`[${jobId}] COMPUTED vs REPORTED: |computed - reported| = ${compDelta.toFixed(3)}s`);
+      if (compDelta > 0.1) {
+        console.log(`[${jobId}] WARNING: Computed duration differs from reported duration`);
+      }
+    }
+
+    console.log(`[${jobId}] ========== END PTS DIAGNOSTIC: ${stage} ==========`);
+    return result;
+
+  } catch (err) {
+    console.error(`[${jobId}] PTS DIAGNOSTIC FAILED: ${err.message}`);
+    return { stage, error: err.message };
+  }
+}
+
+/**
  * Validate video A/V sync and duration consistency
  * Checks that video and audio durations match within tolerance
  * @param {string} jobId - Job ID for logging
@@ -237,6 +342,10 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           fs.writeFileSync(capturedFile, Buffer.from(buffer));
           console.log(`[${jobId}] Downloaded ${extensionStreamSource}: ${fs.statSync(capturedFile).size} bytes`);
 
+          // DIAGNOSTIC STAGE 1: Probe raw captured file BEFORE any processing
+          // This tells us if MediaRecorder produced correct timestamps
+          probePTS(jobId, capturedFile, 'STAGE_1_RAW_CAPTURE');
+
           // Probe the captured file to get duration, frame count, and audio duration
           // These are needed to calculate correct fps for timestamp correction
           let capturedFileDuration = null;
@@ -392,17 +501,9 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                   if (code === 0 && fileSize > 1000) {
                     console.log(`[${jobId}] Converted to mp4: ${fileSize} bytes`);
 
-                    // Validate output A/V sync
-                    try {
-                      const validation = await validateVideoSync(jobId, downloadedFile);
-                      if (!validation.valid) {
-                        console.error(`[${jobId}] VALIDATION FAILED: ${validation.error}`);
-                        // Log detailed info for debugging
-                        console.error(`[${jobId}] This indicates original WebM timestamps may be broken`);
-                      }
-                    } catch (valErr) {
-                      console.warn(`[${jobId}] Validation check failed: ${valErr.message}`);
-                    }
+                    // DIAGNOSTIC STAGE 2: Probe AFTER transcode (WebM → MP4)
+                    // Compare with STAGE_1 to see if transcode altered timestamps
+                    probePTS(jobId, downloadedFile, 'STAGE_2_AFTER_TRANSCODE');
 
                     try { fs.unlinkSync(capturedFile); } catch (e) {}
                     resolve();
