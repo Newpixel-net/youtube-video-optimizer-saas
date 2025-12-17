@@ -667,9 +667,23 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                 const ptsDelta = Math.abs(videoPtsInfo.ptsSpan - realWorldDuration);
                 const ptsRatio = realWorldDuration / videoPtsInfo.ptsSpan;
 
-                console.log(`[${jobId}] PTS ANALYSIS: ptsSpan=${videoPtsInfo.ptsSpan.toFixed(3)}s, realWorld=${realWorldDuration.toFixed(2)}s, ratio=${ptsRatio.toFixed(3)}, delta=${ptsDelta.toFixed(3)}s`);
+                // CRITICAL: Check if the inferred frame rate from PTS is reasonable
+                // If frameCount / ptsSpan gives a reasonable fps (15-60), timestamps are likely CORRECT
+                // and we should NOT rescale. Only rescale if fps is absurdly high (>100).
+                const inferredFps = videoPtsInfo.packetCount / videoPtsInfo.ptsSpan;
 
-                if (ptsDelta > realWorldDuration * 0.1) {
+                console.log(`[${jobId}] PTS ANALYSIS: ptsSpan=${videoPtsInfo.ptsSpan.toFixed(3)}s, realWorld=${realWorldDuration.toFixed(2)}s, ratio=${ptsRatio.toFixed(3)}, delta=${ptsDelta.toFixed(3)}s`);
+                console.log(`[${jobId}] FRAME RATE CHECK: ${videoPtsInfo.packetCount} frames / ${videoPtsInfo.ptsSpan.toFixed(3)}s = ${inferredFps.toFixed(2)} fps`);
+
+                // Heuristic: If inferred fps is between 10-120, timestamps are probably correct
+                // Only rescale if fps is absurdly high (compressed timestamps) or very low
+                const fpsIsReasonable = inferredFps >= 10 && inferredFps <= 120;
+
+                if (fpsIsReasonable) {
+                  console.log(`[${jobId}] DECISION: Inferred fps (${inferredFps.toFixed(2)}) is reasonable (10-120 range) - timestamps likely CORRECT`);
+                  console.log(`[${jobId}] SKIPPING rescaling - capture duration may differ from clip duration`);
+                  useRescaling = false;
+                } else if (ptsDelta > realWorldDuration * 0.1) {
                   // PTS span differs by more than 10% - rescaling needed
                   useRescaling = true;
                   scaleFactor = ptsRatio;
