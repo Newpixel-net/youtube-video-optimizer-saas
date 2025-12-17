@@ -632,7 +632,7 @@ async function handleCaptureForWizard(message) {
 
     let captureResult;
     try {
-      captureResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
+      captureResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime, bridgeRequestId);
       console.log(`[EXT][CAPTURE] MediaRecorder result: success=${captureResult?.success} error=${captureResult?.error || 'none'}`);
     } catch (captureError) {
       console.error(`[EXT][CAPTURE] MediaRecorder exception: ${captureError.message}`);
@@ -2361,8 +2361,9 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
  * @param {string} youtubeUrl - Full YouTube URL
  * @param {number} [requestedStartTime] - Optional segment start time in seconds
  * @param {number} [requestedEndTime] - Optional segment end time in seconds
+ * @param {string} [bridgeRequestId] - Optional bridge request ID for wizard-bridge storage key
  */
-async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedStartTime, requestedEndTime) {
+async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedStartTime, requestedEndTime, bridgeRequestId) {
   const hasSegmentRequest = requestedStartTime !== undefined && requestedEndTime !== undefined;
   const segmentInfo = hasSegmentRequest
     ? `segment ${requestedStartTime}s-${requestedEndTime}s`
@@ -2758,10 +2759,15 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // executeScript with world: 'MAIN' doesn't properly wait for Promises that resolve via callbacks
 
     // Generate a unique capture ID for this request
+    // If bridgeRequestId is provided, use it as the storage key so wizard-bridge can find the result
     const captureId = `capture_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // CRITICAL: Use bridgeRequestId for storage if provided - this is the key wizard-bridge polls for
+    const storageKey = bridgeRequestId || captureId;
 
-    // Clear any previous result for this capture ID
-    await chrome.storage.local.remove([`capture_result_${captureId}`]);
+    console.log(`[EXT][CAPTURE] captureId=${captureId}, storageKey=${storageKey}`);
+
+    // Clear any previous result for this storage key
+    await chrome.storage.local.remove([`bridge_result_${storageKey}`, `capture_result_${captureId}`]);
 
     // Set up a Promise that resolves when we receive the capture result
     // Uses BOTH message passing AND chrome.storage polling for reliability
@@ -2778,22 +2784,24 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }, captureTimeout);
 
       // Poll chrome.storage as fallback (in case message passing fails)
+      // CRITICAL: Poll for bridge_result_${storageKey} which is what the relay stores
       const storagePoller = setInterval(async () => {
         if (resolved) {
           clearInterval(storagePoller);
           return;
         }
         try {
-          const stored = await chrome.storage.local.get([`capture_result_${captureId}`]);
-          const result = stored[`capture_result_${captureId}`];
+          // Check for result stored by relay with the storageKey (bridgeRequestId if provided)
+          const stored = await chrome.storage.local.get([`bridge_result_${storageKey}`]);
+          const result = stored[`bridge_result_${storageKey}`];
           if (result) {
-            console.log(`[EXT][CAPTURE] Retrieved result from storage (fallback)`);
+            console.log(`[EXT][CAPTURE] Retrieved result from storage (key=bridge_result_${storageKey})`);
             resolved = true;
             clearTimeout(messageTimeout);
             clearInterval(storagePoller);
             chrome.runtime.onMessage.removeListener(messageHandler);
             // Clean up storage
-            chrome.storage.local.remove([`capture_result_${captureId}`]);
+            chrome.storage.local.remove([`bridge_result_${storageKey}`]);
             if (result.error) {
               rejectCapture(new Error(result.error));
             } else {
@@ -2830,7 +2838,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             sendResponse({ received: true });
 
             // Clean up storage (in case relay also stored it)
-            chrome.storage.local.remove([`capture_result_${captureId}`]);
+            chrome.storage.local.remove([`bridge_result_${storageKey}`]);
 
             if (message.error) {
               rejectCapture(new Error(message.error));
@@ -2855,9 +2863,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       await chrome.scripting.executeScript({
         target: { tabId: youtubeTab.id },
         world: 'ISOLATED',
-        func: (cid) => {
+        func: (cid, bridgeStorageKey) => {
           console.log(`[EXT][RELAY] ====== RELAY SCRIPT STARTING v2.7.3 ======`);
-          console.log(`[EXT][RELAY] captureId=${cid}`);
+          console.log(`[EXT][RELAY] captureId=${cid}, bridgeStorageKey=${bridgeStorageKey}`);
 
           // Remove any existing listener to avoid duplicates
           if (window.__captureMessageHandler) {
@@ -2884,17 +2892,18 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             clearInterval(window.__captureLocalStoragePoller);
           }
 
-          // CRITICAL: Store result in chrome.storage FIRST (reliable backup)
-          const storageKey = `capture_result_${cid}`;
+          // CRITICAL: Store result in chrome.storage with bridgeStorageKey so wizard-bridge can find it
+          // This is the key that wizard-bridge polls for: bridge_result_${bridgeRequestId}
+          const chromeStorageKey = `bridge_result_${bridgeStorageKey}`;
           const resultData = {
             result: result,
             error: error,
             timestamp: Date.now()
           };
 
-          console.log(`[EXT][RELAY] Handling result from ${source}, storing in chrome.storage (key=${storageKey})`);
-          chrome.storage.local.set({ [storageKey]: resultData }).then(() => {
-            console.log(`[EXT][RELAY] Result stored in chrome.storage`);
+          console.log(`[EXT][RELAY] Handling result from ${source}, storing in chrome.storage (key=${chromeStorageKey})`);
+          chrome.storage.local.set({ [chromeStorageKey]: resultData }).then(() => {
+            console.log(`[EXT][RELAY] Result stored in chrome.storage (key=${chromeStorageKey})`);
           }).catch(e => {
             console.error(`[EXT][RELAY] Failed to store in chrome.storage:`, e.message);
           });
@@ -2968,9 +2977,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         console.log(`[EXT][RELAY] Message relay installed for capture ${cid} (with storage + localStorage backup)`);
         return 'relay_installed';
       },
-      args: [captureId]
+      args: [captureId, storageKey]
     });
-      console.log(`[EXT][CAPTURE] Relay script injection successful`);
+      console.log(`[EXT][CAPTURE] Relay script injection successful (storageKey=${storageKey})`);
     } catch (relayInjectionError) {
       console.error(`[EXT][CAPTURE] Relay script injection failed: ${relayInjectionError.message}`);
       throw new Error(`Failed to inject relay script: ${relayInjectionError.message}`);
