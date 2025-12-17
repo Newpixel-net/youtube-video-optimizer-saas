@@ -698,26 +698,24 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
                     if (audioVideoDelta < 0.1) {
                       // Audio captured via captureStream() while video played at 4x.
-                      // The video element was MUTED during capture.
+                      // Extension now uses volume=0 (not muted=true) to capture audio at 4x.
                       //
-                      // CRITICAL DISCOVERY: When muted, captureStream() captures audio
-                      // at NORMAL SPEED (not 4x). The audio CONTENT is correct duration,
-                      // only the TIMESTAMPS are compressed (same as video).
+                      // Audio content is at 4x speed (7.5s of chipmunk audio for 30s video).
+                      // Need to slow it down by 4x using atempo to get normal-speed audio.
                       //
-                      // Evidence from user testing:
-                      // - atempo (slow down): made audio way too slow → content was NOT 4x
-                      // - asetpts (timestamps only): audio ended early → timestamps wrong
+                      // atempo range is 0.5-2.0, so for 0.25 (4x slowdown) we chain:
+                      // atempo=0.5,atempo=0.5 = 0.25
                       //
-                      // SOLUTION: Use asetpts=N/SR/TB to regenerate timestamps based on
-                      // actual sample count. This creates correct timestamps matching
-                      // the true audio duration without changing content speed.
-                      //
-                      // N = sample number, SR = sample rate, TB = timebase
-                      // This formula generates PTS = sample_number / sample_rate
-                      //
-                      audioFilter = 'asetpts=N/SR/TB';
-                      console.log(`[${jobId}] AUDIO: Using asetpts=N/SR/TB to regenerate timestamps from sample count`);
-                      console.log(`[${jobId}] AUDIO: Content is normal speed (muted capture), only timestamps need fixing`);
+                      const targetAtempo = 1 / scaleFactor;  // e.g., 0.25 for 4x slowdown
+                      let chainCount = 1;
+                      // Find minimum chains needed (each atempo must be >= 0.5)
+                      while (Math.pow(targetAtempo, 1/chainCount) < 0.5 && chainCount < 10) {
+                        chainCount++;
+                      }
+                      const singleAtempo = Math.pow(targetAtempo, 1/chainCount);
+                      audioFilter = Array(chainCount).fill(`atempo=${singleAtempo.toFixed(6)}`).join(',');
+                      console.log(`[${jobId}] AUDIO: targetAtempo=${targetAtempo.toFixed(4)}, chains=${chainCount}, each=${singleAtempo.toFixed(4)}`);
+                      console.log(`[${jobId}] AUDIO: Using atempo to slow down 4x-speed captured audio`);
                     } else {
                       console.log(`[${jobId}] AUDIO: Different compression ratio - may cause A/V desync`);
                       // Don't filter audio - it might already be correct

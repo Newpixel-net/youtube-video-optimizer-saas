@@ -1959,7 +1959,9 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
       // Set playback speed and start
       videoElement.playbackRate = PLAYBACK_SPEED;
-      videoElement.muted = true;
+      // Use volume=0 instead of muted=true to allow audio capture at 4x speed
+      // muted=true can prevent audio track from being captured correctly
+      videoElement.volume = 0;
 
       // Start recording
       const startRecording = () => {
