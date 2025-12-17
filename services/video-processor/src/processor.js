@@ -65,10 +65,14 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       console.log(`[${jobId}] Downloaded uploaded video: ${fs.statSync(downloadedFile).size} bytes`);
 
       // For uploaded videos, we need to extract the segment
-      if (job.startTime > 0 || job.endTime < job.duration) {
+      // Note: Always extract if duration is unknown (undefined) to be safe
+      const needsExtraction = job.startTime > 0 ||
+                              (job.duration && job.endTime < job.duration) ||
+                              (!job.duration && job.endTime); // Extract if duration unknown but endTime specified
+      if (needsExtraction) {
         const segmentFile = path.join(workDir, 'segment.mp4');
         await new Promise((resolve, reject) => {
-          const { spawn } = require('child_process');
+          // spawn is already imported at top of file (ES module)
           const ffmpeg = spawn('ffmpeg', [
             '-i', downloadedFile,
             '-ss', String(job.startTime),
