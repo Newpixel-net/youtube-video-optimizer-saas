@@ -5,6 +5,10 @@
  * Security: Runs in isolated content script context, validates all data
  */
 
+// Guard against duplicate injection
+if (typeof window.__YVO_CONTENT_SCRIPT_LOADED__ === 'undefined') {
+  window.__YVO_CONTENT_SCRIPT_LOADED__ = true;
+
 // State
 let videoInfo = null;
 let streamUrls = null;
@@ -740,3 +744,5 @@ if (document.readyState === 'loading') {
 }
 
 console.log('YouTube Video Optimizer content script loaded');
+
+} // End of duplicate injection guard
