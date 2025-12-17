@@ -148,16 +148,39 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           fs.writeFileSync(capturedFile, Buffer.from(buffer));
           console.log(`[${jobId}] Downloaded ${extensionStreamSource}: ${fs.statSync(capturedFile).size} bytes`);
 
+          // Probe the captured file to get its actual duration
+          let capturedFileDuration = null;
+          try {
+            const probeResult = execSync(`ffprobe -v quiet -print_format json -show_format "${capturedFile}"`, { encoding: 'utf8' });
+            const probeData = JSON.parse(probeResult);
+            capturedFileDuration = parseFloat(probeData.format?.duration) || null;
+            console.log(`[${jobId}] Captured file duration: ${capturedFileDuration?.toFixed(2)}s`);
+          } catch (probeErr) {
+            console.warn(`[${jobId}] Could not probe captured file: ${probeErr.message}`);
+          }
+
           // Check if we need to extract a specific segment from the captured video
           // The extension may have captured more than needed (e.g., full 5 minutes)
           // while the clip only needs a portion (e.g., 30 seconds at 2:00)
-          const capturedStart = job.extensionStreamData?.captureStartTime || 0;
-          const capturedEnd = job.extensionStreamData?.captureEndTime || 300;
           const clipStart = job.startTime || 0;
           const clipEnd = job.endTime || (clipStart + 60);
+          const clipDuration = clipEnd - clipStart;
+
+          // Smart detection: if captured file duration is close to clip duration,
+          // the capture IS the clip segment - no extraction needed
+          const capturedMatchesClip = capturedFileDuration &&
+            Math.abs(capturedFileDuration - clipDuration) < 5; // within 5 seconds
+
+          // Only use explicit capture timestamps if they were actually set
+          const hasExplicitCaptureTime = job.extensionStreamData?.captureStartTime !== undefined;
+          const capturedStart = hasExplicitCaptureTime ? job.extensionStreamData.captureStartTime : clipStart;
+          const capturedEnd = hasExplicitCaptureTime ? (job.extensionStreamData.captureEndTime || capturedStart + 300) : clipEnd;
+
+          console.log(`[${jobId}] Clip: ${clipStart}s-${clipEnd}s (${clipDuration}s), Capture: ${capturedStart}s-${capturedEnd}s, matchesClip=${capturedMatchesClip}`);
 
           // Calculate if segment extraction is needed
-          const needsExtraction = (clipStart > capturedStart) || (clipEnd < capturedEnd);
+          const needsExtraction = !capturedMatchesClip &&
+            ((clipStart > capturedStart) || (clipEnd < capturedEnd));
 
           if (needsExtraction && clipStart >= capturedStart && clipEnd <= capturedEnd) {
             // Extract the specific segment from the captured video
@@ -217,9 +240,45 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               try { fs.unlinkSync(capturedFile); } catch (e) {}
             }
           } else {
-            // Use the captured file directly (segment already matches or no extraction needed)
-            downloadedFile = capturedFile;
-            console.log(`[${jobId}] Using captured video directly (segment matches or full capture)`);
+            // Capture matches clip - no segment extraction needed
+            // But webm files still need to be converted to mp4 for reliable processing
+            if (fileExt === 'webm') {
+              console.log(`[${jobId}] Converting webm to mp4 for reliable processing...`);
+              downloadedFile = path.join(workDir, 'source.mp4');
+
+              await new Promise((resolve, reject) => {
+                const ffmpeg = spawn('ffmpeg', [
+                  '-i', capturedFile,
+                  '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
+                  '-c:a', 'aac', '-b:a', '192k',
+                  '-y',
+                  downloadedFile
+                ]);
+
+                let stderr = '';
+                ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
+                ffmpeg.on('close', (code) => {
+                  const fileSize = fs.existsSync(downloadedFile) ? fs.statSync(downloadedFile).size : 0;
+                  if (code === 0 && fileSize > 1000) {
+                    console.log(`[${jobId}] Converted to mp4: ${fileSize} bytes`);
+                    try { fs.unlinkSync(capturedFile); } catch (e) {}
+                    resolve();
+                  } else {
+                    // Conversion failed, try using webm directly
+                    console.warn(`[${jobId}] webm->mp4 conversion failed, using webm directly`);
+                    downloadedFile = capturedFile;
+                    resolve();
+                  }
+                });
+                ffmpeg.on('error', () => {
+                  downloadedFile = capturedFile;
+                  resolve();
+                });
+              });
+            } else {
+              downloadedFile = capturedFile;
+              console.log(`[${jobId}] Using captured video directly (segment matches clip)`);
+            }
           }
         } catch (captureError) {
           console.warn(`[${jobId}] Extension capture download failed: ${captureError.message}`);
