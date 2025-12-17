@@ -698,28 +698,26 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
                     if (audioVideoDelta < 0.1) {
                       // Audio captured via captureStream() while video played at 4x.
-                      // The video element was muted (no speaker output), but captureStream()
-                      // still captures the audio track at 4x playback speed.
+                      // The video element was MUTED during capture.
                       //
-                      // KEY DIFFERENCE from video:
-                      // - Video: setpts stretches timestamps, frames are "held" longer → works
-                      // - Audio: asetpts stretches timestamps, but samples can't be "held" → fails
-                      //         Audio just plays at original rate and ends early
+                      // CRITICAL DISCOVERY: When muted, captureStream() captures audio
+                      // at NORMAL SPEED (not 4x). The audio CONTENT is correct duration,
+                      // only the TIMESTAMPS are compressed (same as video).
                       //
-                      // SOLUTION: Use atempo to actually stretch the audio content.
-                      // atempo=0.25 slows audio by 4x (matches video stretch).
-                      // atempo range is 0.5-2.0, so we chain: atempo=0.5,atempo=0.5 = 0.25
+                      // Evidence from user testing:
+                      // - atempo (slow down): made audio way too slow → content was NOT 4x
+                      // - asetpts (timestamps only): audio ended early → timestamps wrong
                       //
-                      const targetAtempo = 1 / scaleFactor;  // e.g., 0.25 for 4x stretch
-                      let chainCount = 1;
-                      // Find minimum chains needed (each atempo must be >= 0.5)
-                      while (Math.pow(targetAtempo, 1/chainCount) < 0.5 && chainCount < 10) {
-                        chainCount++;
-                      }
-                      const singleAtempo = Math.pow(targetAtempo, 1/chainCount);
-                      audioFilter = Array(chainCount).fill(`atempo=${singleAtempo.toFixed(6)}`).join(',');
-                      console.log(`[${jobId}] AUDIO: targetAtempo=${targetAtempo.toFixed(4)}, chains=${chainCount}, each=${singleAtempo.toFixed(4)}`);
-                      console.log(`[${jobId}] AUDIO: Using atempo chain to stretch content (not just timestamps)`);
+                      // SOLUTION: Use asetpts=N/SR/TB to regenerate timestamps based on
+                      // actual sample count. This creates correct timestamps matching
+                      // the true audio duration without changing content speed.
+                      //
+                      // N = sample number, SR = sample rate, TB = timebase
+                      // This formula generates PTS = sample_number / sample_rate
+                      //
+                      audioFilter = 'asetpts=N/SR/TB';
+                      console.log(`[${jobId}] AUDIO: Using asetpts=N/SR/TB to regenerate timestamps from sample count`);
+                      console.log(`[${jobId}] AUDIO: Content is normal speed (muted capture), only timestamps need fixing`);
                     } else {
                       console.log(`[${jobId}] AUDIO: Different compression ratio - may cause A/V desync`);
                       // Don't filter audio - it might already be correct
