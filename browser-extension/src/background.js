@@ -1404,19 +1404,15 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
   // Check if an ad is currently playing
   function isAdPlaying() {
-    // Check for YouTube ad indicators
-    const adIndicators = [
-      document.querySelector('.ytp-ad-player-overlay'),
-      document.querySelector('.ytp-ad-text'),
-      document.querySelector('.video-ads.ytp-ad-module'),
-      document.querySelector('.ytp-ad-preview-container'),
-      document.querySelector('[class*="ytp-ad-"]'),
-      document.querySelector('.ad-showing')
-    ];
+    // v2.7.2: Improved ad detection to reduce false positives
+    // Only check for ACTIVE ad indicators, not residual UI elements
 
-    const hasAdIndicator = adIndicators.some(el => el !== null);
+    // Primary check: Video container has ad-showing class (most reliable)
+    const videoContainer = document.querySelector('.html5-video-player');
+    const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
+                       videoContainer?.classList.contains('ad-interrupting');
 
-    // Also check player state
+    // Secondary check: YouTube Player API (very reliable when available)
     const ytPlayer = document.querySelector('#movie_player');
     let isAdFromPlayer = false;
     if (ytPlayer && typeof ytPlayer.getAdState === 'function') {
@@ -1426,14 +1422,32 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       } catch (e) {}
     }
 
-    // Check if video has ad class
-    const videoContainer = document.querySelector('.html5-video-player');
-    const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
-                       videoContainer?.classList.contains('ad-interrupting');
+    // Tertiary check: Active ad UI elements (visible and interactable)
+    // Only check for elements that are VISIBLE and indicate an ACTIVE ad
+    const activeAdIndicators = [
+      // Ad countdown/skip container (only visible during ads)
+      document.querySelector('.ytp-ad-preview-container:not([style*="display: none"])'),
+      // Ad text overlay (only shown during ads)
+      document.querySelector('.ytp-ad-text:not([style*="display: none"])'),
+      // Ad player overlay (only shown during video ads)
+      document.querySelector('.ytp-ad-player-overlay-instream-info'),
+      // Ad skip button container (indicates skippable ad is playing)
+      document.querySelector('.ytp-ad-skip-button-container:not([style*="display: none"])')
+    ];
+    const hasActiveAdIndicator = activeAdIndicators.some(el => el !== null && el.offsetParent !== null);
 
-    const isAd = hasAdIndicator || isAdFromPlayer || hasAdClass;
+    // v2.7.2: Require at least 2 indicators OR player API confirmation for ad detection
+    // This reduces false positives from residual UI elements
+    let indicatorCount = 0;
+    if (hasAdClass) indicatorCount++;
+    if (isAdFromPlayer) indicatorCount++;
+    if (hasActiveAdIndicator) indicatorCount++;
+
+    // Consider it an ad if: player API says so, OR container has ad class, OR 2+ indicators
+    const isAd = isAdFromPlayer || hasAdClass || (hasActiveAdIndicator && indicatorCount >= 2);
+
     if (isAd) {
-      console.log(`[EXT][CAPTURE] Ad detected! hasAdIndicator=${hasAdIndicator}, isAdFromPlayer=${isAdFromPlayer}, hasAdClass=${hasAdClass}`);
+      console.log(`[EXT][CAPTURE] Ad detected! hasAdClass=${hasAdClass}, isAdFromPlayer=${isAdFromPlayer}, hasActiveAdIndicator=${hasActiveAdIndicator}`);
     }
     return isAd;
   }
@@ -1442,13 +1456,48 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
   async function waitForAdToFinish(maxWaitMs = 60000) {
     const startWait = Date.now();
     let adDetected = false;
+    let skipAttempts = 0;
+
+    // v2.7.2: Extended list of skip button selectors (YouTube changes these frequently)
+    const skipButtonSelectors = [
+      '.ytp-skip-ad-button',                    // New 2024+ skip button
+      '.ytp-ad-skip-button',                    // Standard skip button
+      '.ytp-ad-skip-button-modern',             // Modern skip button variant
+      '.ytp-ad-skip-button-container button',   // Button inside container
+      'button.ytp-ad-skip-button',              // Explicit button element
+      '[class*="skip-button"]',                 // Wildcard for skip buttons
+      '.ytp-ad-skip-button-slot button',        // Slot-based skip button
+      '.videoAdUiSkipButton',                   // Alternative skip button class
+      '[data-skip-button]',                     // Data attribute based
+      '.ytp-ad-skip'                            // Short class name
+    ];
+
+    // Helper to try all skip button selectors
+    const tryClickSkipButton = () => {
+      for (const selector of skipButtonSelectors) {
+        const btn = document.querySelector(selector);
+        if (btn && btn.offsetParent !== null) {
+          console.log(`[EXT][CAPTURE] Skip button found (${selector}), clicking...`);
+          // Try multiple click methods
+          btn.click();
+          btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          // Also try focusing and pressing Enter
+          try {
+            btn.focus();
+            btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+          } catch (e) {}
+          return true;
+        }
+      }
+      return false;
+    };
 
     while (Date.now() - startWait < maxWaitMs) {
       if (!isAdPlaying()) {
         if (adDetected) {
           console.log(`[EXT][CAPTURE] Ad finished after ${Date.now() - startWait}ms`);
           // Wait a bit for main video to resume
-          await sleep(1500);
+          await sleep(2000);
         }
         return true;
       }
@@ -1456,26 +1505,32 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       if (!adDetected) {
         adDetected = true;
         console.log(`[EXT][CAPTURE] Ad is playing, waiting for it to finish...`);
+      }
 
-        // Try to skip ad if skip button is available
-        const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, [class*="skip-button"]');
-        if (skipButton && skipButton.offsetParent !== null) {
-          console.log(`[EXT][CAPTURE] Skip button found, clicking...`);
-          skipButton.click();
-          await sleep(500);
+      // Try to skip ad every 500ms for more aggressive skipping
+      skipAttempts++;
+      if (tryClickSkipButton()) {
+        await sleep(500);
+        // Check immediately after clicking
+        if (!isAdPlaying()) {
+          console.log(`[EXT][CAPTURE] Ad skipped successfully after ${Date.now() - startWait}ms`);
+          await sleep(2000);
+          return true;
         }
       }
 
-      // Keep checking for skip button
-      const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern');
-      if (skipButton && skipButton.offsetParent !== null) {
-        skipButton.click();
+      // Log progress every 10 seconds
+      if (skipAttempts % 20 === 0) {
+        console.log(`[EXT][CAPTURE] Still waiting for ad... (${Math.round((Date.now() - startWait) / 1000)}s elapsed)`);
       }
 
-      await sleep(1000);
+      await sleep(500); // Check every 500ms instead of 1000ms for faster response
     }
 
-    return false; // Timed out waiting for ad
+    // v2.7.2: Return true anyway after timeout - ad likely ended or we should try capturing anyway
+    console.warn(`[EXT][CAPTURE] Ad wait timeout (${maxWaitMs}ms) - proceeding with capture anyway`);
+    await sleep(1000);
+    return true; // Return true to proceed instead of blocking
   }
 
   // Check if video is actually playing and has data
@@ -1525,15 +1580,15 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       // First check for ads
       if (isAdPlaying()) {
         console.log(`[EXT][CAPTURE] Ad detected while waiting for video`);
-        const adFinished = await waitForAdToFinish(45000);
-        if (!adFinished) {
-          throw new Error('Ad is still playing after 45 seconds. Please wait for the ad to finish and try again.');
-        }
+        // v2.7.2: waitForAdToFinish now always returns true to proceed anyway after timeout
+        await waitForAdToFinish(45000);
         // Reset the video element reference after ad
         videoEl = document.querySelector('video.html5-main-video') || document.querySelector('video');
         if (!videoEl) {
           throw new Error('Video element lost after ad finished');
         }
+        // Give extra time for main video to start after ad
+        await sleep(1000);
       }
 
       // Check if video is ready
@@ -1599,9 +1654,11 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
     // FIRST: Check for ads before anything else
     if (isAdPlaying()) {
       console.log(`[EXT][CAPTURE] Ad detected at start, waiting for it to finish...`);
-      const adFinished = await waitForAdToFinish(45000);
-      if (!adFinished) {
-        throw new Error('Ad is still playing. Please wait for the ad to finish and try again.');
+      // v2.7.2: waitForAdToFinish now always returns true to proceed anyway after timeout
+      await waitForAdToFinish(45000);
+      // Double-check ad status after waiting
+      if (isAdPlaying()) {
+        console.warn(`[EXT][CAPTURE] Ad may still be playing, but proceeding with capture anyway`);
       }
     }
 
@@ -2372,24 +2429,15 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }
     }
 
-    // v2.7.0: Check for ads FIRST before attempting video loading
+    // v2.7.2: Check for ads FIRST before attempting video loading
+    // Improved ad detection to reduce false positives
     console.log(`[EXT][CAPTURE] Checking for ads before video loading...`);
     try {
       const adCheckResult = await chrome.scripting.executeScript({
         target: { tabId: youtubeTab.id },
         world: 'MAIN',
         func: () => {
-          // Check for YouTube ad indicators
-          const adIndicators = [
-            document.querySelector('.ytp-ad-player-overlay'),
-            document.querySelector('.ytp-ad-text'),
-            document.querySelector('.video-ads.ytp-ad-module'),
-            document.querySelector('.ytp-ad-preview-container'),
-            document.querySelector('[class*="ytp-ad-"]'),
-            document.querySelector('.ad-showing')
-          ];
-          const hasAdIndicator = adIndicators.some(el => el !== null);
-
+          // v2.7.2: Improved ad detection - only check for ACTIVE ad indicators
           const videoContainer = document.querySelector('.html5-video-player');
           const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
                              videoContainer?.classList.contains('ad-interrupting');
@@ -2402,68 +2450,103 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             } catch (e) {}
           }
 
+          // Only check for VISIBLE ad elements
+          const activeAdIndicators = [
+            document.querySelector('.ytp-ad-preview-container:not([style*="display: none"])'),
+            document.querySelector('.ytp-ad-text:not([style*="display: none"])'),
+            document.querySelector('.ytp-ad-player-overlay-instream-info'),
+            document.querySelector('.ytp-ad-skip-button-container:not([style*="display: none"])')
+          ];
+          const hasActiveAdIndicator = activeAdIndicators.some(el => el !== null && el.offsetParent !== null);
+
+          // v2.7.2: Require player API OR container class for reliable detection
+          const isAdPlaying = isAdFromPlayer || hasAdClass || (hasActiveAdIndicator);
+
           return {
-            isAdPlaying: hasAdIndicator || hasAdClass || isAdFromPlayer,
-            hasAdIndicator,
+            isAdPlaying,
             hasAdClass,
-            isAdFromPlayer
+            isAdFromPlayer,
+            hasActiveAdIndicator
           };
         }
       });
 
       const adStatus = adCheckResult[0]?.result;
       if (adStatus?.isAdPlaying) {
-        console.log(`[EXT][CAPTURE] Ad is currently playing, waiting for it to finish...`);
+        console.log(`[EXT][CAPTURE] Ad detected (hasAdClass=${adStatus.hasAdClass}, isAdFromPlayer=${adStatus.isAdFromPlayer}), waiting...`);
 
-        // Wait for ad to finish (up to 60 seconds)
+        // Wait for ad to finish (up to 90 seconds for longer unskippable ads)
         let adWaitAttempts = 0;
-        const MAX_AD_WAIT = 60;
+        const MAX_AD_WAIT = 90; // Increased from 60s
+        const CHECK_INTERVAL = 500; // Check every 500ms for faster response
 
-        while (adWaitAttempts < MAX_AD_WAIT) {
+        while (adWaitAttempts < MAX_AD_WAIT * 2) { // Double iterations since we check every 500ms
           adWaitAttempts++;
 
-          // Try to skip ad
+          // v2.7.2: Try multiple skip button selectors more aggressively
           await chrome.scripting.executeScript({
             target: { tabId: youtubeTab.id },
             world: 'MAIN',
             func: () => {
-              const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, [class*="skip-button"]');
-              if (skipButton && skipButton.offsetParent !== null) {
-                console.log('[YVO] Clicking skip button');
-                skipButton.click();
+              const skipButtonSelectors = [
+                '.ytp-skip-ad-button',
+                '.ytp-ad-skip-button',
+                '.ytp-ad-skip-button-modern',
+                '.ytp-ad-skip-button-container button',
+                'button.ytp-ad-skip-button',
+                '[class*="skip-button"]',
+                '.ytp-ad-skip-button-slot button',
+                '.videoAdUiSkipButton',
+                '.ytp-ad-skip'
+              ];
+              for (const selector of skipButtonSelectors) {
+                const btn = document.querySelector(selector);
+                if (btn && btn.offsetParent !== null) {
+                  console.log(`[YVO] Clicking skip button (${selector})`);
+                  btn.click();
+                  btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                  break;
+                }
               }
             }
           });
 
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, CHECK_INTERVAL));
 
-          // Check if ad is still playing
+          // Check if ad is still playing using reliable indicators
           const adRecheck = await chrome.scripting.executeScript({
             target: { tabId: youtubeTab.id },
             world: 'MAIN',
             func: () => {
-              const adIndicators = [
-                document.querySelector('.ytp-ad-player-overlay'),
-                document.querySelector('.ad-showing'),
-                document.querySelector('.ytp-ad-text')
-              ];
-              return adIndicators.some(el => el !== null);
+              const videoContainer = document.querySelector('.html5-video-player');
+              const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
+                                 videoContainer?.classList.contains('ad-interrupting');
+
+              const ytPlayer = document.querySelector('#movie_player');
+              let isAdFromPlayer = false;
+              if (ytPlayer && typeof ytPlayer.getAdState === 'function') {
+                try { isAdFromPlayer = ytPlayer.getAdState() === 1; } catch (e) {}
+              }
+
+              return hasAdClass || isAdFromPlayer;
             }
           });
 
           if (!adRecheck[0]?.result) {
-            console.log(`[EXT][CAPTURE] Ad finished after ${adWaitAttempts}s`);
-            await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for video to resume
+            console.log(`[EXT][CAPTURE] Ad finished after ${Math.round(adWaitAttempts * CHECK_INTERVAL / 1000)}s`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for video to resume
             break;
           }
 
-          if (adWaitAttempts % 10 === 0) {
-            console.log(`[EXT][CAPTURE] Still waiting for ad to finish (${adWaitAttempts}s)...`);
+          // Log progress every 10 seconds
+          if (adWaitAttempts % 20 === 0) {
+            console.log(`[EXT][CAPTURE] Still waiting for ad to finish (${Math.round(adWaitAttempts * CHECK_INTERVAL / 1000)}s)...`);
           }
         }
 
-        if (adWaitAttempts >= MAX_AD_WAIT) {
-          console.warn(`[EXT][CAPTURE] Ad still playing after ${MAX_AD_WAIT}s, proceeding anyway`);
+        if (adWaitAttempts >= MAX_AD_WAIT * 2) {
+          console.warn(`[EXT][CAPTURE] Ad wait timeout (${MAX_AD_WAIT}s), proceeding with capture anyway`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       } else {
         console.log(`[EXT][CAPTURE] No ad detected, proceeding with video loading`);
