@@ -704,10 +704,16 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                         // For 4x scaling, need to chain: atempo=0.5,atempo=0.5
                         const atempoValue = 1 / scaleFactor;
                         if (atempoValue < 0.5) {
-                          // Chain multiple atempo filters
-                          const chainCount = Math.ceil(Math.log(scaleFactor) / Math.log(2));
+                          // Find minimum number of chains where each atempo >= 0.5
+                          // For 4x (atempo=0.25): 2 chains of 0.5 work perfectly (0.5*0.5=0.25)
+                          // Previous code used ceil(log2) which gave 3 chains for 4.015x - too slow!
+                          let chainCount = 1;
+                          while (Math.pow(atempoValue, 1/chainCount) < 0.5 && chainCount < 10) {
+                            chainCount++;
+                          }
                           const singleAtempo = Math.pow(atempoValue, 1/chainCount);
                           audioFilter = Array(chainCount).fill(`atempo=${singleAtempo.toFixed(6)}`).join(',');
+                          console.log(`[${jobId}] AUDIO: Using ${chainCount} atempo chains (each=${singleAtempo.toFixed(4)})`);
                         }
                       }
                       console.log(`[${jobId}] AUDIO: Same compression detected, applying atempo filter`);
