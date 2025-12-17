@@ -194,15 +194,22 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
             downloadedFile = path.join(workDir, 'source.mp4');
 
             // For webm files, we MUST re-encode because -c copy doesn't work reliably
+            // Also need to fix timestamps which are often broken in MediaRecorder webm
+            // CRITICAL: -r 30 BEFORE -i forces correct timestamp interpretation
             // For mp4 files, try stream copy first for speed
             const useReencode = fileExt === 'webm';
 
             const ffmpegArgs = [
+              ...(useReencode ? ['-fflags', '+genpts+igndts'] : []),  // Fix webm timestamps
+              ...(useReencode ? ['-r', '30'] : []),  // BEFORE -i: Force INPUT at 30fps for webm
               '-ss', String(relativeStart),  // Seek before input for faster processing
               '-i', capturedFile,
               '-t', String(duration),        // Duration instead of -to for accuracy
               ...(useReencode
-                ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18', '-c:a', 'aac', '-b:a', '192k']
+                ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
+                   '-c:a', 'aac', '-b:a', '192k',
+                   '-r', '30',               // Output at 30fps
+                   '-vsync', 'cfr']          // Constant frame rate output
                 : ['-c', 'copy']),
               '-avoid_negative_ts', 'make_zero',
               '-y',
@@ -246,11 +253,21 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               console.log(`[${jobId}] Converting webm to mp4 for reliable processing...`);
               downloadedFile = path.join(workDir, 'source.mp4');
 
+              // MediaRecorder webm files have BROKEN timestamps causing 4x speed issues
+              // The webm timestamps are compressed (30s content = 7.5s timestamps)
+              //
+              // CRITICAL: -r 30 BEFORE -i forces FFmpeg to interpret input at 30fps
+              // This ignores the broken webm timestamps entirely
+              // Without this, FFmpeg trusts the webm timestamps and outputs wrong duration
               await new Promise((resolve, reject) => {
                 const ffmpeg = spawn('ffmpeg', [
+                  '-fflags', '+genpts+igndts',  // Regenerate PTS, ignore broken DTS
+                  '-r', '30',                   // BEFORE -i: Force INPUT interpretation at 30fps
                   '-i', capturedFile,
                   '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                   '-c:a', 'aac', '-b:a', '192k',
+                  '-r', '30',                   // AFTER filters: Ensure 30fps output
+                  '-vsync', 'cfr',              // Constant frame rate output
                   '-y',
                   downloadedFile
                 ]);

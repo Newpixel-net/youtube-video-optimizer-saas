@@ -490,13 +490,16 @@ async function handleCaptureForWizard(message) {
           // Save current tab so we can switch back to it
           const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
           originalTabId = currentTab?.id;
-          console.log(`[EXT][CAPTURE] Saved original tab ${originalTabId} (will switch back after video loads)`);
+          const currentTabIndex = currentTab?.index ?? 0;
+          console.log(`[EXT][CAPTURE] Saved original tab ${originalTabId} at index ${currentTabIndex} (will switch back after video loads)`);
 
           // Create tab - needs to be active briefly for Chrome autoplay policy
           // But we'll switch back to Video Wizard immediately after video loads
+          // Create it right next to the Video Wizard tab for better UX
           const newTab = await chrome.tabs.create({
             url: videoUrl,
-            active: true  // Briefly active for autoplay to work
+            active: true,  // Briefly active for autoplay to work
+            index: currentTabIndex + 1  // Open right next to Video Wizard
           });
           autoOpenedTabId = newTab.id;
           youtubeTab = newTab;
@@ -804,12 +807,15 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
       // Get the current active tab so we can switch back to it
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const originalTabId = currentTab?.id;
+      const currentTabIndex = currentTab?.index ?? 0;
 
       // Open the YouTube video - must be ACTIVE briefly for autoplay to work
       // Chrome's autoplay policy requires the tab to have "user activation"
+      // Create it right next to the current tab for better UX
       captureTab = await chrome.tabs.create({
         url: url,
-        active: true  // Must be active for autoplay to trigger
+        active: true,  // Must be active for autoplay to trigger
+        index: currentTabIndex + 1  // Open right next to current tab
       });
 
       console.log(`[EXT][BG] Opened capture tab ${captureTab.id} (active for autoplay)`);
