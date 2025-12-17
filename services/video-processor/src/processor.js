@@ -101,6 +101,10 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       // When running on server (Cloud Run), these ALWAYS fail with 403, so skip them
 
       const extensionStreamSource = job.extensionStreamData?.source || 'unknown';
+      const uploadedToStorage = job.extensionStreamData?.uploadedToStorage;
+
+      console.log(`[${jobId}] Extension stream check: source=${extensionStreamSource}, uploadedToStorage=${uploadedToStorage}, videoUrl=${job.extensionStreamData?.videoUrl?.substring(0, 50)}...`);
+
       // These capture methods upload video to storage and bypass IP-restriction:
       // - mediarecorder_primary: Primary capture method (v2.1+)
       // - mediarecorder_capture: Legacy capture method
@@ -109,8 +113,14 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       // - source_asset: Video stored as sourceAsset in project (v2.7+)
       // - extension_capture_fallback: Fallback capture from extension at export time
       const uploadedCaptureSources = ['mediarecorder_primary', 'mediarecorder_capture', 'mediarecorder_local', 'browser_download', 'source_asset', 'extension_capture_fallback'];
-      const isUploadedCapture = uploadedCaptureSources.includes(extensionStreamSource) &&
-                                 job.extensionStreamData?.uploadedToStorage;
+
+      // IMPORTANT: If we have a valid storage URL, treat it as uploaded regardless of source type
+      const hasValidStorageUrl = job.extensionStreamData?.videoUrl?.includes('storage.googleapis.com') ||
+                                  job.extensionStreamData?.videoUrl?.includes('firebasestorage.app');
+      const isUploadedCapture = (uploadedCaptureSources.includes(extensionStreamSource) && uploadedToStorage) ||
+                                 hasValidStorageUrl;
+
+      console.log(`[${jobId}] isUploadedCapture=${isUploadedCapture} (sourceInList=${uploadedCaptureSources.includes(extensionStreamSource)}, hasValidStorageUrl=${hasValidStorageUrl})`);
 
       if (isUploadedCapture) {
         // Captured/downloaded video was uploaded to our storage - use it directly
