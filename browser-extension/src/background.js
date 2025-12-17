@@ -38,7 +38,7 @@ const WIZARD_ORIGINS = [
 // Video Processor Service URL for uploading captured streams
 // The extension downloads video streams (which are IP-restricted to user's browser)
 // and uploads them to our server, bypassing the IP restriction
-const VIDEO_PROCESSOR_URL = 'https://video-processor-867328435695.us-central1.run.app';
+const VIDEO_PROCESSOR_URL = 'https://video-processor-382790048044.us-central1.run.app';
 
 /**
  * Network request interception to capture actual stream URLs
@@ -1308,7 +1308,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
   // This ensures we always send a result back even if something breaks
   try {
     // IMMEDIATE LOG - if this doesn't appear, function isn't running at all
-    console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.2 ======`);
+    console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.3 ======`);
     console.log(`[EXT][CAPTURE-PAGE] captureId=${captureId}`);
     console.log(`[EXT][CAPTURE-PAGE] startTime=${startTime}s, endTime=${endTime}s`);
     console.log(`[EXT][CAPTURE-PAGE] uploadUrl=${uploadUrl ? 'provided' : 'none'}`);
@@ -2856,7 +2856,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         target: { tabId: youtubeTab.id },
         world: 'ISOLATED',
         func: (cid) => {
-          console.log(`[EXT][RELAY] ====== RELAY SCRIPT STARTING v2.7.2 ======`);
+          console.log(`[EXT][RELAY] ====== RELAY SCRIPT STARTING v2.7.3 ======`);
           console.log(`[EXT][RELAY] captureId=${cid}`);
 
           // Remove any existing listener to avoid duplicates

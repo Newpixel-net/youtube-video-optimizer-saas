@@ -21,7 +21,7 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '2.7.2',
+        version: '2.7.3',
         extensionId: EXTENSION_ID,
         features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip']
       }
@@ -29,10 +29,10 @@
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '2.7.2';
+    window.__YVO_EXTENSION_VERSION__ = '2.7.3';
     window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip'];
 
-    console.log('[EXT] Bridge ready - v2.7.2 with improved ad detection and skip handling');
+    console.log('[EXT] Bridge ready - v2.7.3 with improved ad detection and skip handling');
   }
 
   /**
@@ -54,7 +54,7 @@
       case 'checkExtension':
         sendResponse(requestId, {
           installed: true,
-          version: '2.7.2',
+          version: '2.7.3',
           features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip'],
           maxBase64Size: 40 * 1024 * 1024 // 40MB - files larger than this upload directly
         });
@@ -118,8 +118,23 @@
       // Generate a unique bridge request ID for storage-based communication
       const bridgeRequestId = `bridge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+      // Check if chrome.storage is available (may be undefined in some contexts)
+      if (!chrome.storage || !chrome.storage.local) {
+        console.error('[EXT][CAPTURE] CRITICAL: chrome.storage.local not available!');
+        sendResponse(requestId, {
+          success: false,
+          error: 'Extension storage not available. Please reload the page and try again.',
+          code: 'STORAGE_UNAVAILABLE'
+        });
+        return;
+      }
+
       // Clear any previous result
-      await chrome.storage.local.remove([`bridge_result_${bridgeRequestId}`]);
+      try {
+        await chrome.storage.local.remove([`bridge_result_${bridgeRequestId}`]);
+      } catch (storageErr) {
+        console.warn('[EXT][CAPTURE] Could not clear previous result:', storageErr.message);
+      }
 
       // Send message to background script to start capture
       // The background will store the result in chrome.storage when done
@@ -191,18 +206,24 @@
         }
 
         try {
+          // Safety check in case chrome.storage became unavailable
+          if (!chrome.storage?.local) {
+            console.error('[EXT][CAPTURE] chrome.storage.local became unavailable during polling');
+            break;
+          }
           const stored = await chrome.storage.local.get([`bridge_result_${bridgeRequestId}`]);
           const result = stored[`bridge_result_${bridgeRequestId}`];
 
           if (result) {
             console.log(`[EXT][CAPTURE] Retrieved result from storage after ${i}s`);
             response = result.response;
-            // Clean up storage
-            chrome.storage.local.remove([`bridge_result_${bridgeRequestId}`]);
+            // Clean up storage (non-blocking)
+            chrome.storage.local.remove([`bridge_result_${bridgeRequestId}`]).catch(() => {});
             break;
           }
         } catch (e) {
-          // Ignore storage errors, keep polling
+          // Log storage errors for debugging, but keep polling
+          console.warn(`[EXT][CAPTURE] Storage poll error: ${e.message}`);
         }
 
         // Log progress every 10 seconds
