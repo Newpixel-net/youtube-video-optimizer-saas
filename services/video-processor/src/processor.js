@@ -23,6 +23,128 @@ import {
 import { generateCaptions } from './caption-renderer.js';
 
 /**
+ * DIAGNOSTIC: Probe PACKET-LEVEL PTS timestamps from a video file
+ * This examines individual frame timestamps to distinguish:
+ * - "No timestamps were written" (all PTS=0 or N/A)
+ * - "Timestamps exist but container metadata is incomplete" (valid PTS per packet)
+ *
+ * @param {string} jobId - Job ID for logging
+ * @param {string} filePath - Path to video file
+ * @param {string} stage - Description of pipeline stage
+ */
+function probePacketPTS(jobId, filePath, stage) {
+  console.log(`[${jobId}] ========== PACKET PTS PROBE: ${stage} ==========`);
+
+  try {
+    // Get first 10 and last 10 video packet timestamps
+    // This tells us if frame-level PTS exists even when container duration=0
+    const packetCmd = `ffprobe -v error -select_streams v:0 -show_entries packet=pts,pts_time,dts,dts_time -of csv=p=0 "${filePath}"`;
+    const packetResult = execSync(packetCmd, { encoding: 'utf8', timeout: 60000 });
+
+    const lines = packetResult.trim().split('\n').filter(line => line.trim());
+    const totalPackets = lines.length;
+
+    console.log(`[${jobId}] Total video packets: ${totalPackets}`);
+
+    if (totalPackets === 0) {
+      console.log(`[${jobId}] NO PACKETS FOUND - file may be corrupt or empty`);
+      return { stage, totalPackets: 0, hasValidPTS: false };
+    }
+
+    // Parse packet data: pts,pts_time,dts,dts_time
+    const parsePacket = (line, index) => {
+      const parts = line.split(',');
+      return {
+        index,
+        pts: parts[0] === 'N/A' ? null : parseInt(parts[0]),
+        pts_time: parts[1] === 'N/A' ? null : parseFloat(parts[1]),
+        dts: parts[2] === 'N/A' ? null : parseInt(parts[2]),
+        dts_time: parts[3] === 'N/A' ? null : parseFloat(parts[3])
+      };
+    };
+
+    // Get first 5 packets
+    const firstPackets = lines.slice(0, 5).map((line, i) => parsePacket(line, i));
+    // Get last 5 packets
+    const lastPackets = lines.slice(-5).map((line, i) => parsePacket(line, totalPackets - 5 + i));
+
+    console.log(`[${jobId}] FIRST 5 PACKETS:`);
+    firstPackets.forEach(p => {
+      console.log(`[${jobId}]   [${p.index}] pts=${p.pts ?? 'N/A'} (${p.pts_time?.toFixed(3) ?? 'N/A'}s), dts=${p.dts ?? 'N/A'}`);
+    });
+
+    console.log(`[${jobId}] LAST 5 PACKETS:`);
+    lastPackets.forEach(p => {
+      console.log(`[${jobId}]   [${p.index}] pts=${p.pts ?? 'N/A'} (${p.pts_time?.toFixed(3) ?? 'N/A'}s), dts=${p.dts ?? 'N/A'}`);
+    });
+
+    // Analyze PTS validity
+    const allPackets = lines.map((line, i) => parsePacket(line, i));
+    const validPtsCount = allPackets.filter(p => p.pts !== null && p.pts >= 0).length;
+    const nullPtsCount = allPackets.filter(p => p.pts === null).length;
+    const zeroPtsCount = allPackets.filter(p => p.pts === 0).length;
+
+    // Check if PTS values are monotonically increasing (good sign)
+    let isMonotonic = true;
+    let prevPts = -1;
+    for (const p of allPackets) {
+      if (p.pts !== null) {
+        if (p.pts < prevPts) {
+          isMonotonic = false;
+          break;
+        }
+        prevPts = p.pts;
+      }
+    }
+
+    // Calculate PTS span from actual packets
+    const firstValidPts = allPackets.find(p => p.pts !== null)?.pts_time;
+    const lastValidPts = [...allPackets].reverse().find(p => p.pts !== null)?.pts_time;
+    const ptsSpan = (firstValidPts !== null && lastValidPts !== null)
+      ? lastValidPts - firstValidPts
+      : null;
+
+    console.log(`[${jobId}] PTS ANALYSIS:`);
+    console.log(`[${jobId}]   Valid PTS: ${validPtsCount}/${totalPackets} packets`);
+    console.log(`[${jobId}]   Null PTS: ${nullPtsCount}, Zero PTS: ${zeroPtsCount}`);
+    console.log(`[${jobId}]   Monotonic: ${isMonotonic}`);
+    console.log(`[${jobId}]   PTS span: ${ptsSpan?.toFixed(3) ?? 'N/A'}s (first=${firstValidPts?.toFixed(3) ?? 'N/A'}s, last=${lastValidPts?.toFixed(3) ?? 'N/A'}s)`);
+
+    // Determine if timestamps are fundamentally missing or just container metadata
+    const hasValidPTS = validPtsCount > totalPackets * 0.9 && ptsSpan !== null && ptsSpan > 0;
+
+    if (hasValidPTS) {
+      console.log(`[${jobId}] CONCLUSION: Timestamps EXIST at packet level (container metadata incomplete)`);
+    } else if (validPtsCount === 0 || nullPtsCount === totalPackets) {
+      console.log(`[${jobId}] CONCLUSION: NO timestamps written - capture is fundamentally timeless`);
+    } else if (zeroPtsCount > totalPackets * 0.5) {
+      console.log(`[${jobId}] CONCLUSION: Most PTS are ZERO - timestamps not properly recorded`);
+    } else {
+      console.log(`[${jobId}] CONCLUSION: Partial/invalid timestamps - inconsistent timing`);
+    }
+
+    console.log(`[${jobId}] ========== END PACKET PTS PROBE: ${stage} ==========`);
+
+    return {
+      stage,
+      totalPackets,
+      validPtsCount,
+      nullPtsCount,
+      zeroPtsCount,
+      isMonotonic,
+      ptsSpan,
+      firstPts: firstValidPts,
+      lastPts: lastValidPts,
+      hasValidPTS
+    };
+
+  } catch (err) {
+    console.error(`[${jobId}] PACKET PTS PROBE FAILED: ${err.message}`);
+    return { stage, error: err.message };
+  }
+}
+
+/**
  * DIAGNOSTIC: Probe PTS timestamps from a video file
  * This function extracts actual PTS values to identify where timing invariants are violated.
  *
@@ -345,6 +467,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           // DIAGNOSTIC STAGE 1: Probe raw captured file BEFORE any processing
           // This tells us if MediaRecorder produced correct timestamps
           probePTS(jobId, capturedFile, 'STAGE_1_RAW_CAPTURE');
+          // PACKET-LEVEL probe to distinguish "no timestamps" vs "container metadata incomplete"
+          probePacketPTS(jobId, capturedFile, 'STAGE_1_RAW_CAPTURE');
 
           // Probe the captured file to get duration, frame count, and audio duration
           // These are needed to calculate correct fps for timestamp correction
