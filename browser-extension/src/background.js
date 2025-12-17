@@ -1962,8 +1962,10 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
       // Set playback speed and start (1x for reliable audio capture)
       videoElement.playbackRate = PLAYBACK_SPEED;
-      // Mute to avoid playing audio during capture
-      videoElement.muted = true;
+      // IMPORTANT: Don't mute - let audio play to ensure it's captured
+      // muted=true prevents audio from being captured by captureStream()
+      videoElement.muted = false;
+      videoElement.volume = 1;
 
       // Start recording
       const startRecording = () => {
