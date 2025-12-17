@@ -77,7 +77,7 @@
    * Supports segment capture with startTime/endTime parameters (clipStart/clipEnd from frontend)
    */
   async function handleGetVideoRequest(data, requestId) {
-    const { youtubeUrl, autoCapture = true, startTime, endTime, clipStart, clipEnd, videoId: providedVideoId, quality } = data || {};
+    const { youtubeUrl, autoCapture = true, startTime, endTime, clipStart, clipEnd, videoId: providedVideoId, quality, autoOpenTab = true } = data || {};
 
     // Support both startTime/endTime and clipStart/clipEnd parameter names
     const captureStart = startTime !== undefined ? startTime : clipStart;
@@ -113,7 +113,7 @@
       const segmentInfo = (captureStart !== undefined && captureEnd !== undefined)
         ? `segment ${captureStart}s-${captureEnd}s`
         : 'full video (up to 5 min)';
-      console.log(`[EXT][CAPTURE] Capturing video: ${videoId}, ${segmentInfo}, autoCapture: ${autoCapture}, quality: ${quality || 'default'}`);
+      console.log(`[EXT][CAPTURE] Capturing video: ${videoId}, ${segmentInfo}, autoCapture: ${autoCapture}, autoOpenTab: ${autoOpenTab}, quality: ${quality || 'default'}`);
 
       // Generate a unique bridge request ID for storage-based communication
       const bridgeRequestId = `bridge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -160,6 +160,7 @@
         videoId: videoId,
         youtubeUrl: youtubeUrl,
         autoCapture: autoCapture,
+        autoOpenTab: autoOpenTab,  // v2.7.3: Enable auto-opening YouTube tab for convenience
         startTime: captureStart,
         endTime: captureEnd,
         quality: quality,
