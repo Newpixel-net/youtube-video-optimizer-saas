@@ -1779,6 +1779,38 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       console.warn(`[EXT][CAPTURE] Video track is muted=${firstVideoTrack.muted}, enabled=${firstVideoTrack.enabled}`);
     }
 
+    // Use Web Audio API for proper audio capture at playback rate
+    // This ensures audio is captured at 4x speed when playbackRate=4
+    console.log('[EXT][CAPTURE] Setting up Web Audio API for audio capture...');
+    let audioContext = null;
+    let mediaElementSource = null;
+    let audioDestination = null;
+    let audioTrackFromWebAudio = null;
+
+    try {
+      audioContext = new AudioContext();
+      mediaElementSource = audioContext.createMediaElementSource(videoElement);
+      audioDestination = audioContext.createMediaStreamDestination();
+
+      // Connect: video element -> destination (for capture)
+      // Note: This re-routes audio through Web Audio API
+      // The audio will be captured at the actual playback rate (4x)
+      mediaElementSource.connect(audioDestination);
+
+      // Also connect to audio context destination for potential playback
+      // (though we'll keep volume at 0)
+      mediaElementSource.connect(audioContext.destination);
+
+      // Get the audio track from Web Audio API destination
+      const webAudioTracks = audioDestination.stream.getAudioTracks();
+      if (webAudioTracks.length > 0) {
+        audioTrackFromWebAudio = webAudioTracks[0];
+        console.log(`[EXT][CAPTURE] Web Audio API audio track ready: ${audioTrackFromWebAudio.label || 'unnamed'}`);
+      }
+    } catch (audioErr) {
+      console.warn('[EXT][CAPTURE] Web Audio API setup failed, falling back to captureStream audio:', audioErr.message);
+    }
+
     // Clone tracks to prevent "Tracks in MediaStream were added" error
     console.log('[EXT][CAPTURE] Creating stable stream with cloned tracks...');
     const stableStream = new MediaStream();
@@ -1789,11 +1821,17 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       console.log(`[EXT][CAPTURE] Cloned video track: ${track.label || 'unnamed'}, enabled=${track.enabled}`);
     });
 
-    originalStream.getAudioTracks().forEach(track => {
-      const clonedTrack = track.clone();
-      stableStream.addTrack(clonedTrack);
-      console.log(`[EXT][CAPTURE] Cloned audio track: ${track.label || 'unnamed'}`);
-    });
+    // Use Web Audio API audio track if available, otherwise fall back to captureStream
+    if (audioTrackFromWebAudio) {
+      stableStream.addTrack(audioTrackFromWebAudio);
+      console.log('[EXT][CAPTURE] Using Web Audio API audio track (proper 4x capture)');
+    } else {
+      originalStream.getAudioTracks().forEach(track => {
+        const clonedTrack = track.clone();
+        stableStream.addTrack(clonedTrack);
+        console.log(`[EXT][CAPTURE] Cloned audio track from captureStream: ${track.label || 'unnamed'}`);
+      });
+    }
 
     console.log(`[EXT][CAPTURE] Stable stream: ${stableStream.getVideoTracks().length} video, ${stableStream.getAudioTracks().length} audio tracks`);
 
@@ -1822,6 +1860,10 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
       const cleanupTracks = () => {
         stableStream.getTracks().forEach(track => track.stop());
+        // Close Web Audio API context if it was created
+        if (audioContext && audioContext.state !== 'closed') {
+          audioContext.close().catch(() => {});
+        }
       };
 
       const stopRecording = (reason) => {

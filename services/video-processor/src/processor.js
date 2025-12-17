@@ -697,10 +697,11 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                     console.log(`[${jobId}] AUDIO PTS ratio: ${audioRatio.toFixed(3)}, video ratio: ${ptsRatio.toFixed(3)}, delta: ${audioVideoDelta.toFixed(3)}`);
 
                     if (audioVideoDelta < 0.1) {
-                      // Audio captured via captureStream() while video played at 4x.
-                      // Extension now uses volume=0 (not muted=true) to capture audio at 4x.
+                      // Audio captured via Web Audio API while video played at 4x.
+                      // Extension uses createMediaElementSource() + createMediaStreamDestination()
+                      // to properly capture audio at the actual playback rate.
                       //
-                      // Audio content is at 4x speed (7.5s of chipmunk audio for 30s video).
+                      // Audio content is at 4x speed (7.5s of 4x-pitch audio for 30s video).
                       // Need to slow it down by 4x using atempo to get normal-speed audio.
                       //
                       // atempo range is 0.5-2.0, so for 0.25 (4x slowdown) we chain:
