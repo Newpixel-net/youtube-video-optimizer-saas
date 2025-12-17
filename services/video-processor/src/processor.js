@@ -144,6 +144,115 @@ async function downloadSecondarySource({ jobId, secondarySource, workDir, primar
 }
 
 /**
+ * Download tertiary source video for three_person mode (third video)
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {Object} params.tertiarySource - Tertiary source configuration
+ * @param {string} params.workDir - Working directory
+ * @param {number} params.primaryDuration - Duration of primary clip (for matching)
+ * @param {Object} [params.youtubeAuth] - Optional YouTube OAuth credentials
+ * @returns {Promise<string|null>} Path to downloaded tertiary video, or null
+ */
+async function downloadTertiarySource({ jobId, tertiarySource, workDir, primaryDuration, youtubeAuth }) {
+  if (!tertiarySource || !tertiarySource.enabled) {
+    console.log(`[${jobId}] Tertiary source not enabled or not provided`);
+    return null;
+  }
+
+  console.log(`[${jobId}] ========== TERTIARY SOURCE DOWNLOAD ==========`);
+  console.log(`[${jobId}] Tertiary source config:`, JSON.stringify(tertiarySource, null, 2));
+
+  const tertiaryFile = path.join(workDir, 'tertiary.mp4');
+
+  try {
+    if (tertiarySource.uploadedUrl) {
+      // Download from Firebase Storage (uploaded video)
+      console.log(`[${jobId}] Downloading tertiary from storage URL...`);
+      console.log(`[${jobId}] URL: ${tertiarySource.uploadedUrl.substring(0, 100)}...`);
+
+      const response = await fetch(tertiarySource.uploadedUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download tertiary video: HTTP ${response.status}`);
+      }
+      const buffer = await response.arrayBuffer();
+      fs.writeFileSync(tertiaryFile, Buffer.from(buffer));
+
+      const fileSize = fs.statSync(tertiaryFile).size;
+      console.log(`[${jobId}] Tertiary video downloaded: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
+
+    } else if (tertiarySource.youtubeVideoId) {
+      // Download from YouTube - use a separate subdirectory
+      console.log(`[${jobId}] Downloading tertiary YouTube video: ${tertiarySource.youtubeVideoId}`);
+
+      const tertiaryWorkDir = path.join(workDir, 'tertiary_temp');
+      fs.mkdirSync(tertiaryWorkDir, { recursive: true });
+
+      const timeOffset = tertiarySource.timeOffset || 0;
+      console.log(`[${jobId}] Tertiary video segment: ${timeOffset}s to ${timeOffset + primaryDuration}s`);
+
+      try {
+        await downloadVideoSegment({
+          jobId: `${jobId}-tertiary`,
+          videoId: tertiarySource.youtubeVideoId,
+          startTime: timeOffset,
+          endTime: timeOffset + primaryDuration,
+          workDir: tertiaryWorkDir,
+          youtubeAuth
+        });
+
+        const expectedPath = path.join(tertiaryWorkDir, 'source.mp4');
+        if (fs.existsSync(expectedPath)) {
+          fs.renameSync(expectedPath, tertiaryFile);
+          console.log(`[${jobId}] Tertiary video moved to: ${tertiaryFile}`);
+        }
+
+        // Cleanup temp directory
+        try {
+          fs.rmSync(tertiaryWorkDir, { recursive: true, force: true });
+        } catch (cleanupErr) {
+          console.warn(`[${jobId}] Could not cleanup tertiary temp dir: ${cleanupErr.message}`);
+        }
+
+        const fileSize = fs.statSync(tertiaryFile).size;
+        console.log(`[${jobId}] Tertiary YouTube video downloaded: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
+
+      } catch (ytError) {
+        console.error(`[${jobId}] YouTube tertiary download failed: ${ytError.message}`);
+        try {
+          fs.rmSync(tertiaryWorkDir, { recursive: true, force: true });
+        } catch (e) {}
+        throw ytError;
+      }
+
+    } else {
+      console.log(`[${jobId}] No valid tertiary source URL or video ID found`);
+      return null;
+    }
+
+    // Verify file exists and has content
+    if (!fs.existsSync(tertiaryFile)) {
+      console.error(`[${jobId}] Tertiary file does not exist after download`);
+      return null;
+    }
+
+    const finalSize = fs.statSync(tertiaryFile).size;
+    if (finalSize < 1000) {
+      console.error(`[${jobId}] Tertiary file too small: ${finalSize} bytes`);
+      return null;
+    }
+
+    console.log(`[${jobId}] Tertiary source download SUCCESS: ${tertiaryFile}`);
+    console.log(`[${jobId}] ========== END TERTIARY SOURCE DOWNLOAD ==========`);
+    return tertiaryFile;
+
+  } catch (error) {
+    console.error(`[${jobId}] ========== TERTIARY SOURCE DOWNLOAD FAILED ==========`);
+    console.error(`[${jobId}] Error: ${error.message}`);
+    return null;
+  }
+}
+
+/**
  * Process video with two sources for split screen modes
  * @param {Object} params
  * @param {string} params.jobId - Job ID for logging
@@ -293,6 +402,314 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
         console.error(`[${jobId}] Multi-source FFmpeg failed. Code: ${code}`);
         console.error(`[${jobId}] stderr: ${stderr.slice(-500)}`);
         reject(new Error(`Multi-source video processing failed: ${code}`));
+      }
+    });
+
+    ffmpegProcess.on('error', (error) => {
+      reject(new Error(`Failed to start FFmpeg: ${error.message}`));
+    });
+  });
+}
+
+/**
+ * Process video with three sources for three_person mode
+ * Layout: Main video on top (full width), two smaller videos on bottom (side by side)
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {string} params.primaryFile - Path to primary video file (main/top)
+ * @param {string} params.secondaryFile - Path to secondary video file (bottom-left)
+ * @param {string} params.tertiaryFile - Path to tertiary video file (bottom-right)
+ * @param {Object} params.settings - Processing settings
+ * @param {Object} params.output - Output specifications
+ * @param {string} params.workDir - Working directory
+ * @returns {Promise<string>} Path to processed output file
+ */
+async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tertiaryFile, settings, output, workDir }) {
+  const outputFile = path.join(workDir, 'processed.mp4');
+
+  console.log(`[${jobId}] Processing three-source video (three_person mode)`);
+  console.log(`[${jobId}] Primary (top): ${primaryFile}`);
+  console.log(`[${jobId}] Secondary (bottom-left): ${secondaryFile}`);
+  console.log(`[${jobId}] Tertiary (bottom-right): ${tertiaryFile}`);
+
+  const targetWidth = output?.resolution?.width || 1080;
+  const targetHeight = output?.resolution?.height || 1920;
+  const topHeight = Math.floor(targetHeight * 0.5);     // Main video: 50% height
+  const bottomHeight = Math.floor(targetHeight * 0.5);  // Bottom videos: 50% height
+  const halfWidth = Math.floor(targetWidth / 2);        // Each bottom video: 50% width
+  const targetFps = output?.fps || 30;
+
+  const safeSettings = settings || {};
+  const audioMix = safeSettings.audioMix || {
+    primaryVolume: 100,
+    secondaryVolume: 0,
+    tertiaryVolume: 0,
+    primaryMuted: false,
+    secondaryMuted: true,
+    tertiaryMuted: true
+  };
+
+  // Generate captions if requested (from primary audio)
+  let captionFile = null;
+  if (safeSettings.captionStyle && safeSettings.captionStyle !== 'none') {
+    console.log(`[${jobId}] Generating captions with style: ${safeSettings.captionStyle}`);
+    try {
+      captionFile = await generateCaptions({
+        jobId,
+        videoFile: primaryFile,
+        workDir,
+        captionStyle: safeSettings.captionStyle,
+        customStyle: safeSettings.customCaptionStyle
+      });
+    } catch (captionError) {
+      console.error(`[${jobId}] Caption generation failed:`, captionError.message);
+    }
+  }
+
+  // Build complex filter graph for three inputs
+  // [0:v] = primary video (main/top), [1:v] = secondary (bottom-left), [2:v] = tertiary (bottom-right)
+  // Layout: Main video at top (full width), two videos at bottom (split)
+  let filterComplex = `
+    [0:v]scale=${targetWidth}:${topHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topHeight},setsar=1[main];
+    [1:v]scale=${halfWidth}:${bottomHeight}:force_original_aspect_ratio=increase,crop=${halfWidth}:${bottomHeight},setsar=1[left];
+    [2:v]scale=${halfWidth}:${bottomHeight}:force_original_aspect_ratio=increase,crop=${halfWidth}:${bottomHeight},setsar=1[right];
+    [left][right]hstack=inputs=2[bottom];
+    [main][bottom]vstack=inputs=2[vout]
+  `.replace(/\n\s*/g, '');
+
+  // Add caption filter if captions were generated
+  if (captionFile && fs.existsSync(captionFile)) {
+    const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
+    filterComplex += `;[vout]ass='${escapedPath}'[vfinal]`;
+    console.log(`[${jobId}] Adding captions to three-source output`);
+  } else {
+    filterComplex = filterComplex.replace('[vout]', '[vfinal]');
+  }
+
+  // Audio mixing - use primary audio by default
+  const primaryVol = audioMix.primaryMuted ? 0 : (audioMix.primaryVolume || 100) / 100;
+  const secondaryVol = audioMix.secondaryMuted ? 0 : (audioMix.secondaryVolume || 0) / 100;
+  const tertiaryVol = audioMix.tertiaryMuted ? 0 : (audioMix.tertiaryVolume || 0) / 100;
+
+  // Audio mixing logic
+  const activeAudioTracks = [];
+  if (primaryVol > 0) activeAudioTracks.push({ input: 0, vol: primaryVol, label: 'a0' });
+  if (secondaryVol > 0) activeAudioTracks.push({ input: 1, vol: secondaryVol, label: 'a1' });
+  if (tertiaryVol > 0) activeAudioTracks.push({ input: 2, vol: tertiaryVol, label: 'a2' });
+
+  if (activeAudioTracks.length > 1) {
+    // Mix multiple audio tracks
+    const volumeFilters = activeAudioTracks.map(t => `[${t.input}:a]volume=${t.vol}[${t.label}]`).join(';');
+    const mixInputs = activeAudioTracks.map(t => `[${t.label}]`).join('');
+    filterComplex += `;${volumeFilters};${mixInputs}amix=inputs=${activeAudioTracks.length}:duration=first[aout]`;
+  } else if (activeAudioTracks.length === 1) {
+    // Single audio track
+    filterComplex += `;[${activeAudioTracks[0].input}:a]volume=${activeAudioTracks[0].vol}[aout]`;
+  } else {
+    // All muted - use silent primary
+    filterComplex += `;[0:a]volume=0[aout]`;
+  }
+
+  console.log(`[${jobId}] Three-source filter complex: ${filterComplex.substring(0, 300)}...`);
+
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-i', primaryFile,
+      '-i', secondaryFile,
+      '-i', tertiaryFile,
+      '-filter_complex', filterComplex,
+      '-map', '[vfinal]',
+      '-map', '[aout]',
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-crf', '23',
+      '-threads', '0',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-r', targetFps.toString(),
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    ];
+
+    console.log(`[${jobId}] FFmpeg three-source command: ffmpeg ${args.slice(0, 12).join(' ')}...`);
+
+    const ffmpegProcess = spawn('ffmpeg', args);
+
+    let stderr = '';
+    ffmpegProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+      const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
+      if (match) {
+        console.log(`[${jobId}] FFmpeg progress: ${match[1]}`);
+      }
+    });
+
+    ffmpegProcess.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outputFile)) {
+        console.log(`[${jobId}] Three-source processing completed: ${outputFile}`);
+        resolve(outputFile);
+      } else {
+        console.error(`[${jobId}] Three-source FFmpeg failed. Code: ${code}`);
+        console.error(`[${jobId}] stderr: ${stderr.slice(-500)}`);
+        reject(new Error(`Three-source video processing failed: ${code}`));
+      }
+    });
+
+    ffmpegProcess.on('error', (error) => {
+      reject(new Error(`Failed to start FFmpeg: ${error.message}`));
+    });
+  });
+}
+
+/**
+ * Process video with gameplay mode - main video with facecam overlay in corner
+ * @param {Object} params
+ * @param {string} params.jobId - Job ID for logging
+ * @param {string} params.primaryFile - Path to primary video file (gameplay)
+ * @param {string} params.secondaryFile - Path to secondary video file (facecam)
+ * @param {Object} params.settings - Processing settings
+ * @param {Object} params.output - Output specifications
+ * @param {string} params.workDir - Working directory
+ * @returns {Promise<string>} Path to processed output file
+ */
+async function processGameplayVideo({ jobId, primaryFile, secondaryFile, settings, output, workDir }) {
+  const outputFile = path.join(workDir, 'processed.mp4');
+
+  console.log(`[${jobId}] Processing gameplay video with facecam overlay`);
+  console.log(`[${jobId}] Primary (gameplay): ${primaryFile}`);
+  console.log(`[${jobId}] Secondary (facecam): ${secondaryFile}`);
+
+  const targetWidth = output?.resolution?.width || 1080;
+  const targetHeight = output?.resolution?.height || 1920;
+  const facecamWidth = Math.floor(targetWidth * 0.3);   // Facecam: 30% width
+  const facecamHeight = Math.floor(facecamWidth * 1.2); // Facecam aspect ratio (portrait)
+  const targetFps = output?.fps || 30;
+  const margin = 40; // Margin from edge
+
+  const safeSettings = settings || {};
+  const position = safeSettings.secondarySource?.position || 'bottom-right';
+  const audioMix = safeSettings.audioMix || {
+    primaryVolume: 100,
+    secondaryVolume: 0,
+    primaryMuted: false,
+    secondaryMuted: true
+  };
+
+  // Calculate facecam position based on setting
+  let overlayX, overlayY;
+  switch (position) {
+    case 'top-left':
+      overlayX = margin;
+      overlayY = margin;
+      break;
+    case 'top-right':
+      overlayX = targetWidth - facecamWidth - margin;
+      overlayY = margin;
+      break;
+    case 'bottom-left':
+      overlayX = margin;
+      overlayY = targetHeight - facecamHeight - margin;
+      break;
+    case 'bottom-right':
+    default:
+      overlayX = targetWidth - facecamWidth - margin;
+      overlayY = targetHeight - facecamHeight - margin;
+      break;
+  }
+
+  console.log(`[${jobId}] Facecam position: ${position} (${overlayX}, ${overlayY})`);
+
+  // Generate captions if requested (from primary audio)
+  let captionFile = null;
+  if (safeSettings.captionStyle && safeSettings.captionStyle !== 'none') {
+    console.log(`[${jobId}] Generating captions with style: ${safeSettings.captionStyle}`);
+    try {
+      captionFile = await generateCaptions({
+        jobId,
+        videoFile: primaryFile,
+        workDir,
+        captionStyle: safeSettings.captionStyle,
+        customStyle: safeSettings.customCaptionStyle
+      });
+    } catch (captionError) {
+      console.error(`[${jobId}] Caption generation failed:`, captionError.message);
+    }
+  }
+
+  // Build complex filter graph for gameplay with facecam overlay
+  // [0:v] = primary (gameplay), [1:v] = secondary (facecam)
+  let filterComplex = `
+    [0:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${targetHeight},setsar=1[gameplay];
+    [1:v]scale=${facecamWidth}:${facecamHeight}:force_original_aspect_ratio=increase,crop=${facecamWidth}:${facecamHeight},setsar=1[facecam];
+    [gameplay][facecam]overlay=${overlayX}:${overlayY}[vout]
+  `.replace(/\n\s*/g, '');
+
+  // Add caption filter if captions were generated
+  if (captionFile && fs.existsSync(captionFile)) {
+    const escapedPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
+    filterComplex += `;[vout]ass='${escapedPath}'[vfinal]`;
+    console.log(`[${jobId}] Adding captions to gameplay output`);
+  } else {
+    filterComplex = filterComplex.replace('[vout]', '[vfinal]');
+  }
+
+  // Audio mixing
+  const primaryVol = audioMix.primaryMuted ? 0 : (audioMix.primaryVolume || 100) / 100;
+  const secondaryVol = audioMix.secondaryMuted ? 0 : (audioMix.secondaryVolume || 0) / 100;
+
+  if (primaryVol > 0 && secondaryVol > 0) {
+    filterComplex += `;[0:a]volume=${primaryVol}[a0];[1:a]volume=${secondaryVol}[a1];[a0][a1]amix=inputs=2:duration=first[aout]`;
+  } else if (primaryVol > 0) {
+    filterComplex += `;[0:a]volume=${primaryVol}[aout]`;
+  } else if (secondaryVol > 0) {
+    filterComplex += `;[1:a]volume=${secondaryVol}[aout]`;
+  } else {
+    filterComplex += `;[0:a]volume=0[aout]`;
+  }
+
+  console.log(`[${jobId}] Gameplay filter complex: ${filterComplex.substring(0, 300)}...`);
+
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-i', primaryFile,
+      '-i', secondaryFile,
+      '-filter_complex', filterComplex,
+      '-map', '[vfinal]',
+      '-map', '[aout]',
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-crf', '23',
+      '-threads', '0',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-r', targetFps.toString(),
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    ];
+
+    console.log(`[${jobId}] FFmpeg gameplay command: ffmpeg ${args.slice(0, 10).join(' ')}...`);
+
+    const ffmpegProcess = spawn('ffmpeg', args);
+
+    let stderr = '';
+    ffmpegProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+      const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
+      if (match) {
+        console.log(`[${jobId}] FFmpeg progress: ${match[1]}`);
+      }
+    });
+
+    ffmpegProcess.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outputFile)) {
+        console.log(`[${jobId}] Gameplay processing completed: ${outputFile}`);
+        resolve(outputFile);
+      } else {
+        console.error(`[${jobId}] Gameplay FFmpeg failed. Code: ${code}`);
+        console.error(`[${jobId}] stderr: ${stderr.slice(-500)}`);
+        reject(new Error(`Gameplay video processing failed: ${code}`));
       }
     });
 
@@ -1248,9 +1665,10 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
     await updateProgress(jobRef, 30, 'Processing video...');
 
-    // Step 2: Check for secondary source (multi-source split screen)
+    // Step 2: Check for multi-source modes (split screen, three_person, gameplay)
     let processedFile;
     const secondarySource = job.settings?.secondarySource;
+    const tertiarySource = job.settings?.tertiarySource;
     const reframeMode = job.settings?.reframeMode || 'auto_center';
 
     // Detailed logging for multi-source detection
@@ -1262,29 +1680,132 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       console.log(`[${jobId}] Secondary type: ${secondarySource.type}`);
       console.log(`[${jobId}] Secondary uploadedUrl: ${secondarySource.uploadedUrl ? 'YES' : 'NO'}`);
       console.log(`[${jobId}] Secondary youtubeVideoId: ${secondarySource.youtubeVideoId || 'NO'}`);
-      console.log(`[${jobId}] Secondary youtubeUrl: ${secondarySource.youtubeUrl || 'NO'}`);
       console.log(`[${jobId}] Secondary position: ${secondarySource.position}`);
     }
+    console.log(`[${jobId}] Tertiary source exists: ${!!tertiarySource}`);
+    if (tertiarySource) {
+      console.log(`[${jobId}] Tertiary enabled: ${tertiarySource.enabled}`);
+      console.log(`[${jobId}] Tertiary uploadedUrl: ${tertiarySource.uploadedUrl ? 'YES' : 'NO'}`);
+      console.log(`[${jobId}] Tertiary youtubeVideoId: ${tertiarySource.youtubeVideoId || 'NO'}`);
+    }
 
-    const isMultiSourceMode = secondarySource?.enabled &&
-                               (secondarySource.uploadedUrl || secondarySource.youtubeVideoId) &&
-                               ['split_screen', 'broll_split'].includes(reframeMode);
+    const hasSecondary = secondarySource?.enabled && (secondarySource.uploadedUrl || secondarySource.youtubeVideoId);
+    const hasTertiary = tertiarySource?.enabled && (tertiarySource.uploadedUrl || tertiarySource.youtubeVideoId);
 
-    console.log(`[${jobId}] Is multi-source mode: ${isMultiSourceMode}`);
+    // Determine processing mode
+    const isThreePersonMode = reframeMode === 'three_person' && hasSecondary && hasTertiary;
+    const isGameplayMode = reframeMode === 'gameplay' && hasSecondary;
+    const isSplitScreenMode = ['split_screen', 'broll_split'].includes(reframeMode) && hasSecondary;
+
+    console.log(`[${jobId}] Is three_person mode: ${isThreePersonMode}`);
+    console.log(`[${jobId}] Is gameplay mode: ${isGameplayMode}`);
+    console.log(`[${jobId}] Is split_screen mode: ${isSplitScreenMode}`);
     console.log(`[${jobId}] ========================================`);
 
-    if (isMultiSourceMode) {
-      // Multi-source split screen processing
-      console.log(`[${jobId}] Starting multi-source processing with mode: ${reframeMode}`);
-      await updateProgress(jobRef, 35, 'Downloading secondary video...');
+    const primaryDuration = (job.endTime || 60) - (job.startTime || 0);
 
-      const primaryDuration = (job.endTime || 60) - (job.startTime || 0);
+    if (isThreePersonMode) {
+      // Three person mode: main video at top, two videos at bottom
+      console.log(`[${jobId}] Starting three-source processing (three_person mode)`);
+      await updateProgress(jobRef, 35, 'Downloading secondary videos...');
+
       const secondaryFile = await downloadSecondarySource({
         jobId,
         secondarySource,
         workDir,
         primaryDuration,
-        youtubeAuth  // Pass youtube auth for better download success
+        youtubeAuth
+      });
+
+      const tertiaryFile = await downloadTertiarySource({
+        jobId,
+        tertiarySource,
+        workDir,
+        primaryDuration,
+        youtubeAuth
+      });
+
+      if (secondaryFile && tertiaryFile) {
+        console.log(`[${jobId}] All three sources downloaded, starting three-source processing`);
+        await updateProgress(jobRef, 50, 'Processing three person split...');
+        processedFile = await processThreeSourceVideo({
+          jobId,
+          primaryFile: downloadedFile,
+          secondaryFile,
+          tertiaryFile,
+          settings: job.settings,
+          output: job.output,
+          workDir
+        });
+      } else if (secondaryFile) {
+        // Fallback to two-source if tertiary failed
+        console.warn(`[${jobId}] Tertiary download failed, falling back to two-source split`);
+        await updateProgress(jobRef, 50, 'Processing split screen (partial)...');
+        processedFile = await processMultiSourceVideo({
+          jobId,
+          primaryFile: downloadedFile,
+          secondaryFile,
+          settings: job.settings,
+          output: job.output,
+          workDir
+        });
+      } else {
+        // Fallback to single-source
+        console.error(`[${jobId}] Secondary download failed, falling back to single-source`);
+        processedFile = await processVideoFile({
+          jobId,
+          inputFile: downloadedFile,
+          settings: job.settings,
+          output: job.output,
+          workDir
+        });
+      }
+    } else if (isGameplayMode) {
+      // Gameplay mode: main video with facecam overlay in corner
+      console.log(`[${jobId}] Starting gameplay processing with facecam overlay`);
+      await updateProgress(jobRef, 35, 'Downloading facecam video...');
+
+      const secondaryFile = await downloadSecondarySource({
+        jobId,
+        secondarySource,
+        workDir,
+        primaryDuration,
+        youtubeAuth
+      });
+
+      if (secondaryFile) {
+        console.log(`[${jobId}] Facecam downloaded, starting gameplay processing`);
+        await updateProgress(jobRef, 50, 'Processing gameplay with facecam...');
+        processedFile = await processGameplayVideo({
+          jobId,
+          primaryFile: downloadedFile,
+          secondaryFile,
+          settings: job.settings,
+          output: job.output,
+          workDir
+        });
+      } else {
+        // Fallback to single-source if facecam download failed
+        console.warn(`[${jobId}] Facecam download failed, processing without overlay`);
+        processedFile = await processVideoFile({
+          jobId,
+          inputFile: downloadedFile,
+          settings: job.settings,
+          output: job.output,
+          workDir
+        });
+      }
+    } else if (isSplitScreenMode) {
+      // Split screen mode: two videos stacked
+      console.log(`[${jobId}] Starting split screen processing with mode: ${reframeMode}`);
+      await updateProgress(jobRef, 35, 'Downloading secondary video...');
+
+      const secondaryFile = await downloadSecondarySource({
+        jobId,
+        secondarySource,
+        workDir,
+        primaryDuration,
+        youtubeAuth
       });
 
       if (secondaryFile) {
@@ -1301,7 +1822,6 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       } else {
         // Fallback to single-source if secondary download failed
         console.error(`[${jobId}] FALLBACK: Secondary source download failed, using single-source processing`);
-        console.error(`[${jobId}] This will show the primary video split in half instead of two different videos`);
         await updateProgress(jobRef, 40, 'Processing video (single source fallback)...');
         processedFile = await processVideoFile({
           jobId,
