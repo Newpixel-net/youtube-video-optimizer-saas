@@ -11407,6 +11407,109 @@
                 }
                 // ===== END EXTENSION-ONLY EXPORT =====
 
+                // ===== SECONDARY VIDEO CAPTURE (if YouTube URL) =====
+                // If secondary source is a YouTube video, capture it via extension too
+                // This ensures reliable split-screen exports by using the same capture method as primary
+                if (clipSettings.secondarySource &&
+                    clipSettings.secondarySource.enabled &&
+                    clipSettings.secondarySource.type === 'youtube' &&
+                    clipSettings.secondarySource.youtubeVideoId &&
+                    !clipSettings.secondarySource.uploadedUrl) {
+
+                    console.log('[EXPORT][EXT] Secondary source is YouTube - capturing via extension');
+                    var secVideoId = clipSettings.secondarySource.youtubeVideoId;
+                    var secTimeOffset = clipSettings.secondarySource.timeOffset || 0;
+                    var clipDuration = clipEndTime - clipStartTime;
+
+                    utils.showToast('Capturing secondary video...', 'info');
+                    app.showCapturingStateInModal('Capturing secondary video via extension...');
+
+                    var secCapturePayload = {
+                        videoId: secVideoId,
+                        youtubeUrl: clipSettings.secondarySource.youtubeUrl || ('https://www.youtube.com/watch?v=' + secVideoId),
+                        clipStart: secTimeOffset,
+                        clipEnd: secTimeOffset + clipDuration,
+                        quality: quality,
+                        autoCapture: true,
+                        autoOpenTab: true  // Auto-open YouTube tab for secondary video
+                    };
+
+                    console.log('[EXPORT][EXT] Secondary capture payload:', JSON.stringify(secCapturePayload));
+
+                    try {
+                        var secCaptureResult = await sendExtensionRequest('captureVideoForWizard', secCapturePayload);
+
+                        console.log('[EXPORT][EXT] Secondary capture result: success=' + secCaptureResult?.success);
+
+                        if (secCaptureResult && secCaptureResult.success && secCaptureResult.streamData) {
+                            var secHasStorageUrl = secCaptureResult.streamData.uploadedToStorage && secCaptureResult.streamData.videoUrl;
+                            var secHasLocalData = secCaptureResult.streamData.videoData;
+
+                            var secStorageUrl = secCaptureResult.streamData.videoUrl;
+
+                            // Upload local data to storage if needed
+                            if (!secHasStorageUrl && secHasLocalData) {
+                                console.log('[EXPORT][EXT] Uploading secondary video to storage...');
+                                app.showCapturingStateInModal('Uploading secondary video...');
+
+                                try {
+                                    var secBase64Data = secCaptureResult.streamData.videoData;
+                                    var secMimeType = secCaptureResult.streamData.mimeType || 'video/webm';
+                                    var secByteCharacters = atob(secBase64Data);
+                                    var secByteNumbers = new Array(secByteCharacters.length);
+                                    for (var j = 0; j < secByteCharacters.length; j++) {
+                                        secByteNumbers[j] = secByteCharacters.charCodeAt(j);
+                                    }
+                                    var secByteArray = new Uint8Array(secByteNumbers);
+                                    var secVideoBlob = new Blob([secByteArray], { type: secMimeType });
+
+                                    var secTimestamp = Date.now();
+                                    var secExt = secMimeType.includes('webm') ? 'webm' : 'mp4';
+                                    var secStoragePath = 'uploads/' + auth.currentUser.uid + '/secondary_' + secVideoId + '_' + secTimestamp + '.' + secExt;
+
+                                    var secStorageRef = storage.ref(secStoragePath);
+                                    var secUploadTask = secStorageRef.put(secVideoBlob, {
+                                        contentType: secMimeType,
+                                        customMetadata: {
+                                            videoId: secVideoId,
+                                            source: 'extension_secondary_upload',
+                                            capturedAt: String(secTimestamp),
+                                            userId: auth.currentUser.uid
+                                        }
+                                    });
+
+                                    secUploadTask.on('state_changed', function(snapshot) {
+                                        var progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                                        app.showCapturingStateInModal('Uploading secondary: ' + progress.toFixed(0) + '%');
+                                    });
+
+                                    await secUploadTask;
+                                    secStorageUrl = await secUploadTask.snapshot.ref.getDownloadURL();
+                                    console.log('[EXPORT][EXT] Secondary upload completed: ' + secStorageUrl);
+                                } catch (secUploadErr) {
+                                    console.error('[EXPORT][EXT] Secondary upload failed:', secUploadErr.message);
+                                    // Continue without secondary - will fall back to server-side download
+                                }
+                            }
+
+                            // Update clipSettings with the captured secondary video URL
+                            if (secStorageUrl) {
+                                console.log('[EXPORT][EXT] Secondary video captured successfully, updating settings');
+                                clipSettings.secondarySource.uploadedUrl = secStorageUrl;
+                                clipSettings.secondarySource.capturedViaExtension = true;
+                            }
+                        } else {
+                            console.warn('[EXPORT][EXT] Secondary capture failed - will try server-side download');
+                            console.warn('[EXPORT][EXT] Error:', secCaptureResult?.error || 'Unknown');
+                            // Don't fail export - backend will try to download
+                        }
+                    } catch (secCaptureErr) {
+                        console.error('[EXPORT][EXT] Secondary capture exception:', secCaptureErr.message);
+                        // Don't fail export - backend will try to download
+                    }
+                }
+                // ===== END SECONDARY VIDEO CAPTURE =====
+
                 // Show processing state
                 utils.showToast('Starting video processing...', 'info');
                 app.showCapturingStateInModal('Sending to processor...');
