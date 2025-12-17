@@ -300,29 +300,23 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
             console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s (${duration}s) from captured video`);
             await updateProgress(jobRef, 15, 'Extracting clip segment...');
 
-            // Output as mp4 for better compatibility (webm segment extraction often fails with -c copy)
+            // Output as mp4 for better compatibility
             downloadedFile = path.join(workDir, 'source.mp4');
 
-            // For webm files, we MUST re-encode because -c copy doesn't work reliably
-            // Also need to fix timestamps which are often broken in MediaRecorder webm
-            // Use setpts filter with ACTUAL fps to preserve correct timing
-            // For mp4 files, try stream copy first for speed
+            // FIRST PRINCIPLES: Preserve original timestamps, don't manipulate them.
+            // For webm: Re-encode (since -c copy doesn't work reliably for webm)
+            // For mp4: Use stream copy for speed
+            // In both cases: DO NOT use setpts - preserve original timing
             const useReencode = fileExt === 'webm';
 
             const ffmpegArgs = [
+              '-ss', String(relativeStart),   // Seek to start position
               '-i', capturedFile,
+              '-t', String(duration),         // Duration to extract
               ...(useReencode
-                ? ['-vf', `setpts=N/${actualFps.toFixed(4)}/TB`,  // Use actual fps, not hardcoded 30
-                   '-af', 'asetpts=N/SR/TB',
-                   '-ss', String(relativeStart),
-                   '-t', String(duration),
-                   '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
-                   '-c:a', 'aac', '-b:a', '192k',
-                   '-r', '30',
-                   '-vsync', 'cfr']
-                : ['-ss', String(relativeStart),
-                   '-t', String(duration),
-                   '-c', 'copy']),
+                ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
+                   '-c:a', 'aac', '-b:a', '192k']
+                : ['-c', 'copy']),
               '-avoid_negative_ts', 'make_zero',
               '-y',
               downloadedFile
@@ -365,20 +359,28 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               console.log(`[${jobId}] Converting webm to mp4 for reliable processing...`);
               downloadedFile = path.join(workDir, 'source.mp4');
 
-              // Convert with correct timestamps using actualFps calculated above
-              // setpts=N/actualFps/TB spaces frames correctly over the target duration
-              // Then output at 30fps (duplicating/interpolating frames as needed)
-              console.log(`[${jobId}] Using actualFps=${actualFps.toFixed(2)} for timestamp correction`);
+              // FIRST PRINCIPLES APPROACH:
+              // =============================
+              // Video playback speed is determined by PTS (Presentation Timestamps), NOT frame rate.
+              // MediaRecorder SHOULD write correct timestamps based on real wall-clock time.
+              //
+              // Previous "fixes" used setpts=N/FPS/TB which DESTROYS original timestamps.
+              // If original timestamps were correct, setpts was CREATING the speed problem.
+              //
+              // Strategy: Simple transcode first, preserving original timestamps.
+              // Do NOT manipulate timestamps unless we have proof they are broken.
+
+              console.log(`[${jobId}] Simple transcode (preserving original timestamps)...`);
+              console.log(`[${jobId}] Input probe: frames=${capturedFrameCount}, audioDur=${capturedAudioDuration.toFixed(2)}s`);
 
               await new Promise((resolve, reject) => {
                 const ffmpeg = spawn('ffmpeg', [
                   '-i', capturedFile,
-                  '-vf', `setpts=N/${actualFps.toFixed(4)}/TB`,  // Space frames over correct duration
-                  '-af', 'asetpts=N/SR/TB',                       // Normalize audio timestamps
-                  '-r', '30',                                     // Output at 30fps
+                  // NO setpts - preserve original timestamps
+                  // NO -r flag - let FFmpeg use source frame rate
+                  // NO -vsync cfr - don't force constant frame rate
                   '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                   '-c:a', 'aac', '-b:a', '192k',
-                  '-vsync', 'cfr',
                   '-y',
                   downloadedFile
                 ]);
@@ -390,12 +392,13 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                   if (code === 0 && fileSize > 1000) {
                     console.log(`[${jobId}] Converted to mp4: ${fileSize} bytes`);
 
-                    // Step 4: Validate output A/V sync
+                    // Validate output A/V sync
                     try {
                       const validation = await validateVideoSync(jobId, downloadedFile);
                       if (!validation.valid) {
                         console.error(`[${jobId}] VALIDATION FAILED: ${validation.error}`);
-                        // Continue anyway, but log the issue
+                        // Log detailed info for debugging
+                        console.error(`[${jobId}] This indicates original WebM timestamps may be broken`);
                       }
                     } catch (valErr) {
                       console.warn(`[${jobId}] Validation check failed: ${valErr.message}`);
