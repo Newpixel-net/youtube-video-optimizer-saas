@@ -1334,7 +1334,9 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
   }
 
   const duration = endTime - startTime;
-  const PLAYBACK_SPEED = 4;
+  // Use 1x playback for reliable audio capture
+  // 4x caused audio issues (distortion, wrong speed, no audio)
+  const PLAYBACK_SPEED = 1;
   const captureTime = (duration / PLAYBACK_SPEED) * 1000;
 
   // CRITICAL: Track if we've sent a result to prevent duplicate sends
@@ -1779,38 +1781,6 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       console.warn(`[EXT][CAPTURE] Video track is muted=${firstVideoTrack.muted}, enabled=${firstVideoTrack.enabled}`);
     }
 
-    // Use Web Audio API for proper audio capture at playback rate
-    // This ensures audio is captured at 4x speed when playbackRate=4
-    console.log('[EXT][CAPTURE] Setting up Web Audio API for audio capture...');
-    let audioContext = null;
-    let mediaElementSource = null;
-    let audioDestination = null;
-    let audioTrackFromWebAudio = null;
-
-    try {
-      audioContext = new AudioContext();
-      mediaElementSource = audioContext.createMediaElementSource(videoElement);
-      audioDestination = audioContext.createMediaStreamDestination();
-
-      // Connect: video element -> destination (for capture)
-      // Note: This re-routes audio through Web Audio API
-      // The audio will be captured at the actual playback rate (4x)
-      mediaElementSource.connect(audioDestination);
-
-      // Also connect to audio context destination for potential playback
-      // (though we'll keep volume at 0)
-      mediaElementSource.connect(audioContext.destination);
-
-      // Get the audio track from Web Audio API destination
-      const webAudioTracks = audioDestination.stream.getAudioTracks();
-      if (webAudioTracks.length > 0) {
-        audioTrackFromWebAudio = webAudioTracks[0];
-        console.log(`[EXT][CAPTURE] Web Audio API audio track ready: ${audioTrackFromWebAudio.label || 'unnamed'}`);
-      }
-    } catch (audioErr) {
-      console.warn('[EXT][CAPTURE] Web Audio API setup failed, falling back to captureStream audio:', audioErr.message);
-    }
-
     // Clone tracks to prevent "Tracks in MediaStream were added" error
     console.log('[EXT][CAPTURE] Creating stable stream with cloned tracks...');
     const stableStream = new MediaStream();
@@ -1821,17 +1791,12 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       console.log(`[EXT][CAPTURE] Cloned video track: ${track.label || 'unnamed'}, enabled=${track.enabled}`);
     });
 
-    // Use Web Audio API audio track if available, otherwise fall back to captureStream
-    if (audioTrackFromWebAudio) {
-      stableStream.addTrack(audioTrackFromWebAudio);
-      console.log('[EXT][CAPTURE] Using Web Audio API audio track (proper 4x capture)');
-    } else {
-      originalStream.getAudioTracks().forEach(track => {
-        const clonedTrack = track.clone();
-        stableStream.addTrack(clonedTrack);
-        console.log(`[EXT][CAPTURE] Cloned audio track from captureStream: ${track.label || 'unnamed'}`);
-      });
-    }
+    // Use audio tracks from captureStream directly
+    originalStream.getAudioTracks().forEach(track => {
+      const clonedTrack = track.clone();
+      stableStream.addTrack(clonedTrack);
+      console.log(`[EXT][CAPTURE] Cloned audio track: ${track.label || 'unnamed'}`);
+    });
 
     console.log(`[EXT][CAPTURE] Stable stream: ${stableStream.getVideoTracks().length} video, ${stableStream.getAudioTracks().length} audio tracks`);
 
@@ -1860,10 +1825,6 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
       const cleanupTracks = () => {
         stableStream.getTracks().forEach(track => track.stop());
-        // Close Web Audio API context if it was created
-        if (audioContext && audioContext.state !== 'closed') {
-          audioContext.close().catch(() => {});
-        }
       };
 
       const stopRecording = (reason) => {
@@ -1999,11 +1960,10 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
         }
       };
 
-      // Set playback speed and start
+      // Set playback speed and start (1x for reliable audio capture)
       videoElement.playbackRate = PLAYBACK_SPEED;
-      // Use volume=0 instead of muted=true to allow audio capture at 4x speed
-      // muted=true can prevent audio track from being captured correctly
-      videoElement.volume = 0;
+      // Mute to avoid playing audio during capture
+      videoElement.muted = true;
 
       // Start recording
       const startRecording = () => {
@@ -2108,7 +2068,8 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
   console.log(`[EXT][CAPTURE] MediaRecorder start=${startTime}s end=${endTime}s videoId=${videoId}`);
 
   const duration = endTime - startTime;
-  const PLAYBACK_SPEED = 4; // 4x speed for faster capture
+  // Use 1x playback for reliable audio capture (4x caused audio issues)
+  const PLAYBACK_SPEED = 1;
   const captureTime = (duration / PLAYBACK_SPEED) * 1000; // in milliseconds
 
   // Maximum size for Base64 transfer (40MB to stay under 64MB limit after encoding)
@@ -2798,7 +2759,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // - Base64 conversion and upload (up to 30s)
     // - Safety margin
     const captureDuration = captureEnd - captureStart;
-    const PLAYBACK_SPEED = 4; // Must match the value in captureVideoWithMessage
+    const PLAYBACK_SPEED = 1; // Must match the value in captureVideoWithMessage
     const expectedCaptureTime = (captureDuration / PLAYBACK_SPEED) * 1000;
     const captureTimeout = expectedCaptureTime + 90000; // Add 90 second buffer for setup/load/upload
 
