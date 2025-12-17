@@ -96,9 +96,17 @@ app.post('/upload-stream', upload.single('video'), async (req, res) => {
     const mimeType = req.file.mimetype || 'video/mp4';
     console.log(`[UploadStream:${uploadId}] Video: ${videoId}, Type: ${type}, Size: ${(fileSize / 1024 / 1024).toFixed(2)}MB, MIME: ${mimeType}`);
 
-    // Generate unique filename for storage
+    // Generate unique filename for storage based on actual mimeType
     const timestamp = Date.now();
-    const extension = type === 'audio' ? 'mp4' : 'mp4';
+    // Determine file extension from mimeType (MediaRecorder produces webm, direct downloads produce mp4)
+    let extension = 'mp4'; // default fallback
+    if (mimeType.includes('webm')) {
+      extension = 'webm';
+    } else if (mimeType.includes('mp4') || mimeType.includes('mpeg')) {
+      extension = 'mp4';
+    } else if (type === 'audio') {
+      extension = mimeType.includes('webm') ? 'webm' : 'm4a';
+    }
     const fileName = `extension-uploads/${videoId}/${type}_${timestamp}.${extension}`;
 
     // Upload to Firebase Storage
