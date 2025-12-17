@@ -163,36 +163,59 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
             // Extract the specific segment from the captured video
             const relativeStart = clipStart - capturedStart;
             const relativeEnd = clipEnd - capturedStart;
-            console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s from captured video`);
+            const duration = relativeEnd - relativeStart;
+            console.log(`[${jobId}] Extracting segment ${relativeStart}s-${relativeEnd}s (${duration}s) from captured video`);
             await updateProgress(jobRef, 15, 'Extracting clip segment...');
 
-            downloadedFile = path.join(workDir, `source.${fileExt}`);
+            // Output as mp4 for better compatibility (webm segment extraction often fails with -c copy)
+            downloadedFile = path.join(workDir, 'source.mp4');
+
+            // For webm files, we MUST re-encode because -c copy doesn't work reliably
+            // For mp4 files, try stream copy first for speed
+            const useReencode = fileExt === 'webm';
+
+            const ffmpegArgs = [
+              '-ss', String(relativeStart),  // Seek before input for faster processing
+              '-i', capturedFile,
+              '-t', String(duration),        // Duration instead of -to for accuracy
+              ...(useReencode
+                ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18', '-c:a', 'aac', '-b:a', '192k']
+                : ['-c', 'copy']),
+              '-avoid_negative_ts', 'make_zero',
+              '-y',
+              downloadedFile
+            ];
+
+            console.log(`[${jobId}] FFmpeg extraction: ${useReencode ? 're-encoding' : 'stream copy'}`);
+
             await new Promise((resolve, reject) => {
-              const ffmpeg = spawn('ffmpeg', [
-                '-i', capturedFile,
-                '-ss', String(relativeStart),
-                '-to', String(relativeEnd),
-                '-c', 'copy',
-                '-avoid_negative_ts', 'make_zero',
-                '-y',
-                downloadedFile
-              ]);
+              const ffmpeg = spawn('ffmpeg', ffmpegArgs);
 
               let stderr = '';
               ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
               ffmpeg.on('close', (code) => {
-                if (code === 0 && fs.existsSync(downloadedFile)) {
-                  console.log(`[${jobId}] Segment extracted: ${fs.statSync(downloadedFile).size} bytes`);
+                const fileSize = fs.existsSync(downloadedFile) ? fs.statSync(downloadedFile).size : 0;
+                console.log(`[${jobId}] Segment extraction finished: code=${code}, size=${fileSize} bytes`);
+
+                if (code === 0 && fileSize > 0) {
+                  console.log(`[${jobId}] Segment extracted successfully: ${fileSize} bytes`);
+                  resolve();
+                } else if (code === 0 && fileSize === 0) {
+                  // Extraction "succeeded" but produced empty file - fall back to full file
+                  console.warn(`[${jobId}] Segment extraction produced empty file, using full capture`);
+                  downloadedFile = capturedFile;
                   resolve();
                 } else {
-                  reject(new Error(`FFmpeg segment extraction failed: ${stderr.slice(-200)}`));
+                  reject(new Error(`FFmpeg segment extraction failed (code ${code}): ${stderr.slice(-300)}`));
                 }
               });
               ffmpeg.on('error', reject);
             });
 
-            // Cleanup captured file
-            try { fs.unlinkSync(capturedFile); } catch (e) {}
+            // Cleanup captured file if we successfully extracted a segment
+            if (downloadedFile !== capturedFile) {
+              try { fs.unlinkSync(capturedFile); } catch (e) {}
+            }
           } else {
             // Use the captured file directly (segment already matches or no extraction needed)
             downloadedFile = capturedFile;
