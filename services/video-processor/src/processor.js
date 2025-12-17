@@ -23,6 +23,95 @@ import {
 import { generateCaptions } from './caption-renderer.js';
 
 /**
+ * Validate video A/V sync and duration consistency
+ * Checks that video and audio durations match within tolerance
+ * @param {string} jobId - Job ID for logging
+ * @param {string} filePath - Path to video file
+ * @param {number} threshold - Maximum allowed duration mismatch in seconds (default 0.1)
+ * @returns {Object} { valid: boolean, error?: string, details: Object }
+ */
+async function validateVideoSync(jobId, filePath, threshold = 0.1) {
+  try {
+    const probeCmd = `ffprobe -v error -show_entries stream=codec_type,avg_frame_rate,nb_frames,duration,time_base -show_entries format=duration -of json "${filePath}"`;
+    const probeResult = execSync(probeCmd, { encoding: 'utf8', timeout: 30000 });
+    const probeData = JSON.parse(probeResult);
+
+    let videoFrames = 0;
+    let videoFps = 30;
+    let videoDuration = 0;
+    let audioDuration = 0;
+    const formatDuration = parseFloat(probeData.format?.duration || 0);
+
+    for (const stream of probeData.streams || []) {
+      if (stream.codec_type === 'video') {
+        videoFrames = parseInt(stream.nb_frames || 0);
+        videoDuration = parseFloat(stream.duration || 0);
+        // Parse avg_frame_rate (e.g., "30/1" or "30000/1001")
+        if (stream.avg_frame_rate) {
+          const [num, den] = stream.avg_frame_rate.split('/').map(Number);
+          videoFps = den ? num / den : num;
+        }
+      } else if (stream.codec_type === 'audio') {
+        audioDuration = parseFloat(stream.duration || 0);
+      }
+    }
+
+    // Calculate computed video duration from frames
+    const computedVideoDuration = videoFrames > 0 && videoFps > 0 ? videoFrames / videoFps : 0;
+
+    // Log all metrics
+    console.log(`[${jobId}] VALIDATION: frames=${videoFrames}, fps=${videoFps.toFixed(2)}, videoDur=${videoDuration.toFixed(3)}s, audioDur=${audioDuration.toFixed(3)}s, formatDur=${formatDuration.toFixed(3)}s, computedDur=${computedVideoDuration.toFixed(3)}s`);
+
+    const errors = [];
+
+    // Check 1: Video duration vs format duration
+    if (videoDuration > 0 && formatDuration > 0) {
+      const delta = Math.abs(videoDuration - formatDuration);
+      if (delta > threshold) {
+        errors.push(`video_dur(${videoDuration.toFixed(3)}) vs format_dur(${formatDuration.toFixed(3)}) delta=${delta.toFixed(3)}s`);
+      }
+    }
+
+    // Check 2: Computed video duration vs actual video duration
+    if (computedVideoDuration > 0 && videoDuration > 0) {
+      const delta = Math.abs(computedVideoDuration - videoDuration);
+      if (delta > threshold) {
+        errors.push(`computed_dur(${computedVideoDuration.toFixed(3)}) vs video_dur(${videoDuration.toFixed(3)}) delta=${delta.toFixed(3)}s`);
+      }
+    }
+
+    // Check 3: Video duration vs audio duration (if audio exists)
+    if (audioDuration > 0 && videoDuration > 0) {
+      const delta = Math.abs(videoDuration - audioDuration);
+      if (delta > threshold) {
+        errors.push(`video_dur(${videoDuration.toFixed(3)}) vs audio_dur(${audioDuration.toFixed(3)}) delta=${delta.toFixed(3)}s`);
+      }
+    }
+
+    if (errors.length > 0) {
+      return {
+        valid: false,
+        error: errors.join('; '),
+        details: { videoFrames, videoFps, videoDuration, audioDuration, formatDuration, computedVideoDuration }
+      };
+    }
+
+    console.log(`[${jobId}] VALIDATION PASSED: A/V sync within ${threshold}s threshold`);
+    return {
+      valid: true,
+      details: { videoFrames, videoFps, videoDuration, audioDuration, formatDuration, computedVideoDuration }
+    };
+
+  } catch (err) {
+    return {
+      valid: false,
+      error: `Probe failed: ${err.message}`,
+      details: {}
+    };
+  }
+}
+
+/**
  * Main video processing function
  * @param {Object} params
  * @param {string} params.jobId - The job ID
@@ -148,16 +237,37 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           fs.writeFileSync(capturedFile, Buffer.from(buffer));
           console.log(`[${jobId}] Downloaded ${extensionStreamSource}: ${fs.statSync(capturedFile).size} bytes`);
 
-          // Probe the captured file to get its actual duration
+          // Probe the captured file to get duration, frame count, and audio duration
+          // These are needed to calculate correct fps for timestamp correction
           let capturedFileDuration = null;
+          let capturedFrameCount = 0;
+          let capturedAudioDuration = 0;
+          let capturedVideoDuration = 0;
+
           try {
-            const probeResult = execSync(`ffprobe -v quiet -print_format json -show_format "${capturedFile}"`, { encoding: 'utf8' });
+            const probeCmd = `ffprobe -v quiet -print_format json -show_streams -show_format -count_frames "${capturedFile}"`;
+            const probeResult = execSync(probeCmd, { encoding: 'utf8', timeout: 60000 });
             const probeData = JSON.parse(probeResult);
-            capturedFileDuration = parseFloat(probeData.format?.duration) || null;
-            console.log(`[${jobId}] Captured file duration: ${capturedFileDuration?.toFixed(2)}s`);
+
+            for (const stream of probeData.streams || []) {
+              if (stream.codec_type === 'video') {
+                capturedFrameCount = parseInt(stream.nb_frames || stream.nb_read_frames || 0);
+                capturedVideoDuration = parseFloat(stream.duration || 0);
+              } else if (stream.codec_type === 'audio') {
+                capturedAudioDuration = parseFloat(stream.duration || 0);
+              }
+            }
+
+            capturedFileDuration = parseFloat(probeData.format?.duration) || capturedAudioDuration || capturedVideoDuration;
+            console.log(`[${jobId}] Probe: duration=${capturedFileDuration?.toFixed(2)}s, frames=${capturedFrameCount}, audioDur=${capturedAudioDuration.toFixed(2)}s`);
           } catch (probeErr) {
             console.warn(`[${jobId}] Could not probe captured file: ${probeErr.message}`);
           }
+
+          // Calculate the actual fps from frame count and audio duration (audio is usually reliable)
+          const targetDuration = capturedAudioDuration || capturedFileDuration || 30;
+          const actualFps = capturedFrameCount > 0 ? capturedFrameCount / targetDuration : 30;
+          console.log(`[${jobId}] Calculated actualFps: ${actualFps.toFixed(2)} (${capturedFrameCount} frames / ${targetDuration.toFixed(2)}s)`)
 
           // Check if we need to extract a specific segment from the captured video
           // The extension may have captured more than needed (e.g., full 5 minutes)
@@ -195,16 +305,16 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
             // For webm files, we MUST re-encode because -c copy doesn't work reliably
             // Also need to fix timestamps which are often broken in MediaRecorder webm
-            // Use setpts filter to force linear timestamps, then trim
+            // Use setpts filter with ACTUAL fps to preserve correct timing
             // For mp4 files, try stream copy first for speed
             const useReencode = fileExt === 'webm';
 
             const ffmpegArgs = [
               '-i', capturedFile,
               ...(useReencode
-                ? ['-vf', `setpts=N/30/TB`,     // Force linear timestamps at 30fps
-                   '-af', 'asetpts=N/SR/TB',    // Force linear audio timestamps
-                   '-ss', String(relativeStart),// Seek AFTER filter (works on fixed timestamps)
+                ? ['-vf', `setpts=N/${actualFps.toFixed(4)}/TB`,  // Use actual fps, not hardcoded 30
+                   '-af', 'asetpts=N/SR/TB',
+                   '-ss', String(relativeStart),
                    '-t', String(duration),
                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                    '-c:a', 'aac', '-b:a', '192k',
@@ -255,36 +365,46 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               console.log(`[${jobId}] Converting webm to mp4 for reliable processing...`);
               downloadedFile = path.join(workDir, 'source.mp4');
 
-              // MediaRecorder webm files have BROKEN timestamps causing 4x speed issues
-              // The webm timestamps are compressed (30s content = 7.5s timestamps)
-              //
-              // FIX: Use setpts filter to FORCE linear timestamps based on frame count
-              // setpts=N/30/TB means: timestamp = frame_number / 30fps / timebase
-              // This completely ignores the broken webm timestamps
+              // Convert with correct timestamps using actualFps calculated above
+              // setpts=N/actualFps/TB spaces frames correctly over the target duration
+              // Then output at 30fps (duplicating/interpolating frames as needed)
+              console.log(`[${jobId}] Using actualFps=${actualFps.toFixed(2)} for timestamp correction`);
+
               await new Promise((resolve, reject) => {
                 const ffmpeg = spawn('ffmpeg', [
                   '-i', capturedFile,
-                  '-vf', 'setpts=N/30/TB',        // Force linear video timestamps at 30fps
-                  '-af', 'asetpts=N/SR/TB',       // Force linear audio timestamps
-                  '-r', '30',                      // Output at 30fps
+                  '-vf', `setpts=N/${actualFps.toFixed(4)}/TB`,  // Space frames over correct duration
+                  '-af', 'asetpts=N/SR/TB',                       // Normalize audio timestamps
+                  '-r', '30',                                     // Output at 30fps
                   '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                   '-c:a', 'aac', '-b:a', '192k',
-                  '-vsync', 'cfr',                 // Constant frame rate
+                  '-vsync', 'cfr',
                   '-y',
                   downloadedFile
                 ]);
 
                 let stderr = '';
                 ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
-                ffmpeg.on('close', (code) => {
+                ffmpeg.on('close', async (code) => {
                   const fileSize = fs.existsSync(downloadedFile) ? fs.statSync(downloadedFile).size : 0;
                   if (code === 0 && fileSize > 1000) {
                     console.log(`[${jobId}] Converted to mp4: ${fileSize} bytes`);
+
+                    // Step 4: Validate output A/V sync
+                    try {
+                      const validation = await validateVideoSync(jobId, downloadedFile);
+                      if (!validation.valid) {
+                        console.error(`[${jobId}] VALIDATION FAILED: ${validation.error}`);
+                        // Continue anyway, but log the issue
+                      }
+                    } catch (valErr) {
+                      console.warn(`[${jobId}] Validation check failed: ${valErr.message}`);
+                    }
+
                     try { fs.unlinkSync(capturedFile); } catch (e) {}
                     resolve();
                   } else {
-                    // Conversion failed, try using webm directly
-                    console.warn(`[${jobId}] webm->mp4 conversion failed: ${stderr.slice(-200)}`);
+                    console.warn(`[${jobId}] webm->mp4 conversion failed: ${stderr.slice(-300)}`);
                     downloadedFile = capturedFile;
                     resolve();
                   }
