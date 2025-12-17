@@ -17707,6 +17707,11 @@ exports.wizardGenerateAICaptions = functions.https.onCall(async (data, context) 
 
     // Parse transcript into words with estimated timing
     const words = (clip.transcript || '').split(/\s+/).filter(w => w.length > 0);
+
+    if (words.length === 0) {
+      throw new functions.https.HttpsError('failed-precondition', 'Clip has no transcript text to generate captions from');
+    }
+
     const clipDuration = clip.duration || (clip.endTime - clip.startTime);
     const avgWordDuration = clipDuration / words.length;
 
