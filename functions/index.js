@@ -5013,6 +5013,113 @@ exports.checkThumbnailStatus = functions.https.onCall(async (data, context) => {
 });
 
 // ==============================================
+// FETCH YOUTUBE VIDEO DATA - For Thumbnail Upgrade Feature
+// Fetches video metadata and thumbnail URL from YouTube
+// ==============================================
+
+exports.fetchYoutubeVideoData = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'fetchYoutubeData', 10); // 10 per minute
+
+  const { videoId, videoUrl } = data;
+
+  // Extract video ID from URL if provided
+  let extractedId = videoId;
+  if (!extractedId && videoUrl) {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([^&\s?#]+)/,
+      /youtube\.com\/shorts\/([^&\s?#]+)/
+    ];
+    for (const pattern of patterns) {
+      const match = videoUrl.match(pattern);
+      if (match) {
+        extractedId = match[1];
+        break;
+      }
+    }
+  }
+
+  if (!extractedId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Valid YouTube video ID or URL is required');
+  }
+
+  try {
+    // Try YouTube Data API if key is configured
+    const youtubeApiKey = functions.config().youtube?.api_key;
+
+    if (youtubeApiKey) {
+      const response = await axios.get(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${extractedId}&key=${youtubeApiKey}`,
+        { timeout: 10000 }
+      );
+
+      const video = response.data.items?.[0];
+      if (!video) {
+        throw new functions.https.HttpsError('not-found', 'Video not found');
+      }
+
+      const snippet = video.snippet;
+      const thumbnails = snippet.thumbnails;
+
+      // Get highest quality thumbnail available
+      const thumbnailUrl = thumbnails.maxres?.url ||
+                          thumbnails.standard?.url ||
+                          thumbnails.high?.url ||
+                          thumbnails.medium?.url ||
+                          thumbnails.default?.url;
+
+      return {
+        success: true,
+        videoId: extractedId,
+        title: snippet.title,
+        description: snippet.description?.substring(0, 500) || '',
+        channelName: snippet.channelTitle,
+        thumbnailUrl: thumbnailUrl,
+        publishedAt: snippet.publishedAt,
+        tags: snippet.tags?.slice(0, 10) || []
+      };
+    }
+
+    // Fallback: Construct thumbnail URL directly (works without API key)
+    // YouTube thumbnails follow predictable patterns
+    const maxresThumbnail = `https://img.youtube.com/vi/${extractedId}/maxresdefault.jpg`;
+    const hqThumbnail = `https://img.youtube.com/vi/${extractedId}/hqdefault.jpg`;
+
+    // Verify thumbnail exists by checking maxres first
+    try {
+      await axios.head(maxresThumbnail, { timeout: 5000 });
+      return {
+        success: true,
+        videoId: extractedId,
+        title: null,
+        description: null,
+        channelName: null,
+        thumbnailUrl: maxresThumbnail,
+        fallbackMode: true,
+        message: 'Video thumbnail found. Title/description not available without YouTube API key.'
+      };
+    } catch {
+      // Fallback to HQ thumbnail if maxres doesn't exist
+      return {
+        success: true,
+        videoId: extractedId,
+        title: null,
+        description: null,
+        channelName: null,
+        thumbnailUrl: hqThumbnail,
+        fallbackMode: true,
+        message: 'Video thumbnail found. Title/description not available without YouTube API key.'
+      };
+    }
+
+  } catch (error) {
+    console.error('fetchYoutubeVideoData error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to fetch video data. Please check the URL and try again.');
+  }
+});
+
+// ==============================================
 // THUMBNAIL PRO - Multi-Model AI Thumbnail Generator
 // Supports: Imagen 4, Gemini (Nano Banana Pro), DALL-E 3
 // Features: Reference images, multiple variations, content categories
@@ -5026,17 +5133,20 @@ exports.generateThumbnailPro = functions.https.onCall(async (data, context) => {
     title,
     style = 'professional',
     customPrompt = '',
-    mode = 'quick', // quick | reference | premium | faceHero | styleClone | productPro
+    mode = 'quick', // quick | reference | upgrade | faceHero | styleClone | productPro
     category = 'general', // general | gaming | tutorial | vlog | review | news | entertainment
     variations = 1, // 1-4
     referenceImage = null, // { base64, mimeType }
     // NEW Phase 1 & 6 parameters
-    referenceType = 'auto', // auto | face | product | style | background
+    referenceType = 'auto', // auto | face | product | style | background | upgrade
     compositionTemplate = 'auto', // auto | face-right | face-center | split-screen | product-hero | action-shot
     faceStrength = 0.85, // 0.5-1.0 - how much to preserve face
     styleStrength = 0.7, // 0.3-1.0 - how much to match style
     expressionModifier = 'keep', // keep | excited | serious | surprised
-    backgroundStyle = 'auto' // auto | studio | blur | gradient | custom
+    backgroundStyle = 'auto', // auto | studio | blur | gradient | custom
+    // Thumbnail Upgrade specific parameters
+    originalThumbnailUrl = null, // URL to fetch thumbnail from (YouTube)
+    youtubeContext = null // { videoId, title, description, channelName }
   } = data;
 
   if (!title || title.trim().length < 3) {
@@ -5052,20 +5162,44 @@ exports.generateThumbnailPro = functions.https.onCall(async (data, context) => {
   const modeConfig = {
     quick: { model: 'imagen-4', tokenCost: 2, supportsReference: false },
     reference: { model: 'nano-banana-pro', tokenCost: 4, supportsReference: true },
-    premium: { model: 'dall-e-3', tokenCost: 6, supportsReference: false },
-    // NEW specialized modes
+    upgrade: { model: 'nano-banana-pro', tokenCost: 4, supportsReference: true, isUpgrade: true },
+    // Specialized modes
     faceHero: { model: 'nano-banana-pro', tokenCost: 5, supportsReference: true, specialization: 'face' },
     styleClone: { model: 'nano-banana-pro', tokenCost: 4, supportsReference: true, specialization: 'style' },
-    productPro: { model: 'dall-e-3', tokenCost: 6, supportsReference: false, specialization: 'product' }
+    productPro: { model: 'nano-banana-pro', tokenCost: 6, supportsReference: true, specialization: 'product' }
   };
 
   const config = modeConfig[mode] || modeConfig.quick;
   const totalCost = config.tokenCost * imageCount;
 
   // Validate reference image for reference-supporting modes
-  const needsReference = ['reference', 'faceHero', 'styleClone'].includes(mode);
-  if (needsReference && !referenceImage?.base64) {
-    throw new functions.https.HttpsError('invalid-argument', `${mode} mode requires a reference image`);
+  const needsReference = ['reference', 'upgrade', 'faceHero', 'styleClone'].includes(mode);
+  const hasReferenceImage = referenceImage?.base64 || originalThumbnailUrl;
+  if (needsReference && !hasReferenceImage) {
+    throw new functions.https.HttpsError('invalid-argument', `${mode} mode requires a reference image or thumbnail URL`);
+  }
+
+  // Fetch thumbnail from URL if provided (for upgrade mode with YouTube)
+  let effectiveReferenceImage = referenceImage;
+  if (mode === 'upgrade' && originalThumbnailUrl && !referenceImage?.base64) {
+    try {
+      console.log('Fetching thumbnail from URL:', originalThumbnailUrl);
+      const thumbnailResponse = await axios.get(originalThumbnailUrl, {
+        responseType: 'arraybuffer',
+        timeout: 15000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ThumbnailFetcher/1.0)'
+        }
+      });
+      effectiveReferenceImage = {
+        base64: Buffer.from(thumbnailResponse.data).toString('base64'),
+        mimeType: thumbnailResponse.headers['content-type'] || 'image/jpeg'
+      };
+      console.log('Successfully fetched thumbnail, size:', effectiveReferenceImage.base64.length);
+    } catch (fetchError) {
+      console.error('Failed to fetch thumbnail from URL:', fetchError.message);
+      throw new functions.https.HttpsError('invalid-argument', 'Failed to fetch thumbnail from URL. Please try uploading the image directly.');
+    }
   }
 
   // ==========================================
@@ -5154,7 +5288,39 @@ The result should feel like it belongs in the same "series" as the reference.`,
 Use the reference image as the BACKGROUND or ENVIRONMENT.
 Place new subjects/elements INTO this background setting.
 Maintain the lighting direction and color temperature of the background.
-Ensure new elements are properly composited and lit to match.`
+Ensure new elements are properly composited and lit to match.`,
+
+    upgrade: `THUMBNAIL UPGRADE REQUEST - CRITICAL INSTRUCTIONS:
+┌─────────────────────────────────────────────────────────────┐
+│ YOU ARE UPGRADING AN EXISTING YOUTUBE THUMBNAIL             │
+│ Create a SIGNIFICANTLY IMPROVED version while keeping       │
+│ the core concept, subject, and message intact.              │
+└─────────────────────────────────────────────────────────────┘
+
+UPGRADE OBJECTIVES:
+• PROFESSIONAL QUALITY: Transform to broadcast/magazine quality
+• VISUAL IMPACT: Maximize click-through appeal for YouTube feed
+• CLARITY: Ensure subject is crystal clear even at small sizes
+• COLOR VIBRANCY: Enhance colors for better YouTube visibility
+• COMPOSITION: Apply golden ratio / rule of thirds principles
+
+ANALYZE THE ORIGINAL AND ENHANCE:
+• If face visible: Sharpen features, improve lighting, add rim light, enhance catch lights
+• If text visible: Make it cleaner, more readable, better contrast
+• If product: Hero lighting, better angles, professional showcase
+• Background: More dynamic, add gradient or depth blur for separation
+
+CRITICAL - MAINTAIN CONSISTENCY:
+• Keep the SAME core subject/concept as the original
+• Preserve brand colors if present in original
+• Keep the same general layout/composition style
+• Maintain the video topic relevance
+
+OUTPUT REQUIREMENTS:
+• 16:9 aspect ratio (1920x1080 equivalent)
+• 4K photorealistic quality with enhanced details
+• High contrast and saturation optimized for small thumbnail display
+• Professional color grading with cinematic feel`
   };
 
   // ==========================================
@@ -5322,8 +5488,8 @@ Ensure new elements are properly composited and lit to match.`
     let effectiveReferenceType = referenceType;
     let referenceAnalysis = null;
 
-    if (referenceImage && referenceImage.base64 && referenceType === 'auto') {
-      // Auto-detect reference type using Gemini Vision
+    if (effectiveReferenceImage && effectiveReferenceImage.base64 && (referenceType === 'auto' || referenceType === 'upgrade')) {
+      // Auto-detect reference type using Gemini Vision (also used for upgrade mode analysis)
       try {
         const geminiApiKey = functions.config().gemini?.key;
         if (geminiApiKey) {
@@ -5333,7 +5499,7 @@ Ensure new elements are properly composited and lit to match.`
             contents: [{
               role: 'user',
               parts: [
-                { inlineData: { mimeType: referenceImage.mimeType || 'image/png', data: referenceImage.base64 } },
+                { inlineData: { mimeType: effectiveReferenceImage.mimeType || 'image/png', data: effectiveReferenceImage.base64 } },
                 { text: `Analyze this image for YouTube thumbnail generation. Respond in JSON format only:
 {
   "primarySubject": "face|product|scene|style",
@@ -5395,10 +5561,19 @@ Ensure new elements are properly composited and lit to match.`
 
       // Build context for reference-based generation
       let referenceContext = '';
-      if (referenceImage && effectiveReferenceType) {
+      if (effectiveReferenceImage && effectiveReferenceType) {
+        // Add YouTube context for upgrade mode
+        const youtubeContextStr = (mode === 'upgrade' && youtubeContext) ? `
+VIDEO CONTEXT (for better relevance):
+- Title: "${youtubeContext.title || 'Unknown'}"
+- Channel: "${youtubeContext.channelName || 'Unknown'}"
+- Description: "${(youtubeContext.description || '').substring(0, 200)}"
+` : '';
+
         referenceContext = `
 REFERENCE IMAGE PROVIDED - Type: ${effectiveReferenceType.toUpperCase()}
 ${referenceAnalysis ? `Analysis: ${JSON.stringify(referenceAnalysis)}` : ''}
+${youtubeContextStr}
 
 ${referenceTypePrompts[effectiveReferenceType] || ''}
 `;
@@ -5507,11 +5682,11 @@ Output ONLY the prompt, no explanations or preamble.`
           const contentParts = [];
 
           // Add reference image FIRST (this is how Creative Studio does it)
-          if (referenceImage && referenceImage.base64) {
+          if (effectiveReferenceImage && effectiveReferenceImage.base64) {
             contentParts.push({
               inlineData: {
-                mimeType: referenceImage.mimeType || 'image/png',
-                data: referenceImage.base64
+                mimeType: effectiveReferenceImage.mimeType || 'image/png',
+                data: effectiveReferenceImage.base64
               }
             });
             console.log('Added reference image as input (face/character reference)');
@@ -5521,11 +5696,31 @@ Output ONLY the prompt, no explanations or preamble.`
           // Creative Studio's working format: "Using the provided image as a character/face reference to maintain consistency, generate a new image: ${prompt}"
           let finalPrompt;
 
-          if (referenceImage && referenceImage.base64) {
+          if (effectiveReferenceImage && effectiveReferenceImage.base64) {
             // ============================================================
             // MATCH CREATIVE STUDIO'S SIMPLE, WORKING FORMAT
             // ============================================================
-            if (effectiveReferenceType === 'face' || mode === 'faceHero') {
+            if (mode === 'upgrade' || effectiveReferenceType === 'upgrade') {
+              // THUMBNAIL UPGRADE MODE - Create improved version of existing thumbnail
+              const youtubeCtx = youtubeContext ? `
+This thumbnail is from a video titled: "${youtubeContext.title || 'Unknown'}"
+Channel: ${youtubeContext.channelName || 'Unknown'}` : '';
+
+              finalPrompt = `You are upgrading an existing YouTube thumbnail. The provided image is the ORIGINAL thumbnail that needs to be improved.
+
+UPGRADE OBJECTIVES:
+- Create a SIGNIFICANTLY ENHANCED version with professional quality
+- Keep the SAME subject, concept, and overall message
+- Improve: lighting, colors, clarity, composition, visual impact
+- Make it more eye-catching for YouTube's feed
+- Maintain brand consistency if present
+${youtubeCtx}
+
+Original thumbnail topic: ${imagePrompt}
+
+Generate an upgraded, professional-quality YouTube thumbnail. 16:9 aspect ratio. The result should be clearly better while keeping the same core concept.`;
+
+            } else if (effectiveReferenceType === 'face' || mode === 'faceHero') {
               // Face preservation - use Creative Studio's exact working pattern
               finalPrompt = `Using the provided image as a character/face reference to maintain consistency, generate a YouTube thumbnail: ${imagePrompt}
 
