@@ -5545,6 +5545,7 @@ OUTPUT REQUIREMENTS:
     if (mode === 'faceHero') effectiveReferenceType = 'face';
     if (mode === 'styleClone') effectiveReferenceType = 'style';
     if (mode === 'productPro') effectiveReferenceType = 'product';
+    if (mode === 'upgrade') effectiveReferenceType = 'upgrade'; // Keep upgrade type
 
     // Build the enhanced prompt
     const categoryEnhancement = categoryPrompts[category] || categoryPrompts.general;
