@@ -5798,6 +5798,81 @@
                 render();
             },
 
+            // Regenerate a single failed bulk item
+            regenerateBulkItem: async function(idx) {
+                var item = state.bulkUrls[idx];
+                if (!item || item.status !== 'error') return;
+
+                // Need video data to regenerate
+                if (!item.youtubeData) {
+                    console.error('No video data for regeneration');
+                    return;
+                }
+
+                item.status = 'regenerating';
+                item.error = null;
+                render();
+
+                try {
+                    var generateThumbnailPro = firebase.functions().httpsCallable('generateThumbnailPro');
+                    var payload = {
+                        prompt: item.youtubeData.title || 'Professional YouTube thumbnail',
+                        mode: 'upgrade',
+                        referenceType: 'upgrade',
+                        originalThumbnailUrl: item.youtubeData.thumbnailUrl,
+                        variations: 1,
+                        title: item.youtubeData.title,
+                        youtubeContext: {
+                            videoId: item.youtubeData.videoId,
+                            title: item.youtubeData.title,
+                            channelName: item.youtubeData.channelName || '',
+                            description: item.youtubeData.description || ''
+                        },
+                        style: state.thumbnailStyle,
+                        category: state.thumbnailCategory
+                    };
+
+                    var result = await generateThumbnailPro(payload);
+
+                    if (result.data && result.data.images && result.data.images.length > 0) {
+                        item.status = 'complete';
+                        item.generatedThumbnail = result.data.images[0].url;
+                        if (typeof result.data.newBalance !== 'undefined') {
+                            state.thumbnailTokenBalance = result.data.newBalance;
+                        }
+                    } else {
+                        throw new Error('No image generated');
+                    }
+                } catch (error) {
+                    console.error('Bulk regeneration error:', error);
+                    item.status = 'error';
+                    item.error = error.message || 'Regeneration failed';
+                }
+
+                render();
+            },
+
+            // Retry all failed bulk items
+            retryFailedBulkItems: async function() {
+                var failedIndices = [];
+                state.bulkUrls.forEach(function(item, idx) {
+                    if (item.status === 'error') {
+                        failedIndices.push(idx);
+                    }
+                });
+
+                if (failedIndices.length === 0) return;
+
+                // Process failed items sequentially
+                for (var i = 0; i < failedIndices.length; i++) {
+                    await app.regenerateBulkItem(failedIndices[i]);
+                    // Small delay between retries
+                    if (i < failedIndices.length - 1) {
+                        await new Promise(function(resolve) { setTimeout(resolve, 1500); });
+                    }
+                }
+            },
+
             // ========== PLAYLIST MODE FUNCTIONS ==========
             setPlaylistUrl: function(url) {
                 state.playlistUrl = url;
@@ -6009,6 +6084,84 @@
                 state.playlistResults = [];
                 state.playlistProcessing = false;
                 render();
+            },
+
+            // Regenerate a single failed playlist item
+            regeneratePlaylistItem: async function(idx) {
+                var item = state.playlistResults[idx];
+                if (!item || item.status !== 'error') return;
+
+                // Find the video data from playlistData
+                var video = state.playlistData?.videos?.find(function(v) {
+                    return v.videoId === item.videoId;
+                });
+                if (!video) {
+                    console.error('Video not found for regeneration');
+                    return;
+                }
+
+                item.status = 'regenerating';
+                item.error = null;
+                render();
+
+                try {
+                    var generateThumbnailPro = firebase.functions().httpsCallable('generateThumbnailPro');
+                    var payload = {
+                        prompt: video.title || 'Professional YouTube thumbnail',
+                        mode: 'upgrade',
+                        referenceType: 'upgrade',
+                        originalThumbnailUrl: video.thumbnailUrl,
+                        variations: 1,
+                        title: video.title,
+                        youtubeContext: {
+                            videoId: video.videoId,
+                            title: video.title,
+                            channelName: state.playlistData?.channelTitle || '',
+                            description: video.description || ''
+                        },
+                        style: state.thumbnailStyle,
+                        category: state.thumbnailCategory
+                    };
+
+                    var result = await generateThumbnailPro(payload);
+
+                    if (result.data && result.data.images && result.data.images.length > 0) {
+                        item.status = 'complete';
+                        item.thumbnailUrl = result.data.images[0].url;
+                        if (typeof result.data.newBalance !== 'undefined') {
+                            state.thumbnailTokenBalance = result.data.newBalance;
+                        }
+                    } else {
+                        throw new Error('No image generated');
+                    }
+                } catch (error) {
+                    console.error('Regeneration error:', error);
+                    item.status = 'error';
+                    item.error = error.message || 'Regeneration failed';
+                }
+
+                render();
+            },
+
+            // Retry all failed playlist items
+            retryFailedPlaylistItems: async function() {
+                var failedIndices = [];
+                state.playlistResults.forEach(function(item, idx) {
+                    if (item.status === 'error') {
+                        failedIndices.push(idx);
+                    }
+                });
+
+                if (failedIndices.length === 0) return;
+
+                // Process failed items sequentially
+                for (var i = 0; i < failedIndices.length; i++) {
+                    await app.regeneratePlaylistItem(failedIndices[i]);
+                    // Small delay between retries
+                    if (i < failedIndices.length - 1) {
+                        await new Promise(function(resolve) { setTimeout(resolve, 1500); });
+                    }
+                }
             },
 
             calculateThumbnailCost: function() {
@@ -9752,11 +9905,15 @@
                                     html += '<div class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">✓</div>';
                                     html += '</div>';
                                 } else if (item.status === 'error') {
-                                    html += '<div class="relative bg-red-50 border border-red-200 rounded-lg flex items-center justify-center" style="aspect-ratio: 16/9;">';
-                                    html += '<div class="text-center p-2">';
+                                    html += '<div class="relative bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center" style="aspect-ratio: 16/9;">';
                                     html += '<div class="text-red-500 text-lg">❌</div>';
-                                    html += '<p class="text-xs text-red-600 mt-1 line-clamp-2">' + utils.escapeHtml(item.error || 'Failed') + '</p>';
+                                    html += '<p class="text-xs text-red-600 mt-1 px-1 text-center line-clamp-1">' + utils.escapeHtml(item.error || 'Failed') + '</p>';
+                                    html += '<button onclick="app.regenerateBulkItem(' + idx + ')" class="mt-1 text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition-colors">🔄 Retry</button>';
                                     html += '</div>';
+                                } else if (item.status === 'regenerating') {
+                                    html += '<div class="relative bg-yellow-50 border border-yellow-200 rounded-lg flex flex-col items-center justify-center" style="aspect-ratio: 16/9;">';
+                                    html += '<div class="text-yellow-500 text-xl animate-spin">⏳</div>';
+                                    html += '<p class="text-xs text-yellow-600 mt-1">Retrying...</p>';
                                     html += '</div>';
                                 }
                             });
@@ -9764,6 +9921,11 @@
 
                             // Action buttons
                             html += '<div class="flex flex-col sm:flex-row gap-3 mt-4">';
+                            if (errorCount > 0) {
+                                html += '<button type="button" onclick="app.retryFailedBulkItems()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center justify-center gap-2 transition-colors">';
+                                html += '<span>🔄</span> Retry Failed (' + errorCount + ')';
+                                html += '</button>';
+                            }
                             if (completedCount > 0) {
                                 html += '<button type="button" onclick="app.downloadAllAsZip()" class="flex-1 btn-primary bg-gradient-to-r from-purple-500 to-indigo-600 inline-flex items-center justify-center gap-2">';
                                 html += '<span>📦</span> Download All as ZIP';
@@ -10005,11 +10167,15 @@
                                     html += '<div class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">✓</div>';
                                     html += '</div>';
                                 } else if (item.status === 'error') {
-                                    html += '<div class="relative bg-red-50 border border-red-200 rounded-lg flex items-center justify-center" style="aspect-ratio: 16/9;">';
-                                    html += '<div class="text-center p-2">';
+                                    html += '<div class="relative bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center group" style="aspect-ratio: 16/9;">';
                                     html += '<div class="text-red-500 text-lg">❌</div>';
-                                    html += '<p class="text-xs text-red-600 mt-1 line-clamp-2">' + utils.escapeHtml(item.error || 'Failed') + '</p>';
+                                    html += '<p class="text-xs text-red-600 mt-1 px-1 text-center line-clamp-1">' + utils.escapeHtml(item.error || 'Failed') + '</p>';
+                                    html += '<button onclick="app.regeneratePlaylistItem(' + idx + ')" class="mt-1 text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition-colors">🔄 Retry</button>';
                                     html += '</div>';
+                                } else if (item.status === 'regenerating') {
+                                    html += '<div class="relative bg-yellow-50 border border-yellow-200 rounded-lg flex flex-col items-center justify-center" style="aspect-ratio: 16/9;">';
+                                    html += '<div class="text-yellow-500 text-xl animate-spin">⏳</div>';
+                                    html += '<p class="text-xs text-yellow-600 mt-1">Retrying...</p>';
                                     html += '</div>';
                                 }
                             });
@@ -10017,6 +10183,11 @@
 
                             // Action buttons
                             html += '<div class="flex flex-col sm:flex-row gap-3 mt-4">';
+                            if (errorCount > 0) {
+                                html += '<button type="button" onclick="app.retryFailedPlaylistItems()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center justify-center gap-2 transition-colors">';
+                                html += '<span>🔄</span> Retry Failed (' + errorCount + ')';
+                                html += '</button>';
+                            }
                             if (completedCount > 0) {
                                 html += '<button type="button" onclick="app.downloadPlaylistAsZip()" class="flex-1 btn-primary bg-gradient-to-r from-indigo-500 to-purple-600 inline-flex items-center justify-center gap-2">';
                                 html += '<span>📦</span> Download All as ZIP';
