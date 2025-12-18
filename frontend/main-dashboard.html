@@ -39,10 +39,19 @@
          SECTION 1: EXTERNAL DEPENDENCIES
          ============================================ -->
 
+    <!-- 1.0 Performance: Preconnect & DNS Prefetch -->
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://www.gstatic.com">
+    <link rel="dns-prefetch" href="https://firestore.googleapis.com">
+
     <!-- 1.1 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- 1.2 Firebase SDKs -->
+    <!-- 1.2 Firebase SDKs (with preload for critical path) -->
+    <link rel="preload" href="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js" as="script">
+    <link rel="preload" href="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js" as="script">
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
