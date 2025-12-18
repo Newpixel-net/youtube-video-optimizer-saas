@@ -3201,37 +3201,40 @@
            4.1 FIREBASE CONFIGURATION
            ========================================== */
 
-        // Check Firebase with smart retry (zero delay if already loaded)
-        if (typeof firebase === 'undefined') {
-            var retryCount = 0;
-            var maxRetries = 30; // 3 seconds max (30 * 100ms)
-
-            function retryFirebaseCheck() {
-                if (typeof firebase !== 'undefined') {
-                    // Firebase loaded - reload to reinitialize properly
-                    location.reload();
-                    return;
-                }
-                retryCount++;
-                if (retryCount >= maxRetries) {
-                    document.getElementById('app-root').innerHTML =
-                        '<div class="view-container view-centered"><div class="card text-center">' +
-                        '<h2 class="text-xl font-bold text-red-600 mb-2">Connection Error</h2>' +
-                        '<p class="text-gray-600 mb-4">Failed to load required resources. This may be due to a slow connection or ad blocker.</p>' +
-                        '<button onclick="location.reload()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">Try Again</button></div></div>';
-                    return;
-                }
-                setTimeout(retryFirebaseCheck, 100);
+        // Robust Firebase check - waits for window.onload if needed
+        function initializeApp() {
+            // Firebase should be available now - proceed with app
+            if (typeof firebase === 'undefined') {
+                // Still not available after window.onload - show error
+                document.getElementById('app-root').innerHTML =
+                    '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">' +
+                    '<div style="background:rgba(30,41,59,0.95);border-radius:1rem;padding:3rem;text-align:center;max-width:400px;border:1px solid rgba(255,255,255,0.1);">' +
+                    '<h2 style="color:#ef4444;font-size:1.5rem;font-weight:bold;margin-bottom:1rem;">Connection Error</h2>' +
+                    '<p style="color:#9ca3af;margin-bottom:1.5rem;">Failed to load required resources. This may be due to a slow connection or ad blocker.</p>' +
+                    '<button onclick="location.reload()" style="padding:0.75rem 2rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:0.5rem;cursor:pointer;font-weight:600;font-size:1rem;">Try Again</button></div></div>';
+                return;
             }
 
-            // Show loading state while retrying
-            document.getElementById('app-root').innerHTML =
-                '<div class="view-container view-centered"><div class="text-center">' +
-                '<div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>' +
-                '<p class="text-gray-400">Loading...</p></div></div>';
-            retryFirebaseCheck();
-            return;
+            // Firebase is ready - continue with initialization
+            runApp();
         }
+
+        // Check if Firebase is already loaded (normal fast path)
+        if (typeof firebase !== 'undefined') {
+            // Firebase ready - run immediately
+            initializeApp();
+        } else {
+            // Firebase not ready - wait for all scripts to load
+            if (document.readyState === 'complete') {
+                // Page already loaded but Firebase missing - wait a bit more
+                setTimeout(initializeApp, 200);
+            } else {
+                // Wait for window.onload (all scripts loaded)
+                window.addEventListener('load', initializeApp);
+            }
+        }
+
+        function runApp() {
 
         // Platform Version
         const PLATFORM_VERSION = '1.0.3';
@@ -11223,6 +11226,8 @@
 
         // Initial render
         render();
+
+        } // end runApp()
 
     })();
     </script>
