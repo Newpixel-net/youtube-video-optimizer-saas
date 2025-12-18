@@ -3361,9 +3361,11 @@
             // Thumbnail Upgrade - YouTube URL Feature
             thumbnailUpgradeMode: 'upload', // 'upload' or 'youtube'
             thumbnailYoutubeUrl: '',
-            thumbnailYoutubeData: null, // { videoId, title, description, channelName, thumbnailUrl }
+            thumbnailYoutubeData: null, // { videoId, title, description, channelName, thumbnailUrl, tags }
             thumbnailYoutubeLoading: false,
             thumbnailYoutubeError: null,
+            thumbnailTitle: '', // Auto-filled from YouTube or manual entry
+            titleAutoFilled: false, // Flag to show "From YouTube" indicator
 
             // Quota settings (from getUserProfile)
             quotaInfo: null,           // Quota info for each tool with reset times
@@ -5486,8 +5488,15 @@
                             description: result.data.description,
                             channelName: result.data.channelName,
                             thumbnailUrl: result.data.thumbnailUrl,
+                            tags: result.data.tags || [],
                             fallbackMode: result.data.fallbackMode || false
                         };
+
+                        // Auto-fill title from YouTube data for SEO
+                        if (result.data.title) {
+                            state.thumbnailTitle = result.data.title;
+                            state.titleAutoFilled = true;
+                        }
 
                         // Auto-load thumbnail as reference (will be downloaded by backend)
                         state.thumbnailReference = {
@@ -5516,6 +5525,8 @@
                 state.thumbnailYoutubeData = null;
                 state.thumbnailYoutubeError = null;
                 state.thumbnailReference = null;
+                state.thumbnailTitle = '';
+                state.titleAutoFilled = false;
                 render();
             },
 
@@ -5649,6 +5660,11 @@
                 var title = document.getElementById('thumbnail-title').value.trim();
                 var customPrompt = document.getElementById('thumbnail-prompt')?.value.trim() || '';
 
+                // For upgrade mode with YouTube data, use YouTube title as fallback
+                if (!title && state.thumbnailMode === 'upgrade' && state.thumbnailYoutubeData && state.thumbnailYoutubeData.title) {
+                    title = state.thumbnailYoutubeData.title;
+                }
+
                 if (!title) {
                     state.error = { message: 'Please enter a video title' };
                     render();
@@ -5722,13 +5738,14 @@
                         payload.originalThumbnailUrl = state.thumbnailReference.dataUrl;
                         payload.referenceType = 'upgrade';
 
-                        // Pass YouTube context if available
+                        // Pass YouTube context if available (including tags for SEO)
                         if (state.thumbnailYoutubeData) {
                             payload.youtubeContext = {
                                 videoId: state.thumbnailYoutubeData.videoId,
                                 title: state.thumbnailYoutubeData.title,
                                 description: state.thumbnailYoutubeData.description,
-                                channelName: state.thumbnailYoutubeData.channelName
+                                channelName: state.thumbnailYoutubeData.channelName,
+                                tags: state.thumbnailYoutubeData.tags || []
                             };
                         }
                     } else {
@@ -9253,9 +9270,20 @@
                 // ========== TITLE INPUT ==========
                 html += '<div class="mb-6">';
                 html += '<label class="block text-gray-700 font-semibold mb-2">Video Title</label>';
-                html += '<input type="text" id="thumbnail-title" value="' + utils.escapeHtml(suggestedTitle) + '" placeholder="Enter your video title..." class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none text-lg" required />';
-                if (hasVideoContext && optimizedTitles.length > 1) {
+
+                // Use state.thumbnailTitle (from YouTube) if available, otherwise suggestedTitle
+                var titleValue = state.thumbnailTitle || suggestedTitle;
+                var isYoutubeTitle = state.titleAutoFilled && state.thumbnailTitle;
+
+                html += '<input type="text" id="thumbnail-title" value="' + utils.escapeHtml(titleValue) + '" placeholder="Enter your video title..." oninput="state.thumbnailTitle = this.value; state.titleAutoFilled = false;" class="w-full px-4 py-3 border-2 ' + (isYoutubeTitle ? 'border-green-300 bg-green-50' : 'border-gray-200') + ' rounded-xl focus:border-pink-500 focus:outline-none text-lg" ' + (state.thumbnailMode === 'upgrade' && state.thumbnailYoutubeData ? '' : 'required') + ' />';
+
+                // Show indicator for YouTube auto-fill
+                if (isYoutubeTitle) {
+                    html += '<p class="text-sm text-green-600 mt-2 flex items-center gap-1"><span>✓</span> Auto-filled from YouTube • Edit if needed for better SEO</p>';
+                } else if (hasVideoContext && optimizedTitles.length > 1) {
                     html += '<p class="text-sm text-gray-500 mt-2">💡 Or try: <span class="text-pink-600 cursor-pointer hover:underline" onclick="document.getElementById(\'thumbnail-title\').value=\'' + utils.escapeHtml(optimizedTitles[1]).replace(/'/g, "\\'") + '\'">' + utils.escapeHtml(optimizedTitles[1]) + '</span></p>';
+                } else if (state.thumbnailMode === 'upgrade' && state.thumbnailYoutubeData && !state.thumbnailTitle) {
+                    html += '<p class="text-sm text-amber-600 mt-2">⚠️ Title unavailable from YouTube - please enter one for best results</p>';
                 }
                 html += '</div>';
 

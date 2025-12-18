@@ -5702,24 +5702,43 @@ Output ONLY the prompt, no explanations or preamble.`
             // MATCH CREATIVE STUDIO'S SIMPLE, WORKING FORMAT
             // ============================================================
             if (mode === 'upgrade' || effectiveReferenceType === 'upgrade') {
-              // THUMBNAIL UPGRADE MODE - Create improved version of existing thumbnail
-              const youtubeCtx = youtubeContext ? `
-This thumbnail is from a video titled: "${youtubeContext.title || 'Unknown'}"
-Channel: ${youtubeContext.channelName || 'Unknown'}` : '';
+              // THUMBNAIL UPGRADE MODE - Create SEO-optimized improved version
+              let youtubeCtx = '';
+              if (youtubeContext) {
+                const tags = youtubeContext.tags?.slice(0, 5).join(', ') || '';
+                const descPreview = (youtubeContext.description || '').substring(0, 200);
+                youtubeCtx = `
+═══════════════════════════════════════════════════════════════
+VIDEO CONTEXT (USE THIS FOR SEO-OPTIMIZED THUMBNAIL):
+═══════════════════════════════════════════════════════════════
+Title: "${youtubeContext.title || 'Unknown'}"
+Channel: ${youtubeContext.channelName || 'Unknown'}
+${descPreview ? `Description: ${descPreview}...` : ''}
+${tags ? `Keywords/Tags: ${tags}` : ''}
+═══════════════════════════════════════════════════════════════`;
+              }
 
-              finalPrompt = `You are upgrading an existing YouTube thumbnail. The provided image is the ORIGINAL thumbnail that needs to be improved.
+              finalPrompt = `You are creating a PROFESSIONAL, SEO-OPTIMIZED YouTube thumbnail upgrade.
 
-UPGRADE OBJECTIVES:
-- Create a SIGNIFICANTLY ENHANCED version with professional quality
-- Keep the SAME subject, concept, and overall message
-- Improve: lighting, colors, clarity, composition, visual impact
-- Make it more eye-catching for YouTube's feed
-- Maintain brand consistency if present
+The provided image is the ORIGINAL thumbnail. Analyze it carefully and create a SIGNIFICANTLY IMPROVED version.
 ${youtubeCtx}
 
-Original thumbnail topic: ${imagePrompt}
+SEO-OPTIMIZED UPGRADE REQUIREMENTS:
+1. VISUAL HIERARCHY: Clear focal point that matches the video title/topic
+2. CLICK-WORTHY: Create curiosity and urgency that compels clicks
+3. THUMBNAIL TEXT SPACE: Leave clear space on left side for title text overlay
+4. COLOR PSYCHOLOGY: Use vibrant, high-contrast colors that pop in YouTube feed
+5. FACE ENHANCEMENT: If there's a face, make expression more engaging/dramatic
+6. BRAND CONSISTENCY: Maintain any brand colors or style from original
+7. MOBILE OPTIMIZED: Ensure key elements are visible at small sizes
+8. CONTEXT ACCURACY: Thumbnail must clearly represent the video content
 
-Generate an upgraded, professional-quality YouTube thumbnail. 16:9 aspect ratio. The result should be clearly better while keeping the same core concept.`;
+CRITICAL - The upgraded thumbnail MUST:
+- Clearly convey what the video "${imagePrompt}" is about
+- Be more visually striking than the original
+- Follow YouTube thumbnail best practices for CTR
+
+16:9 aspect ratio, 1280x720 quality, professional YouTube thumbnail.`;
 
             } else if (effectiveReferenceType === 'face' || mode === 'faceHero') {
               // Face preservation - use Creative Studio's exact working pattern
