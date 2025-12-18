@@ -5114,11 +5114,6 @@
             /* ------------------------------------------
                4.5.7 Thumbnail Generator Actions
                ------------------------------------------ */
-            setThumbnailStyle: function(style) {
-                state.thumbnailStyle = style;
-                render();
-            },
-
             generateThumbnail: function(e) {
                 e.preventDefault();
                 var title = document.getElementById('thumbnail-title').value.trim();
@@ -5418,12 +5413,12 @@
 
             setThumbnailStyle: function(style) {
                 state.thumbnailStyle = style;
-                app.updateThumbnailStyleUI(style);
+                render();
             },
 
             setThumbnailCategory: function(category) {
                 state.thumbnailCategory = category;
-                app.updateThumbnailCategoryUI(category);
+                render();
             },
 
             setThumbnailVariations: function(count) {

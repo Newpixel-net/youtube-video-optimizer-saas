@@ -5695,11 +5695,15 @@ ${referenceTypePrompts[effectiveReferenceType] || ''}
 `;
       }
 
+      // Extract short caption text for the thumbnail
+      const captionWords = title.split(/[:\-|,]/).map(p => p.trim()).filter(p => p.length > 0)[0]?.split(' ').slice(0, 4).join(' ') || title.split(' ').slice(0, 4).join(' ');
+      const suggestedCaption = captionWords.toUpperCase();
+
       const promptGeneratorResponse = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [{
           role: 'system',
-          content: `You are an expert YouTube thumbnail designer and AI image prompt engineer. Your prompts consistently produce viral, high-CTR thumbnails. You understand composition, color psychology, and what makes viewers click.`
+          content: `You are an expert YouTube thumbnail designer and AI image prompt engineer. Your prompts consistently produce viral, high-CTR thumbnails. You understand composition, color psychology, typography, and what makes viewers click. You ALWAYS include bold text captions in your thumbnail designs because professional YouTube thumbnails need eye-catching text.`
         }, {
           role: 'user',
           content: `Create a DETAILED image generation prompt for an AMAZING YouTube thumbnail.
@@ -5723,7 +5727,6 @@ ${styleEnhancement}
 COMPOSITION TEMPLATE
 ═══════════════════════════════════════════════════════════════
 ${compositionGuide.prompt}
-Text overlay space: ${compositionGuide.textSpace}
 
 ═══════════════════════════════════════════════════════════════
 BACKGROUND STYLE
@@ -5741,6 +5744,15 @@ REFERENCE IMAGE REQUIREMENTS (CRITICAL)
 ${referenceContext}` : ''}
 
 ═══════════════════════════════════════════════════════════════
+MANDATORY TEXT CAPTION (CRITICAL - DO NOT SKIP)
+═══════════════════════════════════════════════════════════════
+The thumbnail MUST include bold text. Suggested caption: "${suggestedCaption}"
+- Text style: Thick, bold sans-serif (Impact/Bebas Neue style)
+- Text color: High contrast - white with black stroke, or vibrant color
+- Text size: Large enough to read at small thumbnail sizes
+- Text position: Prominent placement that doesn't cover faces
+
+═══════════════════════════════════════════════════════════════
 OUTPUT REQUIREMENTS
 ═══════════════════════════════════════════════════════════════
 - Format: 16:9 aspect ratio (1280x720), YouTube thumbnail
@@ -5748,8 +5760,9 @@ OUTPUT REQUIREMENTS
 - Must be INSTANTLY eye-catching at small sizes (search results)
 - Colors should pop and contrast well
 - Main subject must be immediately clear
+- MUST include bold, readable text caption on the thumbnail
 
-Generate a comprehensive, detailed prompt that will produce a STUNNING thumbnail.
+Generate a comprehensive, detailed prompt that will produce a STUNNING thumbnail WITH text.
 Output ONLY the prompt, no explanations or preamble.`
         }],
         temperature: 0.7,
@@ -5759,17 +5772,19 @@ Output ONLY the prompt, no explanations or preamble.`
       imagePrompt = promptGeneratorResponse?.choices?.[0]?.message?.content?.trim();
     } catch (openaiError) {
       console.error('OpenAI prompt generation failed:', openaiError.message);
-      // Fallback prompt with all enhancements
-      imagePrompt = `${categoryEnhancement}. ${styleEnhancement}. ${compositionGuide.prompt}. Video title: "${title}". ${customPrompt || ''} ${backgroundGuide}. High quality, 4K resolution, professional YouTube thumbnail, 16:9 aspect ratio.`;
+      // Fallback prompt with all enhancements including text caption
+      const fallbackCaption = title.split(/[:\-|,]/)[0]?.trim().split(' ').slice(0, 4).join(' ').toUpperCase() || title.toUpperCase();
+      imagePrompt = `${categoryEnhancement}. ${styleEnhancement}. ${compositionGuide.prompt}. Video title: "${title}". ${customPrompt || ''} ${backgroundGuide}. Add bold text caption "${fallbackCaption}" in thick sans-serif font with high contrast. High quality, 4K resolution, professional YouTube thumbnail, 16:9 aspect ratio.`;
     }
 
     // Ensure prompt is valid
     if (!imagePrompt || imagePrompt.length < 20) {
-      imagePrompt = `Professional YouTube thumbnail for "${title}". ${categoryEnhancement}. ${styleEnhancement}. ${compositionGuide.prompt}. Eye-catching design, bold colors, high contrast, 4K quality.`;
+      const defaultCaption = title.split(/[:\-|,]/)[0]?.trim().split(' ').slice(0, 4).join(' ').toUpperCase() || title.toUpperCase();
+      imagePrompt = `Professional YouTube thumbnail for "${title}". ${categoryEnhancement}. ${styleEnhancement}. ${compositionGuide.prompt}. Add bold text caption "${defaultCaption}" in thick sans-serif font. Eye-catching design, bold colors, high contrast, 4K quality.`;
     }
 
-    // Enhanced negative prompt
-    const negativePrompt = "blurry, low quality, ugly, distorted faces, watermark, nsfw, excessive text, cluttered, amateur, bad anatomy, disfigured, poorly drawn face, mutation, mutated, extra limbs, ugly, poorly drawn hands, missing limbs, floating limbs, disconnected limbs, malformed hands, blur, out of focus, long neck, long body, disgusting, bad proportions, gross proportions, text, error, missing fingers, cropped, worst quality, jpeg artifacts, signature";
+    // Enhanced negative prompt (note: we allow text for captions, but avoid illegible/excessive text)
+    const negativePrompt = "blurry, low quality, ugly, distorted faces, watermark, nsfw, cluttered, amateur, bad anatomy, disfigured, poorly drawn face, mutation, mutated, extra limbs, ugly, poorly drawn hands, missing limbs, floating limbs, disconnected limbs, malformed hands, blur, out of focus, long neck, long body, disgusting, bad proportions, gross proportions, error, missing fingers, cropped, worst quality, jpeg artifacts, signature, illegible text, garbled text, misspelled words";
     const storage = admin.storage().bucket();
     const timestamp = Date.now();
     const generatedImages = [];
@@ -5833,6 +5848,11 @@ ${tags ? `Keywords/Tags: ${tags}` : ''}
 ═══════════════════════════════════════════════════════════════`;
               }
 
+              // Extract a short, punchy caption from the title (max 3-4 words)
+              const videoTitle = youtubeContext?.title || title || '';
+              const captionText = videoTitle.split(/[:\-|,]/).map(p => p.trim()).filter(p => p.length > 0)[0] || videoTitle;
+              const shortCaption = captionText.split(' ').slice(0, 4).join(' ').toUpperCase();
+
               finalPrompt = `You are creating a PROFESSIONAL, SEO-OPTIMIZED YouTube thumbnail upgrade.
 
 The provided image is the ORIGINAL thumbnail. Analyze it carefully and create a SIGNIFICANTLY IMPROVED version.
@@ -5841,14 +5861,33 @@ ${youtubeCtx}
 SEO-OPTIMIZED UPGRADE REQUIREMENTS:
 1. VISUAL HIERARCHY: Clear focal point that matches the video title/topic
 2. CLICK-WORTHY: Create curiosity and urgency that compels clicks
-3. THUMBNAIL TEXT SPACE: Leave clear space on left side for title text overlay
-4. COLOR PSYCHOLOGY: Use vibrant, high-contrast colors that pop in YouTube feed
-5. FACE ENHANCEMENT: If there's a face, make expression more engaging/dramatic
-6. BRAND CONSISTENCY: Maintain any brand colors or style from original
-7. MOBILE OPTIMIZED: Ensure key elements are visible at small sizes
-8. CONTEXT ACCURACY: Thumbnail must clearly represent the video content
+3. COLOR PSYCHOLOGY: Use vibrant, high-contrast colors that pop in YouTube feed
+4. FACE ENHANCEMENT: If there's a face, make expression more engaging/dramatic
+5. BRAND CONSISTENCY: Maintain any brand colors or style from original
+6. MOBILE OPTIMIZED: Ensure key elements are visible at small sizes
+7. CONTEXT ACCURACY: Thumbnail must clearly represent the video content
+
+═══════════════════════════════════════════════════════════════
+MANDATORY TEXT CAPTION REQUIREMENTS (CRITICAL - DO NOT SKIP):
+═══════════════════════════════════════════════════════════════
+Every professional YouTube thumbnail MUST include a text caption.
+Add a SHORT, BOLD, ATTENTION-GRABBING text caption/headline to the thumbnail.
+
+Caption text: "${shortCaption}" (or a shorter/punchier variant)
+
+TEXT STYLING REQUIREMENTS:
+- Font: Bold, thick, sans-serif (similar to Impact, Bebas Neue, or Montserrat Black)
+- Size: LARGE - must be readable even at small thumbnail sizes
+- Color: High contrast against background (white with black outline, or bright color)
+- Position: Prominently placed (top-left, bottom, or where it doesn't cover the subject's face)
+- Effect: Add a subtle drop shadow, stroke, or glow for readability
+- Style: Modern YouTube thumbnail text style - clean, bold, impactful
+
+The text should be 2-4 words maximum, punchy and click-worthy.
+═══════════════════════════════════════════════════════════════
 
 CRITICAL - The upgraded thumbnail MUST:
+- Include the mandatory text caption rendered in the image
 - Clearly convey what the video "${imagePrompt}" is about
 - Be more visually striking than the original
 - Follow YouTube thumbnail best practices for CTR
@@ -5856,35 +5895,71 @@ CRITICAL - The upgraded thumbnail MUST:
 16:9 aspect ratio, 1280x720 quality, professional YouTube thumbnail.`;
 
             } else if (effectiveReferenceType === 'face' || mode === 'faceHero') {
+              // Extract short caption for text overlay
+              const shortCaption = title.split(/[:\-|,]/).map(p => p.trim()).filter(p => p.length > 0)[0]?.split(' ').slice(0, 4).join(' ').toUpperCase() || title.toUpperCase();
+
               // Face preservation - use Creative Studio's exact working pattern
               finalPrompt = `Using the provided image as a character/face reference to maintain consistency, generate a YouTube thumbnail: ${imagePrompt}
 
-The person in the thumbnail must look exactly like the person in the reference image - same face, same hair, same features. Position them on the right side of the frame, leaving space on the left for text. 16:9 aspect ratio, professional YouTube thumbnail quality.`;
+The person in the thumbnail must look exactly like the person in the reference image - same face, same hair, same features. Position them on the right side of the frame.
+
+MANDATORY TEXT CAPTION: Add bold text "${shortCaption}" (or a punchier 2-4 word variant) to the thumbnail. Use thick, sans-serif font with high contrast (white with black outline or bright color with shadow). Position text on the left side where it doesn't cover the face. Make text large enough to read at small sizes.
+
+16:9 aspect ratio, professional YouTube thumbnail quality.`;
 
             } else if (effectiveReferenceType === 'product') {
+              // Extract short caption
+              const shortCaption = title.split(/[:\-|,]/).map(p => p.trim()).filter(p => p.length > 0)[0]?.split(' ').slice(0, 4).join(' ').toUpperCase() || title.toUpperCase();
+
               // Product reference
               finalPrompt = `Using the provided image as a product reference, generate a YouTube thumbnail showcasing this exact product: ${imagePrompt}
 
-Keep the product's appearance accurate. Professional product photography, clean background, 16:9 YouTube thumbnail format.`;
+Keep the product's appearance accurate. Professional product photography, clean background.
+
+MANDATORY TEXT CAPTION: Add bold text "${shortCaption}" (or a punchier 2-4 word variant) prominently on the thumbnail. Use thick, sans-serif font with high contrast. Make text large and readable at small sizes.
+
+16:9 YouTube thumbnail format.`;
 
             } else if (effectiveReferenceType === 'style') {
+              // Extract short caption
+              const shortCaption = title.split(/[:\-|,]/).map(p => p.trim()).filter(p => p.length > 0)[0]?.split(' ').slice(0, 4).join(' ').toUpperCase() || title.toUpperCase();
+
               // Style transfer - use Creative Studio's style reference pattern
               finalPrompt = `Using the provided image as a style reference, generate a new YouTube thumbnail with the following description: ${imagePrompt}
 
-Match the color palette, lighting style, and overall aesthetic of the reference. 16:9 YouTube thumbnail format.`;
+Match the color palette, lighting style, and overall aesthetic of the reference.
+
+MANDATORY TEXT CAPTION: Add bold text "${shortCaption}" (or a punchier 2-4 word variant) prominently on the thumbnail. Use thick, sans-serif font style that matches the reference aesthetic. High contrast and readable at small sizes.
+
+16:9 YouTube thumbnail format.`;
 
             } else {
+              // Extract short caption
+              const shortCaption = title.split(/[:\-|,]/).map(p => p.trim()).filter(p => p.length > 0)[0]?.split(' ').slice(0, 4).join(' ').toUpperCase() || title.toUpperCase();
+
               // Background/general reference
               finalPrompt = `Using the provided image as reference, generate a YouTube thumbnail: ${imagePrompt}
+
+MANDATORY TEXT CAPTION: Add bold text "${shortCaption}" (or a punchier 2-4 word variant) prominently on the thumbnail. Use thick, sans-serif font with high contrast (white with black outline or bright color). Make text large and readable at small sizes.
 
 16:9 aspect ratio, professional quality, eye-catching design.`;
             }
 
           } else {
-            // No reference image - use full enhanced prompt
+            // No reference image - use full enhanced prompt with mandatory text
+            const shortCaption = title.split(/[:\-|,]/).map(p => p.trim()).filter(p => p.length > 0)[0]?.split(' ').slice(0, 4).join(' ').toUpperCase() || title.toUpperCase();
+
             finalPrompt = `${imagePrompt}
 
 COMPOSITION: ${compositionGuide.prompt}
+
+MANDATORY TEXT CAPTION (CRITICAL - DO NOT SKIP):
+Add bold text "${shortCaption}" (or a punchier 2-4 word variant) prominently on the thumbnail.
+- Font: Thick, bold, sans-serif (Impact/Bebas Neue style)
+- Color: High contrast - white with black outline, or bright color with shadow
+- Size: LARGE - readable at small thumbnail sizes
+- Position: Top-left, bottom, or where it complements the composition
+
 FORMAT: 16:9 YouTube thumbnail (1280x720), professional photography quality, vibrant colors.
 
 AVOID: ${negativePrompt}`;
