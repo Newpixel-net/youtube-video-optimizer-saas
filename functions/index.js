@@ -5261,7 +5261,9 @@ exports.generateThumbnailPro = functions.https.onCall(async (data, context) => {
     backgroundStyle = 'auto', // auto | studio | blur | gradient | custom
     // Thumbnail Upgrade specific parameters
     originalThumbnailUrl = null, // URL to fetch thumbnail from (YouTube)
-    youtubeContext = null // { videoId, title, description, channelName }
+    youtubeContext = null, // { videoId, title, description, channelName }
+    // Face Lock feature - preserve face across batch generation
+    faceReferenceImage = null // { base64, mimeType } - face to preserve in all thumbnails
   } = data;
 
   if (!title || title.trim().length < 3) {
@@ -5818,8 +5820,31 @@ Output ONLY the prompt, no explanations or preamble.`
           // Build content parts - REFERENCE IMAGE FIRST (like Creative Studio)
           const contentParts = [];
 
-          // Add reference image FIRST (this is how Creative Studio does it)
-          if (effectiveReferenceImage && effectiveReferenceImage.base64) {
+          // Check if Face Lock is enabled (face reference provided separately)
+          const hasFaceLock = faceReferenceImage && faceReferenceImage.base64;
+
+          if (hasFaceLock) {
+            // FACE LOCK MODE: Add face reference FIRST (for identity preservation)
+            contentParts.push({
+              inlineData: {
+                mimeType: faceReferenceImage.mimeType || 'image/jpeg',
+                data: faceReferenceImage.base64
+              }
+            });
+            console.log('Added FACE LOCK reference image as input (identity preservation)');
+
+            // Then add the original thumbnail SECOND (for content/style reference)
+            if (effectiveReferenceImage && effectiveReferenceImage.base64) {
+              contentParts.push({
+                inlineData: {
+                  mimeType: effectiveReferenceImage.mimeType || 'image/png',
+                  data: effectiveReferenceImage.base64
+                }
+              });
+              console.log('Added original thumbnail as SECOND input (content reference)');
+            }
+          } else if (effectiveReferenceImage && effectiveReferenceImage.base64) {
+            // Standard mode - add reference image FIRST (this is how Creative Studio does it)
             contentParts.push({
               inlineData: {
                 mimeType: effectiveReferenceImage.mimeType || 'image/png',
@@ -5833,7 +5858,63 @@ Output ONLY the prompt, no explanations or preamble.`
           // Creative Studio's working format: "Using the provided image as a character/face reference to maintain consistency, generate a new image: ${prompt}"
           let finalPrompt;
 
-          if (effectiveReferenceImage && effectiveReferenceImage.base64) {
+          // Check if Face Lock mode with upgrade
+          if (hasFaceLock && (mode === 'upgrade' || effectiveReferenceType === 'upgrade')) {
+            // ============================================================
+            // FACE LOCK + UPGRADE MODE - Preserve face while upgrading content
+            // ============================================================
+            let youtubeCtx = '';
+            if (youtubeContext) {
+              const tags = youtubeContext.tags?.slice(0, 5).join(', ') || '';
+              const descPreview = (youtubeContext.description || '').substring(0, 200);
+              youtubeCtx = `
+Video Title: "${youtubeContext.title || 'Unknown'}"
+Channel: ${youtubeContext.channelName || 'Unknown'}
+${descPreview ? `Topic: ${descPreview}...` : ''}`;
+            }
+
+            const videoTitle = youtubeContext?.title || title || '';
+            const captionText = videoTitle.split(/[:\-|,]/).map(p => p.trim()).filter(p => p.length > 0)[0] || videoTitle;
+            const shortCaption = captionText.split(' ').slice(0, 4).join(' ').toUpperCase();
+
+            finalPrompt = `You are creating a PROFESSIONAL YouTube thumbnail with MANDATORY FACE PRESERVATION.
+
+═══════════════════════════════════════════════════════════════
+⚠️ TWO IMAGES PROVIDED - CRITICAL INSTRUCTIONS ⚠️
+═══════════════════════════════════════════════════════════════
+IMAGE 1 (FACE REFERENCE): This shows the EXACT FACE you MUST use.
+- The person in your output MUST look EXACTLY like this person
+- Same facial structure, same eyes, same nose, same mouth
+- Same skin tone, same hair style/color
+- This is NON-NEGOTIABLE - the face must be RECOGNIZABLE as the same person
+
+IMAGE 2 (CONTENT REFERENCE): This shows the CONTENT/STYLE to upgrade.
+- Use this for the scene concept, composition, and theme
+- DRAMATICALLY improve the quality to professional level
+- But REPLACE any face with the EXACT face from Image 1
+═══════════════════════════════════════════════════════════════
+${youtubeCtx}
+
+REQUIREMENTS:
+1. FACE IDENTITY (CRITICAL): Output face MUST match Image 1 exactly
+   - Same person, instantly recognizable
+   - Viewers should say "That's the same person!"
+
+2. CONTENT UPGRADE: Transform Image 2's concept to studio quality
+   - Cinematic lighting, 4K clarity, professional composition
+   - Magazine/movie poster level quality
+   - Use the theme/concept from Image 2
+
+3. COMPOSITION:
+   - Position the face on right side (golden ratio)
+   - Leave space on left for text overlay
+
+MANDATORY TEXT CAPTION:
+Add bold text "${shortCaption}" - thick sans-serif font, high contrast, with shadow/glow.
+
+OUTPUT: 16:9 YouTube thumbnail with the EXACT face from Image 1 in an upgraded version of Image 2's scene.`;
+
+          } else if (effectiveReferenceImage && effectiveReferenceImage.base64) {
             // ============================================================
             // MATCH CREATIVE STUDIO'S SIMPLE, WORKING FORMAT
             // ============================================================

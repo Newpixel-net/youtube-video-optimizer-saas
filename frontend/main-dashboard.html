@@ -3388,6 +3388,13 @@
             playlistCurrentIndex: 0,
             playlistResults: [], // Array of { videoId, status, thumbnailUrl, error }
 
+            // Face Lock State (for bulk/playlist modes)
+            faceReferenceEnabled: false,          // Toggle for face lock feature
+            faceReferenceSource: 'first',         // 'first' | 'upload' | 'select'
+            faceReferenceImage: null,             // { dataUrl, base64, mimeType }
+            faceReferenceVideoIndex: 0,           // Which video to use as face source
+            faceReferenceLoading: false,          // Loading state when fetching face
+
             // Quota settings (from getUserProfile)
             quotaInfo: null,           // Quota info for each tool with reset times
             resetTimeMinutes: 1440,    // Admin-configured reset time in minutes
@@ -5723,6 +5730,14 @@
                             expression: state.thumbnailExpression
                         };
 
+                        // Add face reference if Face Lock is enabled
+                        if (state.faceReferenceEnabled && state.faceReferenceImage) {
+                            payload.faceReferenceImage = {
+                                base64: state.faceReferenceImage.base64,
+                                mimeType: state.faceReferenceImage.mimeType
+                            };
+                        }
+
                         var result = await generateThumbnailPro(payload);
 
                         if (result.data && result.data.images && result.data.images.length > 0) {
@@ -5832,6 +5847,14 @@
                         category: state.thumbnailCategory
                     };
 
+                    // Add face reference if Face Lock is enabled
+                    if (state.faceReferenceEnabled && state.faceReferenceImage) {
+                        payload.faceReferenceImage = {
+                            base64: state.faceReferenceImage.base64,
+                            mimeType: state.faceReferenceImage.mimeType
+                        };
+                    }
+
                     var result = await generateThumbnailPro(payload);
 
                     if (result.data && result.data.images && result.data.images.length > 0) {
@@ -5871,6 +5894,130 @@
                         await new Promise(function(resolve) { setTimeout(resolve, 1500); });
                     }
                 }
+            },
+
+            // ========== FACE LOCK FUNCTIONS ==========
+            toggleFaceReference: function() {
+                state.faceReferenceEnabled = !state.faceReferenceEnabled;
+
+                // If enabling and no face set yet, try to use first video
+                if (state.faceReferenceEnabled && !state.faceReferenceImage) {
+                    // Try bulk mode first, then playlist
+                    if (state.bulkUrls.length > 0 && state.bulkUrls[0].youtubeData?.thumbnailUrl) {
+                        app.setFaceFromVideo(0, 'bulk');
+                    } else if (state.playlistData?.videos?.length > 0) {
+                        app.setFaceFromVideo(0, 'playlist');
+                    }
+                }
+                render();
+            },
+
+            setFaceReferenceSource: function(source) {
+                state.faceReferenceSource = source;
+
+                if (source === 'first') {
+                    // Use first video from current mode
+                    if (state.thumbnailUpgradeMode === 'bulk' && state.bulkUrls.length > 0) {
+                        app.setFaceFromVideo(0, 'bulk');
+                    } else if (state.thumbnailUpgradeMode === 'playlist' && state.playlistData?.videos?.length > 0) {
+                        app.setFaceFromVideo(0, 'playlist');
+                    }
+                } else if (source === 'upload') {
+                    app.uploadFaceReference();
+                }
+                // 'select' mode - user clicks on a video thumbnail
+                render();
+            },
+
+            setFaceFromVideo: async function(videoIndex, mode) {
+                var thumbnailUrl = null;
+
+                if (mode === 'bulk') {
+                    var item = state.bulkUrls[videoIndex];
+                    if (item?.youtubeData?.thumbnailUrl) {
+                        thumbnailUrl = item.youtubeData.thumbnailUrl;
+                    }
+                } else if (mode === 'playlist') {
+                    var video = state.playlistData?.videos?.[videoIndex];
+                    if (video?.thumbnailUrl) {
+                        thumbnailUrl = video.thumbnailUrl;
+                    }
+                }
+
+                if (!thumbnailUrl) {
+                    console.error('No thumbnail URL found for face reference');
+                    return;
+                }
+
+                state.faceReferenceVideoIndex = videoIndex;
+                state.faceReferenceLoading = true;
+                render();
+
+                try {
+                    // Fetch the thumbnail and convert to base64
+                    var response = await fetch(thumbnailUrl);
+                    var blob = await response.blob();
+                    var reader = new FileReader();
+
+                    reader.onload = function() {
+                        state.faceReferenceImage = {
+                            dataUrl: reader.result,
+                            base64: reader.result.split(',')[1],
+                            mimeType: blob.type || 'image/jpeg'
+                        };
+                        state.faceReferenceLoading = false;
+                        render();
+                    };
+                    reader.onerror = function() {
+                        console.error('Failed to read face reference image');
+                        state.faceReferenceLoading = false;
+                        render();
+                    };
+                    reader.readAsDataURL(blob);
+                } catch (error) {
+                    console.error('Failed to load face reference:', error);
+                    state.faceReferenceLoading = false;
+                    render();
+                }
+            },
+
+            uploadFaceReference: function() {
+                var input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.onchange = function(e) {
+                    var file = e.target.files[0];
+                    if (!file) return;
+
+                    state.faceReferenceLoading = true;
+                    render();
+
+                    var reader = new FileReader();
+                    reader.onload = function() {
+                        state.faceReferenceImage = {
+                            dataUrl: reader.result,
+                            base64: reader.result.split(',')[1],
+                            mimeType: file.type
+                        };
+                        state.faceReferenceSource = 'upload';
+                        state.faceReferenceLoading = false;
+                        render();
+                    };
+                    reader.onerror = function() {
+                        state.faceReferenceLoading = false;
+                        render();
+                    };
+                    reader.readAsDataURL(file);
+                };
+                input.click();
+            },
+
+            clearFaceReference: function() {
+                state.faceReferenceEnabled = false;
+                state.faceReferenceImage = null;
+                state.faceReferenceSource = 'first';
+                state.faceReferenceVideoIndex = 0;
+                render();
             },
 
             // ========== PLAYLIST MODE FUNCTIONS ==========
@@ -6011,6 +6158,14 @@
                             expression: state.thumbnailExpression
                         };
 
+                        // Add face reference if Face Lock is enabled
+                        if (state.faceReferenceEnabled && state.faceReferenceImage) {
+                            payload.faceReferenceImage = {
+                                base64: state.faceReferenceImage.base64,
+                                mimeType: state.faceReferenceImage.mimeType
+                            };
+                        }
+
                         var result = await generateThumbnailPro(payload);
 
                         if (result.data && result.data.images && result.data.images.length > 0) {
@@ -6122,6 +6277,14 @@
                         style: state.thumbnailStyle,
                         category: state.thumbnailCategory
                     };
+
+                    // Add face reference if Face Lock is enabled
+                    if (state.faceReferenceEnabled && state.faceReferenceImage) {
+                        payload.faceReferenceImage = {
+                            base64: state.faceReferenceImage.base64,
+                            mimeType: state.faceReferenceImage.mimeType
+                        };
+                    }
 
                     var result = await generateThumbnailPro(payload);
 
@@ -10104,6 +10267,78 @@
                                 });
                                 html += '</div></div>';
 
+                                // ========== FACE LOCK FEATURE ==========
+                                html += '<div class="mt-4 p-3 rounded-lg border-2 ' + (state.faceReferenceEnabled ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200') + '">';
+                                html += '<div class="flex items-center justify-between">';
+                                html += '<div class="flex items-center gap-2">';
+                                html += '<span class="text-lg">' + (state.faceReferenceEnabled ? '🔒' : '👤') + '</span>';
+                                html += '<div>';
+                                html += '<p class="font-semibold text-sm ' + (state.faceReferenceEnabled ? 'text-amber-800' : 'text-gray-700') + '">Face Lock</p>';
+                                html += '<p class="text-xs text-gray-500">Keep same person across all thumbnails</p>';
+                                html += '</div>';
+                                html += '</div>';
+                                html += '<button type="button" onclick="app.toggleFaceReference()" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all ' + (state.faceReferenceEnabled ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300') + '">';
+                                html += state.faceReferenceEnabled ? 'ON' : 'OFF';
+                                html += '</button>';
+                                html += '</div>';
+
+                                // Face Lock Options (when enabled)
+                                if (state.faceReferenceEnabled) {
+                                    html += '<div class="mt-3 pt-3 border-t border-amber-200">';
+
+                                    // Source Selection
+                                    html += '<p class="text-xs font-medium text-amber-700 mb-2">Face Source:</p>';
+                                    html += '<div class="flex flex-wrap gap-2 mb-3">';
+                                    var faceSourceBtns = [
+                                        { id: 'first', name: 'First Video', icon: '1️⃣' },
+                                        { id: 'upload', name: 'Upload', icon: '📤' },
+                                        { id: 'select', name: 'Select', icon: '👆' }
+                                    ];
+                                    faceSourceBtns.forEach(function(s) {
+                                        var isActive = state.faceReferenceSource === s.id;
+                                        var btnClass = isActive ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 border border-amber-200 hover:border-amber-400';
+                                        html += '<button type="button" onclick="app.setFaceReferenceSource(\'' + s.id + '\')" class="px-2 py-1 rounded text-xs font-medium transition-all ' + btnClass + '">';
+                                        html += s.icon + ' ' + s.name;
+                                        html += '</button>';
+                                    });
+                                    html += '</div>';
+
+                                    // Face Preview
+                                    if (state.faceReferenceLoading) {
+                                        html += '<div class="flex items-center gap-2 p-2 bg-white rounded-lg border border-amber-200">';
+                                        html += '<div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center animate-pulse">';
+                                        html += '<span class="text-amber-500">⏳</span>';
+                                        html += '</div>';
+                                        html += '<p class="text-xs text-amber-600">Loading face reference...</p>';
+                                        html += '</div>';
+                                    } else if (state.faceReferenceImage) {
+                                        html += '<div class="flex items-center gap-3 p-2 bg-white rounded-lg border border-amber-200">';
+                                        html += '<img src="' + state.faceReferenceImage.dataUrl + '" class="w-12 h-12 rounded-full object-cover border-2 border-amber-400" />';
+                                        html += '<div class="flex-1">';
+                                        html += '<p class="text-xs font-medium text-amber-800">✓ Face reference set</p>';
+                                        html += '<p class="text-xs text-amber-600">This face will appear in all thumbnails</p>';
+                                        html += '</div>';
+                                        html += '<button onclick="app.clearFaceReference()" class="text-xs text-red-500 hover:text-red-700">✕</button>';
+                                        html += '</div>';
+                                    } else {
+                                        html += '<div class="flex items-center gap-2 p-2 bg-white rounded-lg border border-dashed border-amber-300">';
+                                        html += '<div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center">';
+                                        html += '<span class="text-amber-400 text-lg">👤</span>';
+                                        html += '</div>';
+                                        html += '<p class="text-xs text-amber-600">Select a face source above or click a video thumbnail</p>';
+                                        html += '</div>';
+                                    }
+
+                                    // Select mode hint
+                                    if (state.faceReferenceSource === 'select') {
+                                        html += '<p class="text-xs text-amber-600 mt-2 text-center">👆 Click on any video thumbnail above to use that face</p>';
+                                    }
+
+                                    html += '</div>';
+                                }
+
+                                html += '</div>';
+
                                 html += '</div>';
                             }
 
@@ -10281,6 +10516,63 @@
                                 html += '</button>';
                             });
                             html += '</div></div>';
+
+                            // ========== FACE LOCK FEATURE (PLAYLIST) ==========
+                            html += '<div class="mt-3 p-3 rounded-lg border-2 ' + (state.faceReferenceEnabled ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200') + '">';
+                            html += '<div class="flex items-center justify-between">';
+                            html += '<div class="flex items-center gap-2">';
+                            html += '<span class="text-lg">' + (state.faceReferenceEnabled ? '🔒' : '👤') + '</span>';
+                            html += '<div>';
+                            html += '<p class="font-semibold text-sm ' + (state.faceReferenceEnabled ? 'text-amber-800' : 'text-gray-700') + '">Face Lock</p>';
+                            html += '<p class="text-xs text-gray-500">Keep same person across all thumbnails</p>';
+                            html += '</div>';
+                            html += '</div>';
+                            html += '<button type="button" onclick="app.toggleFaceReference()" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all ' + (state.faceReferenceEnabled ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300') + '">';
+                            html += state.faceReferenceEnabled ? 'ON' : 'OFF';
+                            html += '</button>';
+                            html += '</div>';
+
+                            if (state.faceReferenceEnabled) {
+                                html += '<div class="mt-3 pt-3 border-t border-amber-200">';
+                                html += '<p class="text-xs font-medium text-amber-700 mb-2">Face Source:</p>';
+                                html += '<div class="flex flex-wrap gap-2 mb-3">';
+                                var playlistFaceSourceBtns = [
+                                    { id: 'first', name: 'First Video', icon: '1️⃣' },
+                                    { id: 'upload', name: 'Upload', icon: '📤' },
+                                    { id: 'select', name: 'Select', icon: '👆' }
+                                ];
+                                playlistFaceSourceBtns.forEach(function(s) {
+                                    var isActive = state.faceReferenceSource === s.id;
+                                    var btnClass = isActive ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 border border-amber-200 hover:border-amber-400';
+                                    html += '<button type="button" onclick="app.setFaceReferenceSource(\'' + s.id + '\')" class="px-2 py-1 rounded text-xs font-medium transition-all ' + btnClass + '">';
+                                    html += s.icon + ' ' + s.name;
+                                    html += '</button>';
+                                });
+                                html += '</div>';
+
+                                if (state.faceReferenceLoading) {
+                                    html += '<div class="flex items-center gap-2 p-2 bg-white rounded-lg border border-amber-200">';
+                                    html += '<div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center animate-pulse"><span class="text-amber-500">⏳</span></div>';
+                                    html += '<p class="text-xs text-amber-600">Loading face reference...</p>';
+                                    html += '</div>';
+                                } else if (state.faceReferenceImage) {
+                                    html += '<div class="flex items-center gap-3 p-2 bg-white rounded-lg border border-amber-200">';
+                                    html += '<img src="' + state.faceReferenceImage.dataUrl + '" class="w-12 h-12 rounded-full object-cover border-2 border-amber-400" />';
+                                    html += '<div class="flex-1">';
+                                    html += '<p class="text-xs font-medium text-amber-800">✓ Face reference set</p>';
+                                    html += '<p class="text-xs text-amber-600">This face will appear in all thumbnails</p>';
+                                    html += '</div>';
+                                    html += '<button onclick="app.clearFaceReference()" class="text-xs text-red-500 hover:text-red-700">✕</button>';
+                                    html += '</div>';
+                                } else {
+                                    html += '<div class="flex items-center gap-2 p-2 bg-white rounded-lg border border-dashed border-amber-300">';
+                                    html += '<div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center"><span class="text-amber-400 text-lg">👤</span></div>';
+                                    html += '<p class="text-xs text-amber-600">Select a face source above</p>';
+                                    html += '</div>';
+                                }
+                                html += '</div>';
+                            }
+                            html += '</div>';
 
                             html += '</div>';
 
