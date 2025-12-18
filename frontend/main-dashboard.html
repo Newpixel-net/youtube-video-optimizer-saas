@@ -7272,53 +7272,43 @@
 
             html += '</div>'; // End grid
 
-            // Creative Studio Banner - Full Width
-            html += '<a href="https://ytseo.siteuo.com/creative-studio" class="block mb-8 fade-in" onclick="this.querySelector(\'.living-aurora\').style.opacity=\'0\'">';
-            html += '<div class="living-aurora aurora-creative rounded-2xl shadow-xl p-6 lg:p-8 cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.01] relative overflow-hidden border border-purple-400/30" style="transition: opacity 0.1s ease-out">';
-            // Aurora orbs layer
-            html += '<div class="aurora-orbs">';
-            html += '<div class="aurora-orb aurora-orb-1"></div>';
-            html += '<div class="aurora-orb aurora-orb-2"></div>';
-            html += '<div class="aurora-orb aurora-orb-3"></div>';
-            html += '<div class="aurora-orb aurora-orb-4"></div>';
-            html += '</div>';
-            // Glass overlay for readability
-            html += '<div class="aurora-glass"></div>';
-            // Shimmer effect
-            html += '<div class="aurora-shimmer"></div>';
-            html += '<div class="aurora-content flex flex-col lg:flex-row items-center gap-4 lg:gap-6">';
-            html += '<div class="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-purple-400/90 to-pink-500/90 backdrop-blur-sm rounded-2xl flex items-center justify-center text-4xl lg:text-5xl shadow-lg">🎨</div>';
-            html += '<div class="flex-1 text-center lg:text-left">';
-            html += '<div class="flex items-center justify-center lg:justify-start gap-2 lg:gap-3 mb-1">';
-            html += '<h3 class="text-xl lg:text-2xl font-bold text-white drop-shadow-sm">Creative Studio</h3>';
-            html += '<span class="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] lg:text-xs font-bold px-2 py-0.5 lg:py-1 rounded-full">NEW</span>';
-            html += '</div>';
-            html += '<p class="text-white/90 text-sm lg:text-base drop-shadow-sm">AI Image Creation, Motion, Upscaler, Canvas Editor & more - Bring your ideas to life</p>';
-            html += '</div>';
-            html += '<div class="text-white text-2xl lg:text-3xl font-bold drop-shadow-sm">→</div>';
-            html += '</div>';
-            html += '</div>';
-            html += '</a>';
-
             // Main Tools Section Title
             html += '<h2 class="text-2xl lg:text-3xl font-bold text-white mb-6 ' + fadeClass() + '">🛠️ AI Tools</h2>';
 
-            // Featured: Video-to-Shorts Wizard
-            html += '<a href="/video-wizard.html" class="block mb-6 ' + fadeClass() + '">';
-            html += '<div class="rounded-3xl shadow-xl p-6 lg:p-8 cursor-pointer relative overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(249, 115, 22, 0.15) 100%); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(236, 72, 153, 0.3);">';
-            html += '<div class="absolute top-3 right-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">NEW WIZARD</div>';
-            html += '<div class="flex items-center gap-6">';
-            html += '<div class="w-20 h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-pink-500 to-orange-500 rounded-2xl flex items-center justify-center text-5xl lg:text-6xl shadow-xl flex-shrink-0">✂️</div>';
-            html += '<div class="flex-1">';
-            html += '<h3 class="text-2xl lg:text-3xl font-bold text-white mb-2">Video-to-Shorts Wizard</h3>';
-            html += '<p class="text-white/70 mb-3 text-sm lg:text-base">Transform long videos into viral short-form clips with AI-powered clipping, captions, thumbnails & SEO optimization</p>';
-            html += '<div class="flex items-center text-pink-400 font-bold group">';
-            html += '<span>Start Wizard</span><span class="ml-2 group-hover:translate-x-2 transition-transform">→</span>';
+            // Featured Tools Row - Video Wizard & Creative Studio side by side
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mb-6 ' + fadeClass() + '">';
+
+            // Video-to-Shorts Wizard - Compact Card
+            html += '<a href="https://ytseo.siteuo.com/video-wizard" class="block group">';
+            html += '<div class="rounded-2xl p-4 lg:p-5 cursor-pointer relative overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-xl flex items-center gap-4" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.12) 0%, rgba(249, 115, 22, 0.12) 100%); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(236, 72, 153, 0.25);">';
+            html += '<div class="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-br from-pink-500 to-orange-500 rounded-xl flex items-center justify-center text-2xl lg:text-3xl shadow-lg flex-shrink-0">✂️</div>';
+            html += '<div class="flex-1 min-w-0">';
+            html += '<div class="flex items-center gap-2 mb-0.5">';
+            html += '<h3 class="text-base lg:text-lg font-bold text-white truncate">Video-to-Shorts Wizard</h3>';
+            html += '<span class="bg-gradient-to-r from-pink-500 to-orange-500 text-white text-[9px] lg:text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">NEW</span>';
             html += '</div>';
+            html += '<p class="text-white/60 text-xs lg:text-sm truncate">AI clipping, captions & thumbnails</p>';
             html += '</div>';
-            html += '</div>';
+            html += '<div class="text-white/40 text-xl group-hover:text-pink-400 group-hover:translate-x-1 transition-all flex-shrink-0">→</div>';
             html += '</div>';
             html += '</a>';
+
+            // Creative Studio - Compact Card
+            html += '<a href="https://ytseo.siteuo.com/creative-studio" class="block group">';
+            html += '<div class="rounded-2xl p-4 lg:p-5 cursor-pointer relative overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-xl flex items-center gap-4" style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(236, 72, 153, 0.12) 100%); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(168, 85, 247, 0.25);">';
+            html += '<div class="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-2xl lg:text-3xl shadow-lg flex-shrink-0">🎨</div>';
+            html += '<div class="flex-1 min-w-0">';
+            html += '<div class="flex items-center gap-2 mb-0.5">';
+            html += '<h3 class="text-base lg:text-lg font-bold text-white truncate">Creative Studio</h3>';
+            html += '<span class="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[9px] lg:text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">NEW</span>';
+            html += '</div>';
+            html += '<p class="text-white/60 text-xs lg:text-sm truncate">AI images, motion & canvas editor</p>';
+            html += '</div>';
+            html += '<div class="text-white/40 text-xl group-hover:text-purple-400 group-hover:translate-x-1 transition-all flex-shrink-0">→</div>';
+            html += '</div>';
+            html += '</a>';
+
+            html += '</div>'; // End featured tools row
 
             // Action Cards - 5 tools in responsive grid
             html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 ' + fadeClass() + '">';
