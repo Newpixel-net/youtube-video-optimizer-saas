@@ -6447,13 +6447,36 @@
            4.1 FIREBASE CONFIGURATION
            ========================================== */
 
+        // Check Firebase with smart retry (zero delay if already loaded)
         if (typeof firebase === 'undefined') {
-            console.error('Firebase SDK not loaded');
+            var retryCount = 0;
+            var maxRetries = 30; // 3 seconds max (30 * 100ms)
+
+            function retryFirebaseCheck() {
+                if (typeof firebase !== 'undefined') {
+                    location.reload();
+                    return;
+                }
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    document.getElementById('app-root').innerHTML =
+                        '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">' +
+                        '<div style="text-align:center;color:white;">' +
+                        '<h2 style="color:#ef4444;margin-bottom:1rem;">Connection Error</h2>' +
+                        '<p style="color:#9ca3af;margin-bottom:1.5rem;">Failed to load required resources. This may be due to a slow connection or ad blocker.</p>' +
+                        '<button onclick="location.reload()" style="padding:0.75rem 1.5rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:0.5rem;cursor:pointer;font-weight:600;">Try Again</button></div></div>';
+                    return;
+                }
+                setTimeout(retryFirebaseCheck, 100);
+            }
+
             document.getElementById('app-root').innerHTML =
-                '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">' +
+                '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;">' +
                 '<div style="text-align:center;color:white;">' +
-                '<h2 style="color:#ef4444;margin-bottom:1rem;">Error Loading Page</h2>' +
-                '<p style="color:#9ca3af;">Failed to load Firebase. Please refresh the page.</p></div></div>';
+                '<div style="width:2rem;height:2rem;border:3px solid #3b82f6;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem;"></div>' +
+                '<p style="color:#9ca3af;">Loading...</p></div></div>' +
+                '<style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+            retryFirebaseCheck();
             return;
         }
 
@@ -6471,6 +6494,16 @@
         const functions = firebase.functions();
         const db = firebase.firestore();
         const storage = firebase.storage();
+
+        // Enable offline persistence for faster loading
+        db.enablePersistence({ synchronizeTabs: true })
+            .catch(function(err) {
+                if (err.code === 'failed-precondition') {
+                    console.log('Persistence failed: Multiple tabs open');
+                } else if (err.code === 'unimplemented') {
+                    console.log('Persistence not supported by browser');
+                }
+            });
 
         /* ==========================================
            4.2 APPLICATION STATE

@@ -3192,13 +3192,35 @@
            4.1 FIREBASE CONFIGURATION
            ========================================== */
 
-        // Check Firebase loaded
+        // Check Firebase with smart retry (zero delay if already loaded)
         if (typeof firebase === 'undefined') {
-            console.error('Firebase SDK not loaded');
+            var retryCount = 0;
+            var maxRetries = 30; // 3 seconds max (30 * 100ms)
+
+            function retryFirebaseCheck() {
+                if (typeof firebase !== 'undefined') {
+                    // Firebase loaded - reload to reinitialize properly
+                    location.reload();
+                    return;
+                }
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    document.getElementById('app-root').innerHTML =
+                        '<div class="view-container view-centered"><div class="card text-center">' +
+                        '<h2 class="text-xl font-bold text-red-600 mb-2">Connection Error</h2>' +
+                        '<p class="text-gray-600 mb-4">Failed to load required resources. This may be due to a slow connection or ad blocker.</p>' +
+                        '<button onclick="location.reload()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">Try Again</button></div></div>';
+                    return;
+                }
+                setTimeout(retryFirebaseCheck, 100);
+            }
+
+            // Show loading state while retrying
             document.getElementById('app-root').innerHTML =
-                '<div class="view-container view-centered"><div class="card text-center">' +
-                '<h2 class="text-xl font-bold text-red-600 mb-2">Error</h2>' +
-                '<p class="text-gray-600">Failed to load Firebase. Please refresh the page.</p></div></div>';
+                '<div class="view-container view-centered"><div class="text-center">' +
+                '<div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>' +
+                '<p class="text-gray-400">Loading...</p></div></div>';
+            retryFirebaseCheck();
             return;
         }
 
@@ -3220,6 +3242,16 @@
         const auth = firebase.auth();
         const functions = firebase.functions();
         const db = firebase.firestore();
+
+        // Enable offline persistence for faster loading
+        db.enablePersistence({ synchronizeTabs: true })
+            .catch(function(err) {
+                if (err.code === 'failed-precondition') {
+                    console.log('Persistence failed: Multiple tabs open');
+                } else if (err.code === 'unimplemented') {
+                    console.log('Persistence not supported by browser');
+                }
+            });
 
         // Real-time notification listener unsubscribe function
         let notificationUnsubscribe = null;
