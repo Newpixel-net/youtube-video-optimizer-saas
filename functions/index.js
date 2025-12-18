@@ -5045,7 +5045,7 @@ exports.fetchYoutubeVideoData = functions.https.onCall(async (data, context) => 
 
   try {
     // Try YouTube Data API if key is configured
-    const youtubeApiKey = functions.config().youtube?.api_key;
+    const youtubeApiKey = functions.config().youtube?.key;
 
     if (youtubeApiKey) {
       const response = await axios.get(
