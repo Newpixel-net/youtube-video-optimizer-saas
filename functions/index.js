@@ -5045,7 +5045,7 @@ exports.fetchYoutubeVideoData = functions.https.onCall(async (data, context) => 
 
   try {
     // Try YouTube Data API if key is configured
-    const youtubeApiKey = functions.config().youtube?.api_key;
+    const youtubeApiKey = functions.config().youtube?.key;
 
     if (youtubeApiKey) {
       const response = await axios.get(
@@ -5545,6 +5545,7 @@ OUTPUT REQUIREMENTS:
     if (mode === 'faceHero') effectiveReferenceType = 'face';
     if (mode === 'styleClone') effectiveReferenceType = 'style';
     if (mode === 'productPro') effectiveReferenceType = 'product';
+    if (mode === 'upgrade') effectiveReferenceType = 'upgrade'; // Keep upgrade type
 
     // Build the enhanced prompt
     const categoryEnhancement = categoryPrompts[category] || categoryPrompts.general;
