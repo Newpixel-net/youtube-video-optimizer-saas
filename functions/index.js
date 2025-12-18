@@ -5405,37 +5405,43 @@ Place new subjects/elements INTO this background setting.
 Maintain the lighting direction and color temperature of the background.
 Ensure new elements are properly composited and lit to match.`,
 
-    upgrade: `THUMBNAIL UPGRADE REQUEST - CRITICAL INSTRUCTIONS:
+    upgrade: `THUMBNAIL COMPLETE TRANSFORMATION - CRITICAL INSTRUCTIONS:
 ┌─────────────────────────────────────────────────────────────┐
-│ YOU ARE UPGRADING AN EXISTING YOUTUBE THUMBNAIL             │
-│ Create a SIGNIFICANTLY IMPROVED version while keeping       │
-│ the core concept, subject, and message intact.              │
+│ ⚠️ WARNING: DO NOT JUST ADD TEXT TO THE EXISTING IMAGE!     │
+│ You must COMPLETELY TRANSFORM the thumbnail quality.        │
+│ The output should look like it was made by a different      │
+│ (much better) artist/photographer.                          │
 └─────────────────────────────────────────────────────────────┘
 
-UPGRADE OBJECTIVES:
-• PROFESSIONAL QUALITY: Transform to broadcast/magazine quality
-• VISUAL IMPACT: Maximize click-through appeal for YouTube feed
-• CLARITY: Ensure subject is crystal clear even at small sizes
-• COLOR VIBRANCY: Enhance colors for better YouTube visibility
-• COMPOSITION: Apply golden ratio / rule of thirds principles
+TRANSFORMATION REQUIREMENTS (NOT OPTIONAL):
 
-ANALYZE THE ORIGINAL AND ENHANCE:
-• If face visible: Sharpen features, improve lighting, add rim light, enhance catch lights
-• If text visible: Make it cleaner, more readable, better contrast
-• If product: Hero lighting, better angles, professional showcase
-• Background: More dynamic, add gradient or depth blur for separation
+1. DRAMATIC QUALITY UPGRADE:
+   • If original looks "AI-generated" → Make it look PROFESSIONALLY MADE
+   • If original is anime/cartoon → Create STUNNING hyper-detailed version
+   • If original is low-quality → Generate CRYSTAL-CLEAR 4K imagery
+   • The difference should be IMMEDIATELY OBVIOUS
 
-CRITICAL - MAINTAIN CONSISTENCY:
-• Keep the SAME core subject/concept as the original
-• Preserve brand colors if present in original
-• Keep the same general layout/composition style
-• Maintain the video topic relevance
+2. PROFESSIONAL PRODUCTION VALUE:
+   • Add CINEMATIC lighting (3-point: key, fill, rim)
+   • Add ATMOSPHERIC effects (particles, haze, volumetric light)
+   • Add MICRO-DETAILS (textures, reflections, environmental elements)
+   • Apply HOLLYWOOD-GRADE color grading
+
+3. COMPOSITION OVERHAUL:
+   • Apply golden ratio / rule of thirds
+   • Create dramatic depth (foreground, subject, background layers)
+   • Add visual storytelling elements
+   • Design for MAXIMUM thumbnail impact
+
+4. WHAT TO KEEP vs CHANGE:
+   • KEEP: The core subject/topic of the video
+   • CHANGE: Everything else - quality, style, composition, lighting
 
 OUTPUT REQUIREMENTS:
-• 16:9 aspect ratio (1920x1080 equivalent)
-• 4K photorealistic quality with enhanced details
-• High contrast and saturation optimized for small thumbnail display
-• Professional color grading with cinematic feel`
+• 16:9 aspect ratio, broadcast/print quality
+• Must look like it cost $500+ to produce
+• Photorealistic OR stunning illustration (your choice based on topic)
+• MUST include bold, professional text caption`
   };
 
   // ==========================================
@@ -5853,46 +5859,71 @@ ${tags ? `Keywords/Tags: ${tags}` : ''}
               const captionText = videoTitle.split(/[:\-|,]/).map(p => p.trim()).filter(p => p.length > 0)[0] || videoTitle;
               const shortCaption = captionText.split(' ').slice(0, 4).join(' ').toUpperCase();
 
-              finalPrompt = `You are creating a PROFESSIONAL, SEO-OPTIMIZED YouTube thumbnail upgrade.
+              finalPrompt = `You are a world-class thumbnail designer creating a COMPLETE VISUAL TRANSFORMATION.
 
-The provided image is the ORIGINAL thumbnail. Analyze it carefully and create a SIGNIFICANTLY IMPROVED version.
+═══════════════════════════════════════════════════════════════
+⚠️ CRITICAL INSTRUCTION - READ CAREFULLY ⚠️
+═══════════════════════════════════════════════════════════════
+The provided image is a LOW-QUALITY original that needs DRAMATIC improvement.
+DO NOT just add text to the existing image.
+DO NOT preserve the original style if it looks amateur/AI-generated.
+You MUST CREATE A COMPLETELY NEW, PROFESSIONAL-GRADE thumbnail.
+
+TRANSFORM the concept into STUDIO-QUALITY, BROADCAST-READY artwork.
+═══════════════════════════════════════════════════════════════
 ${youtubeCtx}
 
-SEO-OPTIMIZED UPGRADE REQUIREMENTS:
-1. VISUAL HIERARCHY: Clear focal point that matches the video title/topic
-2. CLICK-WORTHY: Create curiosity and urgency that compels clicks
-3. COLOR PSYCHOLOGY: Use vibrant, high-contrast colors that pop in YouTube feed
-4. FACE ENHANCEMENT: If there's a face, make expression more engaging/dramatic
-5. BRAND CONSISTENCY: Maintain any brand colors or style from original
-6. MOBILE OPTIMIZED: Ensure key elements are visible at small sizes
-7. CONTEXT ACCURACY: Thumbnail must clearly represent the video content
-
 ═══════════════════════════════════════════════════════════════
-MANDATORY TEXT CAPTION REQUIREMENTS (CRITICAL - DO NOT SKIP):
-═══════════════════════════════════════════════════════════════
-Every professional YouTube thumbnail MUST include a text caption.
-Add a SHORT, BOLD, ATTENTION-GRABBING text caption/headline to the thumbnail.
-
-Caption text: "${shortCaption}" (or a shorter/punchier variant)
-
-TEXT STYLING REQUIREMENTS:
-- Font: Bold, thick, sans-serif (similar to Impact, Bebas Neue, or Montserrat Black)
-- Size: LARGE - must be readable even at small thumbnail sizes
-- Color: High contrast against background (white with black outline, or bright color)
-- Position: Prominently placed (top-left, bottom, or where it doesn't cover the subject's face)
-- Effect: Add a subtle drop shadow, stroke, or glow for readability
-- Style: Modern YouTube thumbnail text style - clean, bold, impactful
-
-The text should be 2-4 words maximum, punchy and click-worthy.
+VISUAL TRANSFORMATION REQUIREMENTS (MANDATORY):
 ═══════════════════════════════════════════════════════════════
 
-CRITICAL - The upgraded thumbnail MUST:
-- Include the mandatory text caption rendered in the image
-- Clearly convey what the video "${imagePrompt}" is about
-- Be more visually striking than the original
-- Follow YouTube thumbnail best practices for CTR
+1. QUALITY LEAP: Transform amateur/AI-looking images into PHOTOREALISTIC, CINEMATIC quality
+   - If input is anime/cartoon style → Create stunning, hyper-detailed illustration OR photorealistic version
+   - If input is low-res/blurry → Generate crystal-clear, 4K-quality imagery
+   - If input looks "AI-generated" → Make it indistinguishable from professional photography/art
 
-16:9 aspect ratio, 1280x720 quality, professional YouTube thumbnail.`;
+2. LIGHTING REVOLUTION:
+   - Add dramatic, professional 3-point lighting (key, fill, rim)
+   - Create depth with volumetric light, god rays, or atmospheric haze
+   - Use cinematic color grading (teal/orange, moody blues, warm golds)
+
+3. COMPOSITION MASTERY:
+   - Apply golden ratio / rule of thirds
+   - Create clear visual hierarchy with dominant focal point
+   - Add depth layers (foreground interest, subject, background)
+
+4. DETAIL ENHANCEMENT:
+   - Add micro-details: textures, reflections, particles, atmosphere
+   - Include environmental storytelling elements
+   - Create a sense of scale and drama
+
+5. PROFESSIONAL POLISH:
+   - Magazine cover / movie poster quality
+   - No amateur artifacts, no "AI look"
+   - Hollywood production value
+
+═══════════════════════════════════════════════════════════════
+MANDATORY TEXT CAPTION (CRITICAL):
+═══════════════════════════════════════════════════════════════
+Add bold text: "${shortCaption}" (or punchier 2-4 word variant)
+
+TEXT STYLE:
+- Font: Thick, bold sans-serif (Impact/Bebas Neue style)
+- Size: LARGE - readable at thumbnail size
+- Color: High contrast with 3D effect (white + black stroke + glow/shadow)
+- Position: Prominent placement, never covering faces
+- Effect: Professional drop shadow or outer glow for pop
+
+═══════════════════════════════════════════════════════════════
+OUTPUT MUST BE:
+═══════════════════════════════════════════════════════════════
+✓ DRAMATICALLY better than the original (night and day difference)
+✓ Professional enough for a major YouTube channel with millions of subs
+✓ Eye-catching at small sizes in YouTube feed
+✓ 16:9 aspect ratio, 1280x720, broadcast quality
+✓ Includes the mandatory text caption
+
+The viewer should think "WOW, this looks professional!" not "oh, they just added text."`;
 
             } else if (effectiveReferenceType === 'face' || mode === 'faceHero') {
               // Extract short caption for text overlay
