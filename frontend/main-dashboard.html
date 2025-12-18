@@ -3378,6 +3378,16 @@
             bulkCurrentIndex: 0,
             bulkIdCounter: 0,
 
+            // Playlist Mode State
+            playlistUrl: '',
+            playlistData: null, // { playlistId, playlistTitle, channelName, videos: [] }
+            playlistLoading: false,
+            playlistError: null,
+            playlistSelectedVideos: [], // Array of videoIds that are selected
+            playlistProcessing: false,
+            playlistCurrentIndex: 0,
+            playlistResults: [], // Array of { videoId, status, thumbnailUrl, error }
+
             // Quota settings (from getUserProfile)
             quotaInfo: null,           // Quota info for each tool with reset times
             resetTimeMinutes: 1440,    // Admin-configured reset time in minutes
@@ -5478,11 +5488,29 @@
                     state.thumbnailTitle = '';
                     state.titleAutoFilled = false;
                 }
+                // Clear data when switching to playlist mode
+                if (mode === 'playlist') {
+                    state.thumbnailYoutubeUrl = '';
+                    state.thumbnailYoutubeData = null;
+                    state.thumbnailYoutubeError = null;
+                    state.thumbnailReference = null;
+                    state.thumbnailTitle = '';
+                    state.titleAutoFilled = false;
+                }
                 // Clear bulk data when switching away from bulk mode
                 if (mode !== 'bulk' && state.bulkUrls.length > 0) {
                     state.bulkUrls = [];
                     state.bulkProcessing = false;
                     state.bulkCurrentIndex = 0;
+                }
+                // Clear playlist data when switching away from playlist mode
+                if (mode !== 'playlist' && (state.playlistData || state.playlistResults.length > 0)) {
+                    state.playlistUrl = '';
+                    state.playlistData = null;
+                    state.playlistError = null;
+                    state.playlistSelectedVideos = [];
+                    state.playlistResults = [];
+                    state.playlistProcessing = false;
                 }
                 render();
             },
@@ -5688,7 +5716,15 @@
                                 description: item.youtubeData.description,
                                 channelName: item.youtubeData.channelName,
                                 tags: item.youtubeData.tags || []
-                            }
+                            },
+                            // Shared settings from bulk configuration
+                            style: state.thumbnailStyle,
+                            category: state.thumbnailCategory,
+                            composition: state.thumbnailComposition,
+                            background: state.thumbnailBackground,
+                            faceStrength: state.thumbnailFaceStrength,
+                            styleStrength: state.thumbnailStyleStrength,
+                            expression: state.thumbnailExpression
                         };
 
                         var result = await generateThumbnailPro(payload);
@@ -5761,6 +5797,216 @@
                 state.bulkProcessing = false;
                 state.bulkCurrentIndex = 0;
                 state.bulkIdCounter = 0;
+                render();
+            },
+
+            // ========== PLAYLIST MODE FUNCTIONS ==========
+            setPlaylistUrl: function(url) {
+                state.playlistUrl = url;
+                state.playlistError = null;
+            },
+
+            fetchPlaylist: async function() {
+                var url = state.playlistUrl.trim();
+                if (!url) {
+                    state.playlistError = 'Please enter a playlist URL';
+                    render();
+                    return;
+                }
+
+                state.playlistLoading = true;
+                state.playlistError = null;
+                state.playlistData = null;
+                render();
+
+                try {
+                    var fetchPlaylistFn = firebase.functions().httpsCallable('fetchYoutubePlaylist');
+                    var result = await fetchPlaylistFn({ playlistUrl: url });
+
+                    if (result.data && result.data.success) {
+                        state.playlistData = result.data;
+                        // Select all videos by default
+                        state.playlistSelectedVideos = result.data.videos.map(function(v) {
+                            return v.videoId;
+                        });
+                        state.playlistResults = []; // Clear any previous results
+                    } else {
+                        throw new Error('Failed to fetch playlist');
+                    }
+                } catch (error) {
+                    console.error('Playlist fetch error:', error);
+                    state.playlistError = error.message || 'Failed to fetch playlist. Please check the URL.';
+                }
+
+                state.playlistLoading = false;
+                render();
+            },
+
+            togglePlaylistVideo: function(videoId) {
+                var idx = state.playlistSelectedVideos.indexOf(videoId);
+                if (idx === -1) {
+                    state.playlistSelectedVideos.push(videoId);
+                } else {
+                    state.playlistSelectedVideos.splice(idx, 1);
+                }
+                render();
+            },
+
+            toggleAllPlaylistVideos: function() {
+                if (!state.playlistData) return;
+                if (state.playlistSelectedVideos.length === state.playlistData.videos.length) {
+                    state.playlistSelectedVideos = [];
+                } else {
+                    state.playlistSelectedVideos = state.playlistData.videos.map(function(v) {
+                        return v.videoId;
+                    });
+                }
+                render();
+            },
+
+            calculatePlaylistCost: function() {
+                return state.playlistSelectedVideos.length * 4; // 4 tokens per upgrade
+            },
+
+            processPlaylist: async function() {
+                if (!state.playlistData || state.playlistSelectedVideos.length === 0) {
+                    state.error = { message: 'No videos selected. Please select at least one video.' };
+                    render();
+                    return;
+                }
+
+                var totalCost = this.calculatePlaylistCost();
+                if (state.thumbnailTokenBalance < totalCost) {
+                    state.error = { message: 'Insufficient tokens. Need ' + totalCost + ' tokens but you have ' + state.thumbnailTokenBalance };
+                    render();
+                    return;
+                }
+
+                state.playlistProcessing = true;
+                state.playlistCurrentIndex = 0;
+                state.playlistResults = [];
+                state.error = null;
+                render();
+
+                var generateThumbnailPro = firebase.functions().httpsCallable('generateThumbnailPro');
+                var selectedVideos = state.playlistData.videos.filter(function(v) {
+                    return state.playlistSelectedVideos.indexOf(v.videoId) !== -1;
+                });
+
+                for (var i = 0; i < selectedVideos.length; i++) {
+                    var video = selectedVideos[i];
+                    state.playlistCurrentIndex = i;
+
+                    // Add to results with 'generating' status
+                    state.playlistResults.push({
+                        videoId: video.videoId,
+                        title: video.title,
+                        status: 'generating',
+                        thumbnailUrl: null,
+                        error: null
+                    });
+                    render();
+
+                    try {
+                        var payload = {
+                            prompt: video.title || 'Professional YouTube thumbnail',
+                            mode: 'upgrade',
+                            referenceType: 'upgrade',
+                            reference: {
+                                dataUrl: video.thumbnailUrl,
+                                mimeType: 'image/jpeg',
+                                name: 'youtube-thumbnail.jpg',
+                                isYoutubeThumbnail: true,
+                                videoId: video.videoId
+                            },
+                            variations: 1,
+                            title: video.title,
+                            youtubeContext: {
+                                videoId: video.videoId,
+                                title: video.title,
+                                description: video.description,
+                                channelName: video.channelName,
+                                tags: []
+                            },
+                            style: state.thumbnailStyle,
+                            category: state.thumbnailCategory,
+                            composition: state.thumbnailComposition,
+                            background: state.thumbnailBackground,
+                            faceStrength: state.thumbnailFaceStrength,
+                            styleStrength: state.thumbnailStyleStrength,
+                            expression: state.thumbnailExpression
+                        };
+
+                        var result = await generateThumbnailPro(payload);
+
+                        if (result.data && result.data.images && result.data.images.length > 0) {
+                            state.playlistResults[i].status = 'complete';
+                            state.playlistResults[i].thumbnailUrl = result.data.images[0].url;
+                            if (typeof result.data.newBalance !== 'undefined') {
+                                state.thumbnailTokenBalance = result.data.newBalance;
+                            }
+                        } else {
+                            throw new Error('No image generated');
+                        }
+                    } catch (error) {
+                        console.error('Playlist generation error:', error);
+                        state.playlistResults[i].status = 'error';
+                        state.playlistResults[i].error = error.message || 'Generation failed';
+                    }
+
+                    render();
+
+                    // Small delay between requests
+                    await new Promise(function(resolve) { setTimeout(resolve, 1000); });
+                }
+
+                state.playlistProcessing = false;
+                render();
+            },
+
+            downloadPlaylistAsZip: async function() {
+                var completedResults = state.playlistResults.filter(function(r) {
+                    return r.status === 'complete' && r.thumbnailUrl;
+                });
+
+                if (completedResults.length === 0) {
+                    state.error = { message: 'No completed thumbnails to download' };
+                    render();
+                    return;
+                }
+
+                try {
+                    var zip = new JSZip();
+                    var folder = zip.folder('playlist-thumbnails');
+
+                    for (var i = 0; i < completedResults.length; i++) {
+                        var item = completedResults[i];
+                        var response = await fetch(item.thumbnailUrl);
+                        var blob = await response.blob();
+
+                        var title = item.title
+                            ? item.title.replace(/[<>:"/\\|?*]/g, '').substring(0, 50)
+                            : 'thumbnail';
+                        var filename = (i + 1) + '_' + title + '.png';
+                        folder.file(filename, blob);
+                    }
+
+                    var content = await zip.generateAsync({ type: 'blob' });
+                    saveAs(content, 'playlist-thumbnails.zip');
+                } catch (error) {
+                    console.error('ZIP download error:', error);
+                    state.error = { message: 'Failed to create ZIP file: ' + error.message };
+                    render();
+                }
+            },
+
+            clearPlaylist: function() {
+                state.playlistUrl = '';
+                state.playlistData = null;
+                state.playlistError = null;
+                state.playlistSelectedVideos = [];
+                state.playlistResults = [];
+                state.playlistProcessing = false;
                 render();
             },
 
@@ -9384,19 +9630,23 @@
                     html += '<div class="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">';
                     html += '<label class="block text-gray-700 font-semibold mb-3">⬆️ Upgrade Existing Thumbnail</label>';
 
-                    // Tab selector: Upload vs YouTube URL vs Bulk
-                    html += '<div class="flex gap-2 mb-4">';
+                    // Tab selector: Upload vs YouTube URL vs Bulk vs Playlist
+                    html += '<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">';
                     var uploadActive = state.thumbnailUpgradeMode === 'upload';
                     var youtubeActive = state.thumbnailUpgradeMode === 'youtube';
                     var bulkActive = state.thumbnailUpgradeMode === 'bulk';
-                    html += '<button type="button" onclick="app.setUpgradeMode(\'upload\')" class="flex-1 px-3 py-2 rounded-lg font-medium transition-all text-sm ' + (uploadActive ? 'bg-green-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300') + '">';
+                    var playlistActive = state.thumbnailUpgradeMode === 'playlist';
+                    html += '<button type="button" onclick="app.setUpgradeMode(\'upload\')" class="px-3 py-2 rounded-lg font-medium transition-all text-sm ' + (uploadActive ? 'bg-green-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300') + '">';
                     html += '📤 Upload';
                     html += '</button>';
-                    html += '<button type="button" onclick="app.setUpgradeMode(\'youtube\')" class="flex-1 px-3 py-2 rounded-lg font-medium transition-all text-sm ' + (youtubeActive ? 'bg-red-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-red-300') + '">';
+                    html += '<button type="button" onclick="app.setUpgradeMode(\'youtube\')" class="px-3 py-2 rounded-lg font-medium transition-all text-sm ' + (youtubeActive ? 'bg-red-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-red-300') + '">';
                     html += '🔗 Single URL';
                     html += '</button>';
-                    html += '<button type="button" onclick="app.setUpgradeMode(\'bulk\')" class="flex-1 px-3 py-2 rounded-lg font-medium transition-all text-sm ' + (bulkActive ? 'bg-purple-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-purple-300') + '">';
-                    html += '📦 Bulk (1-10)';
+                    html += '<button type="button" onclick="app.setUpgradeMode(\'bulk\')" class="px-3 py-2 rounded-lg font-medium transition-all text-sm ' + (bulkActive ? 'bg-purple-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-purple-300') + '">';
+                    html += '📦 Bulk';
+                    html += '</button>';
+                    html += '<button type="button" onclick="app.setUpgradeMode(\'playlist\')" class="px-3 py-2 rounded-lg font-medium transition-all text-sm ' + (playlistActive ? 'bg-indigo-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300') + '">';
+                    html += '🎬 Playlist';
                     html += '</button>';
                     html += '</div>';
 
@@ -9621,8 +9871,56 @@
                                 html += '</button>';
                             }
 
-                            // Summary and action
+                            // ========== BULK SETTINGS (Apply to All) ==========
                             var readyCount = state.bulkUrls.filter(function(i) { return i.status === 'ready'; }).length;
+                            if (state.bulkUrls.length > 0 && !state.bulkProcessing) {
+                                html += '<div class="mt-4 pt-4 border-t border-purple-200">';
+                                html += '<p class="text-sm font-semibold text-purple-700 mb-3">⚙️ Settings (Apply to All Thumbnails)</p>';
+
+                                // Visual Style
+                                html += '<div class="mb-3">';
+                                html += '<label class="block text-gray-600 text-sm font-medium mb-2">Visual Style</label>';
+                                html += '<div class="flex flex-wrap gap-2">';
+                                var bulkStyles = [
+                                    { id: 'professional', name: 'Professional', icon: '💼' },
+                                    { id: 'dramatic', name: 'Dramatic', icon: '🎭' },
+                                    { id: 'minimal', name: 'Minimal', icon: '✨' },
+                                    { id: 'bold', name: 'Bold', icon: '🔥' }
+                                ];
+                                bulkStyles.forEach(function(s) {
+                                    var isActive = state.thumbnailStyle === s.id;
+                                    var btnClass = isActive ? 'bg-purple-500 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-purple-300';
+                                    html += '<button type="button" onclick="app.setThumbnailStyle(\'' + s.id + '\')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all ' + btnClass + '">';
+                                    html += s.icon + ' ' + s.name;
+                                    html += '</button>';
+                                });
+                                html += '</div></div>';
+
+                                // Content Category
+                                html += '<div class="mb-3">';
+                                html += '<label class="block text-gray-600 text-sm font-medium mb-2">Content Category</label>';
+                                html += '<div class="flex flex-wrap gap-2">';
+                                var bulkCategories = [
+                                    { id: 'general', name: 'General', icon: '🎯' },
+                                    { id: 'gaming', name: 'Gaming', icon: '🎮' },
+                                    { id: 'tutorial', name: 'Tutorial', icon: '📚' },
+                                    { id: 'vlog', name: 'Vlog', icon: '📹' },
+                                    { id: 'review', name: 'Review', icon: '📦' },
+                                    { id: 'entertainment', name: 'Entertainment', icon: '🎬' }
+                                ];
+                                bulkCategories.forEach(function(c) {
+                                    var isActive = state.thumbnailCategory === c.id;
+                                    var btnClass = isActive ? 'bg-purple-500 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-purple-300';
+                                    html += '<button type="button" onclick="app.setThumbnailCategory(\'' + c.id + '\')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all ' + btnClass + '">';
+                                    html += c.icon + ' ' + c.name;
+                                    html += '</button>';
+                                });
+                                html += '</div></div>';
+
+                                html += '</div>';
+                            }
+
+                            // Summary and action
                             if (readyCount > 0 && !state.bulkProcessing) {
                                 var bulkCost = app.calculateBulkCost();
                                 html += '<div class="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">';
@@ -9649,10 +9947,227 @@
                         }
                     }
 
+                    // ========== PLAYLIST MODE ==========
+                    if (state.thumbnailUpgradeMode === 'playlist') {
+                        // Check if we're showing results
+                        var hasPlaylistResults = state.playlistResults && state.playlistResults.length > 0;
+                        var allPlaylistComplete = hasPlaylistResults && state.playlistResults.every(function(r) {
+                            return r.status === 'complete' || r.status === 'error';
+                        });
+
+                        if (allPlaylistComplete && !state.playlistProcessing) {
+                            // Show playlist results
+                            html += '<div class="space-y-4">';
+                            var completedCount = state.playlistResults.filter(function(r) { return r.status === 'complete'; }).length;
+                            var errorCount = state.playlistResults.filter(function(r) { return r.status === 'error'; }).length;
+
+                            html += '<div class="text-center mb-4">';
+                            html += '<div class="text-2xl mb-2">🎉</div>';
+                            html += '<p class="font-semibold text-gray-800">Playlist Generation Complete</p>';
+                            html += '<p class="text-sm text-gray-500">' + completedCount + ' successful' + (errorCount > 0 ? ', ' + errorCount + ' failed' : '') + '</p>';
+                            html += '</div>';
+
+                            // Results grid
+                            html += '<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-96 overflow-y-auto">';
+                            state.playlistResults.forEach(function(item, idx) {
+                                if (item.status === 'complete' && item.thumbnailUrl) {
+                                    html += '<div class="relative group">';
+                                    html += '<img src="' + item.thumbnailUrl + '" class="w-full rounded-lg border border-gray-200 shadow-sm" style="aspect-ratio: 16/9; object-fit: cover;" />';
+                                    html += '<div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">';
+                                    html += '<button onclick="app.downloadThumbnail(\'' + item.thumbnailUrl + '\', ' + idx + ')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">📥</button>';
+                                    html += '<button onclick="app.previewThumbnail(\'' + item.thumbnailUrl + '\')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">🔍</button>';
+                                    html += '</div>';
+                                    html += '<div class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">✓</div>';
+                                    html += '</div>';
+                                } else if (item.status === 'error') {
+                                    html += '<div class="relative bg-red-50 border border-red-200 rounded-lg flex items-center justify-center" style="aspect-ratio: 16/9;">';
+                                    html += '<div class="text-center p-2">';
+                                    html += '<div class="text-red-500 text-lg">❌</div>';
+                                    html += '<p class="text-xs text-red-600 mt-1 line-clamp-2">' + utils.escapeHtml(item.error || 'Failed') + '</p>';
+                                    html += '</div>';
+                                    html += '</div>';
+                                }
+                            });
+                            html += '</div>';
+
+                            // Action buttons
+                            html += '<div class="flex flex-col sm:flex-row gap-3 mt-4">';
+                            if (completedCount > 0) {
+                                html += '<button type="button" onclick="app.downloadPlaylistAsZip()" class="flex-1 btn-primary bg-gradient-to-r from-indigo-500 to-purple-600 inline-flex items-center justify-center gap-2">';
+                                html += '<span>📦</span> Download All as ZIP';
+                                html += '</button>';
+                            }
+                            html += '<button type="button" onclick="app.clearPlaylist()" class="flex-1 btn-secondary inline-flex items-center justify-center gap-2">';
+                            html += '<span>🔄</span> New Playlist';
+                            html += '</button>';
+                            html += '</div>';
+
+                            html += '</div>';
+                        } else if (state.playlistData && !state.playlistProcessing) {
+                            // Show playlist with video selection
+                            html += '<div class="space-y-4">';
+
+                            // Playlist info header
+                            html += '<div class="flex items-center justify-between bg-white rounded-lg p-3 border border-gray-200">';
+                            html += '<div>';
+                            html += '<p class="font-semibold text-gray-800">📋 ' + utils.escapeHtml(state.playlistData.playlistTitle) + '</p>';
+                            html += '<p class="text-sm text-gray-500">by ' + utils.escapeHtml(state.playlistData.channelName) + ' • ' + state.playlistData.videoCount + ' videos</p>';
+                            html += '</div>';
+                            html += '<button type="button" onclick="app.clearPlaylist()" class="text-sm text-red-500 hover:text-red-700">Clear</button>';
+                            html += '</div>';
+
+                            // Select all toggle
+                            var allSelected = state.playlistSelectedVideos.length === state.playlistData.videos.length;
+                            html += '<div class="flex items-center justify-between">';
+                            html += '<button type="button" onclick="app.toggleAllPlaylistVideos()" class="flex items-center gap-2 text-sm font-medium ' + (allSelected ? 'text-indigo-600' : 'text-gray-600') + '">';
+                            html += '<span class="w-5 h-5 rounded border-2 flex items-center justify-center ' + (allSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-300') + '">';
+                            html += allSelected ? '✓' : '';
+                            html += '</span>';
+                            html += 'Select All (' + state.playlistSelectedVideos.length + '/' + state.playlistData.videos.length + ')';
+                            html += '</button>';
+                            html += '</div>';
+
+                            // Video list
+                            html += '<div class="max-h-64 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2 bg-gray-50">';
+                            state.playlistData.videos.forEach(function(video) {
+                                var isSelected = state.playlistSelectedVideos.indexOf(video.videoId) !== -1;
+                                html += '<div onclick="app.togglePlaylistVideo(\'' + video.videoId + '\')" class="flex items-center gap-3 p-2 bg-white rounded-lg cursor-pointer hover:bg-indigo-50 transition-colors ' + (isSelected ? 'ring-2 ring-indigo-500' : '') + '">';
+                                html += '<span class="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ' + (isSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-300') + '">';
+                                html += isSelected ? '✓' : '';
+                                html += '</span>';
+                                html += '<img src="' + video.thumbnailUrl + '" class="w-16 h-9 object-cover rounded flex-shrink-0" />';
+                                html += '<div class="flex-1 min-w-0">';
+                                html += '<p class="text-sm font-medium text-gray-800 truncate">' + utils.escapeHtml(video.title) + '</p>';
+                                html += '</div>';
+                                html += '</div>';
+                            });
+                            html += '</div>';
+
+                            // Settings section
+                            html += '<div class="pt-4 border-t border-indigo-200">';
+                            html += '<p class="text-sm font-semibold text-indigo-700 mb-3">⚙️ Settings (Apply to All)</p>';
+
+                            // Visual Style
+                            html += '<div class="mb-3">';
+                            html += '<label class="block text-gray-600 text-sm font-medium mb-2">Visual Style</label>';
+                            html += '<div class="flex flex-wrap gap-2">';
+                            var playlistStyles = [
+                                { id: 'professional', name: 'Professional', icon: '💼' },
+                                { id: 'dramatic', name: 'Dramatic', icon: '🎭' },
+                                { id: 'minimal', name: 'Minimal', icon: '✨' },
+                                { id: 'bold', name: 'Bold', icon: '🔥' }
+                            ];
+                            playlistStyles.forEach(function(s) {
+                                var isActive = state.thumbnailStyle === s.id;
+                                var btnClass = isActive ? 'bg-indigo-500 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-indigo-300';
+                                html += '<button type="button" onclick="app.setThumbnailStyle(\'' + s.id + '\')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all ' + btnClass + '">';
+                                html += s.icon + ' ' + s.name;
+                                html += '</button>';
+                            });
+                            html += '</div></div>';
+
+                            // Category
+                            html += '<div class="mb-3">';
+                            html += '<label class="block text-gray-600 text-sm font-medium mb-2">Content Category</label>';
+                            html += '<div class="flex flex-wrap gap-2">';
+                            var playlistCategories = [
+                                { id: 'general', name: 'General', icon: '🎯' },
+                                { id: 'gaming', name: 'Gaming', icon: '🎮' },
+                                { id: 'tutorial', name: 'Tutorial', icon: '📚' },
+                                { id: 'vlog', name: 'Vlog', icon: '📹' },
+                                { id: 'entertainment', name: 'Entertainment', icon: '🎬' }
+                            ];
+                            playlistCategories.forEach(function(c) {
+                                var isActive = state.thumbnailCategory === c.id;
+                                var btnClass = isActive ? 'bg-indigo-500 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-indigo-300';
+                                html += '<button type="button" onclick="app.setThumbnailCategory(\'' + c.id + '\')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all ' + btnClass + '">';
+                                html += c.icon + ' ' + c.name;
+                                html += '</button>';
+                            });
+                            html += '</div></div>';
+
+                            html += '</div>';
+
+                            // Cost and generate button
+                            if (state.playlistSelectedVideos.length > 0) {
+                                var playlistCost = app.calculatePlaylistCost();
+                                html += '<div class="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">';
+                                html += '<div class="flex items-center justify-between mb-3">';
+                                html += '<div>';
+                                html += '<p class="font-semibold text-gray-800">' + state.playlistSelectedVideos.length + ' video' + (state.playlistSelectedVideos.length > 1 ? 's' : '') + ' selected</p>';
+                                html += '<p class="text-sm text-gray-500">Cost: ' + playlistCost + ' tokens (4 each)</p>';
+                                html += '</div>';
+                                html += '<div class="text-right">';
+                                html += '<p class="text-xs text-gray-500">Balance</p>';
+                                html += '<p class="font-bold ' + (state.thumbnailTokenBalance >= playlistCost ? 'text-green-600' : 'text-red-500') + '">' + state.thumbnailTokenBalance + ' tokens</p>';
+                                html += '</div>';
+                                html += '</div>';
+                                html += '<button type="button" onclick="app.processPlaylist()" ' + (state.thumbnailTokenBalance < playlistCost ? 'disabled' : '') + ' class="w-full btn-primary bg-gradient-to-r from-indigo-500 to-purple-600 py-3 inline-flex items-center justify-center gap-2">';
+                                html += '<span>🎬</span> Generate All Thumbnails (' + playlistCost + ' tokens)';
+                                html += '</button>';
+                                if (state.thumbnailTokenBalance < playlistCost) {
+                                    html += '<p class="text-xs text-red-500 mt-2 text-center">Insufficient tokens. You need ' + (playlistCost - state.thumbnailTokenBalance) + ' more tokens.</p>';
+                                }
+                                html += '</div>';
+                            }
+
+                            html += '</div>';
+                        } else if (state.playlistProcessing) {
+                            // Show processing progress
+                            var doneCount = state.playlistResults.filter(function(r) { return r.status === 'complete' || r.status === 'error'; }).length;
+                            var totalCount = state.playlistSelectedVideos.length;
+
+                            html += '<div class="space-y-4">';
+                            html += '<div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">';
+                            html += '<div class="flex items-center gap-3">';
+                            html += '<div class="animate-spin text-2xl">⚙️</div>';
+                            html += '<div>';
+                            html += '<p class="font-semibold text-indigo-800">Processing Playlist...</p>';
+                            html += '<p class="text-sm text-indigo-600">' + doneCount + ' of ' + totalCount + ' complete</p>';
+                            html += '</div>';
+                            html += '</div>';
+                            html += '<div class="mt-3 bg-indigo-200 rounded-full h-2 overflow-hidden">';
+                            html += '<div class="bg-indigo-500 h-full transition-all" style="width: ' + (totalCount > 0 ? (doneCount / totalCount * 100) : 0) + '%;"></div>';
+                            html += '</div>';
+                            html += '</div>';
+
+                            // Show progress list
+                            if (state.playlistResults.length > 0) {
+                                html += '<div class="max-h-48 overflow-y-auto space-y-2">';
+                                state.playlistResults.forEach(function(item) {
+                                    var statusIcon = item.status === 'generating' ? '⏳' : (item.status === 'complete' ? '✓' : '❌');
+                                    var statusColor = item.status === 'generating' ? 'text-blue-500' : (item.status === 'complete' ? 'text-green-500' : 'text-red-500');
+                                    html += '<div class="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-200">';
+                                    html += '<span class="' + statusColor + ' ' + (item.status === 'generating' ? 'animate-pulse' : '') + '">' + statusIcon + '</span>';
+                                    html += '<span class="text-sm text-gray-700 truncate">' + utils.escapeHtml(item.title || 'Video') + '</span>';
+                                    html += '</div>';
+                                });
+                                html += '</div>';
+                            }
+
+                            html += '</div>';
+                        } else {
+                            // Show playlist URL input
+                            html += '<div class="space-y-3">';
+                            html += '<p class="text-sm text-gray-600">Paste a YouTube playlist URL to upgrade all thumbnails at once.</p>';
+                            html += '<div class="flex gap-2">';
+                            html += '<input type="text" placeholder="https://youtube.com/playlist?list=..." value="' + (state.playlistUrl || '') + '" onchange="app.setPlaylistUrl(this.value)" oninput="app.setPlaylistUrl(this.value)" class="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none" />';
+                            html += '<button type="button" onclick="app.fetchPlaylist()" ' + (state.playlistLoading ? 'disabled' : '') + ' class="px-5 py-3 bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap">';
+                            html += state.playlistLoading ? '⏳ Loading...' : '🔍 Fetch';
+                            html += '</button>';
+                            html += '</div>';
+                            html += '<p class="text-xs text-gray-500">Supports: youtube.com/playlist?list=..., youtube.com/watch?v=...&list=...</p>';
+                            if (state.playlistError) {
+                                html += '<p class="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">❌ ' + utils.escapeHtml(state.playlistError) + '</p>';
+                            }
+                            html += '</div>';
+                        }
+                    }
+
                     html += '</div>';
 
                     // Info box about upgrade process
-                    if (state.thumbnailReference && state.thumbnailUpgradeMode !== 'bulk') {
+                    if (state.thumbnailReference && state.thumbnailUpgradeMode !== 'bulk' && state.thumbnailUpgradeMode !== 'playlist') {
                         html += '<div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">';
                         html += '<p class="text-sm text-blue-800">';
                         html += '<span class="font-semibold">💡 How Upgrade Works:</span> AI will analyze your existing thumbnail and create an enhanced version with better lighting, sharper details, improved colors, and professional composition while keeping the same subject and concept.';
@@ -9724,8 +10239,8 @@
                 }
 
                 // ========== TITLE INPUT ==========
-                // Hide form elements when in bulk mode (bulk has its own UI)
-                if (!(state.thumbnailMode === 'upgrade' && state.thumbnailUpgradeMode === 'bulk')) {
+                // Hide form elements when in bulk or playlist mode (they have their own UI)
+                if (!(state.thumbnailMode === 'upgrade' && (state.thumbnailUpgradeMode === 'bulk' || state.thumbnailUpgradeMode === 'playlist'))) {
                 html += '<div class="mb-6">';
                 html += '<label class="block text-gray-700 font-semibold mb-2">Video Title</label>';
 

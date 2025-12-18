@@ -5120,6 +5120,121 @@ exports.fetchYoutubeVideoData = functions.https.onCall(async (data, context) => 
 });
 
 // ==============================================
+// FETCH YOUTUBE PLAYLIST - For Bulk Thumbnail Upgrade Feature
+// Fetches all videos from a YouTube playlist
+// ==============================================
+
+exports.fetchYoutubePlaylist = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  checkRateLimit(uid, 'fetchYoutubePlaylist', 5); // 5 per minute
+
+  const { playlistUrl } = data;
+
+  if (!playlistUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Playlist URL is required');
+  }
+
+  // Extract playlist ID from various URL formats
+  const extractPlaylistId = (url) => {
+    const patterns = [
+      /[?&]list=([a-zA-Z0-9_-]+)/,
+      /\/playlist\/([a-zA-Z0-9_-]+)/
+    ];
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1];
+    }
+    return null;
+  };
+
+  const playlistId = extractPlaylistId(playlistUrl);
+  if (!playlistId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid playlist URL. Please use a valid YouTube playlist link.');
+  }
+
+  const youtubeApiKey = functions.config().youtube?.key;
+  if (!youtubeApiKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'YouTube API key not configured. Contact administrator.');
+  }
+
+  try {
+    const videos = [];
+    let nextPageToken = null;
+    const maxVideos = 100; // Cap at 100 videos
+
+    // Fetch all pages (YouTube returns max 50 per page)
+    do {
+      const params = new URLSearchParams({
+        part: 'snippet',
+        playlistId: playlistId,
+        maxResults: '50',
+        key: youtubeApiKey
+      });
+      if (nextPageToken) params.append('pageToken', nextPageToken);
+
+      const response = await axios.get(
+        `https://www.googleapis.com/youtube/v3/playlistItems?${params}`,
+        { timeout: 15000 }
+      );
+
+      if (response.data.error) {
+        throw new Error(response.data.error.message);
+      }
+
+      for (const item of response.data.items || []) {
+        // Skip deleted/private videos
+        const title = item.snippet?.title;
+        if (title === 'Deleted video' || title === 'Private video') {
+          continue;
+        }
+
+        const videoId = item.snippet?.resourceId?.videoId;
+        if (!videoId) continue;
+
+        const thumbnails = item.snippet?.thumbnails || {};
+        videos.push({
+          videoId: videoId,
+          title: title,
+          description: (item.snippet?.description || '').substring(0, 300),
+          channelName: item.snippet?.channelTitle || '',
+          thumbnailUrl: thumbnails.maxres?.url ||
+                        thumbnails.high?.url ||
+                        thumbnails.medium?.url ||
+                        `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+          position: item.snippet?.position || 0
+        });
+      }
+
+      nextPageToken = response.data.nextPageToken;
+    } while (nextPageToken && videos.length < maxVideos);
+
+    // Get playlist metadata
+    const playlistResponse = await axios.get(
+      `https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${playlistId}&key=${youtubeApiKey}`,
+      { timeout: 10000 }
+    );
+    const playlistInfo = playlistResponse.data.items?.[0]?.snippet || {};
+
+    return {
+      success: true,
+      playlistId: playlistId,
+      playlistTitle: playlistInfo.title || 'Unknown Playlist',
+      channelName: playlistInfo.channelTitle || 'Unknown Channel',
+      videoCount: videos.length,
+      videos: videos.slice(0, maxVideos) // Ensure max limit
+    };
+
+  } catch (error) {
+    console.error('fetchYoutubePlaylist error:', error);
+    if (error.response?.data?.error?.message) {
+      throw new functions.https.HttpsError('internal', error.response.data.error.message);
+    }
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to fetch playlist. Please check the URL and try again.');
+  }
+});
+
+// ==============================================
 // THUMBNAIL PRO - Multi-Model AI Thumbnail Generator
 // Supports: Imagen 4, Gemini (Nano Banana Pro), DALL-E 3
 // Features: Reference images, multiple variations, content categories
