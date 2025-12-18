@@ -5687,6 +5687,7 @@
                 render();
 
                 var generateThumbnailPro = firebase.functions().httpsCallable('generateThumbnailPro');
+                var lastRenderTime = Date.now();
 
                 for (var i = 0; i < state.bulkUrls.length; i++) {
                     var item = state.bulkUrls[i];
@@ -5694,20 +5695,20 @@
 
                     state.bulkCurrentIndex = i;
                     item.status = 'generating';
-                    render();
+
+                    // Throttle renders to max once per 500ms to prevent flickering
+                    if (Date.now() - lastRenderTime > 500) {
+                        render();
+                        lastRenderTime = Date.now();
+                    }
 
                     try {
                         var payload = {
                             prompt: item.youtubeData.title || 'Professional YouTube thumbnail',
                             mode: 'upgrade',
                             referenceType: 'upgrade',
-                            reference: {
-                                dataUrl: item.youtubeData.thumbnailUrl,
-                                mimeType: 'image/jpeg',
-                                name: 'youtube-thumbnail.jpg',
-                                isYoutubeThumbnail: true,
-                                videoId: item.youtubeData.videoId
-                            },
+                            // Use originalThumbnailUrl for YouTube thumbnails (not reference object)
+                            originalThumbnailUrl: item.youtubeData.thumbnailUrl,
                             variations: 1,
                             title: item.youtubeData.title,
                             youtubeContext: {
@@ -5745,10 +5746,12 @@
                         item.error = error.message || 'Generation failed';
                     }
 
+                    // Render after each completed/failed item (but not too frequently)
                     render();
+                    lastRenderTime = Date.now();
 
                     // Small delay between requests to avoid rate limiting
-                    await new Promise(function(resolve) { setTimeout(resolve, 1000); });
+                    await new Promise(function(resolve) { setTimeout(resolve, 1500); });
                 }
 
                 state.bulkProcessing = false;
@@ -5892,6 +5895,7 @@
                 var selectedVideos = state.playlistData.videos.filter(function(v) {
                     return state.playlistSelectedVideos.indexOf(v.videoId) !== -1;
                 });
+                var lastRenderTime = Date.now();
 
                 for (var i = 0; i < selectedVideos.length; i++) {
                     var video = selectedVideos[i];
@@ -5905,20 +5909,20 @@
                         thumbnailUrl: null,
                         error: null
                     });
-                    render();
+
+                    // Throttle renders to prevent flickering
+                    if (Date.now() - lastRenderTime > 500) {
+                        render();
+                        lastRenderTime = Date.now();
+                    }
 
                     try {
                         var payload = {
                             prompt: video.title || 'Professional YouTube thumbnail',
                             mode: 'upgrade',
                             referenceType: 'upgrade',
-                            reference: {
-                                dataUrl: video.thumbnailUrl,
-                                mimeType: 'image/jpeg',
-                                name: 'youtube-thumbnail.jpg',
-                                isYoutubeThumbnail: true,
-                                videoId: video.videoId
-                            },
+                            // Use originalThumbnailUrl for YouTube thumbnails (not reference object)
+                            originalThumbnailUrl: video.thumbnailUrl,
                             variations: 1,
                             title: video.title,
                             youtubeContext: {
@@ -5954,10 +5958,12 @@
                         state.playlistResults[i].error = error.message || 'Generation failed';
                     }
 
+                    // Render after each completed/failed item
                     render();
+                    lastRenderTime = Date.now();
 
                     // Small delay between requests
-                    await new Promise(function(resolve) { setTimeout(resolve, 1000); });
+                    await new Promise(function(resolve) { setTimeout(resolve, 1500); });
                 }
 
                 state.playlistProcessing = false;
