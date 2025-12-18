@@ -3336,7 +3336,7 @@
             thumbnailFromOptimizer: false,   // Flag if user came from optimizer results
 
             // Thumbnail Pro - Enhanced thumbnail generator
-            thumbnailMode: 'quick', // quick | reference | premium
+            thumbnailMode: 'quick', // quick | reference | upgrade
             thumbnailCategory: 'general', // general | gaming | tutorial | vlog | review | news | entertainment
             thumbnailVariations: 1, // 1-4 variations
             thumbnailReference: null, // { dataUrl, file, mimeType, name }
@@ -3357,6 +3357,13 @@
             generatedThumbnails: [], // Array of generated thumbnails for multi-variation
             selectedThumbnailIndex: 0, // Currently selected thumbnail from variations
             showYouTubePreview: false, // YouTube preview modal visibility
+
+            // Thumbnail Upgrade - YouTube URL Feature
+            thumbnailUpgradeMode: 'upload', // 'upload' or 'youtube'
+            thumbnailYoutubeUrl: '',
+            thumbnailYoutubeData: null, // { videoId, title, description, channelName, thumbnailUrl }
+            thumbnailYoutubeLoading: false,
+            thumbnailYoutubeError: null,
 
             // Quota settings (from getUserProfile)
             quotaInfo: null,           // Quota info for each tool with reset times
@@ -5302,7 +5309,7 @@
             },
 
             updateThumbnailCostUI: function() {
-                var modeCosts = { quick: 2, reference: 4, premium: 6 };
+                var modeCosts = { quick: 2, reference: 4, upgrade: 4 };
                 var baseCost = modeCosts[state.thumbnailMode] || 2;
                 var totalCost = baseCost * state.thumbnailVariations;
 
@@ -5323,14 +5330,17 @@
                 var submitBtn = document.getElementById('thumbnail-submit-btn');
                 if (submitBtn && !state.loading) {
                     var canSubmit = state.thumbnailTokenBalance >= totalCost;
-                    if (state.thumbnailMode === 'reference' && !state.thumbnailReference) {
-                        submitBtn.textContent = '📷 Upload Reference Image First';
+                    var needsReference = (state.thumbnailMode === 'reference' || state.thumbnailMode === 'upgrade') && !state.thumbnailReference;
+                    if (needsReference) {
+                        var msg = state.thumbnailMode === 'upgrade' ? '⬆️ Upload Thumbnail or Enter YouTube URL First' : '📷 Upload Reference Image First';
+                        submitBtn.textContent = msg;
                         submitBtn.disabled = true;
                     } else if (!canSubmit) {
                         submitBtn.textContent = '🪙 Insufficient Tokens';
                         submitBtn.disabled = true;
                     } else {
-                        submitBtn.textContent = '🎨 Generate ' + state.thumbnailVariations + ' Thumbnail' + (state.thumbnailVariations > 1 ? 's' : '') + ' (' + totalCost + ' tokens)';
+                        var actionText = state.thumbnailMode === 'upgrade' ? '⬆️ Upgrade' : '🎨 Generate';
+                        submitBtn.textContent = actionText + ' ' + state.thumbnailVariations + ' Thumbnail' + (state.thumbnailVariations > 1 ? 's' : '') + ' (' + totalCost + ' tokens)';
                         submitBtn.disabled = false;
                     }
                 }
@@ -5352,14 +5362,29 @@
                 state.thumbnailMode = mode;
                 app.calculateThumbnailCost();
 
-                // If switching away from reference mode, clear reference
-                if (mode !== 'reference') {
+                // If switching away from reference/upgrade mode, clear reference and YouTube data
+                if (mode !== 'reference' && mode !== 'upgrade') {
                     state.thumbnailReference = null;
+                    state.thumbnailYoutubeData = null;
+                    state.thumbnailYoutubeUrl = '';
+                    state.thumbnailYoutubeError = null;
                 }
 
-                // If switching to/from reference mode, we need full re-render
-                // because the reference upload section appears/disappears
-                if ((previousMode === 'reference') !== (mode === 'reference')) {
+                // If switching between reference and upgrade, keep reference but clear YouTube
+                if (previousMode === 'upgrade' && mode === 'reference') {
+                    state.thumbnailYoutubeData = null;
+                    state.thumbnailYoutubeUrl = '';
+                    state.thumbnailYoutubeError = null;
+                }
+
+                // If switching to upgrade from reference, reset upgrade sub-mode
+                if (mode === 'upgrade') {
+                    state.thumbnailUpgradeMode = 'upload';
+                }
+
+                // Full re-render for modes that have special UI sections
+                var needsRerender = ['reference', 'upgrade'].includes(previousMode) || ['reference', 'upgrade'].includes(mode);
+                if (needsRerender) {
                     render();
                 } else {
                     // Just update the UI elements
@@ -5421,11 +5446,84 @@
                 render();
             },
 
+            // Thumbnail Upgrade - YouTube URL Feature
+            setUpgradeMode: function(mode) {
+                state.thumbnailUpgradeMode = mode;
+                // Clear YouTube data when switching to upload mode
+                if (mode === 'upload') {
+                    state.thumbnailYoutubeUrl = '';
+                    state.thumbnailYoutubeData = null;
+                    state.thumbnailYoutubeError = null;
+                }
+                render();
+            },
+
+            setYoutubeUrl: function(url) {
+                state.thumbnailYoutubeUrl = url;
+                state.thumbnailYoutubeError = null;
+            },
+
+            fetchYoutubeThumbnail: async function() {
+                var url = state.thumbnailYoutubeUrl.trim();
+                if (!url) {
+                    state.thumbnailYoutubeError = 'Please enter a YouTube URL';
+                    render();
+                    return;
+                }
+
+                state.thumbnailYoutubeLoading = true;
+                state.thumbnailYoutubeError = null;
+                render();
+
+                try {
+                    var fetchYoutubeData = firebase.functions().httpsCallable('fetchYoutubeVideoData');
+                    var result = await fetchYoutubeData({ videoUrl: url });
+
+                    if (result.data && result.data.success) {
+                        state.thumbnailYoutubeData = {
+                            videoId: result.data.videoId,
+                            title: result.data.title,
+                            description: result.data.description,
+                            channelName: result.data.channelName,
+                            thumbnailUrl: result.data.thumbnailUrl,
+                            fallbackMode: result.data.fallbackMode || false
+                        };
+
+                        // Auto-load thumbnail as reference (will be downloaded by backend)
+                        state.thumbnailReference = {
+                            dataUrl: result.data.thumbnailUrl,
+                            mimeType: 'image/jpeg',
+                            name: 'youtube-thumbnail.jpg',
+                            isYoutubeThumbnail: true,
+                            videoId: result.data.videoId
+                        };
+
+                        state.thumbnailYoutubeLoading = false;
+                        render();
+                    } else {
+                        throw new Error('Failed to fetch video data');
+                    }
+                } catch (error) {
+                    console.error('YouTube fetch error:', error);
+                    state.thumbnailYoutubeError = error.message || 'Failed to fetch video data. Please check the URL.';
+                    state.thumbnailYoutubeLoading = false;
+                    render();
+                }
+            },
+
+            clearYoutubeData: function() {
+                state.thumbnailYoutubeUrl = '';
+                state.thumbnailYoutubeData = null;
+                state.thumbnailYoutubeError = null;
+                state.thumbnailReference = null;
+                render();
+            },
+
             calculateThumbnailCost: function() {
                 var modeCosts = {
                     quick: 2,
                     reference: 4,
-                    premium: 6
+                    upgrade: 4
                 };
                 var baseCost = modeCosts[state.thumbnailMode] || 2;
                 state.thumbnailTokenCost = baseCost * state.thumbnailVariations;
@@ -5614,6 +5712,35 @@
                     payload.faceStrength = state.thumbnailFaceStrength;
                     payload.styleStrength = state.thumbnailStyleStrength;
                     payload.expressionModifier = state.thumbnailExpression;
+                }
+
+                // Add reference image for upgrade mode
+                if (state.thumbnailMode === 'upgrade' && state.thumbnailReference) {
+                    // Check if this is a YouTube thumbnail (URL) or uploaded file (data URL)
+                    if (state.thumbnailReference.isYoutubeThumbnail) {
+                        // YouTube thumbnail - pass URL for backend to fetch
+                        payload.originalThumbnailUrl = state.thumbnailReference.dataUrl;
+                        payload.referenceType = 'upgrade';
+
+                        // Pass YouTube context if available
+                        if (state.thumbnailYoutubeData) {
+                            payload.youtubeContext = {
+                                videoId: state.thumbnailYoutubeData.videoId,
+                                title: state.thumbnailYoutubeData.title,
+                                description: state.thumbnailYoutubeData.description,
+                                channelName: state.thumbnailYoutubeData.channelName
+                            };
+                        }
+                    } else {
+                        // Uploaded file - extract base64
+                        var dataUrl = state.thumbnailReference.dataUrl;
+                        var base64 = dataUrl.split(',')[1];
+                        payload.referenceImage = {
+                            base64: base64,
+                            mimeType: state.thumbnailReference.mimeType
+                        };
+                        payload.referenceType = 'upgrade';
+                    }
                 }
 
                 functions.httpsCallable('generateThumbnailPro')(payload)
@@ -8842,7 +8969,7 @@
                 var modes = [
                     { id: 'quick', name: 'Quick Mode', icon: '⚡', desc: 'Imagen 4 - Fast & crisp', cost: 2, badge: '', features: ['~5 seconds', 'No reference'] },
                     { id: 'reference', name: 'Reference Mode', icon: '📷', desc: 'Include your image', cost: 4, badge: 'Popular', features: ['~10 seconds', 'Upload your face/product'] },
-                    { id: 'premium', name: 'Premium Mode', icon: '💎', desc: 'DALL-E 3 - Max detail', cost: 6, badge: 'Best Quality', features: ['~8 seconds', 'Exceptional detail'] }
+                    { id: 'upgrade', name: 'Thumbnail Upgrade', icon: '⬆️', desc: 'Upgrade existing thumbnail', cost: 4, badge: 'NEW', features: ['~10 seconds', 'Upload or paste URL'] }
                 ];
 
                 modes.forEach(function(m) {
@@ -8961,6 +9088,103 @@
                             html += '<div class="flex justify-between text-xs text-gray-400 mt-1"><span>Subtle Hints</span><span>Strong Match</span></div>';
                             html += '</div>';
                         }
+                    }
+                }
+
+                // ========== THUMBNAIL UPGRADE MODE UI ==========
+                if (state.thumbnailMode === 'upgrade') {
+                    html += '<div class="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">';
+                    html += '<label class="block text-gray-700 font-semibold mb-3">⬆️ Upgrade Existing Thumbnail</label>';
+
+                    // Tab selector: Upload vs YouTube URL
+                    html += '<div class="flex gap-2 mb-4">';
+                    var uploadActive = state.thumbnailUpgradeMode === 'upload';
+                    var youtubeActive = state.thumbnailUpgradeMode === 'youtube';
+                    html += '<button type="button" onclick="app.setUpgradeMode(\'upload\')" class="flex-1 px-4 py-2 rounded-lg font-medium transition-all ' + (uploadActive ? 'bg-green-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300') + '">';
+                    html += '📤 Upload Thumbnail';
+                    html += '</button>';
+                    html += '<button type="button" onclick="app.setUpgradeMode(\'youtube\')" class="flex-1 px-4 py-2 rounded-lg font-medium transition-all ' + (youtubeActive ? 'bg-red-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-red-300') + '">';
+                    html += '🔗 YouTube URL';
+                    html += '</button>';
+                    html += '</div>';
+
+                    // Upload mode
+                    if (state.thumbnailUpgradeMode === 'upload') {
+                        if (state.thumbnailReference && !state.thumbnailReference.isYoutubeThumbnail) {
+                            // Show uploaded image preview
+                            html += '<div class="flex items-center gap-4">';
+                            html += '<div class="relative">';
+                            html += '<img src="' + state.thumbnailReference.dataUrl + '" class="w-32 h-18 object-cover rounded-lg border-2 border-green-300" style="aspect-ratio: 16/9;" />';
+                            html += '<button type="button" onclick="app.removeReference()" class="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-sm hover:bg-red-600">×</button>';
+                            html += '</div>';
+                            html += '<div>';
+                            html += '<p class="font-medium text-gray-800">' + utils.escapeHtml(state.thumbnailReference.name) + '</p>';
+                            html += '<p class="text-sm text-green-600">✓ Thumbnail ready for upgrade</p>';
+                            html += '</div>';
+                            html += '</div>';
+                        } else {
+                            // Show upload zone
+                            html += '<div class="border-2 border-dashed border-green-300 rounded-xl p-6 text-center hover:border-green-500 transition-all cursor-pointer" onclick="document.getElementById(\'upgrade-upload\').click()">';
+                            html += '<input type="file" id="upgrade-upload" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="app.handleReferenceUpload(event)" />';
+                            html += '<div class="text-4xl mb-2">📤</div>';
+                            html += '<p class="font-medium text-gray-700">Upload your existing thumbnail</p>';
+                            html += '<p class="text-sm text-gray-500 mt-1">AI will analyze and create an upgraded version</p>';
+                            html += '<p class="text-xs text-gray-400 mt-2">JPG, PNG, WebP • Max 5MB</p>';
+                            html += '</div>';
+                        }
+                    }
+
+                    // YouTube URL mode
+                    if (state.thumbnailUpgradeMode === 'youtube') {
+                        if (state.thumbnailYoutubeData && state.thumbnailReference) {
+                            // Show fetched YouTube thumbnail preview
+                            html += '<div class="bg-white rounded-xl p-4 border border-gray-200">';
+                            html += '<div class="flex gap-4">';
+                            html += '<div class="relative flex-shrink-0">';
+                            html += '<img src="' + state.thumbnailYoutubeData.thumbnailUrl + '" class="w-40 rounded-lg border border-gray-200" style="aspect-ratio: 16/9; object-fit: cover;" />';
+                            html += '<div class="absolute top-1 left-1 bg-red-600 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1">';
+                            html += '<span>▶</span> YouTube';
+                            html += '</div>';
+                            html += '</div>';
+                            html += '<div class="flex-1 min-w-0">';
+                            if (state.thumbnailYoutubeData.title) {
+                                html += '<p class="font-semibold text-gray-800 text-sm line-clamp-2">' + utils.escapeHtml(state.thumbnailYoutubeData.title) + '</p>';
+                                html += '<p class="text-xs text-gray-500 mt-1">' + utils.escapeHtml(state.thumbnailYoutubeData.channelName || 'Unknown Channel') + '</p>';
+                            } else {
+                                html += '<p class="font-semibold text-gray-800 text-sm">Video ID: ' + state.thumbnailYoutubeData.videoId + '</p>';
+                                html += '<p class="text-xs text-amber-600 mt-1">⚠️ Title unavailable (API key not configured)</p>';
+                            }
+                            html += '<p class="text-sm text-green-600 mt-2">✓ Thumbnail ready for upgrade</p>';
+                            html += '<button type="button" onclick="app.clearYoutubeData()" class="mt-2 text-xs text-red-500 hover:text-red-700">Clear & try another</button>';
+                            html += '</div>';
+                            html += '</div>';
+                            html += '</div>';
+                        } else {
+                            // Show YouTube URL input
+                            html += '<div class="space-y-3">';
+                            html += '<div class="flex gap-2">';
+                            html += '<input type="text" id="youtube-url-input" placeholder="Paste YouTube video URL..." value="' + (state.thumbnailYoutubeUrl || '') + '" onchange="app.setYoutubeUrl(this.value)" oninput="app.setYoutubeUrl(this.value)" class="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:border-red-400 focus:ring-2 focus:ring-red-100 outline-none" />';
+                            html += '<button type="button" onclick="app.fetchYoutubeThumbnail()" ' + (state.thumbnailYoutubeLoading ? 'disabled' : '') + ' class="px-5 py-3 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap">';
+                            html += state.thumbnailYoutubeLoading ? '⏳ Loading...' : '🔍 Fetch';
+                            html += '</button>';
+                            html += '</div>';
+                            html += '<p class="text-xs text-gray-500">Supports: youtube.com/watch?v=..., youtu.be/..., youtube.com/shorts/...</p>';
+                            if (state.thumbnailYoutubeError) {
+                                html += '<p class="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">❌ ' + utils.escapeHtml(state.thumbnailYoutubeError) + '</p>';
+                            }
+                            html += '</div>';
+                        }
+                    }
+
+                    html += '</div>';
+
+                    // Info box about upgrade process
+                    if (state.thumbnailReference) {
+                        html += '<div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">';
+                        html += '<p class="text-sm text-blue-800">';
+                        html += '<span class="font-semibold">💡 How Upgrade Works:</span> AI will analyze your existing thumbnail and create an enhanced version with better lighting, sharper details, improved colors, and professional composition while keeping the same subject and concept.';
+                        html += '</p>';
+                        html += '</div>';
                     }
                 }
 
