@@ -17251,11 +17251,57 @@ exports.wizardAnalyzeVideo = functions
     const clipLimits = calculateClipCount(durationSeconds);
     console.log(`[wizardAnalyzeVideo] Video duration: ${Math.floor(durationSeconds / 60)}min, requesting ${clipLimits.min}-${clipLimits.max} clips`);
 
-    // Enhanced clip analysis prompt with diversity requirements
-    // Include actual transcript if available - more for longer videos
-    // Scale transcript length with video duration (longer videos get more transcript context)
+    // ============================================
+    // PHASE 2: Smart Transcript Sampling
+    // ============================================
+    // For long videos, sample transcript from different parts instead of just the beginning
+    // This ensures AI sees content from intro, middle, and end
+    function getSmartTranscriptSample(segments, fullText, maxChars, durationSecs) {
+      if (!segments || segments.length === 0) {
+        return fullText ? fullText.substring(0, maxChars) : '';
+      }
+
+      // For short videos (< 30 min), just use the full transcript up to limit
+      if (durationSecs < 1800) {
+        return fullText ? fullText.substring(0, maxChars) : '';
+      }
+
+      // For longer videos, sample from multiple segments
+      const numSamples = durationSecs > 7200 ? 6 : durationSecs > 3600 ? 4 : 3; // 6 for 2h+, 4 for 1-2h, 3 for 30m-1h
+      const charsPerSample = Math.floor(maxChars / numSamples);
+
+      // Calculate time boundaries for each sample
+      const sampleDuration = durationSecs / numSamples;
+      const samples = [];
+
+      for (let i = 0; i < numSamples; i++) {
+        const sampleStart = i * sampleDuration;
+        const sampleEnd = (i + 1) * sampleDuration;
+
+        // Find transcript segments in this time range
+        const segmentsInRange = segments.filter(seg => {
+          const segStart = seg.start || seg.offset || 0;
+          return segStart >= sampleStart && segStart < sampleEnd;
+        });
+
+        // Get text from these segments
+        const sampleText = segmentsInRange.map(seg => seg.text || seg.snippet || '').join(' ');
+        const truncatedSample = sampleText.substring(0, charsPerSample);
+
+        if (truncatedSample.length > 50) {
+          const timeLabel = `[${Math.floor(sampleStart / 60)}-${Math.floor(sampleEnd / 60)} min]`;
+          samples.push(`${timeLabel}: ${truncatedSample}`);
+        }
+      }
+
+      const result = samples.join('\n\n');
+      console.log(`[wizardAnalyzeVideo] Smart transcript: ${numSamples} samples, ${result.length} total chars`);
+      return result;
+    }
+
+    // Use smart sampling for transcript
     const transcriptCharLimit = Math.min(12000, Math.max(4000, Math.floor(durationSeconds * 2)));
-    const transcriptForPrompt = fullTranscript ? fullTranscript.substring(0, transcriptCharLimit) : '';
+    const transcriptForPrompt = getSmartTranscriptSample(transcriptSegments, fullTranscript, transcriptCharLimit, durationSeconds);
     console.log(`[wizardAnalyzeVideo] Transcript for prompt: ${transcriptForPrompt.length} chars (limit: ${transcriptCharLimit})`);
 
     const clipAnalysisPrompt = `You are an expert viral content analyst specializing in short-form video content. Analyze this YouTube video and identify ${clipLimits.min}-${clipLimits.max} DISTINCT, NON-OVERLAPPING viral clip opportunities.
