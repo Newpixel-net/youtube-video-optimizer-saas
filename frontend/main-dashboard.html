@@ -3395,6 +3395,10 @@
             faceReferenceVideoIndex: 0,           // Which video to use as face source
             faceReferenceLoading: false,          // Loading state when fetching face
 
+            // HD Upscale State
+            hdUpscaleLoading: false,              // Loading state for upscale operations
+            hdUpscaleCost: 1,                     // Cost per image (tokens)
+
             // Quota settings (from getUserProfile)
             quotaInfo: null,           // Quota info for each tool with reset times
             resetTimeMinutes: 1440,    // Admin-configured reset time in minutes
@@ -6196,39 +6200,8 @@
             },
 
             downloadPlaylistAsZip: async function() {
-                var completedResults = state.playlistResults.filter(function(r) {
-                    return r.status === 'complete' && r.thumbnailUrl;
-                });
-
-                if (completedResults.length === 0) {
-                    state.error = { message: 'No completed thumbnails to download' };
-                    render();
-                    return;
-                }
-
-                try {
-                    var zip = new JSZip();
-                    var folder = zip.folder('playlist-thumbnails');
-
-                    for (var i = 0; i < completedResults.length; i++) {
-                        var item = completedResults[i];
-                        var response = await fetch(item.thumbnailUrl);
-                        var blob = await response.blob();
-
-                        var title = item.title
-                            ? item.title.replace(/[<>:"/\\|?*]/g, '').substring(0, 50)
-                            : 'thumbnail';
-                        var filename = (i + 1) + '_' + title + '.png';
-                        folder.file(filename, blob);
-                    }
-
-                    var content = await zip.generateAsync({ type: 'blob' });
-                    saveAs(content, 'playlist-thumbnails.zip');
-                } catch (error) {
-                    console.error('ZIP download error:', error);
-                    state.error = { message: 'Failed to create ZIP file: ' + error.message };
-                    render();
-                }
+                // Delegate to the new downloadAllAsZip function
+                return app.downloadAllAsZip('playlist', false);
             },
 
             clearPlaylist: function() {
@@ -6639,6 +6612,201 @@
                 state.selectedThumbnailIndex = 0;
                 state.error = null;
                 render();
+            },
+
+            /* ------------------------------------------
+               4.5.7b HD Upscale Actions
+               ------------------------------------------ */
+
+            // Upscale a single thumbnail to HD (1920x1080)
+            upscaleThumbnail: async function(imageUrl, itemIndex, mode) {
+                // mode: 'single' | 'bulk' | 'playlist'
+                state.hdUpscaleLoading = true;
+                render();
+
+                try {
+                    var upscale = firebase.functions().httpsCallable('upscaleThumbnail');
+                    var result = await upscale({ imageUrl: imageUrl });
+
+                    if (result.data.success) {
+                        // Update item based on mode
+                        if (mode === 'bulk' && state.bulkUrls[itemIndex]) {
+                            state.bulkUrls[itemIndex].hdUrl = result.data.hdUrl;
+                        } else if (mode === 'playlist' && state.playlistResults[itemIndex]) {
+                            state.playlistResults[itemIndex].hdUrl = result.data.hdUrl;
+                        } else if (mode === 'single' && state.generatedThumbnails[itemIndex]) {
+                            state.generatedThumbnails[itemIndex].hdUrl = result.data.hdUrl;
+                        }
+
+                        // Refresh token balance
+                        await app.refreshTokenBalance();
+                    }
+                } catch (error) {
+                    console.error('HD Upscale failed:', error);
+                    state.error = { message: 'HD Upscale failed: ' + (error.message || 'Unknown error') };
+                }
+
+                state.hdUpscaleLoading = false;
+                render();
+            },
+
+            // Upscale all thumbnails in bulk/playlist mode
+            upscaleAllThumbnails: async function(mode) {
+                var images = [];
+
+                if (mode === 'bulk') {
+                    state.bulkUrls.forEach(function(item, idx) {
+                        if (item.status === 'complete' && item.generatedThumbnail && !item.hdUrl) {
+                            images.push({ url: item.generatedThumbnail, id: idx });
+                        }
+                    });
+                } else if (mode === 'playlist') {
+                    state.playlistResults.forEach(function(item, idx) {
+                        if (item.status === 'complete' && item.thumbnailUrl && !item.hdUrl) {
+                            images.push({ url: item.thumbnailUrl, id: idx });
+                        }
+                    });
+                }
+
+                if (images.length === 0) {
+                    state.error = { message: 'No images to upscale' };
+                    render();
+                    return;
+                }
+
+                // Confirm cost
+                var totalCost = images.length * state.hdUpscaleCost;
+                if (!confirm('Upscale ' + images.length + ' images to HD for ' + totalCost + ' credit(s)?')) {
+                    return;
+                }
+
+                state.hdUpscaleLoading = true;
+                render();
+
+                try {
+                    var upscaleBatch = firebase.functions().httpsCallable('upscaleBatch');
+                    var result = await upscaleBatch({ images: images });
+
+                    if (result.data.success) {
+                        // Update items with HD URLs
+                        result.data.results.forEach(function(r) {
+                            if (r.status === 'success') {
+                                if (mode === 'bulk' && state.bulkUrls[r.id]) {
+                                    state.bulkUrls[r.id].hdUrl = r.hdUrl;
+                                } else if (mode === 'playlist' && state.playlistResults[r.id]) {
+                                    state.playlistResults[r.id].hdUrl = r.hdUrl;
+                                }
+                            }
+                        });
+
+                        // Refresh token balance
+                        await app.refreshTokenBalance();
+
+                        // Show success message
+                        if (result.data.failedCount > 0) {
+                            state.error = { message: 'Upscaled ' + result.data.successCount + ' images. ' + result.data.failedCount + ' failed.' };
+                        }
+                    }
+                } catch (error) {
+                    console.error('Batch upscale failed:', error);
+                    state.error = { message: 'Batch upscale failed: ' + (error.message || 'Unknown error') };
+                }
+
+                state.hdUpscaleLoading = false;
+                render();
+            },
+
+            // Download HD version of a thumbnail
+            downloadHdThumbnail: async function(hdUrl, index) {
+                try {
+                    var btn = document.querySelector('[data-hd-download-btn="' + index + '"]');
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.innerHTML = '<span class="animate-spin">⏳</span> Downloading...';
+                    }
+
+                    var response = await fetch(hdUrl);
+                    var blob = await response.blob();
+                    var blobUrl = URL.createObjectURL(blob);
+
+                    var link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = 'thumbnail-hd-' + (index + 1) + '.png';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    URL.revokeObjectURL(blobUrl);
+
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '⬆️ HD';
+                    }
+                } catch (error) {
+                    console.error('HD Download failed:', error);
+                    window.open(hdUrl, '_blank');
+
+                    var btn = document.querySelector('[data-hd-download-btn="' + index + '"]');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '⬆️ HD';
+                    }
+                }
+            },
+
+            // Download all thumbnails as ZIP (with optional HD)
+            downloadAllAsZip: async function(mode, includeHd) {
+                var items = mode === 'bulk' ? state.bulkUrls : state.playlistResults;
+                var completed = items.filter(function(r) {
+                    return r.status === 'complete' && (r.generatedThumbnail || r.thumbnailUrl);
+                });
+
+                if (completed.length === 0) {
+                    state.error = { message: 'No completed thumbnails to download' };
+                    render();
+                    return;
+                }
+
+                try {
+                    var zip = new JSZip();
+                    var folderName = mode + '-thumbnails' + (includeHd ? '-hd' : '');
+                    var folder = zip.folder(folderName);
+
+                    for (var i = 0; i < completed.length; i++) {
+                        var item = completed[i];
+                        var url = includeHd && item.hdUrl ? item.hdUrl : (item.generatedThumbnail || item.thumbnailUrl);
+
+                        var response = await fetch(url);
+                        var blob = await response.blob();
+
+                        var title = (item.title || 'thumbnail').replace(/[<>:"/\\|?*]/g, '').substring(0, 50);
+                        var suffix = includeHd && item.hdUrl ? '_HD' : '';
+                        var filename = (i + 1) + '_' + title + suffix + '.png';
+
+                        folder.file(filename, blob);
+                    }
+
+                    var content = await zip.generateAsync({ type: 'blob' });
+                    saveAs(content, folderName + '.zip');
+                } catch (error) {
+                    console.error('ZIP download error:', error);
+                    state.error = { message: 'Failed to create ZIP: ' + error.message };
+                    render();
+                }
+            },
+
+            // Refresh token balance after upscale
+            refreshTokenBalance: async function() {
+                try {
+                    var getBalance = firebase.functions().httpsCallable('getThumbnailTokenBalance');
+                    var result = await getBalance();
+                    if (result.data) {
+                        state.thumbnailTokens = result.data.balance || 0;
+                        render();
+                    }
+                } catch (e) {
+                    console.error('Failed to refresh token balance:', e);
+                }
             },
 
             /* ------------------------------------------
@@ -9802,6 +9970,14 @@
                 html += '<div class="flex flex-col sm:flex-row justify-center gap-4 flex-wrap">';
                 if (selectedImg) {
                     html += '<button data-download-btn="' + state.selectedThumbnailIndex + '" onclick="app.downloadThumbnail(\'' + utils.escapeHtml(selectedImg.url) + '\', ' + state.selectedThumbnailIndex + ')" class="btn-primary bg-gradient-to-r from-green-500 to-emerald-600 inline-flex items-center justify-center gap-2"><span>📥</span> Download</button>';
+
+                    // HD Upscale/Download buttons
+                    if (selectedImg.hdUrl) {
+                        html += '<button data-hd-download-btn="' + state.selectedThumbnailIndex + '" onclick="app.downloadHdThumbnail(\'' + utils.escapeHtml(selectedImg.hdUrl) + '\', ' + state.selectedThumbnailIndex + ')" class="btn-primary bg-gradient-to-r from-blue-500 to-indigo-600 inline-flex items-center justify-center gap-2"><span>⬆️</span> Download HD</button>';
+                    } else {
+                        html += '<button onclick="app.upscaleThumbnail(\'' + utils.escapeHtml(selectedImg.url) + '\', ' + state.selectedThumbnailIndex + ', \'single\')" ' + (state.hdUpscaleLoading ? 'disabled' : '') + ' class="btn-secondary inline-flex items-center justify-center gap-2 ' + (state.hdUpscaleLoading ? 'opacity-50 cursor-not-allowed' : '') + '"><span>' + (state.hdUpscaleLoading ? '⏳' : '⬆️') + '</span> ' + (state.hdUpscaleLoading ? 'Upscaling...' : 'Upscale HD (1 credit)') + '</button>';
+                    }
+
                     html += '<button onclick="app.previewThumbnail(\'' + utils.escapeHtml(selectedImg.url) + '\')" class="btn-secondary inline-flex items-center justify-center gap-2"><span>🔍</span> Preview</button>';
                 }
                 html += '<button onclick="app.toggleYouTubePreview()" class="btn-secondary inline-flex items-center justify-center gap-2"><span>👁️</span> YouTube Preview</button>';
@@ -10061,11 +10237,21 @@
                                 if (item.status === 'complete' && item.generatedThumbnail) {
                                     html += '<div class="relative group">';
                                     html += '<img src="' + item.generatedThumbnail + '" class="w-full rounded-lg border border-gray-200 shadow-sm" style="aspect-ratio: 16/9; object-fit: cover;" />';
-                                    html += '<div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">';
-                                    html += '<button onclick="app.downloadThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">📥</button>';
-                                    html += '<button onclick="app.previewThumbnail(\'' + item.generatedThumbnail + '\')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">🔍</button>';
+                                    html += '<div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1">';
+                                    html += '<div class="flex gap-2">';
+                                    html += '<button onclick="app.downloadThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">📥 SD</button>';
+                                    if (item.hdUrl) {
+                                        html += '<button onclick="app.downloadHdThumbnail(\'' + item.hdUrl + '\', ' + idx + ')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600">⬆️ HD</button>';
+                                    } else {
+                                        html += '<button onclick="app.upscaleThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ', \'bulk\')" class="bg-indigo-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-indigo-600">⬆️ Upscale</button>';
+                                    }
+                                    html += '</div>';
+                                    html += '<button onclick="app.previewThumbnail(\'' + item.generatedThumbnail + '\')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">🔍 Preview</button>';
                                     html += '</div>';
                                     html += '<div class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">✓</div>';
+                                    if (item.hdUrl) {
+                                        html += '<div class="absolute bottom-1 right-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded font-bold">HD</div>';
+                                    }
                                     html += '</div>';
                                 } else if (item.status === 'error') {
                                     html += '<div class="relative bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center" style="aspect-ratio: 16/9;">';
@@ -10083,20 +10269,41 @@
                             html += '</div>';
 
                             // Action buttons
-                            html += '<div class="flex flex-col sm:flex-row gap-3 mt-4">';
+                            var hdCount = state.bulkUrls.filter(function(i) { return i.status === 'complete' && i.hdUrl; }).length;
+                            var notHdCount = completedCount - hdCount;
+                            html += '<div class="flex flex-col gap-3 mt-4">';
+
+                            // First row - Download buttons
+                            html += '<div class="flex flex-col sm:flex-row gap-3">';
+                            if (completedCount > 0) {
+                                html += '<button type="button" onclick="app.downloadAllAsZip(\'bulk\', false)" class="flex-1 btn-primary bg-gradient-to-r from-purple-500 to-indigo-600 inline-flex items-center justify-center gap-2">';
+                                html += '<span>📦</span> Download All (ZIP)';
+                                html += '</button>';
+                                if (hdCount > 0) {
+                                    html += '<button type="button" onclick="app.downloadAllAsZip(\'bulk\', true)" class="flex-1 btn-primary bg-gradient-to-r from-blue-500 to-indigo-600 inline-flex items-center justify-center gap-2">';
+                                    html += '<span>📦</span> Download HD (ZIP)';
+                                    html += '</button>';
+                                }
+                            }
+                            html += '</div>';
+
+                            // Second row - HD Upscale & other buttons
+                            html += '<div class="flex flex-col sm:flex-row gap-3">';
+                            if (notHdCount > 0) {
+                                html += '<button type="button" onclick="app.upscaleAllThumbnails(\'bulk\')" ' + (state.hdUpscaleLoading ? 'disabled' : '') + ' class="flex-1 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center justify-center gap-2 transition-all ' + (state.hdUpscaleLoading ? 'opacity-50 cursor-not-allowed' : '') + '">';
+                                html += '<span>' + (state.hdUpscaleLoading ? '⏳' : '⬆️') + '</span> ' + (state.hdUpscaleLoading ? 'Upscaling...' : 'Upscale All HD (' + notHdCount + ')');
+                                html += '</button>';
+                            }
                             if (errorCount > 0) {
                                 html += '<button type="button" onclick="app.retryFailedBulkItems()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center justify-center gap-2 transition-colors">';
                                 html += '<span>🔄</span> Retry Failed (' + errorCount + ')';
                                 html += '</button>';
                             }
-                            if (completedCount > 0) {
-                                html += '<button type="button" onclick="app.downloadAllAsZip()" class="flex-1 btn-primary bg-gradient-to-r from-purple-500 to-indigo-600 inline-flex items-center justify-center gap-2">';
-                                html += '<span>📦</span> Download All as ZIP';
-                                html += '</button>';
-                            }
                             html += '<button type="button" onclick="app.resetBulkMode()" class="flex-1 btn-secondary inline-flex items-center justify-center gap-2">';
                             html += '<span>🔄</span> Start New Batch';
                             html += '</button>';
+                            html += '</div>';
+
                             html += '</div>';
 
                             html += '</div>';
@@ -10186,10 +10393,18 @@
                                         if (item.status === 'generating') {
                                             html += '<p class="text-xs text-purple-600 mt-1 animate-pulse">Generating thumbnail...</p>';
                                         } else if (item.status === 'complete' && item.generatedThumbnail) {
-                                            html += '<div class="flex items-center gap-2 mt-2">';
+                                            html += '<div class="flex items-center flex-wrap gap-2 mt-2">';
                                             html += '<span class="text-xs text-green-600">✓ Complete</span>';
-                                            html += '<button type="button" onclick="app.downloadThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ')" class="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 transition-colors">📥 Download</button>';
-                                            html += '<button type="button" onclick="app.previewThumbnail(\'' + item.generatedThumbnail + '\')" class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300 transition-colors">🔍 Preview</button>';
+                                            if (item.hdUrl) {
+                                                html += '<span class="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded font-bold">HD</span>';
+                                            }
+                                            html += '<button type="button" onclick="app.downloadThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ')" class="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 transition-colors">📥 SD</button>';
+                                            if (item.hdUrl) {
+                                                html += '<button type="button" onclick="app.downloadHdThumbnail(\'' + item.hdUrl + '\', ' + idx + ')" class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 transition-colors">⬆️ HD</button>';
+                                            } else {
+                                                html += '<button type="button" onclick="app.upscaleThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ', \'bulk\')" class="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors">⬆️ Upscale</button>';
+                                            }
+                                            html += '<button type="button" onclick="app.previewThumbnail(\'' + item.generatedThumbnail + '\')" class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300 transition-colors">🔍</button>';
                                             html += '</div>';
                                         } else if (item.status === 'complete') {
                                             html += '<p class="text-xs text-green-600 mt-1">✓ Complete</p>';
@@ -10409,11 +10624,21 @@
                                 if (item.status === 'complete' && item.thumbnailUrl) {
                                     html += '<div class="relative group">';
                                     html += '<img src="' + item.thumbnailUrl + '" class="w-full rounded-lg border border-gray-200 shadow-sm" style="aspect-ratio: 16/9; object-fit: cover;" />';
-                                    html += '<div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">';
-                                    html += '<button onclick="app.downloadThumbnail(\'' + item.thumbnailUrl + '\', ' + idx + ')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">📥</button>';
-                                    html += '<button onclick="app.previewThumbnail(\'' + item.thumbnailUrl + '\')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">🔍</button>';
+                                    html += '<div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1">';
+                                    html += '<div class="flex gap-2">';
+                                    html += '<button onclick="app.downloadThumbnail(\'' + item.thumbnailUrl + '\', ' + idx + ')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">📥 SD</button>';
+                                    if (item.hdUrl) {
+                                        html += '<button onclick="app.downloadHdThumbnail(\'' + item.hdUrl + '\', ' + idx + ')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600">⬆️ HD</button>';
+                                    } else {
+                                        html += '<button onclick="app.upscaleThumbnail(\'' + item.thumbnailUrl + '\', ' + idx + ', \'playlist\')" class="bg-indigo-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-indigo-600">⬆️ Upscale</button>';
+                                    }
+                                    html += '</div>';
+                                    html += '<button onclick="app.previewThumbnail(\'' + item.thumbnailUrl + '\')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">🔍 Preview</button>';
                                     html += '</div>';
                                     html += '<div class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">✓</div>';
+                                    if (item.hdUrl) {
+                                        html += '<div class="absolute bottom-1 right-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded font-bold">HD</div>';
+                                    }
                                     html += '</div>';
                                 } else if (item.status === 'error') {
                                     html += '<div class="relative bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center group" style="aspect-ratio: 16/9;">';
@@ -10431,20 +10656,41 @@
                             html += '</div>';
 
                             // Action buttons
-                            html += '<div class="flex flex-col sm:flex-row gap-3 mt-4">';
+                            var hdCount = state.playlistResults.filter(function(r) { return r.status === 'complete' && r.hdUrl; }).length;
+                            var notHdCount = completedCount - hdCount;
+                            html += '<div class="flex flex-col gap-3 mt-4">';
+
+                            // First row - Download buttons
+                            html += '<div class="flex flex-col sm:flex-row gap-3">';
+                            if (completedCount > 0) {
+                                html += '<button type="button" onclick="app.downloadAllAsZip(\'playlist\', false)" class="flex-1 btn-primary bg-gradient-to-r from-indigo-500 to-purple-600 inline-flex items-center justify-center gap-2">';
+                                html += '<span>📦</span> Download All (ZIP)';
+                                html += '</button>';
+                                if (hdCount > 0) {
+                                    html += '<button type="button" onclick="app.downloadAllAsZip(\'playlist\', true)" class="flex-1 btn-primary bg-gradient-to-r from-blue-500 to-indigo-600 inline-flex items-center justify-center gap-2">';
+                                    html += '<span>📦</span> Download HD (ZIP)';
+                                    html += '</button>';
+                                }
+                            }
+                            html += '</div>';
+
+                            // Second row - HD Upscale & other buttons
+                            html += '<div class="flex flex-col sm:flex-row gap-3">';
+                            if (notHdCount > 0) {
+                                html += '<button type="button" onclick="app.upscaleAllThumbnails(\'playlist\')" ' + (state.hdUpscaleLoading ? 'disabled' : '') + ' class="flex-1 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center justify-center gap-2 transition-all ' + (state.hdUpscaleLoading ? 'opacity-50 cursor-not-allowed' : '') + '">';
+                                html += '<span>' + (state.hdUpscaleLoading ? '⏳' : '⬆️') + '</span> ' + (state.hdUpscaleLoading ? 'Upscaling...' : 'Upscale All HD (' + notHdCount + ')');
+                                html += '</button>';
+                            }
                             if (errorCount > 0) {
                                 html += '<button type="button" onclick="app.retryFailedPlaylistItems()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center justify-center gap-2 transition-colors">';
                                 html += '<span>🔄</span> Retry Failed (' + errorCount + ')';
                                 html += '</button>';
                             }
-                            if (completedCount > 0) {
-                                html += '<button type="button" onclick="app.downloadPlaylistAsZip()" class="flex-1 btn-primary bg-gradient-to-r from-indigo-500 to-purple-600 inline-flex items-center justify-center gap-2">';
-                                html += '<span>📦</span> Download All as ZIP';
-                                html += '</button>';
-                            }
                             html += '<button type="button" onclick="app.clearPlaylist()" class="flex-1 btn-secondary inline-flex items-center justify-center gap-2">';
                             html += '<span>🔄</span> New Playlist';
                             html += '</button>';
+                            html += '</div>';
+
                             html += '</div>';
 
                             html += '</div>';
@@ -10664,7 +10910,13 @@
                                     html += '<span class="text-sm text-gray-700 truncate flex-1">' + utils.escapeHtml(item.title || 'Video') + '</span>';
                                     // Download buttons for completed items
                                     if (item.status === 'complete' && item.thumbnailUrl) {
+                                        if (item.hdUrl) {
+                                            html += '<span class="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded font-bold flex-shrink-0">HD</span>';
+                                        }
                                         html += '<button type="button" onclick="event.stopPropagation(); app.downloadThumbnail(\'' + item.thumbnailUrl + '\', ' + idx + ')" class="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 flex-shrink-0">📥</button>';
+                                        if (item.hdUrl) {
+                                            html += '<button type="button" onclick="event.stopPropagation(); app.downloadHdThumbnail(\'' + item.hdUrl + '\', ' + idx + ')" class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 flex-shrink-0">⬆️</button>';
+                                        }
                                         html += '<button type="button" onclick="event.stopPropagation(); app.previewThumbnail(\'' + item.thumbnailUrl + '\')" class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300 flex-shrink-0">🔍</button>';
                                     }
                                     html += '</div>';
@@ -10676,7 +10928,7 @@
                                 if (completedPlaylistCount > 0) {
                                     html += '<div class="mt-3 p-3 bg-green-50 rounded-lg border border-green-200 flex items-center justify-between">';
                                     html += '<span class="text-sm text-green-700">' + completedPlaylistCount + ' ready for download</span>';
-                                    html += '<button type="button" onclick="app.downloadPlaylistAsZip()" class="bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-green-600 flex items-center gap-1">';
+                                    html += '<button type="button" onclick="app.downloadAllAsZip(\'playlist\', false)" class="bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-green-600 flex items-center gap-1">';
                                     html += '<span>📦</span> Download ZIP';
                                     html += '</button>';
                                     html += '</div>';
