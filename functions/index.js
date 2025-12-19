@@ -5237,30 +5237,37 @@ exports.fetchYoutubePlaylist = functions.https.onCall(async (data, context) => {
 });
 
 // ==============================================
-// SMART CAPTION SYSTEM v2 - Clean & Preserve Title Structure
-// Removes junk, keeps meaningful content, smart truncation
+// SMART CAPTION SYSTEM v3 - Intelligent Part Selection
+// Detects attribution vs content, extracts key phrases
 // ==============================================
 
 /**
- * Generate optimal caption by cleaning title and preserving structure
+ * Generate optimal caption by cleaning title and intelligently selecting best part
  * @param {string} title - The full video title
  * @param {number} maxChars - Maximum characters allowed (default 35)
  * @returns {Promise<string>} - Cleaned caption in uppercase
  */
 async function generateOptimalCaption(title, maxChars = 35) {
-  // Step 1: Clean the title (remove YouTube junk)
+  // Step 1: Try to extract quoted content first (highest priority)
+  const quotedContent = extractQuotedContent(title);
+  if (quotedContent && quotedContent.length <= maxChars && quotedContent.length >= 3) {
+    console.log(`Smart Caption v3: "${title}" → "${quotedContent.toUpperCase()}" (quoted content)`);
+    return quotedContent.toUpperCase();
+  }
+
+  // Step 2: Clean the title (remove YouTube junk)
   let caption = cleanYouTubeTitle(title);
 
-  // Step 2: If already fits, return it
+  // Step 3: If already fits, return it
   if (caption.length <= maxChars) {
-    console.log(`Smart Caption: "${title}" → "${caption}" (${caption.length} chars) [clean]`);
+    console.log(`Smart Caption v3: "${title}" → "${caption}" (${caption.length} chars) [clean]`);
     return caption;
   }
 
-  // Step 3: Smart truncation - try to cut at natural break points
-  caption = smartTruncate(caption, maxChars);
+  // Step 4: Smart truncation with intelligent part selection
+  caption = smartTruncateV3(caption, title, maxChars);
 
-  // Step 4: If still too long, use AI to shorten intelligently
+  // Step 5: If still too long, use AI to shorten intelligently
   if (caption.length > maxChars) {
     try {
       caption = await aiShortenCaption(title, caption, maxChars);
@@ -5271,8 +5278,77 @@ async function generateOptimalCaption(title, maxChars = 35) {
     }
   }
 
-  console.log(`Smart Caption: "${title}" → "${caption}" (${caption.length} chars)`);
+  console.log(`Smart Caption v3: "${title}" → "${caption}" (${caption.length} chars)`);
   return caption;
+}
+
+/**
+ * Extract content in quotes (single or double) - often the song/key phrase
+ * Examples: 'Your Truth', "Night Rainbows", 'L'infinito'
+ */
+function extractQuotedContent(title) {
+  // Try single quotes first (more common in titles)
+  const singleQuoteMatch = title.match(/'([^']+)'/);
+  if (singleQuoteMatch && singleQuoteMatch[1].length >= 3) {
+    return singleQuoteMatch[1];
+  }
+
+  // Try double quotes
+  const doubleQuoteMatch = title.match(/"([^"]+)"/);
+  if (doubleQuoteMatch && doubleQuoteMatch[1].length >= 3) {
+    return doubleQuoteMatch[1];
+  }
+
+  // Try fancy quotes
+  const fancyQuoteMatch = title.match(/[''"]([^''"]+)[''""]/);
+  if (fancyQuoteMatch && fancyQuoteMatch[1].length >= 3) {
+    return fancyQuoteMatch[1];
+  }
+
+  return null;
+}
+
+/**
+ * Detect if text is "attribution" - generic phrases that should be deprioritized
+ * Examples: "Lyrics by Kērd DaiKur", "A New Release by Artist", "Music by X"
+ */
+function isAttribution(text) {
+  const upperText = text.toUpperCase();
+
+  // Patterns that indicate attribution (not the main content)
+  const attributionPatterns = [
+    /\bBY\s+[A-Z]/i,                    // "by [Name]" - strong indicator
+    /\bLYRICS\s+BY\b/i,                 // "Lyrics by"
+    /\bMUSIC\s+BY\b/i,                  // "Music by"
+    /\bPRODUCED\s+BY\b/i,               // "Produced by"
+    /\bDIRECTED\s+BY\b/i,               // "Directed by"
+    /\bA\s+NEW\s+(RELEASE|SINGLE|TRACK|SONG)\b/i,  // "A New Release/Single"
+    /\bNEW\s+(RELEASE|SINGLE|TRACK|SONG)\s+BY\b/i, // "New Release by"
+    /\bFEAT(URING)?\.?\s/i,             // "feat." or "featuring"
+    /\bFT\.?\s/i,                       // "ft."
+    /\bPRESENTS?\b/i,                   // "presents"
+    /\bFROM\s+THE\s+ALBUM\b/i,          // "from the album"
+    /\bOUT\s+NOW\b/i,                   // "out now"
+  ];
+
+  for (const pattern of attributionPatterns) {
+    if (pattern.test(upperText)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Detect if text looks like a song/content title (short, punchy, no attribution)
+ */
+function isSongTitle(text) {
+  // Short text without attribution patterns is likely a song title
+  if (text.length <= 25 && !isAttribution(text)) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -5283,8 +5359,6 @@ function cleanYouTubeTitle(title) {
   let cleaned = title;
 
   // ROBUST: Remove any parentheses containing common YouTube junk words
-  // This handles: (Official Video), (Official Lyrics Video), (Official Music Video),
-  // (Lyrics Video), (Audio), (HD), (4K), (Full Video), (Live), etc.
   const junkWordsInParens = /\s*\([^)]*\b(official|video|lyric|lyrics|audio|music|hd|4k|1080p|720p|full|visualizer|clip|mv|remaster|remastered|live|acoustic|remix|cover|version|premiere|explicit|clean)\b[^)]*\)/gi;
   cleaned = cleaned.replace(junkWordsInParens, '');
 
@@ -5301,7 +5375,6 @@ function cleanYouTubeTitle(title) {
   cleaned = cleaned.replace(/\s*\|.*$/g, '');
 
   // Remove trailing indicators (but be careful not to remove song parts)
-  // Only remove if it's clearly junk like "- Official Video" at the end
   cleaned = cleaned.replace(/\s*[-–—]\s*(official\s*)?(video|audio|lyric|lyrics|hd|4k|full)(\s+video)?$/gi, '');
 
   // Remove "Official" at the start
@@ -5321,52 +5394,77 @@ function cleanYouTubeTitle(title) {
 }
 
 /**
- * Smart truncation at natural break points
- * Prioritizes keeping "Artist – Song" structure intact
+ * Smart truncation v3 - Intelligently selects best part
+ * Key improvement: Detects attribution vs content and prioritizes accordingly
  */
-function smartTruncate(caption, maxChars) {
+function smartTruncateV3(caption, originalTitle, maxChars) {
   if (caption.length <= maxChars) return caption;
 
-  // Try to cut at natural separators: – - : |
-  const separators = [' – ', ' - ', ' — ', ': ', ' | '];
+  // Try to cut at natural separators: – - — :
+  const separators = [' – ', ' — ', ' - ', ': '];
 
   for (const sep of separators) {
     const sepIndex = caption.indexOf(sep);
     if (sepIndex > 0) {
       const parts = caption.split(sep);
       if (parts.length >= 2) {
-        const artist = parts[0].trim();
-        const song = parts.slice(1).join(sep).trim(); // Keep everything after first separator
+        const part1 = parts[0].trim();
+        const part2 = parts.slice(1).join(sep).trim();
 
-        // Try 1: Keep "Artist – Song" with full song title
-        const fullCombo = artist + ' – ' + song;
+        // Analyze both parts
+        const part1IsAttribution = isAttribution(part1);
+        const part2IsAttribution = isAttribution(part2);
+        const part2IsSong = isSongTitle(part2);
+
+        console.log(`Smart Caption v3 Analysis: part1="${part1}" (attr:${part1IsAttribution}), part2="${part2}" (attr:${part2IsAttribution}, song:${part2IsSong})`);
+
+        // Decision logic: prioritize the content part, not the attribution
+        let primaryPart, secondaryPart;
+
+        if (part2IsAttribution && !part1IsAttribution) {
+          // Part 2 is attribution (e.g., "Lyrics by X"), use Part 1
+          primaryPart = part1;
+          secondaryPart = part2;
+        } else if (part1IsAttribution && !part2IsAttribution) {
+          // Part 1 is attribution, use Part 2
+          primaryPart = part2;
+          secondaryPart = part1;
+        } else if (part2IsSong && part2.length <= part1.length) {
+          // Part 2 looks like a song title and is shorter - classic "Artist – Song" format
+          primaryPart = part2;
+          secondaryPart = part1;
+        } else {
+          // Default: prefer the first part (usually the hook/title)
+          primaryPart = part1;
+          secondaryPart = part2;
+        }
+
+        // Try 1: Full combination if fits
+        const fullCombo = part1 + ' – ' + part2;
         if (fullCombo.length <= maxChars) {
           return fullCombo;
         }
 
-        // Try 2: Truncate song title at word boundary, keep artist
-        const availableForSong = maxChars - artist.length - 3; // 3 for " – "
-        if (availableForSong >= 5) {
-          const truncatedSong = truncateAtWordBoundary(song, availableForSong);
-          if (truncatedSong.length >= 5) {
-            return artist + ' – ' + truncatedSong;
-          }
+        // Try 2: Primary part alone
+        if (primaryPart.length <= maxChars) {
+          return primaryPart;
         }
 
-        // Try 3: Just the song title (often more important for music)
-        if (song.length <= maxChars) {
-          return song;
+        // Try 3: Truncated primary part
+        const truncatedPrimary = truncateAtWordBoundary(primaryPart, maxChars);
+        if (truncatedPrimary.length >= 5) {
+          return truncatedPrimary;
         }
 
-        // Try 4: Truncate song title alone
-        const truncatedSongAlone = truncateAtWordBoundary(song, maxChars);
-        if (truncatedSongAlone.length >= 5) {
-          return truncatedSongAlone;
+        // Try 4: Secondary part if primary is too short
+        if (secondaryPart.length <= maxChars) {
+          return secondaryPart;
         }
 
-        // Try 5: Just the artist
-        if (artist.length <= maxChars) {
-          return artist;
+        // Try 5: Truncated secondary part
+        const truncatedSecondary = truncateAtWordBoundary(secondaryPart, maxChars);
+        if (truncatedSecondary.length >= 5) {
+          return truncatedSecondary;
         }
       }
     }
