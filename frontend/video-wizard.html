@@ -7561,12 +7561,14 @@
             var sourceIsUpload = state.videoInput.isUpload || false;
             var sourceUploadUrl = state.videoInput.uploadedFile?.url || state.videoInput.videoData?.uploadedVideoUrl || '';
             var sourceThumbnail = activeClip.thumbnail || (sourceVideoId ? 'https://img.youtube.com/vi/' + sourceVideoId + '/maxresdefault.jpg' : '');
-            // Convert legacy string values to percentage
+            // Convert legacy string values to percentage and validate
             var sourceCropPos = settings.cropPosition;
             if (sourceCropPos === 'left') sourceCropPos = 0;
             else if (sourceCropPos === 'center') sourceCropPos = 50;
             else if (sourceCropPos === 'right') sourceCropPos = 100;
-            else if (typeof sourceCropPos !== 'number') sourceCropPos = 50;
+            else if (typeof sourceCropPos !== 'number' || isNaN(sourceCropPos)) sourceCropPos = 50;
+            // Clamp to valid range
+            sourceCropPos = Math.max(0, Math.min(100, sourceCropPos));
 
             // Calculate crop zone position: 0% means left edge, 100% means right edge
             // The crop zone is 31.64% width (correct ratio for 16:9→9:16 = (9/16)²)
@@ -9699,8 +9701,26 @@
                         cropGuideZone.classList.remove('dragging');
                         document.body.style.cursor = '';
 
-                        // Save the final position
-                        var finalPercent = parseInt(cropGuideZone.dataset.position, 10) || 50;
+                        // State was already saved during dragging (cropMouseMove)
+                        // Just trigger a render to sync UI
+                        // Read from state (more reliable than DOM attribute)
+                        var selectedClips = state.clips.filter(function(c) {
+                            return state.selectedClipIds.indexOf(c.id) !== -1;
+                        });
+                        var activeClip = selectedClips[state.customization.activeClipIndex];
+                        if (activeClip && state.clipSettings[activeClip.id]) {
+                            var statePosition = state.clipSettings[activeClip.id].cropPosition;
+                            if (typeof statePosition === 'number') {
+                                app.setCropPosition(statePosition);
+                                return;
+                            }
+                        }
+                        // Fallback: read from DOM, then slider, then default
+                        var finalPercent = parseInt(cropGuideZone.dataset.position, 10);
+                        if (isNaN(finalPercent)) {
+                            finalPercent = parseInt(cropSlider?.value || '50', 10);
+                        }
+                        if (isNaN(finalPercent)) finalPercent = 50;
                         app.setCropPosition(finalPercent);
                     }
                 }
@@ -11424,26 +11444,50 @@
                     return;
                 }
 
-                var activeClip = selectedClips[state.customization.activeClipIndex];
-                var sourceSettings = state.clipSettings[activeClip.id] || getDefaultSettings();
+                // Validate activeClipIndex is in bounds (with fallback)
+                var activeClipIndex = state.customization.activeClipIndex;
+                if (activeClipIndex < 0 || activeClipIndex >= selectedClips.length) {
+                    activeClipIndex = 0;
+                }
+                var activeClip = selectedClips[activeClipIndex];
+                if (!activeClip) {
+                    utils.showToast('No active clip found', 'error');
+                    return;
+                }
 
-                // Ensure cropPosition is always a valid number (safety net)
-                var sourceCropPosition = (typeof sourceSettings.cropPosition === 'number')
-                    ? sourceSettings.cropPosition
-                    : 50;
+                // Get source settings from the active clip
+                var sourceSettings = state.clipSettings[activeClip.id];
+                if (!sourceSettings) {
+                    // If no settings exist for active clip, use defaults
+                    sourceSettings = getDefaultSettings();
+                }
+
+                // Ensure cropPosition is always a valid number (critical fix)
+                var sourceCropPosition = sourceSettings.cropPosition;
+                if (typeof sourceCropPosition !== 'number' || isNaN(sourceCropPosition)) {
+                    sourceCropPosition = 50;
+                }
+                sourceCropPosition = Math.max(0, Math.min(100, sourceCropPosition));
 
                 // Apply settings to all clips (except trim times which are clip-specific)
                 var appliedCount = 0;
                 selectedClips.forEach(function(clip) {
                     if (clip.id !== activeClip.id) {
                         var clipSettings = state.clipSettings[clip.id] || getDefaultSettings();
-                        // Copy all settings except trim (which is clip-specific)
+                        // Copy ALL settings except trim (which is clip-specific)
                         state.clipSettings[clip.id] = {
+                            // Caption settings
                             captionStyle: sourceSettings.captionStyle,
+                            customCaptionStyle: sourceSettings.customCaptionStyle ? Object.assign({}, sourceSettings.customCaptionStyle) : undefined,
+                            // Reframe/crop settings
                             reframeMode: sourceSettings.reframeMode,
                             cropPosition: sourceCropPosition,  // Use validated value
-                            aiSmartCrop: sourceSettings.aiSmartCrop,    // FIX: was missing!
-                            outputAspect: sourceSettings.outputAspect,  // FIX: was missing!
+                            aiSmartCrop: sourceSettings.aiSmartCrop || false,
+                            outputAspect: sourceSettings.outputAspect,
+                            // Output settings
+                            outputQuality: sourceSettings.outputQuality,
+                            frameRate: sourceSettings.frameRate,
+                            // Audio settings
                             removeFiller: sourceSettings.removeFiller,
                             enhanceAudio: sourceSettings.enhanceAudio,
                             audioDucking: sourceSettings.audioDucking,
@@ -11451,16 +11495,20 @@
                             addMusic: sourceSettings.addMusic,
                             musicVolume: sourceSettings.musicVolume,
                             selectedTrack: sourceSettings.selectedTrack,
+                            // Transition settings
                             introTransition: sourceSettings.introTransition,
                             outroTransition: sourceSettings.outroTransition,
+                            // Visual effects
                             autoZoom: sourceSettings.autoZoom,
                             vignette: sourceSettings.vignette,
                             colorGrade: sourceSettings.colorGrade,
-                            // Copy audio mix settings
+                            // AI features
+                            selectedHook: sourceSettings.selectedHook,
+                            // Copy audio mix settings (deep copy)
                             audioMix: sourceSettings.audioMix ? Object.assign({}, sourceSettings.audioMix) : undefined,
-                            // Copy secondary source settings (deep copy to avoid reference issues)
+                            // Copy secondary source settings (deep copy)
                             secondarySource: sourceSettings.secondarySource ? Object.assign({}, sourceSettings.secondarySource) : undefined,
-                            // Copy tertiary source settings
+                            // Copy tertiary source settings (deep copy)
                             tertiarySource: sourceSettings.tertiarySource ? Object.assign({}, sourceSettings.tertiarySource) : undefined,
                             // Keep original trim values (clip-specific)
                             trimStart: clipSettings.trimStart || 0,
@@ -11470,8 +11518,11 @@
                     }
                 });
 
+                // DEBUG: Show what crop position was applied
+                console.log('[applySettingsToAllClips] Applied cropPosition:', sourceCropPosition, 'from clip:', activeClip.id);
+
                 render();
-                utils.showToast('Settings applied to ' + appliedCount + ' clips!', 'success');
+                utils.showToast('Settings applied to ' + appliedCount + ' clips! (Crop: ' + sourceCropPosition + '%)', 'success');
             },
 
             // Timeline trimming
