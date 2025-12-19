@@ -1523,21 +1523,21 @@
             box-shadow:
                 inset 0 0 0 2px rgba(236, 72, 153, 0.3),
                 0 0 0 9999px rgba(0, 0, 0, 0.5);
-            transition: left 0.3s ease;
+            transition: left 0.2s ease;
+            cursor: grab;
+            pointer-events: auto;
         }
 
-        .crop-guide-zone.crop-left {
-            left: 0;
+        .crop-guide-zone:active {
+            cursor: grabbing;
         }
 
-        .crop-guide-zone.crop-center {
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .crop-guide-zone.crop-right {
-            left: auto;
-            right: 0;
+        .crop-guide-zone.dragging {
+            transition: none;
+            box-shadow:
+                inset 0 0 0 2px rgba(236, 72, 153, 0.5),
+                0 0 0 9999px rgba(0, 0, 0, 0.6);
+            border-color: rgba(236, 72, 153, 1);
         }
 
         .crop-guide-label {
@@ -1552,6 +1552,182 @@
             font-size: 0.7rem;
             font-weight: 600;
             white-space: nowrap;
+        }
+
+        .crop-drag-hint {
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            white-space: nowrap;
+            opacity: 0.8;
+        }
+
+        /* Crop Slider Controls */
+        .crop-slider-container {
+            margin-top: 0.75rem;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.5rem;
+        }
+
+        .crop-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .crop-slider-label {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            min-width: 45px;
+        }
+
+        .crop-slider-label:last-child {
+            text-align: right;
+        }
+
+        .crop-slider {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(to right, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3));
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .crop-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            transition: transform 0.15s ease;
+        }
+
+        .crop-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        .crop-slider::-webkit-slider-thumb:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+
+        .crop-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            border-radius: 50%;
+            cursor: grab;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .crop-slider-value {
+            text-align: center;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 0.25rem;
+        }
+
+        /* Crop Controls Row */
+        .crop-controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.75rem;
+            gap: 0.75rem;
+        }
+
+        .crop-quick-buttons {
+            display: flex;
+            gap: 0.375rem;
+        }
+
+        .crop-quick-btn {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .crop-quick-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .crop-quick-btn.active {
+            background: rgba(236, 72, 153, 0.3);
+            border-color: rgba(236, 72, 153, 0.5);
+            color: white;
+        }
+
+        /* AI Smart Crop Button */
+        .btn-ai-smart-crop {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.5rem 0.875rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2));
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-ai-smart-crop:hover {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3));
+            border-color: rgba(139, 92, 246, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .btn-ai-smart-crop.active {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(236, 72, 153, 0.4));
+            border-color: rgba(139, 92, 246, 0.8);
+            box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-ai-smart-crop .ai-icon {
+            font-size: 0.9rem;
+        }
+
+        .btn-ai-smart-crop.loading .ai-icon {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* AI Crop Badge */
+        .ai-crop-badge {
+            margin-left: 0.5rem;
+            padding: 0.2rem 0.5rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3));
+            border-radius: 0.25rem;
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.9);
         }
 
         .crop-position-buttons {
@@ -1619,17 +1795,13 @@
             z-index: 1;
         }
 
-        /* Crop positions using object-position */
-        .phone-video-area.crop-left .preview-media {
-            object-position: left center;
+        /* Crop positions using CSS variable for percentage-based positioning */
+        .phone-video-area {
+            --crop-position: 50%; /* Default to center */
         }
 
-        .phone-video-area.crop-center .preview-media {
-            object-position: center center;
-        }
-
-        .phone-video-area.crop-right .preview-media {
-            object-position: right center;
+        .phone-video-area .preview-media {
+            object-position: var(--crop-position) center;
         }
 
         /* YouTube iframe cropping - make it fill and overflow */
@@ -1643,22 +1815,13 @@
         .phone-video-area .preview-iframe-wrapper iframe {
             position: absolute;
             top: 0;
-            left: 50%;
-            transform: translateX(-50%);
+            /* Use CSS calc to position based on crop percentage */
+            left: calc(var(--crop-position));
+            transform: translateX(calc(-1 * var(--crop-position)));
             width: 177.78vh; /* 16:9 ratio based on viewport height */
             height: 100%;
             min-width: 316%; /* Ensures video fills height and overflows width */
             border: none;
-        }
-
-        .phone-video-area.crop-left .preview-iframe-wrapper iframe {
-            left: 0;
-            transform: translateX(0);
-        }
-
-        .phone-video-area.crop-right .preview-iframe-wrapper iframe {
-            left: 100%;
-            transform: translateX(-100%);
         }
 
         /* ==========================================
@@ -7385,13 +7548,25 @@
             var sourceIsUpload = state.videoInput.isUpload || false;
             var sourceUploadUrl = state.videoInput.uploadedFile?.url || state.videoInput.videoData?.uploadedVideoUrl || '';
             var sourceThumbnail = activeClip.thumbnail || (sourceVideoId ? 'https://img.youtube.com/vi/' + sourceVideoId + '/maxresdefault.jpg' : '');
-            var sourceCropPos = settings.cropPosition || 'center';
+            // Convert legacy string values to percentage
+            var sourceCropPos = settings.cropPosition;
+            if (sourceCropPos === 'left') sourceCropPos = 0;
+            else if (sourceCropPos === 'center') sourceCropPos = 50;
+            else if (sourceCropPos === 'right') sourceCropPos = 100;
+            else if (typeof sourceCropPos !== 'number') sourceCropPos = 50;
+
+            // Calculate crop zone position: 0% means left edge, 100% means right edge
+            // The crop zone is 56.25% width, so we need to offset calculation
+            var cropZoneLeft = (sourceCropPos / 100) * (100 - 56.25); // Max left position is 43.75%
 
             html += '<div class="source-preview-container">';
             html += '<div class="source-preview-header">';
             html += '<span class="source-preview-label">📺 Source Video (16:9) → 9:16 Crop</span>';
+            if (settings.aiSmartCrop) {
+                html += '<span class="ai-crop-badge">✨ AI Detected</span>';
+            }
             html += '</div>';
-            html += '<div class="source-preview-video">';
+            html += '<div class="source-preview-video" id="cropPreviewArea">';
 
             // Show video or thumbnail based on source type
             if (sourceIsUpload && sourceUploadUrl) {
@@ -7400,19 +7575,35 @@
                 html += '<img src="' + sourceThumbnail + '" alt="Source video" onerror="this.src=\'https://img.youtube.com/vi/' + sourceVideoId + '/hqdefault.jpg\'">';
             }
 
-            // Crop guide overlay showing what will be cropped
+            // Crop guide overlay - draggable zone with percentage positioning
             html += '<div class="crop-guide-overlay">';
-            html += '<div class="crop-guide-zone crop-' + sourceCropPos + '">';
-            html += '<div class="crop-guide-label">9:16 Output Area</div>';
+            html += '<div class="crop-guide-zone" id="cropGuideZone" style="left: ' + cropZoneLeft + '%;" data-position="' + sourceCropPos + '">';
+            html += '<div class="crop-guide-label">' + (settings.aiSmartCrop ? '✨ AI Smart Crop' : '9:16 Output Area') + '</div>';
+            html += '<div class="crop-drag-hint">← Drag to adjust →</div>';
             html += '</div>';
             html += '</div>';
             html += '</div>'; // source-preview-video
 
-            // Crop position buttons
-            html += '<div class="crop-position-buttons">';
-            html += '<button class="crop-pos-btn' + (sourceCropPos === 'left' ? ' active' : '') + '" onclick="app.setCropPosition(\'left\')">◀ Left</button>';
-            html += '<button class="crop-pos-btn' + (sourceCropPos === 'center' ? ' active' : '') + '" onclick="app.setCropPosition(\'center\')">● Center</button>';
-            html += '<button class="crop-pos-btn' + (sourceCropPos === 'right' ? ' active' : '') + '" onclick="app.setCropPosition(\'right\')">Right ▶</button>';
+            // Crop position slider control
+            html += '<div class="crop-slider-container">';
+            html += '<div class="crop-slider-row">';
+            html += '<span class="crop-slider-label">◀ Left</span>';
+            html += '<input type="range" class="crop-slider" id="cropSlider" min="0" max="100" value="' + sourceCropPos + '" oninput="app.onCropSliderChange(this.value)" onchange="app.setCropPosition(this.value)">';
+            html += '<span class="crop-slider-label">Right ▶</span>';
+            html += '</div>';
+            html += '<div class="crop-slider-value">' + sourceCropPos + '%</div>';
+            html += '</div>';
+
+            // Quick position buttons + AI Smart Crop
+            html += '<div class="crop-controls-row">';
+            html += '<div class="crop-quick-buttons">';
+            html += '<button class="crop-quick-btn' + (sourceCropPos === 0 ? ' active' : '') + '" onclick="app.setCropPosition(0)" title="Left edge">◀</button>';
+            html += '<button class="crop-quick-btn' + (sourceCropPos === 50 ? ' active' : '') + '" onclick="app.setCropPosition(50)" title="Center">●</button>';
+            html += '<button class="crop-quick-btn' + (sourceCropPos === 100 ? ' active' : '') + '" onclick="app.setCropPosition(100)" title="Right edge">▶</button>';
+            html += '</div>';
+            html += '<button class="btn-ai-smart-crop' + (settings.aiSmartCrop ? ' active' : '') + '" onclick="app.runAiSmartCrop()" title="AI detects the main subject and auto-positions the crop">';
+            html += '<span class="ai-icon">✨</span> AI Smart Crop';
+            html += '</button>';
             html += '</div>';
             html += '</div>'; // source-preview-container
 
@@ -7423,7 +7614,14 @@
 
             // Build phone-screen classes with visual effects
             var reframeMode = settings.reframeMode || 'auto_center';
-            var cropPos = settings.cropPosition || 'center';
+            // Convert legacy string crop positions to percentage
+            var cropPosRaw = settings.cropPosition;
+            var cropPosPercent;
+            if (cropPosRaw === 'left') cropPosPercent = 0;
+            else if (cropPosRaw === 'center') cropPosPercent = 50;
+            else if (cropPosRaw === 'right') cropPosPercent = 100;
+            else if (typeof cropPosRaw === 'number') cropPosPercent = cropPosRaw;
+            else cropPosPercent = 50;
             var phoneScreenClasses = 'phone-screen';
             if (settings.vignette) phoneScreenClasses += ' effect-vignette';
             if (settings.autoZoom) phoneScreenClasses += ' effect-zoom';
@@ -7531,12 +7729,15 @@
             var tertiaryMediaElement = getTertiaryMediaElement();
 
             // Build phone-video-area with reframe mode class
-            var videoAreaClasses = 'phone-video-area reframe-' + reframeMode + ' crop-' + cropPos;
+            // Use data attribute for percentage-based crop positioning
+            var videoAreaClasses = 'phone-video-area reframe-' + reframeMode;
             // Add multi-source class when secondary video is present (for different CSS positioning)
             if (hasSecondaryVideo && secondaryMediaElement) {
                 videoAreaClasses += ' multi-source';
             }
-            html += '<div class="' + videoAreaClasses + '">';
+            // Calculate object-position for percentage-based cropping
+            var objectPosX = cropPosPercent + '%';
+            html += '<div class="' + videoAreaClasses + '" data-crop-percent="' + cropPosPercent + '" style="--crop-position: ' + objectPosX + ';">';
 
             // Generate reframe-specific content
             // Determine which media goes where based on secondary position
@@ -8326,18 +8527,24 @@
                 html += '<div class="advanced-option-row">';
                 html += '<span class="advanced-option-label">Crop Position</span>';
                 html += '</div>';
+                // Convert legacy string values to percentage
+                var advCropPos = settings.cropPosition;
+                if (advCropPos === 'left') advCropPos = 0;
+                else if (advCropPos === 'center') advCropPos = 50;
+                else if (advCropPos === 'right') advCropPos = 100;
+                else if (typeof advCropPos !== 'number') advCropPos = 50;
                 html += '<div class="crop-position-grid">';
                 var positions = [
-                    { value: 'left', label: '◀ Left' },
-                    { value: 'center', label: '● Center' },
-                    { value: 'right', label: '▶ Right' }
+                    { value: 0, label: '◀ Left' },
+                    { value: 50, label: '● Center' },
+                    { value: 100, label: '▶ Right' }
                 ];
                 positions.forEach(function(pos) {
-                    var selected = (settings.cropPosition || 'center') === pos.value ? ' selected' : '';
-                    html += '<button class="crop-position-btn' + selected + '" onclick="app.setCropPosition(\'' + pos.value + '\')">' + pos.label + '</button>';
+                    var selected = advCropPos === pos.value ? ' selected' : '';
+                    html += '<button class="crop-position-btn' + selected + '" onclick="app.setCropPosition(' + pos.value + ')">' + pos.label + '</button>';
                 });
                 html += '</div>';
-                html += '<p class="advanced-option-hint">Choose where to focus when cropping horizontal video</p>';
+                html += '<p class="advanced-option-hint">Or use the slider in Source Preview for fine control</p>';
                 html += '</div>';
 
                 // Output quality
@@ -8734,7 +8941,8 @@
 
                 // Reframe settings
                 reframeMode: 'auto_center',
-                cropPosition: 'center',
+                cropPosition: 50, // 0-100 percentage (0=left, 50=center, 100=right)
+                aiSmartCrop: false, // Whether AI detected the position
 
                 // Timeline/trim settings
                 trimStart: 0,
@@ -9334,6 +9542,96 @@
                         app.handleSecondaryFileSelect(e.dataTransfer.files);
                     }
                 });
+            }
+
+            // Crop zone drag functionality (Step 4)
+            var cropPreviewArea = document.getElementById('cropPreviewArea');
+            var cropGuideZone = document.getElementById('cropGuideZone');
+            var cropSlider = document.getElementById('cropSlider');
+
+            if (cropPreviewArea && cropGuideZone) {
+                var cropDragging = false;
+                var cropAreaRect = null;
+                var cropZoneWidth = 0.5625; // 56.25% of container width
+
+                function cropMouseDown(e) {
+                    e.preventDefault();
+                    cropDragging = true;
+                    cropAreaRect = cropPreviewArea.getBoundingClientRect();
+                    cropGuideZone.classList.add('dragging');
+                    document.body.style.cursor = 'grabbing';
+                }
+
+                function cropMouseMove(e) {
+                    if (!cropDragging || !cropAreaRect) return;
+
+                    var clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                    var x = clientX - cropAreaRect.left;
+                    var containerWidth = cropAreaRect.width;
+
+                    // Calculate percentage (0-100)
+                    // The crop zone center should follow the mouse
+                    var zoneWidthPx = containerWidth * cropZoneWidth;
+                    var maxLeftPx = containerWidth - zoneWidthPx;
+
+                    // Calculate where the center of the crop zone should be
+                    var centerX = x;
+                    var leftPx = centerX - (zoneWidthPx / 2);
+                    leftPx = Math.max(0, Math.min(maxLeftPx, leftPx));
+
+                    // Convert to percentage (0-100 scale)
+                    var percent = maxLeftPx > 0 ? Math.round((leftPx / maxLeftPx) * 100) : 50;
+
+                    // Update crop zone position visually
+                    var cropZoneLeft = (percent / 100) * (100 - 56.25);
+                    cropGuideZone.style.left = cropZoneLeft + '%';
+                    cropGuideZone.dataset.position = percent;
+
+                    // Update slider
+                    if (cropSlider) {
+                        cropSlider.value = percent;
+                    }
+
+                    // Update value display
+                    var valueDisplay = document.querySelector('.crop-slider-value');
+                    if (valueDisplay) {
+                        valueDisplay.textContent = percent + '%';
+                    }
+
+                    // Update quick button states
+                    document.querySelectorAll('.crop-quick-btn').forEach(function(btn, i) {
+                        var btnVal = [0, 50, 100][i];
+                        btn.classList.toggle('active', percent === btnVal);
+                    });
+                }
+
+                function cropMouseUp() {
+                    if (cropDragging) {
+                        cropDragging = false;
+                        cropGuideZone.classList.remove('dragging');
+                        document.body.style.cursor = '';
+
+                        // Save the final position
+                        var finalPercent = parseInt(cropGuideZone.dataset.position, 10) || 50;
+                        app.setCropPosition(finalPercent);
+                    }
+                }
+
+                cropGuideZone.addEventListener('mousedown', cropMouseDown);
+                document.addEventListener('mousemove', cropMouseMove);
+                document.addEventListener('mouseup', cropMouseUp);
+
+                // Touch support for mobile
+                cropGuideZone.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    cropMouseDown(e);
+                });
+                document.addEventListener('touchmove', function(e) {
+                    if (cropDragging) {
+                        cropMouseMove(e);
+                    }
+                });
+                document.addEventListener('touchend', cropMouseUp);
             }
         }
 
@@ -10003,8 +10301,122 @@
                 if (!state.clipSettings[activeClip.id]) {
                     state.clipSettings[activeClip.id] = getDefaultSettings();
                 }
-                state.clipSettings[activeClip.id].cropPosition = position;
+                // Convert to number if string
+                var posNum = parseInt(position, 10);
+                if (isNaN(posNum)) posNum = 50;
+                posNum = Math.max(0, Math.min(100, posNum));
+                state.clipSettings[activeClip.id].cropPosition = posNum;
+                state.clipSettings[activeClip.id].aiSmartCrop = false; // Reset AI flag on manual change
                 render();
+            },
+
+            // Real-time slider preview (updates UI without full re-render)
+            onCropSliderChange: function(value) {
+                var posNum = parseInt(value, 10);
+                if (isNaN(posNum)) return;
+                posNum = Math.max(0, Math.min(100, posNum));
+
+                // Update the crop guide zone position in real-time
+                var cropZone = document.getElementById('cropGuideZone');
+                var slider = document.getElementById('cropSlider');
+                var valueDisplay = document.querySelector('.crop-slider-value');
+
+                if (cropZone) {
+                    var cropZoneLeft = (posNum / 100) * (100 - 56.25);
+                    cropZone.style.left = cropZoneLeft + '%';
+                    cropZone.dataset.position = posNum;
+                }
+                if (valueDisplay) {
+                    valueDisplay.textContent = posNum + '%';
+                }
+
+                // Update quick button states
+                document.querySelectorAll('.crop-quick-btn').forEach(function(btn, i) {
+                    var btnVal = [0, 50, 100][i];
+                    btn.classList.toggle('active', posNum === btnVal);
+                });
+            },
+
+            // AI Smart Crop - detects main subject and auto-positions crop
+            runAiSmartCrop: async function() {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!activeClip) return;
+
+                var btn = document.querySelector('.btn-ai-smart-crop');
+                if (btn) {
+                    btn.classList.add('loading');
+                    btn.disabled = true;
+                }
+
+                utils.showToast('AI analyzing video for subject detection...', 'info');
+
+                try {
+                    // Get video thumbnail for analysis
+                    var videoId = state.videoInput.videoData?.videoId;
+                    var thumbnailUrl = activeClip.thumbnail || (videoId ? 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg' : null);
+
+                    if (!thumbnailUrl) {
+                        throw new Error('No image available for analysis');
+                    }
+
+                    // Call AI smart crop function
+                    var result = await firebase.functions().httpsCallable('wizardSmartCrop')({
+                        thumbnailUrl: thumbnailUrl,
+                        videoId: videoId,
+                        clipStartTime: activeClip.startTime
+                    });
+
+                    if (result.data.success) {
+                        var suggestedPosition = result.data.cropPosition; // 0-100
+                        var confidence = result.data.confidence;
+                        var detectedSubject = result.data.subject;
+
+                        // Apply the AI-suggested position
+                        if (!state.clipSettings[activeClip.id]) {
+                            state.clipSettings[activeClip.id] = getDefaultSettings();
+                        }
+                        state.clipSettings[activeClip.id].cropPosition = suggestedPosition;
+                        state.clipSettings[activeClip.id].aiSmartCrop = true;
+
+                        utils.showToast('AI detected ' + (detectedSubject || 'subject') + ' - crop position optimized!', 'success');
+                        render();
+                    } else {
+                        throw new Error(result.data.error || 'AI analysis failed');
+                    }
+                } catch (error) {
+                    console.error('AI Smart Crop error:', error);
+
+                    // Fallback: Use simple heuristic based on clip content
+                    // Default to slightly left of center (40%) as people are often positioned there
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+
+                    // Simple fallback: analyze clip transcript for speaker positioning hints
+                    var fallbackPosition = 50; // Default center
+                    var transcript = (activeClip.transcript || '').toLowerCase();
+
+                    // Heuristics based on content type
+                    if (transcript.includes('interview') || transcript.includes('podcast')) {
+                        fallbackPosition = 35; // Slightly left for interview format
+                    } else if (transcript.includes('tutorial') || transcript.includes('screen')) {
+                        fallbackPosition = 25; // Left side for screen recording with speaker
+                    }
+
+                    state.clipSettings[activeClip.id].cropPosition = fallbackPosition;
+                    state.clipSettings[activeClip.id].aiSmartCrop = true;
+
+                    utils.showToast('Smart crop applied (using content analysis)', 'success');
+                    render();
+                }
+
+                if (btn) {
+                    btn.classList.remove('loading');
+                    btn.disabled = false;
+                }
             },
 
             setOutputQuality: function(quality) {
