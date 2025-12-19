@@ -6860,6 +6860,19 @@
             sourceAsset: null  // { storageUrl, storagePath, duration, format, capturedAt, source }
         };
 
+        // Track document event listeners for cleanup between renders
+        // This prevents accumulating duplicate listeners that can cause state bugs
+        var documentEventListeners = {
+            timelineMouseMove: null,
+            timelineMouseUp: null,
+            timelineTouchMove: null,
+            timelineTouchEnd: null,
+            cropMouseMove: null,
+            cropMouseUp: null,
+            cropTouchMove: null,
+            cropTouchEnd: null
+        };
+
         // Mock data for testing
         const MOCK_CLIPS = [
             { id: 'clip_001', startTime: 120, endTime: 165, duration: 45, score: 98, transcript: 'The biggest mistake entrepreneurs make is thinking they need to have everything figured out before they start...', thumbnail: 'https://picsum.photos/seed/clip1/320/180', platforms: ['youtube', 'instagram', 'tiktok'] },
@@ -9425,6 +9438,24 @@
             var handleStart = document.getElementById('handle-start');
             var handleEnd = document.getElementById('handle-end');
 
+            // Clean up old timeline document event listeners to prevent accumulation
+            if (documentEventListeners.timelineMouseMove) {
+                document.removeEventListener('mousemove', documentEventListeners.timelineMouseMove);
+                documentEventListeners.timelineMouseMove = null;
+            }
+            if (documentEventListeners.timelineMouseUp) {
+                document.removeEventListener('mouseup', documentEventListeners.timelineMouseUp);
+                documentEventListeners.timelineMouseUp = null;
+            }
+            if (documentEventListeners.timelineTouchMove) {
+                document.removeEventListener('touchmove', documentEventListeners.timelineTouchMove);
+                documentEventListeners.timelineTouchMove = null;
+            }
+            if (documentEventListeners.timelineTouchEnd) {
+                document.removeEventListener('touchend', documentEventListeners.timelineTouchEnd);
+                documentEventListeners.timelineTouchEnd = null;
+            }
+
             if (timelineBar && handleStart && handleEnd) {
                 var isDragging = null;
                 var barRect = null;
@@ -9515,8 +9546,22 @@
                     }
                 }
 
+                // Create touch move handler
+                function handleTouchMove(e) {
+                    if (isDragging) {
+                        handleMouseMove({ clientX: e.touches[0].clientX });
+                    }
+                }
+
                 handleStart.addEventListener('mousedown', function(e) { handleMouseDown(e, handleStart); });
                 handleEnd.addEventListener('mousedown', function(e) { handleMouseDown(e, handleEnd); });
+
+                // Store and add document listeners (to enable cleanup on next render)
+                documentEventListeners.timelineMouseMove = handleMouseMove;
+                documentEventListeners.timelineMouseUp = handleMouseUp;
+                documentEventListeners.timelineTouchMove = handleTouchMove;
+                documentEventListeners.timelineTouchEnd = handleMouseUp;
+
                 document.addEventListener('mousemove', handleMouseMove);
                 document.addEventListener('mouseup', handleMouseUp);
 
@@ -9529,11 +9574,7 @@
                     e.preventDefault();
                     handleMouseDown({ clientX: e.touches[0].clientX, preventDefault: function(){} }, handleEnd);
                 });
-                document.addEventListener('touchmove', function(e) {
-                    if (isDragging) {
-                        handleMouseMove({ clientX: e.touches[0].clientX });
-                    }
-                });
+                document.addEventListener('touchmove', handleTouchMove);
                 document.addEventListener('touchend', handleMouseUp);
             }
 
@@ -9563,6 +9604,24 @@
             var cropPreviewArea = document.getElementById('cropPreviewArea');
             var cropGuideZone = document.getElementById('cropGuideZone');
             var cropSlider = document.getElementById('cropSlider');
+
+            // Clean up old crop zone document event listeners to prevent accumulation
+            if (documentEventListeners.cropMouseMove) {
+                document.removeEventListener('mousemove', documentEventListeners.cropMouseMove);
+                documentEventListeners.cropMouseMove = null;
+            }
+            if (documentEventListeners.cropMouseUp) {
+                document.removeEventListener('mouseup', documentEventListeners.cropMouseUp);
+                documentEventListeners.cropMouseUp = null;
+            }
+            if (documentEventListeners.cropTouchMove) {
+                document.removeEventListener('touchmove', documentEventListeners.cropTouchMove);
+                documentEventListeners.cropTouchMove = null;
+            }
+            if (documentEventListeners.cropTouchEnd) {
+                document.removeEventListener('touchend', documentEventListeners.cropTouchEnd);
+                documentEventListeners.cropTouchEnd = null;
+            }
 
             if (cropPreviewArea && cropGuideZone) {
                 var cropDragging = false;
@@ -9632,7 +9691,21 @@
                     }
                 }
 
+                // Create touch move handler
+                function cropTouchMove(e) {
+                    if (cropDragging) {
+                        cropMouseMove(e);
+                    }
+                }
+
                 cropGuideZone.addEventListener('mousedown', cropMouseDown);
+
+                // Store and add document listeners (to enable cleanup on next render)
+                documentEventListeners.cropMouseMove = cropMouseMove;
+                documentEventListeners.cropMouseUp = cropMouseUp;
+                documentEventListeners.cropTouchMove = cropTouchMove;
+                documentEventListeners.cropTouchEnd = cropMouseUp;
+
                 document.addEventListener('mousemove', cropMouseMove);
                 document.addEventListener('mouseup', cropMouseUp);
 
@@ -9641,11 +9714,7 @@
                     e.preventDefault();
                     cropMouseDown(e);
                 });
-                document.addEventListener('touchmove', function(e) {
-                    if (cropDragging) {
-                        cropMouseMove(e);
-                    }
-                });
+                document.addEventListener('touchmove', cropTouchMove);
                 document.addEventListener('touchend', cropMouseUp);
             }
         }
