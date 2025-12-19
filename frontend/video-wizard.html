@@ -11930,6 +11930,9 @@
             },
 
             downloadClip: function(clipId) {
+                // DEBUG: Log state at start of downloadClip
+                console.log('[downloadClip] START - All clip settings:', JSON.parse(JSON.stringify(state.clipSettings)));
+
                 var clip = state.clips.find(function(c) { return c.id === clipId; });
                 if (!clip) {
                     utils.showToast('Clip not found', 'error');
@@ -12042,6 +12045,9 @@
             },
 
             closeDownloadModal: function(event) {
+                // DEBUG: Log state when closing modal
+                console.log('[closeDownloadModal] All clip settings:', JSON.parse(JSON.stringify(state.clipSettings)));
+
                 if (event && event.target !== event.currentTarget) return;
                 var container = document.getElementById('download-modal-container');
                 if (container) {
@@ -12872,6 +12878,10 @@
                             if (job.status === 'completed') {
                                 clearInterval(pollInterval);
                                 app.removeProcessingToast(clipId);
+
+                                // DEBUG: Log state when processing completes
+                                console.log('[pollProcessingStatus] COMPLETED - All clip settings:', JSON.parse(JSON.stringify(state.clipSettings)));
+
                                 if (job.outputUrl) {
                                     utils.showToast('🎉 Video ready!', 'success');
                                     // Show download options modal
