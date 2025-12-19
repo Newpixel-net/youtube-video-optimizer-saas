@@ -2175,20 +2175,22 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, reframeMode, cropPosition, autoZoom, vignette, colorGrade }) {
   const filters = [];
 
-  // Validate input dimensions - CRITICAL for crop calculations
+  // Validate and fix input dimensions - CRITICAL for crop calculations
+  // If dimensions are invalid, assume standard 16:9 HD (1920x1080)
+  let validWidth = inputWidth;
+  let validHeight = inputHeight;
+
   if (!inputWidth || !inputHeight || inputWidth <= 0 || inputHeight <= 0) {
-    console.error(`[FFmpeg] INVALID INPUT DIMENSIONS: ${inputWidth}x${inputHeight} - using fallback scale only`);
-    // Fallback: just scale to target (will letterbox but won't crash)
-    filters.push(`scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease`);
-    filters.push(`pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`);
-    return filters.join(',');
+    console.error(`[FFmpeg] INVALID INPUT DIMENSIONS: ${inputWidth}x${inputHeight} - assuming 1920x1080`);
+    validWidth = 1920;
+    validHeight = 1080;
   }
 
-  const inputAspect = inputWidth / inputHeight;
+  const inputAspect = validWidth / validHeight;
   const targetAspect = targetWidth / targetHeight; // 9:16 = 0.5625
 
   console.log(`[FFmpeg] Building filter chain:`);
-  console.log(`[FFmpeg]   Input: ${inputWidth}x${inputHeight} (aspect: ${inputAspect.toFixed(4)})`);
+  console.log(`[FFmpeg]   Input: ${validWidth}x${validHeight} (aspect: ${inputAspect.toFixed(4)}) ${inputWidth !== validWidth ? '[USING DEFAULTS]' : ''}`);
   console.log(`[FFmpeg]   Target: ${targetWidth}x${targetHeight} (aspect: ${targetAspect.toFixed(4)})`);
   console.log(`[FFmpeg]   Mode: ${reframeMode}, CropPosition: ${cropPosition}`);
 
@@ -2200,24 +2202,24 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
     case 'split_screen':
       // Split screen: Show left and right speakers stacked vertically (for podcasts)
       // Take left 1/3 and right 1/3 of the video, stack them
-      const splitCropW = Math.floor(inputWidth / 3);
+      const splitCropW = Math.floor(validWidth / 3);
       const splitHalfH = Math.floor(targetHeight / 2);
       filters.push(`split[left][right]`);
-      filters.push(`[left]crop=${splitCropW}:${inputHeight}:0:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[l]`);
-      filters.push(`[right]crop=${splitCropW}:${inputHeight}:${inputWidth - splitCropW}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[r]`);
+      filters.push(`[left]crop=${splitCropW}:${validHeight}:0:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[l]`);
+      filters.push(`[right]crop=${splitCropW}:${validHeight}:${validWidth - splitCropW}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[r]`);
       filters.push(`[l][r]vstack`);
       break;
 
     case 'three_person':
       // Three person: Show three speakers - top (center), bottom-left, bottom-right
-      const thirdW = Math.floor(inputWidth / 3);
+      const thirdW = Math.floor(validWidth / 3);
       const topH = Math.floor(targetHeight * 0.55);
       const bottomH = targetHeight - topH;
       const halfTargetW = Math.floor(targetWidth / 2);
       filters.push(`split=3[center][bl][br]`);
-      filters.push(`[center]crop=${thirdW}:${inputHeight}:${thirdW}:0,scale=${targetWidth}:${topH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topH}[c]`);
-      filters.push(`[bl]crop=${thirdW}:${inputHeight}:0:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[left]`);
-      filters.push(`[br]crop=${thirdW}:${inputHeight}:${2 * thirdW}:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[right]`);
+      filters.push(`[center]crop=${thirdW}:${validHeight}:${thirdW}:0,scale=${targetWidth}:${topH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topH}[c]`);
+      filters.push(`[bl]crop=${thirdW}:${validHeight}:0:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[left]`);
+      filters.push(`[br]crop=${thirdW}:${validHeight}:${2 * thirdW}:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[right]`);
       filters.push(`[left][right]hstack[bottom]`);
       filters.push(`[c][bottom]vstack`);
       break;
@@ -2226,14 +2228,14 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       // Gameplay mode: Main video fills most, small facecam area in corner
       // First crop to 9:16, then overlay facecam area
       if (inputAspect > targetAspect) {
-        const gameCropW = Math.floor(inputHeight * targetAspect);
-        const gameCropX = Math.floor((inputWidth - gameCropW) / 2);
+        const gameCropW = Math.floor(validHeight * targetAspect);
+        const gameCropX = Math.floor((validWidth - gameCropW) / 2);
         // Show more of the main game area, with a circle/facecam indicator
-        filters.push(`crop=${gameCropW}:${inputHeight}:${gameCropX}:0`);
+        filters.push(`crop=${gameCropW}:${validHeight}:${gameCropX}:0`);
       } else {
-        const gameCropH = Math.floor(inputWidth / targetAspect);
-        const gameCropY = Math.floor((inputHeight - gameCropH) / 2);
-        filters.push(`crop=${inputWidth}:${gameCropH}:0:${gameCropY}`);
+        const gameCropH = Math.floor(validWidth / targetAspect);
+        const gameCropY = Math.floor((validHeight - gameCropH) / 2);
+        filters.push(`crop=${validWidth}:${gameCropH}:0:${gameCropY}`);
       }
       filters.push(`scale=${targetWidth}:${targetHeight}`);
       // Add a subtle border/glow to indicate facecam area at bottom-left
@@ -2246,13 +2248,13 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       // B-roll mode: Currently same as auto_center (B-roll would need additional footage)
       // Future: Could add picture-in-picture or overlay effects
       if (inputAspect > targetAspect) {
-        const brollCropW = Math.floor(inputHeight * targetAspect);
-        const brollCropX = Math.floor((inputWidth - brollCropW) / 2);
-        filters.push(`crop=${brollCropW}:${inputHeight}:${brollCropX}:0`);
+        const brollCropW = Math.floor(validHeight * targetAspect);
+        const brollCropX = Math.floor((validWidth - brollCropW) / 2);
+        filters.push(`crop=${brollCropW}:${validHeight}:${brollCropX}:0`);
       } else {
-        const brollCropH = Math.floor(inputWidth / targetAspect);
-        const brollCropY = Math.floor((inputHeight - brollCropH) / 2);
-        filters.push(`crop=${inputWidth}:${brollCropH}:0:${brollCropY}`);
+        const brollCropH = Math.floor(validWidth / targetAspect);
+        const brollCropY = Math.floor((validHeight - brollCropH) / 2);
+        filters.push(`crop=${validWidth}:${brollCropH}:0:${brollCropY}`);
       }
       filters.push(`scale=${targetWidth}:${targetHeight}`);
       // Add subtle Ken Burns effect for B-roll feel
@@ -2268,56 +2270,56 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       if (inputAspect > targetAspect) {
         // Video is wider than target - crop sides based on position
         // For 16:9 (1920x1080) -> 9:16: cropWidth = 1080 * 0.5625 = 607
-        const cropWidth = Math.floor(inputHeight * targetAspect);
+        const cropWidth = Math.floor(validHeight * targetAspect);
         let cropX;
 
         // Handle both legacy string values and new numeric percentage
         if (cropPosition === 'left') {
           cropX = 0; // Crop from left edge
         } else if (cropPosition === 'right') {
-          cropX = inputWidth - cropWidth; // Crop from right edge
+          cropX = validWidth - cropWidth; // Crop from right edge
         } else if (cropPosition === 'center') {
-          cropX = Math.floor((inputWidth - cropWidth) / 2); // Center crop
+          cropX = Math.floor((validWidth - cropWidth) / 2); // Center crop
         } else if (typeof cropPosition === 'number' || !isNaN(parseInt(cropPosition, 10))) {
           // Numeric percentage (0-100)
           // 0% = left edge (cropX = 0)
-          // 100% = right edge (cropX = inputWidth - cropWidth)
+          // 100% = right edge (cropX = validWidth - cropWidth)
           const percent = Math.max(0, Math.min(100, parseInt(cropPosition, 10)));
-          const maxCropX = inputWidth - cropWidth;
+          const maxCropX = validWidth - cropWidth;
           cropX = Math.floor((percent / 100) * maxCropX);
         } else {
           // Default to center if unrecognized
-          cropX = Math.floor((inputWidth - cropWidth) / 2);
+          cropX = Math.floor((validWidth - cropWidth) / 2);
         }
 
         // Validate crop dimensions
-        if (cropWidth <= 0 || cropWidth > inputWidth || cropX < 0 || cropX > inputWidth - cropWidth) {
-          console.error(`[FFmpeg] INVALID CROP: crop=${cropWidth}:${inputHeight}:${cropX}:0 for input ${inputWidth}x${inputHeight}`);
+        if (cropWidth <= 0 || cropWidth > validWidth || cropX < 0 || cropX > validWidth - cropWidth) {
+          console.error(`[FFmpeg] INVALID CROP: crop=${cropWidth}:${validHeight}:${cropX}:0 for input ${validWidth}x${validHeight}`);
           // Fallback to center crop with corrected values
-          const safeCropWidth = Math.min(cropWidth, inputWidth);
-          cropX = Math.floor((inputWidth - safeCropWidth) / 2);
-          filters.push(`crop=${safeCropWidth}:${inputHeight}:${cropX}:0`);
+          const safeCropWidth = Math.min(cropWidth, validWidth);
+          cropX = Math.floor((validWidth - safeCropWidth) / 2);
+          filters.push(`crop=${safeCropWidth}:${validHeight}:${cropX}:0`);
         } else {
-          filters.push(`crop=${cropWidth}:${inputHeight}:${cropX}:0`);
+          filters.push(`crop=${cropWidth}:${validHeight}:${cropX}:0`);
         }
 
-        console.log(`[FFmpeg] CROP FILTER: crop=${cropWidth}:${inputHeight}:${cropX}:0 (position: ${cropPosition})`);
+        console.log(`[FFmpeg] CROP FILTER: crop=${cropWidth}:${validHeight}:${cropX}:0 (position: ${cropPosition})`);
 
       } else {
         // Video is taller than target - crop top/bottom (position doesn't apply here)
-        const cropHeight = Math.floor(inputWidth / targetAspect);
-        const cropY = Math.floor((inputHeight - cropHeight) / 2);
+        const cropHeight = Math.floor(validWidth / targetAspect);
+        const cropY = Math.floor((validHeight - cropHeight) / 2);
 
         // Validate crop dimensions
-        if (cropHeight <= 0 || cropHeight > inputHeight || cropY < 0) {
-          console.error(`[FFmpeg] INVALID CROP: crop=${inputWidth}:${cropHeight}:0:${cropY} for input ${inputWidth}x${inputHeight}`);
+        if (cropHeight <= 0 || cropHeight > validHeight || cropY < 0) {
+          console.error(`[FFmpeg] INVALID CROP: crop=${validWidth}:${cropHeight}:0:${cropY} for input ${validWidth}x${validHeight}`);
           // Fallback to full frame
-          filters.push(`crop=${inputWidth}:${inputHeight}:0:0`);
+          filters.push(`crop=${validWidth}:${validHeight}:0:0`);
         } else {
-          filters.push(`crop=${inputWidth}:${cropHeight}:0:${cropY}`);
+          filters.push(`crop=${validWidth}:${cropHeight}:0:${cropY}`);
         }
 
-        console.log(`[FFmpeg] CROP FILTER (vertical): crop=${inputWidth}:${cropHeight}:0:${cropY}`);
+        console.log(`[FFmpeg] CROP FILTER (vertical): crop=${validWidth}:${cropHeight}:0:${cropY}`);
       }
       // Scale to target resolution
       filters.push(`scale=${targetWidth}:${targetHeight}`);
