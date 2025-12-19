@@ -5242,10 +5242,10 @@ exports.fetchYoutubePlaylist = functions.https.onCall(async (data, context) => {
 /**
  * Generate optimal caption by cleaning title and preserving structure
  * @param {string} title - The full video title
- * @param {number} maxChars - Maximum characters allowed (default 30)
+ * @param {number} maxChars - Maximum characters allowed (default 35)
  * @returns {Promise<string>} - Cleaned caption in uppercase
  */
-async function generateOptimalCaption(title, maxChars = 30) {
+async function generateOptimalCaption(title, maxChars = 35) {
   // Step 1: Clean the title (remove YouTube junk)
   let caption = cleanYouTubeTitle(title);
 
@@ -5280,24 +5280,27 @@ async function generateOptimalCaption(title, maxChars = 30) {
 function cleanYouTubeTitle(title) {
   let cleaned = title;
 
-  // Remove content in parentheses - common YouTube junk
-  // (Official Video), (Official Music Video), (Lyrics), (Audio), (HD), (4K), (Full), etc.
-  cleaned = cleaned.replace(/\s*\(\s*(official|oficcial|offical)?\s*(music\s*)?(video|lyric|lyrics|audio|visualizer|clip|mv)\s*\)/gi, '');
-  cleaned = cleaned.replace(/\s*\(\s*(official|hd|4k|1080p|720p|full|complete|extended|remaster|remastered|live|acoustic|remix|cover|version)\s*\)/gi, '');
-  cleaned = cleaned.replace(/\s*\(\s*feat\.?[^)]*\)/gi, ''); // Remove (feat. Artist)
-  cleaned = cleaned.replace(/\s*\(\s*ft\.?[^)]*\)/gi, ''); // Remove (ft. Artist)
-  cleaned = cleaned.replace(/\s*\(\s*prod\.?[^)]*\)/gi, ''); // Remove (prod. by X)
-  cleaned = cleaned.replace(/\s*\(\s*\d{4}\s*\)/g, ''); // Remove years like (2024)
+  // ROBUST: Remove any parentheses containing common YouTube junk words
+  // This handles: (Official Video), (Official Lyrics Video), (Official Music Video),
+  // (Lyrics Video), (Audio), (HD), (4K), (Full Video), (Live), etc.
+  const junkWordsInParens = /\s*\([^)]*\b(official|video|lyric|lyrics|audio|music|hd|4k|1080p|720p|full|visualizer|clip|mv|remaster|remastered|live|acoustic|remix|cover|version|premiere|explicit|clean)\b[^)]*\)/gi;
+  cleaned = cleaned.replace(junkWordsInParens, '');
 
-  // Remove content in brackets [Official Video], [Lyrics], etc.
-  cleaned = cleaned.replace(/\s*\[\s*(official|music\s*)?(video|lyric|lyrics|audio|hd|4k|full|new|premiere)\s*\]/gi, '');
-  cleaned = cleaned.replace(/\s*\[\s*\d{4}\s*\]/g, ''); // Remove years like [2024]
+  // Remove remaining parentheses with just years or short codes
+  cleaned = cleaned.replace(/\s*\(\s*\d{4}\s*\)/g, ''); // (2024)
+  cleaned = cleaned.replace(/\s*\(\s*(feat|ft|prod)\.?[^)]*\)/gi, ''); // (feat. X), (ft. X), (prod. X)
+
+  // ROBUST: Remove any brackets containing common junk words
+  const junkWordsInBrackets = /\s*\[[^\]]*\b(official|video|lyric|lyrics|audio|music|hd|4k|full|new|premiere)\b[^\]]*\]/gi;
+  cleaned = cleaned.replace(junkWordsInBrackets, '');
+  cleaned = cleaned.replace(/\s*\[\s*\d{4}\s*\]/g, ''); // [2024]
 
   // Remove everything after | (channel name, topic, etc.)
   cleaned = cleaned.replace(/\s*\|.*$/g, '');
 
-  // Remove trailing indicators
-  cleaned = cleaned.replace(/\s*[-–—]\s*(official|video|audio|lyric|lyrics|hd|4k|full|new).*$/gi, '');
+  // Remove trailing indicators (but be careful not to remove song parts)
+  // Only remove if it's clearly junk like "- Official Video" at the end
+  cleaned = cleaned.replace(/\s*[-–—]\s*(official\s*)?(video|audio|lyric|lyrics|hd|4k|full)(\s+video)?$/gi, '');
 
   // Remove "Official" at the start
   cleaned = cleaned.replace(/^official\s*[-–—:]\s*/gi, '');
@@ -5317,6 +5320,7 @@ function cleanYouTubeTitle(title) {
 
 /**
  * Smart truncation at natural break points
+ * Prioritizes keeping "Artist – Song" structure intact
  */
 function smartTruncate(caption, maxChars) {
   if (caption.length <= maxChars) return caption;
@@ -5325,25 +5329,43 @@ function smartTruncate(caption, maxChars) {
   const separators = [' – ', ' - ', ' — ', ': ', ' | '];
 
   for (const sep of separators) {
-    const parts = caption.split(sep);
-    if (parts.length >= 2) {
-      // For "Artist – Song", try to keep both if possible
-      const combined = parts[0] + sep + parts[1];
-      if (combined.length <= maxChars) {
-        return combined;
-      }
-      // Try just first two parts joined with shorter separator
-      const shortCombined = parts[0] + ' – ' + parts[1];
-      if (shortCombined.length <= maxChars) {
-        return shortCombined;
-      }
-      // If still too long, try just the second part (song name for music)
-      if (parts[1].length <= maxChars && parts[1].length >= 5) {
-        return parts[1];
-      }
-      // Or just the first part
-      if (parts[0].length <= maxChars) {
-        return parts[0];
+    const sepIndex = caption.indexOf(sep);
+    if (sepIndex > 0) {
+      const parts = caption.split(sep);
+      if (parts.length >= 2) {
+        const artist = parts[0].trim();
+        const song = parts.slice(1).join(sep).trim(); // Keep everything after first separator
+
+        // Try 1: Keep "Artist – Song" with full song title
+        const fullCombo = artist + ' – ' + song;
+        if (fullCombo.length <= maxChars) {
+          return fullCombo;
+        }
+
+        // Try 2: Truncate song title at word boundary, keep artist
+        const availableForSong = maxChars - artist.length - 3; // 3 for " – "
+        if (availableForSong >= 5) {
+          const truncatedSong = truncateAtWordBoundary(song, availableForSong);
+          if (truncatedSong.length >= 5) {
+            return artist + ' – ' + truncatedSong;
+          }
+        }
+
+        // Try 3: Just the song title (often more important for music)
+        if (song.length <= maxChars) {
+          return song;
+        }
+
+        // Try 4: Truncate song title alone
+        const truncatedSongAlone = truncateAtWordBoundary(song, maxChars);
+        if (truncatedSongAlone.length >= 5) {
+          return truncatedSongAlone;
+        }
+
+        // Try 5: Just the artist
+        if (artist.length <= maxChars) {
+          return artist;
+        }
       }
     }
   }
@@ -5501,9 +5523,9 @@ exports.generateThumbnailPro = functions.https.onCall(async (data, context) => {
   // ==========================================
   // SMART CAPTION PRE-GENERATION
   // Generate optimal caption ONCE before any prompts
-  // Cleans title, preserves structure, max 30 chars
+  // Cleans title, preserves structure, max 35 chars
   // ==========================================
-  const optimizedCaption = await generateOptimalCaption(title, 30);
+  const optimizedCaption = await generateOptimalCaption(title, 35);
 
   // ==========================================
   // PHASE 1: REVOLUTIONARY PROMPT ENGINEERING
