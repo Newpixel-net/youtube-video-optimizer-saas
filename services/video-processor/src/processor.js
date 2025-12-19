@@ -2039,6 +2039,13 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   // Ensure settings has defaults to prevent crashes
   const safeSettings = settings || {};
 
+  // Log incoming settings for debugging
+  console.log(`[${jobId}] ========== PROCESSING SETTINGS ==========`);
+  console.log(`[${jobId}] reframeMode: ${safeSettings.reframeMode || 'auto_center (default)'}`);
+  console.log(`[${jobId}] cropPosition: ${safeSettings.cropPosition} (type: ${typeof safeSettings.cropPosition})`);
+  console.log(`[${jobId}] All settings:`, JSON.stringify(safeSettings, null, 2));
+  console.log(`[${jobId}] ==========================================`);
+
   // Generate captions if requested
   let captionFile = null;
   if (safeSettings.captionStyle && safeSettings.captionStyle !== 'none') {
@@ -2167,8 +2174,23 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
  */
 function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, reframeMode, cropPosition, autoZoom, vignette, colorGrade }) {
   const filters = [];
+
+  // Validate input dimensions - CRITICAL for crop calculations
+  if (!inputWidth || !inputHeight || inputWidth <= 0 || inputHeight <= 0) {
+    console.error(`[FFmpeg] INVALID INPUT DIMENSIONS: ${inputWidth}x${inputHeight} - using fallback scale only`);
+    // Fallback: just scale to target (will letterbox but won't crash)
+    filters.push(`scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease`);
+    filters.push(`pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`);
+    return filters.join(',');
+  }
+
   const inputAspect = inputWidth / inputHeight;
   const targetAspect = targetWidth / targetHeight; // 9:16 = 0.5625
+
+  console.log(`[FFmpeg] Building filter chain:`);
+  console.log(`[FFmpeg]   Input: ${inputWidth}x${inputHeight} (aspect: ${inputAspect.toFixed(4)})`);
+  console.log(`[FFmpeg]   Target: ${targetWidth}x${targetHeight} (aspect: ${targetAspect.toFixed(4)})`);
+  console.log(`[FFmpeg]   Mode: ${reframeMode}, CropPosition: ${cropPosition}`);
 
   // Normalize reframe mode names (frontend uses 'broll_split', backend used 'b_roll')
   const normalizedMode = reframeMode === 'broll_split' ? 'b_roll' : reframeMode;
@@ -2241,8 +2263,11 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
     default:
       // Crop to 9:16 based on cropPosition
       // Supports both legacy strings ('left', 'center', 'right') and numeric percentage (0-100)
+      console.log(`[FFmpeg] auto_center mode: inputAspect(${inputAspect.toFixed(4)}) > targetAspect(${targetAspect.toFixed(4)}) = ${inputAspect > targetAspect}`);
+
       if (inputAspect > targetAspect) {
         // Video is wider than target - crop sides based on position
+        // For 16:9 (1920x1080) -> 9:16: cropWidth = 1080 * 0.5625 = 607
         const cropWidth = Math.floor(inputHeight * targetAspect);
         let cropX;
 
@@ -2260,20 +2285,43 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
           const percent = Math.max(0, Math.min(100, parseInt(cropPosition, 10)));
           const maxCropX = inputWidth - cropWidth;
           cropX = Math.floor((percent / 100) * maxCropX);
-          console.log(`[FFmpeg] Crop position: ${percent}% -> cropX=${cropX} (maxCropX=${maxCropX})`);
         } else {
           // Default to center if unrecognized
           cropX = Math.floor((inputWidth - cropWidth) / 2);
         }
-        filters.push(`crop=${cropWidth}:${inputHeight}:${cropX}:0`);
+
+        // Validate crop dimensions
+        if (cropWidth <= 0 || cropWidth > inputWidth || cropX < 0 || cropX > inputWidth - cropWidth) {
+          console.error(`[FFmpeg] INVALID CROP: crop=${cropWidth}:${inputHeight}:${cropX}:0 for input ${inputWidth}x${inputHeight}`);
+          // Fallback to center crop with corrected values
+          const safeCropWidth = Math.min(cropWidth, inputWidth);
+          cropX = Math.floor((inputWidth - safeCropWidth) / 2);
+          filters.push(`crop=${safeCropWidth}:${inputHeight}:${cropX}:0`);
+        } else {
+          filters.push(`crop=${cropWidth}:${inputHeight}:${cropX}:0`);
+        }
+
+        console.log(`[FFmpeg] CROP FILTER: crop=${cropWidth}:${inputHeight}:${cropX}:0 (position: ${cropPosition})`);
+
       } else {
         // Video is taller than target - crop top/bottom (position doesn't apply here)
         const cropHeight = Math.floor(inputWidth / targetAspect);
         const cropY = Math.floor((inputHeight - cropHeight) / 2);
-        filters.push(`crop=${inputWidth}:${cropHeight}:0:${cropY}`);
+
+        // Validate crop dimensions
+        if (cropHeight <= 0 || cropHeight > inputHeight || cropY < 0) {
+          console.error(`[FFmpeg] INVALID CROP: crop=${inputWidth}:${cropHeight}:0:${cropY} for input ${inputWidth}x${inputHeight}`);
+          // Fallback to full frame
+          filters.push(`crop=${inputWidth}:${inputHeight}:0:0`);
+        } else {
+          filters.push(`crop=${inputWidth}:${cropHeight}:0:${cropY}`);
+        }
+
+        console.log(`[FFmpeg] CROP FILTER (vertical): crop=${inputWidth}:${cropHeight}:0:${cropY}`);
       }
       // Scale to target resolution
       filters.push(`scale=${targetWidth}:${targetHeight}`);
+      console.log(`[FFmpeg] SCALE FILTER: scale=${targetWidth}:${targetHeight}`);
       break;
   }
 
@@ -2298,7 +2346,11 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
     }
   }
 
-  return filters.join(',');
+  const filterChain = filters.join(',');
+  console.log(`[FFmpeg] COMPLETE FILTER CHAIN: ${filterChain}`);
+  console.log(`[FFmpeg] Filter count: ${filters.length}`);
+
+  return filterChain;
 }
 
 /**
@@ -2434,13 +2486,24 @@ async function getVideoInfo(filePath) {
       const info = JSON.parse(result);
       const videoStream = info.streams.find(s => s.codec_type === 'video');
 
-      resolve({
+      if (!videoStream) {
+        console.error(`[FFprobe] No video stream found in file: ${filePath}`);
+        reject(new Error('No video stream found in file'));
+        return;
+      }
+
+      const videoInfo = {
         width: videoStream.width,
         height: videoStream.height,
         duration: parseFloat(info.format.duration),
         bitrate: parseInt(info.format.bit_rate)
-      });
+      };
+
+      console.log(`[FFprobe] Video info for ${filePath}: ${videoInfo.width}x${videoInfo.height}, ${videoInfo.duration}s`);
+
+      resolve(videoInfo);
     } catch (error) {
+      console.error(`[FFprobe] Failed to parse video info: ${error.message}`);
       reject(new Error('Failed to parse video info'));
     }
   });
