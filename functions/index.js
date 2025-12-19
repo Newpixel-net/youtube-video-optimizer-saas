@@ -640,7 +640,9 @@ async function batchCalculateViralityScores(clips, videoContext) {
     viralPrediction: clip.score >= 80 ? 'MEDIUM' : 'LOW'
   }));
 
-  return [...enhancedClips, ...remainingClips];
+  // Re-sort all clips by final score (descending) since enhancement may have changed scores
+  const allClips = [...enhancedClips, ...remainingClips];
+  return allClips.sort((a, b) => (b.score || 0) - (a.score || 0));
 }
 
 async function getVideoMetadata(videoId) {
@@ -17541,6 +17543,123 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
     console.error('Wizard analyze video error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to analyze video.'));
+  }
+});
+
+/**
+ * wizardSmartCrop - AI-powered subject detection for optimal crop positioning
+ * Analyzes a video thumbnail to detect the main subject (person/face) and
+ * suggests the optimal horizontal crop position for 9:16 format.
+ */
+exports.wizardSmartCrop = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { thumbnailUrl, videoId, clipStartTime } = data;
+
+  if (!thumbnailUrl && !videoId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Thumbnail URL or video ID required');
+  }
+
+  try {
+    // Get the thumbnail URL
+    let imageUrl = thumbnailUrl;
+    if (!imageUrl && videoId) {
+      imageUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+    }
+
+    // Use GPT-4 Vision to analyze the image and detect subject position
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert video editor analyzing frames for optimal crop positioning.
+Your task is to identify where the main subject (typically a person) is located horizontally in the frame.
+The goal is to crop a 16:9 video to 9:16 (vertical) format while keeping the main subject centered.
+
+Analyze the image and determine the optimal horizontal crop position as a percentage from 0-100:
+- 0% = crop from the LEFT edge (subject is on the left)
+- 50% = crop from CENTER (subject is centered)
+- 100% = crop from the RIGHT edge (subject is on the right)
+
+Consider:
+1. Face/person position
+2. Important visual elements
+3. Text/graphics that should remain visible
+4. Rule of thirds composition
+
+Respond with ONLY a JSON object, no markdown or other text.`
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Analyze this video frame and determine the optimal horizontal crop position (0-100) to best capture the main subject when converting from 16:9 to 9:16 format. Return JSON with: cropPosition (0-100), confidence (low/medium/high), subject (what you detected), and reasoning.'
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: imageUrl,
+                detail: 'low'
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 300
+    });
+
+    const content = response.choices[0]?.message?.content || '';
+
+    // Parse the response
+    let result;
+    try {
+      // Try to extract JSON from the response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        result = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found in response');
+      }
+    } catch (parseError) {
+      console.log('[wizardSmartCrop] Failed to parse AI response, using fallback:', content);
+      // Fallback: try to extract number from response
+      const numberMatch = content.match(/(\d+)/);
+      result = {
+        cropPosition: numberMatch ? parseInt(numberMatch[1], 10) : 50,
+        confidence: 'low',
+        subject: 'unknown',
+        reasoning: 'Fallback analysis'
+      };
+    }
+
+    // Validate crop position
+    let cropPosition = parseInt(result.cropPosition, 10);
+    if (isNaN(cropPosition) || cropPosition < 0 || cropPosition > 100) {
+      cropPosition = 50; // Default to center
+    }
+
+    console.log(`[wizardSmartCrop] AI detected subject at ${cropPosition}%:`, result.subject);
+
+    return {
+      success: true,
+      cropPosition,
+      confidence: result.confidence || 'medium',
+      subject: result.subject || 'person',
+      reasoning: result.reasoning || 'AI analysis'
+    };
+
+  } catch (error) {
+    console.error('[wizardSmartCrop] Error:', error);
+
+    // Return a reasonable fallback instead of throwing
+    return {
+      success: true,
+      cropPosition: 50,
+      confidence: 'low',
+      subject: 'unknown',
+      reasoning: 'Fallback to center (AI analysis unavailable)'
+    };
   }
 });
 
