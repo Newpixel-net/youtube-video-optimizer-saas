@@ -16,6 +16,21 @@ import multer from 'multer';
 const app = express();
 app.use(express.json());
 
+// CORS middleware - must be before all routes
+// Allow requests from any origin (browser extension, web app, etc.)
+app.use((req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '86400'); // 24 hours
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send('');
+  }
+  next();
+});
+
 // Configure multer for handling file uploads (video streams from browser extension)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -76,11 +91,6 @@ app.get('/health', (req, res) => {
 app.post('/upload-stream', upload.single('video'), async (req, res) => {
   const uploadId = uuidv4().slice(0, 8);
   console.log(`[UploadStream:${uploadId}] Received upload request`);
-
-  // Set CORS headers for browser extension
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
 
   try {
     if (!req.file) {
@@ -148,13 +158,7 @@ app.post('/upload-stream', upload.single('video'), async (req, res) => {
   }
 });
 
-// Handle CORS preflight for upload endpoint
-app.options('/upload-stream', (req, res) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
-  res.status(204).send('');
-});
+// CORS preflight is now handled by global middleware above
 
 /**
  * Extract frames from a YouTube video at specific timestamps
