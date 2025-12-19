@@ -7541,16 +7541,6 @@
             var activeClip = selectedClips[state.customization.activeClipIndex] || selectedClips[0];
             var settings = state.clipSettings[activeClip.id] || getDefaultSettings();
 
-            // DEBUG: Log what we're rendering
-            console.log('[renderStep4Customization] DEBUG:', {
-                activeClipIndex: state.customization.activeClipIndex,
-                activeClipId: activeClip ? activeClip.id : 'NO ACTIVE CLIP',
-                settingsFromState: state.clipSettings[activeClip.id] ? 'EXISTS' : 'USING DEFAULTS',
-                cropPosition: settings.cropPosition,
-                allClipSettings: JSON.parse(JSON.stringify(state.clipSettings)),
-                selectedClipIds: state.selectedClipIds.slice()
-            });
-
             var html = '<div class="customization-layout">';
 
             // Left: Phone Preview
@@ -10262,45 +10252,19 @@
             },
 
             prevClip: function() {
-                // DEBUG: Log before navigation
-                console.log('[prevClip] BEFORE:', {
-                    activeClipIndex: state.customization.activeClipIndex,
-                    allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
-                });
-
                 if (state.customization.activeClipIndex > 0) {
                     state.customization.activeClipIndex--;
                     state.customization.playingInFrame = false; // Stop video when changing clips
-
-                    // DEBUG: Log after navigation
-                    console.log('[prevClip] AFTER:', {
-                        newActiveClipIndex: state.customization.activeClipIndex,
-                        allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
-                    });
-
                     render();
                 }
             },
 
             nextClip: function() {
-                // DEBUG: Log before navigation
-                console.log('[nextClip] BEFORE:', {
-                    activeClipIndex: state.customization.activeClipIndex,
-                    allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
-                });
-
                 var selectedCount = state.selectedClipIds.length;
                 if (state.customization.activeClipIndex < selectedCount - 1) {
                     state.customization.activeClipIndex++;
                     state.customization.showVideoPreview = false; // Reset preview when changing clips
                     state.customization.playingInFrame = false; // Stop video when changing clips
-
-                    // DEBUG: Log after navigation
-                    console.log('[nextClip] AFTER:', {
-                        newActiveClipIndex: state.customization.activeClipIndex,
-                        allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
-                    });
-
                     render();
                 }
             },
@@ -10419,15 +10383,6 @@
                 });
                 var activeClip = selectedClips[state.customization.activeClipIndex];
 
-                // DEBUG: Log clip info and all current settings
-                console.log('[setCropPosition] DEBUG:', {
-                    activeClipIndex: state.customization.activeClipIndex,
-                    activeClipId: activeClip ? activeClip.id : 'NO ACTIVE CLIP',
-                    position: position,
-                    allClipSettings: JSON.parse(JSON.stringify(state.clipSettings)),
-                    selectedClipIds: state.selectedClipIds.slice()
-                });
-
                 if (!state.clipSettings[activeClip.id]) {
                     state.clipSettings[activeClip.id] = getDefaultSettings();
                 }
@@ -10438,13 +10393,6 @@
                 state.clipSettings[activeClip.id].cropPosition = posNum;
                 state.clipSettings[activeClip.id].aiSmartCrop = false; // Reset AI flag on manual change
 
-                // DEBUG: Log after update
-                console.log('[setCropPosition] AFTER UPDATE:', {
-                    clipId: activeClip.id,
-                    newCropPosition: state.clipSettings[activeClip.id].cropPosition,
-                    allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
-                });
-
                 render();
             },
 
@@ -10453,6 +10401,20 @@
                 var posNum = parseInt(value, 10);
                 if (isNaN(posNum)) return;
                 posNum = Math.max(0, Math.min(100, posNum));
+
+                // IMPORTANT: Save to state immediately during dragging (not just on release)
+                // This ensures "Apply to All Clips" always reads the current slider value
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (activeClip) {
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+                    state.clipSettings[activeClip.id].cropPosition = posNum;
+                    state.clipSettings[activeClip.id].aiSmartCrop = false;
+                }
 
                 // Update the crop guide zone position in real-time
                 var cropZone = document.getElementById('cropGuideZone');
@@ -11451,14 +11413,10 @@
                 var activeClip = selectedClips[state.customization.activeClipIndex];
                 var sourceSettings = state.clipSettings[activeClip.id] || getDefaultSettings();
 
-                // DEBUG: Log what we're copying FROM
-                console.log('[applySettingsToAllClips] DEBUG:', {
-                    activeClipIndex: state.customization.activeClipIndex,
-                    activeClipId: activeClip.id,
-                    sourceSettingsExists: !!state.clipSettings[activeClip.id],
-                    sourceCropPosition: sourceSettings.cropPosition,
-                    allClipSettingsBEFORE: JSON.parse(JSON.stringify(state.clipSettings))
-                });
+                // Ensure cropPosition is always a valid number (safety net)
+                var sourceCropPosition = (typeof sourceSettings.cropPosition === 'number')
+                    ? sourceSettings.cropPosition
+                    : 50;
 
                 // Apply settings to all clips (except trim times which are clip-specific)
                 var appliedCount = 0;
@@ -11469,7 +11427,7 @@
                         state.clipSettings[clip.id] = {
                             captionStyle: sourceSettings.captionStyle,
                             reframeMode: sourceSettings.reframeMode,
-                            cropPosition: sourceSettings.cropPosition,  // FIX: was missing!
+                            cropPosition: sourceCropPosition,  // Use validated value
                             aiSmartCrop: sourceSettings.aiSmartCrop,    // FIX: was missing!
                             outputAspect: sourceSettings.outputAspect,  // FIX: was missing!
                             removeFiller: sourceSettings.removeFiller,
@@ -11496,11 +11454,6 @@
                         };
                         appliedCount++;
                     }
-                });
-
-                // DEBUG: Log what we ended up with
-                console.log('[applySettingsToAllClips] AFTER:', {
-                    allClipSettingsAFTER: JSON.parse(JSON.stringify(state.clipSettings))
                 });
 
                 render();
