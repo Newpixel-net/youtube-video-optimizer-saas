@@ -11460,6 +11460,9 @@
                         state.clipSettings[clip.id] = {
                             captionStyle: sourceSettings.captionStyle,
                             reframeMode: sourceSettings.reframeMode,
+                            cropPosition: sourceSettings.cropPosition,  // FIX: was missing!
+                            aiSmartCrop: sourceSettings.aiSmartCrop,    // FIX: was missing!
+                            outputAspect: sourceSettings.outputAspect,  // FIX: was missing!
                             removeFiller: sourceSettings.removeFiller,
                             enhanceAudio: sourceSettings.enhanceAudio,
                             audioDucking: sourceSettings.audioDucking,
@@ -11472,7 +11475,13 @@
                             autoZoom: sourceSettings.autoZoom,
                             vignette: sourceSettings.vignette,
                             colorGrade: sourceSettings.colorGrade,
-                            // Keep original trim values
+                            // Copy audio mix settings
+                            audioMix: sourceSettings.audioMix ? Object.assign({}, sourceSettings.audioMix) : undefined,
+                            // Copy secondary source settings (deep copy to avoid reference issues)
+                            secondarySource: sourceSettings.secondarySource ? Object.assign({}, sourceSettings.secondarySource) : undefined,
+                            // Copy tertiary source settings
+                            tertiarySource: sourceSettings.tertiarySource ? Object.assign({}, sourceSettings.tertiarySource) : undefined,
+                            // Keep original trim values (clip-specific)
                             trimStart: clipSettings.trimStart || 0,
                             trimEnd: clipSettings.trimEnd || clip.duration
                         };
