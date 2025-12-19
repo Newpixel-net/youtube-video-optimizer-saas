@@ -3397,6 +3397,8 @@
 
             // HD Upscale State
             hdUpscaleLoading: false,              // Loading state for upscale operations
+            hdUpscalingIndex: null,               // Index of item currently being upscaled
+            hdUpscalingMode: null,                // Mode of item being upscaled ('single'|'bulk'|'playlist')
             hdUpscaleCost: 1,                     // Cost per image (tokens)
 
             // Quota settings (from getUserProfile)
@@ -6622,6 +6624,8 @@
             upscaleThumbnail: async function(imageUrl, itemIndex, mode) {
                 // mode: 'single' | 'bulk' | 'playlist'
                 state.hdUpscaleLoading = true;
+                state.hdUpscalingIndex = itemIndex;
+                state.hdUpscalingMode = mode;
                 render();
 
                 try {
@@ -6647,6 +6651,8 @@
                 }
 
                 state.hdUpscaleLoading = false;
+                state.hdUpscalingIndex = null;
+                state.hdUpscalingMode = null;
                 render();
             },
 
@@ -10243,7 +10249,8 @@
                                     if (item.hdUrl) {
                                         html += '<button onclick="app.downloadHdThumbnail(\'' + item.hdUrl + '\', ' + idx + ')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600">⬆️ HD</button>';
                                     } else {
-                                        html += '<button onclick="app.upscaleThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ', \'bulk\')" class="bg-indigo-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-indigo-600">⬆️ Upscale</button>';
+                                        var isUpscaling = state.hdUpscalingMode === 'bulk' && state.hdUpscalingIndex === idx;
+                                        html += '<button onclick="app.upscaleThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ', \'bulk\')" ' + (isUpscaling ? 'disabled' : '') + ' class="bg-indigo-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-indigo-600 ' + (isUpscaling ? 'opacity-70' : '') + '">' + (isUpscaling ? '<span class="animate-spin inline-block">⏳</span>' : '⬆️ Upscale') + '</button>';
                                     }
                                     html += '</div>';
                                     html += '<button onclick="app.previewThumbnail(\'' + item.generatedThumbnail + '\')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">🔍 Preview</button>';
@@ -10402,7 +10409,8 @@
                                             if (item.hdUrl) {
                                                 html += '<button type="button" onclick="app.downloadHdThumbnail(\'' + item.hdUrl + '\', ' + idx + ')" class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 transition-colors">⬆️ HD</button>';
                                             } else {
-                                                html += '<button type="button" onclick="app.upscaleThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ', \'bulk\')" class="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors">⬆️ Upscale</button>';
+                                                var isUpscalingItem = state.hdUpscalingMode === 'bulk' && state.hdUpscalingIndex === idx;
+                                                html += '<button type="button" onclick="app.upscaleThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ', \'bulk\')" ' + (isUpscalingItem ? 'disabled' : '') + ' class="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors ' + (isUpscalingItem ? 'opacity-70' : '') + '">' + (isUpscalingItem ? '<span class="animate-spin inline-block">⏳</span>' : '⬆️ Upscale') + '</button>';
                                             }
                                             html += '<button type="button" onclick="app.previewThumbnail(\'' + item.generatedThumbnail + '\')" class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300 transition-colors">🔍</button>';
                                             html += '</div>';
@@ -10630,7 +10638,8 @@
                                     if (item.hdUrl) {
                                         html += '<button onclick="app.downloadHdThumbnail(\'' + item.hdUrl + '\', ' + idx + ')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-blue-600">⬆️ HD</button>';
                                     } else {
-                                        html += '<button onclick="app.upscaleThumbnail(\'' + item.thumbnailUrl + '\', ' + idx + ', \'playlist\')" class="bg-indigo-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-indigo-600">⬆️ Upscale</button>';
+                                        var isUpscalingPlaylist = state.hdUpscalingMode === 'playlist' && state.hdUpscalingIndex === idx;
+                                        html += '<button onclick="app.upscaleThumbnail(\'' + item.thumbnailUrl + '\', ' + idx + ', \'playlist\')" ' + (isUpscalingPlaylist ? 'disabled' : '') + ' class="bg-indigo-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-indigo-600 ' + (isUpscalingPlaylist ? 'opacity-70' : '') + '">' + (isUpscalingPlaylist ? '<span class="animate-spin inline-block">⏳</span>' : '⬆️ Upscale') + '</button>';
                                     }
                                     html += '</div>';
                                     html += '<button onclick="app.previewThumbnail(\'' + item.thumbnailUrl + '\')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">🔍 Preview</button>';
