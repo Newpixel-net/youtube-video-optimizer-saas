@@ -1517,7 +1517,7 @@
             position: absolute;
             top: 0;
             bottom: 0;
-            width: 56.25%; /* 9:16 ratio within 16:9 = 56.25% */
+            width: 31.640625%; /* Correct: (9/16)² = 81/256 for 16:9→9:16 crop */
             border: 3px solid rgba(236, 72, 153, 0.9);
             background: transparent;
             box-shadow:
@@ -1843,7 +1843,7 @@
             bottom: 0;
             left: 50%;
             transform: translateX(-50%);
-            width: 56.25%; /* 9:16 from 16:9 = 56.25% */
+            width: 31.640625%; /* Correct: (9/16)² for 16:9→9:16 crop */
             border: 2px solid rgba(236, 72, 153, 0.8);
             background: transparent;
             box-shadow:
@@ -7556,8 +7556,10 @@
             else if (typeof sourceCropPos !== 'number') sourceCropPos = 50;
 
             // Calculate crop zone position: 0% means left edge, 100% means right edge
-            // The crop zone is 56.25% width, so we need to offset calculation
-            var cropZoneLeft = (sourceCropPos / 100) * (100 - 56.25); // Max left position is 43.75%
+            // The crop zone is 31.64% width (correct ratio for 16:9→9:16 = (9/16)²)
+            // This matches the backend FFmpeg calculation: cropX = (percent/100) * (width - cropWidth)
+            var cropZoneWidth = 31.640625; // (9/16)² × 100 = 81/256 × 100
+            var cropZoneLeft = (sourceCropPos / 100) * (100 - cropZoneWidth); // Max left position is 68.36%
 
             html += '<div class="source-preview-container">';
             html += '<div class="source-preview-header">';
@@ -9565,7 +9567,7 @@
             if (cropPreviewArea && cropGuideZone) {
                 var cropDragging = false;
                 var cropAreaRect = null;
-                var cropZoneWidth = 0.5625; // 56.25% of container width
+                var cropZoneWidth = 0.31640625; // Correct: (9/16)² for 16:9→9:16 crop
 
                 function cropMouseDown(e) {
                     e.preventDefault();
@@ -9595,9 +9597,9 @@
                     // Convert to percentage (0-100 scale)
                     var percent = maxLeftPx > 0 ? Math.round((leftPx / maxLeftPx) * 100) : 50;
 
-                    // Update crop zone position visually
-                    var cropZoneLeft = (percent / 100) * (100 - 56.25);
-                    cropGuideZone.style.left = cropZoneLeft + '%';
+                    // Update crop zone position visually (must match CSS width)
+                    var cropZoneLeftPercent = (percent / 100) * (100 - 31.640625);
+                    cropGuideZone.style.left = cropZoneLeftPercent + '%';
                     cropGuideZone.dataset.position = percent;
 
                     // Update slider
@@ -10335,7 +10337,7 @@
                 var valueDisplay = document.querySelector('.crop-slider-value');
 
                 if (cropZone) {
-                    var cropZoneLeft = (posNum / 100) * (100 - 56.25);
+                    var cropZoneLeft = (posNum / 100) * (100 - 31.640625); // Match CSS crop zone width
                     cropZone.style.left = cropZoneLeft + '%';
                     cropZone.dataset.position = posNum;
                 }
