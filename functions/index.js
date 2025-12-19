@@ -5235,104 +5235,182 @@ exports.fetchYoutubePlaylist = functions.https.onCall(async (data, context) => {
 });
 
 // ==============================================
-// SMART CAPTION SYSTEM - Optimal Caption Generation
-// Generates short, punchy captions with strict character limits
+// SMART CAPTION SYSTEM v2 - Clean & Preserve Title Structure
+// Removes junk, keeps meaningful content, smart truncation
 // ==============================================
 
 /**
- * Generate an optimal short caption for thumbnails
- * Uses AI to create punchy, clickable text with strict limits
+ * Generate optimal caption by cleaning title and preserving structure
  * @param {string} title - The full video title
- * @param {number} maxChars - Maximum characters allowed (default 20)
- * @returns {Promise<string>} - Optimized caption in uppercase
+ * @param {number} maxChars - Maximum characters allowed (default 30)
+ * @returns {Promise<string>} - Cleaned caption in uppercase
  */
-async function generateOptimalCaption(title, maxChars = 20) {
-  // First, try simple extraction for short titles
-  const simpleCaption = extractSimpleCaption(title);
-  if (simpleCaption.length <= maxChars && simpleCaption.split(' ').length <= 4) {
-    return simpleCaption;
-  }
+async function generateOptimalCaption(title, maxChars = 30) {
+  // Step 1: Clean the title (remove YouTube junk)
+  let caption = cleanYouTubeTitle(title);
 
-  // For longer titles, use AI to generate optimal caption
-  try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [{
-        role: 'system',
-        content: `You create SHORT, PUNCHY YouTube thumbnail captions. STRICT RULES:
-- Maximum ${maxChars} characters (HARD LIMIT - count carefully!)
-- 2-4 words ONLY
-- Must be catchy and clickable
-- ALL CAPS output
-- NO punctuation except ! or ?
-- Focus on the most compelling/emotional hook
-- If it's a person's name, keep it short or use just first name
-- Prefer action words and emotional triggers`
-      }, {
-        role: 'user',
-        content: `Video Title: "${title}"
-
-Generate ONE short caption (MAXIMUM ${maxChars} characters). Count the characters carefully.
-Output ONLY the caption text, nothing else.`
-      }],
-      temperature: 0.5,
-      max_tokens: 30
-    });
-
-    let caption = response.choices?.[0]?.message?.content?.trim().toUpperCase() || '';
-
-    // Remove any quotes the AI might have added
-    caption = caption.replace(/^["']|["']$/g, '');
-
-    // Enforce hard limit - truncate at word boundary if needed
-    if (caption.length > maxChars) {
-      const words = caption.split(' ');
-      caption = '';
-      for (const word of words) {
-        if ((caption + ' ' + word).trim().length <= maxChars) {
-          caption = (caption + ' ' + word).trim();
-        } else {
-          break;
-        }
-      }
-    }
-
-    // Fallback if AI returned empty or too short
-    if (!caption || caption.length < 3) {
-      return simpleCaption.substring(0, maxChars);
-    }
-
+  // Step 2: If already fits, return it
+  if (caption.length <= maxChars) {
+    console.log(`Smart Caption: "${title}" → "${caption}" (${caption.length} chars) [clean]`);
     return caption;
-  } catch (error) {
-    console.error('AI caption generation failed:', error.message);
-    // Fallback to simple extraction
-    return simpleCaption.substring(0, maxChars);
   }
+
+  // Step 3: Smart truncation - try to cut at natural break points
+  caption = smartTruncate(caption, maxChars);
+
+  // Step 4: If still too long, use AI to shorten intelligently
+  if (caption.length > maxChars) {
+    try {
+      caption = await aiShortenCaption(title, caption, maxChars);
+    } catch (error) {
+      console.error('AI caption shortening failed:', error.message);
+      // Final fallback: hard truncate at word boundary
+      caption = truncateAtWordBoundary(caption, maxChars);
+    }
+  }
+
+  console.log(`Smart Caption: "${title}" → "${caption}" (${caption.length} chars)`);
+  return caption;
 }
 
 /**
- * Simple caption extraction without AI
- * Used as fallback and for short titles
+ * Clean YouTube title by removing common junk
+ * Preserves the meaningful structure (Artist – Song, How to X, etc.)
  */
-function extractSimpleCaption(title) {
-  // Remove common YouTube suffixes
-  let cleaned = title
-    .replace(/\s*[\(\[].*(official|lyric|video|audio|music|hd|4k|full|ep\.|episode).*[\)\]]/gi, '')
-    .replace(/\s*\|\s*.*/g, '') // Remove everything after |
-    .trim();
+function cleanYouTubeTitle(title) {
+  let cleaned = title;
 
-  // Split on common separators and take first meaningful part
-  const parts = cleaned.split(/[:\-–—]/).map(p => p.trim()).filter(p => p.length > 0);
-  let caption = parts[0] || cleaned;
+  // Remove content in parentheses - common YouTube junk
+  // (Official Video), (Official Music Video), (Lyrics), (Audio), (HD), (4K), (Full), etc.
+  cleaned = cleaned.replace(/\s*\(\s*(official|oficcial|offical)?\s*(music\s*)?(video|lyric|lyrics|audio|visualizer|clip|mv)\s*\)/gi, '');
+  cleaned = cleaned.replace(/\s*\(\s*(official|hd|4k|1080p|720p|full|complete|extended|remaster|remastered|live|acoustic|remix|cover|version)\s*\)/gi, '');
+  cleaned = cleaned.replace(/\s*\(\s*feat\.?[^)]*\)/gi, ''); // Remove (feat. Artist)
+  cleaned = cleaned.replace(/\s*\(\s*ft\.?[^)]*\)/gi, ''); // Remove (ft. Artist)
+  cleaned = cleaned.replace(/\s*\(\s*prod\.?[^)]*\)/gi, ''); // Remove (prod. by X)
+  cleaned = cleaned.replace(/\s*\(\s*\d{4}\s*\)/g, ''); // Remove years like (2024)
 
-  // Take first 4 words max
-  const words = caption.split(/\s+/).slice(0, 4);
-  caption = words.join(' ').toUpperCase();
+  // Remove content in brackets [Official Video], [Lyrics], etc.
+  cleaned = cleaned.replace(/\s*\[\s*(official|music\s*)?(video|lyric|lyrics|audio|hd|4k|full|new|premiere)\s*\]/gi, '');
+  cleaned = cleaned.replace(/\s*\[\s*\d{4}\s*\]/g, ''); // Remove years like [2024]
 
-  // Clean up any remaining punctuation at the end
-  caption = caption.replace(/[,;.]$/, '');
+  // Remove everything after | (channel name, topic, etc.)
+  cleaned = cleaned.replace(/\s*\|.*$/g, '');
 
-  return caption;
+  // Remove trailing indicators
+  cleaned = cleaned.replace(/\s*[-–—]\s*(official|video|audio|lyric|lyrics|hd|4k|full|new).*$/gi, '');
+
+  // Remove "Official" at the start
+  cleaned = cleaned.replace(/^official\s*[-–—:]\s*/gi, '');
+
+  // Remove hashtags
+  cleaned = cleaned.replace(/\s*#\w+/g, '');
+
+  // Clean up multiple spaces and trim
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+  // Remove trailing punctuation except ? and !
+  cleaned = cleaned.replace(/[,;:\-–—]+$/, '').trim();
+
+  // Convert to uppercase for thumbnail
+  return cleaned.toUpperCase();
+}
+
+/**
+ * Smart truncation at natural break points
+ */
+function smartTruncate(caption, maxChars) {
+  if (caption.length <= maxChars) return caption;
+
+  // Try to cut at natural separators: – - : |
+  const separators = [' – ', ' - ', ' — ', ': ', ' | '];
+
+  for (const sep of separators) {
+    const parts = caption.split(sep);
+    if (parts.length >= 2) {
+      // For "Artist – Song", try to keep both if possible
+      const combined = parts[0] + sep + parts[1];
+      if (combined.length <= maxChars) {
+        return combined;
+      }
+      // Try just first two parts joined with shorter separator
+      const shortCombined = parts[0] + ' – ' + parts[1];
+      if (shortCombined.length <= maxChars) {
+        return shortCombined;
+      }
+      // If still too long, try just the second part (song name for music)
+      if (parts[1].length <= maxChars && parts[1].length >= 5) {
+        return parts[1];
+      }
+      // Or just the first part
+      if (parts[0].length <= maxChars) {
+        return parts[0];
+      }
+    }
+  }
+
+  // No good break point found, truncate at word boundary
+  return truncateAtWordBoundary(caption, maxChars);
+}
+
+/**
+ * Truncate at word boundary
+ */
+function truncateAtWordBoundary(text, maxChars) {
+  if (text.length <= maxChars) return text;
+
+  const words = text.split(' ');
+  let result = '';
+
+  for (const word of words) {
+    const potential = result ? result + ' ' + word : word;
+    if (potential.length <= maxChars) {
+      result = potential;
+    } else {
+      break;
+    }
+  }
+
+  return result || text.substring(0, maxChars);
+}
+
+/**
+ * Use AI to intelligently shorten a caption while preserving meaning
+ */
+async function aiShortenCaption(originalTitle, cleanedCaption, maxChars) {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [{
+      role: 'system',
+      content: `You shorten YouTube thumbnail captions while preserving meaning. Rules:
+- Maximum ${maxChars} characters (STRICT)
+- Keep the essential meaning and structure
+- For "Artist – Song" format: keep both if possible, or prioritize song name
+- For "How to X" format: keep the full phrase
+- For questions: keep the question intact
+- Output in ALL CAPS
+- NO extra punctuation
+- Output ONLY the shortened caption`
+    }, {
+      role: 'user',
+      content: `Original: "${originalTitle}"
+Cleaned: "${cleanedCaption}"
+
+Shorten to max ${maxChars} characters while keeping the meaning:`
+    }],
+    temperature: 0.3,
+    max_tokens: 50
+  });
+
+  let result = response.choices?.[0]?.message?.content?.trim().toUpperCase() || '';
+  result = result.replace(/^["']|["']$/g, ''); // Remove quotes
+
+  // Validate result
+  if (result && result.length <= maxChars && result.length >= 3) {
+    return result;
+  }
+
+  // AI failed to meet requirements, fall back
+  return truncateAtWordBoundary(cleanedCaption, maxChars);
 }
 
 // ==============================================
@@ -5423,9 +5501,9 @@ exports.generateThumbnailPro = functions.https.onCall(async (data, context) => {
   // ==========================================
   // SMART CAPTION PRE-GENERATION
   // Generate optimal caption ONCE before any prompts
+  // Cleans title, preserves structure, max 30 chars
   // ==========================================
-  const optimizedCaption = await generateOptimalCaption(title, 20);
-  console.log(`Smart Caption: "${title}" → "${optimizedCaption}" (${optimizedCaption.length} chars)`);
+  const optimizedCaption = await generateOptimalCaption(title, 30);
 
   // ==========================================
   // PHASE 1: REVOLUTIONARY PROMPT ENGINEERING
