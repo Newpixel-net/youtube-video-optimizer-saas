@@ -11451,6 +11451,15 @@
                 var activeClip = selectedClips[state.customization.activeClipIndex];
                 var sourceSettings = state.clipSettings[activeClip.id] || getDefaultSettings();
 
+                // DEBUG: Log what we're copying FROM
+                console.log('[applySettingsToAllClips] DEBUG:', {
+                    activeClipIndex: state.customization.activeClipIndex,
+                    activeClipId: activeClip.id,
+                    sourceSettingsExists: !!state.clipSettings[activeClip.id],
+                    sourceCropPosition: sourceSettings.cropPosition,
+                    allClipSettingsBEFORE: JSON.parse(JSON.stringify(state.clipSettings))
+                });
+
                 // Apply settings to all clips (except trim times which are clip-specific)
                 var appliedCount = 0;
                 selectedClips.forEach(function(clip) {
@@ -11487,6 +11496,11 @@
                         };
                         appliedCount++;
                     }
+                });
+
+                // DEBUG: Log what we ended up with
+                console.log('[applySettingsToAllClips] AFTER:', {
+                    allClipSettingsAFTER: JSON.parse(JSON.stringify(state.clipSettings))
                 });
 
                 render();
