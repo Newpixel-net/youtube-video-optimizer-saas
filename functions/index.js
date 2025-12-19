@@ -640,7 +640,9 @@ async function batchCalculateViralityScores(clips, videoContext) {
     viralPrediction: clip.score >= 80 ? 'MEDIUM' : 'LOW'
   }));
 
-  return [...enhancedClips, ...remainingClips];
+  // Re-sort all clips by final score (descending) since enhancement may have changed scores
+  const allClips = [...enhancedClips, ...remainingClips];
+  return allClips.sort((a, b) => (b.score || 0) - (a.score || 0));
 }
 
 async function getVideoMetadata(videoId) {

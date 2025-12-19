@@ -1176,6 +1176,83 @@
             color: #ec4899;
         }
 
+        /* Create More Section */
+        .create-more-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1));
+            border: 1px dashed rgba(139, 92, 246, 0.4);
+            border-radius: 1rem;
+        }
+
+        .create-more-info {
+            text-align: center;
+        }
+
+        .create-more-count {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .btn-create-more {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.5rem;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            border: none;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-create-more:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+        }
+
+        .btn-create-more:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-create-more .token-cost {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-create-more .token-cost::before {
+            content: '\1FA99';
+            margin-right: 0.25rem;
+        }
+
+        .btn-create-more .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .create-more-warning {
+            margin-top: 0.5rem;
+            color: #ef4444;
+            font-size: 0.875rem;
+        }
+
         /* Platform Legend */
         .platform-legend {
             display: flex;
@@ -6559,6 +6636,8 @@
             // Step 3: Clips
             clips: [],
             selectedClipIds: [],
+            displayedClipCount: 8, // Initial number of clips to show (more can be unlocked)
+            createMoreLoading: false, // Loading state for "Create more" button
 
             // Step 4: Customization
             customization: {
@@ -7165,19 +7244,27 @@
 
         function renderStep3ClipSelection() {
             var html = '';
+            var displayedClips = state.clips.slice(0, state.displayedClipCount);
+            var hasMoreClips = state.clips.length > state.displayedClipCount;
+            var remainingClips = state.clips.length - state.displayedClipCount;
+            var createMoreCost = 5; // Token cost for creating more clips
 
             // Header
             html += '<div class="clips-header">';
-            html += '<h2>Found ' + state.clips.length + ' Clips</h2>';
+            if (hasMoreClips) {
+                html += '<h2>Showing ' + displayedClips.length + ' of ' + state.clips.length + ' Clips</h2>';
+            } else {
+                html += '<h2>Found ' + state.clips.length + ' Clips</h2>';
+            }
             html += '<div class="clips-header-actions">';
             html += '<button class="btn-secondary" onclick="app.selectAllClips()">Select All</button>';
             html += '<button class="btn-secondary" onclick="app.deselectAllClips()">Deselect All</button>';
             html += '</div>';
             html += '</div>';
 
-            // Clip Grid
+            // Clip Grid (only show displayed clips)
             html += '<div class="clip-grid">';
-            state.clips.forEach(function(clip) {
+            displayedClips.forEach(function(clip, index) {
                 var isSelected = state.selectedClipIds.indexOf(clip.id) !== -1;
                 var cardClass = isSelected ? 'clip-card selected' : 'clip-card';
                 var scoreClass = utils.getScoreClass(clip.score);
@@ -7185,7 +7272,7 @@
                 html += '<div class="' + cardClass + '" onclick="app.toggleClipSelection(\'' + clip.id + '\')">';
 
                 // Thumbnail with play button (use placeholder if missing)
-                var thumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"%3E%3Crect fill="%231a1a2e" width="320" height="180"/%3E%3Ctext x="160" y="85" fill="%23ec4899" font-family="sans-serif" font-size="24" text-anchor="middle"%3E🎬%3C/text%3E%3Ctext x="160" y="110" fill="%23888" font-family="sans-serif" font-size="12" text-anchor="middle"%3EClip ' + (state.clips.indexOf(clip) + 1) + '%3C/text%3E%3C/svg%3E';
+                var thumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"%3E%3Crect fill="%231a1a2e" width="320" height="180"/%3E%3Ctext x="160" y="85" fill="%23ec4899" font-family="sans-serif" font-size="24" text-anchor="middle"%3E🎬%3C/text%3E%3Ctext x="160" y="110" fill="%23888" font-family="sans-serif" font-size="12" text-anchor="middle"%3EClip ' + (index + 1) + '%3C/text%3E%3C/svg%3E';
                 html += '<div class="clip-thumbnail">';
                 html += '<img src="' + thumbUrl + '" alt="Clip thumbnail">';
                 html += '<span class="clip-duration">' + utils.formatDuration(clip.duration) + '</span>';
@@ -7219,6 +7306,28 @@
                 html += '</div>'; // clip-card
             });
             html += '</div>';
+
+            // "Create more" button when there are hidden clips
+            if (hasMoreClips) {
+                var nextBatch = Math.min(10, remainingClips);
+                var canAfford = state.tokens.balance >= createMoreCost;
+                html += '<div class="create-more-section">';
+                html += '<div class="create-more-info">';
+                html += '<span class="create-more-count">+' + remainingClips + ' more clips available</span>';
+                html += '</div>';
+                html += '<button class="btn-create-more' + (state.createMoreLoading ? ' loading' : '') + (!canAfford ? ' disabled' : '') + '" ';
+                html += 'onclick="app.createMoreClips()" ' + (!canAfford || state.createMoreLoading ? 'disabled' : '') + '>';
+                if (state.createMoreLoading) {
+                    html += '<span class="spinner"></span> Loading...';
+                } else {
+                    html += 'Show ' + nextBatch + ' More Clips <span class="token-cost">' + createMoreCost + ' tokens</span>';
+                }
+                html += '</button>';
+                if (!canAfford) {
+                    html += '<p class="create-more-warning">Not enough tokens. You have ' + state.tokens.balance + ' tokens.</p>';
+                }
+                html += '</div>';
+            }
 
             // Platform Legend
             html += '<div class="platform-legend">';
@@ -9577,8 +9686,19 @@
                             utils.showToast('Analysis complete but no viral clips found. Try a different video.', 'warning');
                         }
 
-                        // Auto-select top 5 clips
-                        state.selectedClipIds = state.clips.slice(0, 5).map(function(c) { return c.id; });
+                        // Set initial display count based on video duration
+                        // Short videos (< 10 min): show all clips
+                        // Longer videos: show max 8 initially, with option to unlock more
+                        var videoDuration = state.videoInput.videoData?.duration || 0;
+                        if (videoDuration < 600) { // < 10 minutes
+                            state.displayedClipCount = state.clips.length;
+                        } else {
+                            state.displayedClipCount = Math.min(8, state.clips.length);
+                        }
+
+                        // Auto-select top 5 clips (from displayed clips only)
+                        var displayedClips = state.clips.slice(0, state.displayedClipCount);
+                        state.selectedClipIds = displayedClips.slice(0, 5).map(function(c) { return c.id; });
 
                         render();
 
@@ -9606,12 +9726,39 @@
             },
 
             selectAllClips: function() {
-                state.selectedClipIds = state.clips.map(function(c) { return c.id; });
+                // Only select displayed clips, not all clips
+                var displayedClips = state.clips.slice(0, state.displayedClipCount);
+                state.selectedClipIds = displayedClips.map(function(c) { return c.id; });
                 render();
             },
 
             deselectAllClips: function() {
                 state.selectedClipIds = [];
+                render();
+            },
+
+            createMoreClips: function() {
+                var createMoreCost = 5; // Token cost
+                var remainingClips = state.clips.length - state.displayedClipCount;
+
+                if (remainingClips <= 0) {
+                    utils.showToast('No more clips to show', 'info');
+                    return;
+                }
+
+                if (state.tokens.balance < createMoreCost) {
+                    utils.showToast('Not enough tokens. Need ' + createMoreCost + ' tokens.', 'error');
+                    return;
+                }
+
+                // Deduct tokens
+                state.tokens.balance -= createMoreCost;
+
+                // Show next batch of clips (8-10 more)
+                var nextBatch = Math.min(10, remainingClips);
+                state.displayedClipCount += nextBatch;
+
+                utils.showToast('Unlocked ' + nextBatch + ' more clips! (-' + createMoreCost + ' tokens)', 'success');
                 render();
             },
 
