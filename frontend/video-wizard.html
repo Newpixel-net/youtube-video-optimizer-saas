@@ -7541,6 +7541,16 @@
             var activeClip = selectedClips[state.customization.activeClipIndex] || selectedClips[0];
             var settings = state.clipSettings[activeClip.id] || getDefaultSettings();
 
+            // DEBUG: Log what we're rendering
+            console.log('[renderStep4Customization] DEBUG:', {
+                activeClipIndex: state.customization.activeClipIndex,
+                activeClipId: activeClip ? activeClip.id : 'NO ACTIVE CLIP',
+                settingsFromState: state.clipSettings[activeClip.id] ? 'EXISTS' : 'USING DEFAULTS',
+                cropPosition: settings.cropPosition,
+                allClipSettings: JSON.parse(JSON.stringify(state.clipSettings)),
+                selectedClipIds: state.selectedClipIds.slice()
+            });
+
             var html = '<div class="customization-layout">';
 
             // Left: Phone Preview
@@ -10252,19 +10262,45 @@
             },
 
             prevClip: function() {
+                // DEBUG: Log before navigation
+                console.log('[prevClip] BEFORE:', {
+                    activeClipIndex: state.customization.activeClipIndex,
+                    allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
+                });
+
                 if (state.customization.activeClipIndex > 0) {
                     state.customization.activeClipIndex--;
                     state.customization.playingInFrame = false; // Stop video when changing clips
+
+                    // DEBUG: Log after navigation
+                    console.log('[prevClip] AFTER:', {
+                        newActiveClipIndex: state.customization.activeClipIndex,
+                        allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
+                    });
+
                     render();
                 }
             },
 
             nextClip: function() {
+                // DEBUG: Log before navigation
+                console.log('[nextClip] BEFORE:', {
+                    activeClipIndex: state.customization.activeClipIndex,
+                    allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
+                });
+
                 var selectedCount = state.selectedClipIds.length;
                 if (state.customization.activeClipIndex < selectedCount - 1) {
                     state.customization.activeClipIndex++;
                     state.customization.showVideoPreview = false; // Reset preview when changing clips
                     state.customization.playingInFrame = false; // Stop video when changing clips
+
+                    // DEBUG: Log after navigation
+                    console.log('[nextClip] AFTER:', {
+                        newActiveClipIndex: state.customization.activeClipIndex,
+                        allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
+                    });
+
                     render();
                 }
             },
@@ -10382,6 +10418,16 @@
                     return state.selectedClipIds.indexOf(c.id) !== -1;
                 });
                 var activeClip = selectedClips[state.customization.activeClipIndex];
+
+                // DEBUG: Log clip info and all current settings
+                console.log('[setCropPosition] DEBUG:', {
+                    activeClipIndex: state.customization.activeClipIndex,
+                    activeClipId: activeClip ? activeClip.id : 'NO ACTIVE CLIP',
+                    position: position,
+                    allClipSettings: JSON.parse(JSON.stringify(state.clipSettings)),
+                    selectedClipIds: state.selectedClipIds.slice()
+                });
+
                 if (!state.clipSettings[activeClip.id]) {
                     state.clipSettings[activeClip.id] = getDefaultSettings();
                 }
@@ -10391,6 +10437,14 @@
                 posNum = Math.max(0, Math.min(100, posNum));
                 state.clipSettings[activeClip.id].cropPosition = posNum;
                 state.clipSettings[activeClip.id].aiSmartCrop = false; // Reset AI flag on manual change
+
+                // DEBUG: Log after update
+                console.log('[setCropPosition] AFTER UPDATE:', {
+                    clipId: activeClip.id,
+                    newCropPosition: state.clipSettings[activeClip.id].cropPosition,
+                    allClipSettings: JSON.parse(JSON.stringify(state.clipSettings))
+                });
+
                 render();
             },
 
