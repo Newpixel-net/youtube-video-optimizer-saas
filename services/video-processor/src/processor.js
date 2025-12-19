@@ -2068,7 +2068,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     targetWidth,
     targetHeight,
     reframeMode: reframeMode,
-    cropPosition: safeSettings.cropPosition || 'center',
+    cropPosition: safeSettings.cropPosition !== undefined ? safeSettings.cropPosition : 50,
     autoZoom: safeSettings.autoZoom,
     vignette: safeSettings.vignette,
     colorGrade: safeSettings.colorGrade
@@ -2239,17 +2239,31 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 
     case 'auto_center':
     default:
-      // Crop to 9:16 based on cropPosition (left/center/right)
+      // Crop to 9:16 based on cropPosition
+      // Supports both legacy strings ('left', 'center', 'right') and numeric percentage (0-100)
       if (inputAspect > targetAspect) {
         // Video is wider than target - crop sides based on position
         const cropWidth = Math.floor(inputHeight * targetAspect);
         let cropX;
+
+        // Handle both legacy string values and new numeric percentage
         if (cropPosition === 'left') {
           cropX = 0; // Crop from left edge
         } else if (cropPosition === 'right') {
           cropX = inputWidth - cropWidth; // Crop from right edge
+        } else if (cropPosition === 'center') {
+          cropX = Math.floor((inputWidth - cropWidth) / 2); // Center crop
+        } else if (typeof cropPosition === 'number' || !isNaN(parseInt(cropPosition, 10))) {
+          // Numeric percentage (0-100)
+          // 0% = left edge (cropX = 0)
+          // 100% = right edge (cropX = inputWidth - cropWidth)
+          const percent = Math.max(0, Math.min(100, parseInt(cropPosition, 10)));
+          const maxCropX = inputWidth - cropWidth;
+          cropX = Math.floor((percent / 100) * maxCropX);
+          console.log(`[FFmpeg] Crop position: ${percent}% -> cropX=${cropX} (maxCropX=${maxCropX})`);
         } else {
-          cropX = Math.floor((inputWidth - cropWidth) / 2); // Center crop (default)
+          // Default to center if unrecognized
+          cropX = Math.floor((inputWidth - cropWidth) / 2);
         }
         filters.push(`crop=${cropWidth}:${inputHeight}:${cropX}:0`);
       } else {

@@ -19577,7 +19577,7 @@ exports.wizardProcessClip = functions
         captionStyle: clipSettings.captionStyle || 'karaoke',
         customCaptionStyle: clipSettings.customCaptionStyle || null,
         reframeMode: clipSettings.reframeMode || 'auto_center',
-        cropPosition: clipSettings.cropPosition || 'center',
+        cropPosition: clipSettings.cropPosition !== undefined ? clipSettings.cropPosition : 50,
         trimStart: clipSettings.trimStart || 0,
         trimEnd: clipSettings.trimEnd || clip.duration,
         introTransition: clipSettings.introTransition || 'none',

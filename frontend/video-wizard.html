@@ -9216,7 +9216,20 @@
             html += '<div class="export-list">';
             selectedClips.forEach(function(clip, index) {
                 var seo = state.clipSEO[clip.id] || getDefaultSEO(clip);
-                var exportThumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="45" viewBox="0 0 80 45"%3E%3Crect fill="%231a1a2e" width="80" height="45"/%3E%3Ctext x="40" y="28" fill="%23ec4899" font-family="sans-serif" font-size="14" text-anchor="middle"%3E🎬%3C/text%3E%3C/svg%3E';
+
+                // Use AI-generated thumbnail if user selected one, otherwise fall back to original
+                var exportThumbUrl = null;
+                var clipThumbs = state.clipThumbnails[clip.id];
+                var selectedThumbIndex = state.selectedThumbnail[clip.id];
+                if (clipThumbs && clipThumbs.length > 0 && selectedThumbIndex !== undefined) {
+                    // User selected an AI-generated thumbnail
+                    exportThumbUrl = clipThumbs[selectedThumbIndex]?.previewUrl;
+                }
+                // Fallback to original clip thumbnail or placeholder
+                if (!exportThumbUrl) {
+                    exportThumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="45" viewBox="0 0 80 45"%3E%3Crect fill="%231a1a2e" width="80" height="45"/%3E%3Ctext x="40" y="28" fill="%23ec4899" font-family="sans-serif" font-size="14" text-anchor="middle"%3E🎬%3C/text%3E%3C/svg%3E';
+                }
+
                 html += '<div class="export-item">';
                 html += '<img src="' + exportThumbUrl + '" alt="Clip" class="export-item-thumbnail">';
                 html += '<div class="export-item-info">';
@@ -12825,19 +12838,41 @@
 
             downloadThumbnail: function(clipId, index) {
                 var thumbnails = state.clipThumbnails[clipId];
-                if (!thumbnails || !thumbnails[index]) {
-                    utils.showToast('No thumbnail available. Click "Regenerate" to generate thumbnails.', 'info');
+
+                // If index not provided, use the user's selected thumbnail
+                if (index === undefined) {
+                    index = state.selectedThumbnail[clipId];
+                }
+
+                var url = null;
+                var filename = 'thumbnail-' + clipId + '.png';
+
+                // Try to get AI-generated thumbnail
+                if (thumbnails && thumbnails[index]) {
+                    var thumbnail = thumbnails[index];
+                    url = thumbnail.previewUrl || thumbnail.url || thumbnail;
+                    filename = 'thumbnail-' + clipId + '-ai-' + (index + 1) + '.png';
+                }
+
+                // Fallback to original clip thumbnail
+                if (!url) {
+                    var clip = state.clips.find(function(c) { return c.id === clipId; });
+                    if (clip && clip.thumbnail) {
+                        url = clip.thumbnail;
+                        filename = 'thumbnail-' + clipId + '-original.jpg';
+                    }
+                }
+
+                if (!url) {
+                    utils.showToast('No thumbnail available. Generate AI thumbnails in SEO & Thumbnails step.', 'info');
                     return;
                 }
 
-                var thumbnail = thumbnails[index];
-                var url = thumbnail.previewUrl || thumbnail.url || thumbnail;
-
-                // If it's a Firebase Storage URL, download it directly
-                if (url && url.startsWith('http')) {
+                // If it's a Firebase Storage URL or external URL, download it
+                if (url.startsWith('http')) {
                     var link = document.createElement('a');
                     link.href = url;
-                    link.download = 'thumbnail-' + clipId + '-' + (index + 1) + '.png';
+                    link.download = filename;
                     link.target = '_blank';
                     document.body.appendChild(link);
                     link.click();
