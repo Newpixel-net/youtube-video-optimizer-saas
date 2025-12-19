@@ -9656,6 +9656,20 @@
                     // Convert to percentage (0-100 scale)
                     var percent = maxLeftPx > 0 ? Math.round((leftPx / maxLeftPx) * 100) : 50;
 
+                    // IMPORTANT: Save to state immediately during dragging (not just on release)
+                    // This ensures "Apply to All Clips" always reads the current value
+                    var selectedClips = state.clips.filter(function(c) {
+                        return state.selectedClipIds.indexOf(c.id) !== -1;
+                    });
+                    var activeClip = selectedClips[state.customization.activeClipIndex];
+                    if (activeClip) {
+                        if (!state.clipSettings[activeClip.id]) {
+                            state.clipSettings[activeClip.id] = getDefaultSettings();
+                        }
+                        state.clipSettings[activeClip.id].cropPosition = percent;
+                        state.clipSettings[activeClip.id].aiSmartCrop = false;
+                    }
+
                     // Update crop zone position visually (must match CSS width)
                     var cropZoneLeftPercent = (percent / 100) * (100 - 31.640625);
                     cropGuideZone.style.left = cropZoneLeftPercent + '%';
