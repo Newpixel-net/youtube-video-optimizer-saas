@@ -21,6 +21,8 @@ const { OpenAI } = require('openai');
 const { google } = require('googleapis');
 const axios = require('axios');
 const { GoogleGenAI } = require('@google/genai');
+const { fal } = require('@fal-ai/client');
+const sharp = require('sharp');
 
 // Explicit initialization with project ID and storage bucket
 admin.initializeApp({
@@ -6636,6 +6638,280 @@ AVOID: ${negativePrompt}`;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Thumbnail generation failed. Please try again.'));
   }
 });
+
+// ==============================================
+// HD UPSCALE - Upscale thumbnails to 1080p using fal.ai AuraSR
+// FREE upscaling with AuraSR model
+// ==============================================
+
+/**
+ * upscaleThumbnail - Upscale a single thumbnail to HD (1920x1080)
+ * Uses fal.ai AuraSR (FREE) for 4x upscaling
+ * Cost: 1 token (configurable)
+ *
+ * @param {string} imageUrl - URL of the image to upscale
+ * @returns {object} { success, hdUrl, originalUrl, dimensions }
+ */
+exports.upscaleThumbnail = functions
+  .runWith({ timeoutSeconds: 120, memory: '1GB' })
+  .https.onCall(async (data, context) => {
+    const uid = await verifyAuth(context);
+    checkRateLimit(uid, 'upscaleThumbnail', 10);
+
+    const { imageUrl } = data;
+    const TOKEN_COST = 1; // Low cost since AuraSR is free
+
+    if (!imageUrl) {
+      throw new functions.https.HttpsError('invalid-argument', 'Image URL is required');
+    }
+
+    try {
+      // Check token balance
+      const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+      if (!tokenDoc.exists) {
+        throw new functions.https.HttpsError('failed-precondition', 'Token balance not found');
+      }
+
+      const balance = tokenDoc.data().balance || 0;
+      if (balance < TOKEN_COST) {
+        throw new functions.https.HttpsError('resource-exhausted',
+          `Insufficient tokens. Need ${TOKEN_COST}, have ${balance}`);
+      }
+
+      // Configure fal.ai client
+      fal.config({
+        credentials: process.env.FAL_KEY || functions.config().fal?.key
+      });
+
+      console.log(`Starting HD upscale for user ${uid}: ${imageUrl}`);
+
+      // Call AuraSR for 4x upscale (FREE!)
+      const result = await fal.subscribe('fal-ai/aura-sr', {
+        input: {
+          image_url: imageUrl,
+          upscaling_factor: 4,
+          overlapping_tiles: true // Removes seams for better quality
+        }
+      });
+
+      if (!result.data?.image?.url) {
+        throw new Error('Upscale failed - no image returned');
+      }
+
+      const upscaledUrl = result.data.image.url;
+      console.log(`AuraSR upscale complete: ${upscaledUrl}`);
+
+      // Download upscaled image and resize to exactly 1920x1080
+      const upscaledResponse = await axios.get(upscaledUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000
+      });
+
+      const resizedBuffer = await sharp(upscaledResponse.data)
+        .resize(1920, 1080, {
+          fit: 'cover',
+          position: 'center'
+        })
+        .png({ quality: 95, compressionLevel: 6 })
+        .toBuffer();
+
+      // Upload to Firebase Storage
+      const storage = admin.storage().bucket();
+      const timestamp = Date.now();
+      const hdPath = `thumbnails-hd/${uid}/${timestamp}_hd.png`;
+      const file = storage.file(hdPath);
+
+      await file.save(resizedBuffer, {
+        metadata: {
+          contentType: 'image/png',
+          metadata: {
+            originalUrl: imageUrl,
+            upscaleModel: 'aura-sr',
+            dimensions: '1920x1080'
+          }
+        }
+      });
+
+      await file.makePublic();
+      const hdUrl = `https://storage.googleapis.com/${storage.name}/${hdPath}`;
+
+      // Deduct token
+      await db.collection('creativeTokens').doc(uid).update({
+        balance: admin.firestore.FieldValue.increment(-TOKEN_COST),
+        lastUsed: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Log usage
+      await logUsage(uid, 'hd_upscale', {
+        originalUrl: imageUrl,
+        hdUrl: hdUrl,
+        tokenCost: TOKEN_COST
+      });
+
+      console.log(`HD upscale complete for user ${uid}: ${hdUrl}`);
+
+      return {
+        success: true,
+        hdUrl: hdUrl,
+        originalUrl: imageUrl,
+        dimensions: { width: 1920, height: 1080 },
+        tokensUsed: TOKEN_COST,
+        remainingBalance: balance - TOKEN_COST
+      };
+
+    } catch (error) {
+      console.error('HD Upscale error:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal',
+        sanitizeErrorMessage(error, 'HD upscale failed. Please try again.'));
+    }
+  });
+
+/**
+ * upscaleBatch - Upscale multiple thumbnails to HD
+ * Processes in parallel for efficiency
+ * Cost: 1 token per image
+ *
+ * @param {array} images - Array of { url, id } objects
+ * @returns {object} { success, results, totalTokensUsed, successCount }
+ */
+exports.upscaleBatch = functions
+  .runWith({ timeoutSeconds: 540, memory: '2GB' })
+  .https.onCall(async (data, context) => {
+    const uid = await verifyAuth(context);
+    checkRateLimit(uid, 'upscaleBatch', 3);
+
+    const { images } = data;
+    const TOKEN_COST_PER_IMAGE = 1;
+
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      throw new functions.https.HttpsError('invalid-argument', 'Images array is required');
+    }
+
+    if (images.length > 50) {
+      throw new functions.https.HttpsError('invalid-argument', 'Maximum 50 images per batch');
+    }
+
+    const totalCost = images.length * TOKEN_COST_PER_IMAGE;
+
+    try {
+      // Check token balance
+      const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+      if (!tokenDoc.exists) {
+        throw new functions.https.HttpsError('failed-precondition', 'Token balance not found');
+      }
+
+      const balance = tokenDoc.data().balance || 0;
+      if (balance < totalCost) {
+        throw new functions.https.HttpsError('resource-exhausted',
+          `Insufficient tokens. Need ${totalCost}, have ${balance}`);
+      }
+
+      // Configure fal.ai client
+      fal.config({
+        credentials: process.env.FAL_KEY || functions.config().fal?.key
+      });
+
+      const storage = admin.storage().bucket();
+      const results = [];
+      let successCount = 0;
+
+      console.log(`Starting batch upscale for user ${uid}: ${images.length} images`);
+
+      // Process in chunks of 3 for parallel processing
+      const chunkSize = 3;
+      for (let i = 0; i < images.length; i += chunkSize) {
+        const chunk = images.slice(i, i + chunkSize);
+
+        const chunkResults = await Promise.all(
+          chunk.map(async (img) => {
+            try {
+              // Call AuraSR
+              const result = await fal.subscribe('fal-ai/aura-sr', {
+                input: {
+                  image_url: img.url,
+                  upscaling_factor: 4,
+                  overlapping_tiles: true
+                }
+              });
+
+              if (!result.data?.image?.url) {
+                throw new Error('No image returned');
+              }
+
+              // Download and resize
+              const upscaledResponse = await axios.get(result.data.image.url, {
+                responseType: 'arraybuffer',
+                timeout: 30000
+              });
+
+              const resizedBuffer = await sharp(upscaledResponse.data)
+                .resize(1920, 1080, { fit: 'cover', position: 'center' })
+                .png({ quality: 95, compressionLevel: 6 })
+                .toBuffer();
+
+              // Upload to Firebase Storage
+              const timestamp = Date.now();
+              const hdPath = `thumbnails-hd/${uid}/${timestamp}_${img.id}_hd.png`;
+              const file = storage.file(hdPath);
+
+              await file.save(resizedBuffer, {
+                metadata: {
+                  contentType: 'image/png',
+                  metadata: { originalUrl: img.url, upscaleModel: 'aura-sr' }
+                }
+              });
+
+              await file.makePublic();
+              const hdUrl = `https://storage.googleapis.com/${storage.name}/${hdPath}`;
+
+              successCount++;
+              return { id: img.id, hdUrl, status: 'success' };
+
+            } catch (error) {
+              console.error(`Batch upscale error for image ${img.id}:`, error.message);
+              return { id: img.id, error: error.message, status: 'error' };
+            }
+          })
+        );
+
+        results.push(...chunkResults);
+      }
+
+      // Deduct tokens only for successful upscales
+      const tokensUsed = successCount * TOKEN_COST_PER_IMAGE;
+      if (tokensUsed > 0) {
+        await db.collection('creativeTokens').doc(uid).update({
+          balance: admin.firestore.FieldValue.increment(-tokensUsed),
+          lastUsed: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      // Log usage
+      await logUsage(uid, 'hd_upscale_batch', {
+        totalImages: images.length,
+        successCount,
+        tokensUsed
+      });
+
+      console.log(`Batch upscale complete for user ${uid}: ${successCount}/${images.length} successful`);
+
+      return {
+        success: true,
+        results,
+        totalTokensUsed: tokensUsed,
+        successCount,
+        failedCount: images.length - successCount,
+        remainingBalance: balance - tokensUsed
+      };
+
+    } catch (error) {
+      console.error('Batch upscale error:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal',
+        sanitizeErrorMessage(error, 'Batch upscale failed. Please try again.'));
+    }
+  });
 
 // Get user's creative token balance (for Thumbnail Pro)
 // Syncs with admin token configuration and user subscription plan
