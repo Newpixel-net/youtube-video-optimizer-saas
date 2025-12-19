@@ -21,18 +21,18 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '2.7.3',
+        version: '2.7.4',
         extensionId: EXTENSION_ID,
-        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip']
+        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout']
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '2.7.3';
-    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip'];
+    window.__YVO_EXTENSION_VERSION__ = '2.7.4';
+    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout'];
 
-    console.log('[EXT] Bridge ready - v2.7.3 with improved ad detection and skip handling');
+    console.log('[EXT] Bridge ready - v2.7.4 with extended timeout for long videos');
   }
 
   /**
@@ -54,8 +54,8 @@
       case 'checkExtension':
         sendResponse(requestId, {
           installed: true,
-          version: '2.7.3',
-          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip'],
+          version: '2.7.4',
+          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout'],
           maxBase64Size: 40 * 1024 * 1024 // 40MB - files larger than this upload directly
         });
         break;
@@ -194,9 +194,10 @@
       // Background script stores result in chrome.storage when capture completes
       console.log(`[EXT][CAPTURE] Polling storage for result (bridgeRequestId=${bridgeRequestId})...`);
 
-      // Poll for up to 180 seconds (3 minutes) - capture can take a while
-      // For a 5-minute clip at 4x speed: 75s capture + upload time
-      const maxPolls = 180;
+      // Poll for up to 300 seconds (5 minutes) - long videos need more time
+      // For clips deep into long videos: seek time (30-60s) + capture time + upload
+      // v2.7.4: Increased from 180s to 300s for better long video support
+      const maxPolls = 300;
       const pollInterval = 1000;
       let response = null;
 
@@ -238,7 +239,7 @@
         console.error(`[EXT][CAPTURE] FAIL: No result after ${maxPolls}s polling`);
         sendResponse(requestId, {
           success: false,
-          error: 'Capture timed out. Please ensure the YouTube video is open and try again.',
+          error: 'Capture timed out after 5 minutes. For clips deep into long videos, try: 1) Ensure the YouTube video is open and playing, 2) Let it buffer at the clip position first, 3) Try again.',
           code: 'CAPTURE_TIMEOUT'
         });
         return;

@@ -1314,7 +1314,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
   // This ensures we always send a result back even if something breaks
   try {
     // IMMEDIATE LOG - if this doesn't appear, function isn't running at all
-    console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.3 ======`);
+    console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.4 ======`);
     console.log(`[EXT][CAPTURE-PAGE] captureId=${captureId}`);
     console.log(`[EXT][CAPTURE-PAGE] startTime=${startTime}s, endTime=${endTime}s`);
     console.log(`[EXT][CAPTURE-PAGE] uploadUrl=${uploadUrl ? 'provided' : 'none'}`);
@@ -1386,11 +1386,15 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
   // CRITICAL: Hard timeout to GUARANTEE we always send a response
   // This prevents the frontend from hanging forever
-  const HARD_TIMEOUT_MS = captureTime + 60000; // capture time + 60s buffer (reduced from 120s)
+  // v2.7.4: Added seek time estimate for clips deep into long videos
+  // Seek time increases with start position: ~1s per minute of video position
+  const seekTimeEstimate = Math.max(10000, Math.min(startTime / 60, 90) * 1000);
+  const HARD_TIMEOUT_MS = captureTime + seekTimeEstimate + 60000; // capture time + seek time + 60s buffer
+  console.log(`[EXT][CAPTURE-PAGE] Hard timeout: ${Math.round(HARD_TIMEOUT_MS / 1000)}s (capture: ${Math.round(captureTime / 1000)}s, seek: ${Math.round(seekTimeEstimate / 1000)}s, buffer: 60s)`);
   const hardTimeoutId = setTimeout(() => {
     if (!resultSent) {
       console.error(`[EXT][CAPTURE-PAGE] HARD TIMEOUT after ${HARD_TIMEOUT_MS / 1000}s - forcing error response`);
-      sendResult(null, `Capture timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)} seconds. The video may not be playing properly.`);
+      sendResult(null, `Capture timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)} seconds. The video may not be playing or buffering properly at this position.`);
     }
   }, HARD_TIMEOUT_MS);
 
@@ -2755,17 +2759,25 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     const uploadStreamUrl = `${VIDEO_PROCESSOR_URL}/upload-stream`;
 
     // Calculate expected capture time and set timeout
-    // Capture time = (segment duration / playback speed) + generous buffer for:
+    // v2.7.4: Added dynamic seek time calculation for long videos
+    // Capture time = (segment duration / playback speed) + buffers for:
     // - Video loading (up to 20s)
-    // - Pre-seek and buffering (up to 10s)
+    // - Pre-seek and buffering (variable based on start position)
     // - Base64 conversion and upload (up to 30s)
     // - Safety margin
     const captureDuration = captureEnd - captureStart;
     const PLAYBACK_SPEED = 1; // Must match the value in captureVideoWithMessage
     const expectedCaptureTime = (captureDuration / PLAYBACK_SPEED) * 1000;
-    const captureTimeout = expectedCaptureTime + 90000; // Add 90 second buffer for setup/load/upload
 
-    console.log(`[EXT][CAPTURE] Expected capture time: ${(expectedCaptureTime / 1000).toFixed(1)}s, timeout: ${(captureTimeout / 1000).toFixed(1)}s`);
+    // Calculate seek time based on start position
+    // Seeking deep into long videos takes much longer due to buffering
+    // ~1 second per minute of video position, with minimum of 10s
+    const seekTimeEstimate = Math.max(10000, Math.min(captureStart / 60, 90) * 1000);
+
+    // Total timeout: capture time + seek time + base buffer (60s for load/upload)
+    const captureTimeout = expectedCaptureTime + seekTimeEstimate + 60000;
+
+    console.log(`[EXT][CAPTURE] Expected capture time: ${(expectedCaptureTime / 1000).toFixed(1)}s, seek estimate: ${(seekTimeEstimate / 1000).toFixed(1)}s, total timeout: ${(captureTimeout / 1000).toFixed(1)}s`);
 
     // Inject and run the capture function with videoId and uploadUrl for direct upload
     // SOLUTION: Use message passing instead of relying on executeScript return value
