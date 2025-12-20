@@ -118,7 +118,7 @@ if ($RapidApiKey) {
 Write-Host "`nDeploying to Cloud Run..." -ForegroundColor Cyan
 
 if ($Mode -eq "gpu") {
-    # GPU-enabled deployment
+    # GPU-enabled deployment (max-instances=10 matches GPU quota)
     gcloud run deploy $ServiceName `
         --image="${ImageName}:latest" `
         --region="$Region" `
@@ -130,7 +130,7 @@ if ($Mode -eq "gpu") {
         --timeout=900 `
         --concurrency=1 `
         --min-instances=0 `
-        --max-instances=20 `
+        --max-instances=10 `
         --set-env-vars="$EnvVars" `
         --allow-unauthenticated `
         --project="$ProjectId"
