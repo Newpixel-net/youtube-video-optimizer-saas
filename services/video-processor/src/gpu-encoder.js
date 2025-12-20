@@ -48,27 +48,9 @@ export function isGpuAvailable() {
       return false;
     }
 
-    // Method 2: Check if FFmpeg has NVENC support
-    try {
-      const ffmpegEncoders = execSync('ffmpeg -encoders 2>/dev/null | grep h264_nvenc', {
-        encoding: 'utf8',
-        timeout: 5000
-      });
-      if (!ffmpegEncoders.includes('h264_nvenc')) {
-        console.log('[GPU] FFmpeg does not have h264_nvenc encoder');
-        gpuAvailable = false;
-        gpuCheckError = 'h264_nvenc not in FFmpeg';
-        return false;
-      }
-      console.log('[GPU] FFmpeg h264_nvenc encoder available');
-    } catch (e) {
-      console.log('[GPU] Could not verify FFmpeg NVENC support');
-      gpuAvailable = false;
-      gpuCheckError = 'FFmpeg NVENC check failed';
-      return false;
-    }
-
-    // Method 3: Test actual NVENC encoding capability
+    // Method 2: Test actual NVENC encoding capability
+    // Skip encoder list check - NVENC may not appear in list but still work at runtime
+    // The actual encoding test is the definitive check
     try {
       // Capture stderr for debugging
       const result = execSync('ffmpeg -f lavfi -i color=c=black:s=64x64:d=0.1 -c:v h264_nvenc -f null - 2>&1', {

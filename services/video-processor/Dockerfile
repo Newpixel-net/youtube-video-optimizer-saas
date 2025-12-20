@@ -44,23 +44,19 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install FFmpeg with NVENC support (static build from BtbN)
-# Using FFmpeg 6.1 to ensure compatibility with Cloud Run's NVIDIA driver (535+)
-# FFmpeg 7.0+ requires NVENC SDK 12.2 which needs driver 550+
-# See: https://github.com/BtbN/FFmpeg-Builds
-RUN cd /tmp && \
-    wget -q https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n6.1-latest-linux64-gpl-6.1.tar.xz && \
-    tar -xf ffmpeg-n6.1-latest-linux64-gpl-6.1.tar.xz && \
-    cp ffmpeg-n6.1-latest-linux64-gpl-6.1/bin/ffmpeg /usr/local/bin/ && \
-    cp ffmpeg-n6.1-latest-linux64-gpl-6.1/bin/ffprobe /usr/local/bin/ && \
-    chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe && \
-    rm -rf /tmp/ffmpeg* && \
-    echo "FFmpeg version:" && ffmpeg -version && \
-    echo "Available NVENC encoders:" && ffmpeg -encoders 2>/dev/null | grep nvenc || echo "Note: NVENC encoders listed at runtime with GPU"
+# Install FFmpeg - the system package works with NVIDIA runtime libraries
+# NVENC support is enabled at runtime when GPU is available on Cloud Run
+RUN apt-get update && \
+    apt-get install -y ffmpeg && \
+    rm -rf /var/lib/apt/lists/* && \
+    echo "FFmpeg version:" && ffmpeg -version
 
-# Ensure NVIDIA library paths are in LD_LIBRARY_PATH for NVENC runtime
+# NVIDIA environment configuration for Cloud Run GPU
+# These env vars tell the runtime to expose GPU video encoding capabilities
 ENV LD_LIBRARY_PATH="/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 ENV PATH="/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}"
+ENV NVIDIA_DRIVER_CAPABILITIES="compute,video,utility"
+ENV NVIDIA_VISIBLE_DEVICES="all"
 
 # Set Puppeteer to use system Chromium (skip download)
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
