@@ -13500,23 +13500,28 @@
                     state.parallelExport.clips[clipId].status = 'processing';
                     app.updateParallelExportProgress();
 
-                    // Create processing job
-                    var wizardStartProcessing = functions.httpsCallable('wizardStartProcessing');
+                    // Create processing job - use wizardProcessClip (correct function name)
+                    var wizardProcessClip = functions.httpsCallable('wizardProcessClip');
                     var jobPayload = {
                         projectId: state.projectId,
                         clipId: clipId,
-                        clipSettings: {
+                        quality: quality,
+                        settings: {
                             ...clipSettings,
                             startTime: clip.startTime,
                             endTime: clip.endTime,
                             cropPosition: clipSettings.cropPosition !== undefined ? clipSettings.cropPosition : 50
                         },
-                        quality: quality,
-                        capturedVideoUrl: capturedUrl,
-                        capturedVideoPath: storagePath
+                        // Pass captured video as extensionCaptureData for fallback
+                        extensionCaptureData: capturedUrl ? {
+                            streamData: {
+                                videoUrl: capturedUrl,
+                                storagePath: storagePath
+                            }
+                        } : null
                     };
 
-                    var result = await wizardStartProcessing(jobPayload);
+                    var result = await wizardProcessClip(jobPayload);
 
                     if (!result.data.success) {
                         throw new Error(result.data.message || 'Failed to start processing');
