@@ -19472,6 +19472,14 @@ exports.wizardProcessClip = functions
     // Get clip settings (from project or from request)
     const clipSettings = settings || project.clipSettings?.[clipId] || {};
 
+    // Log cropPosition for debugging export issues
+    console.log(`[wizardProcessClip] ========== CROP POSITION DEBUG ==========`);
+    console.log(`[wizardProcessClip] Clip ID: ${clipId}`);
+    console.log(`[wizardProcessClip] Settings source: ${settings ? 'from request' : (project.clipSettings?.[clipId] ? 'from project' : 'default empty')}`);
+    console.log(`[wizardProcessClip] clipSettings.cropPosition: ${clipSettings.cropPosition} (type: ${typeof clipSettings.cropPosition})`);
+    console.log(`[wizardProcessClip] clipSettings.reframeMode: ${clipSettings.reframeMode}`);
+    console.log(`[wizardProcessClip] ==========================================`);
+
     // SOURCE ASSET CHECK with FALLBACK
     // Primary: use sourceAsset stored during analysis
     // Fallback: use extensionCaptureData passed at export time (if capture failed during analysis)
