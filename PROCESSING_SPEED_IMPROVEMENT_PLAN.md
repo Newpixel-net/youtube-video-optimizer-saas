@@ -135,9 +135,152 @@ Deploy to region closest to:
 
 ---
 
-## Phase 3: Hardware Acceleration ($0.40-0.60/hour)
+## Phase 3: Hardware Acceleration ($0.35-0.60/hour)
 
-### Option A: Modal.com (Recommended)
+### Option A: Google Cloud GPU (Recommended - Native Integration)
+
+Since you're already on GCP, this is the **most seamless option** with no additional vendor accounts needed.
+
+#### A1. Cloud Run with GPU (NEW - GA 2024)
+**Cost: ~$0.35-0.50/hour for L4 GPU**
+**Impact: 5-10x faster, same deployment model**
+
+Cloud Run now supports NVIDIA L4 GPUs - you can keep your existing architecture!
+
+```yaml
+# deploy.sh - Add GPU support
+gcloud run deploy video-processor \
+  --image gcr.io/$PROJECT_ID/video-processor:latest \
+  --region us-central1 \
+  --memory 16Gi \
+  --cpu 4 \
+  --gpu 1 \
+  --gpu-type nvidia-l4 \
+  --no-cpu-throttling \
+  --timeout 900 \
+  --min-instances 0 \
+  --max-instances 5
+```
+
+**Requirements:**
+- Update Dockerfile to include NVIDIA drivers and CUDA
+- Use `nvidia/cuda` base image
+- Install FFmpeg with NVENC support
+
+```dockerfile
+# Dockerfile for GPU-enabled Cloud Run
+FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
+
+# Install FFmpeg with NVENC support
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+
+CMD ["node", "src/index.js"]
+```
+
+**FFmpeg with NVENC (GPU encoding):**
+```javascript
+// processor.js - GPU-accelerated encoding
+const ffmpegArgs = [
+  '-hwaccel', 'cuda',           // Use CUDA for decoding
+  '-hwaccel_output_format', 'cuda',
+  '-i', inputFile,
+  '-vf', `scale_cuda=${width}:${height}`,  // GPU scaling
+  '-c:v', 'h264_nvenc',         // NVIDIA GPU encoder
+  '-preset', 'p4',              // NVENC preset (p1=fastest, p7=best quality)
+  '-rc', 'vbr',                 // Variable bitrate
+  '-cq', '23',                  // Constant quality
+  '-c:a', 'aac',
+  '-b:a', '128k',
+  '-movflags', '+faststart',
+  outputFile
+];
+```
+
+**GCP GPU Pricing (us-central1):**
+| GPU | Cost/hour | VRAM | Best For |
+|-----|-----------|------|----------|
+| NVIDIA L4 | $0.35 | 24GB | Cloud Run (recommended) |
+| NVIDIA T4 | $0.35 | 16GB | Compute Engine |
+| NVIDIA A100 | $2.93 | 40GB | Batch processing |
+
+#### A2. Compute Engine with GPU
+**Cost: ~$0.40-0.60/hour (VM + GPU)**
+**Impact: Full control, persistent instance**
+
+For dedicated processing with more control:
+
+```bash
+# Create GPU-enabled VM
+gcloud compute instances create video-processor-gpu \
+  --machine-type n1-standard-4 \
+  --accelerator type=nvidia-tesla-t4,count=1 \
+  --image-family ubuntu-2204-lts \
+  --image-project ubuntu-os-cloud \
+  --boot-disk-size 100GB \
+  --zone us-central1-a \
+  --maintenance-policy TERMINATE \
+  --metadata startup-script='#!/bin/bash
+    # Install NVIDIA drivers
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+    sudo apt-get update && sudo apt-get install -y nvidia-driver-535
+    # Install FFmpeg with NVENC
+    sudo apt-get install -y ffmpeg
+  '
+```
+
+#### A3. Cloud Batch with GPU
+**Cost: Pay only when jobs run**
+**Impact: Best for batch processing multiple clips**
+
+```javascript
+// Submit batch job to Cloud Batch
+const batchJob = {
+  taskGroups: [{
+    taskSpec: {
+      runnables: [{
+        container: {
+          imageUri: 'gcr.io/PROJECT/video-processor-gpu:latest',
+          commands: ['node', 'process.js'],
+          volumes: ['/mnt/disks/work:/work']
+        }
+      }],
+      computeResource: {
+        cpuMilli: 4000,
+        memoryMib: 16384
+      },
+      maxRunDuration: '900s'
+    },
+    taskCount: clipCount,
+    parallelism: 5  // Process 5 clips simultaneously
+  }],
+  allocationPolicy: {
+    instances: [{
+      policy: {
+        machineType: 'n1-standard-4',
+        accelerators: [{
+          type: 'nvidia-tesla-t4',
+          count: 1
+        }]
+      }
+    }]
+  }
+};
+```
+
+---
+
+### Option B: Modal.com
 **Cost: ~$0.45-0.60/hour for GPU instances**
 **Impact: 5-10x faster encoding with GPU**
 
@@ -294,17 +437,18 @@ Stream partial results as they complete:
 3. [ ] Enable concurrency=2 per instance
 4. [ ] Monitor and optimize
 
-### Week 3-4: GPU Integration (~$0.50/hour when processing)
-1. [ ] Set up Modal.com or RunPod account
-2. [ ] Create GPU-accelerated processor
-3. [ ] Implement fallback to Cloud Run (CPU) if GPU unavailable
-4. [ ] A/B test processing times
+### Week 3-4: GPU Integration (~$0.35/hour when processing)
+1. [ ] Update Dockerfile to use `nvidia/cuda` base image
+2. [ ] Install FFmpeg with NVENC support
+3. [ ] Deploy Cloud Run with `--gpu 1 --gpu-type nvidia-l4`
+4. [ ] Update processor.js to use NVENC encoding
+5. [ ] A/B test processing times
 
 ### Ongoing: Optimization
 1. [ ] Monitor processing times per clip
 2. [ ] Identify bottlenecks in specific filter chains
 3. [ ] Optimize caption generation (cache Whisper models)
-4. [ ] Consider batch processing for bulk exports
+4. [ ] Consider Cloud Batch for bulk exports
 
 ---
 
@@ -315,15 +459,70 @@ Stream partial results as they complete:
 | Current (2 CPU, 4GB, cold) | 2-5 min | ~$10 |
 | Warm Instance (2 CPU, 4GB) | 1.5-4 min | ~$40 |
 | Upgraded (4 CPU, 8GB) | 1-2 min | ~$60 |
-| GPU (Modal/RunPod) | 20-40 sec | ~$30-100** |
-| Dedicated GPU VM | 15-30 sec | ~$150-300 |
+| **GCP Cloud Run + L4 GPU** | **15-30 sec** | **~$25-75** |
+| GCP Compute Engine + T4 | 15-30 sec | ~$50-150 |
+| Modal.com / RunPod | 20-40 sec | ~$30-100 |
+| GCP Cloud Batch + GPU | 15-30 sec | ~$20-60** |
 
 *Assuming 500 clips/month
-**Usage-based, scales with volume
+**Best for batch processing, pay only when running
 
 ---
 
-## Quick Reference: Modal.com Integration (Recommended GPU Option)
+## Quick Reference: GCP Cloud Run with GPU (Recommended)
+
+### Deploy Command
+```bash
+gcloud run deploy video-processor \
+  --image gcr.io/$PROJECT_ID/video-processor-gpu:latest \
+  --region us-central1 \
+  --memory 16Gi \
+  --cpu 4 \
+  --gpu 1 \
+  --gpu-type nvidia-l4 \
+  --no-cpu-throttling \
+  --timeout 900 \
+  --min-instances 0 \
+  --max-instances 5 \
+  --allow-unauthenticated
+```
+
+### Dockerfile Changes
+```dockerfile
+# Change FROM line
+FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
+
+# Add NVENC-capable FFmpeg
+RUN apt-get update && apt-get install -y ffmpeg
+```
+
+### processor.js Changes
+```javascript
+// Replace libx264 with h264_nvenc
+const useGPU = process.env.GPU_ENABLED === 'true';
+
+const videoCodec = useGPU
+  ? ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '23']
+  : ['-c:v', 'libx264', '-preset', 'superfast', '-crf', '24'];
+
+const hwaccel = useGPU
+  ? ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda']
+  : [];
+
+const ffmpegArgs = [
+  ...hwaccel,
+  '-i', inputFile,
+  '-vf', filterChain,
+  ...videoCodec,
+  '-c:a', 'aac', '-b:a', '128k',
+  '-movflags', '+faststart',
+  outputFile
+];
+```
+
+---
+
+## Alternative: Modal.com Integration
 
 ### Setup
 ```bash
@@ -397,6 +596,16 @@ The fastest path to improved processing is:
 1. **Immediate** (today): Change FFmpeg preset to `superfast` - 20-30% faster
 2. **This week**: Enable warm instances - eliminate cold starts
 3. **Next week**: Upgrade Cloud Run to 4 CPU, 8GB - 50% faster
-4. **Next month**: Integrate GPU processing via Modal.com - 5-10x faster
+4. **Next month**: Enable GPU on Cloud Run (L4) - 5-10x faster
 
-The GPU integration at ~$0.50/hour provides the best ROI for processing-heavy workloads, with potential to process clips in under 30 seconds instead of 2-5 minutes.
+### Recommended: GCP Cloud Run with L4 GPU
+
+Since you're already on Google Cloud, **Cloud Run with GPU** is the most seamless option:
+
+- **No new vendor accounts** - uses your existing GCP project
+- **Same deployment model** - just add `--gpu 1 --gpu-type nvidia-l4`
+- **Cost: ~$0.35/hour** when processing (cheaper than Modal/RunPod)
+- **Speed: 15-30 seconds** per clip (vs 2-5 minutes currently)
+- **Scales to zero** - no cost when not processing
+
+This provides the best ROI for your processing workload, with potential to process clips **10x faster** at a lower cost than third-party GPU services.
