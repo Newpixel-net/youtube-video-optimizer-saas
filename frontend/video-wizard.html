@@ -9444,19 +9444,19 @@
             });
             html += '</div>';
 
-            // Parallel Export Banner (GPU + Parallel Processing)
+            // Batch Export Banner (Sequential capture, GPU processing)
             html += '<div class="parallel-export-banner">';
             html += '<div class="parallel-export-header">';
             html += '<span class="parallel-export-icon">🚀</span>';
-            html += '<span class="parallel-export-title">Export All Videos at Once</span>';
-            html += '<span class="parallel-export-badge">10x Faster</span>';
+            html += '<span class="parallel-export-title">Batch Export All Clips</span>';
+            html += '<span class="parallel-export-badge">GPU Accelerated</span>';
             html += '</div>';
             html += '<div class="parallel-export-description">';
-            html += 'Process all ' + selectedClips.length + ' clips simultaneously using GPU acceleration. ';
-            html += 'Expected time: ~15-30 seconds for all clips.';
+            html += 'Export all ' + selectedClips.length + ' clips one by one with GPU acceleration. ';
+            html += 'Stops immediately if any error occurs. Click to cancel anytime.';
             html += '</div>';
             html += '<button class="parallel-export-btn" onclick="app.exportAllClipsParallel()">';
-            html += '🎬 Export All ' + selectedClips.length + ' Clips Now';
+            html += '🎬 Export All ' + selectedClips.length + ' Clips';
             html += '</button>';
             html += '</div>';
 
@@ -13292,9 +13292,9 @@
             },
 
             /**
-             * Export all selected clips in parallel
-             * Uses Promise.all to fire all clip exports simultaneously
-             * Combined with GPU acceleration, this provides 10-20x speedup
+             * Export all selected clips with SEQUENTIAL capture and FAIL-FAST behavior
+             * Captures one clip at a time (browser extension limitation)
+             * Stops immediately if any error occurs to prevent server flooding
              */
             exportAllClipsParallel: async function() {
                 if (!state.projectId) {
@@ -13311,7 +13311,7 @@
                     return;
                 }
 
-                console.log('[ParallelExport] Starting parallel export for ' + selectedClips.length + ' clips');
+                console.log('[BatchExport] Starting sequential export for ' + selectedClips.length + ' clips');
 
                 // Check for extension (required for YouTube videos)
                 var isUploadedVideo = state.videoInput.isUpload || false;
@@ -13320,13 +13320,15 @@
                     return;
                 }
 
-                // Initialize parallel export state
+                // Initialize export state with abort capability
                 state.parallelExport = {
                     active: true,
+                    aborted: false,
                     startTime: Date.now(),
                     totalClips: selectedClips.length,
                     completedClips: 0,
                     failedClips: 0,
+                    currentClipIndex: 0,
                     clips: {}
                 };
 
@@ -13344,45 +13346,73 @@
                 // Show progress UI
                 app.showParallelExportProgress();
 
-                // Disable the export button
+                // Disable the export button and show cancel option
                 var exportBtn = document.querySelector('.parallel-export-btn');
                 if (exportBtn) {
                     exportBtn.disabled = true;
-                    exportBtn.textContent = 'Processing...';
+                    exportBtn.textContent = '⏳ Processing... (Click to Cancel)';
+                    exportBtn.onclick = function() {
+                        state.parallelExport.aborted = true;
+                        utils.showToast('Cancelling export...', 'warning');
+                    };
                 }
 
-                // Create export promises for all clips
-                var exportPromises = selectedClips.map(function(clip) {
-                    return app.exportSingleClipForParallel(clip.id);
-                });
-
-                // Execute all exports in parallel
-                try {
-                    await Promise.all(exportPromises);
-                    console.log('[ParallelExport] All exports completed');
-
-                    var completedCount = state.parallelExport.completedClips;
-                    var failedCount = state.parallelExport.failedClips;
-                    var elapsedTime = ((Date.now() - state.parallelExport.startTime) / 1000).toFixed(1);
-
-                    if (failedCount === 0) {
-                        utils.showToast('All ' + completedCount + ' clips exported in ' + elapsedTime + 's!', 'success');
-                    } else {
-                        utils.showToast(completedCount + ' clips exported, ' + failedCount + ' failed', 'warning');
+                // Process clips SEQUENTIALLY with FAIL-FAST
+                var hasError = false;
+                for (var i = 0; i < selectedClips.length; i++) {
+                    // Check if aborted
+                    if (state.parallelExport.aborted) {
+                        console.log('[BatchExport] Export aborted by user');
+                        utils.showToast('Export cancelled', 'warning');
+                        break;
                     }
 
-                    // Update progress UI to show completion
-                    app.updateParallelExportComplete();
+                    state.parallelExport.currentClipIndex = i;
+                    var clip = selectedClips[i];
 
-                } catch (error) {
-                    console.error('[ParallelExport] Error during parallel export:', error);
-                    utils.showToast('Some exports failed: ' + error.message, 'error');
+                    console.log('[BatchExport] Processing clip ' + (i + 1) + '/' + selectedClips.length + ': ' + clip.id);
+
+                    try {
+                        await app.exportSingleClipForParallel(clip.id);
+
+                        // Check if this clip failed
+                        if (state.parallelExport.clips[clip.id].status === 'error') {
+                            hasError = true;
+                            console.error('[BatchExport] FAIL-FAST: Clip ' + clip.id + ' failed, stopping export');
+                            utils.showToast('Export stopped: ' + (state.parallelExport.clips[clip.id].error || 'Unknown error'), 'error');
+                            break;
+                        }
+                    } catch (error) {
+                        hasError = true;
+                        console.error('[BatchExport] FAIL-FAST: Error on clip ' + clip.id + ':', error);
+                        state.parallelExport.clips[clip.id].status = 'error';
+                        state.parallelExport.clips[clip.id].error = error.message;
+                        state.parallelExport.failedClips++;
+                        utils.showToast('Export stopped: ' + error.message, 'error');
+                        break;
+                    }
                 }
+
+                // Final status
+                var completedCount = state.parallelExport.completedClips;
+                var failedCount = state.parallelExport.failedClips;
+                var elapsedTime = ((Date.now() - state.parallelExport.startTime) / 1000).toFixed(1);
+
+                if (!hasError && !state.parallelExport.aborted && completedCount > 0) {
+                    console.log('[BatchExport] All exports completed successfully');
+                    utils.showToast('All ' + completedCount + ' clips exported in ' + elapsedTime + 's!', 'success');
+                } else if (completedCount > 0) {
+                    console.log('[BatchExport] Partial completion: ' + completedCount + ' succeeded, ' + failedCount + ' failed');
+                }
+
+                // Update progress UI to show completion
+                app.updateParallelExportComplete();
 
                 // Re-enable the export button
                 if (exportBtn) {
                     exportBtn.disabled = false;
                     exportBtn.textContent = '🎬 Export All ' + selectedClips.length + ' Clips Now';
+                    exportBtn.onclick = function() { app.exportAllClipsParallel(); };
                 }
 
                 state.parallelExport.active = false;
@@ -13499,11 +13529,13 @@
                     await app.pollParallelExportJob(clipId, jobId);
 
                 } catch (error) {
-                    console.error('[ParallelExport] Error exporting clip ' + clipId + ':', error);
+                    console.error('[BatchExport] Error exporting clip ' + clipId + ':', error);
                     state.parallelExport.clips[clipId].status = 'error';
                     state.parallelExport.clips[clipId].error = error.message;
                     state.parallelExport.failedClips++;
                     app.updateParallelExportProgress();
+                    // Re-throw to trigger fail-fast in parent
+                    throw error;
                 }
             },
 
