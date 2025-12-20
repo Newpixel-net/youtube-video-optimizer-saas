@@ -121,7 +121,7 @@ if [ "$GPU_ENABLED" = true ]; then
     # - 16GB RAM for GPU video processing
     # - 4 CPUs to feed the GPU
     # - 1x NVIDIA L4 GPU for NVENC encoding
-    # - max-instances=20 for parallel processing of multiple clips
+    # - max-instances=10 (matches GPU quota)
     # - concurrency=1 (one job per instance for GPU workloads)
     gcloud run deploy "${SERVICE_NAME}" \
         --image="${IMAGE_NAME}:latest" \
@@ -134,7 +134,7 @@ if [ "$GPU_ENABLED" = true ]; then
         --timeout=900 \
         --concurrency=1 \
         --min-instances=0 \
-        --max-instances=20 \
+        --max-instances=10 \
         --set-env-vars="${ENV_VARS}" \
         --allow-unauthenticated \
         --project="${PROJECT_ID}"
