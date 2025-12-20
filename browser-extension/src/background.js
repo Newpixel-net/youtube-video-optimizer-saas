@@ -1824,7 +1824,9 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
       const recorder = new MediaRecorder(stableStream, {
         mimeType: mimeType,
-        videoBitsPerSecond: 8000000
+        // Reduced from 8Mbps to 4Mbps - server re-encodes anyway
+        // This speeds up upload time by ~50% with minimal quality loss
+        videoBitsPerSecond: 4000000
       });
 
       const cleanupTracks = () => {
