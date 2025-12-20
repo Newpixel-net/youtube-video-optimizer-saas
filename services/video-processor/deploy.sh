@@ -22,7 +22,7 @@
 
 set -e
 
-PROJECT_ID="${1:-$(gcloud config get-value project)}"
+PROJECT_ID="${1:-ytseo-6d1b0}"
 REGION="${2:-us-central1}"
 MODE="${3:---gpu}"  # Default to GPU mode
 SERVICE_NAME="video-processor"

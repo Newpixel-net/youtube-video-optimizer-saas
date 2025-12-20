@@ -14,7 +14,7 @@
 
 param(
     [Parameter(Mandatory=$false)]
-    [string]$ProjectId,
+    [string]$ProjectId = "ytseo-6d1b0",
 
     [Parameter(Mandatory=$false)]
     [string]$Region = "us-central1",
