@@ -7624,6 +7624,18 @@
             html += '</div>';
             html += '</div>'; // source-preview-container
 
+            // DEBUG: Show actual state values for all clips
+            html += '<div style="background: rgba(255,0,0,0.1); border: 1px solid red; padding: 8px; margin: 8px 0; font-size: 11px; font-family: monospace;">';
+            html += '<strong>DEBUG - State Values:</strong><br>';
+            html += 'Active Clip: ' + activeClip.id + ' (index ' + state.customization.activeClipIndex + ')<br>';
+            selectedClips.forEach(function(clip, idx) {
+                var clipSettings = state.clipSettings[clip.id];
+                var cropVal = clipSettings ? clipSettings.cropPosition : 'NO SETTINGS';
+                var isCurrent = (idx === state.customization.activeClipIndex) ? ' ← CURRENT' : '';
+                html += 'Clip ' + (idx + 1) + ' (' + clip.id + '): cropPosition = ' + cropVal + isCurrent + '<br>';
+            });
+            html += '</div>';
+
             // Output Preview Label
             html += '<div style="text-align: center; margin-bottom: 0.5rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">📱 Output Preview (9:16)</div>';
 
@@ -9803,6 +9815,20 @@
                 if (step > state.currentStep + 1) return;
                 state.currentStep = step;
                 state.customization.playingInFrame = false; // Stop any playing video
+
+                // When entering step 4 (customization), ensure all selected clips have initialized settings
+                if (step === 4) {
+                    var selectedClips = state.clips.filter(function(c) {
+                        return state.selectedClipIds.indexOf(c.id) !== -1;
+                    });
+                    selectedClips.forEach(function(clip) {
+                        if (!state.clipSettings[clip.id]) {
+                            state.clipSettings[clip.id] = getDefaultSettings();
+                            state.clipSettings[clip.id].trimEnd = clip.duration;
+                        }
+                    });
+                }
+
                 render();
                 window.scrollTo(0, 0);
             },
