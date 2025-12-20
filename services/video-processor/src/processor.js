@@ -21,6 +21,35 @@ import {
   extractSegmentFromCache
 } from './video-cache.js';
 import { generateCaptions } from './caption-renderer.js';
+import { isGpuAvailable, getEncodingParams, getGpuStatus } from './gpu-encoder.js';
+
+// GPU availability check at startup
+let gpuEnabled = false;
+try {
+  gpuEnabled = isGpuAvailable();
+  const status = getGpuStatus();
+  console.log(`[Processor] GPU Status: ${JSON.stringify(status)}`);
+} catch (e) {
+  console.log(`[Processor] GPU detection failed: ${e.message}, using CPU encoding`);
+}
+
+/**
+ * Get FFmpeg encoding arguments based on GPU availability
+ * @param {string} quality - 'high', 'medium', 'low'
+ * @returns {string[]} FFmpeg encoding arguments
+ */
+function getVideoEncodingArgs(quality = 'medium') {
+  const encoding = getEncodingParams({ quality });
+  return encoding.encoderArgs;
+}
+
+/**
+ * Get audio encoding arguments
+ * @returns {string[]} FFmpeg audio encoding arguments
+ */
+function getAudioEncodingArgs() {
+  return ['-c:a', 'aac', '-b:a', '128k'];
+}
 
 /**
  * Download secondary source video for multi-source split screen
@@ -363,25 +392,25 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
   console.log(`[${jobId}] Multi-source filter complex: ${filterComplex.substring(0, 200)}...`);
 
   return new Promise((resolve, reject) => {
+    // Use GPU encoding if available, otherwise fall back to CPU
+    const videoEncoding = getVideoEncodingArgs('medium');
+    const audioEncoding = getAudioEncodingArgs();
+
     const args = [
       '-i', primaryFile,
       '-i', secondaryFile,
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',
-      '-crf', '23',
-      '-threads', '0',
-      '-c:a', 'aac',
-      '-b:a', '128k',
+      ...videoEncoding,
+      ...audioEncoding,
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg multi-source command: ffmpeg ${args.slice(0, 10).join(' ')}...`);
+    console.log(`[${jobId}] FFmpeg multi-source command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 10).join(' ')}...`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -513,6 +542,10 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
   console.log(`[${jobId}] Three-source filter complex: ${filterComplex.substring(0, 300)}...`);
 
   return new Promise((resolve, reject) => {
+    // Use GPU encoding if available, otherwise fall back to CPU
+    const videoEncoding = getVideoEncodingArgs('medium');
+    const audioEncoding = getAudioEncodingArgs();
+
     const args = [
       '-i', primaryFile,
       '-i', secondaryFile,
@@ -520,19 +553,15 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',
-      '-crf', '23',
-      '-threads', '0',
-      '-c:a', 'aac',
-      '-b:a', '128k',
+      ...videoEncoding,
+      ...audioEncoding,
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg three-source command: ffmpeg ${args.slice(0, 12).join(' ')}...`);
+    console.log(`[${jobId}] FFmpeg three-source command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 12).join(' ')}...`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -671,25 +700,25 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
   console.log(`[${jobId}] Gameplay filter complex: ${filterComplex.substring(0, 300)}...`);
 
   return new Promise((resolve, reject) => {
+    // Use GPU encoding if available, otherwise fall back to CPU
+    const videoEncoding = getVideoEncodingArgs('medium');
+    const audioEncoding = getAudioEncodingArgs();
+
     const args = [
       '-i', primaryFile,
       '-i', secondaryFile,
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',
-      '-crf', '23',
-      '-threads', '0',
-      '-c:a', 'aac',
-      '-b:a', '128k',
+      ...videoEncoding,
+      ...audioEncoding,
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg gameplay command: ffmpeg ${args.slice(0, 10).join(' ')}...`);
+    console.log(`[${jobId}] FFmpeg gameplay command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 10).join(' ')}...`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -2121,23 +2150,23 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     // For simple linear chains, use -vf
     const filterFlag = isComplexFilter ? '-filter_complex' : '-vf';
 
+    // Use GPU encoding if available, otherwise fall back to CPU
+    const videoEncoding = getVideoEncodingArgs('medium');
+    const audioEncoding = getAudioEncodingArgs();
+
     const args = [
       '-i', inputFile,
       filterFlag, filters,
       '-af', audioFilters,
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',     // Optimized: faster encoding with minimal quality loss
-      '-crf', '23',
-      '-threads', '0',           // Auto-detect optimal thread count
-      '-c:a', 'aac',
-      '-b:a', '128k',
+      ...videoEncoding,
+      ...audioEncoding,
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg command: ffmpeg ${args.join(' ')}`);
+    console.log(`[${jobId}] FFmpeg command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.join(' ')}`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -2435,13 +2464,13 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
   }
 
   return new Promise((resolve, reject) => {
+    // Use GPU encoding if available, otherwise fall back to CPU
+    const videoEncoding = getVideoEncodingArgs('medium');
+
     const args = [
       '-i', inputFile,
       '-vf', filters.join(','),
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',     // Optimized: faster encoding
-      '-crf', '23',
-      '-threads', '0',           // Auto-detect optimal thread count
+      ...videoEncoding,
       '-c:a', 'copy',
       '-y',
       outputFile

@@ -8,6 +8,7 @@ import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
 import { processVideo } from './processor.js';
 import { extractYouTubeFrames } from './youtube-downloader.js';
+import { getGpuStatus } from './gpu-encoder.js';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -61,6 +62,14 @@ app.get('/health', (req, res) => {
   const memUsage = process.memoryUsage();
   const uptimeSeconds = process.uptime();
 
+  // Get GPU status for monitoring
+  let gpuStatus;
+  try {
+    gpuStatus = getGpuStatus();
+  } catch (e) {
+    gpuStatus = { available: false, error: e.message };
+  }
+
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -75,6 +84,7 @@ app.get('/health', (req, res) => {
       totalProcessed: totalJobsProcessed,
       lastCompleted: lastJobCompletedAt
     },
+    gpu: gpuStatus,
     environment: process.env.NODE_ENV || 'development'
   });
 });

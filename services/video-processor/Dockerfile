@@ -1,19 +1,30 @@
-# Video Processor Service for Cloud Run
-# Uses FFmpeg for video processing with reliable YouTube downloads
+# Video Processor Service for Cloud Run with GPU Support
+# Uses NVIDIA CUDA base for GPU-accelerated video encoding (NVENC)
+# Falls back to CPU encoding when GPU is not available
 
-FROM node:20-slim
+# Use NVIDIA CUDA runtime as base for GPU support
+FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
 
-# Install FFmpeg, Python, git, Chromium (for POT server), and other dependencies
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Node.js 20, FFmpeg with NVENC support, Python, and other dependencies
 RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    gnupg \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y \
+    nodejs \
     ffmpeg \
     python3 \
     python3-pip \
     python3-venv \
-    curl \
-    ca-certificates \
     unzip \
     git \
-    chromium \
+    chromium-browser \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -34,7 +45,7 @@ RUN apt-get update && apt-get install -y \
 
 # Set Puppeteer to use system Chromium (skip download)
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Install yt-dlp nightly (more frequent updates for YouTube changes)
 # Using --break-system-packages since we're in a container
@@ -65,7 +76,7 @@ RUN git clone --single-branch --depth 1 https://github.com/Brainicism/bgutil-ytd
     rm -rf server .git
 
 # Create puppeteer config to use system Chromium
-RUN echo '{"executablePath":"/usr/bin/chromium","args":["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage"]}' > /app/pot-server/.puppeteerrc.json
+RUN echo '{"executablePath":"/usr/bin/chromium-browser","args":["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage"]}' > /app/pot-server/.puppeteerrc.json
 
 # Verify yt-dlp installation
 RUN yt-dlp --version && \
@@ -96,8 +107,12 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV TEMP_DIR=/tmp/video-processing
 
-# Memory settings for Node.js (prevent OOM)
-ENV NODE_OPTIONS="--max-old-space-size=3072"
+# GPU detection environment variable (set by Cloud Run when GPU is attached)
+# This will be used by the processor to decide between NVENC and libx264
+ENV GPU_ENABLED=auto
+
+# Memory settings for Node.js (increased for GPU workloads)
+ENV NODE_OPTIONS="--max-old-space-size=8192"
 
 # Expose port (video processor)
 EXPOSE 8080
