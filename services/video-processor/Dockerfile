@@ -48,11 +48,10 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Install yt-dlp nightly (more frequent updates for YouTube changes)
-# Using --break-system-packages since we're in a container
-RUN pip3 install --break-system-packages --upgrade "yt-dlp[default]"
+RUN pip3 install --upgrade "yt-dlp[default]"
 
 # Install bgutil-ytdlp-pot-provider plugin for yt-dlp
-RUN pip3 install --break-system-packages bgutil-ytdlp-pot-provider
+RUN pip3 install bgutil-ytdlp-pot-provider
 
 # Download and install the POT provider plugin
 RUN mkdir -p /root/.config/yt-dlp/plugins && \
