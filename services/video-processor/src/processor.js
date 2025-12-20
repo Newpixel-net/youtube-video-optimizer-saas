@@ -2265,7 +2265,19 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
     default:
       // Crop to 9:16 based on cropPosition
       // Supports both legacy strings ('left', 'center', 'right') and numeric percentage (0-100)
+      console.log(`[FFmpeg] ========== CROP CALCULATION DEBUG ==========`);
+      console.log(`[FFmpeg] Input: ${validWidth}x${validHeight}, Aspect: ${inputAspect.toFixed(4)}`);
+      console.log(`[FFmpeg] Target aspect: ${targetAspect.toFixed(4)} (9:16 = 0.5625)`);
+      console.log(`[FFmpeg] cropPosition received: '${cropPosition}' (type: ${typeof cropPosition})`);
       console.log(`[FFmpeg] auto_center mode: inputAspect(${inputAspect.toFixed(4)}) > targetAspect(${targetAspect.toFixed(4)}) = ${inputAspect > targetAspect}`);
+
+      // Check if input aspect ratio is close to 16:9 (standard video)
+      const expected16by9 = 16 / 9; // 1.7778
+      const aspectDelta = Math.abs(inputAspect - expected16by9);
+      if (aspectDelta > 0.05) {
+        console.warn(`[FFmpeg] WARNING: Input aspect ratio ${inputAspect.toFixed(4)} differs from 16:9 (${expected16by9.toFixed(4)}) by ${(aspectDelta * 100).toFixed(2)}%`);
+        console.warn(`[FFmpeg] This may cause crop position to differ from preview!`);
+      }
 
       if (inputAspect > targetAspect) {
         // Video is wider than target - crop sides based on position
@@ -2276,10 +2288,13 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
         // Handle both legacy string values and new numeric percentage
         if (cropPosition === 'left') {
           cropX = 0; // Crop from left edge
+          console.log(`[FFmpeg] Using 'left' position -> cropX = 0`);
         } else if (cropPosition === 'right') {
           cropX = validWidth - cropWidth; // Crop from right edge
+          console.log(`[FFmpeg] Using 'right' position -> cropX = ${cropX}`);
         } else if (cropPosition === 'center') {
           cropX = Math.floor((validWidth - cropWidth) / 2); // Center crop
+          console.log(`[FFmpeg] Using 'center' position -> cropX = ${cropX}`);
         } else if (typeof cropPosition === 'number' || !isNaN(parseInt(cropPosition, 10))) {
           // Numeric percentage (0-100)
           // 0% = left edge (cropX = 0)
@@ -2287,9 +2302,18 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
           const percent = Math.max(0, Math.min(100, parseInt(cropPosition, 10)));
           const maxCropX = validWidth - cropWidth;
           cropX = Math.floor((percent / 100) * maxCropX);
+
+          // Enhanced debugging for numeric position
+          const cropStartPercent = ((cropX / validWidth) * 100).toFixed(2);
+          const cropCenterPercent = (((cropX + cropWidth/2) / validWidth) * 100).toFixed(2);
+          console.log(`[FFmpeg] Numeric position: ${percent}%`);
+          console.log(`[FFmpeg] Calculation: cropX = floor((${percent}/100) * ${maxCropX}) = ${cropX}`);
+          console.log(`[FFmpeg] Crop region: starts at ${cropStartPercent}%, center at ${cropCenterPercent}%`);
+          console.log(`[FFmpeg] CSS equivalent: object-position ${percent}% should show same region`);
         } else {
           // Default to center if unrecognized
           cropX = Math.floor((validWidth - cropWidth) / 2);
+          console.log(`[FFmpeg] WARNING: Unrecognized cropPosition '${cropPosition}', defaulting to center -> cropX = ${cropX}`);
         }
 
         // Validate crop dimensions
@@ -2303,7 +2327,8 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
           filters.push(`crop=${cropWidth}:${validHeight}:${cropX}:0`);
         }
 
-        console.log(`[FFmpeg] CROP FILTER: crop=${cropWidth}:${validHeight}:${cropX}:0 (position: ${cropPosition})`);
+        console.log(`[FFmpeg] FINAL CROP FILTER: crop=${cropWidth}:${validHeight}:${cropX}:0`);
+        console.log(`[FFmpeg] ==============================================`);
 
       } else {
         // Video is taller than target - crop top/bottom (position doesn't apply here)

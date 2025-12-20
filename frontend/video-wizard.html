@@ -7030,22 +7030,6 @@
             html += renderStepper();
             html += '<div class="wizard-content">';
 
-            // DEBUG PANEL: Show at top of page when on Step 4
-            if (state.currentStep === 4) {
-                var selectedClips = state.clips.filter(function(c) {
-                    return state.selectedClipIds.indexOf(c.id) !== -1;
-                });
-                html += '<div style="background: #ff0000; color: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; font-family: monospace; font-size: 14px;">';
-                html += '<strong>🔴 DEBUG PANEL - CLIP SETTINGS STATE:</strong><br><br>';
-                selectedClips.forEach(function(clip, idx) {
-                    var clipSettings = state.clipSettings[clip.id];
-                    var cropVal = clipSettings ? clipSettings.cropPosition : 'NO SETTINGS';
-                    var isCurrent = (idx === state.customization.activeClipIndex) ? ' ★ ACTIVE' : '';
-                    html += 'Clip ' + (idx + 1) + ': cropPosition = <strong>' + cropVal + '</strong>' + isCurrent + '<br>';
-                });
-                html += '</div>';
-            }
-
             switch (state.currentStep) {
                 case 1:
                     html += renderStep1VideoInput();
@@ -7070,30 +7054,8 @@
             html += '</div>'; // wizard-content
             html += '</div>'; // wizard-container
 
-            // Add fixed cache clear button for debugging
-            html += '<button onclick="clearCacheAndReload()" style="position: fixed; bottom: 20px; right: 20px; z-index: 99999; background: #ff0000; color: white; padding: 12px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(255,0,0,0.4);">🗑️ CLEAR CACHE & RELOAD</button>';
-
             root.innerHTML = html;
             attachEventListeners();
-        }
-
-        // Cache clearing function
-        function clearCacheAndReload() {
-            // Clear localStorage
-            localStorage.clear();
-            // Clear sessionStorage
-            sessionStorage.clear();
-            // Clear caches if available
-            if ('caches' in window) {
-                caches.keys().then(function(names) {
-                    names.forEach(function(name) {
-                        caches.delete(name);
-                    });
-                });
-            }
-            // Force reload bypassing cache
-            alert('Cache cleared! Page will now reload with fresh code.');
-            window.location.reload(true);
         }
 
         function renderLoading() {
@@ -10535,6 +10497,13 @@
                     var btnVal = [0, 50, 100][i];
                     btn.classList.toggle('active', posNum === btnVal);
                 });
+
+                // Update the phone preview's crop position in real-time (CSS variable)
+                var phoneVideoArea = document.querySelector('.phone-video-area');
+                if (phoneVideoArea) {
+                    phoneVideoArea.style.setProperty('--crop-position', posNum + '%');
+                    phoneVideoArea.dataset.cropPercent = posNum;
+                }
             },
 
             // AI Smart Crop - detects main subject and auto-positions crop
@@ -12379,10 +12348,12 @@
                 console.log('Clip ID:', clipId);
                 console.log('Quality:', quality);
                 console.log('Reframe Mode:', clipSettings.reframeMode);
+                console.log('CROP POSITION:', clipSettings.cropPosition, '(type:', typeof clipSettings.cropPosition, ')');
                 console.log('Caption Style:', clipSettings.captionStyle);
                 console.log('Secondary Source:', JSON.stringify(clipSettings.secondarySource, null, 2));
                 console.log('Audio Mix:', JSON.stringify(clipSettings.audioMix, null, 2));
-                console.log('=============================');
+                console.log('Full clipSettings:', JSON.stringify(clipSettings, null, 2));
+                console.log('=============================')
 
                 // Get clip timing info
                 var clip = state.clips.find(function(c) { return c.id === clipId; });
