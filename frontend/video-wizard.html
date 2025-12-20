@@ -7030,6 +7030,22 @@
             html += renderStepper();
             html += '<div class="wizard-content">';
 
+            // DEBUG PANEL: Show at top of page when on Step 4
+            if (state.currentStep === 4) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                html += '<div style="background: #ff0000; color: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; font-family: monospace; font-size: 14px;">';
+                html += '<strong>🔴 DEBUG PANEL - CLIP SETTINGS STATE:</strong><br><br>';
+                selectedClips.forEach(function(clip, idx) {
+                    var clipSettings = state.clipSettings[clip.id];
+                    var cropVal = clipSettings ? clipSettings.cropPosition : 'NO SETTINGS';
+                    var isCurrent = (idx === state.customization.activeClipIndex) ? ' ★ ACTIVE' : '';
+                    html += 'Clip ' + (idx + 1) + ': cropPosition = <strong>' + cropVal + '</strong>' + isCurrent + '<br>';
+                });
+                html += '</div>';
+            }
+
             switch (state.currentStep) {
                 case 1:
                     html += renderStep1VideoInput();
@@ -7659,18 +7675,6 @@
             html += '</button>';
             html += '</div>';
             html += '</div>'; // source-preview-container
-
-            // DEBUG: Show actual state values for all clips
-            html += '<div style="background: rgba(255,0,0,0.1); border: 1px solid red; padding: 8px; margin: 8px 0; font-size: 11px; font-family: monospace;">';
-            html += '<strong>DEBUG - State Values:</strong><br>';
-            html += 'Active Clip: ' + activeClip.id + ' (index ' + state.customization.activeClipIndex + ')<br>';
-            selectedClips.forEach(function(clip, idx) {
-                var clipSettings = state.clipSettings[clip.id];
-                var cropVal = clipSettings ? clipSettings.cropPosition : 'NO SETTINGS';
-                var isCurrent = (idx === state.customization.activeClipIndex) ? ' ← CURRENT' : '';
-                html += 'Clip ' + (idx + 1) + ' (' + clip.id + '): cropPosition = ' + cropVal + isCurrent + '<br>';
-            });
-            html += '</div>';
 
             // Output Preview Label
             html += '<div style="text-align: center; margin-bottom: 0.5rem; font-size: 0.8rem; color: rgba(255,255,255,0.6);">📱 Output Preview (9:16)</div>';
