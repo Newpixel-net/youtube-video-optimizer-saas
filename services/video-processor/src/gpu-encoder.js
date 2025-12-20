@@ -70,14 +70,33 @@ export function isGpuAvailable() {
 
     // Method 3: Test actual NVENC encoding capability
     try {
-      execSync('ffmpeg -f lavfi -i color=c=black:s=64x64:d=0.1 -c:v h264_nvenc -f null - 2>/dev/null', {
-        timeout: 10000
+      // Capture stderr for debugging
+      const result = execSync('ffmpeg -f lavfi -i color=c=black:s=64x64:d=0.1 -c:v h264_nvenc -f null - 2>&1', {
+        timeout: 15000,
+        encoding: 'utf8'
       });
       console.log('[GPU] NVENC encoding test successful');
+      console.log('[GPU] NVENC test output:', result.substring(0, 200));
     } catch (e) {
-      console.log('[GPU] NVENC encoding test failed - GPU may not support NVENC');
+      // Log the actual error for debugging
+      const errorOutput = e.stdout || e.stderr || e.message || 'Unknown error';
+      console.log('[GPU] NVENC encoding test failed with output:', errorOutput.substring(0, 500));
+
+      // Check for specific error types
+      if (errorOutput.includes('Cannot load libnvidia-encode')) {
+        console.log('[GPU] Error: libnvidia-encode.so not found - NVIDIA driver may not be properly installed');
+        gpuCheckError = 'libnvidia-encode.so not found';
+      } else if (errorOutput.includes('driver does not support')) {
+        console.log('[GPU] Error: NVIDIA driver version too old for this FFmpeg build');
+        gpuCheckError = 'Driver version mismatch';
+      } else if (errorOutput.includes('No NVENC capable devices found')) {
+        console.log('[GPU] Error: No NVENC devices - GPU may not support hardware encoding');
+        gpuCheckError = 'No NVENC devices found';
+      } else {
+        gpuCheckError = 'NVENC encoding test failed: ' + errorOutput.substring(0, 100);
+      }
+
       gpuAvailable = false;
-      gpuCheckError = 'NVENC encoding test failed';
       return false;
     }
 
