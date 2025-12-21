@@ -402,6 +402,7 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
+      '-vsync', 'cfr',  // Handle VFR input from MediaRecorder
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -553,6 +554,7 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
+      '-vsync', 'cfr',  // Handle VFR input from MediaRecorder
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -710,6 +712,7 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
+      '-vsync', 'cfr',  // Handle VFR input from MediaRecorder
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -2158,6 +2161,9 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       '-i', inputFile,
       filterFlag, filters,
       '-af', audioFilters,
+      // CRITICAL: Handle VFR (Variable Frame Rate) input from MediaRecorder
+      // Without -vsync cfr, NVENC can produce frozen video with VFR input
+      '-vsync', 'cfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -2470,6 +2476,7 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
     const args = [
       '-i', inputFile,
       '-vf', filters.join(','),
+      '-vsync', 'cfr',  // Handle VFR input from MediaRecorder
       ...videoEncoding,
       '-c:a', 'copy',
       '-y',
