@@ -2316,10 +2316,10 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     return new Promise((resolve, reject) => {
       const audioEncoding = getAudioEncodingArgs();
 
+      // NOTE: -fflags +igndts+genpts REMOVED for MP4 input
+      // The WebM→MP4 transcode step already fixed timestamps with -r 30
+      // Using fflags on properly formatted MP4 was confusing NVENC
       const args = [
-        // CRITICAL: Generate PTS for WebM files from MediaRecorder
-        // MediaRecorder WebM files have broken/missing timestamps causing frozen video
-        '-fflags', '+igndts+genpts',
         '-i', inputFile,
         filterFlag, filters,
         '-af', audioFilters,
