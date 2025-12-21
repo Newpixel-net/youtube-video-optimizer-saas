@@ -2362,8 +2362,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
    * @param {string|null} preProcessedAudio - Path to pre-processed audio (for GPU encoding)
    * @returns {Promise<string>} Output file path
    */
-  const runFFmpegEncode = (encoderArgs, encoderName, preProcessedAudio = null) => {
-    return new Promise((resolve, reject) => {
+  const runFFmpegEncode = async (encoderArgs, encoderName, preProcessedAudio = null) => {
       let args;
 
       // Check if this is GPU encoding - loudnorm causes NVENC to freeze at ~3.3s
@@ -2470,47 +2469,49 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
       console.log(`[${jobId}] FFmpeg command (${encoderName}): ffmpeg ${args.join(' ')}`);
 
-      const ffmpegProcess = spawn('ffmpeg', args);
+      // Execute FFmpeg and wait for completion
+      return new Promise((resolve, reject) => {
+        const ffmpegProcess = spawn('ffmpeg', args);
 
-      let stderr = '';
+        let stderr = '';
 
-      let lastProgress = '';
-      ffmpegProcess.stderr.on('data', (data) => {
-        const chunk = data.toString();
-        stderr += chunk;
+        let lastProgress = '';
+        ffmpegProcess.stderr.on('data', (data) => {
+          const chunk = data.toString();
+          stderr += chunk;
 
-        // Log progress from FFmpeg
-        const match = chunk.match(/time=(\d+:\d+:\d+\.\d+)/);
-        if (match && match[1] !== lastProgress) {
-          lastProgress = match[1];
-          console.log(`[${jobId}] FFmpeg progress (${encoderName}): ${match[1]}`);
-        }
+          // Log progress from FFmpeg
+          const match = chunk.match(/time=(\d+:\d+:\d+\.\d+)/);
+          if (match && match[1] !== lastProgress) {
+            lastProgress = match[1];
+            console.log(`[${jobId}] FFmpeg progress (${encoderName}): ${match[1]}`);
+          }
 
-        // DIAGNOSTIC: Log any error/warning messages immediately
-        if (chunk.includes('Error') || chunk.includes('error') ||
-            chunk.includes('failed') || chunk.includes('Cannot') ||
-            chunk.includes('Invalid') || chunk.includes('No such')) {
-          console.error(`[${jobId}] FFmpeg ERROR: ${chunk.trim()}`);
-        }
+          // DIAGNOSTIC: Log any error/warning messages immediately
+          if (chunk.includes('Error') || chunk.includes('error') ||
+              chunk.includes('failed') || chunk.includes('Cannot') ||
+              chunk.includes('Invalid') || chunk.includes('No such')) {
+            console.error(`[${jobId}] FFmpeg ERROR: ${chunk.trim()}`);
+          }
+        });
+
+        ffmpegProcess.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outputFile)) {
+            console.log(`[${jobId}] FFmpeg ${encoderName} encoding completed: ${outputFile}`);
+            resolve(outputFile);
+          } else {
+            console.error(`[${jobId}] FFmpeg ${encoderName} failed. Code: ${code}`);
+            // Log MORE stderr for debugging (last 2000 chars)
+            console.error(`[${jobId}] FFmpeg FULL stderr (last 2000 chars):`);
+            console.error(stderr.slice(-2000));
+            reject(new Error(`Video processing failed (${encoderName}): ${code}`));
+          }
+        });
+
+        ffmpegProcess.on('error', (error) => {
+          reject(new Error(`Failed to start FFmpeg (${encoderName}): ${error.message}`));
+        });
       });
-
-      ffmpegProcess.on('close', (code) => {
-        if (code === 0 && fs.existsSync(outputFile)) {
-          console.log(`[${jobId}] FFmpeg ${encoderName} encoding completed: ${outputFile}`);
-          resolve(outputFile);
-        } else {
-          console.error(`[${jobId}] FFmpeg ${encoderName} failed. Code: ${code}`);
-          // Log MORE stderr for debugging (last 2000 chars)
-          console.error(`[${jobId}] FFmpeg FULL stderr (last 2000 chars):`);
-          console.error(stderr.slice(-2000));
-          reject(new Error(`Video processing failed (${encoderName}): ${code}`));
-        }
-      });
-
-      ffmpegProcess.on('error', (error) => {
-        reject(new Error(`Failed to start FFmpeg (${encoderName}): ${error.message}`));
-      });
-    });
   };
 
   // Diagnostic: Test NVENC without filters to isolate the problem
