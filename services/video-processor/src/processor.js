@@ -1243,6 +1243,27 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
           fs.writeFileSync(capturedFile, Buffer.from(buffer));
           console.log(`[${jobId}] Downloaded ${extensionStreamSource}: ${fs.statSync(capturedFile).size} bytes`);
 
+          // CRITICAL FIX: Remux WebM to fix broken container metadata
+          // MediaRecorder WebM files have duration=0 and frames=0 in metadata
+          // but valid packet-level timestamps. Remuxing fixes this.
+          if (fileExt === 'webm') {
+            console.log(`[${jobId}] Remuxing WebM to fix broken container metadata...`);
+            const remuxedFile = path.join(workDir, 'captured_remuxed.webm');
+            try {
+              execSync(`ffmpeg -i "${capturedFile}" -c copy -y "${remuxedFile}"`, {
+                timeout: 60000,
+                stdio: ['pipe', 'pipe', 'pipe']
+              });
+              if (fs.existsSync(remuxedFile) && fs.statSync(remuxedFile).size > 0) {
+                fs.unlinkSync(capturedFile);
+                fs.renameSync(remuxedFile, capturedFile);
+                console.log(`[${jobId}] WebM remuxed successfully - metadata fixed`);
+              }
+            } catch (remuxErr) {
+              console.warn(`[${jobId}] WebM remux failed (continuing anyway): ${remuxErr.message}`);
+            }
+          }
+
           // DIAGNOSTIC STAGE 1: Probe raw captured file BEFORE any processing
           // This tells us if MediaRecorder produced correct timestamps
           probePTS(jobId, capturedFile, 'STAGE_1_RAW_CAPTURE');
