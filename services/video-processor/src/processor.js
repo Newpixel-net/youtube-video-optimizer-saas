@@ -50,6 +50,10 @@ function checkGpuIfNeeded() {
  */
 function validateVideoOutput(videoPath, expectedDuration = 30) {
   try {
+    // Get file size - frozen videos are extremely small
+    const fileSizeBytes = fs.statSync(videoPath).size;
+    const fileSizeMB = fileSizeBytes / (1024 * 1024);
+
     // Get frame count
     const frameCountResult = execSync(
       `ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`,
@@ -69,29 +73,40 @@ function validateVideoOutput(videoPath, expectedDuration = 30) {
     // Calculate actual FPS
     const actualFps = frameCount / duration;
 
+    // Calculate bitrate in kbps
+    const bitrateKbps = (fileSizeBytes * 8) / duration / 1000;
+
     // Check for frozen video indicators:
     // 1. Frame count too low (< 20 fps equivalent)
     // 2. Frame count way too high (> 60 fps - indicates 1000fps bug)
+    // 3. File size too small (frozen video with identical frames compresses extremely well)
     const minExpectedFrames = expectedDuration * 20; // At least 20fps
     const maxExpectedFrames = expectedDuration * 60; // No more than 60fps
+    // A 720x1280 video at CRF 23 should be at least ~100 kbps, usually 500+ kbps
+    // Frozen video with identical frames compresses to ~30-50 kbps
+    const minBitrateKbps = 100;
 
-    const isFrozen = frameCount < minExpectedFrames;
+    const isFrozenByFrameCount = frameCount < minExpectedFrames;
     const is1000fpsBug = frameCount > maxExpectedFrames;
+    const isFrozenBySize = bitrateKbps < minBitrateKbps;
 
     console.log(`[Validation] Video: ${videoPath}`);
+    console.log(`[Validation]   File size: ${fileSizeMB.toFixed(2)} MB`);
     console.log(`[Validation]   Duration: ${duration.toFixed(2)}s (expected: ~${expectedDuration}s)`);
     console.log(`[Validation]   Frame count: ${frameCount}`);
     console.log(`[Validation]   Actual FPS: ${actualFps.toFixed(2)}`);
-    console.log(`[Validation]   Min expected frames: ${minExpectedFrames}`);
+    console.log(`[Validation]   Bitrate: ${bitrateKbps.toFixed(0)} kbps (min expected: ${minBitrateKbps} kbps)`);
 
-    if (isFrozen) {
+    if (isFrozenByFrameCount) {
       console.error(`[Validation] ❌ FROZEN VIDEO DETECTED! Frame count ${frameCount} < ${minExpectedFrames}`);
       return {
         isValid: false,
-        reason: 'frozen',
+        reason: 'frozen_frame_count',
         frameCount,
         duration,
         actualFps,
+        fileSizeMB,
+        bitrateKbps,
         message: `Frozen video: only ${frameCount} frames for ${duration}s video (${actualFps.toFixed(1)} fps)`
       };
     }
@@ -104,16 +119,36 @@ function validateVideoOutput(videoPath, expectedDuration = 30) {
         frameCount,
         duration,
         actualFps,
+        fileSizeMB,
+        bitrateKbps,
         message: `1000fps bug: ${frameCount} frames for ${duration}s video (${actualFps.toFixed(1)} fps)`
       };
     }
 
-    console.log(`[Validation] ✅ Video appears valid: ${frameCount} frames, ${actualFps.toFixed(1)} fps`);
+    if (isFrozenBySize) {
+      console.error(`[Validation] ❌ FROZEN VIDEO DETECTED! Bitrate ${bitrateKbps.toFixed(0)} kbps < ${minBitrateKbps} kbps`);
+      console.error(`[Validation] File size ${fileSizeMB.toFixed(2)} MB is too small for ${duration}s video`);
+      console.error(`[Validation] This indicates identical frames (frozen video) which compress extremely well`);
+      return {
+        isValid: false,
+        reason: 'frozen_by_size',
+        frameCount,
+        duration,
+        actualFps,
+        fileSizeMB,
+        bitrateKbps,
+        message: `Frozen video: ${fileSizeMB.toFixed(2)} MB (${bitrateKbps.toFixed(0)} kbps) is too small - identical frames detected`
+      };
+    }
+
+    console.log(`[Validation] ✅ Video appears valid: ${frameCount} frames, ${actualFps.toFixed(1)} fps, ${fileSizeMB.toFixed(2)} MB`);
     return {
       isValid: true,
       frameCount,
       duration,
-      actualFps
+      actualFps,
+      fileSizeMB,
+      bitrateKbps
     };
 
   } catch (error) {
@@ -2423,18 +2458,22 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         console.log(`[${jobId}] NVENC produces frozen video when filters are applied - known driver issue`);
       }
 
+      // CRITICAL FIX: Add fps filter to the filter chain instead of using -r
+      // This ensures proper frame rate handling even if input has any timing issues
+      const filtersWithFps = isComplexFilter
+        ? filters  // Complex filter already handles output correctly
+        : `${filters},fps=${targetFps}`;  // Add fps filter at end of chain
+
       // Always use CPU encoding with libx264 - reliable and produces correct output
       const audioEncoding = getAudioEncodingArgs();
       const args = [
-        '-fflags', '+genpts',
         '-i', inputFile,
-        filterFlag, filters,
+        filterFlag, filtersWithFps,
         '-af', audioFilters,
         '-c:v', 'libx264',
         '-preset', 'fast',      // Good balance of speed and quality
         '-crf', '23',           // Standard quality
         ...audioEncoding,
-        '-r', targetFps.toString(),
         '-movflags', '+faststart',
         '-y',
         outputFile
