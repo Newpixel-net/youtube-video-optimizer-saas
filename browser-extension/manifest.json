@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.7.4",
-  "description": "Extended timeouts for long video capture - better support for clips deep into long videos (v2.7.4)",
+  "version": "2.7.5",
+  "description": "Smart pre-buffering for reliable capture of clips deep into long videos (v2.7.5)",
 
   "permissions": [
     "activeTab",

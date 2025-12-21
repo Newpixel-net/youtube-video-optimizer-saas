@@ -21,18 +21,18 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '2.7.4',
+        version: '2.7.5',
         extensionId: EXTENSION_ID,
-        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout']
+        features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout', 'smart_prebuffering']
       }
     }));
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '2.7.4';
-    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout'];
+    window.__YVO_EXTENSION_VERSION__ = '2.7.5';
+    window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout', 'smart_prebuffering'];
 
-    console.log('[EXT] Bridge ready - v2.7.4 with extended timeout for long videos');
+    console.log('[EXT] Bridge ready - v2.7.5 with smart pre-buffering for long videos');
   }
 
   /**
@@ -54,8 +54,8 @@
       case 'checkExtension':
         sendResponse(requestId, {
           installed: true,
-          version: '2.7.4',
-          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout'],
+          version: '2.7.5',
+          features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout', 'smart_prebuffering'],
           maxBase64Size: 40 * 1024 * 1024 // 40MB - files larger than this upload directly
         });
         break;
@@ -226,6 +226,36 @@
         } catch (e) {
           // Log storage errors for debugging, but keep polling
           console.warn(`[EXT][CAPTURE] Storage poll error: ${e.message}`);
+        }
+
+        // Check for buffering progress updates (v2.7.5)
+        try {
+          const progressStored = await chrome.storage.local.get([`bridge_progress_${bridgeRequestId}`]);
+          const progress = progressStored[`bridge_progress_${bridgeRequestId}`];
+          if (progress) {
+            if (progress.phase === 'buffering') {
+              console.log(`[EXT][CAPTURE] ${progress.message}`);
+              // Dispatch progress event for UI
+              window.dispatchEvent(new CustomEvent('yvo-capture-progress', {
+                detail: {
+                  phase: 'buffering',
+                  percentReady: progress.percentReady,
+                  message: progress.message,
+                  bufferedAhead: progress.bufferedAhead,
+                  needed: progress.needed
+                }
+              }));
+            } else if (progress.phase === 'buffering_warning' && progress.warning) {
+              console.warn(`[EXT][CAPTURE] ${progress.message}`);
+            } else if (progress.phase === 'capturing') {
+              console.log(`[EXT][CAPTURE] ${progress.message}`);
+              window.dispatchEvent(new CustomEvent('yvo-capture-progress', {
+                detail: { phase: 'capturing', message: progress.message }
+              }));
+            }
+          }
+        } catch (progressErr) {
+          // Ignore progress check errors
         }
 
         // Log progress every 10 seconds

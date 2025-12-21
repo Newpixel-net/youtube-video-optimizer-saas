@@ -2676,9 +2676,18 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       };
     }
 
-    // CRITICAL: If capturing from a specific position (not 0), pre-seek BEFORE capture
+    // CRITICAL: If capturing from a specific position (not 0), pre-seek and WAIT FOR BUFFER
+    // v2.7.5: Smart pre-buffering - wait for sufficient buffer before starting capture
     if (hasSegmentRequest && requestedStartTime > 5) {
-      console.log(`[EXT][CAPTURE] Pre-seeking to ${requestedStartTime}s before capture...`);
+      const clipDuration = requestedEndTime - requestedStartTime;
+      const requiredBuffer = Math.min(clipDuration + 30, 120); // Need clip duration + 30s safety, max 120s
+
+      console.log(`[EXT][CAPTURE] === SMART PRE-BUFFERING ===`);
+      console.log(`[EXT][CAPTURE] Clip position: ${requestedStartTime}s to ${requestedEndTime}s (${clipDuration}s)`);
+      console.log(`[EXT][CAPTURE] Required buffer: ${requiredBuffer}s ahead of start position`);
+
+      // Step 1: Seek to start position
+      console.log(`[EXT][CAPTURE] Step 1: Seeking to ${requestedStartTime}s...`);
       try {
         await chrome.scripting.executeScript({
           target: { tabId: youtubeTab.id },
@@ -2699,16 +2708,175 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
           args: [requestedStartTime]
         });
 
-        // Wait for seek and buffering
-        console.log(`[EXT][CAPTURE] Waiting for seek and buffering...`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        // Verify we're at the right position
-        const seekCheck = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
-        console.log(`[EXT][CAPTURE] After seek: currentTime=${seekCheck?.videoInfo?.currentTime || 'unknown'}s, readyState=${seekCheck?.videoInfo?.readyState || 'unknown'}`);
+        // Brief wait for seek to initiate
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (seekErr) {
-        console.warn(`[EXT][CAPTURE] Pre-seek failed: ${seekErr.message}, continuing anyway`);
+        console.warn(`[EXT][CAPTURE] Seek failed: ${seekErr.message}`);
       }
+
+      // Step 2: Wait for buffer with progress updates
+      console.log(`[EXT][CAPTURE] Step 2: Waiting for buffer (need ${requiredBuffer}s buffered)...`);
+
+      // Calculate max wait time based on clip position
+      // Deep clips need more time to buffer
+      const baseWaitTime = 30000; // 30s base
+      const positionFactor = Math.min(requestedStartTime / 60, 5); // Up to 5x for clips 5+ min in
+      const maxBufferWait = baseWaitTime + (positionFactor * 30000); // 30s + up to 150s = max 180s (3 min)
+
+      console.log(`[EXT][CAPTURE] Max buffer wait: ${(maxBufferWait / 1000).toFixed(0)}s (position factor: ${positionFactor.toFixed(1)}x)`);
+
+      let bufferReady = false;
+      let lastBufferStatus = null;
+      const bufferStartTime = Date.now();
+      const BUFFER_CHECK_INTERVAL = 2000; // Check every 2 seconds
+
+      while (!bufferReady && (Date.now() - bufferStartTime) < maxBufferWait) {
+        try {
+          // Check buffer status
+          const bufferCheck = await chrome.scripting.executeScript({
+            target: { tabId: youtubeTab.id },
+            world: 'MAIN',
+            func: (startPos, needed) => {
+              const video = document.querySelector('video.html5-main-video');
+              if (!video) return { error: 'No video element' };
+
+              const currentTime = video.currentTime;
+              const buffered = video.buffered;
+              let bufferedAhead = 0;
+
+              // Find the buffer range that contains our start position
+              for (let i = 0; i < buffered.length; i++) {
+                const start = buffered.start(i);
+                const end = buffered.end(i);
+
+                // If this range contains our position, calculate how much is buffered ahead
+                if (start <= startPos && end > startPos) {
+                  bufferedAhead = end - startPos;
+                  break;
+                }
+                // If this range is ahead of our position but close, also count it
+                if (start > startPos && start < startPos + 5) {
+                  bufferedAhead = end - startPos;
+                  break;
+                }
+              }
+
+              const percentReady = Math.min(100, (bufferedAhead / needed) * 100);
+
+              return {
+                currentTime: currentTime.toFixed(1),
+                bufferedAhead: bufferedAhead.toFixed(1),
+                needed: needed,
+                percentReady: percentReady.toFixed(0),
+                readyState: video.readyState,
+                paused: video.paused,
+                isReady: bufferedAhead >= needed
+              };
+            },
+            args: [requestedStartTime, requiredBuffer]
+          });
+
+          const status = bufferCheck[0]?.result;
+
+          if (status && !status.error) {
+            lastBufferStatus = status;
+            const elapsedSec = ((Date.now() - bufferStartTime) / 1000).toFixed(0);
+
+            console.log(`[EXT][CAPTURE] Buffer: ${status.bufferedAhead}s / ${status.needed}s (${status.percentReady}%) - elapsed ${elapsedSec}s`);
+
+            // Store progress for wizard-bridge to poll
+            if (bridgeRequestId) {
+              await chrome.storage.local.set({
+                [`bridge_progress_${bridgeRequestId}`]: {
+                  phase: 'buffering',
+                  bufferedAhead: parseFloat(status.bufferedAhead),
+                  needed: status.needed,
+                  percentReady: parseInt(status.percentReady),
+                  elapsedSeconds: parseInt(elapsedSec),
+                  message: `Buffering at ${Math.floor(requestedStartTime / 60)}:${(requestedStartTime % 60).toString().padStart(2, '0')}... ${status.percentReady}% ready`
+                }
+              });
+            }
+
+            if (status.isReady) {
+              bufferReady = true;
+              console.log(`[EXT][CAPTURE] ✓ Buffer ready! ${status.bufferedAhead}s buffered ahead`);
+              break;
+            }
+
+            // Ensure video is playing to encourage buffering
+            if (status.paused) {
+              console.log(`[EXT][CAPTURE] Video paused, resuming playback to encourage buffering...`);
+              await chrome.scripting.executeScript({
+                target: { tabId: youtubeTab.id },
+                world: 'MAIN',
+                func: () => {
+                  const video = document.querySelector('video.html5-main-video');
+                  if (video && video.paused) {
+                    video.play().catch(() => {});
+                  }
+                }
+              });
+            }
+          } else {
+            console.log(`[EXT][CAPTURE] Buffer check failed: ${status?.error || 'unknown'}`);
+          }
+        } catch (bufferErr) {
+          console.warn(`[EXT][CAPTURE] Buffer check error: ${bufferErr.message}`);
+        }
+
+        // Wait before next check
+        await new Promise(resolve => setTimeout(resolve, BUFFER_CHECK_INTERVAL));
+      }
+
+      // Step 3: Handle buffer wait result
+      const totalWaitTime = ((Date.now() - bufferStartTime) / 1000).toFixed(1);
+
+      if (!bufferReady) {
+        // Buffer didn't reach required level, but we might still have enough to try
+        const gotBuffer = parseFloat(lastBufferStatus?.bufferedAhead || 0);
+        const minViableBuffer = Math.min(clipDuration * 0.7, 30); // At least 70% of clip or 30s
+
+        if (gotBuffer >= minViableBuffer) {
+          console.log(`[EXT][CAPTURE] Buffer incomplete (${gotBuffer}s/${requiredBuffer}s) but sufficient to attempt capture`);
+        } else {
+          console.warn(`[EXT][CAPTURE] ⚠ Buffer insufficient after ${totalWaitTime}s wait (got ${gotBuffer}s, need ${requiredBuffer}s)`);
+          console.warn(`[EXT][CAPTURE] Proceeding anyway - capture may fail or be incomplete`);
+
+          // Store warning for wizard-bridge
+          if (bridgeRequestId) {
+            await chrome.storage.local.set({
+              [`bridge_progress_${bridgeRequestId}`]: {
+                phase: 'buffering_warning',
+                message: `Buffer incomplete (${Math.round(gotBuffer)}s of ${requiredBuffer}s). Attempting capture anyway...`,
+                warning: true
+              }
+            });
+          }
+        }
+      } else {
+        console.log(`[EXT][CAPTURE] ✓ Pre-buffering complete in ${totalWaitTime}s`);
+      }
+
+      // Clear progress now that buffering is done
+      if (bridgeRequestId) {
+        await chrome.storage.local.set({
+          [`bridge_progress_${bridgeRequestId}`]: {
+            phase: 'capturing',
+            message: 'Starting video capture...'
+          }
+        });
+      }
+
+      // Final position verification
+      try {
+        const seekCheck = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
+        console.log(`[EXT][CAPTURE] Final position: currentTime=${seekCheck?.videoInfo?.currentTime || 'unknown'}s`);
+      } catch (e) {
+        // Ignore
+      }
+
+      console.log(`[EXT][CAPTURE] === PRE-BUFFERING COMPLETE ===`);
     }
 
     // Get video duration from content script
@@ -2761,25 +2929,26 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     const uploadStreamUrl = `${VIDEO_PROCESSOR_URL}/upload-stream`;
 
     // Calculate expected capture time and set timeout
-    // v2.7.4: Added dynamic seek time calculation for long videos
-    // Capture time = (segment duration / playback speed) + buffers for:
-    // - Video loading (up to 20s)
-    // - Pre-seek and buffering (variable based on start position)
-    // - Base64 conversion and upload (up to 30s)
-    // - Safety margin
+    // v2.7.5: Updated timeout calculation to account for smart pre-buffering
+    // Timeout = capture time + buffer wait time + processing time
     const captureDuration = captureEnd - captureStart;
     const PLAYBACK_SPEED = 1; // Must match the value in captureVideoWithMessage
     const expectedCaptureTime = (captureDuration / PLAYBACK_SPEED) * 1000;
 
-    // Calculate seek time based on start position
-    // Seeking deep into long videos takes much longer due to buffering
-    // ~1 second per minute of video position, with minimum of 10s
-    const seekTimeEstimate = Math.max(10000, Math.min(captureStart / 60, 90) * 1000);
+    // Calculate buffer wait time based on start position
+    // v2.7.5: Matches the maxBufferWait calculation in pre-buffering logic
+    // Deep clips (15+ min) can take up to 3 minutes to buffer
+    const baseBufferWait = 30000; // 30s base
+    const positionFactor = Math.min(captureStart / 60, 5); // Up to 5x for clips 5+ min in
+    const maxBufferWait = baseBufferWait + (positionFactor * 30000); // 30s + up to 150s = max 180s
 
-    // Total timeout: capture time + seek time + base buffer (60s for load/upload)
-    const captureTimeout = expectedCaptureTime + seekTimeEstimate + 60000;
+    // Processing time: video loading (30s) + upload/conversion (60s)
+    const processingBuffer = 90000;
 
-    console.log(`[EXT][CAPTURE] Expected capture time: ${(expectedCaptureTime / 1000).toFixed(1)}s, seek estimate: ${(seekTimeEstimate / 1000).toFixed(1)}s, total timeout: ${(captureTimeout / 1000).toFixed(1)}s`);
+    // Total timeout: capture time + buffer wait + processing
+    const captureTimeout = expectedCaptureTime + maxBufferWait + processingBuffer;
+
+    console.log(`[EXT][CAPTURE] Timeout calculation: capture=${(expectedCaptureTime / 1000).toFixed(0)}s + buffer=${(maxBufferWait / 1000).toFixed(0)}s + processing=${processingBuffer / 1000}s = ${(captureTimeout / 1000).toFixed(0)}s total`);
 
     // Inject and run the capture function with videoId and uploadUrl for direct upload
     // SOLUTION: Use message passing instead of relying on executeScript return value
