@@ -2389,22 +2389,68 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         ];
         console.log(`[${jobId}] Using pre-processed audio for GPU encoding`);
       } else if (isGpuEncoding) {
-        // GPU encoding - optimized for NVENC
-        // Skip audio filters (loudnorm causes deadlock with hardware encoders)
-        console.log(`[${jobId}] GPU encoding: using NVENC with timestamp regen`);
-        args = [
-          // CRITICAL: Generate proper PTS for input to ensure frame ordering
-          '-fflags', '+genpts',
+        // GPU encoding - TWO PASS APPROACH to fix NVENC frozen video
+        // NVENC works fine without filters (diagnostic proves this)
+        // But NVENC + filter chain produces frozen video (unknown NVIDIA driver/FFmpeg bug)
+        // Solution: Apply filters with CPU first, then re-encode with NVENC
+
+        console.log(`[${jobId}] GPU encoding: using two-pass approach (filters→CPU→NVENC)`);
+
+        const filteredTemp = path.join(workDir, 'filtered_temp.mp4');
+
+        // PASS 1: Apply filters with CPU encoding (fast preset)
+        const pass1Args = [
           '-i', inputFile,
           filterFlag, filters,
-          ...encoderArgs,
+          '-c:v', 'libx264',
+          '-preset', 'ultrafast',  // Fast since this is intermediate
+          '-crf', '18',            // High quality to avoid quality loss
           '-c:a', 'aac',
           '-b:a', '128k',
           '-r', targetFps.toString(),
+          '-y',
+          filteredTemp
+        ];
+
+        console.log(`[${jobId}] PASS 1 (CPU+filters): ffmpeg ${pass1Args.join(' ')}`);
+
+        await new Promise((resolve, reject) => {
+          const pass1Process = spawn('ffmpeg', pass1Args);
+          let pass1Stderr = '';
+
+          pass1Process.stderr.on('data', (data) => {
+            pass1Stderr += data.toString();
+            const match = data.toString().match(/time=(\d+:\d+:\d+\.\d+)/);
+            if (match) {
+              console.log(`[${jobId}] PASS 1 progress: ${match[1]}`);
+            }
+          });
+
+          pass1Process.on('close', (code) => {
+            if (code === 0 && fs.existsSync(filteredTemp)) {
+              const size = fs.statSync(filteredTemp).size;
+              console.log(`[${jobId}] PASS 1 completed: ${(size / 1024 / 1024).toFixed(2)} MB`);
+              resolve();
+            } else {
+              console.error(`[${jobId}] PASS 1 failed: ${pass1Stderr.slice(-500)}`);
+              reject(new Error(`PASS 1 (CPU filter) failed: ${code}`));
+            }
+          });
+
+          pass1Process.on('error', reject);
+        });
+
+        // PASS 2: Re-encode filtered video with NVENC (NO filters)
+        args = [
+          '-i', filteredTemp,
+          ...encoderArgs,
+          '-c:a', 'copy',  // Audio already encoded in pass 1
           '-movflags', '+faststart',
           '-y',
           outputFile
         ];
+
+        console.log(`[${jobId}] PASS 2 (NVENC): ffmpeg ${args.join(' ')}`);
       } else {
         // CPU encoding - can handle loudnorm inline without deadlock
         const audioEncoding = getAudioEncodingArgs();
@@ -2793,15 +2839,8 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       filters.push(`unsharp=5:5:0.8:5:5:0`);
     }
 
-    // CRITICAL: Ensure output pixel format is compatible with NVENC
-    // Without this, NVENC may receive frames in an incompatible format
+    // Ensure output pixel format is compatible with all encoders
     filters.push('format=yuv420p');
-
-    // CRITICAL FIX FOR NVENC FROZEN VIDEO:
-    // Generate fresh timestamps based on frame count (N) at 30fps
-    // This ensures NVENC receives frames with monotonically increasing timestamps
-    // Without this, NVENC may receive frames with incorrect/duplicate timestamps causing frozen video
-    filters.push('setpts=N/30/TB');
   }
 
   // For complex filter graphs (with labeled streams), join with semicolons
