@@ -27,12 +27,25 @@ export function isGpuAvailable() {
 
   // Check environment variable first (set by Cloud Run or deploy.sh)
   const gpuEnv = process.env.GPU_ENABLED;
+
+  // If explicitly disabled, return false
   if (gpuEnv === 'false') {
     console.log('[GPU] GPU disabled via environment variable');
     gpuAvailable = false;
     return false;
   }
 
+  // CLOUD RUN GPU MODE: If GPU_ENABLED=true, trust it and skip hardware checks
+  // Cloud Run GPU instances have GPU available but nvidia-smi may not work during cold start
+  // The actual NVENC encoding will fail gracefully if GPU isn't available
+  if (gpuEnv === 'true') {
+    console.log('[GPU] GPU_ENABLED=true - assuming GPU available (Cloud Run GPU mode)');
+    console.log('[GPU] ✓ GPU acceleration enabled - will use h264_nvenc');
+    gpuAvailable = true;
+    return true;
+  }
+
+  // AUTO MODE: Run hardware checks
   try {
     // Method 1: Check if nvidia-smi is available (indicates NVIDIA driver is installed)
     try {
@@ -49,35 +62,16 @@ export function isGpuAvailable() {
     }
 
     // Method 2: Test actual NVENC encoding capability
-    // Skip encoder list check - NVENC may not appear in list but still work at runtime
-    // The actual encoding test is the definitive check
     try {
-      // Capture stderr for debugging
       const result = execSync('ffmpeg -f lavfi -i color=c=black:s=64x64:d=0.1 -c:v h264_nvenc -f null - 2>&1', {
         timeout: 15000,
         encoding: 'utf8'
       });
       console.log('[GPU] NVENC encoding test successful');
-      console.log('[GPU] NVENC test output:', result.substring(0, 200));
     } catch (e) {
-      // Log the actual error for debugging
       const errorOutput = e.stdout || e.stderr || e.message || 'Unknown error';
-      console.log('[GPU] NVENC encoding test failed with output:', errorOutput.substring(0, 500));
-
-      // Check for specific error types
-      if (errorOutput.includes('Cannot load libnvidia-encode')) {
-        console.log('[GPU] Error: libnvidia-encode.so not found - NVIDIA driver may not be properly installed');
-        gpuCheckError = 'libnvidia-encode.so not found';
-      } else if (errorOutput.includes('driver does not support')) {
-        console.log('[GPU] Error: NVIDIA driver version too old for this FFmpeg build');
-        gpuCheckError = 'Driver version mismatch';
-      } else if (errorOutput.includes('No NVENC capable devices found')) {
-        console.log('[GPU] Error: No NVENC devices - GPU may not support hardware encoding');
-        gpuCheckError = 'No NVENC devices found';
-      } else {
-        gpuCheckError = 'NVENC encoding test failed: ' + errorOutput.substring(0, 100);
-      }
-
+      console.log('[GPU] NVENC encoding test failed:', errorOutput.substring(0, 200));
+      gpuCheckError = 'NVENC encoding test failed';
       gpuAvailable = false;
       return false;
     }
