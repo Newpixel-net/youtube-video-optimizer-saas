@@ -147,11 +147,14 @@ function getGpuEncodingParams(quality) {
     type: 'gpu',
     encoder: 'h264_nvenc',
     encoderArgs: [
-      // MINIMAL NVENC configuration - testing if simpler settings work
       '-c:v', 'h264_nvenc',
       '-preset', preset.preset,
-      // Let NVENC use defaults for everything else
-      // Previous complex rate control options were causing freezes
+      // CRITICAL: Disable B-frames to prevent NVENC frozen video
+      // B-frames require lookahead which can cause sync issues with filtered input
+      '-bf', '0',
+      // Use constant QP mode - simplest rate control, no lookahead buffering
+      '-rc', 'constqp',
+      '-qp', preset.cq.toString(),
     ],
     audioEncoder: 'aac',
     audioArgs: [
