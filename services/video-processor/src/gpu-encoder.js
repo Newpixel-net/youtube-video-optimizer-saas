@@ -147,23 +147,25 @@ function getGpuEncodingParams(quality) {
     type: 'gpu',
     encoder: 'h264_nvenc',
     encoderArgs: [
-      '-pix_fmt', 'yuv420p',  // CRITICAL: Ensure compatible pixel format for all players
+      // Essential format/codec settings
       '-c:v', 'h264_nvenc',
+      '-pix_fmt', 'yuv420p',    // CRITICAL: Ensure compatible pixel format
       '-preset', preset.preset,
-      '-rc', 'vbr',           // Variable bitrate mode
-      '-cq', preset.cq.toString(),  // Constant quality value
-      '-b:v', '0',            // Let CQ control bitrate
-      '-maxrate', '10M',      // Cap maximum bitrate
-      '-bufsize', '20M',      // Buffer size for rate control
-      '-profile:v', 'high',   // H.264 High Profile for better compression
-      '-level', '4.1',        // Compatibility level
-      '-g', '30',             // Keyframe every 30 frames (1 sec at 30fps)
-      '-bf', '0',             // Disable B-frames for maximum compatibility
-      '-strict_gop', '1',     // NVENC: Enforce strict GOP structure
-      '-forced-idr', '1',     // NVENC: Force IDR frames at keyframe positions
-      '-spatial-aq', '1',     // Spatial adaptive quantization (better quality)
-      '-temporal-aq', '1',    // Temporal adaptive quantization
-      '-fps_mode', 'cfr',     // Force constant frame rate (fixes VFR input from MediaRecorder)
+
+      // Quality settings
+      '-rc', 'vbr',
+      '-cq', preset.cq.toString(),
+      '-b:v', '0',
+      '-maxrate', '10M',
+      '-bufsize', '20M',
+
+      // Compatibility settings
+      '-profile:v', 'main',     // Use 'main' instead of 'high' for better compatibility
+      '-level', '4.0',
+
+      // CRITICAL: Keyframe settings for playback
+      '-g', '30',               // Keyframe every 30 frames
+      '-bf', '0',               // No B-frames for maximum compatibility
     ],
     audioEncoder: 'aac',
     audioArgs: [
