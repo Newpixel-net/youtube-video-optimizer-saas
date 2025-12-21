@@ -156,19 +156,19 @@ function getGpuEncodingParams(quality) {
       '-bufsize', '20M',      // Buffer size for rate control
       '-profile:v', 'high',   // H.264 High Profile for better compression
       '-level', '4.1',        // Compatibility level
+      '-g', '30',             // CRITICAL: Keyframe every 30 frames (1 sec at 30fps)
+      '-bf', '2',             // B-frames for compression efficiency
       '-spatial-aq', '1',     // Spatial adaptive quantization (better quality)
       '-temporal-aq', '1',    // Temporal adaptive quantization
-      '-rc-lookahead', '20',  // Lookahead frames for better rate control
     ],
     audioEncoder: 'aac',
     audioArgs: [
       '-c:a', 'aac',
       '-b:a', '128k'
     ],
-    hwaccel: [
-      '-hwaccel', 'cuda',
-      '-hwaccel_output_format', 'cuda'
-    ],
+    // Note: hwaccel removed - let FFmpeg handle GPU memory automatically
+    // Using explicit hwaccel with filter chains can cause issues
+    hwaccel: [],
     description: `GPU (NVENC) - ${quality} quality`
   };
 }
