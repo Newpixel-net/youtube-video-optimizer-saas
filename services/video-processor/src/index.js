@@ -59,10 +59,23 @@ let lastJobCompletedAt = null;
  * Returns detailed status including memory usage and active job count
  */
 app.get('/health', (req, res) => {
-  const memUsage = process.memoryUsage();
-  const uptimeSeconds = process.uptime();
+  // FAST health check - no slow GPU queries
+  // GPU status is only queried on explicit /gpu-status endpoint
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: `${Math.floor(process.uptime() / 60)} minutes`,
+    jobs: {
+      active: activeJobs,
+      totalProcessed: totalJobsProcessed
+    }
+  });
+});
 
-  // Get GPU status for monitoring
+// Separate endpoint for detailed GPU status (not called during health checks)
+app.get('/gpu-status', (req, res) => {
+  const memUsage = process.memoryUsage();
+
   let gpuStatus;
   try {
     gpuStatus = getGpuStatus();
@@ -71,18 +84,11 @@ app.get('/health', (req, res) => {
   }
 
   res.status(200).json({
-    status: 'healthy',
     timestamp: new Date().toISOString(),
-    uptime: `${Math.floor(uptimeSeconds / 60)} minutes`,
     memory: {
       heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`,
       heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`,
       rss: `${Math.round(memUsage.rss / 1024 / 1024)} MB`
-    },
-    jobs: {
-      active: activeJobs,
-      totalProcessed: totalJobsProcessed,
-      lastCompleted: lastJobCompletedAt
     },
     gpu: gpuStatus,
     environment: process.env.NODE_ENV || 'development'
