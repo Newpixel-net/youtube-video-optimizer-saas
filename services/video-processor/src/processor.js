@@ -1322,11 +1322,14 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
             const useReencode = fileExt === 'webm';
 
             const ffmpegArgs = [
+              // CRITICAL: Fix broken timestamps from MediaRecorder WebM
+              '-fflags', '+genpts',
               '-ss', String(relativeStart),   // Seek to start position
               '-i', capturedFile,
               '-t', String(duration),         // Duration to extract
               ...(useReencode
-                ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
+                ? ['-vsync', 'cfr',  // Force constant frame rate from VFR WebM
+                   '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                    '-c:a', 'aac', '-b:a', '192k']
                 : ['-c', 'copy']),
               '-avoid_negative_ts', 'make_zero',
@@ -1472,7 +1475,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               }
 
               // Build FFmpeg arguments
-              const ffmpegArgs = ['-i', capturedFile];
+              // CRITICAL: Add -fflags +genpts to fix broken timestamps from MediaRecorder WebM
+              const ffmpegArgs = ['-fflags', '+genpts', '-i', capturedFile];
 
               if (useRescaling && videoFilter) {
                 ffmpegArgs.push('-vf', videoFilter);
@@ -1481,7 +1485,9 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                 }
               }
 
+              // CRITICAL: Add -vsync cfr to force constant frame rate from VFR WebM input
               ffmpegArgs.push(
+                '-vsync', 'cfr',
                 '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                 '-c:a', 'aac', '-b:a', '192k',
                 '-y',
