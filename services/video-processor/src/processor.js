@@ -2359,115 +2359,44 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
    * Run FFmpeg encoding with specified encoder args
    * @param {string[]} encoderArgs - Video encoding arguments
    * @param {string} encoderName - Name for logging (GPU/CPU)
-   * @param {string|null} preProcessedAudio - Path to pre-processed audio (for GPU encoding)
+   * @param {string|null} preProcessedAudio - Path to pre-processed audio (unused, kept for API compat)
    * @returns {Promise<string>} Output file path
    */
   const runFFmpegEncode = async (encoderArgs, encoderName, preProcessedAudio = null) => {
-      let args;
+      // IMPORTANT: NVENC has a fundamental bug where filtered video produces frozen output.
+      // The diagnostic test proves NVENC works without filters, but ANY filter chain causes
+      // the output video to be frozen (first frame only). This is an NVIDIA driver or FFmpeg bug.
+      //
+      // SOLUTION: Always use CPU encoding (libx264) when filters are applied.
+      // This is reliable and still fast on Cloud Run's 4-core CPU.
+      // NVENC could theoretically be used for unfiltered re-encoding, but this app
+      // always applies crop/scale filters, so we just use CPU.
 
-      // Check if this is GPU encoding - loudnorm causes NVENC to freeze at ~3.3s
       const isGpuEncoding = encoderName.includes('GPU');
 
-      if (preProcessedAudio && fs.existsSync(preProcessedAudio)) {
-        // GPU encoding with pre-processed audio
-        // Use two inputs: video source + pre-processed audio
-        args = [
-          // CRITICAL: Generate proper PTS for input to fix NVENC frame reading
-          '-fflags', '+genpts',
-          '-i', inputFile,           // Input 0: video source
-          '-i', preProcessedAudio,   // Input 1: pre-processed audio
-          filterFlag, filters,
-          '-map', '0:v',             // Use video from input 0
-          '-map', '1:a',             // Use audio from input 1
-          ...encoderArgs,
-          '-c:a', 'copy',            // Copy pre-processed audio (already encoded)
-          '-r', targetFps.toString(),
-          '-movflags', '+faststart',
-          '-y',
-          outputFile
-        ];
-        console.log(`[${jobId}] Using pre-processed audio for GPU encoding`);
-      } else if (isGpuEncoding) {
-        // GPU encoding - TWO PASS APPROACH to fix NVENC frozen video
-        // NVENC works fine without filters (diagnostic proves this)
-        // But NVENC + filter chain produces frozen video (unknown NVIDIA driver/FFmpeg bug)
-        // Solution: Apply filters with CPU first, then re-encode with NVENC
-
-        console.log(`[${jobId}] GPU encoding: using two-pass approach (filters→CPU→NVENC)`);
-
-        const filteredTemp = path.join(workDir, 'filtered_temp.mp4');
-
-        // PASS 1: Apply filters with CPU encoding (fast preset)
-        const pass1Args = [
-          '-i', inputFile,
-          filterFlag, filters,
-          '-c:v', 'libx264',
-          '-preset', 'ultrafast',  // Fast since this is intermediate
-          '-crf', '18',            // High quality to avoid quality loss
-          '-c:a', 'aac',
-          '-b:a', '128k',
-          '-r', targetFps.toString(),
-          '-y',
-          filteredTemp
-        ];
-
-        console.log(`[${jobId}] PASS 1 (CPU+filters): ffmpeg ${pass1Args.join(' ')}`);
-
-        await new Promise((resolve, reject) => {
-          const pass1Process = spawn('ffmpeg', pass1Args);
-          let pass1Stderr = '';
-
-          pass1Process.stderr.on('data', (data) => {
-            pass1Stderr += data.toString();
-            const match = data.toString().match(/time=(\d+:\d+:\d+\.\d+)/);
-            if (match) {
-              console.log(`[${jobId}] PASS 1 progress: ${match[1]}`);
-            }
-          });
-
-          pass1Process.on('close', (code) => {
-            if (code === 0 && fs.existsSync(filteredTemp)) {
-              const size = fs.statSync(filteredTemp).size;
-              console.log(`[${jobId}] PASS 1 completed: ${(size / 1024 / 1024).toFixed(2)} MB`);
-              resolve();
-            } else {
-              console.error(`[${jobId}] PASS 1 failed: ${pass1Stderr.slice(-500)}`);
-              reject(new Error(`PASS 1 (CPU filter) failed: ${code}`));
-            }
-          });
-
-          pass1Process.on('error', reject);
-        });
-
-        // PASS 2: Re-encode filtered video with NVENC (NO filters)
-        args = [
-          '-i', filteredTemp,
-          ...encoderArgs,
-          '-c:a', 'copy',  // Audio already encoded in pass 1
-          '-movflags', '+faststart',
-          '-y',
-          outputFile
-        ];
-
-        console.log(`[${jobId}] PASS 2 (NVENC): ffmpeg ${args.join(' ')}`);
-      } else {
-        // CPU encoding - can handle loudnorm inline without deadlock
-        const audioEncoding = getAudioEncodingArgs();
-        args = [
-          '-fflags', '+genpts',
-          '-i', inputFile,
-          filterFlag, filters,
-          '-af', audioFilters,
-          ...encoderArgs,
-          ...audioEncoding,
-          '-r', targetFps.toString(),
-          '-movflags', '+faststart',
-          '-y',
-          outputFile
-        ];
+      if (isGpuEncoding) {
+        console.log(`[${jobId}] NOTE: GPU requested but using CPU (libx264) due to NVENC filter bug`);
+        console.log(`[${jobId}] NVENC produces frozen video when filters are applied - known driver issue`);
       }
 
-      console.log(`[${jobId}] FFmpeg command (${encoderName}): ffmpeg ${args.join(' ')}`);
+      // Always use CPU encoding with libx264 - reliable and produces correct output
+      const audioEncoding = getAudioEncodingArgs();
+      const args = [
+        '-fflags', '+genpts',
+        '-i', inputFile,
+        filterFlag, filters,
+        '-af', audioFilters,
+        '-c:v', 'libx264',
+        '-preset', 'fast',      // Good balance of speed and quality
+        '-crf', '23',           // Standard quality
+        ...audioEncoding,
+        '-r', targetFps.toString(),
+        '-movflags', '+faststart',
+        '-y',
+        outputFile
+      ];
+
+      console.log(`[${jobId}] FFmpeg command (CPU-libx264): ffmpeg ${args.join(' ')}`);
 
       // Execute FFmpeg and wait for completion
       return new Promise((resolve, reject) => {
@@ -2484,144 +2413,49 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
           const match = chunk.match(/time=(\d+:\d+:\d+\.\d+)/);
           if (match && match[1] !== lastProgress) {
             lastProgress = match[1];
-            console.log(`[${jobId}] FFmpeg progress (${encoderName}): ${match[1]}`);
-          }
-
-          // DIAGNOSTIC: Log any error/warning messages immediately
-          if (chunk.includes('Error') || chunk.includes('error') ||
-              chunk.includes('failed') || chunk.includes('Cannot') ||
-              chunk.includes('Invalid') || chunk.includes('No such')) {
-            console.error(`[${jobId}] FFmpeg ERROR: ${chunk.trim()}`);
+            console.log(`[${jobId}] FFmpeg progress: ${match[1]}`);
           }
         });
 
         ffmpegProcess.on('close', (code) => {
           if (code === 0 && fs.existsSync(outputFile)) {
-            console.log(`[${jobId}] FFmpeg ${encoderName} encoding completed: ${outputFile}`);
+            console.log(`[${jobId}] FFmpeg encoding completed: ${outputFile}`);
             resolve(outputFile);
           } else {
-            console.error(`[${jobId}] FFmpeg ${encoderName} failed. Code: ${code}`);
-            // Log MORE stderr for debugging (last 2000 chars)
-            console.error(`[${jobId}] FFmpeg FULL stderr (last 2000 chars):`);
+            console.error(`[${jobId}] FFmpeg failed. Code: ${code}`);
+            console.error(`[${jobId}] FFmpeg stderr (last 2000 chars):`);
             console.error(stderr.slice(-2000));
-            reject(new Error(`Video processing failed (${encoderName}): ${code}`));
+            reject(new Error(`Video processing failed: ${code}`));
           }
         });
 
         ffmpegProcess.on('error', (error) => {
-          reject(new Error(`Failed to start FFmpeg (${encoderName}): ${error.message}`));
+          reject(new Error(`Failed to start FFmpeg: ${error.message}`));
         });
       });
   };
 
-  // Diagnostic: Test NVENC without filters to isolate the problem
-  const testNvencBasic = () => {
-    return new Promise((resolve) => {
-      const testOutput = path.join(workDir, 'nvenc_test.mp4');
-      const testArgs = [
-        '-y', '-i', inputFile,
-        '-t', '2',  // Only encode 2 seconds for quick test
-        '-c:v', 'h264_nvenc',
-        '-c:a', 'copy',
-        testOutput
-      ];
-
-      console.log(`[${jobId}] DIAGNOSTIC: Testing basic NVENC (no filters)...`);
-      console.log(`[${jobId}] DIAGNOSTIC cmd: ffmpeg ${testArgs.join(' ')}`);
-
-      const testProcess = spawn('ffmpeg', testArgs);
-      let testStderr = '';
-
-      testProcess.stderr.on('data', (data) => {
-        testStderr += data.toString();
-      });
-
-      // Timeout after 30 seconds - store reference to cancel if process completes
-      const timeoutId = setTimeout(() => {
-        testProcess.kill('SIGKILL');
-        console.error(`[${jobId}] DIAGNOSTIC: ❌ Basic NVENC TIMEOUT after 30s`);
-        resolve({ works: false, error: 'TIMEOUT' });
-      }, 30000);
-
-      testProcess.on('close', (code) => {
-        // Clear the timeout to prevent race condition
-        clearTimeout(timeoutId);
-
-        if (code === 0 && fs.existsSync(testOutput)) {
-          console.log(`[${jobId}] DIAGNOSTIC: ✅ Basic NVENC works! Problem is filter chain.`);
-          try { fs.unlinkSync(testOutput); } catch (e) {}
-          resolve({ works: true, error: null });
-        } else {
-          console.error(`[${jobId}] DIAGNOSTIC: ❌ Basic NVENC FAILED! Code: ${code}`);
-          console.error(`[${jobId}] DIAGNOSTIC stderr: ${testStderr.slice(-1000)}`);
-          resolve({ works: false, error: testStderr.slice(-1000) });
-        }
-      });
-    });
-  };
-
-  // Main encoding logic with validation and retry
+  // Main encoding logic
   try {
-    // Check if we're using GPU
-    const useGpu = checkGpuIfNeeded();
+    // NOTE: We always use CPU (libx264) encoding because NVENC has a bug where
+    // filtered video produces frozen output. See runFFmpegEncode for details.
+    console.log(`[${jobId}] Starting video encoding with libx264 (CPU)`);
 
-    // DIAGNOSTIC: If GPU, test basic NVENC first
-    if (useGpu) {
-      const nvencTest = await testNvencBasic();
-      if (!nvencTest.works) {
-        console.error(`[${jobId}] ⚠️ Basic NVENC test failed - falling back to CPU`);
-        console.error(`[${jobId}] NVENC error: ${nvencTest.error}`);
-        // Force CPU encoding
-        const cpuEncoderArgs = getCpuEncodingArgs('medium');
-        await runFFmpegEncode(cpuEncoderArgs, 'CPU-NVENC-BROKEN', null);
-        return outputFile;
-      }
-    }
+    // Use CPU encoder args - NVENC is disabled due to filter bug
+    const encoderArgs = getCpuEncodingArgs('medium');
 
-    // First attempt: Use GPU if available
-    const primaryEncoderArgs = getVideoEncodingArgs('medium');
-    const primaryEncoderName = useGpu ? 'GPU' : 'CPU';
-
-    // Always use single-input approach (preProcessedAudio = null) to avoid sync issues
-    await runFFmpegEncode(primaryEncoderArgs, primaryEncoderName, null);
+    await runFFmpegEncode(encoderArgs, 'CPU', null);
 
     // CRITICAL: Validate output to detect frozen video
-    console.log(`[${jobId}] Validating ${primaryEncoderName} output...`);
+    console.log(`[${jobId}] Validating output...`);
     const validation = validateVideoOutput(outputFile, expectedDuration);
 
     if (validation.isValid) {
-      console.log(`[${jobId}] ✅ ${primaryEncoderName} output validated successfully`);
-      return outputFile;
+      console.log(`[${jobId}] ✅ Output validated successfully`);
+    } else {
+      console.warn(`[${jobId}] ⚠️ Output validation warning: ${validation.message}`);
     }
 
-    // If GPU output is frozen and we were using GPU, retry with CPU
-    if (useGpu && !validation.isValid) {
-      console.warn(`[${jobId}] ⚠️ ${primaryEncoderName} output validation FAILED: ${validation.message}`);
-      console.log(`[${jobId}] 🔄 Retrying with CPU encoding (libx264)...`);
-
-      // Delete failed output
-      try { fs.unlinkSync(outputFile); } catch (e) {}
-
-      // Retry with CPU
-      const cpuEncoderArgs = getCpuEncodingArgs('medium');
-      await runFFmpegEncode(cpuEncoderArgs, 'CPU-FALLBACK', null);
-
-      // Validate CPU output
-      console.log(`[${jobId}] Validating CPU fallback output...`);
-      const cpuValidation = validateVideoOutput(outputFile, expectedDuration);
-
-      if (cpuValidation.isValid) {
-        console.log(`[${jobId}] ✅ CPU fallback output validated successfully`);
-        return outputFile;
-      } else {
-        console.error(`[${jobId}] ❌ CPU fallback also failed validation: ${cpuValidation.message}`);
-        console.warn(`[${jobId}] ⚠️ Returning video despite validation failure for debugging`);
-        return outputFile;
-      }
-    }
-
-    // If we weren't using GPU and validation failed, return anyway for debugging
-    console.warn(`[${jobId}] ⚠️ Output validation failed but no fallback available: ${validation.message}`);
     return outputFile;
 
   } catch (error) {
