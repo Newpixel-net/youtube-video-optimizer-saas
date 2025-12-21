@@ -21,7 +21,7 @@
     // Dispatch custom event to let Video Wizard know extension is available
     window.dispatchEvent(new CustomEvent('yvo-extension-ready', {
       detail: {
-        version: '2.7.5',
+        version: '2.7.6',
         extensionId: EXTENSION_ID,
         features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout', 'smart_prebuffering']
       }
@@ -29,10 +29,10 @@
 
     // Also set a marker on window for synchronous checks
     window.__YVO_EXTENSION_INSTALLED__ = true;
-    window.__YVO_EXTENSION_VERSION__ = '2.7.5';
+    window.__YVO_EXTENSION_VERSION__ = '2.7.6';
     window.__YVO_EXTENSION_FEATURES__ = ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout', 'smart_prebuffering'];
 
-    console.log('[EXT] Bridge ready - v2.7.5 with smart pre-buffering for long videos');
+    console.log('[EXT] Bridge ready - v2.7.6 with smart pre-buffering for long videos');
   }
 
   /**
@@ -54,7 +54,7 @@
       case 'checkExtension':
         sendResponse(requestId, {
           installed: true,
-          version: '2.7.5',
+          version: '2.7.6',
           features: ['mediarecorder_primary', 'user_initiated_capture', 'browser_upload', 'auto_inject', 'capture_timeout', 'skip_capture_analysis', 'message_passing_capture', 'track_cloning', 'relay_error_handling', 'hard_timeout_guarantee', 'simplified_flow', 'direct_capture', 'storage_backup', 'single_capture_flow', 'bridge_storage_fallback', 'background_capture', 'storage_primary_comm', 'ad_detection', 'localStorage_fallback', 'improved_video_state', 'better_error_handling', 'improved_ad_skip', 'long_video_timeout', 'smart_prebuffering'],
           maxBase64Size: 40 * 1024 * 1024 // 40MB - files larger than this upload directly
         });
@@ -118,6 +118,18 @@
       // Generate a unique bridge request ID for storage-based communication
       const bridgeRequestId = `bridge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+      // Check if extension context is still valid
+      // chrome.runtime.id is undefined when the extension context is invalidated
+      if (!chrome.runtime?.id) {
+        console.error('[EXT][CAPTURE] CRITICAL: Extension context invalidated! chrome.runtime.id is undefined');
+        sendResponse(requestId, {
+          success: false,
+          error: 'Extension was reloaded or updated. Please refresh this page and try again.',
+          code: 'CONTEXT_INVALIDATED'
+        });
+        return;
+      }
+
       // Check if chrome.storage is available (may be undefined in some contexts)
       if (!chrome.storage || !chrome.storage.local) {
         console.error('[EXT][CAPTURE] CRITICAL: chrome.storage.local not available!');
@@ -133,6 +145,16 @@
       try {
         await chrome.storage.local.remove([`bridge_result_${bridgeRequestId}`]);
       } catch (storageErr) {
+        // If storage operation fails with context invalidated, fail immediately
+        if (storageErr.message?.includes('Extension context invalidated')) {
+          console.error('[EXT][CAPTURE] CRITICAL: Extension context invalidated during storage operation');
+          sendResponse(requestId, {
+            success: false,
+            error: 'Extension was reloaded. Please refresh this page and try again.',
+            code: 'CONTEXT_INVALIDATED'
+          });
+          return;
+        }
         console.warn('[EXT][CAPTURE] Could not clear previous result:', storageErr.message);
       }
 
@@ -169,6 +191,10 @@
 
       console.log(`[EXT][CAPTURE] Calling chrome.runtime.sendMessage with payload:`, JSON.stringify(messagePayload).substring(0, 200));
 
+      // Track if message sending fails with context invalidation
+      let contextInvalidated = false;
+      let messageError = null;
+
       chrome.runtime.sendMessage(messagePayload).then(ack => {
         // Just log the acknowledgment, don't use it as the actual response
         if (ack?.acknowledged) {
@@ -176,6 +202,7 @@
         } else if (ack?.error) {
           // Immediate error (e.g., invalid video ID) - store in our local variable
           console.log(`[EXT][CAPTURE] Background returned immediate error: ${ack.error}`);
+          messageError = ack.error;
         }
       }).catch(err => {
         // Log the error details for debugging
@@ -183,12 +210,28 @@
         console.error(`[EXT][CAPTURE] Error name: ${err.name}`);
         console.error(`[EXT][CAPTURE] Full error:`, err);
 
-        // Check for specific error types
+        // Check for specific error types that indicate context invalidation
         if (err.message?.includes('Extension context invalidated') ||
-            err.message?.includes('Could not establish connection')) {
+            err.message?.includes('Could not establish connection') ||
+            err.message?.includes('Receiving end does not exist')) {
           console.error('[EXT][CAPTURE] CRITICAL: Extension disconnected - service worker may have terminated');
+          contextInvalidated = true;
+          messageError = 'Extension was reloaded. Please refresh this page and try again.';
         }
       });
+
+      // Brief wait to catch immediate sendMessage failures
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // If context was invalidated during sendMessage, fail immediately
+      if (contextInvalidated) {
+        sendResponse(requestId, {
+          success: false,
+          error: messageError || 'Extension context invalidated. Please refresh this page.',
+          code: 'CONTEXT_INVALIDATED'
+        });
+        return;
+      }
 
       // ALWAYS poll storage for the result - this is the reliable path
       // Background script stores result in chrome.storage when capture completes
@@ -224,11 +267,32 @@
             break;
           }
         } catch (e) {
-          // Log storage errors for debugging, but keep polling
+          // Check for context invalidation
+          if (e.message?.includes('Extension context invalidated')) {
+            console.error('[EXT][CAPTURE] Context invalidated during polling');
+            sendResponse(requestId, {
+              success: false,
+              error: 'Extension was reloaded during capture. Please refresh this page and try again.',
+              code: 'CONTEXT_INVALIDATED'
+            });
+            return;
+          }
+          // Log other storage errors for debugging, but keep polling
           console.warn(`[EXT][CAPTURE] Storage poll error: ${e.message}`);
         }
 
-        // Check for buffering progress updates (v2.7.5)
+        // Also check if chrome.runtime.id is still valid
+        if (!chrome.runtime?.id) {
+          console.error('[EXT][CAPTURE] Extension context lost during polling');
+          sendResponse(requestId, {
+            success: false,
+            error: 'Extension was reloaded during capture. Please refresh this page and try again.',
+            code: 'CONTEXT_INVALIDATED'
+          });
+          return;
+        }
+
+        // Check for buffering progress updates (v2.7.6)
         try {
           const progressStored = await chrome.storage.local.get([`bridge_progress_${bridgeRequestId}`]);
           const progress = progressStored[`bridge_progress_${bridgeRequestId}`];
