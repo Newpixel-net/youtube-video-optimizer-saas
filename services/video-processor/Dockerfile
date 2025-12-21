@@ -44,12 +44,21 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install FFmpeg - the system package works with NVIDIA runtime libraries
-# NVENC support is enabled at runtime when GPU is available on Cloud Run
+# Install Jellyfin FFmpeg with NVENC support
+# Jellyfin's FFmpeg is compiled with hardware encoding support (h264_nvenc, hevc_nvenc)
+# This is required for GPU-accelerated video processing on Cloud Run
 RUN apt-get update && \
-    apt-get install -y ffmpeg && \
+    apt-get install -y wget && \
+    wget -q https://repo.jellyfin.org/files/ffmpeg/ubuntu/latest-6.x/amd64/jellyfin-ffmpeg6_6.0.1-8-jammy_amd64.deb && \
+    apt-get install -y ./jellyfin-ffmpeg6_6.0.1-8-jammy_amd64.deb && \
+    rm jellyfin-ffmpeg6_6.0.1-8-jammy_amd64.deb && \
+    ln -sf /usr/lib/jellyfin-ffmpeg/ffmpeg /usr/local/bin/ffmpeg && \
+    ln -sf /usr/lib/jellyfin-ffmpeg/ffprobe /usr/local/bin/ffprobe && \
     rm -rf /var/lib/apt/lists/* && \
-    echo "FFmpeg version:" && ffmpeg -version
+    echo "=== FFmpeg Version ===" && \
+    /usr/local/bin/ffmpeg -version && \
+    echo "=== NVENC Encoders ===" && \
+    /usr/local/bin/ffmpeg -encoders 2>/dev/null | grep nvenc || echo "NVENC will be available at runtime with GPU"
 
 # NVIDIA environment configuration for Cloud Run GPU
 # These env vars tell the runtime to expose GPU video encoding capabilities
