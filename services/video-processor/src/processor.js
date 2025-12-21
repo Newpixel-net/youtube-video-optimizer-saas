@@ -404,7 +404,6 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-vsync', 'vfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -559,7 +558,6 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-vsync', 'vfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -719,7 +717,6 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-vsync', 'vfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -1351,7 +1348,6 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               '-t', String(duration),         // Duration to extract
               ...(useReencode
                 ? ['-r', '30',        // Force 30fps OUTPUT (fixes 1000fps detection)
-                   '-vsync', 'vfr',   // VFR preserves timestamps without duplication
                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                    '-c:a', 'aac', '-b:a', '192k']
                 : ['-c', 'copy']),
@@ -1510,10 +1506,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
               // CRITICAL: Fix MediaRecorder WebM timestamp issues
               // -r 30 forces 30fps output (fixes FFmpeg detecting 1000fps)
-              // -vsync vfr preserves timestamps without frame duplication
               ffmpegArgs.push(
                 '-r', '30',
-                '-vsync', 'vfr',
                 '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                 '-c:a', 'aac', '-b:a', '192k',
                 '-y',
@@ -2203,8 +2197,6 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       '-i', inputFile,
       filterFlag, filters,
       '-af', audioFilters,
-      // Handle VFR input - force constant frame rate output
-      '-vsync', 'vfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -2518,8 +2510,8 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
       '-fflags', '+igndts+genpts',
       '-i', inputFile,
       '-vf', filters.join(','),
-      '-vsync', 'vfr',
       ...videoEncoding,
+      '-r', '30',
       '-c:a', 'copy',
       '-y',
       outputFile
