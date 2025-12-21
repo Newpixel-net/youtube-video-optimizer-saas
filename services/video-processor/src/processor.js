@@ -2366,6 +2366,9 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     return new Promise((resolve, reject) => {
       let args;
 
+      // Check if this is GPU encoding - loudnorm causes NVENC to freeze at ~3.3s
+      const isGpuEncoding = encoderName.includes('GPU');
+
       if (preProcessedAudio && fs.existsSync(preProcessedAudio)) {
         // GPU encoding with pre-processed audio
         // Use two inputs: video source + pre-processed audio
@@ -2385,11 +2388,27 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
           outputFile
         ];
         console.log(`[${jobId}] Using pre-processed audio for GPU encoding`);
+      } else if (isGpuEncoding) {
+        // GPU encoding without audio filters - loudnorm causes NVENC deadlock at ~3.3s
+        // Skip audio processing for GPU, just copy/re-encode without filters
+        console.log(`[${jobId}] GPU encoding: skipping audio filters to prevent NVENC deadlock`);
+        args = [
+          '-fflags', '+genpts',
+          '-i', inputFile,
+          filterFlag, filters,
+          // NO -af audio filters for GPU encoding!
+          ...encoderArgs,
+          '-c:a', 'aac',
+          '-b:a', '128k',
+          '-r', targetFps.toString(),
+          '-movflags', '+faststart',
+          '-y',
+          outputFile
+        ];
       } else {
-        // Standard encoding (CPU or GPU without pre-processed audio)
+        // CPU encoding - can handle loudnorm inline without deadlock
         const audioEncoding = getAudioEncodingArgs();
         args = [
-          // CRITICAL: Generate proper PTS for input to fix NVENC frame reading
           '-fflags', '+genpts',
           '-i', inputFile,
           filterFlag, filters,
