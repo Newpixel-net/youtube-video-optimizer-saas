@@ -2389,12 +2389,12 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         ];
         console.log(`[${jobId}] Using pre-processed audio for GPU encoding`);
       } else if (isGpuEncoding) {
-        // GPU encoding - MINIMAL configuration to debug NVENC freeze
-        // Skip audio filters (loudnorm causes deadlock)
-        // No hwaccel (conflicts with CPU filters)
-        // No special flags (source.mp4 already has good timestamps)
-        console.log(`[${jobId}] GPU encoding: using minimal NVENC config`);
+        // GPU encoding - optimized for NVENC
+        // Skip audio filters (loudnorm causes deadlock with hardware encoders)
+        console.log(`[${jobId}] GPU encoding: using NVENC with timestamp regen`);
         args = [
+          // CRITICAL: Generate proper PTS for input to ensure frame ordering
+          '-fflags', '+genpts',
           '-i', inputFile,
           filterFlag, filters,
           ...encoderArgs,
@@ -2489,7 +2489,17 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         testStderr += data.toString();
       });
 
+      // Timeout after 30 seconds - store reference to cancel if process completes
+      const timeoutId = setTimeout(() => {
+        testProcess.kill('SIGKILL');
+        console.error(`[${jobId}] DIAGNOSTIC: ❌ Basic NVENC TIMEOUT after 30s`);
+        resolve({ works: false, error: 'TIMEOUT' });
+      }, 30000);
+
       testProcess.on('close', (code) => {
+        // Clear the timeout to prevent race condition
+        clearTimeout(timeoutId);
+
         if (code === 0 && fs.existsSync(testOutput)) {
           console.log(`[${jobId}] DIAGNOSTIC: ✅ Basic NVENC works! Problem is filter chain.`);
           try { fs.unlinkSync(testOutput); } catch (e) {}
@@ -2500,13 +2510,6 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
           resolve({ works: false, error: testStderr.slice(-1000) });
         }
       });
-
-      // Timeout after 30 seconds
-      setTimeout(() => {
-        testProcess.kill('SIGKILL');
-        console.error(`[${jobId}] DIAGNOSTIC: ❌ Basic NVENC TIMEOUT after 30s`);
-        resolve({ works: false, error: 'TIMEOUT' });
-      }, 30000);
     });
   };
 
@@ -2793,6 +2796,12 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
     // CRITICAL: Ensure output pixel format is compatible with NVENC
     // Without this, NVENC may receive frames in an incompatible format
     filters.push('format=yuv420p');
+
+    // CRITICAL FIX FOR NVENC FROZEN VIDEO:
+    // Generate fresh timestamps based on frame count (N) at 30fps
+    // This ensures NVENC receives frames with monotonically increasing timestamps
+    // Without this, NVENC may receive frames with incorrect/duplicate timestamps causing frozen video
+    filters.push('setpts=N/30/TB');
   }
 
   // For complex filter graphs (with labeled streams), join with semicolons
