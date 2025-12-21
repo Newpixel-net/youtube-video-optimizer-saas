@@ -23,14 +23,22 @@ import {
 import { generateCaptions } from './caption-renderer.js';
 import { isGpuAvailable, getEncodingParams, getGpuStatus } from './gpu-encoder.js';
 
-// GPU availability check at startup
-let gpuEnabled = false;
-try {
-  gpuEnabled = isGpuAvailable();
-  const status = getGpuStatus();
-  console.log(`[Processor] GPU Status: ${JSON.stringify(status)}`);
-} catch (e) {
-  console.log(`[Processor] GPU detection failed: ${e.message}, using CPU encoding`);
+// GPU availability - LAZY initialization (don't check at module load to speed up startup)
+let gpuEnabled = null;
+let gpuChecked = false;
+
+function checkGpuIfNeeded() {
+  if (gpuChecked) return gpuEnabled;
+
+  gpuChecked = true;
+  try {
+    gpuEnabled = isGpuAvailable();
+    console.log(`[Processor] GPU enabled: ${gpuEnabled}`);
+  } catch (e) {
+    console.log(`[Processor] GPU detection failed: ${e.message}, using CPU encoding`);
+    gpuEnabled = false;
+  }
+  return gpuEnabled;
 }
 
 /**
@@ -2359,7 +2367,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   try {
     // First attempt: Use GPU if available
     const primaryEncoderArgs = getVideoEncodingArgs('medium');
-    const primaryEncoderName = gpuEnabled ? 'GPU' : 'CPU';
+    const primaryEncoderName = checkGpuIfNeeded() ? 'GPU' : 'CPU';
 
     await runFFmpegEncode(primaryEncoderArgs, primaryEncoderName);
 
@@ -2373,7 +2381,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     }
 
     // If GPU output is frozen and we were using GPU, retry with CPU
-    if (gpuEnabled && !validation.isValid) {
+    if (checkGpuIfNeeded() && !validation.isValid) {
       console.warn(`[${jobId}] ⚠️ ${primaryEncoderName} output validation FAILED: ${validation.message}`);
       console.log(`[${jobId}] 🔄 Retrying with CPU encoding (libx264)...`);
 
