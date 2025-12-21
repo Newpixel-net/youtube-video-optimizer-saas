@@ -404,7 +404,7 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-vsync', 'cfr',
+      '-vsync', 'vfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -559,7 +559,7 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-vsync', 'cfr',
+      '-vsync', 'vfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -719,7 +719,7 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-vsync', 'cfr',
+      '-vsync', 'vfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -1328,7 +1328,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               '-i', capturedFile,
               '-t', String(duration),         // Duration to extract
               ...(useReencode
-                ? ['-vsync', 'cfr',  // Force constant frame rate from VFR WebM
+                ? ['-r', '30',        // Force 30fps OUTPUT (fixes 1000fps detection)
+                   '-vsync', 'vfr',   // VFR preserves timestamps without duplication
                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                    '-c:a', 'aac', '-b:a', '192k']
                 : ['-c', 'copy']),
@@ -1485,9 +1486,12 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                 }
               }
 
-              // CRITICAL: Add -vsync cfr to force constant frame rate from VFR WebM input
+              // CRITICAL: Fix MediaRecorder WebM timestamp issues
+              // -r 30 forces 30fps output (fixes FFmpeg detecting 1000fps)
+              // -vsync vfr preserves timestamps without frame duplication
               ffmpegArgs.push(
-                '-vsync', 'cfr',
+                '-r', '30',
+                '-vsync', 'vfr',
                 '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                 '-c:a', 'aac', '-b:a', '192k',
                 '-y',
@@ -2178,7 +2182,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       filterFlag, filters,
       '-af', audioFilters,
       // Handle VFR input - force constant frame rate output
-      '-vsync', 'cfr',
+      '-vsync', 'vfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -2492,7 +2496,7 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
       '-fflags', '+genpts',
       '-i', inputFile,
       '-vf', filters.join(','),
-      '-vsync', 'cfr',
+      '-vsync', 'vfr',
       ...videoEncoding,
       '-c:a', 'copy',
       '-y',
