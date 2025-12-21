@@ -2428,12 +2428,23 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
       let stderr = '';
 
+      let lastProgress = '';
       ffmpegProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
+        const chunk = data.toString();
+        stderr += chunk;
+
         // Log progress from FFmpeg
-        const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
-        if (match) {
+        const match = chunk.match(/time=(\d+:\d+:\d+\.\d+)/);
+        if (match && match[1] !== lastProgress) {
+          lastProgress = match[1];
           console.log(`[${jobId}] FFmpeg progress (${encoderName}): ${match[1]}`);
+        }
+
+        // DIAGNOSTIC: Log any error/warning messages immediately
+        if (chunk.includes('Error') || chunk.includes('error') ||
+            chunk.includes('failed') || chunk.includes('Cannot') ||
+            chunk.includes('Invalid') || chunk.includes('No such')) {
+          console.error(`[${jobId}] FFmpeg ERROR: ${chunk.trim()}`);
         }
       });
 
@@ -2443,7 +2454,9 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
           resolve(outputFile);
         } else {
           console.error(`[${jobId}] FFmpeg ${encoderName} failed. Code: ${code}`);
-          console.error(`[${jobId}] stderr: ${stderr.slice(-500)}`);
+          // Log MORE stderr for debugging (last 2000 chars)
+          console.error(`[${jobId}] FFmpeg FULL stderr (last 2000 chars):`);
+          console.error(stderr.slice(-2000));
           reject(new Error(`Video processing failed (${encoderName}): ${code}`));
         }
       });
@@ -2454,18 +2467,66 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     });
   };
 
+  // Diagnostic: Test NVENC without filters to isolate the problem
+  const testNvencBasic = () => {
+    return new Promise((resolve) => {
+      const testOutput = path.join(workDir, 'nvenc_test.mp4');
+      const testArgs = [
+        '-y', '-i', inputFile,
+        '-t', '2',  // Only encode 2 seconds for quick test
+        '-c:v', 'h264_nvenc',
+        '-c:a', 'copy',
+        testOutput
+      ];
+
+      console.log(`[${jobId}] DIAGNOSTIC: Testing basic NVENC (no filters)...`);
+      console.log(`[${jobId}] DIAGNOSTIC cmd: ffmpeg ${testArgs.join(' ')}`);
+
+      const testProcess = spawn('ffmpeg', testArgs);
+      let testStderr = '';
+
+      testProcess.stderr.on('data', (data) => {
+        testStderr += data.toString();
+      });
+
+      testProcess.on('close', (code) => {
+        if (code === 0 && fs.existsSync(testOutput)) {
+          console.log(`[${jobId}] DIAGNOSTIC: ✅ Basic NVENC works! Problem is filter chain.`);
+          try { fs.unlinkSync(testOutput); } catch (e) {}
+          resolve({ works: true, error: null });
+        } else {
+          console.error(`[${jobId}] DIAGNOSTIC: ❌ Basic NVENC FAILED! Code: ${code}`);
+          console.error(`[${jobId}] DIAGNOSTIC stderr: ${testStderr.slice(-1000)}`);
+          resolve({ works: false, error: testStderr.slice(-1000) });
+        }
+      });
+
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        testProcess.kill('SIGKILL');
+        console.error(`[${jobId}] DIAGNOSTIC: ❌ Basic NVENC TIMEOUT after 30s`);
+        resolve({ works: false, error: 'TIMEOUT' });
+      }, 30000);
+    });
+  };
+
   // Main encoding logic with validation and retry
   try {
     // Check if we're using GPU
     const useGpu = checkGpuIfNeeded();
 
-    // NOTE: Audio pre-processing disabled for GPU - the two-input sync causes NVENC to freeze
-    // With -rc-lookahead 0, NVENC can handle loudnorm inline without deadlock
-    // let preProcessedAudio = null;
-    // if (useGpu && audioFilters && audioFilters.includes('loudnorm')) {
-    //   console.log(`[${jobId}] GPU encoding with loudnorm detected - pre-processing audio separately`);
-    //   preProcessedAudio = await preProcessAudio(inputFile, audioFilters, workDir);
-    // }
+    // DIAGNOSTIC: If GPU, test basic NVENC first
+    if (useGpu) {
+      const nvencTest = await testNvencBasic();
+      if (!nvencTest.works) {
+        console.error(`[${jobId}] ⚠️ Basic NVENC test failed - falling back to CPU`);
+        console.error(`[${jobId}] NVENC error: ${nvencTest.error}`);
+        // Force CPU encoding
+        const cpuEncoderArgs = getCpuEncodingArgs('medium');
+        await runFFmpegEncode(cpuEncoderArgs, 'CPU-NVENC-BROKEN', null);
+        return outputFile;
+      }
+    }
 
     // First attempt: Use GPU if available
     const primaryEncoderArgs = getVideoEncodingArgs('medium');
@@ -2728,6 +2789,10 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       filters.push(`eq=saturation=1.15:contrast=1.05:brightness=0.02`);
       filters.push(`unsharp=5:5:0.8:5:5:0`);
     }
+
+    // CRITICAL: Ensure output pixel format is compatible with NVENC
+    // Without this, NVENC may receive frames in an incompatible format
+    filters.push('format=yuv420p');
   }
 
   // For complex filter graphs (with labeled streams), join with semicolons
