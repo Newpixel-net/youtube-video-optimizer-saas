@@ -147,6 +147,7 @@ function getGpuEncodingParams(quality) {
     type: 'gpu',
     encoder: 'h264_nvenc',
     encoderArgs: [
+      '-pix_fmt', 'yuv420p',  // CRITICAL: Ensure compatible pixel format for all players
       '-c:v', 'h264_nvenc',
       '-preset', preset.preset,
       '-rc', 'vbr',           // Variable bitrate mode
@@ -156,8 +157,10 @@ function getGpuEncodingParams(quality) {
       '-bufsize', '20M',      // Buffer size for rate control
       '-profile:v', 'high',   // H.264 High Profile for better compression
       '-level', '4.1',        // Compatibility level
-      '-g', '30',             // CRITICAL: Keyframe every 30 frames (1 sec at 30fps)
-      '-bf', '2',             // B-frames for compression efficiency
+      '-g', '30',             // Keyframe every 30 frames (1 sec at 30fps)
+      '-keyint_min', '30',    // Minimum keyframe interval (match -g)
+      '-sc_threshold', '0',   // Disable scene detection for consistent keyframes
+      '-bf', '0',             // Disable B-frames for maximum compatibility
       '-spatial-aq', '1',     // Spatial adaptive quantization (better quality)
       '-temporal-aq', '1',    // Temporal adaptive quantization
     ],
