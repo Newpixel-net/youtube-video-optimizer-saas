@@ -2638,7 +2638,6 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 
   // For complex filter graphs (with labeled streams), join with semicolons
   // For simple linear chains, join with commas
-  const isComplexFilter = ['split_screen', 'three_person'].includes(normalizedMode);
   const filterChain = isComplexFilter ? filters.join(';') : filters.join(',');
 
   console.log(`[FFmpeg] COMPLETE FILTER CHAIN (${isComplexFilter ? 'complex' : 'simple'}): ${filterChain}`);
