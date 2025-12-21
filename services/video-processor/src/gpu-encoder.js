@@ -153,15 +153,20 @@ function getGpuEncodingParams(quality) {
       // B-frames require lookahead which can cause sync issues with filtered input
       '-bf', '0',
       // Use constant QP mode - simplest rate control, no lookahead buffering
+      // NOTE: Do NOT use 'vbr' with '-b:v 0' as it causes extremely low bitrate
       '-rc', 'constqp',
       '-qp', preset.cq.toString(),
+      // Keyframe interval: every 2 seconds at 30fps
+      '-g', '60',
+      // NOTE: Do NOT set -profile:v explicitly (broken in FFmpeg 7.1+)
     ],
     audioEncoder: 'aac',
     audioArgs: [
       '-c:a', 'aac',
       '-b:a', '128k'
     ],
-    hwaccel: [],
+    // Hardware acceleration for decoding (use before -i)
+    hwaccel: ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda'],
     description: `GPU (NVENC) - ${quality} quality`
   };
 }

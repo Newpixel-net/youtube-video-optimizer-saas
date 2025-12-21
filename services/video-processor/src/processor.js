@@ -2591,17 +2591,30 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       console.log(`[${jobId}] [PASS 1] ✅ Validated: ${pass1Validation.frameCount} frames, ${pass1Validation.bitrateKbps?.toFixed(0)} kbps`);
 
       // PASS 2: Re-encode with NVENC (NO FILTERS!)
+      // CRITICAL FIX based on research:
+      // 1. Use constqp mode (not vbr with -b:v 0 which causes extremely low bitrate)
+      // 2. Use -qp (not -cq) for constant quality
+      // 3. Add -bf 0 to disable B-frames (prevents lookahead/sync issues)
+      // 4. Use hwaccel cuda for faster GPU decoding
+      // 5. Add -g for keyframe interval
+      // 6. DO NOT use -profile:v (broken in FFmpeg 7.1+)
       console.log(`[${jobId}] [PASS 2] Re-encoding with NVENC (no filters)...`);
 
       const pass2Args = [
+        // Use hardware-accelerated decoding for GPU pipeline efficiency
+        '-hwaccel', 'cuda',
+        '-hwaccel_output_format', 'cuda',
         '-i', intermediateFile,
-        // NO VIDEO FILTERS - this is critical!
+        // NO VIDEO FILTERS - this is critical for NVENC!
         '-c:v', 'h264_nvenc',
-        '-preset', 'p4',          // Balanced quality/speed
-        '-rc', 'vbr',             // Variable bitrate for quality
-        '-cq', '23',              // Quality level
-        '-b:v', '0',              // Let encoder decide bitrate
-        '-c:a', 'copy',           // Copy audio (already encoded)
+        '-preset', 'p4',          // Balanced quality/speed (p1=fastest, p7=best)
+        // FIXED: Use constqp mode instead of vbr with b:v 0
+        // vbr with b:v 0 was causing extremely low bitrate (700KB files)
+        '-rc', 'constqp',         // Constant QP mode - simple, reliable
+        '-qp', '23',              // Quality parameter (lower = better, 23 is good balance)
+        '-bf', '0',               // Disable B-frames (prevents lookahead sync issues)
+        '-g', '60',               // Keyframe every 2 seconds (30fps * 2)
+        '-c:a', 'copy',           // Copy audio (already encoded in Pass 1)
         '-movflags', '+faststart',
         '-y',
         outputFile
@@ -2630,7 +2643,57 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         ffmpeg.on('error', reject);
       });
 
-      // Cleanup intermediate file
+      // Validate NVENC output BEFORE deleting intermediate file
+      // This allows CPU fallback if NVENC produces frozen video
+      console.log(`[${jobId}] [PASS 2] Validating NVENC output...`);
+      const nvencValidation = validateVideoOutput(outputFile, expectedDuration);
+
+      if (!nvencValidation.isValid) {
+        console.error(`[${jobId}] [PASS 2] ❌ NVENC output is FROZEN! Bitrate: ${nvencValidation.bitrateKbps?.toFixed(0)} kbps`);
+        console.log(`[${jobId}] [FALLBACK] Falling back to CPU encoding from intermediate file...`);
+
+        // CPU fallback encoding from intermediate file
+        const cpuFallbackArgs = [
+          '-i', intermediateFile,
+          '-c:v', 'libx264',
+          '-preset', 'fast',
+          '-crf', '23',
+          '-pix_fmt', 'yuv420p',
+          '-c:a', 'copy',
+          '-movflags', '+faststart',
+          '-y',
+          outputFile
+        ];
+
+        console.log(`[${jobId}] [FALLBACK] FFmpeg: ffmpeg ${cpuFallbackArgs.join(' ')}`);
+
+        await new Promise((resolve, reject) => {
+          const ffmpeg = spawn('ffmpeg', cpuFallbackArgs);
+          let stderr = '';
+          ffmpeg.stderr.on('data', (data) => {
+            stderr += data.toString();
+            const match = data.toString().match(/time=(\d+:\d+:\d+\.\d+)/);
+            if (match) console.log(`[${jobId}] [FALLBACK] Progress: ${match[1]}`);
+          });
+          ffmpeg.on('close', (code) => {
+            if (code === 0 && fs.existsSync(outputFile)) {
+              const size = fs.statSync(outputFile).size;
+              console.log(`[${jobId}] [FALLBACK] Complete: ${(size / 1024 / 1024).toFixed(2)} MB`);
+              resolve();
+            } else {
+              console.error(`[${jobId}] [FALLBACK] Failed: ${stderr.slice(-500)}`);
+              reject(new Error(`CPU fallback encoding failed: ${code}`));
+            }
+          });
+          ffmpeg.on('error', reject);
+        });
+
+        console.log(`[${jobId}] [FALLBACK] CPU encoding completed, validating...`);
+      } else {
+        console.log(`[${jobId}] [PASS 2] ✅ NVENC output validated: ${nvencValidation.frameCount} frames, ${nvencValidation.bitrateKbps?.toFixed(0)} kbps`);
+      }
+
+      // Cleanup intermediate file AFTER validation/fallback
       try { fs.unlinkSync(intermediateFile); } catch (e) {}
 
     } else {
@@ -2639,8 +2702,8 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       await runFFmpegEncode(getCpuEncodingArgs('medium'), 'CPU', null);
     }
 
-    // CRITICAL: Validate final output
-    console.log(`[${jobId}] Validating final output...`);
+    // CRITICAL: Final validation of output
+    console.log(`[${jobId}] Final output validation...`);
     const validation = validateVideoOutput(outputFile, expectedDuration);
 
     if (validation.isValid) {
