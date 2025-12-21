@@ -397,9 +397,9 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
     const audioEncoding = getAudioEncodingArgs();
 
     const args = [
-      '-fflags', '+genpts',  // Fix broken timestamps from MediaRecorder WebM
+      '-fflags', '+igndts+genpts',  // Fix broken timestamps from MediaRecorder WebM
       '-i', primaryFile,
-      '-fflags', '+genpts',
+      '-fflags', '+igndts+genpts',
       '-i', secondaryFile,
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
@@ -550,11 +550,11 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
     const audioEncoding = getAudioEncodingArgs();
 
     const args = [
-      '-fflags', '+genpts',
+      '-fflags', '+igndts+genpts',
       '-i', primaryFile,
-      '-fflags', '+genpts',
+      '-fflags', '+igndts+genpts',
       '-i', secondaryFile,
-      '-fflags', '+genpts',
+      '-fflags', '+igndts+genpts',
       '-i', tertiaryFile,
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
@@ -712,9 +712,9 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
     const audioEncoding = getAudioEncodingArgs();
 
     const args = [
-      '-fflags', '+genpts',
+      '-fflags', '+igndts+genpts',
       '-i', primaryFile,
-      '-fflags', '+genpts',
+      '-fflags', '+igndts+genpts',
       '-i', secondaryFile,
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
@@ -1323,7 +1323,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
             const ffmpegArgs = [
               // CRITICAL: Fix broken timestamps from MediaRecorder WebM
-              '-fflags', '+genpts',
+              // +igndts ignores broken DTS, +genpts generates new PTS
+              '-fflags', '+igndts+genpts',
               '-ss', String(relativeStart),   // Seek to start position
               '-i', capturedFile,
               '-t', String(duration),         // Duration to extract
@@ -1476,8 +1477,8 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
               }
 
               // Build FFmpeg arguments
-              // CRITICAL: Add -fflags +genpts to fix broken timestamps from MediaRecorder WebM
-              const ffmpegArgs = ['-fflags', '+genpts', '-i', capturedFile];
+              // CRITICAL: +igndts ignores broken DTS, +genpts generates new PTS
+              const ffmpegArgs = ['-fflags', '+igndts+genpts', '-i', capturedFile];
 
               if (useRescaling && videoFilter) {
                 ffmpegArgs.push('-vf', videoFilter);
@@ -2177,7 +2178,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     const args = [
       // CRITICAL: Generate PTS for WebM files from MediaRecorder
       // MediaRecorder WebM files have broken/missing timestamps causing frozen video
-      '-fflags', '+genpts',
+      '-fflags', '+igndts+genpts',
       '-i', inputFile,
       filterFlag, filters,
       '-af', audioFilters,
@@ -2493,7 +2494,7 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
     const videoEncoding = getVideoEncodingArgs('medium');
 
     const args = [
-      '-fflags', '+genpts',
+      '-fflags', '+igndts+genpts',
       '-i', inputFile,
       '-vf', filters.join(','),
       '-vsync', 'vfr',
