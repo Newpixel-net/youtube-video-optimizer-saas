@@ -2470,6 +2470,11 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         '-c:v', 'libx264',
         '-preset', 'fast',      // Good balance of speed and quality
         '-crf', '23',           // Standard quality
+        '-profile:v', 'main',   // Main profile for wide compatibility
+        '-level', '4.0',        // Level 4.0 for 1080p support
+        '-pix_fmt', 'yuv420p',  // Explicit pixel format
+        '-vsync', 'cfr',        // Explicit constant frame rate
+        '-r', '30',             // Explicit output frame rate
         ...audioEncoding,
         '-movflags', '+faststart',
         '-y',
