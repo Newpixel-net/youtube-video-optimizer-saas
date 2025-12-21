@@ -2303,8 +2303,8 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   // For simple linear chains, use -vf
   const filterFlag = isComplexFilter ? '-filter_complex' : '-vf';
 
-  // Calculate expected duration for validation
-  const expectedDuration = targetFps > 0 ? 45 : 30; // Default to 45s for shorts
+  // Calculate expected duration for validation using actual video info
+  const expectedDuration = videoInfo.duration || 30;
 
   /**
    * Run FFmpeg encoding with specified encoder args
@@ -2447,16 +2447,10 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
   // Check if this is a complex filter mode (uses split/labeled streams)
   const isComplexMode = ['split_screen', 'three_person'].includes(normalizedMode);
 
-  // CRITICAL FIX: Add fps=30 as FIRST filter to handle VFR MediaRecorder WebM input
-  // This is more reliable than -r 30 at the end because it normalizes framerate
-  // BEFORE any other filter processing (crop, scale, etc.)
-  // Research source: FFmpeg Trac #6386 - MediaRecorder 1000fps detection bug
-  // For complex filter graphs, we label the fps output to feed into split
-  if (isComplexMode) {
-    filters.push('fps=30[fpsnorm]');
-  } else {
-    filters.push('fps=30');
-  }
+  // NOTE: fps filter REMOVED - it was causing NVENC to freeze on already-30fps input
+  // The WebM→MP4 transcode already uses -r 30 to fix VFR issues
+  // The final encoding command also uses -r 30 for output framerate
+  // Adding fps filter here was redundant and interfered with NVENC frame handling
 
   // Step 1: Reframe/Crop based on mode
   switch (normalizedMode) {
@@ -2465,8 +2459,7 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       // Take left 1/3 and right 1/3 of the video, stack them
       const splitCropW = Math.floor(validWidth / 3);
       const splitHalfH = Math.floor(targetHeight / 2);
-      // Use labeled input from fps filter
-      filters.push(`[fpsnorm]split[left][right]`);
+      filters.push(`split[left][right]`);
       filters.push(`[left]crop=${splitCropW}:${validHeight}:0:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[l]`);
       filters.push(`[right]crop=${splitCropW}:${validHeight}:${validWidth - splitCropW}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[r]`);
       filters.push(`[l][r]vstack`);
@@ -2478,8 +2471,7 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       const topH = Math.floor(targetHeight * 0.55);
       const bottomH = targetHeight - topH;
       const halfTargetW = Math.floor(targetWidth / 2);
-      // Use labeled input from fps filter
-      filters.push(`[fpsnorm]split=3[center][bl][br]`);
+      filters.push(`split=3[center][bl][br]`);
       filters.push(`[center]crop=${thirdW}:${validHeight}:${thirdW}:0,scale=${targetWidth}:${topH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topH}[c]`);
       filters.push(`[bl]crop=${thirdW}:${validHeight}:0:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[left]`);
       filters.push(`[br]crop=${thirdW}:${validHeight}:${2 * thirdW}:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[right]`);
