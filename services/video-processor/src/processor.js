@@ -2391,9 +2391,10 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       } else if (isGpuEncoding) {
         // GPU encoding without audio filters - loudnorm causes NVENC deadlock at ~3.3s
         // Skip audio processing for GPU, just copy/re-encode without filters
+        // NOTE: source.mp4 has proper timestamps from libx264 transcode - no special flags needed
         console.log(`[${jobId}] GPU encoding: skipping audio filters to prevent NVENC deadlock`);
         args = [
-          '-fflags', '+genpts',
+          '-hwaccel', 'cuda',         // Hardware accelerated decoding
           '-i', inputFile,
           filterFlag, filters,
           // NO -af audio filters for GPU encoding!
