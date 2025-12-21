@@ -2307,29 +2307,97 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   const expectedDuration = videoInfo.duration || 30;
 
   /**
+   * Pre-process audio with loudnorm to avoid NVENC synchronization issues.
+   * The loudnorm filter buffers entire audio stream, causing deadlock with hardware encoders.
+   * Solution: Process audio separately, then use it with GPU encoding.
+   * @param {string} inputFile - Source video file
+   * @param {string} audioFilters - Audio filter chain
+   * @param {string} workDir - Working directory for temp files
+   * @returns {Promise<string>} Path to pre-processed audio file
+   */
+  const preProcessAudio = (inputFile, audioFilters, workDir) => {
+    return new Promise((resolve, reject) => {
+      const audioFile = path.join(workDir, 'audio_preprocessed.aac');
+
+      const args = [
+        '-i', inputFile,
+        '-vn',  // No video
+        '-af', audioFilters,
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-y',
+        audioFile
+      ];
+
+      console.log(`[${jobId}] Pre-processing audio for GPU encoding: ffmpeg ${args.join(' ')}`);
+
+      const ffmpegProcess = spawn('ffmpeg', args);
+      let stderr = '';
+
+      ffmpegProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      ffmpegProcess.on('close', (code) => {
+        if (code === 0 && fs.existsSync(audioFile)) {
+          console.log(`[${jobId}] Audio pre-processing completed: ${audioFile}`);
+          resolve(audioFile);
+        } else {
+          console.error(`[${jobId}] Audio pre-processing failed. Code: ${code}`);
+          console.error(`[${jobId}] stderr: ${stderr.slice(-500)}`);
+          reject(new Error(`Audio pre-processing failed: ${code}`));
+        }
+      });
+
+      ffmpegProcess.on('error', (error) => {
+        reject(new Error(`Failed to start audio pre-processing: ${error.message}`));
+      });
+    });
+  };
+
+  /**
    * Run FFmpeg encoding with specified encoder args
    * @param {string[]} encoderArgs - Video encoding arguments
    * @param {string} encoderName - Name for logging (GPU/CPU)
+   * @param {string|null} preProcessedAudio - Path to pre-processed audio (for GPU encoding)
    * @returns {Promise<string>} Output file path
    */
-  const runFFmpegEncode = (encoderArgs, encoderName) => {
+  const runFFmpegEncode = (encoderArgs, encoderName, preProcessedAudio = null) => {
     return new Promise((resolve, reject) => {
-      const audioEncoding = getAudioEncodingArgs();
+      let args;
 
-      // NOTE: -fflags +igndts+genpts REMOVED for MP4 input
-      // The WebM→MP4 transcode step already fixed timestamps with -r 30
-      // Using fflags on properly formatted MP4 was confusing NVENC
-      const args = [
-        '-i', inputFile,
-        filterFlag, filters,
-        '-af', audioFilters,
-        ...encoderArgs,
-        ...audioEncoding,
-        '-r', targetFps.toString(),
-        '-movflags', '+faststart',
-        '-y',
-        outputFile
-      ];
+      if (preProcessedAudio && fs.existsSync(preProcessedAudio)) {
+        // GPU encoding with pre-processed audio
+        // Use two inputs: video source + pre-processed audio
+        args = [
+          '-i', inputFile,           // Input 0: video source
+          '-i', preProcessedAudio,   // Input 1: pre-processed audio
+          filterFlag, filters,
+          '-map', '0:v',             // Use video from input 0
+          '-map', '1:a',             // Use audio from input 1
+          ...encoderArgs,
+          '-c:a', 'copy',            // Copy pre-processed audio (already encoded)
+          '-r', targetFps.toString(),
+          '-movflags', '+faststart',
+          '-y',
+          outputFile
+        ];
+        console.log(`[${jobId}] Using pre-processed audio for GPU encoding`);
+      } else {
+        // Standard encoding (CPU or GPU without pre-processed audio)
+        const audioEncoding = getAudioEncodingArgs();
+        args = [
+          '-i', inputFile,
+          filterFlag, filters,
+          '-af', audioFilters,
+          ...encoderArgs,
+          ...audioEncoding,
+          '-r', targetFps.toString(),
+          '-movflags', '+faststart',
+          '-y',
+          outputFile
+        ];
+      }
 
       console.log(`[${jobId}] FFmpeg command (${encoderName}): ffmpeg ${args.join(' ')}`);
 
@@ -2365,11 +2433,21 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
   // Main encoding logic with validation and retry
   try {
+    // Check if we're using GPU
+    const useGpu = checkGpuIfNeeded();
+    let preProcessedAudio = null;
+
+    // Pre-process audio for GPU encoding to avoid loudnorm deadlock
+    if (useGpu && audioFilters && audioFilters.includes('loudnorm')) {
+      console.log(`[${jobId}] GPU encoding with loudnorm detected - pre-processing audio separately`);
+      preProcessedAudio = await preProcessAudio(inputFile, audioFilters, workDir);
+    }
+
     // First attempt: Use GPU if available
     const primaryEncoderArgs = getVideoEncodingArgs('medium');
-    const primaryEncoderName = checkGpuIfNeeded() ? 'GPU' : 'CPU';
+    const primaryEncoderName = useGpu ? 'GPU' : 'CPU';
 
-    await runFFmpegEncode(primaryEncoderArgs, primaryEncoderName);
+    await runFFmpegEncode(primaryEncoderArgs, primaryEncoderName, preProcessedAudio);
 
     // CRITICAL: Validate output to detect frozen video
     console.log(`[${jobId}] Validating ${primaryEncoderName} output...`);
@@ -2377,24 +2455,33 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
     if (validation.isValid) {
       console.log(`[${jobId}] ✅ ${primaryEncoderName} output validated successfully`);
+      // Cleanup pre-processed audio
+      if (preProcessedAudio && fs.existsSync(preProcessedAudio)) {
+        try { fs.unlinkSync(preProcessedAudio); } catch (e) {}
+      }
       return outputFile;
     }
 
     // If GPU output is frozen and we were using GPU, retry with CPU
-    if (checkGpuIfNeeded() && !validation.isValid) {
+    if (useGpu && !validation.isValid) {
       console.warn(`[${jobId}] ⚠️ ${primaryEncoderName} output validation FAILED: ${validation.message}`);
       console.log(`[${jobId}] 🔄 Retrying with CPU encoding (libx264)...`);
 
       // Delete failed output
       try { fs.unlinkSync(outputFile); } catch (e) {}
 
-      // Retry with CPU
+      // Retry with CPU (no pre-processed audio - CPU can handle loudnorm inline)
       const cpuEncoderArgs = getCpuEncodingArgs('medium');
-      await runFFmpegEncode(cpuEncoderArgs, 'CPU-FALLBACK');
+      await runFFmpegEncode(cpuEncoderArgs, 'CPU-FALLBACK', null);
 
       // Validate CPU output
       console.log(`[${jobId}] Validating CPU fallback output...`);
       const cpuValidation = validateVideoOutput(outputFile, expectedDuration);
+
+      // Cleanup pre-processed audio
+      if (preProcessedAudio && fs.existsSync(preProcessedAudio)) {
+        try { fs.unlinkSync(preProcessedAudio); } catch (e) {}
+      }
 
       if (cpuValidation.isValid) {
         console.log(`[${jobId}] ✅ CPU fallback output validated successfully`);
@@ -2407,11 +2494,20 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       }
     }
 
+    // Cleanup pre-processed audio if still exists
+    if (preProcessedAudio && fs.existsSync(preProcessedAudio)) {
+      try { fs.unlinkSync(preProcessedAudio); } catch (e) {}
+    }
+
     // If we weren't using GPU and validation failed, return anyway for debugging
     console.warn(`[${jobId}] ⚠️ Output validation failed but no fallback available: ${validation.message}`);
     return outputFile;
 
   } catch (error) {
+    // Cleanup pre-processed audio on error
+    if (preProcessedAudio && fs.existsSync(preProcessedAudio)) {
+      try { fs.unlinkSync(preProcessedAudio); } catch (e) {}
+    }
     throw error;
   }
 }
