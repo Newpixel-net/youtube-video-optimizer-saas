@@ -2389,15 +2389,14 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         ];
         console.log(`[${jobId}] Using pre-processed audio for GPU encoding`);
       } else if (isGpuEncoding) {
-        // GPU encoding without audio filters - loudnorm causes NVENC deadlock at ~3.3s
-        // Skip audio processing for GPU, just copy/re-encode without filters
-        // NOTE: source.mp4 has proper timestamps from libx264 transcode - no special flags needed
-        console.log(`[${jobId}] GPU encoding: skipping audio filters to prevent NVENC deadlock`);
+        // GPU encoding - MINIMAL configuration to debug NVENC freeze
+        // Skip audio filters (loudnorm causes deadlock)
+        // No hwaccel (conflicts with CPU filters)
+        // No special flags (source.mp4 already has good timestamps)
+        console.log(`[${jobId}] GPU encoding: using minimal NVENC config`);
         args = [
-          '-hwaccel', 'cuda',         // Hardware accelerated decoding
           '-i', inputFile,
           filterFlag, filters,
-          // NO -af audio filters for GPU encoding!
           ...encoderArgs,
           '-c:a', 'aac',
           '-b:a', '128k',

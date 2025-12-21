@@ -147,37 +147,17 @@ function getGpuEncodingParams(quality) {
     type: 'gpu',
     encoder: 'h264_nvenc',
     encoderArgs: [
-      // Essential format/codec settings
+      // MINIMAL NVENC configuration - testing if simpler settings work
       '-c:v', 'h264_nvenc',
-      '-pix_fmt', 'yuv420p',    // CRITICAL: Ensure compatible pixel format
       '-preset', preset.preset,
-
-      // Quality settings - using VBR with lookahead disabled
-      // constqp was causing frame reading issues
-      '-rc', 'vbr',
-      '-cq', preset.cq.toString(),
-      '-b:v', '0',              // Use CQ mode (quality-based, not bitrate-based)
-      '-maxrate', '10M',
-      '-bufsize', '5M',
-
-      // CRITICAL: Disable lookahead to prevent NVENC freeze/stall
-      '-rc-lookahead', '0',
-
-      // Compatibility settings
-      '-profile:v', 'main',
-      '-level', '4.0',
-
-      // CRITICAL: Keyframe settings for playback
-      '-g', '30',               // Keyframe every 30 frames
-      '-bf', '0',               // No B-frames for maximum compatibility
+      // Let NVENC use defaults for everything else
+      // Previous complex rate control options were causing freezes
     ],
     audioEncoder: 'aac',
     audioArgs: [
       '-c:a', 'aac',
       '-b:a', '128k'
     ],
-    // Note: hwaccel removed - let FFmpeg handle GPU memory automatically
-    // Using explicit hwaccel with filter chains can cause issues
     hwaccel: [],
     description: `GPU (NVENC) - ${quality} quality`
   };
