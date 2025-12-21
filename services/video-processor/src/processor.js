@@ -397,12 +397,14 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
     const audioEncoding = getAudioEncodingArgs();
 
     const args = [
+      '-fflags', '+genpts',  // Fix broken timestamps from MediaRecorder WebM
       '-i', primaryFile,
+      '-fflags', '+genpts',
       '-i', secondaryFile,
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-vsync', 'cfr',  // Handle VFR input from MediaRecorder
+      '-vsync', 'cfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -411,7 +413,7 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg multi-source command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 10).join(' ')}...`);
+    console.log(`[${jobId}] FFmpeg multi-source command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 12).join(' ')}...`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -548,13 +550,16 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
     const audioEncoding = getAudioEncodingArgs();
 
     const args = [
+      '-fflags', '+genpts',
       '-i', primaryFile,
+      '-fflags', '+genpts',
       '-i', secondaryFile,
+      '-fflags', '+genpts',
       '-i', tertiaryFile,
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-vsync', 'cfr',  // Handle VFR input from MediaRecorder
+      '-vsync', 'cfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -563,7 +568,7 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg three-source command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 12).join(' ')}...`);
+    console.log(`[${jobId}] FFmpeg three-source command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 14).join(' ')}...`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -707,12 +712,14 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
     const audioEncoding = getAudioEncodingArgs();
 
     const args = [
+      '-fflags', '+genpts',
       '-i', primaryFile,
+      '-fflags', '+genpts',
       '-i', secondaryFile,
       '-filter_complex', filterComplex,
       '-map', '[vfinal]',
       '-map', '[aout]',
-      '-vsync', 'cfr',  // Handle VFR input from MediaRecorder
+      '-vsync', 'cfr',
       ...videoEncoding,
       ...audioEncoding,
       '-r', targetFps.toString(),
@@ -721,7 +728,7 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg gameplay command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 10).join(' ')}...`);
+    console.log(`[${jobId}] FFmpeg gameplay command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 12).join(' ')}...`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -2158,11 +2165,13 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     const audioEncoding = getAudioEncodingArgs();
 
     const args = [
+      // CRITICAL: Generate PTS for WebM files from MediaRecorder
+      // MediaRecorder WebM files have broken/missing timestamps causing frozen video
+      '-fflags', '+genpts',
       '-i', inputFile,
       filterFlag, filters,
       '-af', audioFilters,
-      // CRITICAL: Handle VFR (Variable Frame Rate) input from MediaRecorder
-      // Without -vsync cfr, NVENC can produce frozen video with VFR input
+      // Handle VFR input - force constant frame rate output
       '-vsync', 'cfr',
       ...videoEncoding,
       ...audioEncoding,
@@ -2474,9 +2483,10 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
     const videoEncoding = getVideoEncodingArgs('medium');
 
     const args = [
+      '-fflags', '+genpts',
       '-i', inputFile,
       '-vf', filters.join(','),
-      '-vsync', 'cfr',  // Handle VFR input from MediaRecorder
+      '-vsync', 'cfr',
       ...videoEncoding,
       '-c:a', 'copy',
       '-y',
