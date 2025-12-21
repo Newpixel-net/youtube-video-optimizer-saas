@@ -152,20 +152,19 @@ function getGpuEncodingParams(quality) {
       '-pix_fmt', 'yuv420p',    // CRITICAL: Ensure compatible pixel format
       '-preset', preset.preset,
 
-      // Quality settings - using constqp for simpler rate control without lookahead
-      // VBR with lookahead was causing freeze at ~100 frames (3.33s)
-      '-rc', 'constqp',
-      '-qp', preset.cq.toString(),  // Use qp instead of cq for constqp mode
+      // Quality settings - using VBR with lookahead disabled
+      // constqp was causing frame reading issues
+      '-rc', 'vbr',
+      '-cq', preset.cq.toString(),
+      '-b:v', '0',              // Use CQ mode (quality-based, not bitrate-based)
       '-maxrate', '10M',
-      '-bufsize', '10M',       // Reduced from 20M to prevent buffer overrun
+      '-bufsize', '5M',
 
-      // CRITICAL: Disable lookahead and delay to prevent NVENC freeze
-      // The freeze at 3.33s (100 frames) was caused by rate control buffering
-      '-rc-lookahead', '0',     // Disable lookahead - prevents frame buffering
-      '-delay', '0',            // Minimize encoder delay
+      // CRITICAL: Disable lookahead to prevent NVENC freeze/stall
+      '-rc-lookahead', '0',
 
       // Compatibility settings
-      '-profile:v', 'main',     // Use 'main' instead of 'high' for better compatibility
+      '-profile:v', 'main',
       '-level', '4.0',
 
       // CRITICAL: Keyframe settings for playback
