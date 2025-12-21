@@ -6847,6 +6847,405 @@
             color: #22c55e;
             margin-bottom: 0.5rem;
         }
+
+        /* ========================================
+           BATCH EXPORT MODAL - Enhanced UX
+           ======================================== */
+        .batch-export-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+        .batch-export-modal {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .batch-export-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .batch-export-modal-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #f3f4f6;
+        }
+
+        .batch-export-modal-title .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(34, 197, 94, 0.3);
+            border-top-color: #22c55e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .batch-export-modal-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #9ca3af;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.25rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .batch-export-modal-close:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .batch-export-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        .batch-export-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .batch-export-stat {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .batch-export-stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #22c55e;
+        }
+
+        .batch-export-stat-value.pending { color: #9ca3af; }
+        .batch-export-stat-value.processing { color: #3b82f6; }
+        .batch-export-stat-value.error { color: #ef4444; }
+
+        .batch-export-stat-label {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-top: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Console-like log area */
+        .batch-export-console {
+            background: #0d1117;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .batch-export-console-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .batch-export-console-header span {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            font-family: monospace;
+        }
+
+        .console-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .console-dot.red { background: #ef4444; }
+        .console-dot.yellow { background: #eab308; }
+        .console-dot.green { background: #22c55e; }
+
+        .batch-export-console-body {
+            height: 200px;
+            overflow-y: auto;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+        }
+
+        .console-line {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .console-timestamp {
+            color: #6b7280;
+            flex-shrink: 0;
+        }
+
+        .console-message {
+            color: #e5e7eb;
+            word-break: break-word;
+        }
+
+        .console-message.info { color: #3b82f6; }
+        .console-message.success { color: #22c55e; }
+        .console-message.error { color: #ef4444; }
+        .console-message.warning { color: #eab308; }
+
+        /* Clip list in modal */
+        .batch-export-clips {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .batch-export-clip {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            transition: all 0.2s;
+        }
+
+        .batch-export-clip.active {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .batch-export-clip.completed {
+            border-color: #22c55e;
+            background: rgba(34, 197, 94, 0.1);
+        }
+
+        .batch-export-clip.error {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .batch-export-clip-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            background: rgba(255, 255, 255, 0.05);
+            flex-shrink: 0;
+        }
+
+        .batch-export-clip.active .batch-export-clip-icon {
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .batch-export-clip.completed .batch-export-clip-icon {
+            background: rgba(34, 197, 94, 0.2);
+        }
+
+        .batch-export-clip-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .batch-export-clip-title {
+            font-weight: 500;
+            color: #f3f4f6;
+            margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .batch-export-clip-status {
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+
+        .batch-export-clip-progress {
+            width: 120px;
+            flex-shrink: 0;
+        }
+
+        .batch-export-clip-progress-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .batch-export-clip-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6 0%, #22c55e 100%);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .batch-export-clip-progress-text {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            text-align: center;
+            margin-top: 0.25rem;
+        }
+
+        .batch-export-clip-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .batch-export-download-btn {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .batch-export-download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        }
+
+        /* Modal footer */
+        .batch-export-modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .batch-export-footer-status {
+            font-size: 0.9rem;
+            color: #9ca3af;
+        }
+
+        .batch-export-footer-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .batch-export-cancel-btn {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .batch-export-cancel-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .batch-export-download-all-btn {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .batch-export-download-all-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+        }
+
+        .batch-export-download-all-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Complete state */
+        .batch-export-complete-banner {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.1) 100%);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .batch-export-complete-banner h3 {
+            font-size: 1.5rem;
+            color: #22c55e;
+            margin-bottom: 0.5rem;
+        }
+
+        .batch-export-complete-banner p {
+            color: #9ca3af;
+        }
     </style>
 
     <!-- ============================================
@@ -13329,8 +13728,27 @@
                     completedClips: 0,
                     failedClips: 0,
                     currentClipIndex: 0,
-                    clips: {}
+                    clips: {},
+                    consoleLogs: []  // Console-like log messages
                 };
+
+                // Helper to add console log entries
+                app.addBatchExportLog = function(message, type) {
+                    if (!state.parallelExport) return;
+                    var timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+                    state.parallelExport.consoleLogs.push({
+                        timestamp: timestamp,
+                        message: message,
+                        type: type || 'info'  // info, success, error, warning
+                    });
+                    // Keep only last 100 logs
+                    if (state.parallelExport.consoleLogs.length > 100) {
+                        state.parallelExport.consoleLogs.shift();
+                    }
+                    app.updateBatchExportModal();
+                };
+
+                app.addBatchExportLog('Starting batch export for ' + selectedClips.length + ' clips...', 'info');
 
                 // Initialize state for each clip
                 selectedClips.forEach(function(clip) {
@@ -13425,16 +13843,23 @@
                 console.log('[ParallelExport] Starting export for clip: ' + clipId);
 
                 var clip = state.clips.find(function(c) { return c.id === clipId; });
+                var seo = state.clipSEO[clipId] || {};
+                var clipTitle = (seo.title || 'Clip ' + clipId).substring(0, 30);
+
+                app.addBatchExportLog('Starting: ' + clipTitle, 'info');
+
                 if (!clip) {
                     state.parallelExport.clips[clipId].status = 'error';
                     state.parallelExport.clips[clipId].error = 'Clip not found';
                     state.parallelExport.failedClips++;
+                    app.addBatchExportLog('Error: Clip not found - ' + clipId, 'error');
                     app.updateParallelExportProgress();
                     return;
                 }
 
                 // Update status to capturing
                 state.parallelExport.clips[clipId].status = 'capturing';
+                app.addBatchExportLog('Capturing video segment (' + clip.startTime.toFixed(1) + 's - ' + clip.endTime.toFixed(1) + 's)...', 'info');
                 app.updateParallelExportProgress();
 
                 var clipSettings = state.clipSettings[clipId] || {};
@@ -13498,6 +13923,7 @@
 
                     // Update status to processing
                     state.parallelExport.clips[clipId].status = 'processing';
+                    app.addBatchExportLog('Video captured, sending to server for processing...', 'info');
                     app.updateParallelExportProgress();
 
                     // Create processing job - use wizardProcessClip (correct function name)
@@ -13529,15 +13955,17 @@
 
                     var jobId = result.data.jobId;
                     state.parallelExport.clips[clipId].jobId = jobId;
+                    app.addBatchExportLog('Processing job started (Job ID: ' + jobId.substring(0, 8) + '...)', 'info');
 
                     // Poll for completion
-                    await app.pollParallelExportJob(clipId, jobId);
+                    await app.pollParallelExportJob(clipId, jobId, clipTitle);
 
                 } catch (error) {
                     console.error('[BatchExport] Error exporting clip ' + clipId + ':', error);
                     state.parallelExport.clips[clipId].status = 'error';
                     state.parallelExport.clips[clipId].error = error.message;
                     state.parallelExport.failedClips++;
+                    app.addBatchExportLog('Error: ' + error.message, 'error');
                     app.updateParallelExportProgress();
                     // Re-throw to trigger fail-fast in parent
                     throw error;
@@ -13547,10 +13975,11 @@
             /**
              * Poll for parallel export job completion
              */
-            pollParallelExportJob: function(clipId, jobId) {
+            pollParallelExportJob: function(clipId, jobId, clipTitle) {
                 return new Promise(function(resolve, reject) {
                     var pollCount = 0;
                     var maxPolls = 180; // 15 minutes max (5 second intervals)
+                    var lastLoggedProgress = 0;
 
                     var pollInterval = setInterval(async function() {
                         pollCount++;
@@ -13561,7 +13990,20 @@
 
                             if (result.data.success) {
                                 var job = result.data.job;
-                                state.parallelExport.clips[clipId].progress = job.progress || 0;
+                                var currentProgress = job.progress || 0;
+                                state.parallelExport.clips[clipId].progress = currentProgress;
+
+                                // Log progress at 25%, 50%, 75% milestones
+                                if (currentProgress >= 25 && lastLoggedProgress < 25) {
+                                    app.addBatchExportLog('Progress: 25% - Downloading source video...', 'info');
+                                    lastLoggedProgress = 25;
+                                } else if (currentProgress >= 50 && lastLoggedProgress < 50) {
+                                    app.addBatchExportLog('Progress: 50% - Transcoding video...', 'info');
+                                    lastLoggedProgress = 50;
+                                } else if (currentProgress >= 75 && lastLoggedProgress < 75) {
+                                    app.addBatchExportLog('Progress: 75% - Applying filters & encoding...', 'info');
+                                    lastLoggedProgress = 75;
+                                }
                                 app.updateParallelExportProgress();
 
                                 if (job.status === 'completed') {
@@ -13569,6 +14011,7 @@
                                     state.parallelExport.clips[clipId].status = 'completed';
                                     state.parallelExport.clips[clipId].outputUrl = job.outputUrl;
                                     state.parallelExport.completedClips++;
+                                    app.addBatchExportLog('✓ Completed: ' + (clipTitle || 'Clip') + ' - Ready for download!', 'success');
                                     app.updateParallelExportProgress();
                                     resolve();
                                 } else if (job.status === 'failed') {
@@ -13576,6 +14019,7 @@
                                     state.parallelExport.clips[clipId].status = 'error';
                                     state.parallelExport.clips[clipId].error = job.error || 'Processing failed';
                                     state.parallelExport.failedClips++;
+                                    app.addBatchExportLog('✗ Failed: ' + (clipTitle || 'Clip') + ' - ' + (job.error || 'Processing failed'), 'error');
                                     app.updateParallelExportProgress();
                                     resolve(); // Don't reject, allow other clips to continue
                                 }
@@ -13589,6 +14033,7 @@
                             state.parallelExport.clips[clipId].status = 'error';
                             state.parallelExport.clips[clipId].error = 'Timeout';
                             state.parallelExport.failedClips++;
+                            app.addBatchExportLog('✗ Timeout: ' + (clipTitle || 'Clip') + ' - Processing took too long', 'error');
                             app.updateParallelExportProgress();
                             resolve();
                         }
@@ -13597,102 +14042,297 @@
             },
 
             /**
-             * Show parallel export progress UI
+             * Show the batch export modal overlay
              */
             showParallelExportProgress: function() {
-                var container = document.getElementById('parallelExportProgress');
-                if (!container) return;
+                // Remove any existing modal
+                var existingModal = document.getElementById('batchExportModal');
+                if (existingModal) existingModal.remove();
 
-                container.style.display = 'block';
-                app.updateParallelExportProgress();
+                // Create modal overlay
+                var overlay = document.createElement('div');
+                overlay.id = 'batchExportModal';
+                overlay.className = 'batch-export-modal-overlay';
+                overlay.innerHTML = app.buildBatchExportModalHTML();
+                document.body.appendChild(overlay);
+
+                // Scroll console to bottom
+                var consoleBody = document.getElementById('batchExportConsole');
+                if (consoleBody) consoleBody.scrollTop = consoleBody.scrollHeight;
             },
 
             /**
-             * Update parallel export progress UI
+             * Build the batch export modal HTML
              */
-            updateParallelExportProgress: function() {
-                var container = document.getElementById('parallelExportProgress');
-                if (!container || !state.parallelExport) return;
+            buildBatchExportModalHTML: function() {
+                if (!state.parallelExport) return '';
 
                 var clips = state.parallelExport.clips;
                 var completed = state.parallelExport.completedClips;
+                var failed = state.parallelExport.failedClips;
                 var total = state.parallelExport.totalClips;
+                var pending = total - completed - failed;
+                var processing = 0;
                 var elapsed = ((Date.now() - state.parallelExport.startTime) / 1000).toFixed(0);
+                var isComplete = !state.parallelExport.active;
 
-                var html = '<div class="parallel-progress-header">';
-                html += '<div class="parallel-progress-title">🎬 Exporting All Clips</div>';
-                html += '<div class="parallel-progress-stats">' + completed + '/' + total + ' complete (' + elapsed + 's)</div>';
+                // Count processing clips
+                for (var cid in clips) {
+                    if (clips[cid].status === 'capturing' || clips[cid].status === 'processing') {
+                        processing++;
+                        pending--;
+                    }
+                }
+
+                var html = '<div class="batch-export-modal">';
+
+                // Header
+                html += '<div class="batch-export-modal-header">';
+                html += '<div class="batch-export-modal-title">';
+                if (!isComplete) {
+                    html += '<div class="spinner"></div>';
+                }
+                html += isComplete ? '🎉 Export Complete' : '🎬 Batch Export in Progress';
+                html += '</div>';
+                if (isComplete) {
+                    html += '<button class="batch-export-modal-close" onclick="app.closeBatchExportModal()">✕</button>';
+                }
                 html += '</div>';
 
-                html += '<div class="parallel-progress-items">';
+                // Body
+                html += '<div class="batch-export-modal-body">';
+
+                // Complete banner (only show when done)
+                if (isComplete && completed > 0) {
+                    html += '<div class="batch-export-complete-banner">';
+                    html += '<h3>🎉 All Done!</h3>';
+                    html += '<p>' + completed + ' clip' + (completed !== 1 ? 's' : '') + ' exported successfully in ' + elapsed + ' seconds</p>';
+                    if (failed > 0) {
+                        html += '<p style="color: #ef4444;">' + failed + ' clip' + (failed !== 1 ? 's' : '') + ' failed</p>';
+                    }
+                    html += '</div>';
+                }
+
+                // Stats grid
+                html += '<div class="batch-export-stats">';
+                html += '<div class="batch-export-stat"><div class="batch-export-stat-value">' + completed + '</div><div class="batch-export-stat-label">Completed</div></div>';
+                html += '<div class="batch-export-stat"><div class="batch-export-stat-value processing">' + processing + '</div><div class="batch-export-stat-label">Processing</div></div>';
+                html += '<div class="batch-export-stat"><div class="batch-export-stat-value pending">' + pending + '</div><div class="batch-export-stat-label">Pending</div></div>';
+                html += '<div class="batch-export-stat"><div class="batch-export-stat-value error">' + failed + '</div><div class="batch-export-stat-label">Failed</div></div>';
+                html += '</div>';
+
+                // Console log area
+                html += '<div class="batch-export-console">';
+                html += '<div class="batch-export-console-header">';
+                html += '<div class="console-dot red"></div>';
+                html += '<div class="console-dot yellow"></div>';
+                html += '<div class="console-dot green"></div>';
+                html += '<span>Export Log</span>';
+                html += '</div>';
+                html += '<div class="batch-export-console-body" id="batchExportConsole">';
+
+                // Add log entries
+                var logs = state.parallelExport.consoleLogs || [];
+                for (var i = 0; i < logs.length; i++) {
+                    var log = logs[i];
+                    html += '<div class="console-line">';
+                    html += '<span class="console-timestamp">[' + log.timestamp + ']</span>';
+                    html += '<span class="console-message ' + log.type + '">' + utils.escapeHtml(log.message) + '</span>';
+                    html += '</div>';
+                }
+
+                html += '</div></div>';
+
+                // Clips list
+                html += '<div class="batch-export-clips">';
 
                 for (var clipId in clips) {
                     var clipData = clips[clipId];
                     var clip = state.clips.find(function(c) { return c.id === clipId; });
                     var seo = state.clipSEO[clipId] || getDefaultSEO(clip);
-                    var title = (seo.title || 'Clip').substring(0, 30);
+                    var title = (seo.title || 'Clip ' + clipId).substring(0, 40);
 
-                    var itemClass = 'parallel-progress-item';
-                    if (clipData.status === 'completed') itemClass += ' completed';
-                    if (clipData.status === 'error') itemClass += ' error';
+                    var clipClass = 'batch-export-clip';
+                    if (clipData.status === 'capturing' || clipData.status === 'processing') clipClass += ' active';
+                    if (clipData.status === 'completed') clipClass += ' completed';
+                    if (clipData.status === 'error') clipClass += ' error';
 
                     var icon = '⏳';
-                    var statusText = 'Pending';
-                    if (clipData.status === 'capturing') { icon = '📹'; statusText = 'Capturing...'; }
-                    if (clipData.status === 'processing') { icon = '⚡'; statusText = 'Processing ' + clipData.progress + '%'; }
-                    if (clipData.status === 'completed') { icon = '✅'; statusText = 'Complete'; }
-                    if (clipData.status === 'error') { icon = '❌'; statusText = clipData.error || 'Error'; }
+                    var statusText = 'Waiting...';
+                    if (clipData.status === 'capturing') { icon = '📹'; statusText = 'Capturing video...'; }
+                    if (clipData.status === 'processing') { icon = '⚡'; statusText = 'Processing...'; }
+                    if (clipData.status === 'completed') { icon = '✅'; statusText = 'Ready to download'; }
+                    if (clipData.status === 'error') { icon = '❌'; statusText = clipData.error || 'Failed'; }
 
-                    html += '<div class="' + itemClass + '">';
-                    html += '<div class="parallel-progress-item-icon">' + icon + '</div>';
-                    html += '<div class="parallel-progress-item-info">';
-                    html += '<div class="parallel-progress-item-title">' + utils.escapeHtml(title) + '</div>';
-                    html += '<div class="parallel-progress-item-status">' + statusText + '</div>';
+                    html += '<div class="' + clipClass + '">';
+                    html += '<div class="batch-export-clip-icon">' + icon + '</div>';
+                    html += '<div class="batch-export-clip-info">';
+                    html += '<div class="batch-export-clip-title">' + utils.escapeHtml(title) + '</div>';
+                    html += '<div class="batch-export-clip-status">' + statusText + '</div>';
                     html += '</div>';
 
-                    if (clipData.status === 'processing' || clipData.status === 'capturing') {
-                        html += '<div class="parallel-progress-bar-container">';
-                        html += '<div class="parallel-progress-bar" style="width: ' + (clipData.progress || 0) + '%"></div>';
+                    // Progress bar for active clips
+                    if (clipData.status === 'capturing' || clipData.status === 'processing') {
+                        html += '<div class="batch-export-clip-progress">';
+                        html += '<div class="batch-export-clip-progress-bar">';
+                        html += '<div class="batch-export-clip-progress-fill" style="width: ' + (clipData.progress || 0) + '%"></div>';
+                        html += '</div>';
+                        html += '<div class="batch-export-clip-progress-text">' + (clipData.progress || 0) + '%</div>';
                         html += '</div>';
                     }
 
+                    // Download button for completed clips
                     if (clipData.status === 'completed' && clipData.outputUrl) {
-                        html += '<a href="' + clipData.outputUrl + '" download class="export-action-btn" style="font-size: 0.8rem; padding: 0.25rem 0.5rem;">📥</a>';
+                        html += '<div class="batch-export-clip-actions">';
+                        html += '<a href="' + clipData.outputUrl + '" download class="batch-export-download-btn">📥 Download</a>';
+                        html += '</div>';
                     }
 
                     html += '</div>';
                 }
 
-                html += '</div>';
+                html += '</div>'; // clips
 
-                container.innerHTML = html;
+                html += '</div>'; // body
+
+                // Footer
+                html += '<div class="batch-export-modal-footer">';
+                html += '<div class="batch-export-footer-status">';
+                if (!isComplete) {
+                    html += 'Processing clip ' + (state.parallelExport.currentClipIndex + 1) + ' of ' + total + ' • ' + elapsed + 's elapsed';
+                } else {
+                    html += 'Total time: ' + elapsed + ' seconds';
+                }
+                html += '</div>';
+                html += '<div class="batch-export-footer-actions">';
+
+                if (!isComplete) {
+                    html += '<button class="batch-export-cancel-btn" onclick="app.cancelBatchExport()">Cancel Export</button>';
+                } else {
+                    if (completed > 0) {
+                        html += '<button class="batch-export-download-all-btn" onclick="app.downloadAllExportedClips()">📥 Download All (' + completed + ')</button>';
+                    }
+                    html += '<button class="batch-export-cancel-btn" onclick="app.closeBatchExportModal()" style="background: rgba(255,255,255,0.1); color: #9ca3af; border-color: rgba(255,255,255,0.2);">Close</button>';
+                }
+
+                html += '</div></div>';
+                html += '</div>'; // modal
+
+                return html;
+            },
+
+            /**
+             * Update the batch export modal (called frequently during export)
+             */
+            updateBatchExportModal: function() {
+                var modal = document.getElementById('batchExportModal');
+                if (!modal) return;
+
+                modal.innerHTML = app.buildBatchExportModalHTML();
+
+                // Scroll console to bottom
+                var consoleBody = document.getElementById('batchExportConsole');
+                if (consoleBody) {
+                    consoleBody.scrollTop = consoleBody.scrollHeight;
+                }
+            },
+
+            /**
+             * Update parallel export progress UI (legacy compatibility + modal update)
+             */
+            updateParallelExportProgress: function() {
+                // Update the modal
+                app.updateBatchExportModal();
+
+                // Also update the inline container for backwards compatibility
+                var container = document.getElementById('parallelExportProgress');
+                if (container) {
+                    container.style.display = 'none'; // Hide inline, we use modal now
+                }
             },
 
             /**
              * Update parallel export UI when all complete
              */
             updateParallelExportComplete: function() {
-                var container = document.getElementById('parallelExportProgress');
-                if (!container || !state.parallelExport) return;
+                // Add completion log
+                if (state.parallelExport) {
+                    var elapsed = ((Date.now() - state.parallelExport.startTime) / 1000).toFixed(1);
+                    var completed = state.parallelExport.completedClips;
+                    var failed = state.parallelExport.failedClips;
 
-                var elapsed = ((Date.now() - state.parallelExport.startTime) / 1000).toFixed(1);
-                var completed = state.parallelExport.completedClips;
-                var failed = state.parallelExport.failedClips;
-
-                // Update the current progress display
-                app.updateParallelExportProgress();
-
-                // Add completion message
-                var completeHtml = '<div class="parallel-progress-complete-message">';
-                completeHtml += '<h4>🎉 Export Complete!</h4>';
-                completeHtml += '<p>' + completed + ' clips exported in ' + elapsed + ' seconds';
-                if (failed > 0) {
-                    completeHtml += ' (' + failed + ' failed)';
+                    if (completed > 0) {
+                        app.addBatchExportLog('✓ Export complete! ' + completed + ' clips in ' + elapsed + 's', 'success');
+                    }
+                    if (failed > 0) {
+                        app.addBatchExportLog('✗ ' + failed + ' clip(s) failed', 'error');
+                    }
                 }
-                completeHtml += '</p>';
-                completeHtml += '</div>';
 
-                container.innerHTML += completeHtml;
+                // Update the modal one final time
+                app.updateBatchExportModal();
+            },
+
+            /**
+             * Close the batch export modal
+             */
+            closeBatchExportModal: function() {
+                var modal = document.getElementById('batchExportModal');
+                if (modal) {
+                    modal.remove();
+                }
+            },
+
+            /**
+             * Cancel the batch export
+             */
+            cancelBatchExport: function() {
+                if (state.parallelExport) {
+                    state.parallelExport.aborted = true;
+                    app.addBatchExportLog('Export cancelled by user', 'warning');
+                }
+            },
+
+            /**
+             * Download all exported clips sequentially
+             */
+            downloadAllExportedClips: function() {
+                if (!state.parallelExport) return;
+
+                var clips = state.parallelExport.clips;
+                var downloadUrls = [];
+
+                for (var clipId in clips) {
+                    if (clips[clipId].status === 'completed' && clips[clipId].outputUrl) {
+                        downloadUrls.push({
+                            url: clips[clipId].outputUrl,
+                            clipId: clipId
+                        });
+                    }
+                }
+
+                if (downloadUrls.length === 0) {
+                    utils.showToast('No clips to download', 'warning');
+                    return;
+                }
+
+                // Download each file with a small delay to prevent browser blocking
+                app.addBatchExportLog('Starting download of ' + downloadUrls.length + ' clips...', 'info');
+
+                downloadUrls.forEach(function(item, index) {
+                    setTimeout(function() {
+                        var link = document.createElement('a');
+                        link.href = item.url;
+                        link.download = 'clip_' + item.clipId + '.mp4';
+                        link.style.display = 'none';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        app.addBatchExportLog('Downloaded: clip_' + item.clipId + '.mp4', 'success');
+                    }, index * 500); // 500ms delay between downloads
+                });
+
+                utils.showToast('Downloading ' + downloadUrls.length + ' clips...', 'success');
             },
 
             downloadAllZip: function() {
