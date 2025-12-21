@@ -2728,6 +2728,10 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       filters.push(`eq=saturation=1.15:contrast=1.05:brightness=0.02`);
       filters.push(`unsharp=5:5:0.8:5:5:0`);
     }
+
+    // CRITICAL: Ensure output pixel format is compatible with NVENC
+    // Without this, NVENC may receive frames in an incompatible format
+    filters.push('format=yuv420p');
   }
 
   // For complex filter graphs (with labeled streams), join with semicolons
