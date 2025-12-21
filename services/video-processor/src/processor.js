@@ -2458,17 +2458,14 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         console.log(`[${jobId}] NVENC produces frozen video when filters are applied - known driver issue`);
       }
 
-      // CRITICAL FIX: Add fps filter to the filter chain instead of using -r
-      // This ensures proper frame rate handling even if input has any timing issues
-      const filtersWithFps = isComplexFilter
-        ? filters  // Complex filter already handles output correctly
-        : `${filters},fps=${targetFps}`;  // Add fps filter at end of chain
+      // NOTE: The source.mp4 is already 30fps CFR from the transcode step.
+      // No fps filter needed here - just apply crop/scale/format filters.
 
       // Always use CPU encoding with libx264 - reliable and produces correct output
       const audioEncoding = getAudioEncodingArgs();
       const args = [
         '-i', inputFile,
-        filterFlag, filtersWithFps,
+        filterFlag, filters,
         '-af', audioFilters,
         '-c:v', 'libx264',
         '-preset', 'fast',      // Good balance of speed and quality
