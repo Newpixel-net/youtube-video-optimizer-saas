@@ -524,6 +524,7 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
       '-map', '[aout]',
       ...videoEncoding,
       ...audioEncoding,
+      '-vsync', 'cfr',              // CRITICAL: Force constant frame rate for NVENC
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
@@ -678,6 +679,7 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
       '-map', '[aout]',
       ...videoEncoding,
       ...audioEncoding,
+      '-vsync', 'cfr',              // CRITICAL: Force constant frame rate for NVENC
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
@@ -837,6 +839,7 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
       '-map', '[aout]',
       ...videoEncoding,
       ...audioEncoding,
+      '-vsync', 'cfr',              // CRITICAL: Force constant frame rate for NVENC
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
@@ -2377,6 +2380,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
           '-map', '1:a',             // Use audio from input 1
           ...encoderArgs,
           '-c:a', 'copy',            // Copy pre-processed audio (already encoded)
+          '-vsync', 'cfr',           // CRITICAL: Force constant frame rate for NVENC
           '-r', targetFps.toString(),
           '-movflags', '+faststart',
           '-y',
@@ -2392,6 +2396,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
           '-af', audioFilters,
           ...encoderArgs,
           ...audioEncoding,
+          '-vsync', 'cfr',           // CRITICAL: Force constant frame rate for NVENC
           '-r', targetFps.toString(),
           '-movflags', '+faststart',
           '-y',
@@ -2797,6 +2802,7 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
       '-i', inputFile,
       '-vf', filters.join(','),
       ...videoEncoding,
+      '-vsync', 'cfr',              // CRITICAL: Force constant frame rate for NVENC
       '-r', '30',
       '-c:a', 'copy',
       '-y',
