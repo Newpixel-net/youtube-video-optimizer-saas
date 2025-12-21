@@ -2458,21 +2458,23 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         console.log(`[${jobId}] NVENC produces frozen video when filters are applied - known driver issue`);
       }
 
-      // CRITICAL FIX: Add fps filter to the filter chain instead of using -r
-      // This ensures proper frame rate handling even if input has any timing issues
-      const filtersWithFps = isComplexFilter
-        ? filters  // Complex filter already handles output correctly
-        : `${filters},fps=${targetFps}`;  // Add fps filter at end of chain
+      // NOTE: The source.mp4 is already 30fps CFR from the transcode step.
+      // No fps filter needed here - just apply crop/scale/format filters.
 
       // Always use CPU encoding with libx264 - reliable and produces correct output
       const audioEncoding = getAudioEncodingArgs();
       const args = [
         '-i', inputFile,
-        filterFlag, filtersWithFps,
+        filterFlag, filters,
         '-af', audioFilters,
         '-c:v', 'libx264',
         '-preset', 'fast',      // Good balance of speed and quality
         '-crf', '23',           // Standard quality
+        '-profile:v', 'main',   // Main profile for wide compatibility
+        '-level', '4.0',        // Level 4.0 for 1080p support
+        '-pix_fmt', 'yuv420p',  // Explicit pixel format
+        '-vsync', 'cfr',        // Explicit constant frame rate
+        '-r', '30',             // Explicit output frame rate
         ...audioEncoding,
         '-movflags', '+faststart',
         '-y',
@@ -2518,25 +2520,134 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       });
   };
 
-  // Main encoding logic
+  // Main encoding logic - Two-pass approach for GPU acceleration
+  //
+  // The issue: NVENC produces frozen video when filters are applied directly.
+  // The solution: Apply filters with CPU first, then re-encode with NVENC (no filters).
+  //
+  // Pass 1: Decode → CPU Filters → libx264 (intermediate file at target resolution)
+  // Pass 2: Decode intermediate → NVENC (no filters) → final file
+  //
+  // This works because Pass 2 has NO FILTERS - NVENC just re-encodes a clean video.
+
   try {
-    // NOTE: We always use CPU (libx264) encoding because NVENC has a bug where
-    // filtered video produces frozen output. See runFFmpegEncode for details.
-    console.log(`[${jobId}] Starting video encoding with libx264 (CPU)`);
+    const useGpu = gpuEnabled;
+    const intermediateFile = path.join(workDir, 'intermediate.mp4');
 
-    // Use CPU encoder args - NVENC is disabled due to filter bug
-    const encoderArgs = getCpuEncodingArgs('medium');
+    if (useGpu) {
+      console.log(`[${jobId}] ========== TWO-PASS GPU ENCODING ==========`);
+      console.log(`[${jobId}] Pass 1: CPU filters → intermediate file`);
+      console.log(`[${jobId}] Pass 2: NVENC re-encode (no filters) → final file`);
+      console.log(`[${jobId}] ============================================`);
 
-    await runFFmpegEncode(encoderArgs, 'CPU', null);
+      // PASS 1: Apply filters with CPU encoding to intermediate file
+      console.log(`[${jobId}] [PASS 1] Applying filters with libx264...`);
 
-    // CRITICAL: Validate output to detect frozen video
-    console.log(`[${jobId}] Validating output...`);
+      const pass1Args = [
+        '-i', inputFile,
+        filterFlag, filters,
+        '-af', audioFilters,
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',   // Fast for intermediate
+        '-crf', '18',             // High quality (will be re-encoded)
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-r', '30',
+        '-pix_fmt', 'yuv420p',
+        '-movflags', '+faststart',
+        '-y',
+        intermediateFile
+      ];
+
+      console.log(`[${jobId}] [PASS 1] FFmpeg: ffmpeg ${pass1Args.join(' ')}`);
+
+      await new Promise((resolve, reject) => {
+        const ffmpeg = spawn('ffmpeg', pass1Args);
+        let stderr = '';
+        ffmpeg.stderr.on('data', (data) => {
+          stderr += data.toString();
+          const match = data.toString().match(/time=(\d+:\d+:\d+\.\d+)/);
+          if (match) console.log(`[${jobId}] [PASS 1] Progress: ${match[1]}`);
+        });
+        ffmpeg.on('close', (code) => {
+          if (code === 0 && fs.existsSync(intermediateFile)) {
+            const size = fs.statSync(intermediateFile).size;
+            console.log(`[${jobId}] [PASS 1] Complete: ${(size / 1024 / 1024).toFixed(2)} MB`);
+            resolve();
+          } else {
+            console.error(`[${jobId}] [PASS 1] Failed: ${stderr.slice(-500)}`);
+            reject(new Error(`Pass 1 failed: ${code}`));
+          }
+        });
+        ffmpeg.on('error', reject);
+      });
+
+      // Validate intermediate file
+      const pass1Validation = validateVideoOutput(intermediateFile, expectedDuration);
+      if (!pass1Validation.isValid) {
+        console.error(`[${jobId}] [PASS 1] ❌ Intermediate file is invalid: ${pass1Validation.message}`);
+        throw new Error(`Pass 1 produced invalid video: ${pass1Validation.message}`);
+      }
+      console.log(`[${jobId}] [PASS 1] ✅ Validated: ${pass1Validation.frameCount} frames, ${pass1Validation.bitrateKbps?.toFixed(0)} kbps`);
+
+      // PASS 2: Re-encode with NVENC (NO FILTERS!)
+      console.log(`[${jobId}] [PASS 2] Re-encoding with NVENC (no filters)...`);
+
+      const pass2Args = [
+        '-i', intermediateFile,
+        // NO VIDEO FILTERS - this is critical!
+        '-c:v', 'h264_nvenc',
+        '-preset', 'p4',          // Balanced quality/speed
+        '-rc', 'vbr',             // Variable bitrate for quality
+        '-cq', '23',              // Quality level
+        '-b:v', '0',              // Let encoder decide bitrate
+        '-c:a', 'copy',           // Copy audio (already encoded)
+        '-movflags', '+faststart',
+        '-y',
+        outputFile
+      ];
+
+      console.log(`[${jobId}] [PASS 2] FFmpeg: ffmpeg ${pass2Args.join(' ')}`);
+
+      await new Promise((resolve, reject) => {
+        const ffmpeg = spawn('ffmpeg', pass2Args);
+        let stderr = '';
+        ffmpeg.stderr.on('data', (data) => {
+          stderr += data.toString();
+          const match = data.toString().match(/time=(\d+:\d+:\d+\.\d+)/);
+          if (match) console.log(`[${jobId}] [PASS 2] Progress: ${match[1]}`);
+        });
+        ffmpeg.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outputFile)) {
+            const size = fs.statSync(outputFile).size;
+            console.log(`[${jobId}] [PASS 2] Complete: ${(size / 1024 / 1024).toFixed(2)} MB`);
+            resolve();
+          } else {
+            console.error(`[${jobId}] [PASS 2] Failed: ${stderr.slice(-500)}`);
+            reject(new Error(`Pass 2 NVENC failed: ${code}`));
+          }
+        });
+        ffmpeg.on('error', reject);
+      });
+
+      // Cleanup intermediate file
+      try { fs.unlinkSync(intermediateFile); } catch (e) {}
+
+    } else {
+      // CPU-only encoding (no GPU available)
+      console.log(`[${jobId}] Starting video encoding with libx264 (CPU)`);
+      await runFFmpegEncode(getCpuEncodingArgs('medium'), 'CPU', null);
+    }
+
+    // CRITICAL: Validate final output
+    console.log(`[${jobId}] Validating final output...`);
     const validation = validateVideoOutput(outputFile, expectedDuration);
 
     if (validation.isValid) {
-      console.log(`[${jobId}] ✅ Output validated successfully`);
+      console.log(`[${jobId}] ✅ Output validated: ${validation.frameCount} frames, ${validation.fileSizeMB?.toFixed(2)} MB, ${validation.bitrateKbps?.toFixed(0)} kbps`);
     } else {
-      console.warn(`[${jobId}] ⚠️ Output validation warning: ${validation.message}`);
+      console.error(`[${jobId}] ❌ Output validation FAILED: ${validation.message}`);
+      throw new Error(`Output video is invalid: ${validation.message}`);
     }
 
     return outputFile;
@@ -2778,12 +2889,16 @@ function buildAudioFilters({ enhanceAudio, removeFiller }) {
   const filters = [];
 
   if (enhanceAudio) {
-    // Audio normalization
-    filters.push('loudnorm=I=-16:TP=-1.5:LRA=11');
+    // SIMPLIFIED: Removed loudnorm as it buffers entire audio stream
+    // and can cause timing issues with video encoding.
+    // Using simpler filters that don't require full-stream buffering:
+
     // High-pass filter to remove rumble
     filters.push('highpass=f=80');
-    // Slight compression
+    // Slight compression for more consistent levels
     filters.push('acompressor=threshold=-20dB:ratio=4:attack=5:release=50');
+    // Simple volume boost instead of loudnorm
+    filters.push('volume=1.5');
   }
 
   // Default passthrough if no filters
