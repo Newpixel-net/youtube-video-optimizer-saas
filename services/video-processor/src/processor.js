@@ -1467,23 +1467,20 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
             // Output as mp4 for better compatibility
             downloadedFile = path.join(workDir, 'source.mp4');
 
-            // FIRST PRINCIPLES: Preserve original timestamps, don't manipulate them.
-            // For webm: Re-encode (since -c copy doesn't work reliably for webm)
+            // For webm: Re-encode with fps filter for proper VFR->CFR conversion
             // For mp4: Use stream copy for speed
-            // In both cases: DO NOT use setpts - preserve original timing
+            // CRITICAL: Use fps filter instead of -r for correct VFR handling
             const useReencode = fileExt === 'webm';
 
             const ffmpegArgs = [
-              // CRITICAL: Fix broken timestamps from MediaRecorder WebM
-              // +igndts ignores broken DTS, +genpts generates new PTS
-              '-fflags', '+igndts+genpts',
               '-ss', String(relativeStart),   // Seek to start position
               '-i', capturedFile,
               '-t', String(duration),         // Duration to extract
               ...(useReencode
-                ? ['-r', '30',        // Force 30fps OUTPUT (fixes 1000fps detection)
+                ? ['-vf', 'fps=30',   // Use fps filter for proper VFR->CFR conversion
                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
-                   '-c:a', 'aac', '-b:a', '192k']
+                   '-c:a', 'aac', '-b:a', '192k',
+                   '-movflags', '+faststart']
                 : ['-c', 'copy']),
               '-avoid_negative_ts', 'make_zero',
               '-y',
@@ -1627,23 +1624,44 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                 console.log(`[${jobId}] Invalid video PTS span - cannot rescale`);
               }
 
-              // Build FFmpeg arguments
-              // CRITICAL: +igndts ignores broken DTS, +genpts generates new PTS
-              const ffmpegArgs = ['-fflags', '+igndts+genpts', '-i', capturedFile];
+              // Build FFmpeg arguments for WebM to MP4 conversion
+              //
+              // CRITICAL FIX: Previous approach used -fflags +igndts+genpts and -r 30
+              // which can cause frozen video with VFR (variable frame rate) WebM input.
+              //
+              // NEW APPROACH:
+              // 1. Use fps video filter instead of -r for proper VFR->CFR conversion
+              // 2. Don't use igndts/genpts - let FFmpeg handle timestamps naturally
+              // 3. The fps filter properly duplicates/drops frames for correct timing
+              //
+              const ffmpegArgs = ['-i', capturedFile];
 
+              // Build video filter chain
+              const vfFilters = [];
+
+              // Add PTS rescaling if needed (for 4x speed captures)
               if (useRescaling && videoFilter) {
-                ffmpegArgs.push('-vf', videoFilter);
-                if (audioFilter) {
-                  ffmpegArgs.push('-af', audioFilter);
-                }
+                vfFilters.push(videoFilter);
               }
 
-              // CRITICAL: Fix MediaRecorder WebM timestamp issues
-              // -r 30 forces 30fps output (fixes FFmpeg detecting 1000fps)
+              // CRITICAL: Use fps filter for VFR->CFR conversion
+              // This properly handles variable frame rate input from MediaRecorder
+              vfFilters.push('fps=30');
+
+              if (vfFilters.length > 0) {
+                ffmpegArgs.push('-vf', vfFilters.join(','));
+              }
+
+              // Audio filter if needed
+              if (useRescaling && audioFilter) {
+                ffmpegArgs.push('-af', audioFilter);
+              }
+
+              // Output encoding
               ffmpegArgs.push(
-                '-r', '30',
                 '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
                 '-c:a', 'aac', '-b:a', '192k',
+                '-movflags', '+faststart',
                 '-y',
                 downloadedFile
               );
@@ -1659,6 +1677,16 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
                   const fileSize = fs.existsSync(downloadedFile) ? fs.statSync(downloadedFile).size : 0;
                   if (code === 0 && fileSize > 1000) {
                     console.log(`[${jobId}] Converted to mp4: ${fileSize} bytes`);
+
+                    // CRITICAL: Validate frame count to detect frozen video early
+                    const transcodeValidation = validateVideoOutput(downloadedFile, realWorldDuration);
+                    if (!transcodeValidation.isValid) {
+                      console.error(`[${jobId}] ❌ TRANSCODE PRODUCED FROZEN VIDEO!`);
+                      console.error(`[${jobId}] Frame count: ${transcodeValidation.frameCount}, Duration: ${transcodeValidation.duration}s`);
+                      console.error(`[${jobId}] This indicates a problem with the WebM input or FFmpeg transcode settings`);
+                    } else {
+                      console.log(`[${jobId}] ✅ Transcode validation passed: ${transcodeValidation.frameCount} frames, ${transcodeValidation.actualFps?.toFixed(1)} fps`);
+                    }
 
                     // DIAGNOSTIC STAGE 2: Probe AFTER transcode (WebM → MP4)
                     probePTS(jobId, downloadedFile, 'STAGE_2_AFTER_TRANSCODE');
