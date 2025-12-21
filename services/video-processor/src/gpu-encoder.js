@@ -158,11 +158,12 @@ function getGpuEncodingParams(quality) {
       '-profile:v', 'high',   // H.264 High Profile for better compression
       '-level', '4.1',        // Compatibility level
       '-g', '30',             // Keyframe every 30 frames (1 sec at 30fps)
-      '-keyint_min', '30',    // Minimum keyframe interval (match -g)
-      '-sc_threshold', '0',   // Disable scene detection for consistent keyframes
       '-bf', '0',             // Disable B-frames for maximum compatibility
+      '-strict_gop', '1',     // NVENC: Enforce strict GOP structure
+      '-forced-idr', '1',     // NVENC: Force IDR frames at keyframe positions
       '-spatial-aq', '1',     // Spatial adaptive quantization (better quality)
       '-temporal-aq', '1',    // Temporal adaptive quantization
+      '-fps_mode', 'cfr',     // Force constant frame rate (fixes VFR input from MediaRecorder)
     ],
     audioEncoder: 'aac',
     audioArgs: [
