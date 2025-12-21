@@ -34,6 +34,116 @@ try {
 }
 
 /**
+ * Validate encoded video output to detect frozen video issues
+ * Returns true if video appears valid, false if it seems frozen
+ * @param {string} videoPath - Path to the encoded video file
+ * @param {number} expectedDuration - Expected duration in seconds
+ * @returns {Object} Validation result with isValid flag and details
+ */
+function validateVideoOutput(videoPath, expectedDuration = 30) {
+  try {
+    // Get frame count
+    const frameCountResult = execSync(
+      `ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`,
+      { encoding: 'utf8', timeout: 60000 }
+    ).trim();
+
+    const frameCount = parseInt(frameCountResult, 10);
+
+    // Get duration
+    const durationResult = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`,
+      { encoding: 'utf8', timeout: 30000 }
+    ).trim();
+
+    const duration = parseFloat(durationResult);
+
+    // Calculate actual FPS
+    const actualFps = frameCount / duration;
+
+    // Check for frozen video indicators:
+    // 1. Frame count too low (< 20 fps equivalent)
+    // 2. Frame count way too high (> 60 fps - indicates 1000fps bug)
+    const minExpectedFrames = expectedDuration * 20; // At least 20fps
+    const maxExpectedFrames = expectedDuration * 60; // No more than 60fps
+
+    const isFrozen = frameCount < minExpectedFrames;
+    const is1000fpsBug = frameCount > maxExpectedFrames;
+
+    console.log(`[Validation] Video: ${videoPath}`);
+    console.log(`[Validation]   Duration: ${duration.toFixed(2)}s (expected: ~${expectedDuration}s)`);
+    console.log(`[Validation]   Frame count: ${frameCount}`);
+    console.log(`[Validation]   Actual FPS: ${actualFps.toFixed(2)}`);
+    console.log(`[Validation]   Min expected frames: ${minExpectedFrames}`);
+
+    if (isFrozen) {
+      console.error(`[Validation] ❌ FROZEN VIDEO DETECTED! Frame count ${frameCount} < ${minExpectedFrames}`);
+      return {
+        isValid: false,
+        reason: 'frozen',
+        frameCount,
+        duration,
+        actualFps,
+        message: `Frozen video: only ${frameCount} frames for ${duration}s video (${actualFps.toFixed(1)} fps)`
+      };
+    }
+
+    if (is1000fpsBug) {
+      console.error(`[Validation] ❌ 1000FPS BUG DETECTED! Frame count ${frameCount} > ${maxExpectedFrames}`);
+      return {
+        isValid: false,
+        reason: '1000fps_bug',
+        frameCount,
+        duration,
+        actualFps,
+        message: `1000fps bug: ${frameCount} frames for ${duration}s video (${actualFps.toFixed(1)} fps)`
+      };
+    }
+
+    console.log(`[Validation] ✅ Video appears valid: ${frameCount} frames, ${actualFps.toFixed(1)} fps`);
+    return {
+      isValid: true,
+      frameCount,
+      duration,
+      actualFps
+    };
+
+  } catch (error) {
+    console.error(`[Validation] Error validating video: ${error.message}`);
+    return {
+      isValid: false,
+      reason: 'validation_error',
+      message: error.message
+    };
+  }
+}
+
+/**
+ * Get CPU-only encoding arguments (for fallback when GPU fails)
+ * @param {string} quality - 'high', 'medium', 'low'
+ * @returns {string[]} FFmpeg CPU encoding arguments
+ */
+function getCpuEncodingArgs(quality = 'medium') {
+  const presets = {
+    high: { preset: 'medium', crf: '20' },
+    medium: { preset: 'veryfast', crf: '23' },
+    low: { preset: 'ultrafast', crf: '28' }
+  };
+  const p = presets[quality] || presets.medium;
+
+  return [
+    '-c:v', 'libx264',
+    '-preset', p.preset,
+    '-crf', p.crf,
+    '-pix_fmt', 'yuv420p',
+    '-profile:v', 'main',
+    '-level', '4.0',
+    '-g', '30',
+    '-bf', '0',
+  ];
+}
+
+/**
  * Get FFmpeg encoding arguments based on GPU availability
  * @param {string} quality - 'high', 'medium', 'low'
  * @returns {string[]} FFmpeg encoding arguments
@@ -2181,60 +2291,121 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   // Get FPS with safe default
   const targetFps = output?.fps || 30;
 
-  return new Promise((resolve, reject) => {
-    // For complex filter graphs with labeled streams, use -filter_complex
-    // For simple linear chains, use -vf
-    const filterFlag = isComplexFilter ? '-filter_complex' : '-vf';
+  // For complex filter graphs with labeled streams, use -filter_complex
+  // For simple linear chains, use -vf
+  const filterFlag = isComplexFilter ? '-filter_complex' : '-vf';
 
-    // Use GPU encoding if available, otherwise fall back to CPU
-    const videoEncoding = getVideoEncodingArgs('medium');
-    const audioEncoding = getAudioEncodingArgs();
+  // Calculate expected duration for validation
+  const expectedDuration = targetFps > 0 ? 45 : 30; // Default to 45s for shorts
 
-    const args = [
-      // CRITICAL: Generate PTS for WebM files from MediaRecorder
-      // MediaRecorder WebM files have broken/missing timestamps causing frozen video
-      '-fflags', '+igndts+genpts',
-      '-i', inputFile,
-      filterFlag, filters,
-      '-af', audioFilters,
-      ...videoEncoding,
-      ...audioEncoding,
-      '-r', targetFps.toString(),
-      '-movflags', '+faststart',
-      '-y',
-      outputFile
-    ];
+  /**
+   * Run FFmpeg encoding with specified encoder args
+   * @param {string[]} encoderArgs - Video encoding arguments
+   * @param {string} encoderName - Name for logging (GPU/CPU)
+   * @returns {Promise<string>} Output file path
+   */
+  const runFFmpegEncode = (encoderArgs, encoderName) => {
+    return new Promise((resolve, reject) => {
+      const audioEncoding = getAudioEncodingArgs();
 
-    console.log(`[${jobId}] FFmpeg command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.join(' ')}`);
+      const args = [
+        // CRITICAL: Generate PTS for WebM files from MediaRecorder
+        // MediaRecorder WebM files have broken/missing timestamps causing frozen video
+        '-fflags', '+igndts+genpts',
+        '-i', inputFile,
+        filterFlag, filters,
+        '-af', audioFilters,
+        ...encoderArgs,
+        ...audioEncoding,
+        '-r', targetFps.toString(),
+        '-movflags', '+faststart',
+        '-y',
+        outputFile
+      ];
 
-    const ffmpegProcess = spawn('ffmpeg', args);
+      console.log(`[${jobId}] FFmpeg command (${encoderName}): ffmpeg ${args.join(' ')}`);
 
-    let stderr = '';
+      const ffmpegProcess = spawn('ffmpeg', args);
 
-    ffmpegProcess.stderr.on('data', (data) => {
-      stderr += data.toString();
-      // Log progress from FFmpeg
-      const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
-      if (match) {
-        console.log(`[${jobId}] FFmpeg progress: ${match[1]}`);
-      }
+      let stderr = '';
+
+      ffmpegProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+        // Log progress from FFmpeg
+        const match = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
+        if (match) {
+          console.log(`[${jobId}] FFmpeg progress (${encoderName}): ${match[1]}`);
+        }
+      });
+
+      ffmpegProcess.on('close', (code) => {
+        if (code === 0 && fs.existsSync(outputFile)) {
+          console.log(`[${jobId}] FFmpeg ${encoderName} encoding completed: ${outputFile}`);
+          resolve(outputFile);
+        } else {
+          console.error(`[${jobId}] FFmpeg ${encoderName} failed. Code: ${code}`);
+          console.error(`[${jobId}] stderr: ${stderr.slice(-500)}`);
+          reject(new Error(`Video processing failed (${encoderName}): ${code}`));
+        }
+      });
+
+      ffmpegProcess.on('error', (error) => {
+        reject(new Error(`Failed to start FFmpeg (${encoderName}): ${error.message}`));
+      });
     });
+  };
 
-    ffmpegProcess.on('close', (code) => {
-      if (code === 0 && fs.existsSync(outputFile)) {
-        console.log(`[${jobId}] Processing completed: ${outputFile}`);
-        resolve(outputFile);
+  // Main encoding logic with validation and retry
+  try {
+    // First attempt: Use GPU if available
+    const primaryEncoderArgs = getVideoEncodingArgs('medium');
+    const primaryEncoderName = gpuEnabled ? 'GPU' : 'CPU';
+
+    await runFFmpegEncode(primaryEncoderArgs, primaryEncoderName);
+
+    // CRITICAL: Validate output to detect frozen video
+    console.log(`[${jobId}] Validating ${primaryEncoderName} output...`);
+    const validation = validateVideoOutput(outputFile, expectedDuration);
+
+    if (validation.isValid) {
+      console.log(`[${jobId}] ✅ ${primaryEncoderName} output validated successfully`);
+      return outputFile;
+    }
+
+    // If GPU output is frozen and we were using GPU, retry with CPU
+    if (gpuEnabled && !validation.isValid) {
+      console.warn(`[${jobId}] ⚠️ ${primaryEncoderName} output validation FAILED: ${validation.message}`);
+      console.log(`[${jobId}] 🔄 Retrying with CPU encoding (libx264)...`);
+
+      // Delete failed output
+      try { fs.unlinkSync(outputFile); } catch (e) {}
+
+      // Retry with CPU
+      const cpuEncoderArgs = getCpuEncodingArgs('medium');
+      await runFFmpegEncode(cpuEncoderArgs, 'CPU-FALLBACK');
+
+      // Validate CPU output
+      console.log(`[${jobId}] Validating CPU fallback output...`);
+      const cpuValidation = validateVideoOutput(outputFile, expectedDuration);
+
+      if (cpuValidation.isValid) {
+        console.log(`[${jobId}] ✅ CPU fallback output validated successfully`);
+        return outputFile;
       } else {
-        console.error(`[${jobId}] FFmpeg failed. Code: ${code}`);
-        console.error(`[${jobId}] stderr: ${stderr.slice(-500)}`);
-        reject(new Error(`Video processing failed: ${code}`));
+        console.error(`[${jobId}] ❌ CPU fallback also failed validation: ${cpuValidation.message}`);
+        // Return anyway - let the user see the result and report
+        console.warn(`[${jobId}] ⚠️ Returning video despite validation failure for debugging`);
+        return outputFile;
       }
-    });
+    }
 
-    ffmpegProcess.on('error', (error) => {
-      reject(new Error(`Failed to start FFmpeg: ${error.message}`));
-    });
-  });
+    // If we weren't using GPU and validation failed, return anyway for debugging
+    console.warn(`[${jobId}] ⚠️ Output validation failed but no fallback available: ${validation.message}`);
+    return outputFile;
+
+  } catch (error) {
+    throw error;
+  }
 }
 
 /**
@@ -2265,6 +2436,20 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
   // Normalize reframe mode names (frontend uses 'broll_split', backend used 'b_roll')
   const normalizedMode = reframeMode === 'broll_split' ? 'b_roll' : reframeMode;
 
+  // Check if this is a complex filter mode (uses split/labeled streams)
+  const isComplexMode = ['split_screen', 'three_person'].includes(normalizedMode);
+
+  // CRITICAL FIX: Add fps=30 as FIRST filter to handle VFR MediaRecorder WebM input
+  // This is more reliable than -r 30 at the end because it normalizes framerate
+  // BEFORE any other filter processing (crop, scale, etc.)
+  // Research source: FFmpeg Trac #6386 - MediaRecorder 1000fps detection bug
+  // For complex filter graphs, we label the fps output to feed into split
+  if (isComplexMode) {
+    filters.push('fps=30[fpsnorm]');
+  } else {
+    filters.push('fps=30');
+  }
+
   // Step 1: Reframe/Crop based on mode
   switch (normalizedMode) {
     case 'split_screen':
@@ -2272,7 +2457,8 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       // Take left 1/3 and right 1/3 of the video, stack them
       const splitCropW = Math.floor(validWidth / 3);
       const splitHalfH = Math.floor(targetHeight / 2);
-      filters.push(`split[left][right]`);
+      // Use labeled input from fps filter
+      filters.push(`[fpsnorm]split[left][right]`);
       filters.push(`[left]crop=${splitCropW}:${validHeight}:0:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[l]`);
       filters.push(`[right]crop=${splitCropW}:${validHeight}:${validWidth - splitCropW}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[r]`);
       filters.push(`[l][r]vstack`);
@@ -2284,7 +2470,8 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       const topH = Math.floor(targetHeight * 0.55);
       const bottomH = targetHeight - topH;
       const halfTargetW = Math.floor(targetWidth / 2);
-      filters.push(`split=3[center][bl][br]`);
+      // Use labeled input from fps filter
+      filters.push(`[fpsnorm]split=3[center][bl][br]`);
       filters.push(`[center]crop=${thirdW}:${validHeight}:${thirdW}:0,scale=${targetWidth}:${topH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topH}[c]`);
       filters.push(`[bl]crop=${thirdW}:${validHeight}:0:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[left]`);
       filters.push(`[br]crop=${thirdW}:${validHeight}:${2 * thirdW}:0,scale=${halfTargetW}:${bottomH}:force_original_aspect_ratio=increase,crop=${halfTargetW}:${bottomH}[right]`);
@@ -2441,8 +2628,12 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
     }
   }
 
-  const filterChain = filters.join(',');
-  console.log(`[FFmpeg] COMPLETE FILTER CHAIN: ${filterChain}`);
+  // For complex filter graphs (with labeled streams), join with semicolons
+  // For simple linear chains, join with commas
+  const isComplexFilter = ['split_screen', 'three_person'].includes(normalizedMode);
+  const filterChain = isComplexFilter ? filters.join(';') : filters.join(',');
+
+  console.log(`[FFmpeg] COMPLETE FILTER CHAIN (${isComplexFilter ? 'complex' : 'simple'}): ${filterChain}`);
   console.log(`[FFmpeg] Filter count: ${filters.length}`);
 
   return filterChain;
