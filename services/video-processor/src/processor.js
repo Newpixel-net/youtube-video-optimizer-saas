@@ -524,7 +524,6 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
       '-map', '[aout]',
       ...videoEncoding,
       ...audioEncoding,
-      '-vsync', 'cfr',              // CRITICAL: Force constant frame rate for NVENC
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
@@ -679,7 +678,6 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
       '-map', '[aout]',
       ...videoEncoding,
       ...audioEncoding,
-      '-vsync', 'cfr',              // CRITICAL: Force constant frame rate for NVENC
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
@@ -839,7 +837,6 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
       '-map', '[aout]',
       ...videoEncoding,
       ...audioEncoding,
-      '-vsync', 'cfr',              // CRITICAL: Force constant frame rate for NVENC
       '-r', targetFps.toString(),
       '-movflags', '+faststart',
       '-y',
@@ -2373,6 +2370,8 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         // GPU encoding with pre-processed audio
         // Use two inputs: video source + pre-processed audio
         args = [
+          // CRITICAL: Generate proper PTS for input to fix NVENC frame reading
+          '-fflags', '+genpts',
           '-i', inputFile,           // Input 0: video source
           '-i', preProcessedAudio,   // Input 1: pre-processed audio
           filterFlag, filters,
@@ -2380,7 +2379,6 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
           '-map', '1:a',             // Use audio from input 1
           ...encoderArgs,
           '-c:a', 'copy',            // Copy pre-processed audio (already encoded)
-          '-vsync', 'cfr',           // CRITICAL: Force constant frame rate for NVENC
           '-r', targetFps.toString(),
           '-movflags', '+faststart',
           '-y',
@@ -2391,12 +2389,13 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         // Standard encoding (CPU or GPU without pre-processed audio)
         const audioEncoding = getAudioEncodingArgs();
         args = [
+          // CRITICAL: Generate proper PTS for input to fix NVENC frame reading
+          '-fflags', '+genpts',
           '-i', inputFile,
           filterFlag, filters,
           '-af', audioFilters,
           ...encoderArgs,
           ...audioEncoding,
-          '-vsync', 'cfr',           // CRITICAL: Force constant frame rate for NVENC
           '-r', targetFps.toString(),
           '-movflags', '+faststart',
           '-y',
@@ -2798,11 +2797,10 @@ async function applyTransitions({ jobId, inputFile, introTransition, outroTransi
     const videoEncoding = getVideoEncodingArgs('medium');
 
     const args = [
-      '-fflags', '+igndts+genpts',
+      '-fflags', '+genpts',         // Generate proper PTS timestamps
       '-i', inputFile,
       '-vf', filters.join(','),
       ...videoEncoding,
-      '-vsync', 'cfr',              // CRITICAL: Force constant frame rate for NVENC
       '-r', '30',
       '-c:a', 'copy',
       '-y',
