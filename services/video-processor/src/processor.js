@@ -2778,12 +2778,16 @@ function buildAudioFilters({ enhanceAudio, removeFiller }) {
   const filters = [];
 
   if (enhanceAudio) {
-    // Audio normalization
-    filters.push('loudnorm=I=-16:TP=-1.5:LRA=11');
+    // SIMPLIFIED: Removed loudnorm as it buffers entire audio stream
+    // and can cause timing issues with video encoding.
+    // Using simpler filters that don't require full-stream buffering:
+
     // High-pass filter to remove rumble
     filters.push('highpass=f=80');
-    // Slight compression
+    // Slight compression for more consistent levels
     filters.push('acompressor=threshold=-20dB:ratio=4:attack=5:release=50');
+    // Simple volume boost instead of loudnorm
+    filters.push('volume=1.5');
   }
 
   // Default passthrough if no filters
