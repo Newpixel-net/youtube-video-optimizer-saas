@@ -152,13 +152,29 @@ function getCpuEncodingArgs(quality = 'medium') {
 }
 
 /**
- * Get FFmpeg encoding arguments based on GPU availability
+ * Get FFmpeg encoding arguments - ALWAYS uses CPU (libx264)
+ *
+ * IMPORTANT: NVENC has a fundamental bug where filtered video produces frozen output.
+ * This function now always returns CPU encoding to ensure videos work correctly.
+ *
  * @param {string} quality - 'high', 'medium', 'low'
- * @returns {string[]} FFmpeg encoding arguments
+ * @returns {string[]} FFmpeg encoding arguments (always libx264)
  */
 function getVideoEncodingArgs(quality = 'medium') {
-  const encoding = getEncodingParams({ quality });
-  return encoding.encoderArgs;
+  // CRITICAL: Always use CPU encoding due to NVENC frozen video bug
+  // GPU encoding with h264_nvenc produces frozen video when filters are applied
+  const qualityPresets = {
+    high: { preset: 'medium', crf: '20' },
+    medium: { preset: 'fast', crf: '23' },
+    low: { preset: 'ultrafast', crf: '28' }
+  };
+  const preset = qualityPresets[quality] || qualityPresets.medium;
+
+  return [
+    '-c:v', 'libx264',
+    '-preset', preset.preset,
+    '-crf', preset.crf,
+  ];
 }
 
 /**
@@ -530,7 +546,7 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg multi-source command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 12).join(' ')}...`);
+    console.log(`[${jobId}] FFmpeg multi-source command (CPU-libx264): ffmpeg ${args.slice(0, 12).join(' ')}...`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -684,7 +700,7 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg three-source command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 14).join(' ')}...`);
+    console.log(`[${jobId}] FFmpeg three-source command (CPU-libx264): ffmpeg ${args.slice(0, 14).join(' ')}...`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
@@ -843,7 +859,7 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
       outputFile
     ];
 
-    console.log(`[${jobId}] FFmpeg gameplay command (${gpuEnabled ? 'GPU' : 'CPU'}): ffmpeg ${args.slice(0, 12).join(' ')}...`);
+    console.log(`[${jobId}] FFmpeg gameplay command (CPU-libx264): ffmpeg ${args.slice(0, 12).join(' ')}...`);
 
     const ffmpegProcess = spawn('ffmpeg', args);
 
