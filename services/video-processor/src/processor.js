@@ -2603,21 +2603,18 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       // 6. DO NOT use -profile:v (broken in FFmpeg 7.1+)
       console.log(`[${jobId}] [PASS 2] Re-encoding with NVENC (no filters)...`);
 
+      // SIMPLIFIED NVENC command - minimal parameters to avoid conflicts
+      // Previous complex commands with constqp, qp, bf, g were causing frozen video
+      // Starting with simplest possible command that should work
       const pass2Args = [
-        // CRITICAL FIX: Do NOT use -hwaccel_output_format cuda without a GPU filter chain!
-        // It causes frames to get stuck in CUDA memory and NVENC only encodes first frame.
-        // CPU decoding is fast enough for a small intermediate file.
         '-i', intermediateFile,
-        // CRITICAL: Explicit pixel format for NVENC compatibility
-        '-pix_fmt', 'yuv420p',
         '-c:v', 'h264_nvenc',
-        '-preset', 'p4',          // Balanced quality/speed (p1=fastest, p7=best)
-        // Use constqp mode - simple, reliable, no lookahead
-        '-rc', 'constqp',
-        '-qp', '23',              // Quality parameter (lower = better, 23 is good balance)
-        '-bf', '0',               // Disable B-frames (prevents sync issues)
-        '-g', '60',               // Keyframe every 2 seconds (30fps * 2)
-        '-c:a', 'copy',           // Copy audio (already encoded in Pass 1)
+        '-preset', 'p4',
+        // Use VBR with target bitrate - more reliable than constqp
+        '-b:v', '4M',
+        '-maxrate', '6M',
+        '-bufsize', '8M',
+        '-c:a', 'copy',
         '-movflags', '+faststart',
         '-y',
         outputFile
@@ -2651,8 +2648,19 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       console.log(`[${jobId}] [PASS 2] Validating NVENC output...`);
       const nvencValidation = validateVideoOutput(outputFile, expectedDuration);
 
-      if (!nvencValidation.isValid) {
-        console.error(`[${jobId}] [PASS 2] ❌ NVENC output is FROZEN! Bitrate: ${nvencValidation.bitrateKbps?.toFixed(0)} kbps`);
+      // CRITICAL: Compare Pass 2 bitrate with Pass 1 bitrate
+      // If Pass 2 is much smaller (< 25% of Pass 1), the video is likely frozen
+      // Frozen video compresses extremely well because all frames are identical
+      const pass2BitrateRatio = nvencValidation.bitrateKbps / pass1Validation.bitrateKbps;
+      console.log(`[${jobId}] [PASS 2] Bitrate comparison: Pass1=${pass1Validation.bitrateKbps?.toFixed(0)} kbps, Pass2=${nvencValidation.bitrateKbps?.toFixed(0)} kbps, Ratio=${(pass2BitrateRatio * 100).toFixed(1)}%`);
+
+      const isFrozenByBitrateRatio = pass2BitrateRatio < 0.25; // Pass 2 less than 25% of Pass 1 is suspicious
+      if (isFrozenByBitrateRatio) {
+        console.error(`[${jobId}] [PASS 2] ⚠️ SUSPICIOUS: Pass 2 bitrate is only ${(pass2BitrateRatio * 100).toFixed(1)}% of Pass 1 - likely frozen video!`);
+      }
+
+      if (!nvencValidation.isValid || isFrozenByBitrateRatio) {
+        console.error(`[${jobId}] [PASS 2] ❌ NVENC output is FROZEN! Bitrate: ${nvencValidation.bitrateKbps?.toFixed(0)} kbps (${(pass2BitrateRatio * 100).toFixed(1)}% of Pass 1)`);
         console.log(`[${jobId}] [FALLBACK] Falling back to CPU encoding from intermediate file...`);
 
         // CPU fallback encoding from intermediate file
