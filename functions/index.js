@@ -19480,72 +19480,66 @@ exports.wizardProcessClip = functions
     console.log(`[wizardProcessClip] clipSettings.reframeMode: ${clipSettings.reframeMode}`);
     console.log(`[wizardProcessClip] ==========================================`);
 
-    // SOURCE ASSET CHECK with FALLBACK
-    // Primary: use sourceAsset stored during analysis
-    // Fallback: use extensionCaptureData passed at export time (if capture failed during analysis)
+    // SOURCE ASSET PRIORITY:
+    // 1. extensionCaptureData - ALWAYS preferred when provided (clip-specific capture)
+    // 2. sourceAsset - full source video stored during analysis
+    // 3. uploadedVideoUrl - for user-uploaded videos
+    //
+    // CRITICAL FIX: extensionCaptureData contains the clip-specific captured segment.
+    // We must use it when provided, NOT fall back to sourceAsset (which may be a different clip's segment).
+    // Do NOT save clip-specific captures as sourceAsset - that's for the full source video only.
+
     let sourceAsset = project.sourceAsset;
     const isUploadedVideo = project.isUpload && project.videoData?.uploadedVideoUrl;
 
-    // Check if we have a fallback from extensionCaptureData
-    const hasExtensionFallback = extensionCaptureData &&
+    // Check if we have clip-specific capture data from the extension
+    const hasClipSpecificCapture = extensionCaptureData &&
       extensionCaptureData.streamData &&
       extensionCaptureData.streamData.uploadedToStorage &&
       extensionCaptureData.streamData.videoUrl;
 
     console.log(`[wizardProcessClip] Checking source for ${clipId}:`, {
+      hasClipSpecificCapture,
       hasSourceAsset: !!sourceAsset,
       sourceAssetUrl: sourceAsset?.storageUrl?.substring(0, 60) + '...' || 'none',
       isUploadedVideo,
-      hasExtensionFallback,
       projectId
     });
 
-    // If no sourceAsset but we have extensionCaptureData fallback, create sourceAsset from it
-    if (!sourceAsset && hasExtensionFallback) {
-      console.log(`[wizardProcessClip] Using extensionCaptureData fallback for ${projectId}`);
-      sourceAsset = {
-        storageUrl: extensionCaptureData.streamData.videoUrl,
-        storagePath: extensionCaptureData.streamData.storagePath || null,
-        duration: extensionCaptureData.streamData.duration || project.videoData?.duration || 0,
-        format: extensionCaptureData.streamData.mimeType || 'video/mp4',
-        fileSize: extensionCaptureData.streamData.fileSize || 0,
-        capturedAt: Date.now(),
-        source: 'extension_capture_fallback'
-      };
-
-      // Also save this sourceAsset to the project for future exports
-      try {
-        await db.collection('wizardProjects').doc(projectId).update({
-          sourceAsset: sourceAsset,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        console.log(`[wizardProcessClip] Saved fallback sourceAsset to project ${projectId}`);
-      } catch (saveErr) {
-        console.warn(`[wizardProcessClip] Could not save fallback sourceAsset: ${saveErr.message}`);
-      }
-    }
-
-    // Validate we have a video source
-    if (!sourceAsset && !isUploadedVideo) {
-      console.error(`[wizardProcessClip] ERROR: No sourceAsset for project ${projectId}`);
-      throw new functions.https.HttpsError(
-        'failed-precondition',
-        'Video source not available. The video capture may have failed. Please try re-analyzing the video.'
-      );
-    }
-
     // Determine the video source URL for processing
+    // PRIORITY: clip-specific capture > sourceAsset > uploaded video
     let videoSourceUrl = null;
     let videoSourceType = 'unknown';
 
-    if (sourceAsset && sourceAsset.storageUrl) {
+    if (hasClipSpecificCapture) {
+      // HIGHEST PRIORITY: Use clip-specific captured segment from extension
+      // This is the video that was captured specifically for THIS clip at export time
+      videoSourceUrl = extensionCaptureData.streamData.videoUrl;
+      videoSourceType = 'clip_capture';
+      console.log(`[wizardProcessClip] Using clip-specific capture for ${clipId}: ${videoSourceUrl.substring(0, 60)}...`);
+
+      // NOTE: We intentionally do NOT save this as sourceAsset.
+      // sourceAsset should only contain the full source video, not clip segments.
+      // Each clip gets its own captured segment via extensionCaptureData.
+    } else if (sourceAsset && sourceAsset.storageUrl) {
+      // SECOND PRIORITY: Use full source video from analysis
       videoSourceUrl = sourceAsset.storageUrl;
       videoSourceType = 'source_asset';
       console.log(`[wizardProcessClip] Using sourceAsset: ${videoSourceUrl.substring(0, 60)}...`);
     } else if (isUploadedVideo) {
+      // THIRD PRIORITY: Use user-uploaded video
       videoSourceUrl = project.videoData.uploadedVideoUrl;
       videoSourceType = 'uploaded_video';
       console.log(`[wizardProcessClip] Using uploaded video: ${videoSourceUrl.substring(0, 60)}...`);
+    }
+
+    // Validate we have a video source
+    if (!videoSourceUrl) {
+      console.error(`[wizardProcessClip] ERROR: No video source for project ${projectId}, clip ${clipId}`);
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Video source not available. The video capture may have failed. Please try re-analyzing the video.'
+      );
     }
 
     // Create processing job record with canonical source
