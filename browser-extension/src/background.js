@@ -428,12 +428,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Open the Video Wizard directly for viral clip detection
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const currentTab = tabs[0];
-        let wizardUrl = 'https://ytseo.siteuo.com/video-wizard.html';
+        let wizardUrl = 'https://ytseo.siteuo.com/video-wizard';
 
         // If on a YouTube video page, pass the video URL
         if (currentTab?.url?.includes('youtube.com/watch')) {
           const videoUrl = encodeURIComponent(currentTab.url);
-          wizardUrl = `https://ytseo.siteuo.com/video-wizard.html?youtube=${videoUrl}`;
+          wizardUrl = `https://ytseo.siteuo.com/video-wizard?youtube=${videoUrl}`;
         }
 
         chrome.tabs.create({ url: wizardUrl });
