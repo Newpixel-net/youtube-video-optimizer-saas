@@ -424,6 +424,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       saveSettings(message.settings).then(sendResponse);
       return true;
 
+    case 'openViralClipDetector':
+      // Open the web app for viral clip detection
+      // Get current tab's video ID and open wizard with it
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const currentTab = tabs[0];
+        let wizardUrl = 'https://ytseo.siteuo.com';
+
+        // If on a YouTube video page, pass the video URL
+        if (currentTab?.url?.includes('youtube.com/watch')) {
+          const videoUrl = encodeURIComponent(currentTab.url);
+          wizardUrl = `https://ytseo.siteuo.com/?video=${videoUrl}`;
+        }
+
+        chrome.tabs.create({ url: wizardUrl });
+      });
+      sendResponse({ success: true });
+      return false;
+
     default:
       console.log('[EXT][BG] Unknown action:', message?.action);
       return false;
