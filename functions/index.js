@@ -21374,10 +21374,18 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
       deletedCount++;
     }
 
-    // If deleteAll or cleanAllStorage flag is set, also delete ALL files in extension-uploads
+    // If deleteAll or cleanAllStorage flag is set, also delete ALL files in storage
     // This catches orphaned files not referenced by any project document
     if (deleteAll || cleanAllStorage) {
       console.log('[adminBulkDeleteWizardProjects] Cleaning ALL storage files...');
+
+      // Delete all files in processed-clips/ (THIS IS WHERE EXPORTED CLIPS ARE!)
+      const [processedClips] = await bucket.getFiles({ prefix: 'processed-clips/' });
+      for (const file of processedClips) {
+        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        deletedFilesCount++;
+      }
+      console.log(`[adminBulkDeleteWizardProjects] Deleted ${processedClips.length} files from processed-clips/`);
 
       // Delete all files in extension-uploads/
       const [extensionFiles] = await bucket.getFiles({ prefix: 'extension-uploads/' });
@@ -21436,13 +21444,14 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
 
     // Check all possible storage locations used by Video Wizard
     const storagePrefixes = [
+      'processed-clips/',    // THIS IS WHERE EXPORTED CLIPS ARE STORED
       'extension-uploads/',
       'wizard-videos/',
       'video-uploads/',
       'wizard-exports/',
       'clip-exports/',
-      'thumbnails/',       // Sometimes thumbnails are stored here
-      'temp/'              // Temporary files
+      'thumbnails/',
+      'temp/'
     ];
 
     let totalFiles = 0;
