@@ -294,6 +294,10 @@ async function logUsage(uid, action, metadata = {}) {
  * Also cleans up associated storage files
  */
 async function enforceMaxProjects(uid, maxProjects = 8) {
+  // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
+  const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
+  const bucket = admin.storage().bucket(STORAGE_BUCKET);
+
   try {
     // Get user's projects ordered by creation date (oldest first)
     const projectsSnapshot = await db.collection('wizardProjects')
@@ -317,15 +321,15 @@ async function enforceMaxProjects(uid, maxProjects = 8) {
         try {
           // Delete sourceAsset if exists
           if (projectData.sourceAsset?.storagePath) {
-            await admin.storage().bucket().file(projectData.sourceAsset.storagePath).delete().catch(() => {});
+            await bucket.file(projectData.sourceAsset.storagePath).delete().catch(() => {});
           }
           // Delete uploaded video if exists
           if (projectData.uploadedVideoPath) {
-            await admin.storage().bucket().file(projectData.uploadedVideoPath).delete().catch(() => {});
+            await bucket.file(projectData.uploadedVideoPath).delete().catch(() => {});
           }
           // Delete any clip-specific captures
           const clipCapturesPath = `extension-uploads/${projectData.videoId}`;
-          const [files] = await admin.storage().bucket().getFiles({ prefix: clipCapturesPath });
+          const [files] = await bucket.getFiles({ prefix: clipCapturesPath });
           for (const file of files) {
             await file.delete().catch(() => {});
           }
@@ -21237,7 +21241,11 @@ exports.adminDeleteWizardProject = functions.https.onCall(async (data, context) 
     }
 
     const projectData = projectDoc.data();
-    const bucket = admin.storage().bucket();
+    // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
+    const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
+    const bucket = admin.storage().bucket(STORAGE_BUCKET);
+
+    console.log(`[adminDeleteWizardProject] Using bucket: ${STORAGE_BUCKET}, videoId: ${projectData.videoId}`);
 
     // Delete associated storage files
     const deletedFiles = [];
@@ -21331,9 +21339,13 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
       targetDocs = snapshot.docs;
     }
 
-    const bucket = admin.storage().bucket();
+    // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
+    const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
+    const bucket = admin.storage().bucket(STORAGE_BUCKET);
     let deletedCount = 0;
     let deletedFilesCount = 0;
+
+    console.log(`[adminBulkDeleteWizardProjects] Using bucket: ${STORAGE_BUCKET}`);
 
     // Delete project-associated files
     for (const doc of targetDocs) {
@@ -21415,13 +21427,22 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
   const { dryRun = false } = data;
 
   try {
-    const bucket = admin.storage().bucket();
+    // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
+    // The video-processor service uploads to this bucket
+    const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
+    const bucket = admin.storage().bucket(STORAGE_BUCKET);
+
+    console.log(`[adminCleanWizardStorage] Starting cleanup, bucket: ${STORAGE_BUCKET}, dryRun: ${dryRun}`);
+
+    // Check all possible storage locations used by Video Wizard
     const storagePrefixes = [
       'extension-uploads/',
       'wizard-videos/',
       'video-uploads/',
       'wizard-exports/',
-      'clip-exports/'
+      'clip-exports/',
+      'thumbnails/',       // Sometimes thumbnails are stored here
+      'temp/'              // Temporary files
     ];
 
     let totalFiles = 0;
@@ -21429,6 +21450,7 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
     const results = {};
 
     for (const prefix of storagePrefixes) {
+      console.log(`[adminCleanWizardStorage] Scanning: ${prefix}`);
       const [files] = await bucket.getFiles({ prefix });
       let folderSize = 0;
 
@@ -21451,15 +21473,59 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
         sizeMB: (folderSize / (1024 * 1024)).toFixed(2)
       };
 
+      if (files.length > 0) {
+        console.log(`[adminCleanWizardStorage] ${prefix}: ${files.length} files, ${(folderSize / (1024 * 1024)).toFixed(2)} MB`);
+      }
+
       totalFiles += files.length;
       totalSize += folderSize;
     }
 
-    console.log(`[adminCleanWizardStorage] ${dryRun ? 'DRY RUN - ' : ''}Found ${totalFiles} files, ${(totalSize / (1024 * 1024)).toFixed(2)} MB total`);
+    // Also try to list ALL files in the bucket to find any unexpected locations
+    console.log(`[adminCleanWizardStorage] Scanning entire bucket for any remaining files...`);
+    const [allFiles] = await bucket.getFiles({ maxResults: 1000 });
+
+    // Find files that weren't in our prefixes
+    const knownPrefixes = storagePrefixes;
+    const otherFiles = allFiles.filter(f => !knownPrefixes.some(p => f.name.startsWith(p)));
+
+    if (otherFiles.length > 0) {
+      let otherSize = 0;
+      const otherPaths = new Set();
+
+      for (const file of otherFiles) {
+        const folder = file.name.split('/')[0] + '/';
+        otherPaths.add(folder);
+
+        try {
+          const [metadata] = await file.getMetadata();
+          otherSize += parseInt(metadata.size || 0);
+        } catch (e) {}
+
+        if (!dryRun) {
+          await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        }
+      }
+
+      results['OTHER (unexpected)'] = {
+        fileCount: otherFiles.length,
+        sizeBytes: otherSize,
+        sizeMB: (otherSize / (1024 * 1024)).toFixed(2),
+        paths: Array.from(otherPaths)
+      };
+
+      console.log(`[adminCleanWizardStorage] Found ${otherFiles.length} files in unexpected locations: ${Array.from(otherPaths).join(', ')}`);
+
+      totalFiles += otherFiles.length;
+      totalSize += otherSize;
+    }
+
+    console.log(`[adminCleanWizardStorage] ${dryRun ? 'DRY RUN - ' : ''}Total: ${totalFiles} files, ${(totalSize / (1024 * 1024)).toFixed(2)} MB`);
 
     return {
       success: true,
       dryRun,
+      bucket: STORAGE_BUCKET,
       totalFiles,
       totalSizeBytes: totalSize,
       totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
