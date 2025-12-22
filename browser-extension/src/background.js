@@ -1763,7 +1763,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
     if (videoElement.paused) {
       console.log('[EXT][CAPTURE] Video is paused after seek, resuming playback...');
       try {
-        // CRITICAL: Must set muted=true for Chrome autoplay policy!
+        // CRITICAL FIX v2.7.10: Must set muted=true for Chrome autoplay policy!
         // Without this, play() fails silently and captureStream() gets frozen frames
         videoElement.muted = true;
         await videoElement.play();
@@ -2851,8 +2851,6 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
                 func: () => {
                   const video = document.querySelector('video.html5-main-video');
                   if (video && video.paused) {
-                    // Must set muted=true for Chrome autoplay policy
-                    video.muted = true;
                     video.play().catch(() => {});
                   }
                 }

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.7.11",
-  "description": "Fix frozen video - add muted=true in ALL play() calls (v2.7.11)",
+  "version": "2.7.10",
+  "description": "Fix frozen video in pre-capture section - muted=true before play() (v2.7.10)",
 
   "permissions": [
     "activeTab",
