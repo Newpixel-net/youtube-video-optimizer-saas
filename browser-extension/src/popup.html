@@ -58,32 +58,158 @@
 
     <!-- On YouTube - Can capture for wizard -->
     <div class="youtube-ready hidden" id="youtubeReady">
-      <div class="video-card">
-        <div class="video-thumbnail" id="videoThumbnail">
-          <img src="" alt="Video thumbnail" id="thumbnailImg">
-          <div class="video-duration" id="videoDuration">0:00</div>
-        </div>
-        <div class="video-info">
-          <h3 class="video-title" id="videoTitle">Loading...</h3>
-          <p class="video-channel" id="videoChannel">Channel</p>
-        </div>
-      </div>
-
-      <div class="action-info">
-        <p>Ready to capture this video for Video Wizard</p>
-      </div>
-
-      <div class="actions">
-        <button class="btn btn-primary" id="sendToWizardBtn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 12h14"/>
-            <path d="M12 5l7 7-7 7"/>
+      <!-- Tabs for Creator Tools -->
+      <div class="creator-tabs">
+        <button class="tab-btn active" data-tab="video">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="23 7 16 12 23 17 23 7"/>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
           </svg>
-          Send to Video Wizard
+          Video
         </button>
-        <button class="btn btn-secondary" id="openWizardBtn">
-          Open Video Wizard
+        <button class="tab-btn" data-tab="tags">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+            <line x1="7" y1="7" x2="7.01" y2="7"/>
+          </svg>
+          Tags
         </button>
+        <button class="tab-btn" data-tab="seo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 20V10"/>
+            <path d="M12 20V4"/>
+            <path d="M6 20v-6"/>
+          </svg>
+          SEO
+        </button>
+      </div>
+
+      <!-- Video Tab Content -->
+      <div class="tab-content active" id="tabVideo">
+        <div class="video-card">
+          <div class="video-thumbnail" id="videoThumbnail">
+            <img src="" alt="Video thumbnail" id="thumbnailImg">
+            <div class="video-duration" id="videoDuration">0:00</div>
+          </div>
+          <div class="video-info">
+            <h3 class="video-title" id="videoTitle">Loading...</h3>
+            <p class="video-channel" id="videoChannel">Channel</p>
+          </div>
+        </div>
+
+        <div class="action-info">
+          <p>Ready to capture this video for Video Wizard</p>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" id="sendToWizardBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14"/>
+              <path d="M12 5l7 7-7 7"/>
+            </svg>
+            Send to Video Wizard
+          </button>
+          <button class="btn btn-secondary" id="openWizardBtn">
+            Open Video Wizard
+          </button>
+        </div>
+      </div>
+
+      <!-- Tags Tab Content -->
+      <div class="tab-content" id="tabTags">
+        <div class="tags-section">
+          <div class="tags-header">
+            <h4>Video Tags</h4>
+            <button class="copy-all-btn" id="copyAllTagsBtn" title="Copy all tags">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+              </svg>
+              Copy All
+            </button>
+          </div>
+          <div class="tags-container" id="tagsContainer">
+            <div class="tags-loading">
+              <div class="mini-spinner"></div>
+              <span>Analyzing video tags...</span>
+            </div>
+          </div>
+          <div class="tags-stats hidden" id="tagsStats">
+            <div class="stat-item">
+              <span class="stat-value" id="tagCount">0</span>
+              <span class="stat-label">Tags Found</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value" id="avgTagLength">0</span>
+              <span class="stat-label">Avg. Length</span>
+            </div>
+          </div>
+          <div class="tags-tip">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+            <span>Click any tag to copy it</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEO Tab Content -->
+      <div class="tab-content" id="tabSeo">
+        <div class="seo-section">
+          <div class="seo-score-circle" id="seoScoreCircle">
+            <svg viewBox="0 0 36 36" class="circular-chart">
+              <path class="circle-bg" d="M18 2.0845
+                a 15.9155 15.9155 0 0 1 0 31.831
+                a 15.9155 15.9155 0 0 1 0 -31.831"/>
+              <path class="circle" id="seoCircle" stroke-dasharray="0, 100" d="M18 2.0845
+                a 15.9155 15.9155 0 0 1 0 31.831
+                a 15.9155 15.9155 0 0 1 0 -31.831"/>
+              <text x="18" y="20.35" class="score-text" id="seoScoreText">--</text>
+            </svg>
+          </div>
+          <div class="seo-label" id="seoLabel">Analyzing...</div>
+
+          <div class="seo-breakdown" id="seoBreakdown">
+            <div class="seo-item" id="seoTitle">
+              <div class="seo-item-header">
+                <span class="seo-item-icon">--</span>
+                <span class="seo-item-name">Title</span>
+              </div>
+              <div class="seo-item-bar"><div class="seo-item-fill" style="width: 0%"></div></div>
+              <span class="seo-item-hint">Analyzing...</span>
+            </div>
+            <div class="seo-item" id="seoDescription">
+              <div class="seo-item-header">
+                <span class="seo-item-icon">--</span>
+                <span class="seo-item-name">Description</span>
+              </div>
+              <div class="seo-item-bar"><div class="seo-item-fill" style="width: 0%"></div></div>
+              <span class="seo-item-hint">Analyzing...</span>
+            </div>
+            <div class="seo-item" id="seoTags">
+              <div class="seo-item-header">
+                <span class="seo-item-icon">--</span>
+                <span class="seo-item-name">Tags</span>
+              </div>
+              <div class="seo-item-bar"><div class="seo-item-fill" style="width: 0%"></div></div>
+              <span class="seo-item-hint">Analyzing...</span>
+            </div>
+            <div class="seo-item" id="seoThumbnail">
+              <div class="seo-item-header">
+                <span class="seo-item-icon">--</span>
+                <span class="seo-item-name">Thumbnail</span>
+              </div>
+              <div class="seo-item-bar"><div class="seo-item-fill" style="width: 0%"></div></div>
+              <span class="seo-item-hint">Analyzing...</span>
+            </div>
+          </div>
+
+          <div class="seo-suggestions hidden" id="seoSuggestions">
+            <h5>Suggestions</h5>
+            <ul id="seoSuggestionsList"></ul>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -184,7 +310,7 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <span class="version">v2.7.3</span>
+      <span class="version">v2.8.0</span>
       <span class="footer-link">
         <a href="https://ytseo.siteuo.com/video-wizard.html" target="_blank">Video Wizard</a>
       </span>
