@@ -2648,8 +2648,19 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       console.log(`[${jobId}] [PASS 2] Validating NVENC output...`);
       const nvencValidation = validateVideoOutput(outputFile, expectedDuration);
 
-      if (!nvencValidation.isValid) {
-        console.error(`[${jobId}] [PASS 2] ❌ NVENC output is FROZEN! Bitrate: ${nvencValidation.bitrateKbps?.toFixed(0)} kbps`);
+      // CRITICAL: Compare Pass 2 bitrate with Pass 1 bitrate
+      // If Pass 2 is much smaller (< 25% of Pass 1), the video is likely frozen
+      // Frozen video compresses extremely well because all frames are identical
+      const pass2BitrateRatio = nvencValidation.bitrateKbps / pass1Validation.bitrateKbps;
+      console.log(`[${jobId}] [PASS 2] Bitrate comparison: Pass1=${pass1Validation.bitrateKbps?.toFixed(0)} kbps, Pass2=${nvencValidation.bitrateKbps?.toFixed(0)} kbps, Ratio=${(pass2BitrateRatio * 100).toFixed(1)}%`);
+
+      const isFrozenByBitrateRatio = pass2BitrateRatio < 0.25; // Pass 2 less than 25% of Pass 1 is suspicious
+      if (isFrozenByBitrateRatio) {
+        console.error(`[${jobId}] [PASS 2] ⚠️ SUSPICIOUS: Pass 2 bitrate is only ${(pass2BitrateRatio * 100).toFixed(1)}% of Pass 1 - likely frozen video!`);
+      }
+
+      if (!nvencValidation.isValid || isFrozenByBitrateRatio) {
+        console.error(`[${jobId}] [PASS 2] ❌ NVENC output is FROZEN! Bitrate: ${nvencValidation.bitrateKbps?.toFixed(0)} kbps (${(pass2BitrateRatio * 100).toFixed(1)}% of Pass 1)`);
         console.log(`[${jobId}] [FALLBACK] Falling back to CPU encoding from intermediate file...`);
 
         // CPU fallback encoding from intermediate file
