@@ -6427,183 +6427,117 @@
             border-color: rgba(239, 68, 68, 0.4);
         }
 
-        /* Platform Selection - Step 1 */
+        /* Platform Selection - Step 1 (Compact single-row design) */
         .platform-selection-section {
-            margin-bottom: 2rem;
+            margin-bottom: 1.25rem;
         }
 
         .platform-selection-header {
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .platform-selection-header h3 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #fff;
-            margin-bottom: 0.5rem;
-        }
-
-        .platform-selection-header p {
-            font-size: 0.875rem;
-            color: rgba(255, 255, 255, 0.6);
+            display: none; /* Hide header for cleaner look */
         }
 
         .platform-cards-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-bottom: 1rem;
+            display: flex;
+            gap: 0.625rem;
+            justify-content: center;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding: 0.25rem 0;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
         }
 
-        @media (max-width: 768px) {
-            .platform-cards-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        @media (max-width: 480px) {
-            .platform-cards-grid {
-                grid-template-columns: 1fr;
-            }
+        .platform-cards-grid::-webkit-scrollbar {
+            display: none;
         }
 
         .platform-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 1rem;
-            padding: 1.25rem 1rem;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.625rem;
+            padding: 0.875rem 1rem;
             cursor: pointer;
-            transition: all 0.25s ease;
+            transition: all 0.2s ease;
             text-align: center;
-            position: relative;
-            overflow: hidden;
+            min-width: 110px;
+            flex: 1;
+            max-width: 140px;
         }
 
         .platform-card:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.15);
         }
 
         .platform-card.selected {
-            background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(249, 115, 22, 0.05) 100%);
+            background: rgba(249, 115, 22, 0.08);
             border-color: #f97316;
-            box-shadow: 0 0 20px rgba(249, 115, 22, 0.2);
-        }
-
-        .platform-card.selected::before {
-            content: '✓';
-            position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
-            width: 1.25rem;
-            height: 1.25rem;
-            background: #f97316;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            color: #fff;
-            font-weight: bold;
         }
 
         .platform-card-icon {
-            font-size: 2rem;
-            margin-bottom: 0.75rem;
+            font-size: 1.375rem;
+            margin-bottom: 0.5rem;
             display: block;
+            line-height: 1;
         }
 
         .platform-card-name {
-            font-size: 0.95rem;
+            font-size: 0.75rem;
             font-weight: 600;
             color: #fff;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.125rem;
+            white-space: nowrap;
         }
 
         .platform-card-subtitle {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.625rem;
+            color: rgba(255, 255, 255, 0.45);
             margin-bottom: 0.5rem;
+            white-space: nowrap;
         }
 
         .platform-card-duration {
-            font-size: 0.7rem;
+            font-size: 0.625rem;
             color: #f97316;
             font-weight: 500;
-            padding: 0.25rem 0.5rem;
-            background: rgba(249, 115, 22, 0.1);
-            border-radius: 0.5rem;
+            padding: 0.1875rem 0.5rem;
+            background: rgba(249, 115, 22, 0.12);
+            border-radius: 0.25rem;
             display: inline-block;
         }
 
-        .platform-card.selected .platform-card-duration {
-            background: rgba(249, 115, 22, 0.2);
-        }
-
-        .platform-multi-card {
-            grid-column: span 3;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-            padding: 1rem 1.5rem;
-        }
-
-        @media (max-width: 768px) {
-            .platform-multi-card {
-                grid-column: span 2;
+        /* Mobile: scrollable row */
+        @media (max-width: 700px) {
+            .platform-cards-grid {
+                justify-content: flex-start;
+                padding: 0.25rem 0.5rem;
             }
-        }
 
-        @media (max-width: 480px) {
-            .platform-multi-card {
-                grid-column: span 1;
-                flex-direction: column;
-                text-align: center;
+            .platform-card {
+                min-width: 95px;
+                max-width: 110px;
+                padding: 0.625rem 0.75rem;
             }
-        }
 
-        .platform-multi-card .platform-card-icon {
-            font-size: 1.5rem;
-            margin-bottom: 0;
-        }
-
-        .platform-multi-info {
-            text-align: left;
-        }
-
-        @media (max-width: 480px) {
-            .platform-multi-info {
-                text-align: center;
+            .platform-card-icon {
+                font-size: 1.125rem;
             }
-        }
 
-        .platform-multi-info .platform-card-name {
-            margin-bottom: 0.125rem;
-        }
+            .platform-card-name {
+                font-size: 0.6875rem;
+            }
 
-        .platform-multi-info .platform-card-description {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.5);
+            .platform-card-subtitle {
+                font-size: 0.5625rem;
+            }
+
+            .platform-card-duration {
+                font-size: 0.5625rem;
+            }
         }
 
         .platform-selection-tip {
-            text-align: center;
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.4);
-            margin-top: 0.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.375rem;
-        }
-
-        .platform-selection-tip svg {
-            width: 14px;
-            height: 14px;
-            opacity: 0.6;
+            display: none;
         }
 
         /* YouTube Connection Panel - Step 1 */
@@ -7998,18 +7932,13 @@
         function renderStep1VideoInput() {
             var html = '';
 
-            // Platform Selection Section
+            // Platform Selection Section - Compact single row
             html += '<div class="platform-selection-section">';
-            html += '<div class="platform-selection-header">';
-            html += '<h3>What are you creating?</h3>';
-            html += '<p>Choose your target platform for optimal clip lengths</p>';
-            html += '</div>';
-
             html += '<div class="platform-cards-grid">';
 
-            // Main platform cards (excluding multi-platform)
-            var mainPlatforms = ['youtube-shorts', 'tiktok-viral', 'instagram-reels', 'podcast-clip', 'gaming-highlight'];
-            mainPlatforms.forEach(function(platformId) {
+            // All platform cards in one row
+            var allPlatforms = ['youtube-shorts', 'tiktok-viral', 'instagram-reels', 'podcast-clip', 'gaming-highlight', 'multi-platform'];
+            allPlatforms.forEach(function(platformId) {
                 var preset = PLATFORM_PRESETS[platformId];
                 var isSelected = state.contentType.selected === platformId;
                 html += '<div class="platform-card' + (isSelected ? ' selected' : '') + '" onclick="app.selectPlatform(\'' + platformId + '\')">';
@@ -8020,24 +7949,7 @@
                 html += '</div>';
             });
 
-            // Multi-platform card (spans full width)
-            var multiPreset = PLATFORM_PRESETS['multi-platform'];
-            var isMultiSelected = state.contentType.selected === 'multi-platform';
-            html += '<div class="platform-card platform-multi-card' + (isMultiSelected ? ' selected' : '') + '" onclick="app.selectPlatform(\'multi-platform\')">';
-            html += '<span class="platform-card-icon">' + multiPreset.icon + '</span>';
-            html += '<div class="platform-multi-info">';
-            html += '<div class="platform-card-name">' + multiPreset.name + ' <span class="platform-card-duration">' + multiPreset.durationRange + 's</span></div>';
-            html += '<div class="platform-card-description">' + multiPreset.description + '</div>';
-            html += '</div>';
-            html += '</div>';
-
             html += '</div>'; // .platform-cards-grid
-
-            html += '<div class="platform-selection-tip">';
-            html += '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
-            html += 'Longer clips = more watch time = better algorithm performance';
-            html += '</div>';
-
             html += '</div>'; // .platform-selection-section
 
             // Dropzone
