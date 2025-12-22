@@ -44,6 +44,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'getVideoMetadata') {
+    getVideoMetadata().then(result => {
+      sendResponse(result);
+    }).catch(error => {
+      sendResponse({ success: false, error: error.message });
+    });
+    return true;
+  }
+
+  if (message.action === 'getTranscript') {
+    getVideoTranscript().then(result => {
+      sendResponse(result);
+    }).catch(error => {
+      sendResponse({ success: false, error: error.message });
+    });
+    return true;
+  }
+
+  if (message.action === 'seekToTime') {
+    seekToTime(message.time);
+    sendResponse({ success: true });
+    return false;
+  }
+
   // NEW: Download video stream in page context (has cookie access)
   if (message.action === 'downloadStreamInPage') {
     downloadStreamInPage(message.videoUrl, message.audioUrl).then(result => {
@@ -314,6 +338,223 @@ async function getVideoInfo() {
       success: false,
       error: error.message
     };
+  }
+}
+
+/**
+ * Get extended video metadata including tags and description
+ * Used by Creator Tools (Tag Revealer, SEO Analyzer)
+ */
+async function getVideoMetadata() {
+  try {
+    const playerData = getPlayerData();
+    const videoId = getVideoId();
+
+    if (!playerData || !videoId) {
+      throw new Error('Could not access video data');
+    }
+
+    const videoDetails = playerData.videoDetails || {};
+    const microformat = playerData.microformat?.playerMicroformatRenderer || {};
+
+    // Extract tags from multiple sources
+    let tags = [];
+
+    // Source 1: videoDetails.keywords (most common)
+    if (videoDetails.keywords && Array.isArray(videoDetails.keywords)) {
+      tags = videoDetails.keywords;
+    }
+
+    // Source 2: microformat.keywords if available
+    if (tags.length === 0 && microformat.keywords) {
+      if (typeof microformat.keywords === 'string') {
+        tags = microformat.keywords.split(',').map(t => t.trim()).filter(t => t);
+      } else if (Array.isArray(microformat.keywords)) {
+        tags = microformat.keywords;
+      }
+    }
+
+    // Source 3: Try to find in page meta tags
+    if (tags.length === 0) {
+      const metaKeywords = document.querySelector('meta[name="keywords"]');
+      if (metaKeywords?.content) {
+        tags = metaKeywords.content.split(',').map(t => t.trim()).filter(t => t);
+      }
+    }
+
+    // Get description
+    let description = '';
+    if (videoDetails.shortDescription) {
+      description = videoDetails.shortDescription;
+    } else if (microformat.description?.simpleText) {
+      description = microformat.description.simpleText;
+    } else {
+      // Try DOM fallback
+      const descElement = document.querySelector('#description-inline-expander, #description yt-formatted-string');
+      if (descElement) {
+        description = descElement.textContent || '';
+      }
+    }
+
+    // Check for custom thumbnail
+    const thumbnails = videoDetails.thumbnail?.thumbnails || microformat.thumbnail?.thumbnails || [];
+    const hasCustomThumbnail = thumbnails.some(t =>
+      t.url && !t.url.includes('hqdefault') && !t.url.includes('default.jpg')
+    );
+
+    // Get view count
+    const viewCount = parseInt(videoDetails.viewCount, 10) || 0;
+
+    // Get publish date
+    const publishDate = microformat.publishDate || microformat.uploadDate || null;
+
+    // Get category
+    const category = microformat.category || '';
+
+    return {
+      success: true,
+      metadata: {
+        videoId,
+        title: videoDetails.title || '',
+        channel: videoDetails.author || '',
+        description,
+        tags,
+        viewCount,
+        publishDate,
+        category,
+        hasCustomThumbnail,
+        duration: parseInt(videoDetails.lengthSeconds, 10) || 0
+      }
+    };
+
+  } catch (error) {
+    console.error('[YVO Content] Error getting video metadata:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get video transcript/captions
+ * Extracts transcript from YouTube's caption tracks
+ */
+async function getVideoTranscript() {
+  try {
+    const playerData = getPlayerData();
+    const videoId = getVideoId();
+
+    if (!playerData || !videoId) {
+      throw new Error('Could not access video data');
+    }
+
+    // Get caption tracks from player data
+    const captionTracks = playerData.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+
+    if (!captionTracks || captionTracks.length === 0) {
+      return {
+        success: false,
+        error: 'No captions available for this video'
+      };
+    }
+
+    // Prefer English, then auto-generated, then first available
+    let selectedTrack = captionTracks.find(t => t.languageCode === 'en' && !t.kind);
+    if (!selectedTrack) {
+      selectedTrack = captionTracks.find(t => t.languageCode === 'en');
+    }
+    if (!selectedTrack) {
+      selectedTrack = captionTracks[0];
+    }
+
+    // Fetch the transcript
+    const transcriptUrl = selectedTrack.baseUrl;
+    if (!transcriptUrl) {
+      throw new Error('Could not get transcript URL');
+    }
+
+    // Fetch XML transcript
+    const response = await fetch(transcriptUrl);
+    if (!response.ok) {
+      throw new Error('Failed to fetch transcript');
+    }
+
+    const xmlText = await response.text();
+    const segments = parseTranscriptXml(xmlText);
+
+    return {
+      success: true,
+      transcript: {
+        language: selectedTrack.languageCode,
+        languageName: selectedTrack.name?.simpleText || selectedTrack.name?.runs?.[0]?.text || 'Unknown',
+        isAutoGenerated: selectedTrack.kind === 'asr',
+        segments
+      }
+    };
+
+  } catch (error) {
+    console.error('[YVO Content] Error getting transcript:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Parse transcript XML to segments array
+ */
+function parseTranscriptXml(xmlText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'text/xml');
+  const textElements = doc.querySelectorAll('text');
+
+  const segments = [];
+  textElements.forEach(el => {
+    const start = parseFloat(el.getAttribute('start')) || 0;
+    const duration = parseFloat(el.getAttribute('dur')) || 0;
+    let text = el.textContent || '';
+
+    // Clean up HTML entities and formatting
+    text = text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n/g, ' ')
+      .trim();
+
+    if (text) {
+      segments.push({
+        start,
+        duration,
+        end: start + duration,
+        text
+      });
+    }
+  });
+
+  return segments;
+}
+
+/**
+ * Seek video to a specific time
+ */
+function seekToTime(seconds) {
+  try {
+    const video = document.querySelector('video.html5-main-video');
+    if (video) {
+      video.currentTime = seconds;
+      // Also try YouTube's player API
+      const ytPlayer = document.querySelector('#movie_player');
+      if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+        ytPlayer.seekTo(seconds, true);
+      }
+    }
+  } catch (error) {
+    console.error('[YVO Content] Error seeking to time:', error);
   }
 }
 
