@@ -2531,7 +2531,10 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   // This works because Pass 2 has NO FILTERS - NVENC just re-encodes a clean video.
 
   try {
-    const useGpu = gpuEnabled;
+    // CRITICAL: Must call checkGpuIfNeeded() to initialize gpuEnabled
+    // Previously gpuEnabled was null because this was never called!
+    const useGpu = checkGpuIfNeeded();
+    console.log(`[${jobId}] GPU encoding available: ${useGpu}`);
     const intermediateFile = path.join(workDir, 'intermediate.mp4');
 
     if (useGpu) {
