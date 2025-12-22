@@ -40,6 +40,117 @@ const WIZARD_ORIGINS = [
 // and uploads them to our server, bypassing the IP restriction
 const VIDEO_PROCESSOR_URL = 'https://video-processor-382790048044.us-central1.run.app';
 
+// ============================================
+// CAPTURE PROGRESS OVERLAY HELPERS
+// Send progress updates to content script on YouTube page
+// ============================================
+
+/**
+ * Send capture progress update to the YouTube tab's content script
+ * This shows the visual overlay on the YouTube page
+ */
+async function sendCaptureProgress(tabId, options) {
+  if (!tabId) {
+    console.log('[EXT][BG] sendCaptureProgress: No tabId provided');
+    return;
+  }
+
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'updateCaptureProgress',
+      ...options
+    });
+  } catch (err) {
+    // Ignore errors - content script might not be ready
+    console.log('[EXT][BG] sendCaptureProgress error (non-fatal):', err.message);
+  }
+}
+
+/**
+ * Show the capture progress overlay on YouTube tab
+ */
+async function showCaptureOverlay(tabId, startTime, endTime) {
+  if (!tabId) return;
+
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'showCaptureProgress',
+      startTime,
+      endTime
+    });
+    console.log(`[EXT][BG] Capture overlay shown on tab ${tabId}`);
+  } catch (err) {
+    console.log('[EXT][BG] showCaptureOverlay error (non-fatal):', err.message);
+  }
+}
+
+/**
+ * Hide the capture progress overlay
+ */
+async function hideCaptureOverlay(tabId) {
+  if (!tabId) return;
+
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'hideCaptureProgress'
+    });
+  } catch (err) {
+    // Ignore
+  }
+}
+
+/**
+ * Show capture completion on overlay
+ */
+async function showCaptureComplete(tabId, message = 'Capture complete!') {
+  if (!tabId) return;
+
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'captureComplete',
+      message
+    });
+  } catch (err) {
+    // Ignore
+  }
+}
+
+/**
+ * Show capture error on overlay
+ */
+async function showCaptureError(tabId, message = 'Capture failed') {
+  if (!tabId) return;
+
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'captureError',
+      message
+    });
+  } catch (err) {
+    // Ignore
+  }
+}
+
+/**
+ * Format seconds to MM:SS or HH:MM:SS for overlay display
+ */
+function formatTimeForOverlay(seconds) {
+  if (seconds === undefined || seconds === null) return '--:--';
+  seconds = Math.round(seconds);
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ============================================
+// END CAPTURE PROGRESS OVERLAY HELPERS
+// ============================================
+
 /**
  * Network request interception to capture actual stream URLs
  * This captures the REAL URLs that YouTube's player uses (after signature deciphering)
@@ -2052,7 +2163,18 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
           return;
         }
         const progress = ((videoElement.currentTime - startTime) / duration * 100).toFixed(1);
+        const capturedSeconds = Math.round(videoElement.currentTime - startTime);
         console.log(`[EXT][CAPTURE] Progress: ${progress}% (at ${videoElement.currentTime.toFixed(1)}s, chunks=${chunks.length})`);
+        // Post progress to content script for overlay update
+        try {
+          window.postMessage({
+            type: 'YVO_CAPTURE_PROGRESS',
+            progress: parseFloat(progress),
+            capturedSeconds: capturedSeconds,
+            totalSeconds: Math.round(duration),
+            phase: 'capturing'
+          }, '*');
+        } catch (e) {}
       }, 3000);
 
       // Stop when we reach end time
@@ -2453,6 +2575,17 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     console.log(`[EXT][CAPTURE] Using existing YouTube tab ${youtubeTab.id}`)
 
+    // Show capture progress overlay on YouTube tab
+    await showCaptureOverlay(youtubeTab.id, requestedStartTime, requestedEndTime);
+    await sendCaptureProgress(youtubeTab.id, {
+      phase: 'initializing',
+      percent: 0,
+      message: 'Preparing video capture...',
+      label: 'Initializing',
+      startTime: requestedStartTime,
+      endTime: requestedEndTime
+    });
+
     // Save current tab (Video Wizard) so we can switch back after focusing YouTube
     let savedOriginalTabId = null;
     try {
@@ -2831,6 +2964,18 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
                 }
               });
             }
+
+            // Update capture progress overlay with buffering status
+            await sendCaptureProgress(youtubeTab.id, {
+              phase: 'buffering',
+              percent: parseInt(status.percentReady),
+              message: `Buffering video at position...`,
+              label: `${status.bufferedAhead}s / ${status.needed}s buffered`,
+              details: {
+                segment: `${formatTimeForOverlay(requestedStartTime)} → ${formatTimeForOverlay(requestedEndTime)}`,
+                duration: `${Math.round(requestedEndTime - requestedStartTime)}s`
+              }
+            });
 
             if (status.isReady) {
               bufferReady = true;
@@ -3251,6 +3396,19 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     const directUploadUrl = `${VIDEO_PROCESSOR_URL}/upload-stream`;
     console.log(`[EXT][CAPTURE] Injecting capture function (captureId=${captureId}, directUpload=true)`);
 
+    // Update overlay to show capturing phase
+    const clipDurationForDisplay = captureEnd - captureStart;
+    await sendCaptureProgress(youtubeTab.id, {
+      phase: 'capturing',
+      percent: 0,
+      message: 'Recording video segment...',
+      label: `0s / ${Math.round(clipDurationForDisplay)}s captured`,
+      details: {
+        segment: `${formatTimeForOverlay(captureStart)} → ${formatTimeForOverlay(captureEnd)}`,
+        duration: `${Math.round(clipDurationForDisplay)}s`
+      }
+    });
+
     try {
       const injectionResult = await chrome.scripting.executeScript({
         target: { tabId: youtubeTab.id },
@@ -3289,6 +3447,8 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // CHECK: Did the capture function upload directly (for large files)?
     if (captureResult.uploadedDirectly && captureResult.videoStorageUrl) {
       console.log(`[EXT][CAPTURE] Direct upload completed in page context`);
+      // Show completion on overlay
+      await showCaptureComplete(youtubeTab.id, 'Capture & upload complete!');
       return {
         success: true,
         videoStorageUrl: captureResult.videoStorageUrl,
@@ -3321,6 +3481,18 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     formData.append('capturedDuration', String(capturedDuration));
 
     console.log(`[EXT][UPLOAD] Uploading to server (${captureStart}s-${captureEnd}s)...`);
+
+    // Update overlay to show uploading phase
+    await sendCaptureProgress(youtubeTab.id, {
+      phase: 'uploading',
+      percent: 50,
+      message: 'Uploading captured video...',
+      label: `${(videoBlob.size / 1024 / 1024).toFixed(1)}MB`,
+      details: {
+        segment: `${formatTimeForOverlay(captureStart)} → ${formatTimeForOverlay(captureEnd)}`,
+        duration: `${Math.round(capturedDuration)}s`
+      }
+    });
 
     // Try uploading to server - if it fails, return local data for frontend upload
     let uploadResult = null;
@@ -3377,6 +3549,8 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     // If server upload succeeded, return the storage URL
     if (uploadResult && uploadResult.url) {
+      // Show completion on overlay
+      await showCaptureComplete(youtubeTab.id, 'Capture & upload complete!');
       return {
         success: true,
         videoStorageUrl: uploadResult.url,
@@ -3394,6 +3568,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     // Server upload failed - return local data for frontend to upload
     console.log(`[EXT][UPLOAD] Server unavailable, returning local data for frontend upload`);
+
+    // Show completion on overlay (frontend will handle upload)
+    await showCaptureComplete(youtubeTab.id, 'Capture complete! Finishing upload...');
 
     // NOTE: URL.createObjectURL is NOT available in Service Workers (Manifest V3)
     // Return base64 data directly for frontend to upload to Firebase Storage
@@ -3415,6 +3592,15 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
   } catch (error) {
     console.error(`[EXT][CAPTURE] FAIL: ${error.message}`);
+    // Try to show error on overlay (youtubeTab might not be defined if error occurred early)
+    try {
+      const tabs = await chrome.tabs.query({ url: ['*://www.youtube.com/*', '*://youtube.com/*'] });
+      if (tabs.length > 0) {
+        await showCaptureError(tabs[0].id, `Capture failed: ${error.message.substring(0, 50)}`);
+      }
+    } catch (e) {
+      // Ignore overlay errors
+    }
     return {
       success: false,
       error: error.message,

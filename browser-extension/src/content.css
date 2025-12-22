@@ -99,3 +99,235 @@
 .yvo-toast-close:hover {
   opacity: 1;
 }
+
+/* ============================================
+   CAPTURE PROGRESS OVERLAY
+   Displays capture status on YouTube video page
+   ============================================ */
+
+.yvo-capture-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2147483640;
+  min-width: 280px;
+  max-width: 320px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  color: #f1f5f9;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: yvo-overlay-slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+}
+
+.yvo-capture-overlay.yvo-overlay-hiding {
+  animation: yvo-overlay-slideOut 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes yvo-overlay-slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes yvo-overlay-slideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+}
+
+/* Header */
+.yvo-capture-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.yvo-capture-overlay-logo {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.yvo-capture-overlay-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  flex: 1;
+}
+
+.yvo-capture-overlay-close {
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.yvo-capture-overlay-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+}
+
+/* Status section */
+.yvo-capture-overlay-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.yvo-capture-overlay-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.yvo-capture-overlay-icon.spinning {
+  animation: yvo-spin 1s linear infinite;
+}
+
+@keyframes yvo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.yvo-capture-overlay-message {
+  font-size: 13px;
+  color: #e2e8f0;
+  flex: 1;
+}
+
+/* Progress bar */
+.yvo-capture-overlay-progress {
+  margin-bottom: 10px;
+}
+
+.yvo-capture-overlay-progress-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.yvo-capture-overlay-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ec4899, #8b5cf6, #06b6d4);
+  background-size: 200% 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.yvo-capture-overlay-progress-fill.animated {
+  animation: yvo-progress-shimmer 2s linear infinite;
+}
+
+@keyframes yvo-progress-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.yvo-capture-overlay-progress-text {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* Details section */
+.yvo-capture-overlay-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.yvo-capture-overlay-detail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.yvo-capture-overlay-detail-icon {
+  font-size: 10px;
+}
+
+/* Phase-specific colors */
+.yvo-capture-overlay.phase-initializing .yvo-capture-overlay-progress-fill {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.yvo-capture-overlay.phase-buffering .yvo-capture-overlay-progress-fill {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.yvo-capture-overlay.phase-capturing .yvo-capture-overlay-progress-fill {
+  background: linear-gradient(90deg, #ec4899, #8b5cf6);
+}
+
+.yvo-capture-overlay.phase-uploading .yvo-capture-overlay-progress-fill {
+  background: linear-gradient(90deg, #06b6d4, #22d3ee);
+}
+
+.yvo-capture-overlay.phase-complete .yvo-capture-overlay-progress-fill {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.yvo-capture-overlay.phase-error .yvo-capture-overlay-progress-fill {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+/* Fullscreen adjustments */
+.ytp-fullscreen .yvo-capture-overlay {
+  top: 20px;
+  left: 20px;
+}
+
+/* Hide in mini-player */
+.ytd-miniplayer .yvo-capture-overlay,
+ytd-miniplayer .yvo-capture-overlay {
+  display: none !important;
+}
