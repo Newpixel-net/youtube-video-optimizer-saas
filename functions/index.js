@@ -289,6 +289,80 @@ async function logUsage(uid, action, metadata = {}) {
 }
 
 /**
+ * Helper: Enforce maximum projects per user
+ * Deletes oldest projects if user exceeds limit (default 8)
+ * Also cleans up associated storage files
+ */
+async function enforceMaxProjects(uid, maxProjects = 8) {
+  try {
+    // Get user's projects ordered by creation date (oldest first)
+    const projectsSnapshot = await db.collection('wizardProjects')
+      .where('userId', '==', uid)
+      .orderBy('createdAt', 'asc')
+      .get();
+
+    const projectCount = projectsSnapshot.size;
+
+    // If at or over limit, delete oldest projects to make room for new one
+    if (projectCount >= maxProjects) {
+      const projectsToDelete = projectCount - maxProjects + 1; // +1 to make room for new project
+      const docs = projectsSnapshot.docs.slice(0, projectsToDelete);
+
+      console.log(`[enforceMaxProjects] User ${uid} has ${projectCount} projects, deleting ${projectsToDelete} oldest`);
+
+      for (const doc of docs) {
+        const projectData = doc.data();
+
+        // Clean up storage files associated with this project
+        try {
+          // Delete sourceAsset if exists
+          if (projectData.sourceAsset?.storagePath) {
+            await admin.storage().bucket().file(projectData.sourceAsset.storagePath).delete().catch(() => {});
+          }
+          // Delete uploaded video if exists
+          if (projectData.uploadedVideoPath) {
+            await admin.storage().bucket().file(projectData.uploadedVideoPath).delete().catch(() => {});
+          }
+          // Delete any clip-specific captures
+          const clipCapturesPath = `extension-uploads/${projectData.videoId}`;
+          const [files] = await admin.storage().bucket().getFiles({ prefix: clipCapturesPath });
+          for (const file of files) {
+            await file.delete().catch(() => {});
+          }
+        } catch (storageError) {
+          console.log(`[enforceMaxProjects] Storage cleanup error for project ${doc.id}:`, storageError.message);
+        }
+
+        // Delete the project document
+        await db.collection('wizardProjects').doc(doc.id).delete();
+        console.log(`[enforceMaxProjects] Deleted old project ${doc.id} (${projectData.videoId || 'uploaded'})`);
+      }
+    }
+
+    return { deleted: projectCount >= maxProjects ? projectCount - maxProjects + 1 : 0 };
+  } catch (error) {
+    console.error('[enforceMaxProjects] Error:', error.message);
+    // Don't throw - allow project creation to continue even if cleanup fails
+    return { deleted: 0, error: error.message };
+  }
+}
+
+/**
+ * Helper: Get max projects setting from admin config
+ */
+async function getMaxProjectsLimit() {
+  try {
+    const configDoc = await db.collection('settings').doc('wizardConfig').get();
+    if (configDoc.exists && configDoc.data().maxProjectsPerUser) {
+      return configDoc.data().maxProjectsPerUser;
+    }
+  } catch (error) {
+    console.log('[getMaxProjectsLimit] Using default:', error.message);
+  }
+  return 8; // Default max projects
+}
+
+/**
  * Helper: Get token configuration from admin settings
  * Default values MUST match admin panel defaults in admin-plans.html
  * This function is used across multiple token-related Cloud Functions
@@ -17052,6 +17126,10 @@ exports.wizardAnalyzeVideo = functions
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
 
+    // Enforce max projects limit before creating new project
+    const maxProjects = await getMaxProjectsLimit();
+    await enforceMaxProjects(uid, maxProjects);
+
     const projectRef = await db.collection('wizardProjects').add(projectData);
     await logUsage(uid, 'wizard_analyze_upload', { videoId, fileName: uploadedVideoName });
 
@@ -17525,6 +17603,10 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
       sourceAsset: null,  // Will be populated by frontend after capture upload
       isUpload: false     // Will be set to true for uploaded videos
     };
+
+    // Enforce max projects limit before creating new project
+    const maxProjects = await getMaxProjectsLimit();
+    await enforceMaxProjects(uid, maxProjects);
 
     const projectRef = await db.collection('wizardProjects').add(projectData);
     await logUsage(uid, 'wizard_analyze_video', { videoId, clipCount: processedClips.length });
@@ -20557,3 +20639,669 @@ exports.extensionUploadVideo = functions
       return res.status(500).json({ error: error.message || 'Upload failed' });
     }
   });
+
+// ============================================================================
+// VIDEO WIZARD ADMIN MANAGEMENT FUNCTIONS
+// ============================================================================
+
+/**
+ * adminGetWizardStorageStats - Get storage usage statistics
+ * Returns total storage used, video count, and breakdown by folder
+ */
+exports.adminGetWizardStorageStats = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  try {
+    const bucket = admin.storage().bucket();
+
+    // Get all files in storage
+    const [files] = await bucket.getFiles();
+
+    let totalSize = 0;
+    let totalFiles = 0;
+    const folderStats = {};
+
+    for (const file of files) {
+      const [metadata] = await file.getMetadata();
+      const size = parseInt(metadata.size || 0);
+      totalSize += size;
+      totalFiles++;
+
+      // Group by top-level folder
+      const folder = file.name.split('/')[0] || 'root';
+      if (!folderStats[folder]) {
+        folderStats[folder] = { files: 0, size: 0 };
+      }
+      folderStats[folder].files++;
+      folderStats[folder].size += size;
+    }
+
+    // Get project count
+    const projectsSnapshot = await db.collection('wizardProjects').get();
+    const totalProjects = projectsSnapshot.size;
+
+    // Get processing jobs count
+    const activeJobsSnapshot = await db.collection('processingJobs')
+      .where('status', 'in', ['pending', 'processing'])
+      .get();
+    const activeJobs = activeJobsSnapshot.size;
+
+    // Get failed jobs count
+    const failedJobsSnapshot = await db.collection('processingJobs')
+      .where('status', '==', 'failed')
+      .limit(100)
+      .get();
+    const failedJobs = failedJobsSnapshot.size;
+
+    // Get config
+    const configDoc = await db.collection('settings').doc('wizardConfig').get();
+    const config = configDoc.exists ? configDoc.data() : {};
+
+    return {
+      success: true,
+      stats: {
+        totalSize,
+        totalSizeGB: (totalSize / (1024 * 1024 * 1024)).toFixed(2),
+        totalFiles,
+        totalProjects,
+        activeJobs,
+        failedJobs,
+        folderStats
+      },
+      config: {
+        maxProjectsPerUser: config.maxProjectsPerUser || 8,
+        retentionDays: config.retentionDays || 14,
+        autoCleanupEnabled: config.autoCleanupEnabled || false
+      }
+    };
+  } catch (error) {
+    console.error('[adminGetWizardStorageStats] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminGetWizardVideos - List all videos/projects with user info
+ */
+exports.adminGetWizardVideos = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { limit: queryLimit = 50, startAfter, filterByUser, olderThanDays } = data || {};
+
+  try {
+    let query = db.collection('wizardProjects')
+      .orderBy('createdAt', 'desc');
+
+    if (filterByUser) {
+      query = query.where('userId', '==', filterByUser);
+    }
+
+    if (startAfter) {
+      const startDoc = await db.collection('wizardProjects').doc(startAfter).get();
+      if (startDoc.exists) {
+        query = query.startAfter(startDoc);
+      }
+    }
+
+    query = query.limit(queryLimit);
+    const snapshot = await query.get();
+
+    const videos = [];
+    const userIds = new Set();
+
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      userIds.add(data.userId);
+
+      const createdAt = data.createdAt?.toDate?.() || new Date();
+      const ageInDays = Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
+
+      // Filter by age if specified
+      if (olderThanDays && ageInDays < olderThanDays) {
+        return;
+      }
+
+      videos.push({
+        id: doc.id,
+        userId: data.userId,
+        videoId: data.videoId,
+        title: data.videoData?.title || data.uploadedVideoName || 'Unknown',
+        clipCount: data.clips?.length || 0,
+        isUpload: data.isUpload || false,
+        hasSourceAsset: !!data.sourceAsset?.storageUrl,
+        createdAt: createdAt.toISOString(),
+        ageInDays,
+        status: data.status
+      });
+    });
+
+    // Get user emails for display
+    const userEmails = {};
+    for (const userId of userIds) {
+      try {
+        const userRecord = await admin.auth().getUser(userId);
+        userEmails[userId] = userRecord.email || 'Unknown';
+      } catch (e) {
+        userEmails[userId] = 'Deleted User';
+      }
+    }
+
+    // Add emails to videos
+    videos.forEach(v => {
+      v.userEmail = userEmails[v.userId] || 'Unknown';
+    });
+
+    return {
+      success: true,
+      videos,
+      hasMore: snapshot.size === queryLimit,
+      lastId: videos.length > 0 ? videos[videos.length - 1].id : null
+    };
+  } catch (error) {
+    console.error('[adminGetWizardVideos] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminGetTopStorageUsers - Get users consuming most storage
+ */
+exports.adminGetTopStorageUsers = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  try {
+    const projectsSnapshot = await db.collection('wizardProjects').get();
+
+    const userStats = {};
+
+    projectsSnapshot.forEach(doc => {
+      const data = doc.data();
+      const userId = data.userId;
+
+      if (!userStats[userId]) {
+        userStats[userId] = { projectCount: 0, clipCount: 0 };
+      }
+
+      userStats[userId].projectCount++;
+      userStats[userId].clipCount += data.clips?.length || 0;
+    });
+
+    // Get user emails and sort by project count
+    const userList = [];
+    for (const [userId, stats] of Object.entries(userStats)) {
+      try {
+        const userRecord = await admin.auth().getUser(userId);
+        userList.push({
+          userId,
+          email: userRecord.email || 'Unknown',
+          ...stats
+        });
+      } catch (e) {
+        userList.push({
+          userId,
+          email: 'Deleted User',
+          ...stats
+        });
+      }
+    }
+
+    userList.sort((a, b) => b.projectCount - a.projectCount);
+
+    return {
+      success: true,
+      users: userList.slice(0, 20) // Top 20 users
+    };
+  } catch (error) {
+    console.error('[adminGetTopStorageUsers] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminDeleteWizardProject - Delete a specific project and its storage
+ */
+exports.adminDeleteWizardProject = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { projectId } = data;
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const projectData = projectDoc.data();
+    const bucket = admin.storage().bucket();
+
+    // Delete associated storage files
+    const deletedFiles = [];
+
+    // Delete sourceAsset
+    if (projectData.sourceAsset?.storagePath) {
+      try {
+        await bucket.file(projectData.sourceAsset.storagePath).delete();
+        deletedFiles.push(projectData.sourceAsset.storagePath);
+      } catch (e) { /* ignore */ }
+    }
+
+    // Delete uploaded video
+    if (projectData.uploadedVideoPath) {
+      try {
+        await bucket.file(projectData.uploadedVideoPath).delete();
+        deletedFiles.push(projectData.uploadedVideoPath);
+      } catch (e) { /* ignore */ }
+    }
+
+    // Delete extension uploads for this video
+    if (projectData.videoId) {
+      const prefix = `extension-uploads/${projectData.videoId}/`;
+      const [files] = await bucket.getFiles({ prefix });
+      for (const file of files) {
+        await file.delete().catch(() => {});
+        deletedFiles.push(file.name);
+      }
+    }
+
+    // Delete project document
+    await db.collection('wizardProjects').doc(projectId).delete();
+
+    // Delete related processing jobs
+    const jobsSnapshot = await db.collection('processingJobs')
+      .where('projectId', '==', projectId)
+      .get();
+
+    const batch = db.batch();
+    jobsSnapshot.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+
+    return {
+      success: true,
+      deletedProject: projectId,
+      deletedFiles: deletedFiles.length,
+      deletedJobs: jobsSnapshot.size
+    };
+  } catch (error) {
+    console.error('[adminDeleteWizardProject] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminBulkDeleteWizardProjects - Delete multiple projects or all old projects
+ */
+exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { projectIds, olderThanDays, userId, deleteAll } = data;
+
+  try {
+    let query = db.collection('wizardProjects');
+    let targetDocs = [];
+
+    if (projectIds && projectIds.length > 0) {
+      // Delete specific projects
+      for (const id of projectIds) {
+        const doc = await db.collection('wizardProjects').doc(id).get();
+        if (doc.exists) targetDocs.push(doc);
+      }
+    } else if (olderThanDays) {
+      // Delete projects older than X days
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+
+      const snapshot = await query
+        .where('createdAt', '<', cutoffDate)
+        .get();
+      targetDocs = snapshot.docs;
+    } else if (userId) {
+      // Delete all projects for a specific user
+      const snapshot = await query
+        .where('userId', '==', userId)
+        .get();
+      targetDocs = snapshot.docs;
+    } else if (deleteAll) {
+      // Delete ALL projects (dangerous!)
+      const snapshot = await query.get();
+      targetDocs = snapshot.docs;
+    }
+
+    if (targetDocs.length === 0) {
+      return { success: true, deleted: 0, message: 'No projects matched criteria' };
+    }
+
+    const bucket = admin.storage().bucket();
+    let deletedCount = 0;
+    let deletedFilesCount = 0;
+
+    for (const doc of targetDocs) {
+      const projectData = doc.data();
+
+      // Delete storage files
+      if (projectData.sourceAsset?.storagePath) {
+        await bucket.file(projectData.sourceAsset.storagePath).delete().catch(() => {});
+        deletedFilesCount++;
+      }
+      if (projectData.uploadedVideoPath) {
+        await bucket.file(projectData.uploadedVideoPath).delete().catch(() => {});
+        deletedFilesCount++;
+      }
+      if (projectData.videoId) {
+        const prefix = `extension-uploads/${projectData.videoId}/`;
+        const [files] = await bucket.getFiles({ prefix });
+        for (const file of files) {
+          await file.delete().catch(() => {});
+          deletedFilesCount++;
+        }
+      }
+
+      // Delete project
+      await db.collection('wizardProjects').doc(doc.id).delete();
+      deletedCount++;
+    }
+
+    console.log(`[adminBulkDeleteWizardProjects] Deleted ${deletedCount} projects, ${deletedFilesCount} files`);
+
+    return {
+      success: true,
+      deleted: deletedCount,
+      deletedFiles: deletedFilesCount
+    };
+  } catch (error) {
+    console.error('[adminBulkDeleteWizardProjects] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminSetWizardConfig - Set Video Wizard configuration
+ */
+exports.adminSetWizardConfig = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { maxProjectsPerUser, retentionDays, autoCleanupEnabled } = data;
+
+  try {
+    const updateData = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: context.auth.uid
+    };
+
+    if (maxProjectsPerUser !== undefined) {
+      updateData.maxProjectsPerUser = Math.max(1, Math.min(50, parseInt(maxProjectsPerUser)));
+    }
+    if (retentionDays !== undefined) {
+      updateData.retentionDays = Math.max(1, Math.min(365, parseInt(retentionDays)));
+    }
+    if (autoCleanupEnabled !== undefined) {
+      updateData.autoCleanupEnabled = !!autoCleanupEnabled;
+    }
+
+    await db.collection('settings').doc('wizardConfig').set(updateData, { merge: true });
+
+    return {
+      success: true,
+      config: updateData
+    };
+  } catch (error) {
+    console.error('[adminSetWizardConfig] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminGetProcessingJobs - Get processing job status
+ */
+exports.adminGetProcessingJobs = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { status, limit: queryLimit = 50 } = data || {};
+
+  try {
+    let query = db.collection('processingJobs')
+      .orderBy('createdAt', 'desc');
+
+    if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    const snapshot = await query.limit(queryLimit).get();
+
+    const jobs = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      jobs.push({
+        id: doc.id,
+        projectId: data.projectId,
+        clipId: data.clipId,
+        status: data.status,
+        error: data.error,
+        createdAt: data.createdAt?.toDate?.().toISOString(),
+        completedAt: data.completedAt?.toDate?.().toISOString()
+      });
+    });
+
+    return { success: true, jobs };
+  } catch (error) {
+    console.error('[adminGetProcessingJobs] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminRetryFailedJob - Retry a failed processing job
+ */
+exports.adminRetryFailedJob = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { jobId } = data;
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID required');
+  }
+
+  try {
+    const jobDoc = await db.collection('processingJobs').doc(jobId).get();
+    if (!jobDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Job not found');
+    }
+
+    const jobData = jobDoc.data();
+    if (jobData.status !== 'failed') {
+      throw new functions.https.HttpsError('failed-precondition', 'Job is not in failed state');
+    }
+
+    // Reset job status to pending
+    await db.collection('processingJobs').doc(jobId).update({
+      status: 'pending',
+      error: null,
+      retryCount: (jobData.retryCount || 0) + 1,
+      retriedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, message: 'Job queued for retry' };
+  } catch (error) {
+    console.error('[adminRetryFailedJob] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminClearFailedJobs - Delete all failed processing jobs
+ */
+exports.adminClearFailedJobs = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  try {
+    const snapshot = await db.collection('processingJobs')
+      .where('status', '==', 'failed')
+      .get();
+
+    const batch = db.batch();
+    snapshot.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+
+    return { success: true, deleted: snapshot.size };
+  } catch (error) {
+    console.error('[adminClearFailedJobs] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * scheduledWizardCleanup - Scheduled function to clean up old projects
+ * Runs daily at 3 AM UTC
+ */
+exports.scheduledWizardCleanup = functions.pubsub
+  .schedule('0 3 * * *')
+  .timeZone('UTC')
+  .onRun(async (context) => {
+    console.log('[scheduledWizardCleanup] Starting scheduled cleanup...');
+
+    try {
+      // Check if auto-cleanup is enabled
+      const configDoc = await db.collection('settings').doc('wizardConfig').get();
+      const config = configDoc.exists ? configDoc.data() : {};
+
+      if (!config.autoCleanupEnabled) {
+        console.log('[scheduledWizardCleanup] Auto-cleanup is disabled, skipping');
+        return null;
+      }
+
+      const retentionDays = config.retentionDays || 14;
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+      console.log(`[scheduledWizardCleanup] Deleting projects older than ${retentionDays} days (before ${cutoffDate.toISOString()})`);
+
+      // Find old projects
+      const snapshot = await db.collection('wizardProjects')
+        .where('createdAt', '<', cutoffDate)
+        .get();
+
+      if (snapshot.empty) {
+        console.log('[scheduledWizardCleanup] No old projects to delete');
+        return null;
+      }
+
+      const bucket = admin.storage().bucket();
+      let deletedCount = 0;
+      let deletedFilesCount = 0;
+
+      for (const doc of snapshot.docs) {
+        const projectData = doc.data();
+
+        // Delete storage files
+        if (projectData.sourceAsset?.storagePath) {
+          await bucket.file(projectData.sourceAsset.storagePath).delete().catch(() => {});
+          deletedFilesCount++;
+        }
+        if (projectData.uploadedVideoPath) {
+          await bucket.file(projectData.uploadedVideoPath).delete().catch(() => {});
+          deletedFilesCount++;
+        }
+        if (projectData.videoId) {
+          const prefix = `extension-uploads/${projectData.videoId}/`;
+          const [files] = await bucket.getFiles({ prefix });
+          for (const file of files) {
+            await file.delete().catch(() => {});
+            deletedFilesCount++;
+          }
+        }
+
+        // Delete project
+        await db.collection('wizardProjects').doc(doc.id).delete();
+        deletedCount++;
+      }
+
+      console.log(`[scheduledWizardCleanup] Completed: deleted ${deletedCount} projects, ${deletedFilesCount} files`);
+
+      // Log cleanup action
+      await db.collection('adminLogs').add({
+        action: 'scheduled_wizard_cleanup',
+        deletedProjects: deletedCount,
+        deletedFiles: deletedFilesCount,
+        retentionDays,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return null;
+    } catch (error) {
+      console.error('[scheduledWizardCleanup] Error:', error);
+      return null;
+    }
+  });
+
+/**
+ * adminManualCleanup - Manually trigger cleanup
+ */
+exports.adminManualCleanup = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { olderThanDays } = data;
+
+  if (!olderThanDays || olderThanDays < 1) {
+    throw new functions.https.HttpsError('invalid-argument', 'olderThanDays must be at least 1');
+  }
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+
+    const snapshot = await db.collection('wizardProjects')
+      .where('createdAt', '<', cutoffDate)
+      .get();
+
+    if (snapshot.empty) {
+      return { success: true, deleted: 0, message: 'No old projects found' };
+    }
+
+    const bucket = admin.storage().bucket();
+    let deletedCount = 0;
+    let deletedFilesCount = 0;
+
+    for (const doc of snapshot.docs) {
+      const projectData = doc.data();
+
+      if (projectData.sourceAsset?.storagePath) {
+        await bucket.file(projectData.sourceAsset.storagePath).delete().catch(() => {});
+        deletedFilesCount++;
+      }
+      if (projectData.uploadedVideoPath) {
+        await bucket.file(projectData.uploadedVideoPath).delete().catch(() => {});
+        deletedFilesCount++;
+      }
+      if (projectData.videoId) {
+        const prefix = `extension-uploads/${projectData.videoId}/`;
+        const [files] = await bucket.getFiles({ prefix });
+        for (const file of files) {
+          await file.delete().catch(() => {});
+          deletedFilesCount++;
+        }
+      }
+
+      await db.collection('wizardProjects').doc(doc.id).delete();
+      deletedCount++;
+    }
+
+    await db.collection('adminLogs').add({
+      action: 'manual_wizard_cleanup',
+      deletedProjects: deletedCount,
+      deletedFiles: deletedFilesCount,
+      olderThanDays,
+      adminId: context.auth.uid,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      deleted: deletedCount,
+      deletedFiles: deletedFilesCount
+    };
+  } catch (error) {
+    console.error('[adminManualCleanup] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});

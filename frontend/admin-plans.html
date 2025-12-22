@@ -1398,6 +1398,24 @@
 
             // Cover image modal state
             coverModal: null,  // { promptId, prompt, generatedImage, generating, saving }
+
+            // Video Wizard Management state
+            wizardStats: null,
+            wizardStatsLoading: false,
+            wizardVideos: [],
+            wizardVideosLoading: false,
+            wizardTopUsers: [],
+            wizardTopUsersLoading: false,
+            wizardJobs: [],
+            wizardJobsLoading: false,
+            wizardConfig: {
+                maxProjectsPerUser: 8,
+                retentionDays: 14,
+                autoCleanupEnabled: false
+            },
+            wizardConfigSaving: false,
+            wizardSelectedVideos: [],
+            wizardCleanupDays: 7
         };
 
         // Tool configuration with icons and colors
@@ -1756,6 +1774,10 @@
             html += '<span class="main-tab-icon">✨</span>';
             html += '<span>Prompts</span>';
             html += '</button>';
+            html += '<button class="main-tab' + (state.activeTab === 'wizard' ? ' active' : '') + '" onclick="setActiveTab(\'wizard\')">';
+            html += '<span class="main-tab-icon">🎬</span>';
+            html += '<span>Video Wizard</span>';
+            html += '</button>';
             html += '</div>';
             html += '</div>';
 
@@ -1794,6 +1816,10 @@
 
             html += '<div class="tab-content' + (state.activeTab === 'prompts' ? ' active' : '') + '">';
             html += renderPromptsTab();
+            html += '</div>';
+
+            html += '<div class="tab-content' + (state.activeTab === 'wizard' ? ' active' : '') + '">';
+            html += renderVideoWizardTab();
             html += '</div>';
 
             html += '</div>';
@@ -2995,6 +3021,10 @@
                 loadTransactions();
             } else if (tab === 'requests' && state.renewalRequests.length === 0) {
                 loadRenewalRequests();
+            } else if (tab === 'wizard' && !state.wizardStats) {
+                loadWizardStats();
+                loadWizardVideos();
+                loadWizardTopUsers();
             }
         }
 
@@ -4886,6 +4916,480 @@
                         render();
                     });
             });
+        }
+
+        // =============================================
+        // VIDEO WIZARD MANAGEMENT TAB
+        // =============================================
+
+        function renderVideoWizardTab() {
+            var html = '';
+            var stats = state.wizardStats;
+
+            // Header with refresh button
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">';
+            html += '<h2 style="font-size: 1.25rem; font-weight: 600;">🎬 Video Wizard Management</h2>';
+            html += '<button onclick="refreshWizardData()" class="btn-secondary" ' + (state.wizardStatsLoading ? 'disabled' : '') + '>';
+            html += state.wizardStatsLoading ? '<span class="spinner" style="width:14px;height:14px"></span>' : '↻ Refresh';
+            html += '</button>';
+            html += '</div>';
+
+            // Stats Cards Row
+            html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">';
+
+            // Storage Used Card
+            html += '<div class="stat-card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05)); border: 1px solid rgba(59, 130, 246, 0.3);">';
+            html += '<div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem;">Storage Used</div>';
+            html += '<div style="font-size: 1.5rem; font-weight: 700; color: #3b82f6;">' + (stats ? stats.totalSizeGB + ' GB' : '--') + '</div>';
+            html += '<div style="font-size: 0.7rem; color: #64748b;">' + (stats ? stats.totalFiles + ' files' : '') + '</div>';
+            html += '</div>';
+
+            // Total Projects Card
+            html += '<div class="stat-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.05)); border: 1px solid rgba(16, 185, 129, 0.3);">';
+            html += '<div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem;">Total Projects</div>';
+            html += '<div style="font-size: 1.5rem; font-weight: 700; color: #10b981;">' + (stats ? stats.totalProjects : '--') + '</div>';
+            html += '</div>';
+
+            // Active Jobs Card
+            html += '<div class="stat-card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.05)); border: 1px solid rgba(245, 158, 11, 0.3);">';
+            html += '<div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem;">Active Jobs</div>';
+            html += '<div style="font-size: 1.5rem; font-weight: 700; color: #f59e0b;">' + (stats ? stats.activeJobs : '--') + '</div>';
+            html += '</div>';
+
+            // Failed Jobs Card
+            html += '<div class="stat-card" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.05)); border: 1px solid rgba(239, 68, 68, 0.3);">';
+            html += '<div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem;">Failed Jobs</div>';
+            html += '<div style="font-size: 1.5rem; font-weight: 700; color: #ef4444;">' + (stats ? stats.failedJobs : '--') + '</div>';
+            if (stats && stats.failedJobs > 0) {
+                html += '<button onclick="clearFailedJobs()" style="font-size: 0.65rem; margin-top: 0.25rem; padding: 0.2rem 0.5rem; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.3); border-radius: 4px; color: #ef4444; cursor: pointer;">Clear All</button>';
+            }
+            html += '</div>';
+
+            html += '</div>';
+
+            // Configuration Section
+            html += '<div class="card" style="margin-bottom: 1.5rem;">';
+            html += '<h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">⚙️ Configuration</h3>';
+            html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">';
+
+            // Max Projects Per User
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.25rem;">Max Projects per User</label>';
+            html += '<div style="display: flex; gap: 0.5rem;">';
+            html += '<input type="number" id="wizardMaxProjects" value="' + state.wizardConfig.maxProjectsPerUser + '" min="1" max="50" style="flex: 1; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white;" />';
+            html += '</div>';
+            html += '</div>';
+
+            // Retention Days
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.25rem;">Retention Period (days)</label>';
+            html += '<input type="number" id="wizardRetentionDays" value="' + state.wizardConfig.retentionDays + '" min="1" max="365" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white;" />';
+            html += '</div>';
+
+            // Auto Cleanup Toggle
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.25rem;">Auto-Cleanup (Daily)</label>';
+            html += '<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">';
+            html += '<input type="checkbox" id="wizardAutoCleanup" ' + (state.wizardConfig.autoCleanupEnabled ? 'checked' : '') + ' style="width: 18px; height: 18px;" />';
+            html += '<span style="font-size: 0.85rem; color: #e2e8f0;">' + (state.wizardConfig.autoCleanupEnabled ? 'Enabled' : 'Disabled') + '</span>';
+            html += '</label>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '<div style="margin-top: 1rem; display: flex; gap: 0.5rem;">';
+            html += '<button onclick="saveWizardConfig()" class="btn-primary" ' + (state.wizardConfigSaving ? 'disabled' : '') + '>';
+            html += state.wizardConfigSaving ? '<span class="spinner" style="width:14px;height:14px"></span>' : '💾 Save Config';
+            html += '</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Manual Cleanup Section
+            html += '<div class="card" style="margin-bottom: 1.5rem;">';
+            html += '<h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">🧹 Manual Cleanup</h3>';
+            html += '<div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span style="font-size: 0.85rem; color: #94a3b8;">Delete projects older than</span>';
+            html += '<input type="number" id="wizardCleanupDays" value="' + state.wizardCleanupDays + '" min="1" max="365" style="width: 70px; padding: 0.4rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; text-align: center;" />';
+            html += '<span style="font-size: 0.85rem; color: #94a3b8;">days</span>';
+            html += '</div>';
+            html += '<button onclick="runManualCleanup()" class="btn-secondary" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); color: #f87171;">🗑️ Run Cleanup</button>';
+            html += '<button onclick="deleteAllProjects()" class="btn-secondary" style="background: rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); color: #fca5a5;">⚠️ Delete ALL</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Two Column Layout: Videos and Top Users
+            html += '<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">';
+
+            // All Videos Table
+            html += '<div class="card">';
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">';
+            html += '<h3 style="font-size: 1rem; font-weight: 600;">📹 All Projects</h3>';
+            if (state.wizardSelectedVideos.length > 0) {
+                html += '<button onclick="deleteSelectedProjects()" class="btn-secondary" style="font-size: 0.75rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); color: #f87171;">🗑️ Delete Selected (' + state.wizardSelectedVideos.length + ')</button>';
+            }
+            html += '</div>';
+
+            if (state.wizardVideosLoading) {
+                html += '<div style="text-align: center; padding: 2rem;"><div class="spinner"></div></div>';
+            } else if (state.wizardVideos.length === 0) {
+                html += '<div style="text-align: center; padding: 2rem; color: #64748b;">No projects found</div>';
+            } else {
+                html += '<div style="max-height: 400px; overflow-y: auto;">';
+                html += '<table style="width: 100%; font-size: 0.8rem;">';
+                html += '<thead style="position: sticky; top: 0; background: #1e293b;">';
+                html += '<tr style="text-align: left; color: #94a3b8;">';
+                html += '<th style="padding: 0.5rem;"><input type="checkbox" onchange="toggleAllWizardVideos(this.checked)" /></th>';
+                html += '<th style="padding: 0.5rem;">User</th>';
+                html += '<th style="padding: 0.5rem;">Title</th>';
+                html += '<th style="padding: 0.5rem;">Clips</th>';
+                html += '<th style="padding: 0.5rem;">Age</th>';
+                html += '<th style="padding: 0.5rem;">Actions</th>';
+                html += '</tr>';
+                html += '</thead>';
+                html += '<tbody>';
+
+                for (var i = 0; i < state.wizardVideos.length; i++) {
+                    var video = state.wizardVideos[i];
+                    var isSelected = state.wizardSelectedVideos.indexOf(video.id) !== -1;
+                    html += '<tr style="border-top: 1px solid rgba(255,255,255,0.05);">';
+                    html += '<td style="padding: 0.5rem;"><input type="checkbox" ' + (isSelected ? 'checked' : '') + ' onchange="toggleWizardVideo(\'' + video.id + '\')" /></td>';
+                    html += '<td style="padding: 0.5rem; color: #94a3b8;" title="' + escapeHtml(video.userEmail) + '">' + escapeHtml(video.userEmail.split('@')[0]) + '</td>';
+                    html += '<td style="padding: 0.5rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(video.title) + '">' + escapeHtml(video.title.substring(0, 30)) + (video.title.length > 30 ? '...' : '') + '</td>';
+                    html += '<td style="padding: 0.5rem; color: #10b981;">' + video.clipCount + '</td>';
+                    html += '<td style="padding: 0.5rem; color: ' + (video.ageInDays > 7 ? '#f59e0b' : '#64748b') + ';">' + video.ageInDays + 'd</td>';
+                    html += '<td style="padding: 0.5rem;">';
+                    html += '<button onclick="deleteWizardProject(\'' + video.id + '\')" style="padding: 0.2rem 0.4rem; font-size: 0.7rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 4px; color: #f87171; cursor: pointer;">🗑️</button>';
+                    html += '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody>';
+                html += '</table>';
+                html += '</div>';
+
+                if (state.wizardVideos.length >= 50) {
+                    html += '<div style="text-align: center; margin-top: 1rem;">';
+                    html += '<button onclick="loadMoreWizardVideos()" class="btn-secondary" style="font-size: 0.8rem;">Load More</button>';
+                    html += '</div>';
+                }
+            }
+            html += '</div>';
+
+            // Top Users Section
+            html += '<div class="card">';
+            html += '<h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">👥 Top Users by Projects</h3>';
+
+            if (state.wizardTopUsersLoading) {
+                html += '<div style="text-align: center; padding: 2rem;"><div class="spinner"></div></div>';
+            } else if (state.wizardTopUsers.length === 0) {
+                html += '<div style="text-align: center; padding: 2rem; color: #64748b;">No users found</div>';
+            } else {
+                html += '<div style="max-height: 400px; overflow-y: auto;">';
+                for (var j = 0; j < state.wizardTopUsers.length; j++) {
+                    var user = state.wizardTopUsers[j];
+                    html += '<div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.05);">';
+                    html += '<div>';
+                    html += '<div style="font-size: 0.85rem; color: #e2e8f0;">' + escapeHtml(user.email.split('@')[0]) + '</div>';
+                    html += '<div style="font-size: 0.7rem; color: #64748b;">' + user.clipCount + ' clips</div>';
+                    html += '</div>';
+                    html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+                    html += '<span style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">' + user.projectCount + '</span>';
+                    html += '<button onclick="deleteUserProjects(\'' + user.userId + '\')" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 4px; color: #f87171; cursor: pointer;" title="Delete all projects for this user">🗑️</button>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+
+            html += '</div>'; // End two column layout
+
+            return html;
+        }
+
+        // Video Wizard Data Loading Functions
+        function loadWizardStats() {
+            state.wizardStatsLoading = true;
+            render();
+
+            var adminGetWizardStorageStats = firebase.functions().httpsCallable('adminGetWizardStorageStats');
+            adminGetWizardStorageStats({})
+                .then(function(result) {
+                    state.wizardStatsLoading = false;
+                    if (result.data.success) {
+                        state.wizardStats = result.data.stats;
+                        state.wizardConfig = result.data.config;
+                    }
+                    render();
+                })
+                .catch(function(error) {
+                    state.wizardStatsLoading = false;
+                    console.error('Error loading wizard stats:', error);
+                    showToast('Failed to load storage stats', 'error');
+                    render();
+                });
+        }
+
+        function loadWizardVideos() {
+            state.wizardVideosLoading = true;
+            render();
+
+            var adminGetWizardVideos = firebase.functions().httpsCallable('adminGetWizardVideos');
+            adminGetWizardVideos({ limit: 50 })
+                .then(function(result) {
+                    state.wizardVideosLoading = false;
+                    if (result.data.success) {
+                        state.wizardVideos = result.data.videos;
+                    }
+                    render();
+                })
+                .catch(function(error) {
+                    state.wizardVideosLoading = false;
+                    console.error('Error loading wizard videos:', error);
+                    showToast('Failed to load videos', 'error');
+                    render();
+                });
+        }
+
+        function loadMoreWizardVideos() {
+            if (state.wizardVideos.length === 0) return;
+
+            var lastId = state.wizardVideos[state.wizardVideos.length - 1].id;
+            state.wizardVideosLoading = true;
+            render();
+
+            var adminGetWizardVideos = firebase.functions().httpsCallable('adminGetWizardVideos');
+            adminGetWizardVideos({ limit: 50, startAfter: lastId })
+                .then(function(result) {
+                    state.wizardVideosLoading = false;
+                    if (result.data.success) {
+                        state.wizardVideos = state.wizardVideos.concat(result.data.videos);
+                    }
+                    render();
+                })
+                .catch(function(error) {
+                    state.wizardVideosLoading = false;
+                    console.error('Error loading more videos:', error);
+                    render();
+                });
+        }
+
+        function loadWizardTopUsers() {
+            state.wizardTopUsersLoading = true;
+            render();
+
+            var adminGetTopStorageUsers = firebase.functions().httpsCallable('adminGetTopStorageUsers');
+            adminGetTopStorageUsers({})
+                .then(function(result) {
+                    state.wizardTopUsersLoading = false;
+                    if (result.data.success) {
+                        state.wizardTopUsers = result.data.users;
+                    }
+                    render();
+                })
+                .catch(function(error) {
+                    state.wizardTopUsersLoading = false;
+                    console.error('Error loading top users:', error);
+                    render();
+                });
+        }
+
+        function refreshWizardData() {
+            state.wizardStats = null;
+            state.wizardVideos = [];
+            state.wizardTopUsers = [];
+            state.wizardSelectedVideos = [];
+            loadWizardStats();
+            loadWizardVideos();
+            loadWizardTopUsers();
+        }
+
+        function saveWizardConfig() {
+            var maxProjects = parseInt(document.getElementById('wizardMaxProjects').value) || 8;
+            var retentionDays = parseInt(document.getElementById('wizardRetentionDays').value) || 14;
+            var autoCleanup = document.getElementById('wizardAutoCleanup').checked;
+
+            state.wizardConfigSaving = true;
+            render();
+
+            var adminSetWizardConfig = firebase.functions().httpsCallable('adminSetWizardConfig');
+            adminSetWizardConfig({
+                maxProjectsPerUser: maxProjects,
+                retentionDays: retentionDays,
+                autoCleanupEnabled: autoCleanup
+            })
+                .then(function(result) {
+                    state.wizardConfigSaving = false;
+                    if (result.data.success) {
+                        state.wizardConfig = {
+                            maxProjectsPerUser: maxProjects,
+                            retentionDays: retentionDays,
+                            autoCleanupEnabled: autoCleanup
+                        };
+                        showToast('Configuration saved!', 'success');
+                    }
+                    render();
+                })
+                .catch(function(error) {
+                    state.wizardConfigSaving = false;
+                    console.error('Error saving config:', error);
+                    showToast('Failed to save configuration', 'error');
+                    render();
+                });
+        }
+
+        function runManualCleanup() {
+            var days = parseInt(document.getElementById('wizardCleanupDays').value) || 7;
+
+            if (!confirm('Delete all projects older than ' + days + ' days? This cannot be undone.')) {
+                return;
+            }
+
+            showToast('Running cleanup...', 'info');
+
+            var adminManualCleanup = firebase.functions().httpsCallable('adminManualCleanup');
+            adminManualCleanup({ olderThanDays: days })
+                .then(function(result) {
+                    if (result.data.success) {
+                        showToast('Deleted ' + result.data.deleted + ' projects, ' + result.data.deletedFiles + ' files', 'success');
+                        refreshWizardData();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Cleanup error:', error);
+                    showToast('Cleanup failed: ' + error.message, 'error');
+                });
+        }
+
+        function deleteAllProjects() {
+            if (!confirm('⚠️ WARNING: This will delete ALL Video Wizard projects for ALL users. Are you absolutely sure?')) {
+                return;
+            }
+            if (!confirm('⚠️ FINAL WARNING: This action is IRREVERSIBLE. Type "DELETE" in the next prompt to confirm.')) {
+                return;
+            }
+            var confirmation = prompt('Type DELETE to confirm:');
+            if (confirmation !== 'DELETE') {
+                showToast('Deletion cancelled', 'info');
+                return;
+            }
+
+            showToast('Deleting all projects...', 'info');
+
+            var adminBulkDeleteWizardProjects = firebase.functions().httpsCallable('adminBulkDeleteWizardProjects');
+            adminBulkDeleteWizardProjects({ deleteAll: true })
+                .then(function(result) {
+                    if (result.data.success) {
+                        showToast('Deleted ' + result.data.deleted + ' projects', 'success');
+                        refreshWizardData();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Delete all error:', error);
+                    showToast('Delete failed: ' + error.message, 'error');
+                });
+        }
+
+        function deleteWizardProject(projectId) {
+            if (!confirm('Delete this project? This cannot be undone.')) {
+                return;
+            }
+
+            var adminDeleteWizardProject = firebase.functions().httpsCallable('adminDeleteWizardProject');
+            adminDeleteWizardProject({ projectId: projectId })
+                .then(function(result) {
+                    if (result.data.success) {
+                        showToast('Project deleted', 'success');
+                        state.wizardVideos = state.wizardVideos.filter(function(v) { return v.id !== projectId; });
+                        render();
+                        loadWizardStats(); // Refresh stats
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Delete error:', error);
+                    showToast('Delete failed: ' + error.message, 'error');
+                });
+        }
+
+        function deleteSelectedProjects() {
+            if (state.wizardSelectedVideos.length === 0) return;
+
+            if (!confirm('Delete ' + state.wizardSelectedVideos.length + ' selected projects? This cannot be undone.')) {
+                return;
+            }
+
+            showToast('Deleting ' + state.wizardSelectedVideos.length + ' projects...', 'info');
+
+            var adminBulkDeleteWizardProjects = firebase.functions().httpsCallable('adminBulkDeleteWizardProjects');
+            adminBulkDeleteWizardProjects({ projectIds: state.wizardSelectedVideos })
+                .then(function(result) {
+                    if (result.data.success) {
+                        showToast('Deleted ' + result.data.deleted + ' projects', 'success');
+                        state.wizardSelectedVideos = [];
+                        refreshWizardData();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Bulk delete error:', error);
+                    showToast('Delete failed: ' + error.message, 'error');
+                });
+        }
+
+        function deleteUserProjects(userId) {
+            if (!confirm('Delete ALL projects for this user? This cannot be undone.')) {
+                return;
+            }
+
+            var adminBulkDeleteWizardProjects = firebase.functions().httpsCallable('adminBulkDeleteWizardProjects');
+            adminBulkDeleteWizardProjects({ userId: userId })
+                .then(function(result) {
+                    if (result.data.success) {
+                        showToast('Deleted ' + result.data.deleted + ' projects for user', 'success');
+                        refreshWizardData();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Delete user projects error:', error);
+                    showToast('Delete failed: ' + error.message, 'error');
+                });
+        }
+
+        function toggleWizardVideo(videoId) {
+            var index = state.wizardSelectedVideos.indexOf(videoId);
+            if (index === -1) {
+                state.wizardSelectedVideos.push(videoId);
+            } else {
+                state.wizardSelectedVideos.splice(index, 1);
+            }
+            render();
+        }
+
+        function toggleAllWizardVideos(checked) {
+            if (checked) {
+                state.wizardSelectedVideos = state.wizardVideos.map(function(v) { return v.id; });
+            } else {
+                state.wizardSelectedVideos = [];
+            }
+            render();
+        }
+
+        function clearFailedJobs() {
+            if (!confirm('Clear all failed processing jobs?')) {
+                return;
+            }
+
+            var adminClearFailedJobs = firebase.functions().httpsCallable('adminClearFailedJobs');
+            adminClearFailedJobs({})
+                .then(function(result) {
+                    if (result.data.success) {
+                        showToast('Cleared ' + result.data.deleted + ' failed jobs', 'success');
+                        loadWizardStats();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Clear failed jobs error:', error);
+                    showToast('Failed to clear jobs: ' + error.message, 'error');
+                });
         }
 
         // Initialize
