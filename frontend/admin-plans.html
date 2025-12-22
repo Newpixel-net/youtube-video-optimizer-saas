@@ -1415,7 +1415,16 @@
             },
             wizardConfigSaving: false,
             wizardSelectedVideos: [],
-            wizardCleanupDays: 7
+            wizardCleanupDays: 7,
+            wizardTokenCosts: {
+                analyzeVideo: 5,
+                showMoreClips: 3,
+                generateSEO: 2,
+                generateBRoll: 4,
+                detectSpeakers: 3,
+                exportClip: 0
+            },
+            wizardTokenCostsSaving: false
         };
 
         // Tool configuration with icons and colors
@@ -3025,6 +3034,7 @@
                 loadWizardStats();
                 loadWizardVideos();
                 loadWizardTopUsers();
+                loadWizardTokenCosts();
             }
         }
 
@@ -5003,6 +5013,56 @@
             html += '</div>';
             html += '</div>';
 
+            // Token Costs Section
+            html += '<div class="card" style="margin-bottom: 1.5rem;">';
+            html += '<h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">🪙 Token Costs</h3>';
+            html += '<p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 1rem;">Configure how many tokens each Video Wizard operation costs.</p>';
+            html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">';
+
+            // Analyze Video Cost
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.25rem;">📊 Analyze Video</label>';
+            html += '<input type="number" id="wizardTokenAnalyze" value="' + (state.wizardTokenCosts.analyzeVideo || 5) + '" min="0" max="100" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white;" />';
+            html += '</div>';
+
+            // Show More Clips Cost
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.25rem;">🎬 Show More Clips</label>';
+            html += '<input type="number" id="wizardTokenShowMore" value="' + (state.wizardTokenCosts.showMoreClips || 3) + '" min="0" max="100" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white;" />';
+            html += '</div>';
+
+            // Generate SEO Cost
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.25rem;">✨ Generate SEO</label>';
+            html += '<input type="number" id="wizardTokenSEO" value="' + (state.wizardTokenCosts.generateSEO || 2) + '" min="0" max="100" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white;" />';
+            html += '</div>';
+
+            // Generate B-Roll Cost
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.25rem;">🎞️ Generate B-Roll</label>';
+            html += '<input type="number" id="wizardTokenBRoll" value="' + (state.wizardTokenCosts.generateBRoll || 4) + '" min="0" max="100" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white;" />';
+            html += '</div>';
+
+            // Detect Speakers Cost
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.25rem;">👤 Detect Speakers</label>';
+            html += '<input type="number" id="wizardTokenSpeakers" value="' + (state.wizardTokenCosts.detectSpeakers || 3) + '" min="0" max="100" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white;" />';
+            html += '</div>';
+
+            // Export Clip Cost
+            html += '<div>';
+            html += '<label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 0.25rem;">📤 Export Clip</label>';
+            html += '<input type="number" id="wizardTokenExport" value="' + (state.wizardTokenCosts.exportClip || 0) + '" min="0" max="100" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white;" />';
+            html += '</div>';
+
+            html += '</div>';
+            html += '<div style="margin-top: 1rem;">';
+            html += '<button onclick="saveWizardTokenCosts()" class="btn-primary" ' + (state.wizardTokenCostsSaving ? 'disabled' : '') + '>';
+            html += state.wizardTokenCostsSaving ? '<span class="spinner" style="width:14px;height:14px"></span>' : '💾 Save Token Costs';
+            html += '</button>';
+            html += '</div>';
+            html += '</div>';
+
             // Manual Cleanup Section
             html += '<div class="card" style="margin-bottom: 1.5rem;">';
             html += '<h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">🧹 Manual Cleanup</h3>';
@@ -5234,6 +5294,70 @@
                     state.wizardConfigSaving = false;
                     console.error('Error saving config:', error);
                     showToast('Failed to save configuration', 'error');
+                    render();
+                });
+        }
+
+        function loadWizardTokenCosts() {
+            var adminGetWizardTokenCosts = firebase.functions().httpsCallable('adminGetWizardTokenCosts');
+            adminGetWizardTokenCosts({})
+                .then(function(result) {
+                    if (result.data.success && result.data.costs) {
+                        state.wizardTokenCosts = {
+                            analyzeVideo: result.data.costs.analyzeVideo || 5,
+                            showMoreClips: result.data.costs.showMoreClips || 3,
+                            generateSEO: result.data.costs.generateSEO || 2,
+                            generateBRoll: result.data.costs.generateBRoll || 4,
+                            detectSpeakers: result.data.costs.detectSpeakers || 3,
+                            exportClip: result.data.costs.exportClip || 0
+                        };
+                        render();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error loading token costs:', error);
+                });
+        }
+
+        function saveWizardTokenCosts() {
+            var analyzeVideo = parseInt(document.getElementById('wizardTokenAnalyze').value) || 5;
+            var showMoreClips = parseInt(document.getElementById('wizardTokenShowMore').value) || 3;
+            var generateSEO = parseInt(document.getElementById('wizardTokenSEO').value) || 2;
+            var generateBRoll = parseInt(document.getElementById('wizardTokenBRoll').value) || 4;
+            var detectSpeakers = parseInt(document.getElementById('wizardTokenSpeakers').value) || 3;
+            var exportClip = parseInt(document.getElementById('wizardTokenExport').value) || 0;
+
+            state.wizardTokenCostsSaving = true;
+            render();
+
+            var adminSetWizardTokenCosts = firebase.functions().httpsCallable('adminSetWizardTokenCosts');
+            adminSetWizardTokenCosts({
+                analyzeVideo: analyzeVideo,
+                showMoreClips: showMoreClips,
+                generateSEO: generateSEO,
+                generateBRoll: generateBRoll,
+                detectSpeakers: detectSpeakers,
+                exportClip: exportClip
+            })
+                .then(function(result) {
+                    state.wizardTokenCostsSaving = false;
+                    if (result.data.success) {
+                        state.wizardTokenCosts = {
+                            analyzeVideo: analyzeVideo,
+                            showMoreClips: showMoreClips,
+                            generateSEO: generateSEO,
+                            generateBRoll: generateBRoll,
+                            detectSpeakers: detectSpeakers,
+                            exportClip: exportClip
+                        };
+                        showToast('Token costs saved!', 'success');
+                    }
+                    render();
+                })
+                .catch(function(error) {
+                    state.wizardTokenCostsSaving = false;
+                    console.error('Error saving token costs:', error);
+                    showToast('Failed to save token costs', 'error');
                     render();
                 });
         }
