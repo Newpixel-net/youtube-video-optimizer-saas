@@ -42,7 +42,13 @@ const elements = {
   seoLabel: null,
   seoBreakdown: null,
   seoSuggestions: null,
-  seoSuggestionsList: null
+  seoSuggestionsList: null,
+  // Transcript elements
+  transcriptContainer: null,
+  transcriptStats: null,
+  wordCount: null,
+  segmentCount: null,
+  copyTranscriptBtn: null
 };
 
 // State
@@ -50,6 +56,7 @@ let currentVideoInfo = null;
 let currentVideoMetadata = null; // Extended metadata for tags/SEO
 let isProcessing = false;
 let currentTags = [];
+let currentTranscript = null;
 
 // Constants
 const WIZARD_URL = 'https://ytseo.siteuo.com/video-wizard.html';
@@ -106,6 +113,12 @@ function cacheElements() {
   elements.seoBreakdown = document.getElementById('seoBreakdown');
   elements.seoSuggestions = document.getElementById('seoSuggestions');
   elements.seoSuggestionsList = document.getElementById('seoSuggestionsList');
+  // Transcript elements
+  elements.transcriptContainer = document.getElementById('transcriptContainer');
+  elements.transcriptStats = document.getElementById('transcriptStats');
+  elements.wordCount = document.getElementById('wordCount');
+  elements.segmentCount = document.getElementById('segmentCount');
+  elements.copyTranscriptBtn = document.getElementById('copyTranscriptBtn');
 }
 
 /**
@@ -126,6 +139,9 @@ function attachEventListeners() {
 
   // Copy all tags
   elements.copyAllTagsBtn?.addEventListener('click', handleCopyAllTags);
+
+  // Copy transcript
+  elements.copyTranscriptBtn?.addEventListener('click', handleCopyTranscript);
 }
 
 /**
@@ -428,6 +444,9 @@ function handleTabSwitch(tabName) {
   // Load data for the active tab if needed
   if (tabName === 'tags' && currentTags.length === 0 && currentVideoInfo) {
     loadVideoTags();
+  }
+  if (tabName === 'transcript' && !currentTranscript && currentVideoInfo) {
+    loadTranscript();
   }
   if (tabName === 'seo' && currentVideoInfo) {
     loadSeoAnalysis();
@@ -770,6 +789,166 @@ function updateSeoItem(elementId, data) {
 
   const hintEl = element.querySelector('.seo-item-hint');
   if (hintEl) hintEl.textContent = data.hint;
+}
+
+// ============================================
+// TRANSCRIPT VIEWER
+// ============================================
+
+/**
+ * Load transcript from content script
+ */
+async function loadTranscript() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+
+    const response = await chrome.tabs.sendMessage(tab.id, { action: 'getTranscript' });
+
+    if (response?.success && response.transcript) {
+      currentTranscript = response.transcript;
+      displayTranscript(response.transcript, tab.id);
+    } else {
+      displayNoTranscript(response?.error || 'No transcript available for this video');
+    }
+  } catch (error) {
+    console.error('Error loading transcript:', error);
+    displayNoTranscript('Failed to load transcript');
+  }
+}
+
+/**
+ * Display transcript in the UI
+ */
+function displayTranscript(transcript, tabId) {
+  if (!elements.transcriptContainer) return;
+
+  if (!transcript.segments || transcript.segments.length === 0) {
+    displayNoTranscript('No transcript segments available');
+    return;
+  }
+
+  // Create transcript list
+  const listEl = document.createElement('div');
+  listEl.className = 'transcript-list';
+
+  transcript.segments.forEach(segment => {
+    const segmentEl = document.createElement('div');
+    segmentEl.className = 'transcript-segment';
+
+    const timeEl = document.createElement('span');
+    timeEl.className = 'transcript-time';
+    timeEl.textContent = formatTimestamp(segment.start);
+    timeEl.title = 'Click to jump to this time';
+    timeEl.addEventListener('click', () => seekToTime(tabId, segment.start));
+
+    const textEl = document.createElement('span');
+    textEl.className = 'transcript-text';
+    textEl.textContent = segment.text;
+
+    segmentEl.appendChild(timeEl);
+    segmentEl.appendChild(textEl);
+    listEl.appendChild(segmentEl);
+  });
+
+  elements.transcriptContainer.innerHTML = '';
+  elements.transcriptContainer.appendChild(listEl);
+
+  // Show stats
+  if (elements.transcriptStats) {
+    elements.transcriptStats.classList.remove('hidden');
+
+    // Count words
+    const fullText = transcript.segments.map(s => s.text).join(' ');
+    const wordCount = fullText.split(/\s+/).filter(w => w.length > 0).length;
+
+    if (elements.wordCount) elements.wordCount.textContent = wordCount.toLocaleString();
+    if (elements.segmentCount) elements.segmentCount.textContent = transcript.segments.length;
+  }
+}
+
+/**
+ * Display no transcript message
+ */
+function displayNoTranscript(message) {
+  if (!elements.transcriptContainer) return;
+
+  elements.transcriptContainer.innerHTML = `
+    <div class="no-transcript">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <path d="M14 2v6h6"/>
+        <line x1="12" y1="18" x2="12" y2="12"/>
+        <line x1="9" y1="15" x2="15" y2="15"/>
+      </svg>
+      <span>${sanitizeText(message)}</span>
+    </div>
+  `;
+
+  if (elements.transcriptStats) elements.transcriptStats.classList.add('hidden');
+}
+
+/**
+ * Handle copy transcript button
+ */
+async function handleCopyTranscript() {
+  if (!currentTranscript?.segments) return;
+
+  try {
+    // Format transcript with timestamps
+    const text = currentTranscript.segments
+      .map(s => `[${formatTimestamp(s.start)}] ${s.text}`)
+      .join('\n');
+
+    await navigator.clipboard.writeText(text);
+
+    // Visual feedback
+    if (elements.copyTranscriptBtn) {
+      elements.copyTranscriptBtn.classList.add('copied');
+      const originalText = elements.copyTranscriptBtn.innerHTML;
+      elements.copyTranscriptBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Copied!
+      `;
+      setTimeout(() => {
+        elements.copyTranscriptBtn.classList.remove('copied');
+        elements.copyTranscriptBtn.innerHTML = originalText;
+      }, 2000);
+    }
+  } catch (error) {
+    console.error('Failed to copy transcript:', error);
+  }
+}
+
+/**
+ * Format seconds to timestamp (MM:SS or HH:MM:SS)
+ */
+function formatTimestamp(seconds) {
+  seconds = Math.floor(seconds);
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Seek to a specific time in the video
+ */
+async function seekToTime(tabId, seconds) {
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'seekToTime',
+      time: seconds
+    });
+  } catch (error) {
+    console.error('Failed to seek to time:', error);
+  }
 }
 
 // Initialize when DOM is ready

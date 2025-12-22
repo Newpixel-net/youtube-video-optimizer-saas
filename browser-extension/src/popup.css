@@ -1049,3 +1049,131 @@ body {
   left: 4px;
   color: #8b5cf6;
 }
+
+/* ============================================
+   TRANSCRIPT SECTION
+   ============================================ */
+
+.transcript-section {
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.transcript-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.transcript-header h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.transcript-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.transcript-container {
+  min-height: 120px;
+  max-height: 250px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  background: white;
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.transcript-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.transcript-list {
+  padding: 8px;
+}
+
+.transcript-segment {
+  display: flex;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.transcript-segment:hover {
+  background: #f3f4f6;
+}
+
+.transcript-time {
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  font-size: 11px;
+  color: #8b5cf6;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(139, 92, 246, 0.1));
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  height: fit-content;
+  transition: all 0.15s;
+}
+
+.transcript-time:hover {
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  color: white;
+}
+
+.transcript-text {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.no-transcript {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px;
+  color: #9ca3af;
+  font-size: 12px;
+  text-align: center;
+}
+
+.no-transcript svg {
+  opacity: 0.5;
+}
+
+.transcript-stats {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.transcript-tip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.transcript-tip svg {
+  flex-shrink: 0;
+}
