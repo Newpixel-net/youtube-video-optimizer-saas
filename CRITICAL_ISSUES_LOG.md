@@ -551,6 +551,101 @@ Creating `cors.json` is NOT enough! You MUST apply it to the bucket using gsutil
 
 ---
 
+## Issue #8: FROZEN VIDEO Capture - Chrome Autoplay Policy
+
+**Date**: 2025-12-22
+
+**Symptom**:
+- Captured video shows only the first frame (frozen)
+- Audio plays normally in the captured file
+- WebM file is valid but all video frames are identical
+- This appeared to be related to NVENC/GPU encoding but was actually in the browser extension
+
+**What DID NOT fix it (extensive debugging - 8+ hours)**:
+- Disabling NVENC and using CPU encoding (libx264)
+- Removing `-vsync cfr -r 30` from FFmpeg
+- Adding `-hwaccel cuda` and various NVENC parameters
+- Two-pass encoding (CPU pass 1, GPU pass 2)
+- Keeping YouTube tab in foreground during capture
+- Adding play() check before captureStream()
+- Various FFmpeg filter combinations
+
+**Root Cause**:
+The change from `muted=true` to `muted=false` (made to fix audio capture) broke video capture because **Chrome's autoplay policy blocks unmuted video autoplay**.
+
+The timeline of changes that caused this:
+1. **v2.7.1**: `videoElement.muted = true` → Video worked
+2. **After v2.7.1**: Changed to `videoElement.muted = false` to fix audio issues
+3. **Result**: Chrome blocked autoplay, video stayed paused, captureStream() captured frozen frames
+
+```javascript
+// BROKEN CODE (after v2.7.1):
+videoElement.muted = false;  // Unmuted = Chrome blocks autoplay!
+videoElement.play();         // FAILS silently - video stays PAUSED
+
+// WORKING CODE (v2.7.1):
+videoElement.muted = true;   // Muted = Chrome allows autoplay
+videoElement.play();         // Works!
+```
+
+**The ACTUAL fix**:
+Start muted for autoplay, then unmute AFTER playback begins:
+
+```javascript
+// CRITICAL FIX: Start MUTED for autoplay to work (Chrome policy)
+videoElement.muted = true;
+videoElement.volume = 1;
+
+const startRecording = () => {
+  recorder.start(500);
+  console.log('[EXT][CAPTURE] Recording started');
+
+  // NOW unmute to capture audio (after playback confirmed)
+  setTimeout(() => {
+    videoElement.muted = false;
+    console.log('[EXT][CAPTURE] Video unmuted for audio capture');
+  }, 100);
+};
+
+if (videoElement.paused) {
+  videoElement.play().then(startRecording).catch((e) => {
+    console.warn('[EXT][CAPTURE] Play failed, trying anyway:', e.message);
+    startRecording();
+  });
+} else {
+  startRecording();
+}
+```
+
+**Why this happens**:
+Chrome's autoplay policy (implemented to prevent annoying auto-playing videos with sound) blocks `video.play()` for unmuted videos unless:
+1. User has interacted with the page, OR
+2. Video is muted, OR
+3. Media Engagement Index is high
+
+When `play()` fails due to autoplay policy, it fails silently (no error thrown when called with `.catch()`). The video stays paused, and `captureStream()` captures the same frozen frame repeatedly.
+
+**Key Lesson**:
+When debugging video capture issues, ALWAYS compare with the last known working version using `git diff`. The issue appeared to be in the video processor (NVENC/FFmpeg) but was actually in the browser extension's autoplay handling.
+
+**Debugging methodology that worked**:
+```bash
+# Compare current code with working version
+git diff 85221c6 HEAD -- browser-extension/src/background.js | grep -A5 -B5 "muted\|play"
+```
+
+This immediately revealed the `muted=false` change that broke autoplay.
+
+**File location**: `browser-extension/src/background.js` (lines ~1994-2028)
+
+**Backup created**: `backups/v2.7.9-working-capture/`
+
+**Working version**: v2.7.9, commit `6956286`
+
+**Time wasted**: ~8+ hours (most spent debugging wrong component - video processor instead of extension)
+
+---
+
 ## Template for Future Issues
 
 ### Issue #X: [Title]
