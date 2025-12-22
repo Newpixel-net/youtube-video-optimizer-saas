@@ -1789,13 +1789,25 @@
             overflow: hidden;
         }
 
-        /* Simple 9:16 crop using object-fit - MUCH more reliable than transforms */
+        /*
+         * CRITICAL FIX: Use transform-based positioning to EXACTLY match FFmpeg crop calculation
+         *
+         * The issue: CSS object-position: X% positions the X% point of image at X% point of container.
+         * But FFmpeg calculates: cropX = (X/100) * (videoWidth - cropWidth)
+         * These give different results for non-center positions!
+         *
+         * Solution: Use the same transform approach as iframes - this matches FFmpeg exactly.
+         * For 16:9 video in 9:16 container: image width = 316% of container (256/81 ratio)
+         */
         .phone-video-area .preview-media {
             position: absolute;
-            inset: 0;
-            width: 100%;
+            top: 0;
+            /* Transform-based positioning that matches FFmpeg calculation */
+            left: var(--crop-position);
+            transform: translateX(calc(-1 * var(--crop-position)));
             height: 100%;
-            object-fit: cover;
+            width: auto;
+            min-width: 316.05%; /* (16/9) / (9/16) * 100 = 256/81 * 100 = 316.05% */
             z-index: 1;
         }
 
@@ -1804,8 +1816,9 @@
             --crop-position: 50%; /* Default to center */
         }
 
-        .phone-video-area .preview-media {
-            object-position: var(--crop-position) center;
+        /* Keep the overflow hidden to show only the cropped region */
+        .phone-video-area {
+            overflow: hidden;
         }
 
         /* YouTube iframe cropping - make it fill and overflow */
