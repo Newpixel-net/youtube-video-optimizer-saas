@@ -1177,3 +1177,47 @@ body {
 .transcript-tip svg {
   flex-shrink: 0;
 }
+
+/* ============================================
+   VIRAL CLIP DETECTOR PROMO
+   ============================================ */
+
+.viral-clip-promo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(139, 92, 246, 0.08));
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.promo-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  border-radius: 10px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.promo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.promo-text strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.promo-text span {
+  font-size: 11px;
+  color: #6b7280;
+}
