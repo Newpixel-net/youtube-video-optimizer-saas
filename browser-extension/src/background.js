@@ -38,7 +38,7 @@ const WIZARD_ORIGINS = [
 // Video Processor Service URL for uploading captured streams
 // The extension downloads video streams (which are IP-restricted to user's browser)
 // and uploads them to our server, bypassing the IP restriction
-const VIDEO_PROCESSOR_URL = 'https://video-processor-867328435695.us-central1.run.app';
+const VIDEO_PROCESSOR_URL = 'https://video-processor-382790048044.us-central1.run.app';
 
 /**
  * Network request interception to capture actual stream URLs
@@ -490,13 +490,16 @@ async function handleCaptureForWizard(message) {
           // Save current tab so we can switch back to it
           const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
           originalTabId = currentTab?.id;
-          console.log(`[EXT][CAPTURE] Saved original tab ${originalTabId} (will switch back after video loads)`);
+          const currentTabIndex = currentTab?.index ?? 0;
+          console.log(`[EXT][CAPTURE] Saved original tab ${originalTabId} at index ${currentTabIndex} (will switch back after video loads)`);
 
           // Create tab - needs to be active briefly for Chrome autoplay policy
           // But we'll switch back to Video Wizard immediately after video loads
+          // Create it right next to the Video Wizard tab for better UX
           const newTab = await chrome.tabs.create({
             url: videoUrl,
-            active: true  // Briefly active for autoplay to work
+            active: true,  // Briefly active for autoplay to work
+            index: currentTabIndex + 1  // Open right next to Video Wizard
           });
           autoOpenedTabId = newTab.id;
           youtubeTab = newTab;
@@ -632,7 +635,7 @@ async function handleCaptureForWizard(message) {
 
     let captureResult;
     try {
-      captureResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime);
+      captureResult = await captureAndUploadWithMediaRecorder(videoId, youtubeUrl, startTime, endTime, bridgeRequestId);
       console.log(`[EXT][CAPTURE] MediaRecorder result: success=${captureResult?.success} error=${captureResult?.error || 'none'}`);
     } catch (captureError) {
       console.error(`[EXT][CAPTURE] MediaRecorder exception: ${captureError.message}`);
@@ -804,12 +807,15 @@ async function openAndCaptureStreams(videoId, youtubeUrl) {
       // Get the current active tab so we can switch back to it
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const originalTabId = currentTab?.id;
+      const currentTabIndex = currentTab?.index ?? 0;
 
       // Open the YouTube video - must be ACTIVE briefly for autoplay to work
       // Chrome's autoplay policy requires the tab to have "user activation"
+      // Create it right next to the current tab for better UX
       captureTab = await chrome.tabs.create({
         url: url,
-        active: true  // Must be active for autoplay to trigger
+        active: true,  // Must be active for autoplay to trigger
+        index: currentTabIndex + 1  // Open right next to current tab
       });
 
       console.log(`[EXT][BG] Opened capture tab ${captureTab.id} (active for autoplay)`);
@@ -1308,7 +1314,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
   // This ensures we always send a result back even if something breaks
   try {
     // IMMEDIATE LOG - if this doesn't appear, function isn't running at all
-    console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.1 ======`);
+    console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.7 ======`);
     console.log(`[EXT][CAPTURE-PAGE] captureId=${captureId}`);
     console.log(`[EXT][CAPTURE-PAGE] startTime=${startTime}s, endTime=${endTime}s`);
     console.log(`[EXT][CAPTURE-PAGE] uploadUrl=${uploadUrl ? 'provided' : 'none'}`);
@@ -1328,7 +1334,9 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
   }
 
   const duration = endTime - startTime;
-  const PLAYBACK_SPEED = 4;
+  // Use 1x playback for reliable audio capture
+  // 4x caused audio issues (distortion, wrong speed, no audio)
+  const PLAYBACK_SPEED = 1;
   const captureTime = (duration / PLAYBACK_SPEED) * 1000;
 
   // CRITICAL: Track if we've sent a result to prevent duplicate sends
@@ -1378,11 +1386,15 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
   // CRITICAL: Hard timeout to GUARANTEE we always send a response
   // This prevents the frontend from hanging forever
-  const HARD_TIMEOUT_MS = captureTime + 60000; // capture time + 60s buffer (reduced from 120s)
+  // v2.7.4: Added seek time estimate for clips deep into long videos
+  // Seek time increases with start position: ~1s per minute of video position
+  const seekTimeEstimate = Math.max(10000, Math.min(startTime / 60, 90) * 1000);
+  const HARD_TIMEOUT_MS = captureTime + seekTimeEstimate + 60000; // capture time + seek time + 60s buffer
+  console.log(`[EXT][CAPTURE-PAGE] Hard timeout: ${Math.round(HARD_TIMEOUT_MS / 1000)}s (capture: ${Math.round(captureTime / 1000)}s, seek: ${Math.round(seekTimeEstimate / 1000)}s, buffer: 60s)`);
   const hardTimeoutId = setTimeout(() => {
     if (!resultSent) {
       console.error(`[EXT][CAPTURE-PAGE] HARD TIMEOUT after ${HARD_TIMEOUT_MS / 1000}s - forcing error response`);
-      sendResult(null, `Capture timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)} seconds. The video may not be playing properly.`);
+      sendResult(null, `Capture timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)} seconds. The video may not be playing or buffering properly at this position.`);
     }
   }, HARD_TIMEOUT_MS);
 
@@ -1404,19 +1416,15 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
   // Check if an ad is currently playing
   function isAdPlaying() {
-    // Check for YouTube ad indicators
-    const adIndicators = [
-      document.querySelector('.ytp-ad-player-overlay'),
-      document.querySelector('.ytp-ad-text'),
-      document.querySelector('.video-ads.ytp-ad-module'),
-      document.querySelector('.ytp-ad-preview-container'),
-      document.querySelector('[class*="ytp-ad-"]'),
-      document.querySelector('.ad-showing')
-    ];
+    // v2.7.2: Improved ad detection to reduce false positives
+    // Only check for ACTIVE ad indicators, not residual UI elements
 
-    const hasAdIndicator = adIndicators.some(el => el !== null);
+    // Primary check: Video container has ad-showing class (most reliable)
+    const videoContainer = document.querySelector('.html5-video-player');
+    const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
+                       videoContainer?.classList.contains('ad-interrupting');
 
-    // Also check player state
+    // Secondary check: YouTube Player API (very reliable when available)
     const ytPlayer = document.querySelector('#movie_player');
     let isAdFromPlayer = false;
     if (ytPlayer && typeof ytPlayer.getAdState === 'function') {
@@ -1426,14 +1434,32 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       } catch (e) {}
     }
 
-    // Check if video has ad class
-    const videoContainer = document.querySelector('.html5-video-player');
-    const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
-                       videoContainer?.classList.contains('ad-interrupting');
+    // Tertiary check: Active ad UI elements (visible and interactable)
+    // Only check for elements that are VISIBLE and indicate an ACTIVE ad
+    const activeAdIndicators = [
+      // Ad countdown/skip container (only visible during ads)
+      document.querySelector('.ytp-ad-preview-container:not([style*="display: none"])'),
+      // Ad text overlay (only shown during ads)
+      document.querySelector('.ytp-ad-text:not([style*="display: none"])'),
+      // Ad player overlay (only shown during video ads)
+      document.querySelector('.ytp-ad-player-overlay-instream-info'),
+      // Ad skip button container (indicates skippable ad is playing)
+      document.querySelector('.ytp-ad-skip-button-container:not([style*="display: none"])')
+    ];
+    const hasActiveAdIndicator = activeAdIndicators.some(el => el !== null && el.offsetParent !== null);
 
-    const isAd = hasAdIndicator || isAdFromPlayer || hasAdClass;
+    // v2.7.2: Require at least 2 indicators OR player API confirmation for ad detection
+    // This reduces false positives from residual UI elements
+    let indicatorCount = 0;
+    if (hasAdClass) indicatorCount++;
+    if (isAdFromPlayer) indicatorCount++;
+    if (hasActiveAdIndicator) indicatorCount++;
+
+    // Consider it an ad if: player API says so, OR container has ad class, OR 2+ indicators
+    const isAd = isAdFromPlayer || hasAdClass || (hasActiveAdIndicator && indicatorCount >= 2);
+
     if (isAd) {
-      console.log(`[EXT][CAPTURE] Ad detected! hasAdIndicator=${hasAdIndicator}, isAdFromPlayer=${isAdFromPlayer}, hasAdClass=${hasAdClass}`);
+      console.log(`[EXT][CAPTURE] Ad detected! hasAdClass=${hasAdClass}, isAdFromPlayer=${isAdFromPlayer}, hasActiveAdIndicator=${hasActiveAdIndicator}`);
     }
     return isAd;
   }
@@ -1442,13 +1468,48 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
   async function waitForAdToFinish(maxWaitMs = 60000) {
     const startWait = Date.now();
     let adDetected = false;
+    let skipAttempts = 0;
+
+    // v2.7.2: Extended list of skip button selectors (YouTube changes these frequently)
+    const skipButtonSelectors = [
+      '.ytp-skip-ad-button',                    // New 2024+ skip button
+      '.ytp-ad-skip-button',                    // Standard skip button
+      '.ytp-ad-skip-button-modern',             // Modern skip button variant
+      '.ytp-ad-skip-button-container button',   // Button inside container
+      'button.ytp-ad-skip-button',              // Explicit button element
+      '[class*="skip-button"]',                 // Wildcard for skip buttons
+      '.ytp-ad-skip-button-slot button',        // Slot-based skip button
+      '.videoAdUiSkipButton',                   // Alternative skip button class
+      '[data-skip-button]',                     // Data attribute based
+      '.ytp-ad-skip'                            // Short class name
+    ];
+
+    // Helper to try all skip button selectors
+    const tryClickSkipButton = () => {
+      for (const selector of skipButtonSelectors) {
+        const btn = document.querySelector(selector);
+        if (btn && btn.offsetParent !== null) {
+          console.log(`[EXT][CAPTURE] Skip button found (${selector}), clicking...`);
+          // Try multiple click methods
+          btn.click();
+          btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          // Also try focusing and pressing Enter
+          try {
+            btn.focus();
+            btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+          } catch (e) {}
+          return true;
+        }
+      }
+      return false;
+    };
 
     while (Date.now() - startWait < maxWaitMs) {
       if (!isAdPlaying()) {
         if (adDetected) {
           console.log(`[EXT][CAPTURE] Ad finished after ${Date.now() - startWait}ms`);
           // Wait a bit for main video to resume
-          await sleep(1500);
+          await sleep(2000);
         }
         return true;
       }
@@ -1456,26 +1517,32 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       if (!adDetected) {
         adDetected = true;
         console.log(`[EXT][CAPTURE] Ad is playing, waiting for it to finish...`);
+      }
 
-        // Try to skip ad if skip button is available
-        const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, [class*="skip-button"]');
-        if (skipButton && skipButton.offsetParent !== null) {
-          console.log(`[EXT][CAPTURE] Skip button found, clicking...`);
-          skipButton.click();
-          await sleep(500);
+      // Try to skip ad every 500ms for more aggressive skipping
+      skipAttempts++;
+      if (tryClickSkipButton()) {
+        await sleep(500);
+        // Check immediately after clicking
+        if (!isAdPlaying()) {
+          console.log(`[EXT][CAPTURE] Ad skipped successfully after ${Date.now() - startWait}ms`);
+          await sleep(2000);
+          return true;
         }
       }
 
-      // Keep checking for skip button
-      const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern');
-      if (skipButton && skipButton.offsetParent !== null) {
-        skipButton.click();
+      // Log progress every 10 seconds
+      if (skipAttempts % 20 === 0) {
+        console.log(`[EXT][CAPTURE] Still waiting for ad... (${Math.round((Date.now() - startWait) / 1000)}s elapsed)`);
       }
 
-      await sleep(1000);
+      await sleep(500); // Check every 500ms instead of 1000ms for faster response
     }
 
-    return false; // Timed out waiting for ad
+    // v2.7.2: Return true anyway after timeout - ad likely ended or we should try capturing anyway
+    console.warn(`[EXT][CAPTURE] Ad wait timeout (${maxWaitMs}ms) - proceeding with capture anyway`);
+    await sleep(1000);
+    return true; // Return true to proceed instead of blocking
   }
 
   // Check if video is actually playing and has data
@@ -1525,15 +1592,15 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       // First check for ads
       if (isAdPlaying()) {
         console.log(`[EXT][CAPTURE] Ad detected while waiting for video`);
-        const adFinished = await waitForAdToFinish(45000);
-        if (!adFinished) {
-          throw new Error('Ad is still playing after 45 seconds. Please wait for the ad to finish and try again.');
-        }
+        // v2.7.2: waitForAdToFinish now always returns true to proceed anyway after timeout
+        await waitForAdToFinish(45000);
         // Reset the video element reference after ad
         videoEl = document.querySelector('video.html5-main-video') || document.querySelector('video');
         if (!videoEl) {
           throw new Error('Video element lost after ad finished');
         }
+        // Give extra time for main video to start after ad
+        await sleep(1000);
       }
 
       // Check if video is ready
@@ -1599,9 +1666,11 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
     // FIRST: Check for ads before anything else
     if (isAdPlaying()) {
       console.log(`[EXT][CAPTURE] Ad detected at start, waiting for it to finish...`);
-      const adFinished = await waitForAdToFinish(45000);
-      if (!adFinished) {
-        throw new Error('Ad is still playing. Please wait for the ad to finish and try again.');
+      // v2.7.2: waitForAdToFinish now always returns true to proceed anyway after timeout
+      await waitForAdToFinish(45000);
+      // Double-check ad status after waiting
+      if (isAdPlaying()) {
+        console.warn(`[EXT][CAPTURE] Ad may still be playing, but proceeding with capture anyway`);
       }
     }
 
@@ -1688,6 +1757,31 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
     // Wait a moment for buffer after seek
     await sleep(500);
 
+    // CRITICAL: Ensure video is PLAYING before captureStream
+    // Seeking can pause the video, and captureStream() on a paused video captures frozen frames
+    console.log(`[EXT][CAPTURE] Pre-capture state: paused=${videoElement.paused}, readyState=${videoElement.readyState}`);
+    if (videoElement.paused) {
+      console.log('[EXT][CAPTURE] Video is paused after seek, resuming playback...');
+      try {
+        await videoElement.play();
+        await sleep(300); // Brief wait for playback to stabilize
+        console.log(`[EXT][CAPTURE] Video resumed, paused=${videoElement.paused}`);
+      } catch (playErr) {
+        console.warn(`[EXT][CAPTURE] Play failed: ${playErr.message}, trying YouTube API...`);
+        // Try YouTube player API as fallback
+        const ytPlayer = document.querySelector('#movie_player');
+        if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
+          ytPlayer.playVideo();
+          await sleep(500);
+        }
+      }
+    }
+
+    // Final verification before capture
+    if (videoElement.paused) {
+      console.error('[EXT][CAPTURE] WARNING: Video still paused before capture - output may be frozen!');
+    }
+
     // Capture the video stream
     console.log('[EXT][CAPTURE] Calling captureStream()...');
     let originalStream;
@@ -1726,6 +1820,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
       console.log(`[EXT][CAPTURE] Cloned video track: ${track.label || 'unnamed'}, enabled=${track.enabled}`);
     });
 
+    // Use audio tracks from captureStream directly
     originalStream.getAudioTracks().forEach(track => {
       const clonedTrack = track.clone();
       stableStream.addTrack(clonedTrack);
@@ -1754,7 +1849,9 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
       const recorder = new MediaRecorder(stableStream, {
         mimeType: mimeType,
-        videoBitsPerSecond: 8000000
+        // Reduced from 8Mbps to 4Mbps - server re-encodes anyway
+        // This speeds up upload time by ~50% with minimal quality loss
+        videoBitsPerSecond: 4000000
       });
 
       const cleanupTracks = () => {
@@ -1894,21 +1991,33 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
         }
       };
 
-      // Set playback speed and start
+      // Set playback speed
       videoElement.playbackRate = PLAYBACK_SPEED;
+
+      // CRITICAL FIX: Start MUTED for autoplay to work (Chrome policy)
+      // Chrome blocks autoplay of unmuted videos. We must start muted,
+      // then unmute AFTER playback begins for audio capture.
       videoElement.muted = true;
+      videoElement.volume = 1; // Pre-set volume for when we unmute
 
       // Start recording
       const startRecording = () => {
         try {
           recorder.start(500);
           console.log('[EXT][CAPTURE] Recording started');
+
+          // NOW unmute to capture audio (after playback confirmed)
+          // Small delay to ensure playback is stable
+          setTimeout(() => {
+            videoElement.muted = false;
+            console.log('[EXT][CAPTURE] Video unmuted for audio capture');
+          }, 100);
         } catch (startErr) {
           reject(new Error(`Failed to start recording: ${startErr.message}`));
         }
       };
 
-      // Ensure video is playing before starting
+      // Ensure video is playing before starting (muted autoplay should work)
       if (videoElement.paused) {
         videoElement.play().then(startRecording).catch((e) => {
           console.warn('[EXT][CAPTURE] Play failed, trying anyway:', e.message);
@@ -2001,7 +2110,8 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
   console.log(`[EXT][CAPTURE] MediaRecorder start=${startTime}s end=${endTime}s videoId=${videoId}`);
 
   const duration = endTime - startTime;
-  const PLAYBACK_SPEED = 4; // 4x speed for faster capture
+  // Use 1x playback for reliable audio capture (4x caused audio issues)
+  const PLAYBACK_SPEED = 1;
   const captureTime = (duration / PLAYBACK_SPEED) * 1000; // in milliseconds
 
   // Maximum size for Base64 transfer (40MB to stay under 64MB limit after encoding)
@@ -2304,8 +2414,9 @@ async function captureVideoSegmentWithMediaRecorder(startTime, endTime, videoId,
  * @param {string} youtubeUrl - Full YouTube URL
  * @param {number} [requestedStartTime] - Optional segment start time in seconds
  * @param {number} [requestedEndTime] - Optional segment end time in seconds
+ * @param {string} [bridgeRequestId] - Optional bridge request ID for wizard-bridge storage key
  */
-async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedStartTime, requestedEndTime) {
+async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedStartTime, requestedEndTime, bridgeRequestId) {
   const hasSegmentRequest = requestedStartTime !== undefined && requestedEndTime !== undefined;
   const segmentInfo = hasSegmentRequest
     ? `segment ${requestedStartTime}s-${requestedEndTime}s`
@@ -2362,7 +2473,8 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       console.warn(`[EXT][CAPTURE] Could not focus tab: ${focusErr.message}`);
     }
 
-    // IMMEDIATELY switch back to Video Wizard tab so user isn't disrupted
+    // Switch back to Video Wizard tab so user isn't disrupted
+    // v2.7.1 worked fine with this - the frozen video issue was caused by muted=false
     if (savedOriginalTabId && savedOriginalTabId !== youtubeTab.id) {
       try {
         await chrome.tabs.update(savedOriginalTabId, { active: true });
@@ -2372,24 +2484,15 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }
     }
 
-    // v2.7.0: Check for ads FIRST before attempting video loading
+    // v2.7.2: Check for ads FIRST before attempting video loading
+    // Improved ad detection to reduce false positives
     console.log(`[EXT][CAPTURE] Checking for ads before video loading...`);
     try {
       const adCheckResult = await chrome.scripting.executeScript({
         target: { tabId: youtubeTab.id },
         world: 'MAIN',
         func: () => {
-          // Check for YouTube ad indicators
-          const adIndicators = [
-            document.querySelector('.ytp-ad-player-overlay'),
-            document.querySelector('.ytp-ad-text'),
-            document.querySelector('.video-ads.ytp-ad-module'),
-            document.querySelector('.ytp-ad-preview-container'),
-            document.querySelector('[class*="ytp-ad-"]'),
-            document.querySelector('.ad-showing')
-          ];
-          const hasAdIndicator = adIndicators.some(el => el !== null);
-
+          // v2.7.2: Improved ad detection - only check for ACTIVE ad indicators
           const videoContainer = document.querySelector('.html5-video-player');
           const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
                              videoContainer?.classList.contains('ad-interrupting');
@@ -2402,68 +2505,103 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             } catch (e) {}
           }
 
+          // Only check for VISIBLE ad elements
+          const activeAdIndicators = [
+            document.querySelector('.ytp-ad-preview-container:not([style*="display: none"])'),
+            document.querySelector('.ytp-ad-text:not([style*="display: none"])'),
+            document.querySelector('.ytp-ad-player-overlay-instream-info'),
+            document.querySelector('.ytp-ad-skip-button-container:not([style*="display: none"])')
+          ];
+          const hasActiveAdIndicator = activeAdIndicators.some(el => el !== null && el.offsetParent !== null);
+
+          // v2.7.2: Require player API OR container class for reliable detection
+          const isAdPlaying = isAdFromPlayer || hasAdClass || (hasActiveAdIndicator);
+
           return {
-            isAdPlaying: hasAdIndicator || hasAdClass || isAdFromPlayer,
-            hasAdIndicator,
+            isAdPlaying,
             hasAdClass,
-            isAdFromPlayer
+            isAdFromPlayer,
+            hasActiveAdIndicator
           };
         }
       });
 
       const adStatus = adCheckResult[0]?.result;
       if (adStatus?.isAdPlaying) {
-        console.log(`[EXT][CAPTURE] Ad is currently playing, waiting for it to finish...`);
+        console.log(`[EXT][CAPTURE] Ad detected (hasAdClass=${adStatus.hasAdClass}, isAdFromPlayer=${adStatus.isAdFromPlayer}), waiting...`);
 
-        // Wait for ad to finish (up to 60 seconds)
+        // Wait for ad to finish (up to 90 seconds for longer unskippable ads)
         let adWaitAttempts = 0;
-        const MAX_AD_WAIT = 60;
+        const MAX_AD_WAIT = 90; // Increased from 60s
+        const CHECK_INTERVAL = 500; // Check every 500ms for faster response
 
-        while (adWaitAttempts < MAX_AD_WAIT) {
+        while (adWaitAttempts < MAX_AD_WAIT * 2) { // Double iterations since we check every 500ms
           adWaitAttempts++;
 
-          // Try to skip ad
+          // v2.7.2: Try multiple skip button selectors more aggressively
           await chrome.scripting.executeScript({
             target: { tabId: youtubeTab.id },
             world: 'MAIN',
             func: () => {
-              const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, [class*="skip-button"]');
-              if (skipButton && skipButton.offsetParent !== null) {
-                console.log('[YVO] Clicking skip button');
-                skipButton.click();
+              const skipButtonSelectors = [
+                '.ytp-skip-ad-button',
+                '.ytp-ad-skip-button',
+                '.ytp-ad-skip-button-modern',
+                '.ytp-ad-skip-button-container button',
+                'button.ytp-ad-skip-button',
+                '[class*="skip-button"]',
+                '.ytp-ad-skip-button-slot button',
+                '.videoAdUiSkipButton',
+                '.ytp-ad-skip'
+              ];
+              for (const selector of skipButtonSelectors) {
+                const btn = document.querySelector(selector);
+                if (btn && btn.offsetParent !== null) {
+                  console.log(`[YVO] Clicking skip button (${selector})`);
+                  btn.click();
+                  btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                  break;
+                }
               }
             }
           });
 
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, CHECK_INTERVAL));
 
-          // Check if ad is still playing
+          // Check if ad is still playing using reliable indicators
           const adRecheck = await chrome.scripting.executeScript({
             target: { tabId: youtubeTab.id },
             world: 'MAIN',
             func: () => {
-              const adIndicators = [
-                document.querySelector('.ytp-ad-player-overlay'),
-                document.querySelector('.ad-showing'),
-                document.querySelector('.ytp-ad-text')
-              ];
-              return adIndicators.some(el => el !== null);
+              const videoContainer = document.querySelector('.html5-video-player');
+              const hasAdClass = videoContainer?.classList.contains('ad-showing') ||
+                                 videoContainer?.classList.contains('ad-interrupting');
+
+              const ytPlayer = document.querySelector('#movie_player');
+              let isAdFromPlayer = false;
+              if (ytPlayer && typeof ytPlayer.getAdState === 'function') {
+                try { isAdFromPlayer = ytPlayer.getAdState() === 1; } catch (e) {}
+              }
+
+              return hasAdClass || isAdFromPlayer;
             }
           });
 
           if (!adRecheck[0]?.result) {
-            console.log(`[EXT][CAPTURE] Ad finished after ${adWaitAttempts}s`);
-            await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for video to resume
+            console.log(`[EXT][CAPTURE] Ad finished after ${Math.round(adWaitAttempts * CHECK_INTERVAL / 1000)}s`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for video to resume
             break;
           }
 
-          if (adWaitAttempts % 10 === 0) {
-            console.log(`[EXT][CAPTURE] Still waiting for ad to finish (${adWaitAttempts}s)...`);
+          // Log progress every 10 seconds
+          if (adWaitAttempts % 20 === 0) {
+            console.log(`[EXT][CAPTURE] Still waiting for ad to finish (${Math.round(adWaitAttempts * CHECK_INTERVAL / 1000)}s)...`);
           }
         }
 
-        if (adWaitAttempts >= MAX_AD_WAIT) {
-          console.warn(`[EXT][CAPTURE] Ad still playing after ${MAX_AD_WAIT}s, proceeding anyway`);
+        if (adWaitAttempts >= MAX_AD_WAIT * 2) {
+          console.warn(`[EXT][CAPTURE] Ad wait timeout (${MAX_AD_WAIT}s), proceeding with capture anyway`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       } else {
         console.log(`[EXT][CAPTURE] No ad detected, proceeding with video loading`);
@@ -2573,9 +2711,18 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       };
     }
 
-    // CRITICAL: If capturing from a specific position (not 0), pre-seek BEFORE capture
+    // CRITICAL: If capturing from a specific position (not 0), pre-seek and WAIT FOR BUFFER
+    // v2.7.5: Smart pre-buffering - wait for sufficient buffer before starting capture
     if (hasSegmentRequest && requestedStartTime > 5) {
-      console.log(`[EXT][CAPTURE] Pre-seeking to ${requestedStartTime}s before capture...`);
+      const clipDuration = requestedEndTime - requestedStartTime;
+      const requiredBuffer = Math.min(clipDuration + 30, 120); // Need clip duration + 30s safety, max 120s
+
+      console.log(`[EXT][CAPTURE] === SMART PRE-BUFFERING ===`);
+      console.log(`[EXT][CAPTURE] Clip position: ${requestedStartTime}s to ${requestedEndTime}s (${clipDuration}s)`);
+      console.log(`[EXT][CAPTURE] Required buffer: ${requiredBuffer}s ahead of start position`);
+
+      // Step 1: Seek to start position
+      console.log(`[EXT][CAPTURE] Step 1: Seeking to ${requestedStartTime}s...`);
       try {
         await chrome.scripting.executeScript({
           target: { tabId: youtubeTab.id },
@@ -2596,16 +2743,175 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
           args: [requestedStartTime]
         });
 
-        // Wait for seek and buffering
-        console.log(`[EXT][CAPTURE] Waiting for seek and buffering...`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        // Verify we're at the right position
-        const seekCheck = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
-        console.log(`[EXT][CAPTURE] After seek: currentTime=${seekCheck?.videoInfo?.currentTime || 'unknown'}s, readyState=${seekCheck?.videoInfo?.readyState || 'unknown'}`);
+        // Brief wait for seek to initiate
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (seekErr) {
-        console.warn(`[EXT][CAPTURE] Pre-seek failed: ${seekErr.message}, continuing anyway`);
+        console.warn(`[EXT][CAPTURE] Seek failed: ${seekErr.message}`);
       }
+
+      // Step 2: Wait for buffer with progress updates
+      console.log(`[EXT][CAPTURE] Step 2: Waiting for buffer (need ${requiredBuffer}s buffered)...`);
+
+      // Calculate max wait time based on clip position
+      // Deep clips need more time to buffer
+      const baseWaitTime = 30000; // 30s base
+      const positionFactor = Math.min(requestedStartTime / 60, 5); // Up to 5x for clips 5+ min in
+      const maxBufferWait = baseWaitTime + (positionFactor * 30000); // 30s + up to 150s = max 180s (3 min)
+
+      console.log(`[EXT][CAPTURE] Max buffer wait: ${(maxBufferWait / 1000).toFixed(0)}s (position factor: ${positionFactor.toFixed(1)}x)`);
+
+      let bufferReady = false;
+      let lastBufferStatus = null;
+      const bufferStartTime = Date.now();
+      const BUFFER_CHECK_INTERVAL = 2000; // Check every 2 seconds
+
+      while (!bufferReady && (Date.now() - bufferStartTime) < maxBufferWait) {
+        try {
+          // Check buffer status
+          const bufferCheck = await chrome.scripting.executeScript({
+            target: { tabId: youtubeTab.id },
+            world: 'MAIN',
+            func: (startPos, needed) => {
+              const video = document.querySelector('video.html5-main-video');
+              if (!video) return { error: 'No video element' };
+
+              const currentTime = video.currentTime;
+              const buffered = video.buffered;
+              let bufferedAhead = 0;
+
+              // Find the buffer range that contains our start position
+              for (let i = 0; i < buffered.length; i++) {
+                const start = buffered.start(i);
+                const end = buffered.end(i);
+
+                // If this range contains our position, calculate how much is buffered ahead
+                if (start <= startPos && end > startPos) {
+                  bufferedAhead = end - startPos;
+                  break;
+                }
+                // If this range is ahead of our position but close, also count it
+                if (start > startPos && start < startPos + 5) {
+                  bufferedAhead = end - startPos;
+                  break;
+                }
+              }
+
+              const percentReady = Math.min(100, (bufferedAhead / needed) * 100);
+
+              return {
+                currentTime: currentTime.toFixed(1),
+                bufferedAhead: bufferedAhead.toFixed(1),
+                needed: needed,
+                percentReady: percentReady.toFixed(0),
+                readyState: video.readyState,
+                paused: video.paused,
+                isReady: bufferedAhead >= needed
+              };
+            },
+            args: [requestedStartTime, requiredBuffer]
+          });
+
+          const status = bufferCheck[0]?.result;
+
+          if (status && !status.error) {
+            lastBufferStatus = status;
+            const elapsedSec = ((Date.now() - bufferStartTime) / 1000).toFixed(0);
+
+            console.log(`[EXT][CAPTURE] Buffer: ${status.bufferedAhead}s / ${status.needed}s (${status.percentReady}%) - elapsed ${elapsedSec}s`);
+
+            // Store progress for wizard-bridge to poll
+            if (bridgeRequestId) {
+              await chrome.storage.local.set({
+                [`bridge_progress_${bridgeRequestId}`]: {
+                  phase: 'buffering',
+                  bufferedAhead: parseFloat(status.bufferedAhead),
+                  needed: status.needed,
+                  percentReady: parseInt(status.percentReady),
+                  elapsedSeconds: parseInt(elapsedSec),
+                  message: `Buffering at ${Math.floor(requestedStartTime / 60)}:${(requestedStartTime % 60).toString().padStart(2, '0')}... ${status.percentReady}% ready`
+                }
+              });
+            }
+
+            if (status.isReady) {
+              bufferReady = true;
+              console.log(`[EXT][CAPTURE] ✓ Buffer ready! ${status.bufferedAhead}s buffered ahead`);
+              break;
+            }
+
+            // Ensure video is playing to encourage buffering
+            if (status.paused) {
+              console.log(`[EXT][CAPTURE] Video paused, resuming playback to encourage buffering...`);
+              await chrome.scripting.executeScript({
+                target: { tabId: youtubeTab.id },
+                world: 'MAIN',
+                func: () => {
+                  const video = document.querySelector('video.html5-main-video');
+                  if (video && video.paused) {
+                    video.play().catch(() => {});
+                  }
+                }
+              });
+            }
+          } else {
+            console.log(`[EXT][CAPTURE] Buffer check failed: ${status?.error || 'unknown'}`);
+          }
+        } catch (bufferErr) {
+          console.warn(`[EXT][CAPTURE] Buffer check error: ${bufferErr.message}`);
+        }
+
+        // Wait before next check
+        await new Promise(resolve => setTimeout(resolve, BUFFER_CHECK_INTERVAL));
+      }
+
+      // Step 3: Handle buffer wait result
+      const totalWaitTime = ((Date.now() - bufferStartTime) / 1000).toFixed(1);
+
+      if (!bufferReady) {
+        // Buffer didn't reach required level, but we might still have enough to try
+        const gotBuffer = parseFloat(lastBufferStatus?.bufferedAhead || 0);
+        const minViableBuffer = Math.min(clipDuration * 0.7, 30); // At least 70% of clip or 30s
+
+        if (gotBuffer >= minViableBuffer) {
+          console.log(`[EXT][CAPTURE] Buffer incomplete (${gotBuffer}s/${requiredBuffer}s) but sufficient to attempt capture`);
+        } else {
+          console.warn(`[EXT][CAPTURE] ⚠ Buffer insufficient after ${totalWaitTime}s wait (got ${gotBuffer}s, need ${requiredBuffer}s)`);
+          console.warn(`[EXT][CAPTURE] Proceeding anyway - capture may fail or be incomplete`);
+
+          // Store warning for wizard-bridge
+          if (bridgeRequestId) {
+            await chrome.storage.local.set({
+              [`bridge_progress_${bridgeRequestId}`]: {
+                phase: 'buffering_warning',
+                message: `Buffer incomplete (${Math.round(gotBuffer)}s of ${requiredBuffer}s). Attempting capture anyway...`,
+                warning: true
+              }
+            });
+          }
+        }
+      } else {
+        console.log(`[EXT][CAPTURE] ✓ Pre-buffering complete in ${totalWaitTime}s`);
+      }
+
+      // Clear progress now that buffering is done
+      if (bridgeRequestId) {
+        await chrome.storage.local.set({
+          [`bridge_progress_${bridgeRequestId}`]: {
+            phase: 'capturing',
+            message: 'Starting video capture...'
+          }
+        });
+      }
+
+      // Final position verification
+      try {
+        const seekCheck = await chrome.tabs.sendMessage(youtubeTab.id, { action: 'getVideoInfo' });
+        console.log(`[EXT][CAPTURE] Final position: currentTime=${seekCheck?.videoInfo?.currentTime || 'unknown'}s`);
+      } catch (e) {
+        // Ignore
+      }
+
+      console.log(`[EXT][CAPTURE] === PRE-BUFFERING COMPLETE ===`);
     }
 
     // Get video duration from content script
@@ -2658,27 +2964,41 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     const uploadStreamUrl = `${VIDEO_PROCESSOR_URL}/upload-stream`;
 
     // Calculate expected capture time and set timeout
-    // Capture time = (segment duration / playback speed) + generous buffer for:
-    // - Video loading (up to 20s)
-    // - Pre-seek and buffering (up to 10s)
-    // - Base64 conversion and upload (up to 30s)
-    // - Safety margin
+    // v2.7.5: Updated timeout calculation to account for smart pre-buffering
+    // Timeout = capture time + buffer wait time + processing time
     const captureDuration = captureEnd - captureStart;
-    const PLAYBACK_SPEED = 4; // Must match the value in captureVideoWithMessage
+    const PLAYBACK_SPEED = 1; // Must match the value in captureVideoWithMessage
     const expectedCaptureTime = (captureDuration / PLAYBACK_SPEED) * 1000;
-    const captureTimeout = expectedCaptureTime + 90000; // Add 90 second buffer for setup/load/upload
 
-    console.log(`[EXT][CAPTURE] Expected capture time: ${(expectedCaptureTime / 1000).toFixed(1)}s, timeout: ${(captureTimeout / 1000).toFixed(1)}s`);
+    // Calculate buffer wait time based on start position
+    // v2.7.5: Matches the maxBufferWait calculation in pre-buffering logic
+    // Deep clips (15+ min) can take up to 3 minutes to buffer
+    const baseBufferWait = 30000; // 30s base
+    const positionFactor = Math.min(captureStart / 60, 5); // Up to 5x for clips 5+ min in
+    const maxBufferWait = baseBufferWait + (positionFactor * 30000); // 30s + up to 150s = max 180s
+
+    // Processing time: video loading (30s) + upload/conversion (60s)
+    const processingBuffer = 90000;
+
+    // Total timeout: capture time + buffer wait + processing
+    const captureTimeout = expectedCaptureTime + maxBufferWait + processingBuffer;
+
+    console.log(`[EXT][CAPTURE] Timeout calculation: capture=${(expectedCaptureTime / 1000).toFixed(0)}s + buffer=${(maxBufferWait / 1000).toFixed(0)}s + processing=${processingBuffer / 1000}s = ${(captureTimeout / 1000).toFixed(0)}s total`);
 
     // Inject and run the capture function with videoId and uploadUrl for direct upload
     // SOLUTION: Use message passing instead of relying on executeScript return value
     // executeScript with world: 'MAIN' doesn't properly wait for Promises that resolve via callbacks
 
     // Generate a unique capture ID for this request
+    // If bridgeRequestId is provided, use it as the storage key so wizard-bridge can find the result
     const captureId = `capture_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // CRITICAL: Use bridgeRequestId for storage if provided - this is the key wizard-bridge polls for
+    const storageKey = bridgeRequestId || captureId;
 
-    // Clear any previous result for this capture ID
-    await chrome.storage.local.remove([`capture_result_${captureId}`]);
+    console.log(`[EXT][CAPTURE] captureId=${captureId}, storageKey=${storageKey}`);
+
+    // Clear any previous result for this storage key
+    await chrome.storage.local.remove([`bridge_result_${storageKey}`, `capture_result_${captureId}`]);
 
     // Set up a Promise that resolves when we receive the capture result
     // Uses BOTH message passing AND chrome.storage polling for reliability
@@ -2695,22 +3015,24 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       }, captureTimeout);
 
       // Poll chrome.storage as fallback (in case message passing fails)
+      // CRITICAL: Poll for bridge_result_${storageKey} which is what the relay stores
       const storagePoller = setInterval(async () => {
         if (resolved) {
           clearInterval(storagePoller);
           return;
         }
         try {
-          const stored = await chrome.storage.local.get([`capture_result_${captureId}`]);
-          const result = stored[`capture_result_${captureId}`];
+          // Check for result stored by relay with the storageKey (bridgeRequestId if provided)
+          const stored = await chrome.storage.local.get([`bridge_result_${storageKey}`]);
+          const result = stored[`bridge_result_${storageKey}`];
           if (result) {
-            console.log(`[EXT][CAPTURE] Retrieved result from storage (fallback)`);
+            console.log(`[EXT][CAPTURE] Retrieved result from storage (key=bridge_result_${storageKey})`);
             resolved = true;
             clearTimeout(messageTimeout);
             clearInterval(storagePoller);
             chrome.runtime.onMessage.removeListener(messageHandler);
             // Clean up storage
-            chrome.storage.local.remove([`capture_result_${captureId}`]);
+            chrome.storage.local.remove([`bridge_result_${storageKey}`]);
             if (result.error) {
               rejectCapture(new Error(result.error));
             } else {
@@ -2747,7 +3069,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             sendResponse({ received: true });
 
             // Clean up storage (in case relay also stored it)
-            chrome.storage.local.remove([`capture_result_${captureId}`]);
+            chrome.storage.local.remove([`bridge_result_${storageKey}`]);
 
             if (message.error) {
               rejectCapture(new Error(message.error));
@@ -2772,9 +3094,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       await chrome.scripting.executeScript({
         target: { tabId: youtubeTab.id },
         world: 'ISOLATED',
-        func: (cid) => {
-          console.log(`[EXT][RELAY] ====== RELAY SCRIPT STARTING v2.7.1 ======`);
-          console.log(`[EXT][RELAY] captureId=${cid}`);
+        func: (cid, bridgeStorageKey) => {
+          console.log(`[EXT][RELAY] ====== RELAY SCRIPT STARTING v2.7.3 ======`);
+          console.log(`[EXT][RELAY] captureId=${cid}, bridgeStorageKey=${bridgeStorageKey}`);
 
           // Remove any existing listener to avoid duplicates
           if (window.__captureMessageHandler) {
@@ -2801,17 +3123,18 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
             clearInterval(window.__captureLocalStoragePoller);
           }
 
-          // CRITICAL: Store result in chrome.storage FIRST (reliable backup)
-          const storageKey = `capture_result_${cid}`;
+          // CRITICAL: Store result in chrome.storage with bridgeStorageKey so wizard-bridge can find it
+          // This is the key that wizard-bridge polls for: bridge_result_${bridgeRequestId}
+          const chromeStorageKey = `bridge_result_${bridgeStorageKey}`;
           const resultData = {
             result: result,
             error: error,
             timestamp: Date.now()
           };
 
-          console.log(`[EXT][RELAY] Handling result from ${source}, storing in chrome.storage (key=${storageKey})`);
-          chrome.storage.local.set({ [storageKey]: resultData }).then(() => {
-            console.log(`[EXT][RELAY] Result stored in chrome.storage`);
+          console.log(`[EXT][RELAY] Handling result from ${source}, storing in chrome.storage (key=${chromeStorageKey})`);
+          chrome.storage.local.set({ [chromeStorageKey]: resultData }).then(() => {
+            console.log(`[EXT][RELAY] Result stored in chrome.storage (key=${chromeStorageKey})`);
           }).catch(e => {
             console.error(`[EXT][RELAY] Failed to store in chrome.storage:`, e.message);
           });
@@ -2885,9 +3208,9 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
         console.log(`[EXT][RELAY] Message relay installed for capture ${cid} (with storage + localStorage backup)`);
         return 'relay_installed';
       },
-      args: [captureId]
+      args: [captureId, storageKey]
     });
-      console.log(`[EXT][CAPTURE] Relay script injection successful`);
+      console.log(`[EXT][CAPTURE] Relay script injection successful (storageKey=${storageKey})`);
     } catch (relayInjectionError) {
       console.error(`[EXT][CAPTURE] Relay script injection failed: ${relayInjectionError.message}`);
       throw new Error(`Failed to inject relay script: ${relayInjectionError.message}`);
