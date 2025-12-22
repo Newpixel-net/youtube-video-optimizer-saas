@@ -2532,9 +2532,22 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
   try {
     // CRITICAL: Must call checkGpuIfNeeded() to initialize gpuEnabled
-    // Previously gpuEnabled was null because this was never called!
-    const useGpu = checkGpuIfNeeded();
-    console.log(`[${jobId}] GPU encoding available: ${useGpu}`);
+    const gpuAvailable = checkGpuIfNeeded();
+    console.log(`[${jobId}] GPU hardware available: ${gpuAvailable}`);
+
+    // TEMPORARY FIX: Disable NVENC due to frozen video bug on Cloud Run L4 GPU
+    // Evidence from logs:
+    // - NVENC encoding progress jumps from 0.27s to 29.56s instantly (not normal)
+    // - Output has correct frame count (889) and reasonable bitrate (1172 kbps)
+    // - But video is frozen (all frames identical)
+    // - This suggests NVENC hardware/driver issue on L4, not FFmpeg config
+    // Using CPU encoding until root cause is identified and fixed.
+    const useGpu = false;
+    if (gpuAvailable) {
+      console.log(`[${jobId}] ⚠️ GPU available but DISABLED - NVENC produces frozen video on L4`);
+    }
+    console.log(`[${jobId}] Using CPU encoding (libx264) for reliable output`);
+
     const intermediateFile = path.join(workDir, 'intermediate.mp4');
 
     if (useGpu) {
