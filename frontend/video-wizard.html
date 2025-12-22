@@ -39,10 +39,19 @@
          SECTION 1: EXTERNAL DEPENDENCIES
          ============================================ -->
 
+    <!-- 1.0 Performance: Preconnect & DNS Prefetch -->
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://www.gstatic.com">
+    <link rel="dns-prefetch" href="https://firestore.googleapis.com">
+
     <!-- 1.1 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- 1.2 Firebase SDKs -->
+    <!-- 1.2 Firebase SDKs (with preload for critical path) -->
+    <link rel="preload" href="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js" as="script">
+    <link rel="preload" href="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js" as="script">
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
@@ -1167,6 +1176,83 @@
             color: #ec4899;
         }
 
+        /* Create More Section */
+        .create-more-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1));
+            border: 1px dashed rgba(139, 92, 246, 0.4);
+            border-radius: 1rem;
+        }
+
+        .create-more-info {
+            text-align: center;
+        }
+
+        .create-more-count {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .btn-create-more {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.5rem;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            border: none;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-create-more:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+        }
+
+        .btn-create-more:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-create-more .token-cost {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-create-more .token-cost::before {
+            content: '\1FA99';
+            margin-right: 0.25rem;
+        }
+
+        .btn-create-more .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .create-more-warning {
+            margin-top: 0.5rem;
+            color: #ef4444;
+            font-size: 0.875rem;
+        }
+
         /* Platform Legend */
         .platform-legend {
             display: flex;
@@ -1414,10 +1500,14 @@
         }
 
         .source-preview-video img,
-        .source-preview-video video {
+        .source-preview-video video,
+        .source-preview-video iframe {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
 
         /* Crop guide overlay on source */
@@ -1431,27 +1521,27 @@
             position: absolute;
             top: 0;
             bottom: 0;
-            width: 56.25%; /* 9:16 ratio within 16:9 = 56.25% */
+            width: 31.640625%; /* Correct: (9/16)² = 81/256 for 16:9→9:16 crop */
             border: 3px solid rgba(236, 72, 153, 0.9);
             background: transparent;
             box-shadow:
                 inset 0 0 0 2px rgba(236, 72, 153, 0.3),
                 0 0 0 9999px rgba(0, 0, 0, 0.5);
-            transition: left 0.3s ease;
+            transition: left 0.2s ease;
+            cursor: grab;
+            pointer-events: auto;
         }
 
-        .crop-guide-zone.crop-left {
-            left: 0;
+        .crop-guide-zone:active {
+            cursor: grabbing;
         }
 
-        .crop-guide-zone.crop-center {
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .crop-guide-zone.crop-right {
-            left: auto;
-            right: 0;
+        .crop-guide-zone.dragging {
+            transition: none;
+            box-shadow:
+                inset 0 0 0 2px rgba(236, 72, 153, 0.5),
+                0 0 0 9999px rgba(0, 0, 0, 0.6);
+            border-color: rgba(236, 72, 153, 1);
         }
 
         .crop-guide-label {
@@ -1466,6 +1556,182 @@
             font-size: 0.7rem;
             font-weight: 600;
             white-space: nowrap;
+        }
+
+        .crop-drag-hint {
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            white-space: nowrap;
+            opacity: 0.8;
+        }
+
+        /* Crop Slider Controls */
+        .crop-slider-container {
+            margin-top: 0.75rem;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.5rem;
+        }
+
+        .crop-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .crop-slider-label {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            min-width: 45px;
+        }
+
+        .crop-slider-label:last-child {
+            text-align: right;
+        }
+
+        .crop-slider {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(to right, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3));
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .crop-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            transition: transform 0.15s ease;
+        }
+
+        .crop-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        .crop-slider::-webkit-slider-thumb:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+
+        .crop-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            border-radius: 50%;
+            cursor: grab;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .crop-slider-value {
+            text-align: center;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 0.25rem;
+        }
+
+        /* Crop Controls Row */
+        .crop-controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.75rem;
+            gap: 0.75rem;
+        }
+
+        .crop-quick-buttons {
+            display: flex;
+            gap: 0.375rem;
+        }
+
+        .crop-quick-btn {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .crop-quick-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .crop-quick-btn.active {
+            background: rgba(236, 72, 153, 0.3);
+            border-color: rgba(236, 72, 153, 0.5);
+            color: white;
+        }
+
+        /* AI Smart Crop Button */
+        .btn-ai-smart-crop {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.5rem 0.875rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2));
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-ai-smart-crop:hover {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3));
+            border-color: rgba(139, 92, 246, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .btn-ai-smart-crop.active {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(236, 72, 153, 0.4));
+            border-color: rgba(139, 92, 246, 0.8);
+            box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-ai-smart-crop .ai-icon {
+            font-size: 0.9rem;
+        }
+
+        .btn-ai-smart-crop.loading .ai-icon {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* AI Crop Badge */
+        .ai-crop-badge {
+            margin-left: 0.5rem;
+            padding: 0.2rem 0.5rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3));
+            border-radius: 0.25rem;
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.9);
         }
 
         .crop-position-buttons {
@@ -1533,17 +1799,13 @@
             z-index: 1;
         }
 
-        /* Crop positions using object-position */
-        .phone-video-area.crop-left .preview-media {
-            object-position: left center;
+        /* Crop positions using CSS variable for percentage-based positioning */
+        .phone-video-area {
+            --crop-position: 50%; /* Default to center */
         }
 
-        .phone-video-area.crop-center .preview-media {
-            object-position: center center;
-        }
-
-        .phone-video-area.crop-right .preview-media {
-            object-position: right center;
+        .phone-video-area .preview-media {
+            object-position: var(--crop-position) center;
         }
 
         /* YouTube iframe cropping - make it fill and overflow */
@@ -1557,22 +1819,13 @@
         .phone-video-area .preview-iframe-wrapper iframe {
             position: absolute;
             top: 0;
-            left: 50%;
-            transform: translateX(-50%);
+            /* Use CSS calc to position based on crop percentage */
+            left: calc(var(--crop-position));
+            transform: translateX(calc(-1 * var(--crop-position)));
             width: 177.78vh; /* 16:9 ratio based on viewport height */
             height: 100%;
             min-width: 316%; /* Ensures video fills height and overflows width */
             border: none;
-        }
-
-        .phone-video-area.crop-left .preview-iframe-wrapper iframe {
-            left: 0;
-            transform: translateX(0);
-        }
-
-        .phone-video-area.crop-right .preview-iframe-wrapper iframe {
-            left: 100%;
-            transform: translateX(-100%);
         }
 
         /* ==========================================
@@ -1594,7 +1847,7 @@
             bottom: 0;
             left: 50%;
             transform: translateX(-50%);
-            width: 56.25%; /* 9:16 from 16:9 = 56.25% */
+            width: 31.640625%; /* Correct: (9/16)² for 16:9→9:16 crop */
             border: 2px solid rgba(236, 72, 153, 0.8);
             background: transparent;
             box-shadow:
@@ -2084,6 +2337,20 @@
             background: rgba(236, 72, 153, 0.8);
             padding: 2px 6px;
             border-radius: 4px;
+        }
+
+        /* Facecam position variants */
+        .phone-video-area.reframe-gameplay .facecam-preview.facecam-bottom-right {
+            bottom: 5%; right: 5%; top: auto; left: auto;
+        }
+        .phone-video-area.reframe-gameplay .facecam-preview.facecam-bottom-left {
+            bottom: 5%; left: 5%; top: auto; right: auto;
+        }
+        .phone-video-area.reframe-gameplay .facecam-preview.facecam-top-right {
+            top: 5%; right: 5%; bottom: auto; left: auto;
+        }
+        .phone-video-area.reframe-gameplay .facecam-preview.facecam-top-left {
+            top: 5%; left: 5%; bottom: auto; right: auto;
         }
 
         /* B-Roll mode with Ken Burns effect */
@@ -6413,6 +6680,572 @@
             opacity: 0.7;
             margin-top: 0.25rem;
         }
+
+        /* Parallel Export Banner Styles */
+        .parallel-export-banner {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .parallel-export-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .parallel-export-icon {
+            font-size: 1.5rem;
+        }
+
+        .parallel-export-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #22c55e;
+        }
+
+        .parallel-export-badge {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .parallel-export-description {
+            color: #9ca3af;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .parallel-export-btn {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+        }
+
+        .parallel-export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(34, 197, 94, 0.4);
+        }
+
+        .parallel-export-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Parallel Export Progress Styles */
+        .parallel-export-progress {
+            background: rgba(17, 24, 39, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .parallel-progress-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .parallel-progress-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #22c55e;
+        }
+
+        .parallel-progress-stats {
+            font-size: 0.9rem;
+            color: #9ca3af;
+        }
+
+        .parallel-progress-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .parallel-progress-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+
+        .parallel-progress-item.completed {
+            background: rgba(34, 197, 94, 0.1);
+        }
+
+        .parallel-progress-item.error {
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .parallel-progress-item-icon {
+            font-size: 1.25rem;
+            width: 32px;
+            text-align: center;
+        }
+
+        .parallel-progress-item-info {
+            flex: 1;
+        }
+
+        .parallel-progress-item-title {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #f3f4f6;
+        }
+
+        .parallel-progress-item-status {
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+
+        .parallel-progress-bar-container {
+            width: 100px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .parallel-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .parallel-progress-complete-message {
+            text-align: center;
+            padding: 1rem;
+            margin-top: 1rem;
+            background: rgba(34, 197, 94, 0.1);
+            border-radius: 8px;
+        }
+
+        .parallel-progress-complete-message h4 {
+            color: #22c55e;
+            margin-bottom: 0.5rem;
+        }
+
+        /* ========================================
+           BATCH EXPORT MODAL - Enhanced UX
+           ======================================== */
+        .batch-export-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+        .batch-export-modal {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .batch-export-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .batch-export-modal-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #f3f4f6;
+        }
+
+        .batch-export-modal-title .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(34, 197, 94, 0.3);
+            border-top-color: #22c55e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .batch-export-modal-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #9ca3af;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.25rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .batch-export-modal-close:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .batch-export-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        .batch-export-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .batch-export-stat {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .batch-export-stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #22c55e;
+        }
+
+        .batch-export-stat-value.pending { color: #9ca3af; }
+        .batch-export-stat-value.processing { color: #3b82f6; }
+        .batch-export-stat-value.error { color: #ef4444; }
+
+        .batch-export-stat-label {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-top: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Console-like log area */
+        .batch-export-console {
+            background: #0d1117;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .batch-export-console-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .batch-export-console-header span {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            font-family: monospace;
+        }
+
+        .console-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .console-dot.red { background: #ef4444; }
+        .console-dot.yellow { background: #eab308; }
+        .console-dot.green { background: #22c55e; }
+
+        .batch-export-console-body {
+            height: 200px;
+            overflow-y: auto;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+        }
+
+        .console-line {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .console-timestamp {
+            color: #6b7280;
+            flex-shrink: 0;
+        }
+
+        .console-message {
+            color: #e5e7eb;
+            word-break: break-word;
+        }
+
+        .console-message.info { color: #3b82f6; }
+        .console-message.success { color: #22c55e; }
+        .console-message.error { color: #ef4444; }
+        .console-message.warning { color: #eab308; }
+
+        /* Clip list in modal */
+        .batch-export-clips {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .batch-export-clip {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            transition: all 0.2s;
+        }
+
+        .batch-export-clip.active {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .batch-export-clip.completed {
+            border-color: #22c55e;
+            background: rgba(34, 197, 94, 0.1);
+        }
+
+        .batch-export-clip.error {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .batch-export-clip-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            background: rgba(255, 255, 255, 0.05);
+            flex-shrink: 0;
+        }
+
+        .batch-export-clip.active .batch-export-clip-icon {
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .batch-export-clip.completed .batch-export-clip-icon {
+            background: rgba(34, 197, 94, 0.2);
+        }
+
+        .batch-export-clip-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .batch-export-clip-title {
+            font-weight: 500;
+            color: #f3f4f6;
+            margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .batch-export-clip-status {
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+
+        .batch-export-clip-progress {
+            width: 120px;
+            flex-shrink: 0;
+        }
+
+        .batch-export-clip-progress-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .batch-export-clip-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6 0%, #22c55e 100%);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .batch-export-clip-progress-text {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            text-align: center;
+            margin-top: 0.25rem;
+        }
+
+        .batch-export-clip-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .batch-export-download-btn {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .batch-export-download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        }
+
+        /* Modal footer */
+        .batch-export-modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .batch-export-footer-status {
+            font-size: 0.9rem;
+            color: #9ca3af;
+        }
+
+        .batch-export-footer-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .batch-export-cancel-btn {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .batch-export-cancel-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .batch-export-download-all-btn {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .batch-export-download-all-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+        }
+
+        .batch-export-download-all-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Complete state */
+        .batch-export-complete-banner {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.1) 100%);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .batch-export-complete-banner h3 {
+            font-size: 1.5rem;
+            color: #22c55e;
+            margin-bottom: 0.5rem;
+        }
+
+        .batch-export-complete-banner p {
+            color: #9ca3af;
+        }
     </style>
 
     <!-- ============================================
@@ -6433,15 +7266,31 @@
            4.1 FIREBASE CONFIGURATION
            ========================================== */
 
-        if (typeof firebase === 'undefined') {
-            console.error('Firebase SDK not loaded');
-            document.getElementById('app-root').innerHTML =
-                '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">' +
-                '<div style="text-align:center;color:white;">' +
-                '<h2 style="color:#ef4444;margin-bottom:1rem;">Error Loading Page</h2>' +
-                '<p style="color:#9ca3af;">Failed to load Firebase. Please refresh the page.</p></div></div>';
-            return;
+        // Robust Firebase check - waits for window.onload if needed
+        function initializeApp() {
+            if (typeof firebase === 'undefined') {
+                document.getElementById('app-root').innerHTML =
+                    '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">' +
+                    '<div style="background:rgba(30,41,59,0.95);border-radius:1rem;padding:3rem;text-align:center;max-width:400px;border:1px solid rgba(255,255,255,0.1);">' +
+                    '<h2 style="color:#ef4444;font-size:1.5rem;font-weight:bold;margin-bottom:1rem;">Connection Error</h2>' +
+                    '<p style="color:#9ca3af;margin-bottom:1.5rem;">Failed to load required resources. This may be due to a slow connection or ad blocker.</p>' +
+                    '<button onclick="location.reload()" style="padding:0.75rem 2rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:0.5rem;cursor:pointer;font-weight:600;font-size:1rem;">Try Again</button></div></div>';
+                return;
+            }
+            runApp();
         }
+
+        if (typeof firebase !== 'undefined') {
+            initializeApp();
+        } else {
+            if (document.readyState === 'complete') {
+                setTimeout(initializeApp, 200);
+            } else {
+                window.addEventListener('load', initializeApp);
+            }
+        }
+
+        function runApp() {
 
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyAGczY5ZEIJdTq25BpQdia3lv2I556wOZo",
@@ -6457,6 +7306,16 @@
         const functions = firebase.functions();
         const db = firebase.firestore();
         const storage = firebase.storage();
+
+        // Enable offline persistence for faster loading
+        db.enablePersistence({ synchronizeTabs: true })
+            .catch(function(err) {
+                if (err.code === 'failed-precondition') {
+                    console.log('Persistence failed: Multiple tabs open');
+                } else if (err.code === 'unimplemented') {
+                    console.log('Persistence not supported by browser');
+                }
+            });
 
         /* ==========================================
            4.2 APPLICATION STATE
@@ -6510,6 +7369,8 @@
             // Step 3: Clips
             clips: [],
             selectedClipIds: [],
+            displayedClipCount: 8, // Initial number of clips to show (more can be unlocked)
+            createMoreLoading: false, // Loading state for "Create more" button
 
             // Step 4: Customization
             customization: {
@@ -6567,6 +7428,19 @@
             // Captured during analysis and saved to Firebase Storage
             // Export uses this instead of re-capturing at export time
             sourceAsset: null  // { storageUrl, storagePath, duration, format, capturedAt, source }
+        };
+
+        // Track document event listeners for cleanup between renders
+        // This prevents accumulating duplicate listeners that can cause state bugs
+        var documentEventListeners = {
+            timelineMouseMove: null,
+            timelineMouseUp: null,
+            timelineTouchMove: null,
+            timelineTouchEnd: null,
+            cropMouseMove: null,
+            cropMouseUp: null,
+            cropTouchMove: null,
+            cropTouchEnd: null
         };
 
         // Mock data for testing
@@ -7116,19 +7990,27 @@
 
         function renderStep3ClipSelection() {
             var html = '';
+            var displayedClips = state.clips.slice(0, state.displayedClipCount);
+            var hasMoreClips = state.clips.length > state.displayedClipCount;
+            var remainingClips = state.clips.length - state.displayedClipCount;
+            var createMoreCost = 5; // Token cost for creating more clips
 
             // Header
             html += '<div class="clips-header">';
-            html += '<h2>Found ' + state.clips.length + ' Clips</h2>';
+            if (hasMoreClips) {
+                html += '<h2>Showing ' + displayedClips.length + ' of ' + state.clips.length + ' Clips</h2>';
+            } else {
+                html += '<h2>Found ' + state.clips.length + ' Clips</h2>';
+            }
             html += '<div class="clips-header-actions">';
             html += '<button class="btn-secondary" onclick="app.selectAllClips()">Select All</button>';
             html += '<button class="btn-secondary" onclick="app.deselectAllClips()">Deselect All</button>';
             html += '</div>';
             html += '</div>';
 
-            // Clip Grid
+            // Clip Grid (only show displayed clips)
             html += '<div class="clip-grid">';
-            state.clips.forEach(function(clip) {
+            displayedClips.forEach(function(clip, index) {
                 var isSelected = state.selectedClipIds.indexOf(clip.id) !== -1;
                 var cardClass = isSelected ? 'clip-card selected' : 'clip-card';
                 var scoreClass = utils.getScoreClass(clip.score);
@@ -7136,7 +8018,7 @@
                 html += '<div class="' + cardClass + '" onclick="app.toggleClipSelection(\'' + clip.id + '\')">';
 
                 // Thumbnail with play button (use placeholder if missing)
-                var thumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"%3E%3Crect fill="%231a1a2e" width="320" height="180"/%3E%3Ctext x="160" y="85" fill="%23ec4899" font-family="sans-serif" font-size="24" text-anchor="middle"%3E🎬%3C/text%3E%3Ctext x="160" y="110" fill="%23888" font-family="sans-serif" font-size="12" text-anchor="middle"%3EClip ' + (state.clips.indexOf(clip) + 1) + '%3C/text%3E%3C/svg%3E';
+                var thumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"%3E%3Crect fill="%231a1a2e" width="320" height="180"/%3E%3Ctext x="160" y="85" fill="%23ec4899" font-family="sans-serif" font-size="24" text-anchor="middle"%3E🎬%3C/text%3E%3Ctext x="160" y="110" fill="%23888" font-family="sans-serif" font-size="12" text-anchor="middle"%3EClip ' + (index + 1) + '%3C/text%3E%3C/svg%3E';
                 html += '<div class="clip-thumbnail">';
                 html += '<img src="' + thumbUrl + '" alt="Clip thumbnail">';
                 html += '<span class="clip-duration">' + utils.formatDuration(clip.duration) + '</span>';
@@ -7170,6 +8052,28 @@
                 html += '</div>'; // clip-card
             });
             html += '</div>';
+
+            // "Create more" button when there are hidden clips
+            if (hasMoreClips) {
+                var nextBatch = Math.min(10, remainingClips);
+                var canAfford = state.tokens.balance >= createMoreCost;
+                html += '<div class="create-more-section">';
+                html += '<div class="create-more-info">';
+                html += '<span class="create-more-count">+' + remainingClips + ' more clips available</span>';
+                html += '</div>';
+                html += '<button class="btn-create-more' + (state.createMoreLoading ? ' loading' : '') + (!canAfford ? ' disabled' : '') + '" ';
+                html += 'onclick="app.createMoreClips()" ' + (!canAfford || state.createMoreLoading ? 'disabled' : '') + '>';
+                if (state.createMoreLoading) {
+                    html += '<span class="spinner"></span> Loading...';
+                } else {
+                    html += 'Show ' + nextBatch + ' More Clips <span class="token-cost">' + createMoreCost + ' tokens</span>';
+                }
+                html += '</button>';
+                if (!canAfford) {
+                    html += '<p class="create-more-warning">Not enough tokens. You have ' + state.tokens.balance + ' tokens.</p>';
+                }
+                html += '</div>';
+            }
 
             // Platform Legend
             html += '<div class="platform-legend">';
@@ -7227,34 +8131,76 @@
             var sourceIsUpload = state.videoInput.isUpload || false;
             var sourceUploadUrl = state.videoInput.uploadedFile?.url || state.videoInput.videoData?.uploadedVideoUrl || '';
             var sourceThumbnail = activeClip.thumbnail || (sourceVideoId ? 'https://img.youtube.com/vi/' + sourceVideoId + '/maxresdefault.jpg' : '');
-            var sourceCropPos = settings.cropPosition || 'center';
+            // Convert legacy string values to percentage and validate
+            var sourceCropPos = settings.cropPosition;
+            if (sourceCropPos === 'left') sourceCropPos = 0;
+            else if (sourceCropPos === 'center') sourceCropPos = 50;
+            else if (sourceCropPos === 'right') sourceCropPos = 100;
+            else if (typeof sourceCropPos !== 'number' || isNaN(sourceCropPos)) sourceCropPos = 50;
+            // Clamp to valid range
+            sourceCropPos = Math.max(0, Math.min(100, sourceCropPos));
+
+            // Calculate crop zone position: 0% means left edge, 100% means right edge
+            // The crop zone is 31.64% width (correct ratio for 16:9→9:16 = (9/16)²)
+            // This matches the backend FFmpeg calculation: cropX = (percent/100) * (width - cropWidth)
+            var cropZoneWidth = 31.640625; // (9/16)² × 100 = 81/256 × 100
+            var cropZoneLeft = (sourceCropPos / 100) * (100 - cropZoneWidth); // Max left position is 68.36%
 
             html += '<div class="source-preview-container">';
             html += '<div class="source-preview-header">';
             html += '<span class="source-preview-label">📺 Source Video (16:9) → 9:16 Crop</span>';
+            if (settings.aiSmartCrop) {
+                html += '<span class="ai-crop-badge">✨ AI Detected</span>';
+            }
             html += '</div>';
-            html += '<div class="source-preview-video">';
+            html += '<div class="source-preview-video" id="cropPreviewArea">';
 
-            // Show video or thumbnail based on source type
+            // Show video based on source type
             if (sourceIsUpload && sourceUploadUrl) {
+                // For uploaded videos, show the video element at clip start time
                 html += '<video src="' + sourceUploadUrl + '#t=' + (activeClip.startTime || 0) + '" muted playsinline></video>';
+            } else if (sourceVideoId) {
+                // For YouTube videos, embed an iframe at the clip's start time
+                var startSeconds = Math.floor(activeClip.startTime || 0);
+                html += '<iframe ';
+                html += 'src="https://www.youtube.com/embed/' + sourceVideoId + '?start=' + startSeconds + '&autoplay=0&mute=1&controls=0&modestbranding=1&rel=0&showinfo=0" ';
+                html += 'frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ';
+                html += 'style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;" ';
+                html += 'allowfullscreen></iframe>';
             } else if (sourceThumbnail) {
+                // Fallback to thumbnail if no video source
                 html += '<img src="' + sourceThumbnail + '" alt="Source video" onerror="this.src=\'https://img.youtube.com/vi/' + sourceVideoId + '/hqdefault.jpg\'">';
             }
 
-            // Crop guide overlay showing what will be cropped
+            // Crop guide overlay - draggable zone with percentage positioning
             html += '<div class="crop-guide-overlay">';
-            html += '<div class="crop-guide-zone crop-' + sourceCropPos + '">';
-            html += '<div class="crop-guide-label">9:16 Output Area</div>';
+            html += '<div class="crop-guide-zone" id="cropGuideZone" style="left: ' + cropZoneLeft + '%;" data-position="' + sourceCropPos + '">';
+            html += '<div class="crop-guide-label">' + (settings.aiSmartCrop ? '✨ AI Smart Crop' : '9:16 Output Area') + '</div>';
+            html += '<div class="crop-drag-hint">← Drag to adjust →</div>';
             html += '</div>';
             html += '</div>';
             html += '</div>'; // source-preview-video
 
-            // Crop position buttons
-            html += '<div class="crop-position-buttons">';
-            html += '<button class="crop-pos-btn' + (sourceCropPos === 'left' ? ' active' : '') + '" onclick="app.setCropPosition(\'left\')">◀ Left</button>';
-            html += '<button class="crop-pos-btn' + (sourceCropPos === 'center' ? ' active' : '') + '" onclick="app.setCropPosition(\'center\')">● Center</button>';
-            html += '<button class="crop-pos-btn' + (sourceCropPos === 'right' ? ' active' : '') + '" onclick="app.setCropPosition(\'right\')">Right ▶</button>';
+            // Crop position slider control
+            html += '<div class="crop-slider-container">';
+            html += '<div class="crop-slider-row">';
+            html += '<span class="crop-slider-label">◀ Left</span>';
+            html += '<input type="range" class="crop-slider" id="cropSlider" min="0" max="100" value="' + sourceCropPos + '" oninput="app.onCropSliderChange(this.value)" onchange="app.setCropPosition(this.value)">';
+            html += '<span class="crop-slider-label">Right ▶</span>';
+            html += '</div>';
+            html += '<div class="crop-slider-value">' + sourceCropPos + '%</div>';
+            html += '</div>';
+
+            // Quick position buttons + AI Smart Crop
+            html += '<div class="crop-controls-row">';
+            html += '<div class="crop-quick-buttons">';
+            html += '<button class="crop-quick-btn' + (sourceCropPos === 0 ? ' active' : '') + '" onclick="app.setCropPosition(0)" title="Left edge">◀</button>';
+            html += '<button class="crop-quick-btn' + (sourceCropPos === 50 ? ' active' : '') + '" onclick="app.setCropPosition(50)" title="Center">●</button>';
+            html += '<button class="crop-quick-btn' + (sourceCropPos === 100 ? ' active' : '') + '" onclick="app.setCropPosition(100)" title="Right edge">▶</button>';
+            html += '</div>';
+            html += '<button class="btn-ai-smart-crop' + (settings.aiSmartCrop ? ' active' : '') + '" onclick="app.runAiSmartCrop()" title="AI detects the main subject and auto-positions the crop">';
+            html += '<span class="ai-icon">✨</span> AI Smart Crop';
+            html += '</button>';
             html += '</div>';
             html += '</div>'; // source-preview-container
 
@@ -7265,7 +8211,14 @@
 
             // Build phone-screen classes with visual effects
             var reframeMode = settings.reframeMode || 'auto_center';
-            var cropPos = settings.cropPosition || 'center';
+            // Convert legacy string crop positions to percentage
+            var cropPosRaw = settings.cropPosition;
+            var cropPosPercent;
+            if (cropPosRaw === 'left') cropPosPercent = 0;
+            else if (cropPosRaw === 'center') cropPosPercent = 50;
+            else if (cropPosRaw === 'right') cropPosPercent = 100;
+            else if (typeof cropPosRaw === 'number') cropPosPercent = cropPosRaw;
+            else cropPosPercent = 50;
             var phoneScreenClasses = 'phone-screen';
             if (settings.vignette) phoneScreenClasses += ' effect-vignette';
             if (settings.autoZoom) phoneScreenClasses += ' effect-zoom';
@@ -7339,16 +8292,49 @@
                 return null;
             };
 
+            // Helper function to generate tertiary source media element (for three_person mode)
+            var tertiarySource = settings.tertiarySource || { enabled: false };
+            var hasTertiaryVideo = tertiarySource.enabled && (tertiarySource.youtubeVideoId || tertiarySource.uploadedUrl);
+
+            var getTertiaryMediaElement = function() {
+                if (!hasTertiaryVideo) return null;
+
+                var audioMix = settings.audioMix || { tertiaryMuted: true };
+                var shouldMute = audioMix.tertiaryMuted;
+                var mutedAttr = shouldMute ? ' muted' : '';
+
+                if (tertiarySource.type === 'youtube' && tertiarySource.youtubeVideoId) {
+                    var tertThumbnail = 'https://img.youtube.com/vi/' + tertiarySource.youtubeVideoId + '/mqdefault.jpg';
+                    if (state.customization.playingInFrame) {
+                        var tertEmbedUrl = 'https://www.youtube.com/embed/' + tertiarySource.youtubeVideoId +
+                            '?autoplay=1&modestbranding=1&rel=0&playsinline=1' + (shouldMute ? '&mute=1' : '');
+                        return '<div class="preview-iframe-wrapper">' +
+                               '<iframe data-track="tertiary" src="' + tertEmbedUrl + '" ' +
+                               'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
+                               'allowfullscreen></iframe>' +
+                               '</div>';
+                    }
+                    return '<img class="preview-media tertiary-preview" src="' + tertThumbnail + '" alt="Third Video">';
+                } else if (tertiarySource.type === 'upload' && tertiarySource.uploadedUrl) {
+                    return '<video class="preview-media tertiary-preview" data-track="tertiary" src="' + tertiarySource.uploadedUrl + '" controls' + mutedAttr + ' playsinline></video>';
+                }
+                return null;
+            };
+
             var mediaElement = getMediaElement(true);
             var secondaryMediaElement = getSecondaryMediaElement();
+            var tertiaryMediaElement = getTertiaryMediaElement();
 
             // Build phone-video-area with reframe mode class
-            var videoAreaClasses = 'phone-video-area reframe-' + reframeMode + ' crop-' + cropPos;
+            // Use data attribute for percentage-based crop positioning
+            var videoAreaClasses = 'phone-video-area reframe-' + reframeMode;
             // Add multi-source class when secondary video is present (for different CSS positioning)
             if (hasSecondaryVideo && secondaryMediaElement) {
                 videoAreaClasses += ' multi-source';
             }
-            html += '<div class="' + videoAreaClasses + '">';
+            // Calculate object-position for percentage-based cropping
+            var objectPosX = cropPosPercent + '%';
+            html += '<div class="' + videoAreaClasses + '" data-crop-percent="' + cropPosPercent + '" style="--crop-position: ' + objectPosX + ';">';
 
             // Generate reframe-specific content
             // Determine which media goes where based on secondary position
@@ -7379,37 +8365,36 @@
                 html += '<div class="split-preview-top">' + topMedia + '<span class="split-label">' + topLabel + '</span></div>';
                 html += '<div class="split-preview-bottom">' + bottomMedia + '<span class="split-label">' + bottomLabel + '</span></div>';
             } else if (reframeMode === 'three_person') {
-                // Three person: Main top, two bottom
+                // Three person: Main top, two bottom (left=secondary, right=tertiary)
                 var mainMedia = mediaElement, leftMedia = mediaElement, rightMedia = mediaElement;
                 var mainLabel = 'Main', leftLabel = 'L', rightLabel = 'R';
+
+                // Secondary source goes to bottom-left
                 if (hasSecondaryVideo && secondaryMediaElement) {
-                    if (secPosition === 'top') {
-                        mainMedia = secondaryMediaElement;
-                        mainLabel = 'Secondary';
-                    } else if (secPosition === 'bottom-left') {
-                        leftMedia = secondaryMediaElement;
-                        leftLabel = 'Sec';
-                    } else {
-                        rightMedia = secondaryMediaElement;
-                        rightLabel = 'Sec';
-                    }
+                    leftMedia = secondaryMediaElement;
+                    leftLabel = '2nd';
                 }
+
+                // Tertiary source goes to bottom-right
+                if (hasTertiaryVideo && tertiaryMediaElement) {
+                    rightMedia = tertiaryMediaElement;
+                    rightLabel = '3rd';
+                }
+
                 html += '<div class="three-zone three-zone-main">' + mainMedia + '<span class="zone-label">' + mainLabel + '</span></div>';
                 html += '<div class="three-zone three-zone-left">' + leftMedia + '<span class="zone-label">' + leftLabel + '</span></div>';
                 html += '<div class="three-zone three-zone-right">' + rightMedia + '<span class="zone-label">' + rightLabel + '</span></div>';
             } else if (reframeMode === 'gameplay') {
-                // Gameplay: Main video with facecam overlay
-                var gameMedia = mediaElement;
+                // Gameplay: Main video (gameplay) with facecam overlay in corner
+                // Primary video is always the gameplay, secondary is facecam
+                html += mediaElement;
+                // Facecam position class based on secPosition
+                var facecamPosClass = 'facecam-' + (secPosition || 'bottom-right');
                 var facecamContent = '<span>Facecam</span>';
                 if (hasSecondaryVideo && secondaryMediaElement) {
-                    if (secPosition === 'facecam') {
-                        facecamContent = secondaryMediaElement;
-                    } else {
-                        gameMedia = secondaryMediaElement;
-                    }
+                    facecamContent = secondaryMediaElement;
                 }
-                html += gameMedia;
-                html += '<div class="facecam-preview">' + facecamContent + '</div>';
+                html += '<div class="facecam-preview ' + facecamPosClass + '">' + facecamContent + '</div>';
             } else if (reframeMode === 'broll_split') {
                 // B-Roll: Main content + B-roll area
                 var brollMainMedia = mediaElement, brollSpeakerMedia = mediaElement;
@@ -7747,24 +8732,39 @@
             var showSecondarySource = ['split_screen', 'three_person', 'gameplay', 'broll_split'].indexOf(settings.reframeMode) !== -1;
             if (showSecondarySource) {
                 var secondarySource = settings.secondarySource || { enabled: false, inputTab: 'upload' };
-                var audioMix = settings.audioMix || { primaryVolume: 100, secondaryVolume: 0, primaryMuted: false, secondaryMuted: true };
+                var tertiarySource = settings.tertiarySource || { enabled: false, inputTab: 'upload' };
+                var audioMix = settings.audioMix || { primaryVolume: 100, secondaryVolume: 0, tertiaryVolume: 0, primaryMuted: false, secondaryMuted: true, tertiaryMuted: true };
+
+                // Determine panel title based on mode
+                var sourcePanelTitle = settings.reframeMode === 'gameplay' ? 'FACECAM SOURCE' : 'SECONDARY SOURCE';
+                var sourcePanelIcon = settings.reframeMode === 'gameplay' ? '📹' : '🎬';
 
                 html += '<div class="customization-panel">';
                 html += '<div class="panel-header">';
-                html += '<span class="panel-icon">🎬</span>';
-                html += '<span class="panel-title">SECONDARY SOURCE</span>';
+                html += '<span class="panel-icon">' + sourcePanelIcon + '</span>';
+                html += '<span class="panel-title">' + sourcePanelTitle + '</span>';
                 html += '</div>';
 
                 html += '<div class="secondary-source-panel">';
 
                 // Toggle: None vs Add second video
                 html += '<div class="secondary-source-toggle">';
-                html += '<button class="source-toggle-btn' + (!secondarySource.enabled ? ' active' : '') + '" onclick="app.toggleSecondarySource(false)">';
-                html += '<span>○</span> Split primary video';
-                html += '</button>';
-                html += '<button class="source-toggle-btn' + (secondarySource.enabled ? ' active' : '') + '" onclick="app.toggleSecondarySource(true)">';
-                html += '<span>●</span> Add second video';
-                html += '</button>';
+                if (settings.reframeMode === 'gameplay') {
+                    // Gameplay mode: No facecam vs Add facecam
+                    html += '<button class="source-toggle-btn' + (!secondarySource.enabled ? ' active' : '') + '" onclick="app.toggleSecondarySource(false)">';
+                    html += '<span>○</span> No facecam';
+                    html += '</button>';
+                    html += '<button class="source-toggle-btn' + (secondarySource.enabled ? ' active' : '') + '" onclick="app.toggleSecondarySource(true)">';
+                    html += '<span>●</span> Add facecam video';
+                    html += '</button>';
+                } else {
+                    html += '<button class="source-toggle-btn' + (!secondarySource.enabled ? ' active' : '') + '" onclick="app.toggleSecondarySource(false)">';
+                    html += '<span>○</span> Split primary video';
+                    html += '</button>';
+                    html += '<button class="source-toggle-btn' + (secondarySource.enabled ? ' active' : '') + '" onclick="app.toggleSecondarySource(true)">';
+                    html += '<span>●</span> Add second video';
+                    html += '</button>';
+                }
                 html += '</div>';
 
                 if (secondarySource.enabled) {
@@ -7893,8 +8893,10 @@
                             ];
                         } else if (settings.reframeMode === 'gameplay') {
                             positionOptions = [
-                                { value: 'facecam', label: 'Facecam area' },
-                                { value: 'game', label: 'Game area' }
+                                { value: 'bottom-right', label: 'Bottom right' },
+                                { value: 'bottom-left', label: 'Bottom left' },
+                                { value: 'top-right', label: 'Top right' },
+                                { value: 'top-left', label: 'Top left' }
                             ];
                         } else if (settings.reframeMode === 'broll_split') {
                             positionOptions = [
@@ -7970,6 +8972,117 @@
 
                 html += '</div>'; // secondary-source-panel
                 html += '</div>'; // customization-panel
+
+                // ===== TERTIARY SOURCE PANEL (only for three_person mode) =====
+                if (settings.reframeMode === 'three_person') {
+                    html += '<div class="customization-panel">';
+                    html += '<div class="panel-header">';
+                    html += '<span class="panel-icon">🎥</span>';
+                    html += '<span class="panel-title">THIRD SOURCE</span>';
+                    html += '</div>';
+
+                    html += '<div class="secondary-source-panel">';
+
+                    // Toggle for third video
+                    html += '<div class="secondary-source-toggle">';
+                    html += '<button class="source-toggle-btn' + (!tertiarySource.enabled ? ' active' : '') + '" onclick="app.toggleTertiarySource(false)">';
+                    html += '<span>○</span> No third video';
+                    html += '</button>';
+                    html += '<button class="source-toggle-btn' + (tertiarySource.enabled ? ' active' : '') + '" onclick="app.toggleTertiarySource(true)">';
+                    html += '<span>●</span> Add third video';
+                    html += '</button>';
+                    html += '</div>';
+
+                    if (tertiarySource.enabled) {
+                        var hasTertiarySource = tertiarySource.type && (tertiarySource.fileName || tertiarySource.youtubeVideoId);
+
+                        if (!hasTertiarySource) {
+                            // Input tabs
+                            html += '<div class="secondary-source-input">';
+                            html += '<div class="source-input-tabs">';
+                            html += '<button class="source-input-tab' + (tertiarySource.inputTab === 'upload' ? ' active' : '') + '" onclick="app.setTertiaryInputTab(\'upload\')">';
+                            html += '📤 Upload File';
+                            html += '</button>';
+                            html += '<button class="source-input-tab' + (tertiarySource.inputTab === 'youtube' ? ' active' : '') + '" onclick="app.setTertiaryInputTab(\'youtube\')">';
+                            html += '🔗 YouTube URL';
+                            html += '</button>';
+                            html += '</div>';
+
+                            if (tertiarySource.inputTab === 'upload') {
+                                html += '<div class="upload-dropzone" onclick="document.getElementById(\'tertiary-file-input\').click()">';
+                                html += '<div class="upload-dropzone-icon">📁</div>';
+                                html += '<div class="upload-dropzone-text">Click or drag video file here</div>';
+                                html += '<div class="upload-dropzone-hint">MP4, MOV, WebM up to 500MB</div>';
+                                html += '</div>';
+                                html += '<input type="file" id="tertiary-file-input" accept="video/*" style="display:none" onchange="app.handleTertiaryFileSelect(this.files)">';
+                            } else {
+                                html += '<div class="youtube-url-input-container">';
+                                html += '<input type="text" class="youtube-url-input" id="tertiary-youtube-url" placeholder="https://www.youtube.com/watch?v=..." onkeypress="if(event.key===\'Enter\')app.loadTertiaryYouTube()">';
+                                html += '<button class="youtube-load-btn" onclick="app.loadTertiaryYouTube()">Load</button>';
+                                html += '</div>';
+                            }
+                            html += '</div>';
+                        } else {
+                            // Show source preview
+                            html += '<div class="secondary-source-preview">';
+                            html += '<div class="source-preview-thumb">';
+                            if (tertiarySource.type === 'youtube' && tertiarySource.youtubeThumbnail) {
+                                html += '<img src="' + tertiarySource.youtubeThumbnail + '" alt="thumbnail">';
+                            } else {
+                                html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:1.5rem">📹</div>';
+                            }
+                            html += '</div>';
+                            html += '<div class="source-preview-info">';
+                            var tertiaryName = tertiarySource.type === 'youtube'
+                                ? (tertiarySource.youtubeTitle || 'YouTube Video')
+                                : (tertiarySource.fileName || 'Uploaded Video');
+                            html += '<div class="source-preview-name">' + utils.escapeHtml(tertiaryName) + '</div>';
+                            html += '<div class="source-preview-meta">';
+                            if (tertiarySource.uploading) {
+                                html += '<span class="source-preview-status" style="color:#f59e0b">⏳ Uploading ' + (tertiarySource.uploadProgress || 0) + '%</span>';
+                            } else if (tertiarySource.uploadedUrl || tertiarySource.youtubeVideoId) {
+                                html += '<span class="source-preview-status">✓ Ready</span>';
+                            }
+                            html += '</div>';
+                            html += '</div>';
+                            html += '<button class="source-preview-remove" onclick="app.removeTertiarySource()" title="Remove">×</button>';
+                            html += '</div>';
+
+                            // Position selection for tertiary (the remaining position)
+                            html += '<div class="secondary-source-options">';
+                            html += '<div class="source-option-row">';
+                            html += '<span class="source-option-label">📍 Position</span>';
+                            html += '<select class="source-option-select" onchange="app.setTertiaryPosition(this.value)">';
+                            // Tertiary can only go in positions not taken by secondary
+                            var tertiaryPositions = [
+                                { value: 'bottom-left', label: 'Bottom left' },
+                                { value: 'bottom-right', label: 'Bottom right' }
+                            ];
+                            tertiaryPositions.forEach(function(opt) {
+                                var selected = tertiarySource.position === opt.value ? ' selected' : '';
+                                html += '<option value="' + opt.value + '"' + selected + '>' + opt.label + '</option>';
+                            });
+                            html += '</select>';
+                            html += '</div>';
+
+                            // Time sync offset
+                            html += '<div class="source-option-row">';
+                            html += '<span class="source-option-label">⏱️ Sync offset</span>';
+                            html += '<div class="source-offset-control">';
+                            html += '<button class="source-offset-btn" onclick="app.adjustTertiaryOffset(-0.5)">−</button>';
+                            var tertOffsetSign = tertiarySource.timeOffset >= 0 ? '+' : '';
+                            html += '<span class="source-offset-value">' + tertOffsetSign + (tertiarySource.timeOffset || 0).toFixed(1) + 's</span>';
+                            html += '<button class="source-offset-btn" onclick="app.adjustTertiaryOffset(0.5)">+</button>';
+                            html += '</div>';
+                            html += '</div>';
+                            html += '</div>';
+                        }
+                    }
+
+                    html += '</div>'; // secondary-source-panel (reused for tertiary)
+                    html += '</div>'; // customization-panel
+                }
+                // ===== END TERTIARY SOURCE PANEL =====
             }
 
             // Advanced Reframe Options Panel
@@ -8011,18 +9124,24 @@
                 html += '<div class="advanced-option-row">';
                 html += '<span class="advanced-option-label">Crop Position</span>';
                 html += '</div>';
+                // Convert legacy string values to percentage
+                var advCropPos = settings.cropPosition;
+                if (advCropPos === 'left') advCropPos = 0;
+                else if (advCropPos === 'center') advCropPos = 50;
+                else if (advCropPos === 'right') advCropPos = 100;
+                else if (typeof advCropPos !== 'number') advCropPos = 50;
                 html += '<div class="crop-position-grid">';
                 var positions = [
-                    { value: 'left', label: '◀ Left' },
-                    { value: 'center', label: '● Center' },
-                    { value: 'right', label: '▶ Right' }
+                    { value: 0, label: '◀ Left' },
+                    { value: 50, label: '● Center' },
+                    { value: 100, label: '▶ Right' }
                 ];
                 positions.forEach(function(pos) {
-                    var selected = (settings.cropPosition || 'center') === pos.value ? ' selected' : '';
-                    html += '<button class="crop-position-btn' + selected + '" onclick="app.setCropPosition(\'' + pos.value + '\')">' + pos.label + '</button>';
+                    var selected = advCropPos === pos.value ? ' selected' : '';
+                    html += '<button class="crop-position-btn' + selected + '" onclick="app.setCropPosition(' + pos.value + ')">' + pos.label + '</button>';
                 });
                 html += '</div>';
-                html += '<p class="advanced-option-hint">Choose where to focus when cropping horizontal video</p>';
+                html += '<p class="advanced-option-hint">Or use the slider in Source Preview for fine control</p>';
                 html += '</div>';
 
                 // Output quality
@@ -8419,7 +9538,8 @@
 
                 // Reframe settings
                 reframeMode: 'auto_center',
-                cropPosition: 'center',
+                cropPosition: 50, // 0-100 percentage (0=left, 50=center, 100=right)
+                aiSmartCrop: false, // Whether AI detected the position
 
                 // Timeline/trim settings
                 trimStart: 0,
@@ -8460,12 +9580,31 @@
                     timeOffset: 0             // Sync offset in seconds (-10 to +10)
                 },
 
+                // Tertiary source settings (for three_person mode - third video)
+                tertiarySource: {
+                    enabled: false,
+                    inputTab: 'upload',
+                    type: null,
+                    file: null,
+                    fileName: null,
+                    fileSize: null,
+                    uploadedUrl: null,
+                    youtubeUrl: null,
+                    youtubeVideoId: null,
+                    youtubeThumbnail: null,
+                    youtubeTitle: null,
+                    position: 'bottom-right',  // For three_person: 'bottom-left' or 'bottom-right'
+                    timeOffset: 0
+                },
+
                 // Audio mixing (when secondary source is enabled)
                 audioMix: {
                     primaryVolume: 100,       // 0-100
                     secondaryVolume: 0,       // 0-100
+                    tertiaryVolume: 0,        // 0-100 (for three_person mode)
                     primaryMuted: false,
-                    secondaryMuted: true      // Default: secondary audio muted
+                    secondaryMuted: true,     // Default: secondary audio muted
+                    tertiaryMuted: true       // Default: tertiary audio muted
                 }
             };
         }
@@ -8674,7 +9813,20 @@
             html += '<div class="export-list">';
             selectedClips.forEach(function(clip, index) {
                 var seo = state.clipSEO[clip.id] || getDefaultSEO(clip);
-                var exportThumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="45" viewBox="0 0 80 45"%3E%3Crect fill="%231a1a2e" width="80" height="45"/%3E%3Ctext x="40" y="28" fill="%23ec4899" font-family="sans-serif" font-size="14" text-anchor="middle"%3E🎬%3C/text%3E%3C/svg%3E';
+
+                // Use AI-generated thumbnail if user selected one, otherwise fall back to original
+                var exportThumbUrl = null;
+                var clipThumbs = state.clipThumbnails[clip.id];
+                var selectedThumbIndex = state.selectedThumbnail[clip.id];
+                if (clipThumbs && clipThumbs.length > 0 && selectedThumbIndex !== undefined) {
+                    // User selected an AI-generated thumbnail
+                    exportThumbUrl = clipThumbs[selectedThumbIndex]?.previewUrl;
+                }
+                // Fallback to original clip thumbnail or placeholder
+                if (!exportThumbUrl) {
+                    exportThumbUrl = clip.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="45" viewBox="0 0 80 45"%3E%3Crect fill="%231a1a2e" width="80" height="45"/%3E%3Ctext x="40" y="28" fill="%23ec4899" font-family="sans-serif" font-size="14" text-anchor="middle"%3E🎬%3C/text%3E%3C/svg%3E';
+                }
+
                 html += '<div class="export-item">';
                 html += '<img src="' + exportThumbUrl + '" alt="Clip" class="export-item-thumbnail">';
                 html += '<div class="export-item-info">';
@@ -8689,6 +9841,26 @@
                 html += '</div>';
                 html += '</div>';
             });
+            html += '</div>';
+
+            // Batch Export Banner (Sequential capture, GPU processing)
+            html += '<div class="parallel-export-banner">';
+            html += '<div class="parallel-export-header">';
+            html += '<span class="parallel-export-icon">🚀</span>';
+            html += '<span class="parallel-export-title">Batch Export All Clips</span>';
+            html += '<span class="parallel-export-badge">GPU Accelerated</span>';
+            html += '</div>';
+            html += '<div class="parallel-export-description">';
+            html += 'Export all ' + selectedClips.length + ' clips one by one with GPU acceleration. ';
+            html += 'Stops immediately if any error occurs. Click to cancel anytime.';
+            html += '</div>';
+            html += '<button class="parallel-export-btn" onclick="app.exportAllClipsParallel()">';
+            html += '🎬 Export All ' + selectedClips.length + ' Clips';
+            html += '</button>';
+            html += '</div>';
+
+            // Parallel export progress container (hidden by default)
+            html += '<div id="parallelExportProgress" class="parallel-export-progress" style="display: none;">';
             html += '</div>';
 
             // Large Export Actions
@@ -8868,6 +10040,24 @@
             var handleStart = document.getElementById('handle-start');
             var handleEnd = document.getElementById('handle-end');
 
+            // Clean up old timeline document event listeners to prevent accumulation
+            if (documentEventListeners.timelineMouseMove) {
+                document.removeEventListener('mousemove', documentEventListeners.timelineMouseMove);
+                documentEventListeners.timelineMouseMove = null;
+            }
+            if (documentEventListeners.timelineMouseUp) {
+                document.removeEventListener('mouseup', documentEventListeners.timelineMouseUp);
+                documentEventListeners.timelineMouseUp = null;
+            }
+            if (documentEventListeners.timelineTouchMove) {
+                document.removeEventListener('touchmove', documentEventListeners.timelineTouchMove);
+                documentEventListeners.timelineTouchMove = null;
+            }
+            if (documentEventListeners.timelineTouchEnd) {
+                document.removeEventListener('touchend', documentEventListeners.timelineTouchEnd);
+                documentEventListeners.timelineTouchEnd = null;
+            }
+
             if (timelineBar && handleStart && handleEnd) {
                 var isDragging = null;
                 var barRect = null;
@@ -8958,8 +10148,22 @@
                     }
                 }
 
+                // Create touch move handler
+                function handleTouchMove(e) {
+                    if (isDragging) {
+                        handleMouseMove({ clientX: e.touches[0].clientX });
+                    }
+                }
+
                 handleStart.addEventListener('mousedown', function(e) { handleMouseDown(e, handleStart); });
                 handleEnd.addEventListener('mousedown', function(e) { handleMouseDown(e, handleEnd); });
+
+                // Store and add document listeners (to enable cleanup on next render)
+                documentEventListeners.timelineMouseMove = handleMouseMove;
+                documentEventListeners.timelineMouseUp = handleMouseUp;
+                documentEventListeners.timelineTouchMove = handleTouchMove;
+                documentEventListeners.timelineTouchEnd = handleMouseUp;
+
                 document.addEventListener('mousemove', handleMouseMove);
                 document.addEventListener('mouseup', handleMouseUp);
 
@@ -8972,11 +10176,7 @@
                     e.preventDefault();
                     handleMouseDown({ clientX: e.touches[0].clientX, preventDefault: function(){} }, handleEnd);
                 });
-                document.addEventListener('touchmove', function(e) {
-                    if (isDragging) {
-                        handleMouseMove({ clientX: e.touches[0].clientX });
-                    }
-                });
+                document.addEventListener('touchmove', handleTouchMove);
                 document.addEventListener('touchend', handleMouseUp);
             }
 
@@ -9000,6 +10200,156 @@
                         app.handleSecondaryFileSelect(e.dataTransfer.files);
                     }
                 });
+            }
+
+            // Crop zone drag functionality (Step 4)
+            var cropPreviewArea = document.getElementById('cropPreviewArea');
+            var cropGuideZone = document.getElementById('cropGuideZone');
+            var cropSlider = document.getElementById('cropSlider');
+
+            // Clean up old crop zone document event listeners to prevent accumulation
+            if (documentEventListeners.cropMouseMove) {
+                document.removeEventListener('mousemove', documentEventListeners.cropMouseMove);
+                documentEventListeners.cropMouseMove = null;
+            }
+            if (documentEventListeners.cropMouseUp) {
+                document.removeEventListener('mouseup', documentEventListeners.cropMouseUp);
+                documentEventListeners.cropMouseUp = null;
+            }
+            if (documentEventListeners.cropTouchMove) {
+                document.removeEventListener('touchmove', documentEventListeners.cropTouchMove);
+                documentEventListeners.cropTouchMove = null;
+            }
+            if (documentEventListeners.cropTouchEnd) {
+                document.removeEventListener('touchend', documentEventListeners.cropTouchEnd);
+                documentEventListeners.cropTouchEnd = null;
+            }
+
+            if (cropPreviewArea && cropGuideZone) {
+                var cropDragging = false;
+                var cropAreaRect = null;
+                var cropZoneWidth = 0.31640625; // Correct: (9/16)² for 16:9→9:16 crop
+
+                function cropMouseDown(e) {
+                    e.preventDefault();
+                    cropDragging = true;
+                    cropAreaRect = cropPreviewArea.getBoundingClientRect();
+                    cropGuideZone.classList.add('dragging');
+                    document.body.style.cursor = 'grabbing';
+                }
+
+                function cropMouseMove(e) {
+                    if (!cropDragging || !cropAreaRect) return;
+
+                    var clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                    var x = clientX - cropAreaRect.left;
+                    var containerWidth = cropAreaRect.width;
+
+                    // Calculate percentage (0-100)
+                    // The crop zone center should follow the mouse
+                    var zoneWidthPx = containerWidth * cropZoneWidth;
+                    var maxLeftPx = containerWidth - zoneWidthPx;
+
+                    // Calculate where the center of the crop zone should be
+                    var centerX = x;
+                    var leftPx = centerX - (zoneWidthPx / 2);
+                    leftPx = Math.max(0, Math.min(maxLeftPx, leftPx));
+
+                    // Convert to percentage (0-100 scale)
+                    var percent = maxLeftPx > 0 ? Math.round((leftPx / maxLeftPx) * 100) : 50;
+
+                    // IMPORTANT: Save to state immediately during dragging (not just on release)
+                    // This ensures "Apply to All Clips" always reads the current value
+                    var selectedClips = state.clips.filter(function(c) {
+                        return state.selectedClipIds.indexOf(c.id) !== -1;
+                    });
+                    var activeClip = selectedClips[state.customization.activeClipIndex];
+                    if (activeClip) {
+                        if (!state.clipSettings[activeClip.id]) {
+                            state.clipSettings[activeClip.id] = getDefaultSettings();
+                        }
+                        state.clipSettings[activeClip.id].cropPosition = percent;
+                        state.clipSettings[activeClip.id].aiSmartCrop = false;
+                    }
+
+                    // Update crop zone position visually (must match CSS width)
+                    var cropZoneLeftPercent = (percent / 100) * (100 - 31.640625);
+                    cropGuideZone.style.left = cropZoneLeftPercent + '%';
+                    cropGuideZone.dataset.position = percent;
+
+                    // Update slider
+                    if (cropSlider) {
+                        cropSlider.value = percent;
+                    }
+
+                    // Update value display
+                    var valueDisplay = document.querySelector('.crop-slider-value');
+                    if (valueDisplay) {
+                        valueDisplay.textContent = percent + '%';
+                    }
+
+                    // Update quick button states
+                    document.querySelectorAll('.crop-quick-btn').forEach(function(btn, i) {
+                        var btnVal = [0, 50, 100][i];
+                        btn.classList.toggle('active', percent === btnVal);
+                    });
+                }
+
+                function cropMouseUp() {
+                    if (cropDragging) {
+                        cropDragging = false;
+                        cropGuideZone.classList.remove('dragging');
+                        document.body.style.cursor = '';
+
+                        // State was already saved during dragging (cropMouseMove)
+                        // Just trigger a render to sync UI
+                        // Read from state (more reliable than DOM attribute)
+                        var selectedClips = state.clips.filter(function(c) {
+                            return state.selectedClipIds.indexOf(c.id) !== -1;
+                        });
+                        var activeClip = selectedClips[state.customization.activeClipIndex];
+                        if (activeClip && state.clipSettings[activeClip.id]) {
+                            var statePosition = state.clipSettings[activeClip.id].cropPosition;
+                            if (typeof statePosition === 'number') {
+                                app.setCropPosition(statePosition);
+                                return;
+                            }
+                        }
+                        // Fallback: read from DOM, then slider, then default
+                        var finalPercent = parseInt(cropGuideZone.dataset.position, 10);
+                        if (isNaN(finalPercent)) {
+                            finalPercent = parseInt(cropSlider?.value || '50', 10);
+                        }
+                        if (isNaN(finalPercent)) finalPercent = 50;
+                        app.setCropPosition(finalPercent);
+                    }
+                }
+
+                // Create touch move handler
+                function cropTouchMove(e) {
+                    if (cropDragging) {
+                        cropMouseMove(e);
+                    }
+                }
+
+                cropGuideZone.addEventListener('mousedown', cropMouseDown);
+
+                // Store and add document listeners (to enable cleanup on next render)
+                documentEventListeners.cropMouseMove = cropMouseMove;
+                documentEventListeners.cropMouseUp = cropMouseUp;
+                documentEventListeners.cropTouchMove = cropTouchMove;
+                documentEventListeners.cropTouchEnd = cropMouseUp;
+
+                document.addEventListener('mousemove', cropMouseMove);
+                document.addEventListener('mouseup', cropMouseUp);
+
+                // Touch support for mobile
+                cropGuideZone.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    cropMouseDown(e);
+                });
+                document.addEventListener('touchmove', cropTouchMove);
+                document.addEventListener('touchend', cropMouseUp);
             }
         }
 
@@ -9053,6 +10403,20 @@
                 if (step > state.currentStep + 1) return;
                 state.currentStep = step;
                 state.customization.playingInFrame = false; // Stop any playing video
+
+                // When entering step 4 (customization), ensure all selected clips have initialized settings
+                if (step === 4) {
+                    var selectedClips = state.clips.filter(function(c) {
+                        return state.selectedClipIds.indexOf(c.id) !== -1;
+                    });
+                    selectedClips.forEach(function(clip) {
+                        if (!state.clipSettings[clip.id]) {
+                            state.clipSettings[clip.id] = getDefaultSettings();
+                            state.clipSettings[clip.id].trimEnd = clip.duration;
+                        }
+                    });
+                }
+
                 render();
                 window.scrollTo(0, 0);
             },
@@ -9352,8 +10716,19 @@
                             utils.showToast('Analysis complete but no viral clips found. Try a different video.', 'warning');
                         }
 
-                        // Auto-select top 5 clips
-                        state.selectedClipIds = state.clips.slice(0, 5).map(function(c) { return c.id; });
+                        // Set initial display count based on video duration
+                        // Short videos (< 10 min): show all clips
+                        // Longer videos: show max 8 initially, with option to unlock more
+                        var videoDuration = state.videoInput.videoData?.duration || 0;
+                        if (videoDuration < 600) { // < 10 minutes
+                            state.displayedClipCount = state.clips.length;
+                        } else {
+                            state.displayedClipCount = Math.min(8, state.clips.length);
+                        }
+
+                        // Auto-select top 5 clips (from displayed clips only)
+                        var displayedClips = state.clips.slice(0, state.displayedClipCount);
+                        state.selectedClipIds = displayedClips.slice(0, 5).map(function(c) { return c.id; });
 
                         render();
 
@@ -9381,12 +10756,39 @@
             },
 
             selectAllClips: function() {
-                state.selectedClipIds = state.clips.map(function(c) { return c.id; });
+                // Only select displayed clips, not all clips
+                var displayedClips = state.clips.slice(0, state.displayedClipCount);
+                state.selectedClipIds = displayedClips.map(function(c) { return c.id; });
                 render();
             },
 
             deselectAllClips: function() {
                 state.selectedClipIds = [];
+                render();
+            },
+
+            createMoreClips: function() {
+                var createMoreCost = 5; // Token cost
+                var remainingClips = state.clips.length - state.displayedClipCount;
+
+                if (remainingClips <= 0) {
+                    utils.showToast('No more clips to show', 'info');
+                    return;
+                }
+
+                if (state.tokens.balance < createMoreCost) {
+                    utils.showToast('Not enough tokens. Need ' + createMoreCost + ' tokens.', 'error');
+                    return;
+                }
+
+                // Deduct tokens
+                state.tokens.balance -= createMoreCost;
+
+                // Show next batch of clips (8-10 more)
+                var nextBatch = Math.min(10, remainingClips);
+                state.displayedClipCount += nextBatch;
+
+                utils.showToast('Unlocked ' + nextBatch + ' more clips! (-' + createMoreCost + ' tokens)', 'success');
                 render();
             },
 
@@ -9628,11 +11030,148 @@
                     return state.selectedClipIds.indexOf(c.id) !== -1;
                 });
                 var activeClip = selectedClips[state.customization.activeClipIndex];
+
                 if (!state.clipSettings[activeClip.id]) {
                     state.clipSettings[activeClip.id] = getDefaultSettings();
                 }
-                state.clipSettings[activeClip.id].cropPosition = position;
+                // Convert to number if string
+                var posNum = parseInt(position, 10);
+                if (isNaN(posNum)) posNum = 50;
+                posNum = Math.max(0, Math.min(100, posNum));
+                state.clipSettings[activeClip.id].cropPosition = posNum;
+                state.clipSettings[activeClip.id].aiSmartCrop = false; // Reset AI flag on manual change
+
                 render();
+            },
+
+            // Real-time slider preview (updates UI without full re-render)
+            onCropSliderChange: function(value) {
+                var posNum = parseInt(value, 10);
+                if (isNaN(posNum)) return;
+                posNum = Math.max(0, Math.min(100, posNum));
+
+                // IMPORTANT: Save to state immediately during dragging (not just on release)
+                // This ensures "Apply to All Clips" always reads the current slider value
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (activeClip) {
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+                    state.clipSettings[activeClip.id].cropPosition = posNum;
+                    state.clipSettings[activeClip.id].aiSmartCrop = false;
+                }
+
+                // Update the crop guide zone position in real-time
+                var cropZone = document.getElementById('cropGuideZone');
+                var slider = document.getElementById('cropSlider');
+                var valueDisplay = document.querySelector('.crop-slider-value');
+
+                if (cropZone) {
+                    var cropZoneLeft = (posNum / 100) * (100 - 31.640625); // Match CSS crop zone width
+                    cropZone.style.left = cropZoneLeft + '%';
+                    cropZone.dataset.position = posNum;
+                }
+                if (valueDisplay) {
+                    valueDisplay.textContent = posNum + '%';
+                }
+
+                // Update quick button states
+                document.querySelectorAll('.crop-quick-btn').forEach(function(btn, i) {
+                    var btnVal = [0, 50, 100][i];
+                    btn.classList.toggle('active', posNum === btnVal);
+                });
+
+                // Update the phone preview's crop position in real-time (CSS variable)
+                var phoneVideoArea = document.querySelector('.phone-video-area');
+                if (phoneVideoArea) {
+                    phoneVideoArea.style.setProperty('--crop-position', posNum + '%');
+                    phoneVideoArea.dataset.cropPercent = posNum;
+                }
+            },
+
+            // AI Smart Crop - detects main subject and auto-positions crop
+            runAiSmartCrop: async function() {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!activeClip) return;
+
+                var btn = document.querySelector('.btn-ai-smart-crop');
+                if (btn) {
+                    btn.classList.add('loading');
+                    btn.disabled = true;
+                }
+
+                utils.showToast('AI analyzing video for subject detection...', 'info');
+
+                try {
+                    // Get video thumbnail for analysis
+                    var videoId = state.videoInput.videoData?.videoId;
+                    var thumbnailUrl = activeClip.thumbnail || (videoId ? 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg' : null);
+
+                    if (!thumbnailUrl) {
+                        throw new Error('No image available for analysis');
+                    }
+
+                    // Call AI smart crop function
+                    var result = await firebase.functions().httpsCallable('wizardSmartCrop')({
+                        thumbnailUrl: thumbnailUrl,
+                        videoId: videoId,
+                        clipStartTime: activeClip.startTime
+                    });
+
+                    if (result.data.success) {
+                        var suggestedPosition = result.data.cropPosition; // 0-100
+                        var confidence = result.data.confidence;
+                        var detectedSubject = result.data.subject;
+
+                        // Apply the AI-suggested position
+                        if (!state.clipSettings[activeClip.id]) {
+                            state.clipSettings[activeClip.id] = getDefaultSettings();
+                        }
+                        state.clipSettings[activeClip.id].cropPosition = suggestedPosition;
+                        state.clipSettings[activeClip.id].aiSmartCrop = true;
+
+                        utils.showToast('AI detected ' + (detectedSubject || 'subject') + ' - crop position optimized!', 'success');
+                        render();
+                    } else {
+                        throw new Error(result.data.error || 'AI analysis failed');
+                    }
+                } catch (error) {
+                    console.error('AI Smart Crop error:', error);
+
+                    // Fallback: Use simple heuristic based on clip content
+                    // Default to slightly left of center (40%) as people are often positioned there
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+
+                    // Simple fallback: analyze clip transcript for speaker positioning hints
+                    var fallbackPosition = 50; // Default center
+                    var transcript = (activeClip.transcript || '').toLowerCase();
+
+                    // Heuristics based on content type
+                    if (transcript.includes('interview') || transcript.includes('podcast')) {
+                        fallbackPosition = 35; // Slightly left for interview format
+                    } else if (transcript.includes('tutorial') || transcript.includes('screen')) {
+                        fallbackPosition = 25; // Left side for screen recording with speaker
+                    }
+
+                    state.clipSettings[activeClip.id].cropPosition = fallbackPosition;
+                    state.clipSettings[activeClip.id].aiSmartCrop = true;
+
+                    utils.showToast('Smart crop applied (using content analysis)', 'success');
+                    render();
+                }
+
+                if (btn) {
+                    btn.classList.remove('loading');
+                    btn.disabled = false;
+                }
             },
 
             setOutputQuality: function(quality) {
@@ -9932,6 +11471,228 @@
                     var current = state.clipSettings[activeClip.id].secondarySource.timeOffset || 0;
                     var newOffset = Math.max(-10, Math.min(10, current + delta));
                     state.clipSettings[activeClip.id].secondarySource.timeOffset = newOffset;
+                }
+                render();
+            },
+
+            // =============================================
+            // TERTIARY SOURCE (for three_person mode - third video)
+            // =============================================
+
+            toggleTertiarySource: function(enabled) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                }
+                state.clipSettings[activeClip.id].tertiarySource.enabled = enabled;
+                render();
+            },
+
+            setTertiaryInputTab: function(tab) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                }
+                state.clipSettings[activeClip.id].tertiarySource.inputTab = tab;
+                render();
+            },
+
+            handleTertiaryFileSelect: async function(files) {
+                if (!files || files.length === 0) return;
+                var file = files[0];
+
+                // Validate file type
+                if (!file.type.startsWith('video/')) {
+                    utils.showToast('Please select a video file', 'error');
+                    return;
+                }
+
+                // Validate file size (500MB max)
+                var maxSize = 500 * 1024 * 1024;
+                if (file.size > maxSize) {
+                    utils.showToast('File too large. Maximum size is 500MB', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                }
+
+                // Store file info immediately for UI
+                state.clipSettings[activeClip.id].tertiarySource.type = 'upload';
+                state.clipSettings[activeClip.id].tertiarySource.file = file;
+                state.clipSettings[activeClip.id].tertiarySource.fileName = file.name;
+                state.clipSettings[activeClip.id].tertiarySource.fileSize = file.size;
+                state.clipSettings[activeClip.id].tertiarySource.uploading = true;
+                state.clipSettings[activeClip.id].tertiarySource.uploadProgress = 0;
+
+                // Set default position for three_person mode
+                state.clipSettings[activeClip.id].tertiarySource.position = 'bottom-right';
+
+                render();
+                utils.showToast('Uploading third video...', 'info');
+
+                // Upload to Firebase Storage
+                try {
+                    var timestamp = Date.now();
+                    var safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                    var storagePath = 'tertiary_videos/' + state.user.uid + '/' + activeClip.id + '_' + timestamp + '_' + safeName;
+                    var storageRef = storage.ref(storagePath);
+
+                    var uploadTask = storageRef.put(file);
+
+                    uploadTask.on('state_changed',
+                        function(snapshot) {
+                            // Progress updates
+                            var progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                            if (state.clipSettings[activeClip.id]?.tertiarySource) {
+                                state.clipSettings[activeClip.id].tertiarySource.uploadProgress = progress;
+                            }
+                            // Update UI periodically
+                            if (progress % 20 === 0 || progress === 100) {
+                                render();
+                            }
+                        },
+                        function(error) {
+                            // Error handling
+                            console.error('Tertiary video upload error:', error);
+                            utils.showToast('Upload failed: ' + error.message, 'error');
+                            if (state.clipSettings[activeClip.id]?.tertiarySource) {
+                                state.clipSettings[activeClip.id].tertiarySource.uploading = false;
+                                state.clipSettings[activeClip.id].tertiarySource.uploadProgress = 0;
+                            }
+                            render();
+                        },
+                        async function() {
+                            // Upload completed - get download URL
+                            var downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+
+                            if (state.clipSettings[activeClip.id]?.tertiarySource) {
+                                state.clipSettings[activeClip.id].tertiarySource.uploading = false;
+                                state.clipSettings[activeClip.id].tertiarySource.uploadProgress = 100;
+                                state.clipSettings[activeClip.id].tertiarySource.uploadedUrl = downloadURL;
+                            }
+
+                            console.log('Tertiary video uploaded:', downloadURL);
+                            utils.showToast('Third video upload complete!', 'success');
+                            render();
+                        }
+                    );
+                } catch (uploadError) {
+                    console.error('Tertiary video upload error:', uploadError);
+                    utils.showToast('Upload failed: ' + uploadError.message, 'error');
+                    if (state.clipSettings[activeClip.id]?.tertiarySource) {
+                        state.clipSettings[activeClip.id].tertiarySource.uploading = false;
+                    }
+                    render();
+                }
+            },
+
+            loadTertiaryYouTube: function() {
+                var urlInput = document.getElementById('tertiary-youtube-url');
+                if (!urlInput) return;
+
+                var url = urlInput.value.trim();
+                if (!url) {
+                    utils.showToast('Please enter a YouTube URL', 'error');
+                    return;
+                }
+
+                // Extract video ID from URL
+                var videoId = null;
+                var patterns = [
+                    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+                    /^([a-zA-Z0-9_-]{11})$/
+                ];
+                for (var i = 0; i < patterns.length; i++) {
+                    var match = url.match(patterns[i]);
+                    if (match) {
+                        videoId = match[1];
+                        break;
+                    }
+                }
+
+                if (!videoId) {
+                    utils.showToast('Invalid YouTube URL', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                }
+
+                // Store YouTube info
+                state.clipSettings[activeClip.id].tertiarySource.type = 'youtube';
+                state.clipSettings[activeClip.id].tertiarySource.youtubeUrl = url;
+                state.clipSettings[activeClip.id].tertiarySource.youtubeVideoId = videoId;
+                state.clipSettings[activeClip.id].tertiarySource.youtubeThumbnail = 'https://img.youtube.com/vi/' + videoId + '/mqdefault.jpg';
+                state.clipSettings[activeClip.id].tertiarySource.youtubeTitle = 'YouTube Video';
+                state.clipSettings[activeClip.id].tertiarySource.position = 'bottom-right';
+
+                utils.showToast('Third YouTube video loaded', 'success');
+                render();
+            },
+
+            removeTertiarySource: function() {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (state.clipSettings[activeClip.id] && state.clipSettings[activeClip.id].tertiarySource) {
+                    // Reset tertiary source to defaults
+                    state.clipSettings[activeClip.id].tertiarySource = getDefaultSettings().tertiarySource;
+                    state.clipSettings[activeClip.id].tertiarySource.enabled = true; // Keep enabled state
+                }
+                utils.showToast('Third video source removed', 'info');
+                render();
+            },
+
+            setTertiaryPosition: function(position) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (state.clipSettings[activeClip.id] && state.clipSettings[activeClip.id].tertiarySource) {
+                    state.clipSettings[activeClip.id].tertiarySource.position = position;
+                }
+                render();
+            },
+
+            adjustTertiaryOffset: function(delta) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (state.clipSettings[activeClip.id] && state.clipSettings[activeClip.id].tertiarySource) {
+                    var current = state.clipSettings[activeClip.id].tertiarySource.timeOffset || 0;
+                    var newOffset = Math.max(-10, Math.min(10, current + delta));
+                    state.clipSettings[activeClip.id].tertiarySource.timeOffset = newOffset;
                 }
                 render();
             },
@@ -10304,18 +12065,50 @@
                     return;
                 }
 
-                var activeClip = selectedClips[state.customization.activeClipIndex];
-                var sourceSettings = state.clipSettings[activeClip.id] || getDefaultSettings();
+                // Validate activeClipIndex is in bounds (with fallback)
+                var activeClipIndex = state.customization.activeClipIndex;
+                if (activeClipIndex < 0 || activeClipIndex >= selectedClips.length) {
+                    activeClipIndex = 0;
+                }
+                var activeClip = selectedClips[activeClipIndex];
+                if (!activeClip) {
+                    utils.showToast('No active clip found', 'error');
+                    return;
+                }
+
+                // Get source settings from the active clip
+                var sourceSettings = state.clipSettings[activeClip.id];
+                if (!sourceSettings) {
+                    // If no settings exist for active clip, use defaults
+                    sourceSettings = getDefaultSettings();
+                }
+
+                // Ensure cropPosition is always a valid number (critical fix)
+                var sourceCropPosition = sourceSettings.cropPosition;
+                if (typeof sourceCropPosition !== 'number' || isNaN(sourceCropPosition)) {
+                    sourceCropPosition = 50;
+                }
+                sourceCropPosition = Math.max(0, Math.min(100, sourceCropPosition));
 
                 // Apply settings to all clips (except trim times which are clip-specific)
                 var appliedCount = 0;
                 selectedClips.forEach(function(clip) {
                     if (clip.id !== activeClip.id) {
                         var clipSettings = state.clipSettings[clip.id] || getDefaultSettings();
-                        // Copy all settings except trim (which is clip-specific)
+                        // Copy ALL settings except trim (which is clip-specific)
                         state.clipSettings[clip.id] = {
+                            // Caption settings
                             captionStyle: sourceSettings.captionStyle,
+                            customCaptionStyle: sourceSettings.customCaptionStyle ? Object.assign({}, sourceSettings.customCaptionStyle) : undefined,
+                            // Reframe/crop settings
                             reframeMode: sourceSettings.reframeMode,
+                            cropPosition: sourceCropPosition,  // Use validated value
+                            aiSmartCrop: sourceSettings.aiSmartCrop || false,
+                            outputAspect: sourceSettings.outputAspect,
+                            // Output settings
+                            outputQuality: sourceSettings.outputQuality,
+                            frameRate: sourceSettings.frameRate,
+                            // Audio settings
                             removeFiller: sourceSettings.removeFiller,
                             enhanceAudio: sourceSettings.enhanceAudio,
                             audioDucking: sourceSettings.audioDucking,
@@ -10323,12 +12116,22 @@
                             addMusic: sourceSettings.addMusic,
                             musicVolume: sourceSettings.musicVolume,
                             selectedTrack: sourceSettings.selectedTrack,
+                            // Transition settings
                             introTransition: sourceSettings.introTransition,
                             outroTransition: sourceSettings.outroTransition,
+                            // Visual effects
                             autoZoom: sourceSettings.autoZoom,
                             vignette: sourceSettings.vignette,
                             colorGrade: sourceSettings.colorGrade,
-                            // Keep original trim values
+                            // AI features
+                            selectedHook: sourceSettings.selectedHook,
+                            // Copy audio mix settings (deep copy)
+                            audioMix: sourceSettings.audioMix ? Object.assign({}, sourceSettings.audioMix) : undefined,
+                            // Copy secondary source settings (deep copy)
+                            secondarySource: sourceSettings.secondarySource ? Object.assign({}, sourceSettings.secondarySource) : undefined,
+                            // Copy tertiary source settings (deep copy)
+                            tertiarySource: sourceSettings.tertiarySource ? Object.assign({}, sourceSettings.tertiarySource) : undefined,
+                            // Keep original trim values (clip-specific)
                             trimStart: clipSettings.trimStart || 0,
                             trimEnd: clipSettings.trimEnd || clip.duration
                         };
@@ -10336,8 +12139,11 @@
                     }
                 });
 
+                // DEBUG: Show what crop position was applied
+                console.log('[applySettingsToAllClips] Applied cropPosition:', sourceCropPosition, 'from clip:', activeClip.id);
+
                 render();
-                utils.showToast('Settings applied to ' + appliedCount + ' clips!', 'success');
+                utils.showToast('Settings applied to ' + appliedCount + ' clips! (Crop: ' + sourceCropPosition + '%)', 'success');
             },
 
             // Timeline trimming
@@ -10786,6 +12592,9 @@
             },
 
             downloadClip: function(clipId) {
+                // DEBUG: Log state at start of downloadClip
+                console.log('[downloadClip] START - All clip settings:', JSON.parse(JSON.stringify(state.clipSettings)));
+
                 var clip = state.clips.find(function(c) { return c.id === clipId; });
                 if (!clip) {
                     utils.showToast('Clip not found', 'error');
@@ -10898,6 +12707,9 @@
             },
 
             closeDownloadModal: function(event) {
+                // DEBUG: Log state when closing modal
+                console.log('[closeDownloadModal] All clip settings:', JSON.parse(JSON.stringify(state.clipSettings)));
+
                 if (event && event.target !== event.currentTarget) return;
                 var container = document.getElementById('download-modal-container');
                 if (container) {
@@ -11122,10 +12934,12 @@
                 console.log('Clip ID:', clipId);
                 console.log('Quality:', quality);
                 console.log('Reframe Mode:', clipSettings.reframeMode);
+                console.log('CROP POSITION:', clipSettings.cropPosition, '(type:', typeof clipSettings.cropPosition, ')');
                 console.log('Caption Style:', clipSettings.captionStyle);
                 console.log('Secondary Source:', JSON.stringify(clipSettings.secondarySource, null, 2));
                 console.log('Audio Mix:', JSON.stringify(clipSettings.audioMix, null, 2));
-                console.log('=============================');
+                console.log('Full clipSettings:', JSON.stringify(clipSettings, null, 2));
+                console.log('=============================')
 
                 // Get clip timing info
                 var clip = state.clips.find(function(c) { return c.id === clipId; });
@@ -11407,6 +13221,208 @@
                 }
                 // ===== END EXTENSION-ONLY EXPORT =====
 
+                // ===== SECONDARY VIDEO CAPTURE (if YouTube URL) =====
+                // If secondary source is a YouTube video, capture it via extension too
+                // This ensures reliable split-screen exports by using the same capture method as primary
+                if (clipSettings.secondarySource &&
+                    clipSettings.secondarySource.enabled &&
+                    clipSettings.secondarySource.type === 'youtube' &&
+                    clipSettings.secondarySource.youtubeVideoId &&
+                    !clipSettings.secondarySource.uploadedUrl) {
+
+                    console.log('[EXPORT][EXT] Secondary source is YouTube - capturing via extension');
+                    var secVideoId = clipSettings.secondarySource.youtubeVideoId;
+                    var secTimeOffset = clipSettings.secondarySource.timeOffset || 0;
+                    var clipDuration = clipEndTime - clipStartTime;
+
+                    utils.showToast('Capturing secondary video...', 'info');
+                    app.showCapturingStateInModal('Capturing secondary video via extension...');
+
+                    var secCapturePayload = {
+                        videoId: secVideoId,
+                        youtubeUrl: clipSettings.secondarySource.youtubeUrl || ('https://www.youtube.com/watch?v=' + secVideoId),
+                        clipStart: secTimeOffset,
+                        clipEnd: secTimeOffset + clipDuration,
+                        quality: quality,
+                        autoCapture: true,
+                        autoOpenTab: true  // Auto-open YouTube tab for secondary video
+                    };
+
+                    console.log('[EXPORT][EXT] Secondary capture payload:', JSON.stringify(secCapturePayload));
+
+                    try {
+                        var secCaptureResult = await sendExtensionRequest('captureVideoForWizard', secCapturePayload);
+
+                        console.log('[EXPORT][EXT] Secondary capture result: success=' + secCaptureResult?.success);
+
+                        if (secCaptureResult && secCaptureResult.success && secCaptureResult.streamData) {
+                            var secHasStorageUrl = secCaptureResult.streamData.uploadedToStorage && secCaptureResult.streamData.videoUrl;
+                            var secHasLocalData = secCaptureResult.streamData.videoData;
+
+                            var secStorageUrl = secCaptureResult.streamData.videoUrl;
+
+                            // Upload local data to storage if needed
+                            if (!secHasStorageUrl && secHasLocalData) {
+                                console.log('[EXPORT][EXT] Uploading secondary video to storage...');
+                                app.showCapturingStateInModal('Uploading secondary video...');
+
+                                try {
+                                    var secBase64Data = secCaptureResult.streamData.videoData;
+                                    var secMimeType = secCaptureResult.streamData.mimeType || 'video/webm';
+                                    var secByteCharacters = atob(secBase64Data);
+                                    var secByteNumbers = new Array(secByteCharacters.length);
+                                    for (var j = 0; j < secByteCharacters.length; j++) {
+                                        secByteNumbers[j] = secByteCharacters.charCodeAt(j);
+                                    }
+                                    var secByteArray = new Uint8Array(secByteNumbers);
+                                    var secVideoBlob = new Blob([secByteArray], { type: secMimeType });
+
+                                    var secTimestamp = Date.now();
+                                    var secExt = secMimeType.includes('webm') ? 'webm' : 'mp4';
+                                    var secStoragePath = 'uploads/' + auth.currentUser.uid + '/secondary_' + secVideoId + '_' + secTimestamp + '.' + secExt;
+
+                                    var secStorageRef = storage.ref(secStoragePath);
+                                    var secUploadTask = secStorageRef.put(secVideoBlob, {
+                                        contentType: secMimeType,
+                                        customMetadata: {
+                                            videoId: secVideoId,
+                                            source: 'extension_secondary_upload',
+                                            capturedAt: String(secTimestamp),
+                                            userId: auth.currentUser.uid
+                                        }
+                                    });
+
+                                    secUploadTask.on('state_changed', function(snapshot) {
+                                        var progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                                        app.showCapturingStateInModal('Uploading secondary: ' + progress.toFixed(0) + '%');
+                                    });
+
+                                    await secUploadTask;
+                                    secStorageUrl = await secUploadTask.snapshot.ref.getDownloadURL();
+                                    console.log('[EXPORT][EXT] Secondary upload completed: ' + secStorageUrl);
+                                } catch (secUploadErr) {
+                                    console.error('[EXPORT][EXT] Secondary upload failed:', secUploadErr.message);
+                                    // Continue without secondary - will fall back to server-side download
+                                }
+                            }
+
+                            // Update clipSettings with the captured secondary video URL
+                            if (secStorageUrl) {
+                                console.log('[EXPORT][EXT] Secondary video captured successfully, updating settings');
+                                clipSettings.secondarySource.uploadedUrl = secStorageUrl;
+                                clipSettings.secondarySource.capturedViaExtension = true;
+                            }
+                        } else {
+                            console.warn('[EXPORT][EXT] Secondary capture failed - will try server-side download');
+                            console.warn('[EXPORT][EXT] Error:', secCaptureResult?.error || 'Unknown');
+                            // Don't fail export - backend will try to download
+                        }
+                    } catch (secCaptureErr) {
+                        console.error('[EXPORT][EXT] Secondary capture exception:', secCaptureErr.message);
+                        // Don't fail export - backend will try to download
+                    }
+                }
+                // ===== END SECONDARY VIDEO CAPTURE =====
+
+                // ===== TERTIARY VIDEO CAPTURE (for three_person mode) =====
+                // If tertiary source is a YouTube video, capture it via extension too
+                if (clipSettings.tertiarySource &&
+                    clipSettings.tertiarySource.enabled &&
+                    clipSettings.tertiarySource.type === 'youtube' &&
+                    clipSettings.tertiarySource.youtubeVideoId &&
+                    !clipSettings.tertiarySource.uploadedUrl) {
+
+                    console.log('[EXPORT][EXT] Tertiary source is YouTube - capturing via extension');
+                    var tertVideoId = clipSettings.tertiarySource.youtubeVideoId;
+                    var tertTimeOffset = clipSettings.tertiarySource.timeOffset || 0;
+                    var clipDurationTert = clipEndTime - clipStartTime;
+
+                    utils.showToast('Capturing third video...', 'info');
+                    app.showCapturingStateInModal('Capturing third video via extension...');
+
+                    var tertCapturePayload = {
+                        videoId: tertVideoId,
+                        youtubeUrl: clipSettings.tertiarySource.youtubeUrl || ('https://www.youtube.com/watch?v=' + tertVideoId),
+                        clipStart: tertTimeOffset,
+                        clipEnd: tertTimeOffset + clipDurationTert,
+                        quality: quality,
+                        autoCapture: true,
+                        autoOpenTab: true
+                    };
+
+                    console.log('[EXPORT][EXT] Tertiary capture payload:', JSON.stringify(tertCapturePayload));
+
+                    try {
+                        var tertCaptureResult = await sendExtensionRequest('captureVideoForWizard', tertCapturePayload);
+
+                        console.log('[EXPORT][EXT] Tertiary capture result: success=' + tertCaptureResult?.success);
+
+                        if (tertCaptureResult && tertCaptureResult.success && tertCaptureResult.streamData) {
+                            var tertHasStorageUrl = tertCaptureResult.streamData.uploadedToStorage && tertCaptureResult.streamData.videoUrl;
+                            var tertHasLocalData = tertCaptureResult.streamData.videoData;
+
+                            var tertStorageUrl = tertCaptureResult.streamData.videoUrl;
+
+                            // Upload local data to storage if needed
+                            if (!tertHasStorageUrl && tertHasLocalData) {
+                                console.log('[EXPORT][EXT] Uploading tertiary video to storage...');
+                                app.showCapturingStateInModal('Uploading third video...');
+
+                                try {
+                                    var tertBase64Data = tertCaptureResult.streamData.videoData;
+                                    var tertMimeType = tertCaptureResult.streamData.mimeType || 'video/webm';
+                                    var tertByteCharacters = atob(tertBase64Data);
+                                    var tertByteNumbers = new Array(tertByteCharacters.length);
+                                    for (var k = 0; k < tertByteCharacters.length; k++) {
+                                        tertByteNumbers[k] = tertByteCharacters.charCodeAt(k);
+                                    }
+                                    var tertByteArray = new Uint8Array(tertByteNumbers);
+                                    var tertVideoBlob = new Blob([tertByteArray], { type: tertMimeType });
+
+                                    var tertTimestamp = Date.now();
+                                    var tertExt = tertMimeType.includes('webm') ? 'webm' : 'mp4';
+                                    var tertStoragePath = 'uploads/' + auth.currentUser.uid + '/tertiary_' + tertVideoId + '_' + tertTimestamp + '.' + tertExt;
+
+                                    var tertStorageRef = storage.ref(tertStoragePath);
+                                    var tertUploadTask = tertStorageRef.put(tertVideoBlob, {
+                                        contentType: tertMimeType,
+                                        customMetadata: {
+                                            videoId: tertVideoId,
+                                            source: 'extension_tertiary_upload',
+                                            capturedAt: String(tertTimestamp),
+                                            userId: auth.currentUser.uid
+                                        }
+                                    });
+
+                                    tertUploadTask.on('state_changed', function(snapshot) {
+                                        var progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                                        app.showCapturingStateInModal('Uploading third video: ' + progress.toFixed(0) + '%');
+                                    });
+
+                                    await tertUploadTask;
+                                    tertStorageUrl = await tertUploadTask.snapshot.ref.getDownloadURL();
+                                    console.log('[EXPORT][EXT] Tertiary upload completed: ' + tertStorageUrl);
+                                } catch (tertUploadErr) {
+                                    console.error('[EXPORT][EXT] Tertiary upload failed:', tertUploadErr.message);
+                                }
+                            }
+
+                            // Update clipSettings with the captured tertiary video URL
+                            if (tertStorageUrl) {
+                                console.log('[EXPORT][EXT] Tertiary video captured successfully, updating settings');
+                                clipSettings.tertiarySource.uploadedUrl = tertStorageUrl;
+                                clipSettings.tertiarySource.capturedViaExtension = true;
+                            }
+                        } else {
+                            console.warn('[EXPORT][EXT] Tertiary capture failed');
+                            console.warn('[EXPORT][EXT] Error:', tertCaptureResult?.error || 'Unknown');
+                        }
+                    } catch (tertCaptureErr) {
+                        console.error('[EXPORT][EXT] Tertiary capture exception:', tertCaptureErr.message);
+                    }
+                }
+                // ===== END TERTIARY VIDEO CAPTURE =====
+
                 // Show processing state
                 utils.showToast('Starting video processing...', 'info');
                 app.showCapturingStateInModal('Sending to processor...');
@@ -11526,6 +13542,10 @@
                             if (job.status === 'completed') {
                                 clearInterval(pollInterval);
                                 app.removeProcessingToast(clipId);
+
+                                // DEBUG: Log state when processing completes
+                                console.log('[pollProcessingStatus] COMPLETED - All clip settings:', JSON.parse(JSON.stringify(state.clipSettings)));
+
                                 if (job.outputUrl) {
                                     utils.showToast('🎉 Video ready!', 'success');
                                     // Show download options modal
@@ -11617,19 +13637,41 @@
 
             downloadThumbnail: function(clipId, index) {
                 var thumbnails = state.clipThumbnails[clipId];
-                if (!thumbnails || !thumbnails[index]) {
-                    utils.showToast('No thumbnail available. Click "Regenerate" to generate thumbnails.', 'info');
+
+                // If index not provided, use the user's selected thumbnail
+                if (index === undefined) {
+                    index = state.selectedThumbnail[clipId];
+                }
+
+                var url = null;
+                var filename = 'thumbnail-' + clipId + '.png';
+
+                // Try to get AI-generated thumbnail
+                if (thumbnails && thumbnails[index]) {
+                    var thumbnail = thumbnails[index];
+                    url = thumbnail.previewUrl || thumbnail.url || thumbnail;
+                    filename = 'thumbnail-' + clipId + '-ai-' + (index + 1) + '.png';
+                }
+
+                // Fallback to original clip thumbnail
+                if (!url) {
+                    var clip = state.clips.find(function(c) { return c.id === clipId; });
+                    if (clip && clip.thumbnail) {
+                        url = clip.thumbnail;
+                        filename = 'thumbnail-' + clipId + '-original.jpg';
+                    }
+                }
+
+                if (!url) {
+                    utils.showToast('No thumbnail available. Generate AI thumbnails in SEO & Thumbnails step.', 'info');
                     return;
                 }
 
-                var thumbnail = thumbnails[index];
-                var url = thumbnail.previewUrl || thumbnail.url || thumbnail;
-
-                // If it's a Firebase Storage URL, download it directly
-                if (url && url.startsWith('http')) {
+                // If it's a Firebase Storage URL or external URL, download it
+                if (url.startsWith('http')) {
                     var link = document.createElement('a');
                     link.href = url;
-                    link.download = 'thumbnail-' + clipId + '-' + (index + 1) + '.png';
+                    link.download = filename;
                     link.target = '_blank';
                     document.body.appendChild(link);
                     link.click();
@@ -11646,6 +13688,651 @@
                 var text = 'Title: ' + seo.title + '\n\nDescription:\n' + seo.description + '\n\nTags: ' + seo.tags.join(', ');
                 navigator.clipboard.writeText(text);
                 utils.showToast('SEO copied to clipboard!', 'success');
+            },
+
+            /**
+             * Export all selected clips with SEQUENTIAL capture and FAIL-FAST behavior
+             * Captures one clip at a time (browser extension limitation)
+             * Stops immediately if any error occurs to prevent server flooding
+             */
+            exportAllClipsParallel: async function() {
+                if (!state.projectId) {
+                    utils.showToast('No project loaded', 'error');
+                    return;
+                }
+
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+
+                if (selectedClips.length === 0) {
+                    utils.showToast('No clips selected for export', 'error');
+                    return;
+                }
+
+                console.log('[BatchExport] Starting sequential export for ' + selectedClips.length + ' clips');
+
+                // Check for extension (required for YouTube videos)
+                var isUploadedVideo = state.videoInput.isUpload || false;
+                if (!isUploadedVideo && !state.extension.installed) {
+                    utils.showToast('Browser extension required for YouTube video export', 'error');
+                    return;
+                }
+
+                // Initialize export state with abort capability
+                state.parallelExport = {
+                    active: true,
+                    aborted: false,
+                    startTime: Date.now(),
+                    totalClips: selectedClips.length,
+                    completedClips: 0,
+                    failedClips: 0,
+                    currentClipIndex: 0,
+                    clips: {},
+                    consoleLogs: []  // Console-like log messages
+                };
+
+                // Helper to add console log entries
+                app.addBatchExportLog = function(message, type) {
+                    if (!state.parallelExport) return;
+                    var timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+                    state.parallelExport.consoleLogs.push({
+                        timestamp: timestamp,
+                        message: message,
+                        type: type || 'info'  // info, success, error, warning
+                    });
+                    // Keep only last 100 logs
+                    if (state.parallelExport.consoleLogs.length > 100) {
+                        state.parallelExport.consoleLogs.shift();
+                    }
+                    app.updateBatchExportModal();
+                };
+
+                app.addBatchExportLog('Starting batch export for ' + selectedClips.length + ' clips...', 'info');
+
+                // Initialize state for each clip
+                selectedClips.forEach(function(clip) {
+                    state.parallelExport.clips[clip.id] = {
+                        status: 'pending',
+                        progress: 0,
+                        jobId: null,
+                        outputUrl: null,
+                        error: null
+                    };
+                });
+
+                // Show progress UI
+                app.showParallelExportProgress();
+
+                // Disable the export button and show cancel option
+                var exportBtn = document.querySelector('.parallel-export-btn');
+                if (exportBtn) {
+                    exportBtn.disabled = true;
+                    exportBtn.textContent = '⏳ Processing... (Click to Cancel)';
+                    exportBtn.onclick = function() {
+                        state.parallelExport.aborted = true;
+                        utils.showToast('Cancelling export...', 'warning');
+                    };
+                }
+
+                // Process clips SEQUENTIALLY with FAIL-FAST
+                var hasError = false;
+                for (var i = 0; i < selectedClips.length; i++) {
+                    // Check if aborted
+                    if (state.parallelExport.aborted) {
+                        console.log('[BatchExport] Export aborted by user');
+                        utils.showToast('Export cancelled', 'warning');
+                        break;
+                    }
+
+                    state.parallelExport.currentClipIndex = i;
+                    var clip = selectedClips[i];
+
+                    console.log('[BatchExport] Processing clip ' + (i + 1) + '/' + selectedClips.length + ': ' + clip.id);
+
+                    try {
+                        await app.exportSingleClipForParallel(clip.id);
+
+                        // Check if this clip failed
+                        if (state.parallelExport.clips[clip.id].status === 'error') {
+                            hasError = true;
+                            console.error('[BatchExport] FAIL-FAST: Clip ' + clip.id + ' failed, stopping export');
+                            utils.showToast('Export stopped: ' + (state.parallelExport.clips[clip.id].error || 'Unknown error'), 'error');
+                            break;
+                        }
+                    } catch (error) {
+                        hasError = true;
+                        console.error('[BatchExport] FAIL-FAST: Error on clip ' + clip.id + ':', error);
+                        state.parallelExport.clips[clip.id].status = 'error';
+                        state.parallelExport.clips[clip.id].error = error.message;
+                        state.parallelExport.failedClips++;
+                        utils.showToast('Export stopped: ' + error.message, 'error');
+                        break;
+                    }
+                }
+
+                // Final status
+                var completedCount = state.parallelExport.completedClips;
+                var failedCount = state.parallelExport.failedClips;
+                var elapsedTime = ((Date.now() - state.parallelExport.startTime) / 1000).toFixed(1);
+
+                if (!hasError && !state.parallelExport.aborted && completedCount > 0) {
+                    console.log('[BatchExport] All exports completed successfully');
+                    utils.showToast('All ' + completedCount + ' clips exported in ' + elapsedTime + 's!', 'success');
+                } else if (completedCount > 0) {
+                    console.log('[BatchExport] Partial completion: ' + completedCount + ' succeeded, ' + failedCount + ' failed');
+                }
+
+                // Update progress UI to show completion
+                app.updateParallelExportComplete();
+
+                // Re-enable the export button
+                if (exportBtn) {
+                    exportBtn.disabled = false;
+                    exportBtn.textContent = '🎬 Export All ' + selectedClips.length + ' Clips Now';
+                    exportBtn.onclick = function() { app.exportAllClipsParallel(); };
+                }
+
+                state.parallelExport.active = false;
+            },
+
+            /**
+             * Export a single clip as part of parallel processing
+             */
+            exportSingleClipForParallel: async function(clipId) {
+                console.log('[ParallelExport] Starting export for clip: ' + clipId);
+
+                var clip = state.clips.find(function(c) { return c.id === clipId; });
+                var seo = state.clipSEO[clipId] || {};
+                var clipTitle = (seo.title || 'Clip ' + clipId).substring(0, 30);
+
+                app.addBatchExportLog('Starting: ' + clipTitle, 'info');
+
+                if (!clip) {
+                    state.parallelExport.clips[clipId].status = 'error';
+                    state.parallelExport.clips[clipId].error = 'Clip not found';
+                    state.parallelExport.failedClips++;
+                    app.addBatchExportLog('Error: Clip not found - ' + clipId, 'error');
+                    app.updateParallelExportProgress();
+                    return;
+                }
+
+                // Update status to capturing
+                state.parallelExport.clips[clipId].status = 'capturing';
+                app.addBatchExportLog('Capturing video segment (' + clip.startTime.toFixed(1) + 's - ' + clip.endTime.toFixed(1) + 's)...', 'info');
+                app.updateParallelExportProgress();
+
+                var clipSettings = state.clipSettings[clipId] || {};
+                var isUploadedVideo = state.videoInput.isUpload || false;
+                var videoId = state.videoInput.videoData?.videoId;
+                var quality = '720p';
+
+                try {
+                    var capturedUrl = null;
+                    var storagePath = null;
+
+                    if (!isUploadedVideo) {
+                        // Capture video via extension
+                        var capturePayload = {
+                            videoId: videoId,
+                            youtubeUrl: state.videoInput.url || ('https://www.youtube.com/watch?v=' + videoId),
+                            clipStart: clip.startTime,
+                            clipEnd: clip.endTime,
+                            quality: quality,
+                            autoCapture: true
+                        };
+
+                        var captureResult = await sendExtensionRequest('captureVideoForWizard', capturePayload);
+
+                        if (!captureResult || !captureResult.success) {
+                            throw new Error(captureResult?.error || 'Capture failed');
+                        }
+
+                        if (captureResult.streamData && captureResult.streamData.videoUrl) {
+                            capturedUrl = captureResult.streamData.videoUrl;
+                            storagePath = captureResult.streamData.storagePath;
+                        } else if (captureResult.streamData && captureResult.streamData.videoData) {
+                            // Upload to Firebase Storage
+                            var base64Data = captureResult.streamData.videoData;
+                            var mimeType = captureResult.streamData.mimeType || 'video/webm';
+                            var byteCharacters = atob(base64Data);
+                            var byteNumbers = new Array(byteCharacters.length);
+                            for (var i = 0; i < byteCharacters.length; i++) {
+                                byteNumbers[i] = byteCharacters.charCodeAt(i);
+                            }
+                            var byteArray = new Uint8Array(byteNumbers);
+                            var videoBlob = new Blob([byteArray], { type: mimeType });
+
+                            var timestamp = Date.now();
+                            var ext = mimeType.includes('webm') ? 'webm' : 'mp4';
+                            storagePath = 'uploads/' + auth.currentUser.uid + '/parallel_' + clipId + '_' + timestamp + '.' + ext;
+
+                            var storageRef = storage.ref(storagePath);
+                            await storageRef.put(videoBlob, {
+                                contentType: mimeType,
+                                customMetadata: { source: 'parallel_export' }
+                            });
+                            capturedUrl = await storageRef.getDownloadURL();
+                        } else {
+                            throw new Error('No video data from capture');
+                        }
+                    } else {
+                        // Use uploaded video URL
+                        capturedUrl = state.videoInput.videoData?.uploadedUrl || state.videoInput.videoData?.sourceUrl;
+                    }
+
+                    // Update status to processing
+                    state.parallelExport.clips[clipId].status = 'processing';
+                    app.addBatchExportLog('Video captured, sending to server for processing...', 'info');
+                    app.updateParallelExportProgress();
+
+                    // Create processing job - use wizardProcessClip (correct function name)
+                    var wizardProcessClip = functions.httpsCallable('wizardProcessClip');
+                    var jobPayload = {
+                        projectId: state.projectId,
+                        clipId: clipId,
+                        quality: quality,
+                        settings: {
+                            ...clipSettings,
+                            startTime: clip.startTime,
+                            endTime: clip.endTime,
+                            cropPosition: clipSettings.cropPosition !== undefined ? clipSettings.cropPosition : 50
+                        },
+                        // Pass captured video as extensionCaptureData for fallback
+                        extensionCaptureData: capturedUrl ? {
+                            streamData: {
+                                videoUrl: capturedUrl,
+                                storagePath: storagePath
+                            }
+                        } : null
+                    };
+
+                    var result = await wizardProcessClip(jobPayload);
+
+                    if (!result.data.success) {
+                        throw new Error(result.data.message || 'Failed to start processing');
+                    }
+
+                    var jobId = result.data.jobId;
+                    state.parallelExport.clips[clipId].jobId = jobId;
+                    app.addBatchExportLog('Processing job started (Job ID: ' + jobId.substring(0, 8) + '...)', 'info');
+
+                    // Poll for completion
+                    await app.pollParallelExportJob(clipId, jobId, clipTitle);
+
+                } catch (error) {
+                    console.error('[BatchExport] Error exporting clip ' + clipId + ':', error);
+                    state.parallelExport.clips[clipId].status = 'error';
+                    state.parallelExport.clips[clipId].error = error.message;
+                    state.parallelExport.failedClips++;
+                    app.addBatchExportLog('Error: ' + error.message, 'error');
+                    app.updateParallelExportProgress();
+                    // Re-throw to trigger fail-fast in parent
+                    throw error;
+                }
+            },
+
+            /**
+             * Poll for parallel export job completion
+             */
+            pollParallelExportJob: function(clipId, jobId, clipTitle) {
+                return new Promise(function(resolve, reject) {
+                    var pollCount = 0;
+                    var maxPolls = 180; // 15 minutes max (5 second intervals)
+                    var lastLoggedProgress = 0;
+
+                    var pollInterval = setInterval(async function() {
+                        pollCount++;
+
+                        try {
+                            var wizardGetProcessingStatus = functions.httpsCallable('wizardGetProcessingStatus');
+                            var result = await wizardGetProcessingStatus({ jobId: jobId });
+
+                            if (result.data.success) {
+                                var job = result.data.job;
+                                var currentProgress = job.progress || 0;
+                                state.parallelExport.clips[clipId].progress = currentProgress;
+
+                                // Log progress at 25%, 50%, 75% milestones
+                                if (currentProgress >= 25 && lastLoggedProgress < 25) {
+                                    app.addBatchExportLog('Progress: 25% - Downloading source video...', 'info');
+                                    lastLoggedProgress = 25;
+                                } else if (currentProgress >= 50 && lastLoggedProgress < 50) {
+                                    app.addBatchExportLog('Progress: 50% - Transcoding video...', 'info');
+                                    lastLoggedProgress = 50;
+                                } else if (currentProgress >= 75 && lastLoggedProgress < 75) {
+                                    app.addBatchExportLog('Progress: 75% - Applying filters & encoding...', 'info');
+                                    lastLoggedProgress = 75;
+                                }
+                                app.updateParallelExportProgress();
+
+                                if (job.status === 'completed') {
+                                    clearInterval(pollInterval);
+                                    state.parallelExport.clips[clipId].status = 'completed';
+                                    state.parallelExport.clips[clipId].outputUrl = job.outputUrl;
+                                    state.parallelExport.completedClips++;
+                                    app.addBatchExportLog('✓ Completed: ' + (clipTitle || 'Clip') + ' - Ready for download!', 'success');
+                                    app.updateParallelExportProgress();
+                                    resolve();
+                                } else if (job.status === 'failed') {
+                                    clearInterval(pollInterval);
+                                    state.parallelExport.clips[clipId].status = 'error';
+                                    state.parallelExport.clips[clipId].error = job.error || 'Processing failed';
+                                    state.parallelExport.failedClips++;
+                                    app.addBatchExportLog('✗ Failed: ' + (clipTitle || 'Clip') + ' - ' + (job.error || 'Processing failed'), 'error');
+                                    app.updateParallelExportProgress();
+                                    resolve(); // Don't reject, allow other clips to continue
+                                }
+                            }
+                        } catch (e) {
+                            console.error('[ParallelExport] Poll error:', e);
+                        }
+
+                        if (pollCount >= maxPolls) {
+                            clearInterval(pollInterval);
+                            state.parallelExport.clips[clipId].status = 'error';
+                            state.parallelExport.clips[clipId].error = 'Timeout';
+                            state.parallelExport.failedClips++;
+                            app.addBatchExportLog('✗ Timeout: ' + (clipTitle || 'Clip') + ' - Processing took too long', 'error');
+                            app.updateParallelExportProgress();
+                            resolve();
+                        }
+                    }, 5000); // Poll every 5 seconds
+                });
+            },
+
+            /**
+             * Show the batch export modal overlay
+             */
+            showParallelExportProgress: function() {
+                // Remove any existing modal
+                var existingModal = document.getElementById('batchExportModal');
+                if (existingModal) existingModal.remove();
+
+                // Create modal overlay
+                var overlay = document.createElement('div');
+                overlay.id = 'batchExportModal';
+                overlay.className = 'batch-export-modal-overlay';
+                overlay.innerHTML = app.buildBatchExportModalHTML();
+                document.body.appendChild(overlay);
+
+                // Scroll console to bottom
+                var consoleBody = document.getElementById('batchExportConsole');
+                if (consoleBody) consoleBody.scrollTop = consoleBody.scrollHeight;
+            },
+
+            /**
+             * Build the batch export modal HTML
+             */
+            buildBatchExportModalHTML: function() {
+                if (!state.parallelExport) return '';
+
+                var clips = state.parallelExport.clips;
+                var completed = state.parallelExport.completedClips;
+                var failed = state.parallelExport.failedClips;
+                var total = state.parallelExport.totalClips;
+                var pending = total - completed - failed;
+                var processing = 0;
+                var elapsed = ((Date.now() - state.parallelExport.startTime) / 1000).toFixed(0);
+                var isComplete = !state.parallelExport.active;
+
+                // Count processing clips
+                for (var cid in clips) {
+                    if (clips[cid].status === 'capturing' || clips[cid].status === 'processing') {
+                        processing++;
+                        pending--;
+                    }
+                }
+
+                var html = '<div class="batch-export-modal">';
+
+                // Header
+                html += '<div class="batch-export-modal-header">';
+                html += '<div class="batch-export-modal-title">';
+                if (!isComplete) {
+                    html += '<div class="spinner"></div>';
+                }
+                html += isComplete ? '🎉 Export Complete' : '🎬 Batch Export in Progress';
+                html += '</div>';
+                if (isComplete) {
+                    html += '<button class="batch-export-modal-close" onclick="app.closeBatchExportModal()">✕</button>';
+                }
+                html += '</div>';
+
+                // Body
+                html += '<div class="batch-export-modal-body">';
+
+                // Complete banner (only show when done)
+                if (isComplete && completed > 0) {
+                    html += '<div class="batch-export-complete-banner">';
+                    html += '<h3>🎉 All Done!</h3>';
+                    html += '<p>' + completed + ' clip' + (completed !== 1 ? 's' : '') + ' exported successfully in ' + elapsed + ' seconds</p>';
+                    if (failed > 0) {
+                        html += '<p style="color: #ef4444;">' + failed + ' clip' + (failed !== 1 ? 's' : '') + ' failed</p>';
+                    }
+                    html += '</div>';
+                }
+
+                // Stats grid
+                html += '<div class="batch-export-stats">';
+                html += '<div class="batch-export-stat"><div class="batch-export-stat-value">' + completed + '</div><div class="batch-export-stat-label">Completed</div></div>';
+                html += '<div class="batch-export-stat"><div class="batch-export-stat-value processing">' + processing + '</div><div class="batch-export-stat-label">Processing</div></div>';
+                html += '<div class="batch-export-stat"><div class="batch-export-stat-value pending">' + pending + '</div><div class="batch-export-stat-label">Pending</div></div>';
+                html += '<div class="batch-export-stat"><div class="batch-export-stat-value error">' + failed + '</div><div class="batch-export-stat-label">Failed</div></div>';
+                html += '</div>';
+
+                // Console log area
+                html += '<div class="batch-export-console">';
+                html += '<div class="batch-export-console-header">';
+                html += '<div class="console-dot red"></div>';
+                html += '<div class="console-dot yellow"></div>';
+                html += '<div class="console-dot green"></div>';
+                html += '<span>Export Log</span>';
+                html += '</div>';
+                html += '<div class="batch-export-console-body" id="batchExportConsole">';
+
+                // Add log entries
+                var logs = state.parallelExport.consoleLogs || [];
+                for (var i = 0; i < logs.length; i++) {
+                    var log = logs[i];
+                    html += '<div class="console-line">';
+                    html += '<span class="console-timestamp">[' + log.timestamp + ']</span>';
+                    html += '<span class="console-message ' + log.type + '">' + utils.escapeHtml(log.message) + '</span>';
+                    html += '</div>';
+                }
+
+                html += '</div></div>';
+
+                // Clips list
+                html += '<div class="batch-export-clips">';
+
+                for (var clipId in clips) {
+                    var clipData = clips[clipId];
+                    var clip = state.clips.find(function(c) { return c.id === clipId; });
+                    var seo = state.clipSEO[clipId] || getDefaultSEO(clip);
+                    var title = (seo.title || 'Clip ' + clipId).substring(0, 40);
+
+                    var clipClass = 'batch-export-clip';
+                    if (clipData.status === 'capturing' || clipData.status === 'processing') clipClass += ' active';
+                    if (clipData.status === 'completed') clipClass += ' completed';
+                    if (clipData.status === 'error') clipClass += ' error';
+
+                    var icon = '⏳';
+                    var statusText = 'Waiting...';
+                    if (clipData.status === 'capturing') { icon = '📹'; statusText = 'Capturing video...'; }
+                    if (clipData.status === 'processing') { icon = '⚡'; statusText = 'Processing...'; }
+                    if (clipData.status === 'completed') { icon = '✅'; statusText = 'Ready to download'; }
+                    if (clipData.status === 'error') { icon = '❌'; statusText = clipData.error || 'Failed'; }
+
+                    html += '<div class="' + clipClass + '">';
+                    html += '<div class="batch-export-clip-icon">' + icon + '</div>';
+                    html += '<div class="batch-export-clip-info">';
+                    html += '<div class="batch-export-clip-title">' + utils.escapeHtml(title) + '</div>';
+                    html += '<div class="batch-export-clip-status">' + statusText + '</div>';
+                    html += '</div>';
+
+                    // Progress bar for active clips
+                    if (clipData.status === 'capturing' || clipData.status === 'processing') {
+                        html += '<div class="batch-export-clip-progress">';
+                        html += '<div class="batch-export-clip-progress-bar">';
+                        html += '<div class="batch-export-clip-progress-fill" style="width: ' + (clipData.progress || 0) + '%"></div>';
+                        html += '</div>';
+                        html += '<div class="batch-export-clip-progress-text">' + (clipData.progress || 0) + '%</div>';
+                        html += '</div>';
+                    }
+
+                    // Download button for completed clips
+                    if (clipData.status === 'completed' && clipData.outputUrl) {
+                        html += '<div class="batch-export-clip-actions">';
+                        html += '<a href="' + clipData.outputUrl + '" download class="batch-export-download-btn">📥 Download</a>';
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                }
+
+                html += '</div>'; // clips
+
+                html += '</div>'; // body
+
+                // Footer
+                html += '<div class="batch-export-modal-footer">';
+                html += '<div class="batch-export-footer-status">';
+                if (!isComplete) {
+                    html += 'Processing clip ' + (state.parallelExport.currentClipIndex + 1) + ' of ' + total + ' • ' + elapsed + 's elapsed';
+                } else {
+                    html += 'Total time: ' + elapsed + ' seconds';
+                }
+                html += '</div>';
+                html += '<div class="batch-export-footer-actions">';
+
+                if (!isComplete) {
+                    html += '<button class="batch-export-cancel-btn" onclick="app.cancelBatchExport()">Cancel Export</button>';
+                } else {
+                    if (completed > 0) {
+                        html += '<button class="batch-export-download-all-btn" onclick="app.downloadAllExportedClips()">📥 Download All (' + completed + ')</button>';
+                    }
+                    html += '<button class="batch-export-cancel-btn" onclick="app.closeBatchExportModal()" style="background: rgba(255,255,255,0.1); color: #9ca3af; border-color: rgba(255,255,255,0.2);">Close</button>';
+                }
+
+                html += '</div></div>';
+                html += '</div>'; // modal
+
+                return html;
+            },
+
+            /**
+             * Update the batch export modal (called frequently during export)
+             */
+            updateBatchExportModal: function() {
+                var modal = document.getElementById('batchExportModal');
+                if (!modal) return;
+
+                modal.innerHTML = app.buildBatchExportModalHTML();
+
+                // Scroll console to bottom
+                var consoleBody = document.getElementById('batchExportConsole');
+                if (consoleBody) {
+                    consoleBody.scrollTop = consoleBody.scrollHeight;
+                }
+            },
+
+            /**
+             * Update parallel export progress UI (legacy compatibility + modal update)
+             */
+            updateParallelExportProgress: function() {
+                // Update the modal
+                app.updateBatchExportModal();
+
+                // Also update the inline container for backwards compatibility
+                var container = document.getElementById('parallelExportProgress');
+                if (container) {
+                    container.style.display = 'none'; // Hide inline, we use modal now
+                }
+            },
+
+            /**
+             * Update parallel export UI when all complete
+             */
+            updateParallelExportComplete: function() {
+                // Add completion log
+                if (state.parallelExport) {
+                    var elapsed = ((Date.now() - state.parallelExport.startTime) / 1000).toFixed(1);
+                    var completed = state.parallelExport.completedClips;
+                    var failed = state.parallelExport.failedClips;
+
+                    if (completed > 0) {
+                        app.addBatchExportLog('✓ Export complete! ' + completed + ' clips in ' + elapsed + 's', 'success');
+                    }
+                    if (failed > 0) {
+                        app.addBatchExportLog('✗ ' + failed + ' clip(s) failed', 'error');
+                    }
+                }
+
+                // Update the modal one final time
+                app.updateBatchExportModal();
+            },
+
+            /**
+             * Close the batch export modal
+             */
+            closeBatchExportModal: function() {
+                var modal = document.getElementById('batchExportModal');
+                if (modal) {
+                    modal.remove();
+                }
+            },
+
+            /**
+             * Cancel the batch export
+             */
+            cancelBatchExport: function() {
+                if (state.parallelExport) {
+                    state.parallelExport.aborted = true;
+                    app.addBatchExportLog('Export cancelled by user', 'warning');
+                }
+            },
+
+            /**
+             * Download all exported clips sequentially
+             */
+            downloadAllExportedClips: function() {
+                if (!state.parallelExport) return;
+
+                var clips = state.parallelExport.clips;
+                var downloadUrls = [];
+
+                for (var clipId in clips) {
+                    if (clips[clipId].status === 'completed' && clips[clipId].outputUrl) {
+                        downloadUrls.push({
+                            url: clips[clipId].outputUrl,
+                            clipId: clipId
+                        });
+                    }
+                }
+
+                if (downloadUrls.length === 0) {
+                    utils.showToast('No clips to download', 'warning');
+                    return;
+                }
+
+                // Download each file with a small delay to prevent browser blocking
+                app.addBatchExportLog('Starting download of ' + downloadUrls.length + ' clips...', 'info');
+
+                downloadUrls.forEach(function(item, index) {
+                    setTimeout(function() {
+                        var link = document.createElement('a');
+                        link.href = item.url;
+                        link.download = 'clip_' + item.clipId + '.mp4';
+                        link.style.display = 'none';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        app.addBatchExportLog('Downloaded: clip_' + item.clipId + '.mp4', 'success');
+                    }, index * 500); // 500ms delay between downloads
+                });
+
+                utils.showToast('Downloading ' + downloadUrls.length + ' clips...', 'success');
             },
 
             downloadAllZip: function() {
@@ -12590,6 +15277,8 @@
 
         // Initial render
         render();
+
+        } // end runApp()
 
     })();
     </script>
