@@ -2464,15 +2464,12 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       console.warn(`[EXT][CAPTURE] Could not focus tab: ${focusErr.message}`);
     }
 
-    // IMMEDIATELY switch back to Video Wizard tab so user isn't disrupted
-    if (savedOriginalTabId && savedOriginalTabId !== youtubeTab.id) {
-      try {
-        await chrome.tabs.update(savedOriginalTabId, { active: true });
-        console.log(`[EXT][CAPTURE] Switched back to Video Wizard tab ${savedOriginalTabId}`);
-      } catch (switchErr) {
-        console.warn(`[EXT][CAPTURE] Could not switch back: ${switchErr.message}`);
-      }
-    }
+    // CRITICAL: Do NOT switch back to Video Wizard tab yet!
+    // The YouTube tab MUST stay in foreground during capture.
+    // Chrome throttles background tabs, which causes captureStream() to capture frozen frames.
+    // We will switch back AFTER capture completes.
+    console.log(`[EXT][CAPTURE] Keeping YouTube tab in foreground for capture (savedOriginalTabId=${savedOriginalTabId})`);
+    // The switch back happens after captureResultPromise resolves
 
     // v2.7.2: Check for ads FIRST before attempting video loading
     // Improved ad detection to reduce false positives
@@ -3230,6 +3227,17 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     // Wait for the result via message passing
     const captureResult = await captureResultPromise;
+
+    // CRITICAL: Now that capture is complete, switch back to Video Wizard tab
+    // The YouTube tab was kept in foreground during capture to prevent Chrome throttling
+    if (savedOriginalTabId && savedOriginalTabId !== youtubeTab.id) {
+      try {
+        await chrome.tabs.update(savedOriginalTabId, { active: true });
+        console.log(`[EXT][CAPTURE] Capture complete - switched back to Video Wizard tab ${savedOriginalTabId}`);
+      } catch (switchErr) {
+        console.warn(`[EXT][CAPTURE] Could not switch back: ${switchErr.message}`);
+      }
+    }
 
     if (!captureResult.success) {
       console.error(`[EXT][CAPTURE] FAIL: ${captureResult.error}`);

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.7.7",
-  "description": "Fix frozen video capture - ensure video is playing before captureStream (v2.7.7)",
+  "version": "2.7.8",
+  "description": "Fix frozen video - keep YouTube tab in foreground during capture (v2.7.8)",
 
   "permissions": [
     "activeTab",
