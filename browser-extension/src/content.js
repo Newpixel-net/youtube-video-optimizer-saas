@@ -663,6 +663,334 @@ function getStreamUrl(format) {
   return null;
 }
 
+// ============================================
+// CAPTURE PROGRESS OVERLAY
+// Shows visual feedback when video is being captured
+// ============================================
+
+/**
+ * Capture Progress Overlay Manager
+ * Creates and manages the on-page capture progress UI
+ */
+const CaptureProgressOverlay = {
+  container: null,
+  isVisible: false,
+  autoHideTimeout: null,
+
+  /**
+   * Create the overlay DOM structure
+   */
+  createOverlay() {
+    if (this.container) return this.container;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'yvo-capture-progress-overlay';
+    overlay.className = 'yvo-capture-overlay phase-initializing';
+
+    overlay.innerHTML = `
+      <div class="yvo-capture-overlay-header">
+        <div class="yvo-capture-overlay-logo">🎬</div>
+        <div class="yvo-capture-overlay-title">Video Optimizer</div>
+        <button class="yvo-capture-overlay-close" title="Minimize">×</button>
+      </div>
+      <div class="yvo-capture-overlay-status">
+        <div class="yvo-capture-overlay-icon spinning">⚙️</div>
+        <div class="yvo-capture-overlay-message">Preparing capture...</div>
+      </div>
+      <div class="yvo-capture-overlay-progress">
+        <div class="yvo-capture-overlay-progress-bar">
+          <div class="yvo-capture-overlay-progress-fill animated" style="width: 0%"></div>
+        </div>
+        <div class="yvo-capture-overlay-progress-text">
+          <span class="yvo-progress-label">Starting...</span>
+          <span class="yvo-progress-percent">0%</span>
+        </div>
+      </div>
+      <div class="yvo-capture-overlay-details"></div>
+    `;
+
+    // Add close button handler
+    overlay.querySelector('.yvo-capture-overlay-close').addEventListener('click', () => {
+      this.hide();
+    });
+
+    this.container = overlay;
+    return overlay;
+  },
+
+  /**
+   * Show the overlay with initial state
+   */
+  show(options = {}) {
+    console.log('[YVO Content] Showing capture progress overlay');
+
+    // Clear any pending auto-hide
+    if (this.autoHideTimeout) {
+      clearTimeout(this.autoHideTimeout);
+      this.autoHideTimeout = null;
+    }
+
+    // Find the video player container
+    const playerContainer = document.querySelector('#movie_player, .html5-video-player');
+    if (!playerContainer) {
+      console.warn('[YVO Content] Could not find video player for overlay');
+      return;
+    }
+
+    // Create overlay if not exists
+    if (!this.container) {
+      this.createOverlay();
+    }
+
+    // Remove hiding class if present
+    this.container.classList.remove('yvo-overlay-hiding');
+
+    // Add to player container if not already there
+    if (!playerContainer.contains(this.container)) {
+      playerContainer.appendChild(this.container);
+    }
+
+    // Set initial state
+    this.updatePhase('initializing');
+    this.updateProgress(0, 'Preparing capture...');
+
+    if (options.startTime !== undefined && options.endTime !== undefined) {
+      this.updateDetails({
+        segment: `${this.formatTime(options.startTime)} → ${this.formatTime(options.endTime)}`,
+        duration: `${Math.round(options.endTime - options.startTime)}s`
+      });
+    }
+
+    this.isVisible = true;
+  },
+
+  /**
+   * Hide the overlay with animation
+   */
+  hide() {
+    if (!this.container || !this.isVisible) return;
+
+    console.log('[YVO Content] Hiding capture progress overlay');
+
+    // Add hiding animation class
+    this.container.classList.add('yvo-overlay-hiding');
+
+    // Remove after animation
+    setTimeout(() => {
+      if (this.container && this.container.parentNode) {
+        this.container.parentNode.removeChild(this.container);
+      }
+      this.isVisible = false;
+    }, 250);
+  },
+
+  /**
+   * Update the current phase (changes colors and icon)
+   */
+  updatePhase(phase) {
+    if (!this.container) return;
+
+    // Remove all phase classes
+    const phases = ['initializing', 'buffering', 'capturing', 'uploading', 'complete', 'error'];
+    phases.forEach(p => this.container.classList.remove(`phase-${p}`));
+
+    // Add new phase class
+    this.container.classList.add(`phase-${phase}`);
+
+    // Update icon based on phase
+    const iconEl = this.container.querySelector('.yvo-capture-overlay-icon');
+    const icons = {
+      initializing: { icon: '⚙️', spin: true },
+      buffering: { icon: '📊', spin: false },
+      capturing: { icon: '🎬', spin: false },
+      uploading: { icon: '☁️', spin: true },
+      complete: { icon: '✓', spin: false },
+      error: { icon: '⚠️', spin: false }
+    };
+
+    const config = icons[phase] || icons.initializing;
+    iconEl.textContent = config.icon;
+    iconEl.classList.toggle('spinning', config.spin);
+
+    // Update progress bar animation
+    const progressFill = this.container.querySelector('.yvo-capture-overlay-progress-fill');
+    progressFill.classList.toggle('animated', phase === 'initializing' || phase === 'uploading');
+  },
+
+  /**
+   * Update progress bar and message
+   */
+  updateProgress(percent, message, label) {
+    if (!this.container) return;
+
+    // Clamp percent
+    percent = Math.max(0, Math.min(100, percent));
+
+    // Update progress bar
+    const progressFill = this.container.querySelector('.yvo-capture-overlay-progress-fill');
+    progressFill.style.width = `${percent}%`;
+
+    // Update percent text
+    const percentEl = this.container.querySelector('.yvo-progress-percent');
+    percentEl.textContent = `${Math.round(percent)}%`;
+
+    // Update label
+    if (label) {
+      const labelEl = this.container.querySelector('.yvo-progress-label');
+      labelEl.textContent = label;
+    }
+
+    // Update message
+    if (message) {
+      const messageEl = this.container.querySelector('.yvo-capture-overlay-message');
+      messageEl.textContent = message;
+    }
+  },
+
+  /**
+   * Update the details section
+   */
+  updateDetails(details) {
+    if (!this.container) return;
+
+    const detailsEl = this.container.querySelector('.yvo-capture-overlay-details');
+
+    let html = '';
+    if (details.segment) {
+      html += `<div class="yvo-capture-overlay-detail">
+        <span class="yvo-capture-overlay-detail-icon">📍</span>
+        <span>${details.segment}</span>
+      </div>`;
+    }
+    if (details.duration) {
+      html += `<div class="yvo-capture-overlay-detail">
+        <span class="yvo-capture-overlay-detail-icon">⏱️</span>
+        <span>${details.duration}</span>
+      </div>`;
+    }
+    if (details.captured) {
+      html += `<div class="yvo-capture-overlay-detail">
+        <span class="yvo-capture-overlay-detail-icon">🎥</span>
+        <span>${details.captured}</span>
+      </div>`;
+    }
+
+    detailsEl.innerHTML = html;
+  },
+
+  /**
+   * Show completion state and auto-hide
+   */
+  showComplete(message = 'Capture complete!') {
+    this.updatePhase('complete');
+    this.updateProgress(100, message, 'Done');
+
+    // Auto-hide after 3 seconds
+    this.autoHideTimeout = setTimeout(() => {
+      this.hide();
+    }, 3000);
+  },
+
+  /**
+   * Show error state
+   */
+  showError(message = 'Capture failed') {
+    this.updatePhase('error');
+    this.updateProgress(0, message, 'Error');
+
+    // Auto-hide after 5 seconds
+    this.autoHideTimeout = setTimeout(() => {
+      this.hide();
+    }, 5000);
+  },
+
+  /**
+   * Format seconds to MM:SS or HH:MM:SS
+   */
+  formatTime(seconds) {
+    seconds = Math.round(seconds);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+};
+
+// Add capture progress message handlers to the existing listener
+const originalMessageListener = chrome.runtime.onMessage.hasListeners;
+
+// Extend the message handler to include capture progress
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Handle capture progress updates from background script
+  if (message.action === 'showCaptureProgress') {
+    CaptureProgressOverlay.show({
+      startTime: message.startTime,
+      endTime: message.endTime
+    });
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (message.action === 'updateCaptureProgress') {
+    const { phase, percent, message: msg, label, details, startTime, endTime } = message;
+
+    // Show overlay if not visible
+    if (!CaptureProgressOverlay.isVisible) {
+      CaptureProgressOverlay.show({ startTime, endTime });
+    }
+
+    // Update phase if provided
+    if (phase) {
+      CaptureProgressOverlay.updatePhase(phase);
+    }
+
+    // Update progress
+    if (percent !== undefined || msg || label) {
+      CaptureProgressOverlay.updateProgress(percent || 0, msg, label);
+    }
+
+    // Update details if provided
+    if (details) {
+      CaptureProgressOverlay.updateDetails(details);
+    }
+
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (message.action === 'hideCaptureProgress') {
+    CaptureProgressOverlay.hide();
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (message.action === 'captureComplete') {
+    CaptureProgressOverlay.showComplete(message.message);
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (message.action === 'captureError') {
+    CaptureProgressOverlay.showError(message.message);
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // Return false for unhandled messages (let other listeners handle them)
+  return false;
+});
+
+// Make overlay accessible for debugging
+window.__YVO_CAPTURE_OVERLAY__ = CaptureProgressOverlay;
+
+// ============================================
+// END CAPTURE PROGRESS OVERLAY
+// ============================================
+
 /**
  * Initialize content script
  */
@@ -733,6 +1061,17 @@ window.addEventListener('message', (event) => {
       streamUrls.videoUrl = message.data.videoUrl || streamUrls.videoUrl;
       streamUrls.audioUrl = message.data.audioUrl || streamUrls.audioUrl;
     }
+  }
+
+  // Handle capture progress updates from injected capture function
+  if (message?.type === 'YVO_CAPTURE_PROGRESS') {
+    const { progress, capturedSeconds, totalSeconds, phase } = message;
+    CaptureProgressOverlay.updatePhase(phase || 'capturing');
+    CaptureProgressOverlay.updateProgress(
+      progress || 0,
+      'Recording video segment...',
+      `${capturedSeconds}s / ${totalSeconds}s captured`
+    );
   }
 });
 

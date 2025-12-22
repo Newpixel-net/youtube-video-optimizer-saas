@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.7.12",
-  "description": "Fix frozen video for long videos - keep YouTube tab in foreground during capture (v2.7.12)",
+  "version": "2.7.13",
+  "description": "Add capture progress overlay on YouTube page (v2.7.13)",
 
   "permissions": [
     "activeTab",
