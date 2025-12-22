@@ -2601,18 +2601,18 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       console.log(`[${jobId}] [PASS 2] Re-encoding with NVENC (no filters)...`);
 
       const pass2Args = [
-        // Use hardware-accelerated decoding for GPU pipeline efficiency
-        '-hwaccel', 'cuda',
-        '-hwaccel_output_format', 'cuda',
+        // CRITICAL FIX: Do NOT use -hwaccel_output_format cuda without a GPU filter chain!
+        // It causes frames to get stuck in CUDA memory and NVENC only encodes first frame.
+        // CPU decoding is fast enough for a small intermediate file.
         '-i', intermediateFile,
-        // NO VIDEO FILTERS - this is critical for NVENC!
+        // CRITICAL: Explicit pixel format for NVENC compatibility
+        '-pix_fmt', 'yuv420p',
         '-c:v', 'h264_nvenc',
         '-preset', 'p4',          // Balanced quality/speed (p1=fastest, p7=best)
-        // FIXED: Use constqp mode instead of vbr with b:v 0
-        // vbr with b:v 0 was causing extremely low bitrate (700KB files)
-        '-rc', 'constqp',         // Constant QP mode - simple, reliable
+        // Use constqp mode - simple, reliable, no lookahead
+        '-rc', 'constqp',
         '-qp', '23',              // Quality parameter (lower = better, 23 is good balance)
-        '-bf', '0',               // Disable B-frames (prevents lookahead sync issues)
+        '-bf', '0',               // Disable B-frames (prevents sync issues)
         '-g', '60',               // Keyframe every 2 seconds (30fps * 2)
         '-c:a', 'copy',           // Copy audio (already encoded in Pass 1)
         '-movflags', '+faststart',
