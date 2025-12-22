@@ -7186,6 +7186,305 @@ exports.getThumbnailTokenBalance = functions.https.onCall(async (data, context) 
 });
 
 // ==============================================
+// VIDEO WIZARD TOKEN FUNCTIONS
+// ==============================================
+
+/**
+ * Default token costs for Video Wizard operations
+ * Can be overridden in admin settings: settings/wizardTokenCosts
+ */
+const DEFAULT_WIZARD_TOKEN_COSTS = {
+  analyzeVideo: 5,      // Analyze a YouTube video
+  showMoreClips: 3,     // Generate additional clips
+  generateSEO: 2,       // Generate SEO for a clip
+  generateBRoll: 4,     // Generate B-Roll suggestions
+  detectSpeakers: 3,    // Detect speakers in video
+  exportClip: 0         // Export is free (already paid for analysis)
+};
+
+/**
+ * Helper: Get wizard token costs from admin config or defaults
+ */
+async function getWizardTokenCosts() {
+  try {
+    const costsDoc = await db.collection('settings').doc('wizardTokenCosts').get();
+    if (costsDoc.exists) {
+      return { ...DEFAULT_WIZARD_TOKEN_COSTS, ...costsDoc.data() };
+    }
+  } catch (error) {
+    console.log('[getWizardTokenCosts] Using defaults:', error.message);
+  }
+  return DEFAULT_WIZARD_TOKEN_COSTS;
+}
+
+/**
+ * Helper: Deduct tokens for wizard operations
+ * Uses creativeTokens collection (same as Thumbnail Generator)
+ * @returns {Object} { success, newBalance, error }
+ */
+async function deductWizardTokens(uid, amount, operation, metadata = {}) {
+  if (amount <= 0) {
+    return { success: true, newBalance: null, deducted: 0 };
+  }
+
+  try {
+    // Get current balance
+    const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+
+    if (!tokenDoc.exists) {
+      // Initialize with free plan defaults
+      const tokenConfig = await getTokenConfigFromAdmin();
+      const planConfig = tokenConfig.free || { monthlyTokens: 10 };
+
+      await db.collection('creativeTokens').doc(uid).set({
+        balance: planConfig.monthlyTokens,
+        rollover: 0,
+        plan: 'free',
+        monthlyAllocation: planConfig.monthlyTokens,
+        rolloverPercent: 0,
+        lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Re-fetch
+      const newDoc = await db.collection('creativeTokens').doc(uid).get();
+      if (!newDoc.exists) {
+        return { success: false, error: 'Failed to initialize tokens' };
+      }
+    }
+
+    const tokenData = (await db.collection('creativeTokens').doc(uid).get()).data();
+    const currentBalance = tokenData.balance || 0;
+
+    if (currentBalance < amount) {
+      return {
+        success: false,
+        error: 'Insufficient tokens',
+        required: amount,
+        available: currentBalance
+      };
+    }
+
+    const newBalance = currentBalance - amount;
+
+    // Update balance
+    await db.collection('creativeTokens').doc(uid).update({
+      balance: newBalance,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Log transaction
+    await db.collection('tokenTransactions').add({
+      userId: uid,
+      type: 'wizard_' + operation,
+      amount: -amount,
+      balanceAfter: newBalance,
+      operation: operation,
+      metadata: metadata,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`[deductWizardTokens] User ${uid}: ${operation} cost ${amount} tokens, new balance: ${newBalance}`);
+
+    return { success: true, newBalance, deducted: amount };
+  } catch (error) {
+    console.error('[deductWizardTokens] Error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get user's token balance for Video Wizard
+ * Uses creativeTokens collection (shared with Thumbnail Generator)
+ */
+exports.getWizardTokenBalance = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  try {
+    // Get user's subscription plan
+    const userDoc = await db.collection('users').doc(uid).get();
+    const userPlan = userDoc.exists ? (userDoc.data().subscription?.plan || 'free') : 'free';
+
+    // Get admin-configured token settings
+    const tokenConfig = await getTokenConfigFromAdmin();
+    const planConfig = tokenConfig[userPlan] || tokenConfig.free;
+    const monthlyAllocation = planConfig.monthlyTokens || 10;
+    const rolloverPercent = planConfig.rolloverPercent || 0;
+
+    // Get or create user's token balance
+    const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+
+    if (!tokenDoc.exists) {
+      // Initialize new user with plan-appropriate tokens
+      const initialTokens = {
+        balance: monthlyAllocation,
+        rollover: 0,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rolloverPercent: rolloverPercent,
+        lastRefresh: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      await db.collection('creativeTokens').doc(uid).set(initialTokens);
+
+      // Get token costs
+      const costs = await getWizardTokenCosts();
+
+      return {
+        success: true,
+        balance: monthlyAllocation,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rollover: 0,
+        costs: costs
+      };
+    }
+
+    const tokenData = tokenDoc.data();
+
+    // Check if plan has changed - sync if needed
+    if (tokenData.plan !== userPlan) {
+      await db.collection('creativeTokens').doc(uid).update({
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rolloverPercent: rolloverPercent
+      });
+    }
+
+    // Check if monthly refresh is needed
+    const now = new Date();
+    const lastRefresh = tokenData.lastRefresh?.toDate() || new Date(0);
+    const monthsSinceRefresh = (now.getFullYear() - lastRefresh.getFullYear()) * 12 +
+                               (now.getMonth() - lastRefresh.getMonth());
+
+    let balance = tokenData.balance || 0;
+    let rollover = tokenData.rollover || 0;
+
+    if (monthsSinceRefresh >= 1) {
+      // Calculate rollover based on plan's rollover percent
+      const maxRollover = Math.floor(balance * (rolloverPercent / 100));
+      balance = monthlyAllocation + maxRollover;
+      rollover = maxRollover;
+
+      await db.collection('creativeTokens').doc(uid).update({
+        balance: balance,
+        rollover: rollover,
+        plan: userPlan,
+        monthlyAllocation: monthlyAllocation,
+        rolloverPercent: rolloverPercent,
+        lastRefresh: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    // Get token costs
+    const costs = await getWizardTokenCosts();
+
+    return {
+      success: true,
+      balance: balance,
+      plan: userPlan,
+      monthlyAllocation: monthlyAllocation,
+      rollover: rollover,
+      costs: costs
+    };
+  } catch (error) {
+    console.error('[getWizardTokenBalance] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get token balance');
+  }
+});
+
+/**
+ * Admin function: Set Video Wizard token costs
+ */
+exports.adminSetWizardTokenCosts = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { analyzeVideo, showMoreClips, generateSEO, generateBRoll, detectSpeakers, exportClip } = data;
+
+  try {
+    const costs = {};
+
+    if (analyzeVideo !== undefined) costs.analyzeVideo = Math.max(0, parseInt(analyzeVideo));
+    if (showMoreClips !== undefined) costs.showMoreClips = Math.max(0, parseInt(showMoreClips));
+    if (generateSEO !== undefined) costs.generateSEO = Math.max(0, parseInt(generateSEO));
+    if (generateBRoll !== undefined) costs.generateBRoll = Math.max(0, parseInt(generateBRoll));
+    if (detectSpeakers !== undefined) costs.detectSpeakers = Math.max(0, parseInt(detectSpeakers));
+    if (exportClip !== undefined) costs.exportClip = Math.max(0, parseInt(exportClip));
+
+    costs.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+    costs.updatedBy = context.auth.uid;
+
+    await db.collection('settings').doc('wizardTokenCosts').set(costs, { merge: true });
+
+    return { success: true, costs };
+  } catch (error) {
+    console.error('[adminSetWizardTokenCosts] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Admin function: Get Video Wizard token costs
+ */
+exports.adminGetWizardTokenCosts = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  try {
+    const costs = await getWizardTokenCosts();
+    return { success: true, costs };
+  } catch (error) {
+    console.error('[adminGetWizardTokenCosts] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Deduct tokens for Video Wizard operations
+ * Called by frontend for operations like showMoreClips
+ */
+exports.wizardDeductTokens = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  const { amount, operation, metadata = {} } = data;
+
+  if (!amount || amount <= 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid token amount');
+  }
+
+  if (!operation) {
+    throw new functions.https.HttpsError('invalid-argument', 'Operation is required');
+  }
+
+  try {
+    // Verify the cost matches the configured amount
+    const costs = await getWizardTokenCosts();
+    const expectedCost = costs[operation];
+
+    if (expectedCost !== undefined && amount !== expectedCost) {
+      console.warn(`[wizardDeductTokens] Client requested ${amount} tokens but ${operation} costs ${expectedCost}`);
+      // Use the server-configured cost, not the client-provided one
+    }
+
+    const actualCost = expectedCost !== undefined ? expectedCost : amount;
+
+    // Deduct tokens using the helper function
+    const result = await deductWizardTokens(uid, actualCost, operation, metadata);
+
+    return {
+      success: true,
+      newBalance: result.newBalance,
+      tokensDeducted: actualCost
+    };
+  } catch (error) {
+    console.error('[wizardDeductTokens] Error:', error);
+    if (error.code === 'resource-exhausted') {
+      throw error;
+    }
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ==============================================
 // HISTORY RETRIEVAL & MANAGEMENT FUNCTIONS
 // ==============================================
 
@@ -17059,6 +17358,21 @@ exports.wizardAnalyzeVideo = functions
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'wizardAnalyzeVideo', 3);
 
+  // Check and deduct tokens for video analysis
+  const tokenCosts = await getWizardTokenCosts();
+  const analyzeCost = tokenCosts.analyzeVideo || 5;
+
+  const tokenResult = await deductWizardTokens(uid, analyzeCost, 'analyzeVideo', {
+    videoUrl: data.videoUrl || 'uploaded_file'
+  });
+
+  if (!tokenResult.success) {
+    throw new functions.https.HttpsError(
+      'resource-exhausted',
+      `Insufficient tokens. This operation requires ${analyzeCost} tokens, but you have ${tokenResult.available || 0}.`
+    );
+  }
+
   const { videoUrl, options, uploadedVideoUrl, uploadedVideoPath, uploadedVideoName, extensionData, useExtension } = data;
   const isUploadedFile = !!uploadedVideoUrl;
   const hasExtensionData = useExtension && extensionData && extensionData.videoInfo;
@@ -17823,6 +18137,22 @@ exports.wizardGenerateClipSEO = functions.https.onCall(async (data, context) => 
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'wizardGenerateClipSEO', 10);
 
+  // Check and deduct tokens for SEO generation
+  const tokenCosts = await getWizardTokenCosts();
+  const seoCost = tokenCosts.generateSEO || 2;
+
+  const tokenResult = await deductWizardTokens(uid, seoCost, 'generateSEO', {
+    clipId: data.clipId,
+    projectId: data.projectId
+  });
+
+  if (!tokenResult.success) {
+    throw new functions.https.HttpsError(
+      'resource-exhausted',
+      `Insufficient tokens. This operation requires ${seoCost} tokens, but you have ${tokenResult.available || 0}.`
+    );
+  }
+
   const { clipId, transcript, platform, projectId, videoTitle } = data;
   if (!transcript) {
     throw new functions.https.HttpsError('invalid-argument', 'Transcript is required');
@@ -18507,6 +18837,22 @@ exports.wizardGenerateBRoll = functions.runWith({ timeoutSeconds: 120 }).https.o
     throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
   }
 
+  // Check and deduct tokens for B-Roll generation
+  const tokenCosts = await getWizardTokenCosts();
+  const brollCost = tokenCosts.generateBRoll || 4;
+
+  const tokenResult = await deductWizardTokens(uid, brollCost, 'generateBRoll', {
+    clipId: clipId,
+    projectId: projectId
+  });
+
+  if (!tokenResult.success) {
+    throw new functions.https.HttpsError(
+      'resource-exhausted',
+      `Insufficient tokens. This operation requires ${brollCost} tokens, but you have ${tokenResult.available || 0}.`
+    );
+  }
+
   try {
     // Verify project ownership
     const projectDoc = await db.collection('wizardProjects').doc(projectId).get();
@@ -18860,6 +19206,22 @@ exports.wizardDetectSpeakers = functions.runWith({ timeoutSeconds: 120 }).https.
 
   if (!projectId || !clipId) {
     throw new functions.https.HttpsError('invalid-argument', 'Project ID and Clip ID required');
+  }
+
+  // Check and deduct tokens for speaker detection
+  const tokenCosts = await getWizardTokenCosts();
+  const speakerCost = tokenCosts.detectSpeakers || 3;
+
+  const tokenResult = await deductWizardTokens(uid, speakerCost, 'detectSpeakers', {
+    clipId: clipId,
+    projectId: projectId
+  });
+
+  if (!tokenResult.success) {
+    throw new functions.https.HttpsError(
+      'resource-exhausted',
+      `Insufficient tokens. This operation requires ${speakerCost} tokens, but you have ${tokenResult.available || 0}.`
+    );
   }
 
   try {
@@ -20936,7 +21298,7 @@ exports.adminDeleteWizardProject = functions.https.onCall(async (data, context) 
 exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, context) => {
   await requireAdmin(context);
 
-  const { projectIds, olderThanDays, userId, deleteAll } = data;
+  const { projectIds, olderThanDays, userId, deleteAll, cleanAllStorage } = data;
 
   try {
     let query = db.collection('wizardProjects');
@@ -20969,14 +21331,11 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
       targetDocs = snapshot.docs;
     }
 
-    if (targetDocs.length === 0) {
-      return { success: true, deleted: 0, message: 'No projects matched criteria' };
-    }
-
     const bucket = admin.storage().bucket();
     let deletedCount = 0;
     let deletedFilesCount = 0;
 
+    // Delete project-associated files
     for (const doc of targetDocs) {
       const projectData = doc.data();
 
@@ -21003,7 +21362,37 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
       deletedCount++;
     }
 
-    console.log(`[adminBulkDeleteWizardProjects] Deleted ${deletedCount} projects, ${deletedFilesCount} files`);
+    // If deleteAll or cleanAllStorage flag is set, also delete ALL files in extension-uploads
+    // This catches orphaned files not referenced by any project document
+    if (deleteAll || cleanAllStorage) {
+      console.log('[adminBulkDeleteWizardProjects] Cleaning ALL storage files...');
+
+      // Delete all files in extension-uploads/
+      const [extensionFiles] = await bucket.getFiles({ prefix: 'extension-uploads/' });
+      for (const file of extensionFiles) {
+        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        deletedFilesCount++;
+      }
+      console.log(`[adminBulkDeleteWizardProjects] Deleted ${extensionFiles.length} files from extension-uploads/`);
+
+      // Delete all files in wizard-videos/ (if exists)
+      const [wizardFiles] = await bucket.getFiles({ prefix: 'wizard-videos/' });
+      for (const file of wizardFiles) {
+        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        deletedFilesCount++;
+      }
+      console.log(`[adminBulkDeleteWizardProjects] Deleted ${wizardFiles.length} files from wizard-videos/`);
+
+      // Delete all files in video-uploads/ (wizard related)
+      const [uploadFiles] = await bucket.getFiles({ prefix: 'video-uploads/' });
+      for (const file of uploadFiles) {
+        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        deletedFilesCount++;
+      }
+      console.log(`[adminBulkDeleteWizardProjects] Deleted ${uploadFiles.length} files from video-uploads/`);
+    }
+
+    console.log(`[adminBulkDeleteWizardProjects] Total: Deleted ${deletedCount} projects, ${deletedFilesCount} files`);
 
     return {
       success: true,
@@ -21012,6 +21401,76 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
     };
   } catch (error) {
     console.error('[adminBulkDeleteWizardProjects] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminCleanWizardStorage - Clean ALL Video Wizard storage files (orphan cleanup)
+ * This deletes ALL files in wizard-related storage folders regardless of project references
+ */
+exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { dryRun = false } = data;
+
+  try {
+    const bucket = admin.storage().bucket();
+    const storagePrefixes = [
+      'extension-uploads/',
+      'wizard-videos/',
+      'video-uploads/',
+      'wizard-exports/',
+      'clip-exports/'
+    ];
+
+    let totalFiles = 0;
+    let totalSize = 0;
+    const results = {};
+
+    for (const prefix of storagePrefixes) {
+      const [files] = await bucket.getFiles({ prefix });
+      let folderSize = 0;
+
+      for (const file of files) {
+        try {
+          const [metadata] = await file.getMetadata();
+          folderSize += parseInt(metadata.size || 0);
+        } catch (e) {
+          // Ignore metadata errors
+        }
+
+        if (!dryRun) {
+          await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        }
+      }
+
+      results[prefix] = {
+        fileCount: files.length,
+        sizeBytes: folderSize,
+        sizeMB: (folderSize / (1024 * 1024)).toFixed(2)
+      };
+
+      totalFiles += files.length;
+      totalSize += folderSize;
+    }
+
+    console.log(`[adminCleanWizardStorage] ${dryRun ? 'DRY RUN - ' : ''}Found ${totalFiles} files, ${(totalSize / (1024 * 1024)).toFixed(2)} MB total`);
+
+    return {
+      success: true,
+      dryRun,
+      totalFiles,
+      totalSizeBytes: totalSize,
+      totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
+      totalSizeGB: (totalSize / (1024 * 1024 * 1024)).toFixed(3),
+      breakdown: results,
+      message: dryRun
+        ? `Found ${totalFiles} files (${(totalSize / (1024 * 1024)).toFixed(2)} MB) that would be deleted`
+        : `Deleted ${totalFiles} files (${(totalSize / (1024 * 1024)).toFixed(2)} MB)`
+    };
+  } catch (error) {
+    console.error('[adminCleanWizardStorage] Error:', error);
     throw new functions.https.HttpsError('internal', error.message);
   }
 });

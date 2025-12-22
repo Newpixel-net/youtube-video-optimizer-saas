@@ -7339,10 +7339,20 @@
             loading: false,
             projectId: null, // Firestore project ID
 
-            // Token system
+            // Token system (synced with backend)
             tokens: {
                 balance: 0,
-                plan: 'free'
+                plan: 'free',
+                monthlyAllocation: 10,
+                loading: false,
+                costs: {
+                    analyzeVideo: 5,
+                    showMoreClips: 3,
+                    generateSEO: 2,
+                    generateBRoll: 4,
+                    detectSpeakers: 3,
+                    exportClip: 0
+                }
             },
 
             // Step 1: Video Input
@@ -10558,6 +10568,21 @@
                     return;
                 }
 
+                // Check if user has enough tokens
+                var analysisCost = state.tokens.costs.analyzeVideo || 5;
+                if (state.tokens.balance < analysisCost) {
+                    utils.showModal(
+                        'Insufficient Tokens',
+                        '<div style="text-align: center; padding: 20px;">' +
+                            '<div style="font-size: 48px; margin-bottom: 16px;">🎬</div>' +
+                            '<p style="margin-bottom: 16px;">You need <strong>' + analysisCost + ' tokens</strong> to analyze a video.</p>' +
+                            '<p style="margin-bottom: 16px;">Current balance: <strong>' + state.tokens.balance + ' tokens</strong></p>' +
+                            '<p style="color: #9ca3af; font-size: 14px;">Upgrade your plan or wait for your monthly token refresh to continue.</p>' +
+                        '</div>'
+                    );
+                    return;
+                }
+
                 // Reset analysis state
                 state.currentStep = 2;
                 state.analysis.status = 'processing';
@@ -10721,6 +10746,9 @@
                             hasVideoData: !!state.videoInput.videoData
                         });
 
+                        // Refresh token balance after successful analysis (tokens were deducted on backend)
+                        app.refreshTokenBalance();
+
                         // Warn if no clips were found
                         if (state.clips.length === 0) {
                             console.warn('[Video Wizard] WARNING: No clips returned from analysis');
@@ -10778,8 +10806,8 @@
                 render();
             },
 
-            createMoreClips: function() {
-                var createMoreCost = 5; // Token cost
+            createMoreClips: async function() {
+                var createMoreCost = state.tokens.costs.showMoreClips || 3;
                 var remainingClips = state.clips.length - state.displayedClipCount;
 
                 if (remainingClips <= 0) {
@@ -10788,19 +10816,39 @@
                 }
 
                 if (state.tokens.balance < createMoreCost) {
-                    utils.showToast('Not enough tokens. Need ' + createMoreCost + ' tokens.', 'error');
+                    utils.showModal(
+                        'Insufficient Tokens',
+                        '<div style="text-align: center; padding: 20px;">' +
+                            '<div style="font-size: 48px; margin-bottom: 16px;">🎬</div>' +
+                            '<p style="margin-bottom: 16px;">You need <strong>' + createMoreCost + ' tokens</strong> to unlock more clips.</p>' +
+                            '<p style="margin-bottom: 16px;">Current balance: <strong>' + state.tokens.balance + ' tokens</strong></p>' +
+                        '</div>'
+                    );
                     return;
                 }
 
-                // Deduct tokens
-                state.tokens.balance -= createMoreCost;
+                try {
+                    // Deduct tokens via backend
+                    var wizardDeductTokens = firebase.functions().httpsCallable('wizardDeductTokens');
+                    await wizardDeductTokens({
+                        amount: createMoreCost,
+                        operation: 'showMoreClips',
+                        metadata: { projectId: state.projectId }
+                    });
 
-                // Show next batch of clips (8-10 more)
-                var nextBatch = Math.min(10, remainingClips);
-                state.displayedClipCount += nextBatch;
+                    // Show next batch of clips (8-10 more)
+                    var nextBatch = Math.min(10, remainingClips);
+                    state.displayedClipCount += nextBatch;
 
-                utils.showToast('Unlocked ' + nextBatch + ' more clips! (-' + createMoreCost + ' tokens)', 'success');
-                render();
+                    utils.showToast('Unlocked ' + nextBatch + ' more clips! (-' + createMoreCost + ' tokens)', 'success');
+
+                    // Refresh token balance
+                    app.refreshTokenBalance();
+                    render();
+                } catch (error) {
+                    console.error('Error deducting tokens:', error);
+                    utils.showToast('Failed to unlock clips: ' + (error.message || 'Unknown error'), 'error');
+                }
             },
 
             toggleClipSelection: function(clipId) {
@@ -12219,6 +12267,28 @@
                     hook: 'AI Hook Generation'
                 };
 
+                // Token cost mapping for AI features
+                var featureTokenCosts = {
+                    broll: state.tokens.costs.generateBRoll || 4,
+                    reframe: state.tokens.costs.detectSpeakers || 3
+                };
+
+                // Check token balance for token-consuming features
+                if (featureTokenCosts[feature]) {
+                    var cost = featureTokenCosts[feature];
+                    if (state.tokens.balance < cost) {
+                        utils.showModal(
+                            'Insufficient Tokens',
+                            '<div style="text-align: center; padding: 20px;">' +
+                                '<div style="font-size: 48px; margin-bottom: 16px;">🤖</div>' +
+                                '<p style="margin-bottom: 16px;">You need <strong>' + cost + ' tokens</strong> to use ' + (featureNames[feature] || feature) + '.</p>' +
+                                '<p style="margin-bottom: 16px;">Current balance: <strong>' + state.tokens.balance + ' tokens</strong></p>' +
+                            '</div>'
+                        );
+                        return;
+                    }
+                }
+
                 utils.showToast('Applying ' + (featureNames[feature] || feature) + '...', 'info');
 
                 try {
@@ -12233,6 +12303,7 @@
                             if (result.data.success) {
                                 state.clipBRoll = state.clipBRoll || {};
                                 state.clipBRoll[activeClip.id] = result.data.brollSuggestions;
+                                app.refreshTokenBalance(); // Refresh tokens after successful operation
                                 utils.showToast('Generated ' + result.data.brollSuggestions.length + ' B-Roll suggestions!', 'success');
                                 app.showBRollModal(activeClip.id);
                             }
@@ -12281,6 +12352,7 @@
                                 if (result.data.recommendedReframe) {
                                     app.setReframeMode(result.data.recommendedReframe);
                                 }
+                                app.refreshTokenBalance(); // Refresh tokens after successful operation
                                 utils.showToast('Detected ' + result.data.speakerCount + ' speaker(s). Reframe set to: ' + result.data.recommendedReframe, 'success');
                             }
                             break;
@@ -12483,6 +12555,20 @@
                     return;
                 }
 
+                // Check token balance
+                var seoCost = state.tokens.costs.generateSEO || 2;
+                if (state.tokens.balance < seoCost) {
+                    utils.showModal(
+                        'Insufficient Tokens',
+                        '<div style="text-align: center; padding: 20px;">' +
+                            '<div style="font-size: 48px; margin-bottom: 16px;">✨</div>' +
+                            '<p style="margin-bottom: 16px;">You need <strong>' + seoCost + ' tokens</strong> to regenerate SEO.</p>' +
+                            '<p style="margin-bottom: 16px;">Current balance: <strong>' + state.tokens.balance + ' tokens</strong></p>' +
+                        '</div>'
+                    );
+                    return;
+                }
+
                 utils.showToast('Regenerating ' + field + '...', 'info');
 
                 try {
@@ -12503,6 +12589,8 @@
                             tags: result.data.tags || [],
                             hashtags: result.data.hashtags || []
                         };
+                        // Refresh token balance after successful operation
+                        app.refreshTokenBalance();
                         render();
                         utils.showToast(field.charAt(0).toUpperCase() + field.slice(1) + ' regenerated!', 'success');
                     } else {
@@ -14898,6 +14986,57 @@
                 }
             },
 
+            // Load token balance from backend
+            loadTokenBalance: async function() {
+                if (!state.user) {
+                    state.tokens.balance = 0;
+                    state.tokens.plan = 'free';
+                    return;
+                }
+
+                state.tokens.loading = true;
+                render();
+
+                try {
+                    var getWizardTokenBalance = functions.httpsCallable('getWizardTokenBalance');
+                    var result = await getWizardTokenBalance({});
+
+                    if (result.data.success) {
+                        state.tokens.balance = result.data.balance || 0;
+                        state.tokens.plan = result.data.plan || 'free';
+                        state.tokens.monthlyAllocation = result.data.monthlyAllocation || 10;
+
+                        // Update costs from backend
+                        if (result.data.costs) {
+                            state.tokens.costs = result.data.costs;
+                        }
+
+                        console.log('[TokenBalance] Loaded:', state.tokens.balance, 'tokens, plan:', state.tokens.plan);
+                    }
+                } catch (error) {
+                    console.error('[TokenBalance] Error loading balance:', error);
+                    // Keep default values
+                } finally {
+                    state.tokens.loading = false;
+                    render();
+                }
+            },
+
+            // Refresh token balance after an operation
+            refreshTokenBalance: async function() {
+                try {
+                    var getWizardTokenBalance = functions.httpsCallable('getWizardTokenBalance');
+                    var result = await getWizardTokenBalance({});
+
+                    if (result.data.success) {
+                        state.tokens.balance = result.data.balance || 0;
+                        render();
+                    }
+                } catch (error) {
+                    console.error('[TokenBalance] Error refreshing:', error);
+                }
+            },
+
             checkYouTubeConnection: async function() {
                 if (!state.user) return;
 
@@ -15269,8 +15408,10 @@
         auth.onAuthStateChanged(function(user) {
             if (user) {
                 state.user = user;
-                state.tokens.balance = 100; // Mock balance
                 render();
+
+                // Load real token balance from backend
+                app.loadTokenBalance();
 
                 // Check for pending OAuth from localStorage
                 checkPendingOAuth();
@@ -15281,8 +15422,9 @@
                 // Check YouTube connection status
                 app.checkYouTubeConnection();
             } else {
-                // For demo purposes, allow access without auth
-                state.tokens.balance = 50;
+                // Not logged in - set to 0 tokens (require auth)
+                state.tokens.balance = 0;
+                state.tokens.plan = 'free';
                 render();
             }
         });
