@@ -3223,6 +3223,32 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
     // Small delay to ensure relay is fully set up
     await new Promise(resolve => setTimeout(resolve, 100));
 
+    // CRITICAL FIX v2.7.11: Ensure video is playing RIGHT BEFORE capture injection
+    // For long videos with deep clips, the video might have paused during the gap
+    // between pre-buffering completion and capture injection
+    console.log(`[EXT][CAPTURE] Ensuring video is playing before capture injection...`);
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: youtubeTab.id },
+        world: 'MAIN',
+        func: () => {
+          const video = document.querySelector('video.html5-main-video');
+          if (video) {
+            console.log(`[YVO] Pre-injection check: paused=${video.paused}, readyState=${video.readyState}`);
+            if (video.paused) {
+              console.log('[YVO] Video paused before capture injection, resuming with muted=true...');
+              video.muted = true;
+              video.play().catch(e => console.warn('[YVO] Pre-injection play failed:', e.message));
+            }
+          }
+        }
+      });
+      // Brief wait for play to take effect
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } catch (prePlayErr) {
+      console.warn(`[EXT][CAPTURE] Pre-injection play check failed: ${prePlayErr.message}`);
+    }
+
     // Now inject the capture function into MAIN world
     // NEW v2.6.8: Pass upload URL so capture can upload directly from page context
     // This avoids message passing issues with large video data
