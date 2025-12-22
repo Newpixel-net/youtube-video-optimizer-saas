@@ -294,9 +294,9 @@ async function logUsage(uid, action, metadata = {}) {
  * Also cleans up associated storage files
  */
 async function enforceMaxProjects(uid, maxProjects = 8) {
-  // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
-  const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
-  const bucket = admin.storage().bucket(STORAGE_BUCKET);
+  // Use the default bucket (most reliable) - Firebase admin SDK knows the correct bucket
+  const bucket = admin.storage().bucket();
+  const STORAGE_BUCKET = bucket.name;
 
   try {
     // Get user's projects ordered by creation date (oldest first)
@@ -21547,9 +21547,9 @@ exports.adminDeleteWizardProject = functions.https.onCall(async (data, context) 
     }
 
     const projectData = projectDoc.data();
-    // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
-    const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
-    const bucket = admin.storage().bucket(STORAGE_BUCKET);
+    // Use the default bucket (most reliable) - Firebase admin SDK knows the correct bucket
+    const bucket = admin.storage().bucket();
+    const STORAGE_BUCKET = bucket.name;
 
     console.log(`[adminDeleteWizardProject] Using bucket: ${STORAGE_BUCKET}, videoId: ${projectData.videoId}`);
 
@@ -21645,9 +21645,58 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
       targetDocs = snapshot.docs;
     }
 
-    // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
-    const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
-    const bucket = admin.storage().bucket(STORAGE_BUCKET);
+    // CRITICAL: Try multiple bucket name formats - Firebase can use different formats
+    const BUCKET_FORMATS = [
+      'ytseo-6d1b0.firebasestorage.app',  // New format
+      'ytseo-6d1b0.appspot.com',           // Old format
+    ];
+
+    let bucket;
+    let STORAGE_BUCKET;
+
+    // First, try the default bucket (most reliable)
+    console.log('[adminBulkDeleteWizardProjects] Detecting correct bucket...');
+    const defaultBucket = admin.storage().bucket();
+    const defaultBucketName = defaultBucket.name;
+    console.log(`[adminBulkDeleteWizardProjects] Default bucket name: ${defaultBucketName}`);
+
+    // Test if default bucket has files
+    try {
+      const [testFiles] = await defaultBucket.getFiles({ prefix: 'processed-clips/', maxResults: 5 });
+      if (testFiles.length > 0) {
+        bucket = defaultBucket;
+        STORAGE_BUCKET = defaultBucketName;
+        console.log(`[adminBulkDeleteWizardProjects] Using default bucket: ${STORAGE_BUCKET} (found ${testFiles.length} files)`);
+      }
+    } catch (e) {
+      console.log(`[adminBulkDeleteWizardProjects] Default bucket test failed: ${e.message}`);
+    }
+
+    // If default bucket didn't have files, try explicit bucket names
+    if (!bucket) {
+      for (const bucketName of BUCKET_FORMATS) {
+        try {
+          const testBucket = admin.storage().bucket(bucketName);
+          const [testFiles] = await testBucket.getFiles({ prefix: 'processed-clips/', maxResults: 5 });
+          if (testFiles.length > 0) {
+            bucket = testBucket;
+            STORAGE_BUCKET = bucketName;
+            console.log(`[adminBulkDeleteWizardProjects] Using bucket: ${STORAGE_BUCKET} (found ${testFiles.length} files)`);
+            break;
+          }
+        } catch (e) {
+          console.log(`[adminBulkDeleteWizardProjects] ${bucketName} failed: ${e.message}`);
+        }
+      }
+    }
+
+    // If still no bucket, use default
+    if (!bucket) {
+      bucket = defaultBucket;
+      STORAGE_BUCKET = defaultBucketName;
+      console.log(`[adminBulkDeleteWizardProjects] No files found, using default bucket: ${STORAGE_BUCKET}`);
+    }
+
     let deletedCount = 0;
     let deletedFilesCount = 0;
 
@@ -21741,10 +21790,62 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
   const { dryRun = false } = data;
 
   try {
-    // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
-    // The video-processor service uploads to this bucket
-    const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
-    const bucket = admin.storage().bucket(STORAGE_BUCKET);
+    // Try multiple bucket name formats - Firebase can use different formats
+    const BUCKET_FORMATS = [
+      'ytseo-6d1b0.firebasestorage.app',  // New format
+      'ytseo-6d1b0.appspot.com',           // Old format
+    ];
+
+    let bucket;
+    let STORAGE_BUCKET;
+    let foundFiles = false;
+
+    // First, try the default bucket (most reliable)
+    console.log('[adminCleanWizardStorage] Trying default bucket first...');
+    const defaultBucket = admin.storage().bucket();
+    const defaultBucketName = defaultBucket.name;
+    console.log(`[adminCleanWizardStorage] Default bucket name: ${defaultBucketName}`);
+
+    try {
+      const [testFiles] = await defaultBucket.getFiles({ prefix: 'processed-clips/', maxResults: 5 });
+      console.log(`[adminCleanWizardStorage] Default bucket: found ${testFiles.length} files in processed-clips/`);
+      if (testFiles.length > 0) {
+        bucket = defaultBucket;
+        STORAGE_BUCKET = defaultBucketName;
+        foundFiles = true;
+        console.log(`[adminCleanWizardStorage] Using default bucket: ${STORAGE_BUCKET}`);
+      }
+    } catch (e) {
+      console.log(`[adminCleanWizardStorage] Default bucket test failed: ${e.message}`);
+    }
+
+    // If default bucket didn't have files, try explicit bucket names
+    if (!foundFiles) {
+      for (const bucketName of BUCKET_FORMATS) {
+        console.log(`[adminCleanWizardStorage] Trying bucket: ${bucketName}`);
+        try {
+          const testBucket = admin.storage().bucket(bucketName);
+          const [testFiles] = await testBucket.getFiles({ prefix: 'processed-clips/', maxResults: 5 });
+          console.log(`[adminCleanWizardStorage] ${bucketName}: found ${testFiles.length} files in processed-clips/`);
+          if (testFiles.length > 0) {
+            bucket = testBucket;
+            STORAGE_BUCKET = bucketName;
+            foundFiles = true;
+            console.log(`[adminCleanWizardStorage] Using bucket: ${STORAGE_BUCKET}`);
+            break;
+          }
+        } catch (e) {
+          console.log(`[adminCleanWizardStorage] ${bucketName} failed: ${e.message}`);
+        }
+      }
+    }
+
+    // If still no files found, use default bucket anyway and report what we find
+    if (!bucket) {
+      bucket = defaultBucket;
+      STORAGE_BUCKET = defaultBucketName;
+      console.log(`[adminCleanWizardStorage] No files found in any bucket, using default: ${STORAGE_BUCKET}`);
+    }
 
     console.log(`[adminCleanWizardStorage] Starting cleanup, bucket: ${STORAGE_BUCKET}, dryRun: ${dryRun}`);
 
