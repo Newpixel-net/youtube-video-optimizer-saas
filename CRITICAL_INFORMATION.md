@@ -72,9 +72,15 @@ if (videoElement.paused) {
 4. The 100ms delay ensures playback is stable before unmuting
 
 ### Working Version Reference
-- **v2.7.9** is the working version with this fix
-- Commit: `6956286` (2025-12-22)
+- **v2.7.10** is the working version with the complete fix
+- Commit: `2410782` (2025-12-22)
 - Key file: `browser-extension/src/background.js`
+
+**Important**: There are TWO places where `muted=true` must be set before `play()`:
+1. **Pre-capture section** (~line 1766-1768) - before `captureStream()` is called
+2. **Recording section** (~line 1994-2028) - when starting the MediaRecorder
+
+The v2.7.9 fix only addressed the recording section. v2.7.10 adds the fix to the pre-capture section as well.
 
 ---
 
@@ -256,57 +262,56 @@ ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=nb_read_
 
 ---
 
-## Working Version Backup Reference (v2.7.9)
+## Working Version Backup Reference (v2.7.10)
 
 **Date**: 2025-12-22
-**Commit**: `6956286`
+**Commit**: `2410782`
 **Branch**: `claude/fix-nvenc-frozen-video-v9bA2`
 
 ### Key Configuration (browser-extension/src/background.js)
 
+**Location 1: Pre-capture section (~lines 1763-1781)**
 ```javascript
-// Line ~1337
-const PLAYBACK_SPEED = 1;
+// CRITICAL: Ensure video is PLAYING before captureStream
+if (videoElement.paused) {
+  console.log('[EXT][CAPTURE] Video is paused after seek, resuming playback...');
+  try {
+    // CRITICAL FIX v2.7.10: Must set muted=true for Chrome autoplay policy!
+    // Without this, play() fails silently and captureStream() gets frozen frames
+    videoElement.muted = true;
+    await videoElement.play();
+    await sleep(300);
+  } catch (playErr) {
+    // Fallback to YouTube player API...
+  }
+}
+```
 
-// Lines ~1994-2028 (in captureVideoWithMessage function)
-// Set playback speed
-videoElement.playbackRate = PLAYBACK_SPEED;
-
+**Location 2: Recording section (~lines 1994-2028)**
+```javascript
 // CRITICAL FIX: Start MUTED for autoplay to work (Chrome policy)
 videoElement.muted = true;
 videoElement.volume = 1;
 
 const startRecording = () => {
   recorder.start(500);
-  console.log('[EXT][CAPTURE] Recording started');
-
   // NOW unmute to capture audio (after playback confirmed)
   setTimeout(() => {
     videoElement.muted = false;
-    console.log('[EXT][CAPTURE] Video unmuted for audio capture');
   }, 100);
 };
-
-if (videoElement.paused) {
-  videoElement.play().then(startRecording).catch((e) => {
-    console.warn('[EXT][CAPTURE] Play failed, trying anyway:', e.message);
-    startRecording();
-  });
-} else {
-  startRecording();
-}
 ```
 
 ### To Restore if Problems Arise
 ```bash
 # Compare current code with working version
-git diff 6956286 -- browser-extension/src/background.js
+git diff 2410782 -- browser-extension/src/background.js
 
 # Reset to working version if needed
-git checkout 6956286 -- browser-extension/src/background.js
+git checkout 2410782 -- browser-extension/src/background.js
 ```
 
 ---
 
 *Last updated: 2025-12-22*
-*Working version: v2.7.9 (commit 6956286)*
+*Working version: v2.7.10 (commit 2410782)*
