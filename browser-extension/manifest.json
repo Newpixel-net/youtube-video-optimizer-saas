@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.7.7",
-  "description": "Fix frozen video capture - ensure video is playing before captureStream (v2.7.7)",
+  "version": "2.7.9",
+  "description": "Fix frozen video - start muted for autoplay, unmute after playback (v2.7.9)",
 
   "permissions": [
     "activeTab",
