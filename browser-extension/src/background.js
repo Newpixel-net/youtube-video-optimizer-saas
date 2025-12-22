@@ -2851,6 +2851,7 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
                 func: () => {
                   const video = document.querySelector('video.html5-main-video');
                   if (video && video.paused) {
+                    video.muted = true;  // CRITICAL: Required for Chrome autoplay policy
                     video.play().catch(() => {});
                   }
                 }
