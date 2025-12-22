@@ -1795,8 +1795,10 @@ const CreatorToolsPanel = {
             <circle class="yvo-seo-circle-progress" cx="50" cy="50" r="45"
               style="stroke-dasharray: ${total * 2.83}, 283; stroke: ${getScoreColor(total)}"/>
           </svg>
-          <div class="yvo-seo-score-value">${total}</div>
-          <div class="yvo-seo-score-label">SEO Score</div>
+          <div class="yvo-seo-score-text">
+            <div class="yvo-seo-score-value">${total}</div>
+            <div class="yvo-seo-score-label">SEO Score</div>
+          </div>
         </div>
       </div>
       <div class="yvo-seo-breakdown">
