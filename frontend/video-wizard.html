@@ -1819,12 +1819,23 @@
         .phone-video-area .preview-iframe-wrapper iframe {
             position: absolute;
             top: 0;
-            /* Use CSS calc to position based on crop percentage */
-            left: calc(var(--crop-position));
-            transform: translateX(calc(-1 * var(--crop-position)));
-            width: 177.78vh; /* 16:9 ratio based on viewport height */
             height: 100%;
-            min-width: 316%; /* Ensures video fills height and overflows width */
+            /*
+             * CRITICAL FIX: Use FIXED width of exactly 316% (16:9 in 9:16 container).
+             * The previous approach used 177.78vh which varies with viewport,
+             * causing translateX(-X%) to produce inconsistent results because
+             * translateX is calculated as percentage of element's own width.
+             *
+             * For 16:9 source in 9:16 output: ratio = (16/9)² = 256/81 ≈ 3.16 = 316%
+             * This matches the FFmpeg calculation exactly.
+             */
+            width: 316%;
+            /* Position using left offset calculated the same way as FFmpeg:
+             * FFmpeg: cropX = (percent/100) * (width - cropWidth)
+             * CSS equivalent: left = -percent% * (316% - 100%) / 100% = -percent% * 2.16
+             * Using CSS calc with the crop position variable
+             */
+            left: calc(-1 * var(--crop-position) * 2.16);
             border: none;
         }
 
