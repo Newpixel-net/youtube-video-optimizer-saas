@@ -17850,24 +17850,35 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
     }
 
     // Validate and process clips - ensure no overlaps and proper spread
-    const defaultDuration = presetConfig.targetDuration || 55;
+    // ENFORCE platform-specific durations
+    const minDuration = presetConfig.minDuration || 45;
+    const maxDuration = presetConfig.maxDuration || 60;
+    const targetDuration = presetConfig.targetDuration || 55;
+
     let processedClips = (analysisResult.clips || [])
       .filter(clip => {
         // Validate timestamps
         const start = parseInt(clip.startTime) || 0;
-        const end = parseInt(clip.endTime) || start + defaultDuration;
-        return start >= 0 && start < durationSeconds && end > start && end <= durationSeconds;
+        return start >= 0 && start < durationSeconds;
       })
       .map((clip, index) => {
         const start = parseInt(clip.startTime) || 0;
-        const end = parseInt(clip.endTime) || start + defaultDuration;
+        // ENFORCE platform-specific duration: use AI's duration if within range, otherwise use target
+        let clipDuration = parseInt(clip.duration) || targetDuration;
+        if (clipDuration < minDuration) clipDuration = targetDuration;
+        if (clipDuration > maxDuration) clipDuration = maxDuration;
+        // Calculate end based on enforced duration
+        const end = Math.min(start + clipDuration, durationSeconds);
+        // Recalculate duration in case end was capped by video length
+        const finalDuration = end - start;
+
         // Get actual transcript for this clip's time range
         const actualTranscript = getTranscriptForTimeRange(transcriptSegments, start, end);
         return {
           id: `clip_${videoId}_${index}_${Date.now()}`,
           startTime: start,
-          endTime: Math.min(end, durationSeconds),
-          duration: Math.min(end - start, 60),
+          endTime: end,
+          duration: finalDuration,
           // Use actual transcript if available, otherwise use AI-generated summary
           transcript: actualTranscript || clip.transcript || `Clip ${index + 1}`,
           aiSummary: clip.transcript || '', // Keep AI summary as additional context
