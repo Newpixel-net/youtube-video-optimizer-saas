@@ -13818,10 +13818,29 @@
                     return;
                 }
 
+                // Create batch export document in Firestore for persistence/resume
+                var batchId = null;
+                try {
+                    var wizardCreateBatchExport = firebase.functions().httpsCallable('wizardCreateBatchExport');
+                    var batchResult = await wizardCreateBatchExport({
+                        projectId: state.projectId,
+                        clips: selectedClips.map(function(c) {
+                            return { clipId: c.id, title: c.title || c.summary || 'Clip' };
+                        })
+                    });
+                    if (batchResult.data.success) {
+                        batchId = batchResult.data.batchId;
+                        console.log('[BatchExport] Created batch export document:', batchId);
+                    }
+                } catch (batchErr) {
+                    console.warn('[BatchExport] Could not create batch document (export will continue):', batchErr);
+                }
+
                 // Initialize export state with abort capability
                 state.parallelExport = {
                     active: true,
                     aborted: false,
+                    batchId: batchId,  // Store batchId for persistence
                     startTime: Date.now(),
                     totalClips: selectedClips.length,
                     completedClips: 0,
@@ -14056,6 +14075,8 @@
                     var jobId = result.data.jobId;
                     state.parallelExport.clips[clipId].jobId = jobId;
                     app.addBatchExportLog('Processing job started (Job ID: ' + jobId.substring(0, 8) + '...)', 'info');
+                    // Update batch export document with job ID
+                    app.updateBatchExportClip(clipId, { jobId: jobId, status: 'processing' });
 
                     // Poll for completion
                     await app.pollParallelExportJob(clipId, jobId, clipTitle);
@@ -14067,6 +14088,8 @@
                     state.parallelExport.failedClips++;
                     app.addBatchExportLog('Error: ' + error.message, 'error');
                     app.updateParallelExportProgress();
+                    // Update batch export document
+                    app.updateBatchExportClip(clipId, { status: 'error', error: error.message });
                     // Re-throw to trigger fail-fast in parent
                     throw error;
                 }
@@ -14113,6 +14136,8 @@
                                     state.parallelExport.completedClips++;
                                     app.addBatchExportLog('✓ Completed: ' + (clipTitle || 'Clip') + ' - Ready for download!', 'success');
                                     app.updateParallelExportProgress();
+                                    // Update batch export document
+                                    app.updateBatchExportClip(clipId, { status: 'completed', outputUrl: job.outputUrl });
                                     resolve();
                                 } else if (job.status === 'failed') {
                                     clearInterval(pollInterval);
@@ -14121,6 +14146,8 @@
                                     state.parallelExport.failedClips++;
                                     app.addBatchExportLog('✗ Failed: ' + (clipTitle || 'Clip') + ' - ' + (job.error || 'Processing failed'), 'error');
                                     app.updateParallelExportProgress();
+                                    // Update batch export document
+                                    app.updateBatchExportClip(clipId, { status: 'error', error: job.error || 'Processing failed' });
                                     resolve(); // Don't reject, allow other clips to continue
                                 }
                             }
@@ -14135,6 +14162,8 @@
                             state.parallelExport.failedClips++;
                             app.addBatchExportLog('✗ Timeout: ' + (clipTitle || 'Clip') + ' - Processing took too long', 'error');
                             app.updateParallelExportProgress();
+                            // Update batch export document
+                            app.updateBatchExportClip(clipId, { status: 'error', error: 'Timeout - processing took too long' });
                             resolve();
                         }
                     }, 5000); // Poll every 5 seconds
@@ -14284,7 +14313,7 @@
                     // Download button for completed clips
                     if (clipData.status === 'completed' && clipData.outputUrl) {
                         html += '<div class="batch-export-clip-actions">';
-                        html += '<a href="' + clipData.outputUrl + '" download class="batch-export-download-btn">📥 Download</a>';
+                        html += '<a href="' + clipData.outputUrl + '" target="_blank" download class="batch-export-download-btn">📥 Download</a>';
                         html += '</div>';
                     }
 
@@ -14433,6 +14462,200 @@
                 });
 
                 utils.showToast('Downloading ' + downloadUrls.length + ' clips...', 'success');
+            },
+
+            /**
+             * Update batch export clip status in Firestore (for persistence/resume)
+             */
+            updateBatchExportClip: function(clipId, updates) {
+                if (!state.parallelExport || !state.parallelExport.batchId) return;
+
+                var wizardUpdateBatchExportClip = firebase.functions().httpsCallable('wizardUpdateBatchExportClip');
+                wizardUpdateBatchExportClip({
+                    batchId: state.parallelExport.batchId,
+                    clipId: clipId,
+                    jobId: updates.jobId || null,
+                    status: updates.status || null,
+                    progress: updates.progress || null,
+                    outputUrl: updates.outputUrl || null,
+                    error: updates.error || null
+                }).then(function(result) {
+                    if (result.data.isComplete) {
+                        console.log('[BatchExport] All clips done, showing notification');
+                        app.showBatchExportNotification();
+                    }
+                }).catch(function(err) {
+                    console.warn('[BatchExport] Could not update batch document:', err);
+                });
+            },
+
+            /**
+             * Check for pending batch export on page load
+             */
+            checkPendingBatchExport: async function() {
+                if (!state.projectId || !state.user) return;
+
+                try {
+                    var wizardGetPendingBatchExport = firebase.functions().httpsCallable('wizardGetPendingBatchExport');
+                    var result = await wizardGetPendingBatchExport({ projectId: state.projectId });
+
+                    if (result.data.success && result.data.batch) {
+                        var batch = result.data.batch;
+                        console.log('[BatchExport] Found pending batch export:', batch.id, batch.status);
+
+                        // Show resume modal
+                        app.showResumeBatchExportModal(batch);
+                    }
+                } catch (err) {
+                    console.warn('[BatchExport] Error checking for pending batch:', err);
+                }
+            },
+
+            /**
+             * Show modal to resume or dismiss pending batch export
+             */
+            showResumeBatchExportModal: function(batch) {
+                var completedCount = batch.completedClips || 0;
+                var failedCount = batch.failedClips || 0;
+                var totalCount = batch.totalClips || 0;
+                var processingCount = totalCount - completedCount - failedCount;
+                var isComplete = batch.status === 'completed' || batch.status === 'partial' || batch.status === 'failed';
+
+                // Remove any existing modal
+                var existingModal = document.getElementById('resumeBatchModal');
+                if (existingModal) existingModal.remove();
+
+                var modalHtml = '<div class="batch-export-modal-overlay" id="resumeBatchModal">';
+                modalHtml += '<div class="batch-export-modal" style="max-width: 500px;">';
+                modalHtml += '<div class="batch-export-modal-header">';
+                modalHtml += '<h2>' + (isComplete ? '📦 Previous Export Complete' : '🔄 Export In Progress') + '</h2>';
+                modalHtml += '</div>';
+                modalHtml += '<div class="batch-export-modal-body" style="padding: 1.5rem;">';
+
+                if (isComplete) {
+                    modalHtml += '<p style="margin-bottom: 1rem;">Your previous batch export has completed.</p>';
+                    modalHtml += '<div style="display: flex; gap: 1rem; margin-bottom: 1rem;">';
+                    modalHtml += '<div style="flex: 1; text-align: center; padding: 1rem; background: rgba(34, 197, 94, 0.2); border-radius: 8px;">';
+                    modalHtml += '<div style="font-size: 1.5rem; font-weight: bold; color: #22c55e;">' + completedCount + '</div>';
+                    modalHtml += '<div style="font-size: 0.8rem; color: #94a3b8;">Completed</div>';
+                    modalHtml += '</div>';
+                    if (failedCount > 0) {
+                        modalHtml += '<div style="flex: 1; text-align: center; padding: 1rem; background: rgba(239, 68, 68, 0.2); border-radius: 8px;">';
+                        modalHtml += '<div style="font-size: 1.5rem; font-weight: bold; color: #ef4444;">' + failedCount + '</div>';
+                        modalHtml += '<div style="font-size: 0.8rem; color: #94a3b8;">Failed</div>';
+                        modalHtml += '</div>';
+                    }
+                    modalHtml += '</div>';
+                } else {
+                    modalHtml += '<p style="margin-bottom: 1rem;">A batch export is still processing in the background.</p>';
+                    modalHtml += '<div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">';
+                    modalHtml += '<div style="flex: 1; text-align: center; padding: 0.75rem; background: rgba(34, 197, 94, 0.2); border-radius: 8px;">';
+                    modalHtml += '<div style="font-size: 1.25rem; font-weight: bold; color: #22c55e;">' + completedCount + '</div>';
+                    modalHtml += '<div style="font-size: 0.75rem; color: #94a3b8;">Done</div>';
+                    modalHtml += '</div>';
+                    modalHtml += '<div style="flex: 1; text-align: center; padding: 0.75rem; background: rgba(59, 130, 246, 0.2); border-radius: 8px;">';
+                    modalHtml += '<div style="font-size: 1.25rem; font-weight: bold; color: #3b82f6;">' + processingCount + '</div>';
+                    modalHtml += '<div style="font-size: 0.75rem; color: #94a3b8;">Processing</div>';
+                    modalHtml += '</div>';
+                    if (failedCount > 0) {
+                        modalHtml += '<div style="flex: 1; text-align: center; padding: 0.75rem; background: rgba(239, 68, 68, 0.2); border-radius: 8px;">';
+                        modalHtml += '<div style="font-size: 1.25rem; font-weight: bold; color: #ef4444;">' + failedCount + '</div>';
+                        modalHtml += '<div style="font-size: 0.75rem; color: #94a3b8;">Failed</div>';
+                        modalHtml += '</div>';
+                    }
+                    modalHtml += '</div>';
+                }
+
+                // Show clip list
+                modalHtml += '<div style="max-height: 200px; overflow-y: auto; margin-bottom: 1rem;">';
+                batch.clips.forEach(function(clip) {
+                    var icon = clip.status === 'completed' ? '✅' : clip.status === 'error' ? '❌' : clip.status === 'processing' ? '⏳' : '⏸️';
+                    modalHtml += '<div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 0.25rem;">';
+                    modalHtml += '<span>' + icon + '</span>';
+                    modalHtml += '<span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + utils.escapeHtml(clip.title || clip.clipId) + '</span>';
+                    if (clip.status === 'completed' && clip.outputUrl) {
+                        modalHtml += '<a href="' + clip.outputUrl + '" target="_blank" download style="color: #22c55e; text-decoration: none;">📥</a>';
+                    }
+                    modalHtml += '</div>';
+                });
+                modalHtml += '</div>';
+
+                modalHtml += '</div>';
+                modalHtml += '<div class="batch-export-modal-footer" style="display: flex; gap: 0.5rem; justify-content: flex-end;">';
+                modalHtml += '<button onclick="app.dismissResumeBatchModal()" class="btn-secondary" style="padding: 0.5rem 1rem;">Dismiss</button>';
+                if (completedCount > 0) {
+                    modalHtml += '<button onclick="app.downloadFromResumeBatch(\'' + batch.id + '\')" class="btn-primary" style="padding: 0.5rem 1rem;">📥 Download ' + completedCount + ' Clips</button>';
+                }
+                modalHtml += '</div>';
+                modalHtml += '</div></div>';
+
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            },
+
+            dismissResumeBatchModal: function() {
+                var modal = document.getElementById('resumeBatchModal');
+                if (modal) modal.remove();
+            },
+
+            downloadFromResumeBatch: async function(batchId) {
+                try {
+                    var wizardGetBatchExport = firebase.functions().httpsCallable('wizardGetBatchExport');
+                    var result = await wizardGetBatchExport({ batchId: batchId });
+
+                    if (result.data.success) {
+                        var clips = result.data.batch.clips;
+                        var completedClips = clips.filter(function(c) { return c.status === 'completed' && c.outputUrl; });
+
+                        if (completedClips.length === 0) {
+                            utils.showToast('No completed clips to download', 'warning');
+                            return;
+                        }
+
+                        utils.showToast('Downloading ' + completedClips.length + ' clips...', 'info');
+
+                        completedClips.forEach(function(clip, index) {
+                            setTimeout(function() {
+                                var link = document.createElement('a');
+                                link.href = clip.outputUrl;
+                                link.download = 'clip_' + clip.clipId + '.mp4';
+                                link.target = '_blank';
+                                link.style.display = 'none';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }, index * 500);
+                        });
+
+                        app.dismissResumeBatchModal();
+                    }
+                } catch (err) {
+                    console.error('Download error:', err);
+                    utils.showToast('Download failed: ' + err.message, 'error');
+                }
+            },
+
+            /**
+             * Show browser notification when batch export completes
+             */
+            showBatchExportNotification: function() {
+                // Request notification permission if not granted
+                if ('Notification' in window) {
+                    if (Notification.permission === 'granted') {
+                        new Notification('🎬 Batch Export Complete!', {
+                            body: 'Your clips are ready to download.',
+                            icon: '/favicon.ico'
+                        });
+                    } else if (Notification.permission !== 'denied') {
+                        Notification.requestPermission().then(function(permission) {
+                            if (permission === 'granted') {
+                                new Notification('🎬 Batch Export Complete!', {
+                                    body: 'Your clips are ready to download.',
+                                    icon: '/favicon.ico'
+                                });
+                            }
+                        });
+                    }
+                }
             },
 
             downloadAllZip: function() {
@@ -14667,6 +14890,11 @@
                         }
 
                         utils.showToast('Project loaded successfully!', 'success');
+
+                        // Check for any pending/in-progress batch exports
+                        setTimeout(function() {
+                            app.checkPendingBatchExport();
+                        }, 1000);
                     } else {
                         throw new Error(result.data.error || 'Failed to load project');
                     }

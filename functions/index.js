@@ -20203,6 +20203,312 @@ exports.wizardGetProcessingStatus = functions.https.onCall(async (data, context)
 });
 
 // ============================================
+// BATCH EXPORT TRACKING FUNCTIONS
+// ============================================
+
+/**
+ * wizardCreateBatchExport - Create a batch export tracking document
+ * This allows users to resume viewing progress if they refresh/leave the page
+ */
+exports.wizardCreateBatchExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clips } = data;
+
+  if (!projectId || !clips || !Array.isArray(clips)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and clips array required');
+  }
+
+  try {
+    // Create batch export document
+    const batchData = {
+      userId: uid,
+      projectId: projectId,
+      status: 'processing',
+      clips: clips.map(clip => ({
+        clipId: clip.clipId,
+        title: clip.title || '',
+        jobId: null,
+        status: 'pending',
+        progress: 0,
+        outputUrl: null,
+        error: null
+      })),
+      totalClips: clips.length,
+      completedClips: 0,
+      failedClips: 0,
+      startedAt: admin.firestore.FieldValue.serverTimestamp(),
+      completedAt: null,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const batchRef = await db.collection('wizardBatchExports').add(batchData);
+
+    console.log(`[wizardCreateBatchExport] Created batch ${batchRef.id} for project ${projectId} with ${clips.length} clips`);
+
+    return {
+      success: true,
+      batchId: batchRef.id
+    };
+  } catch (error) {
+    console.error('[wizardCreateBatchExport] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * wizardUpdateBatchExportClip - Update a single clip's status in a batch export
+ */
+exports.wizardUpdateBatchExportClip = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { batchId, clipId, jobId, status, progress, outputUrl, error } = data;
+
+  if (!batchId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Batch ID and clip ID required');
+  }
+
+  try {
+    const batchRef = db.collection('wizardBatchExports').doc(batchId);
+    const batchDoc = await batchRef.get();
+
+    if (!batchDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Batch export not found');
+    }
+
+    const batch = batchDoc.data();
+    if (batch.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Update the specific clip in the array
+    const updatedClips = batch.clips.map(clip => {
+      if (clip.clipId === clipId) {
+        return {
+          ...clip,
+          jobId: jobId || clip.jobId,
+          status: status || clip.status,
+          progress: progress !== undefined ? progress : clip.progress,
+          outputUrl: outputUrl || clip.outputUrl,
+          error: error || clip.error
+        };
+      }
+      return clip;
+    });
+
+    // Calculate completion stats
+    const completedClips = updatedClips.filter(c => c.status === 'completed').length;
+    const failedClips = updatedClips.filter(c => c.status === 'error').length;
+    const allDone = (completedClips + failedClips) === batch.totalClips;
+
+    const updateData = {
+      clips: updatedClips,
+      completedClips,
+      failedClips,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    if (allDone) {
+      updateData.status = failedClips === batch.totalClips ? 'failed' : (failedClips > 0 ? 'partial' : 'completed');
+      updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    await batchRef.update(updateData);
+
+    return {
+      success: true,
+      completedClips,
+      failedClips,
+      isComplete: allDone
+    };
+  } catch (error) {
+    console.error('[wizardUpdateBatchExportClip] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * wizardGetBatchExport - Get batch export status
+ */
+exports.wizardGetBatchExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { batchId } = data;
+
+  if (!batchId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Batch ID required');
+  }
+
+  try {
+    const batchDoc = await db.collection('wizardBatchExports').doc(batchId).get();
+
+    if (!batchDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Batch export not found');
+    }
+
+    const batch = batchDoc.data();
+    if (batch.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    return {
+      success: true,
+      batch: {
+        id: batchId,
+        projectId: batch.projectId,
+        status: batch.status,
+        clips: batch.clips,
+        totalClips: batch.totalClips,
+        completedClips: batch.completedClips,
+        failedClips: batch.failedClips,
+        startedAt: batch.startedAt?.toDate?.()?.toISOString() || null,
+        completedAt: batch.completedAt?.toDate?.()?.toISOString() || null
+      }
+    };
+  } catch (error) {
+    console.error('[wizardGetBatchExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * wizardGetPendingBatchExport - Get any pending batch export for a project
+ * Called on page load to check if there's an export in progress
+ */
+exports.wizardGetPendingBatchExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    // Find any processing batch for this project
+    const batchSnapshot = await db.collection('wizardBatchExports')
+      .where('userId', '==', uid)
+      .where('projectId', '==', projectId)
+      .where('status', '==', 'processing')
+      .orderBy('startedAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (batchSnapshot.empty) {
+      return { success: true, batch: null };
+    }
+
+    const batchDoc = batchSnapshot.docs[0];
+    const batch = batchDoc.data();
+
+    // Check if any jobs are still actually processing
+    // If all jobs are done but status wasn't updated, fix it
+    const pendingClips = batch.clips.filter(c => c.status === 'pending' || c.status === 'capturing' || c.status === 'processing');
+    const completedClips = batch.clips.filter(c => c.status === 'completed').length;
+    const failedClips = batch.clips.filter(c => c.status === 'error').length;
+
+    // Refresh job statuses from wizardProcessingJobs collection
+    const updatedClips = await Promise.all(batch.clips.map(async (clip) => {
+      if (clip.jobId && (clip.status === 'processing' || clip.status === 'capturing')) {
+        try {
+          const jobDoc = await db.collection('wizardProcessingJobs').doc(clip.jobId).get();
+          if (jobDoc.exists) {
+            const job = jobDoc.data();
+            return {
+              ...clip,
+              status: job.status,
+              progress: job.progress || clip.progress,
+              outputUrl: job.outputUrl || clip.outputUrl,
+              error: job.error || clip.error
+            };
+          }
+        } catch (e) {
+          console.warn(`Could not fetch job ${clip.jobId}:`, e.message);
+        }
+      }
+      return clip;
+    }));
+
+    // Recalculate stats
+    const actualCompleted = updatedClips.filter(c => c.status === 'completed').length;
+    const actualFailed = updatedClips.filter(c => c.status === 'error').length;
+    const allDone = (actualCompleted + actualFailed) === batch.totalClips;
+
+    // Update the batch if stats changed
+    if (actualCompleted !== completedClips || actualFailed !== failedClips || allDone) {
+      const updateData = {
+        clips: updatedClips,
+        completedClips: actualCompleted,
+        failedClips: actualFailed,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (allDone) {
+        updateData.status = actualFailed === batch.totalClips ? 'failed' : (actualFailed > 0 ? 'partial' : 'completed');
+        updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+      }
+
+      await batchDoc.ref.update(updateData);
+    }
+
+    return {
+      success: true,
+      batch: {
+        id: batchDoc.id,
+        projectId: batch.projectId,
+        status: allDone ? (actualFailed === batch.totalClips ? 'failed' : (actualFailed > 0 ? 'partial' : 'completed')) : 'processing',
+        clips: updatedClips,
+        totalClips: batch.totalClips,
+        completedClips: actualCompleted,
+        failedClips: actualFailed,
+        startedAt: batch.startedAt?.toDate?.()?.toISOString() || null,
+        completedAt: allDone ? new Date().toISOString() : null
+      }
+    };
+  } catch (error) {
+    console.error('[wizardGetPendingBatchExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * wizardCancelBatchExport - Cancel a batch export
+ */
+exports.wizardCancelBatchExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { batchId } = data;
+
+  if (!batchId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Batch ID required');
+  }
+
+  try {
+    const batchRef = db.collection('wizardBatchExports').doc(batchId);
+    const batchDoc = await batchRef.get();
+
+    if (!batchDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Batch export not found');
+    }
+
+    const batch = batchDoc.data();
+    if (batch.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    await batchRef.update({
+      status: 'cancelled',
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('[wizardCancelBatchExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ============================================
 // YOUTUBE OAUTH FUNCTIONS
 // ============================================
 
