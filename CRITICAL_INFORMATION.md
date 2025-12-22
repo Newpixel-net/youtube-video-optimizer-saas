@@ -4,7 +4,81 @@ This document contains critical solutions for video/audio capture issues encount
 
 ---
 
-## Problem 1: Video Plays at Wrong Speed (4x Too Fast)
+## Problem 1: FROZEN VIDEO - Chrome Autoplay Policy (CRITICAL - Fixed 2025-12-22)
+
+### Symptoms
+- Captured video shows only the first frame (frozen)
+- Audio plays normally
+- MediaRecorder captures data successfully but video content is static
+- WebM file is valid but contains repeated first frame
+
+### Root Cause
+**Chrome's autoplay policy blocks unmuted video autoplay.**
+
+The change from `muted=true` to `muted=false` (to fix audio capture) broke video capture because:
+
+```javascript
+// BROKEN CODE (after v2.7.1):
+videoElement.muted = false;  // Unmuted = Chrome blocks autoplay!
+videoElement.play();         // FAILS silently - video stays PAUSED
+// captureStream() then captures frozen frames
+```
+
+```javascript
+// WORKING CODE (v2.7.1):
+videoElement.muted = true;   // Muted = Chrome allows autoplay
+videoElement.play();         // Works!
+// captureStream() captures actual video frames
+```
+
+### Solution
+**Start muted for autoplay, then unmute AFTER playback begins:**
+
+**In `browser-extension/src/background.js` (~line 1994-2028):**
+
+```javascript
+// CRITICAL FIX: Start MUTED for autoplay to work (Chrome policy)
+// Chrome blocks autoplay of unmuted videos. We must start muted,
+// then unmute AFTER playback begins for audio capture.
+videoElement.muted = true;
+videoElement.volume = 1; // Pre-set volume for when we unmute
+
+const startRecording = () => {
+  recorder.start(500);
+  console.log('[EXT][CAPTURE] Recording started');
+
+  // NOW unmute to capture audio (after playback confirmed)
+  setTimeout(() => {
+    videoElement.muted = false;
+    console.log('[EXT][CAPTURE] Video unmuted for audio capture');
+  }, 100);
+};
+
+// Ensure video is playing before starting (muted autoplay should work)
+if (videoElement.paused) {
+  videoElement.play().then(startRecording).catch((e) => {
+    console.warn('[EXT][CAPTURE] Play failed, trying anyway:', e.message);
+    startRecording();
+  });
+} else {
+  startRecording();
+}
+```
+
+### Key Points
+1. **NEVER set `muted=false` before `play()`** - Chrome will block autoplay
+2. Start with `muted=true` so autoplay is allowed
+3. Unmute AFTER playback has started (100ms delay)
+4. The 100ms delay ensures playback is stable before unmuting
+
+### Working Version Reference
+- **v2.7.9** is the working version with this fix
+- Commit: `6956286` (2025-12-22)
+- Key file: `browser-extension/src/background.js`
+
+---
+
+## Problem 2: Video Plays at Wrong Speed (4x Too Fast)
 
 ### Symptoms
 - Exported video plays at 4x speed
@@ -41,7 +115,7 @@ The `setpts=PTS*4` filter multiplies all presentation timestamps by 4, stretchin
 
 ---
 
-## Problem 2: Audio Issues (Distorted, Wrong Speed, or Missing)
+## Problem 3: Audio Issues (Distorted, Wrong Speed, or Missing)
 
 ### Symptoms
 - Audio is distorted or robotic
@@ -63,7 +137,7 @@ When capturing video at non-1x playback speeds, `captureStream()` and `MediaReco
 The W3C spec says audio should be "time-stretched" at different playback rates, but browser implementations vary.
 
 ### Solution
-**Capture at 1x playback speed with audio unmuted.**
+**Capture at 1x playback speed with audio unmuted (after playback starts).**
 
 **In `browser-extension/src/background.js`:**
 
@@ -71,39 +145,61 @@ The W3C spec says audio should be "time-stretched" at different playback rates, 
 // Use 1x playback for reliable audio capture
 const PLAYBACK_SPEED = 1;
 
-// CRITICAL: Do NOT mute the video element
+// Start muted for autoplay, unmute after playback begins
 videoElement.playbackRate = PLAYBACK_SPEED;
-videoElement.muted = false;  // MUST be false to capture audio
-videoElement.volume = 1;     // Full volume ensures audio is captured
+videoElement.muted = true;  // Start muted for autoplay
+videoElement.volume = 1;
+
+// After recorder.start():
+setTimeout(() => {
+  videoElement.muted = false;  // Unmute to capture audio
+}, 100);
 ```
 
 ### Why This Works
 1. At 1x playback, no timestamp rescaling issues
-2. `muted = false` ensures audio track is active and captured by `captureStream()`
-3. Audio and video are synchronized naturally
-4. No FFmpeg audio filters needed
+2. Starting `muted=true` allows autoplay (Chrome policy)
+3. Unmuting after playback starts captures audio properly
+4. Audio and video are synchronized naturally
+5. No FFmpeg audio filters needed
 
 ### Trade-off
 Capture takes the full duration of the clip (30s video = 30s capture time) instead of 4x faster.
 
 ### Key Files
-- `browser-extension/src/background.js` - PLAYBACK_SPEED constant (multiple locations: ~lines 1337, 2072, 2762)
-- `browser-extension/src/background.js` - muted/volume settings (~line 1964-1968)
+- `browser-extension/src/background.js` - PLAYBACK_SPEED constant (multiple locations: ~lines 1337, 2101, 2948)
+- `browser-extension/src/background.js` - muted/volume settings (~line 1994-2028)
 
 ---
 
 ## Quick Reference: What NOT to Do
 
-### Video Element Settings That Break Audio Capture
+### Video Element Settings That Break Video/Audio Capture
 ```javascript
-// BAD - prevents audio capture
-videoElement.muted = true;
+// BAD - prevents autoplay, causes FROZEN VIDEO
+videoElement.muted = false;
+videoElement.play();  // Chrome blocks this!
 
 // BAD - can cause distorted audio at non-1x speeds
 videoElement.volume = 0;
 
 // BAD - unreliable audio routing
 audioContext.createMediaElementSource(videoElement);
+```
+
+### CORRECT Approach
+```javascript
+// GOOD - allows autoplay
+videoElement.muted = true;
+videoElement.volume = 1;
+videoElement.play().then(() => {
+  // Start recording
+  recorder.start(500);
+  // Then unmute for audio capture
+  setTimeout(() => {
+    videoElement.muted = false;
+  }, 100);
+});
 ```
 
 ### FFmpeg Audio Filters That Don't Work for This Use Case
@@ -141,18 +237,76 @@ PTS ANALYSIS: ptsSpan=7.5s, realWorld=30s, ratio=4.0
 ```
 If ratio is significantly different from 1.0, timestamp rescaling is needed.
 
+### Check if Video is Frozen
+```bash
+# Count unique frames (frozen video = very few unique frames)
+ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=nb_read_frames -of csv=p=0 "video.webm"
+```
+
 ---
 
 ## Summary
 
 | Issue | Root Cause | Solution |
 |-------|------------|----------|
+| **FROZEN VIDEO** | `muted=false` before `play()` blocks autoplay | Start `muted=true`, unmute after playback starts |
 | Video 4x too fast | MediaRecorder timestamps based on real time | `setpts=PTS*scaleFactor` in FFmpeg |
-| No audio | `muted = true` on video element | Set `muted = false`, `volume = 1` |
+| No audio | `muted=true` throughout capture | Unmute after playback starts |
 | Audio distorted | Capturing at non-1x playback | Use `PLAYBACK_SPEED = 1` |
-| Audio wrong speed | Incorrect FFmpeg filter | Don't apply audio filters at 1x capture |
 
 ---
 
-*Last updated: December 2024*
-*Related commits: fix-video-ad-issues branch*
+## Working Version Backup Reference (v2.7.9)
+
+**Date**: 2025-12-22
+**Commit**: `6956286`
+**Branch**: `claude/fix-nvenc-frozen-video-v9bA2`
+
+### Key Configuration (browser-extension/src/background.js)
+
+```javascript
+// Line ~1337
+const PLAYBACK_SPEED = 1;
+
+// Lines ~1994-2028 (in captureVideoWithMessage function)
+// Set playback speed
+videoElement.playbackRate = PLAYBACK_SPEED;
+
+// CRITICAL FIX: Start MUTED for autoplay to work (Chrome policy)
+videoElement.muted = true;
+videoElement.volume = 1;
+
+const startRecording = () => {
+  recorder.start(500);
+  console.log('[EXT][CAPTURE] Recording started');
+
+  // NOW unmute to capture audio (after playback confirmed)
+  setTimeout(() => {
+    videoElement.muted = false;
+    console.log('[EXT][CAPTURE] Video unmuted for audio capture');
+  }, 100);
+};
+
+if (videoElement.paused) {
+  videoElement.play().then(startRecording).catch((e) => {
+    console.warn('[EXT][CAPTURE] Play failed, trying anyway:', e.message);
+    startRecording();
+  });
+} else {
+  startRecording();
+}
+```
+
+### To Restore if Problems Arise
+```bash
+# Compare current code with working version
+git diff 6956286 -- browser-extension/src/background.js
+
+# Reset to working version if needed
+git checkout 6956286 -- browser-extension/src/background.js
+```
+
+---
+
+*Last updated: 2025-12-22*
+*Working version: v2.7.9 (commit 6956286)*

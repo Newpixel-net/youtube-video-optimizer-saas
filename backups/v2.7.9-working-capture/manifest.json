@@ -1,0 +1,79 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Video Optimizer",
+  "version": "2.7.9",
+  "description": "Fix frozen video - start muted for autoplay, unmute after playback (v2.7.9)",
+
+  "permissions": [
+    "activeTab",
+    "storage",
+    "unlimitedStorage",
+    "downloads",
+    "webRequest",
+    "tabs",
+    "cookies",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://*.googlevideo.com/*",
+    "https://ytseo.siteuo.com/*",
+    "https://youtube-video-optimizer.web.app/*",
+    "https://ytseo-6d1b0.web.app/*",
+    "https://video-processor-867328435695.us-central1.run.app/*",
+    "https://us-central1-ytseo-6d1b0.cloudfunctions.net/*"
+  ],
+
+  "background": {
+    "service_worker": "src/background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://youtube.com/*"],
+      "js": ["src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://ytseo.siteuo.com/*",
+        "https://youtube-video-optimizer.web.app/*",
+        "https://ytseo-6d1b0.web.app/*"
+      ],
+      "js": ["src/wizard-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "YouTube Video Optimizer"
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["src/injected.js"],
+      "matches": ["https://www.youtube.com/*", "https://youtube.com/*"]
+    }
+  ]
+}
