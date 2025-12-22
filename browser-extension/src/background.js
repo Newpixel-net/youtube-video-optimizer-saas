@@ -2476,16 +2476,12 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       console.warn(`[EXT][CAPTURE] Could not focus tab: ${focusErr.message}`);
     }
 
-    // Switch back to Video Wizard tab so user isn't disrupted
-    // v2.7.1 worked fine with this - the frozen video issue was caused by muted=false
-    if (savedOriginalTabId && savedOriginalTabId !== youtubeTab.id) {
-      try {
-        await chrome.tabs.update(savedOriginalTabId, { active: true });
-        console.log(`[EXT][CAPTURE] Switched back to Video Wizard tab ${savedOriginalTabId}`);
-      } catch (switchErr) {
-        console.warn(`[EXT][CAPTURE] Could not switch back: ${switchErr.message}`);
-      }
-    }
+    // CRITICAL FIX v2.7.11: Do NOT switch back to Video Wizard tab yet!
+    // The YouTube tab MUST stay in foreground during capture.
+    // Chrome throttles background tabs, which causes captureStream() to capture frozen frames.
+    // See: https://bugs.chromium.org/p/chromium/issues/detail?id=639105
+    // We will switch back AFTER capture completes.
+    console.log(`[EXT][CAPTURE] Keeping YouTube tab in foreground for capture (savedOriginalTabId=${savedOriginalTabId})`);
 
     // v2.7.2: Check for ads FIRST before attempting video loading
     // Improved ad detection to reduce false positives
@@ -3270,6 +3266,17 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     // Wait for the result via message passing
     const captureResult = await captureResultPromise;
+
+    // CRITICAL FIX v2.7.11: Now that capture is complete, switch back to Video Wizard tab
+    // The YouTube tab was kept in foreground during capture to prevent Chrome throttling
+    if (savedOriginalTabId && savedOriginalTabId !== youtubeTab.id) {
+      try {
+        await chrome.tabs.update(savedOriginalTabId, { active: true });
+        console.log(`[EXT][CAPTURE] Capture complete - switched back to Video Wizard tab ${savedOriginalTabId}`);
+      } catch (switchErr) {
+        console.warn(`[EXT][CAPTURE] Could not switch back to original tab: ${switchErr.message}`);
+      }
+    }
 
     if (!captureResult.success) {
       console.error(`[EXT][CAPTURE] FAIL: ${captureResult.error}`);
