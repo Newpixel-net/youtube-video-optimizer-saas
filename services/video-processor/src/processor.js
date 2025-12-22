@@ -2461,20 +2461,17 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       // NOTE: The source.mp4 is already 30fps CFR from the transcode step.
       // No fps filter needed here - just apply crop/scale/format filters.
 
-      // Always use CPU encoding with libx264 - reliable and produces correct output
+      // SIMPLIFIED encoding - removed -vsync cfr -r 30 which can cause frame duplication
+      // when FFmpeg misinterprets timestamps
       const audioEncoding = getAudioEncodingArgs();
       const args = [
         '-i', inputFile,
         filterFlag, filters,
         '-af', audioFilters,
         '-c:v', 'libx264',
-        '-preset', 'fast',      // Good balance of speed and quality
-        '-crf', '23',           // Standard quality
-        '-profile:v', 'main',   // Main profile for wide compatibility
-        '-level', '4.0',        // Level 4.0 for 1080p support
-        '-pix_fmt', 'yuv420p',  // Explicit pixel format
-        '-vsync', 'cfr',        // Explicit constant frame rate
-        '-r', '30',             // Explicit output frame rate
+        '-preset', 'fast',
+        '-crf', '23',
+        '-pix_fmt', 'yuv420p',
         ...audioEncoding,
         '-movflags', '+faststart',
         '-y',
