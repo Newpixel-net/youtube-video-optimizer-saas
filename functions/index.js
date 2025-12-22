@@ -294,9 +294,9 @@ async function logUsage(uid, action, metadata = {}) {
  * Also cleans up associated storage files
  */
 async function enforceMaxProjects(uid, maxProjects = 8) {
-  // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
-  const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
-  const bucket = admin.storage().bucket(STORAGE_BUCKET);
+  // Use the default bucket (most reliable) - Firebase admin SDK knows the correct bucket
+  const bucket = admin.storage().bucket();
+  const STORAGE_BUCKET = bucket.name;
 
   try {
     // Get user's projects ordered by creation date (oldest first)
@@ -20203,6 +20203,312 @@ exports.wizardGetProcessingStatus = functions.https.onCall(async (data, context)
 });
 
 // ============================================
+// BATCH EXPORT TRACKING FUNCTIONS
+// ============================================
+
+/**
+ * wizardCreateBatchExport - Create a batch export tracking document
+ * This allows users to resume viewing progress if they refresh/leave the page
+ */
+exports.wizardCreateBatchExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, clips } = data;
+
+  if (!projectId || !clips || !Array.isArray(clips)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID and clips array required');
+  }
+
+  try {
+    // Create batch export document
+    const batchData = {
+      userId: uid,
+      projectId: projectId,
+      status: 'processing',
+      clips: clips.map(clip => ({
+        clipId: clip.clipId,
+        title: clip.title || '',
+        jobId: null,
+        status: 'pending',
+        progress: 0,
+        outputUrl: null,
+        error: null
+      })),
+      totalClips: clips.length,
+      completedClips: 0,
+      failedClips: 0,
+      startedAt: admin.firestore.FieldValue.serverTimestamp(),
+      completedAt: null,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    const batchRef = await db.collection('wizardBatchExports').add(batchData);
+
+    console.log(`[wizardCreateBatchExport] Created batch ${batchRef.id} for project ${projectId} with ${clips.length} clips`);
+
+    return {
+      success: true,
+      batchId: batchRef.id
+    };
+  } catch (error) {
+    console.error('[wizardCreateBatchExport] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * wizardUpdateBatchExportClip - Update a single clip's status in a batch export
+ */
+exports.wizardUpdateBatchExportClip = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { batchId, clipId, jobId, status, progress, outputUrl, error } = data;
+
+  if (!batchId || !clipId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Batch ID and clip ID required');
+  }
+
+  try {
+    const batchRef = db.collection('wizardBatchExports').doc(batchId);
+    const batchDoc = await batchRef.get();
+
+    if (!batchDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Batch export not found');
+    }
+
+    const batch = batchDoc.data();
+    if (batch.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Update the specific clip in the array
+    const updatedClips = batch.clips.map(clip => {
+      if (clip.clipId === clipId) {
+        return {
+          ...clip,
+          jobId: jobId || clip.jobId,
+          status: status || clip.status,
+          progress: progress !== undefined ? progress : clip.progress,
+          outputUrl: outputUrl || clip.outputUrl,
+          error: error || clip.error
+        };
+      }
+      return clip;
+    });
+
+    // Calculate completion stats
+    const completedClips = updatedClips.filter(c => c.status === 'completed').length;
+    const failedClips = updatedClips.filter(c => c.status === 'error').length;
+    const allDone = (completedClips + failedClips) === batch.totalClips;
+
+    const updateData = {
+      clips: updatedClips,
+      completedClips,
+      failedClips,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    if (allDone) {
+      updateData.status = failedClips === batch.totalClips ? 'failed' : (failedClips > 0 ? 'partial' : 'completed');
+      updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    await batchRef.update(updateData);
+
+    return {
+      success: true,
+      completedClips,
+      failedClips,
+      isComplete: allDone
+    };
+  } catch (error) {
+    console.error('[wizardUpdateBatchExportClip] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * wizardGetBatchExport - Get batch export status
+ */
+exports.wizardGetBatchExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { batchId } = data;
+
+  if (!batchId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Batch ID required');
+  }
+
+  try {
+    const batchDoc = await db.collection('wizardBatchExports').doc(batchId).get();
+
+    if (!batchDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Batch export not found');
+    }
+
+    const batch = batchDoc.data();
+    if (batch.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    return {
+      success: true,
+      batch: {
+        id: batchId,
+        projectId: batch.projectId,
+        status: batch.status,
+        clips: batch.clips,
+        totalClips: batch.totalClips,
+        completedClips: batch.completedClips,
+        failedClips: batch.failedClips,
+        startedAt: batch.startedAt?.toDate?.()?.toISOString() || null,
+        completedAt: batch.completedAt?.toDate?.()?.toISOString() || null
+      }
+    };
+  } catch (error) {
+    console.error('[wizardGetBatchExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * wizardGetPendingBatchExport - Get any pending batch export for a project
+ * Called on page load to check if there's an export in progress
+ */
+exports.wizardGetPendingBatchExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    // Find any processing batch for this project
+    const batchSnapshot = await db.collection('wizardBatchExports')
+      .where('userId', '==', uid)
+      .where('projectId', '==', projectId)
+      .where('status', '==', 'processing')
+      .orderBy('startedAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (batchSnapshot.empty) {
+      return { success: true, batch: null };
+    }
+
+    const batchDoc = batchSnapshot.docs[0];
+    const batch = batchDoc.data();
+
+    // Check if any jobs are still actually processing
+    // If all jobs are done but status wasn't updated, fix it
+    const pendingClips = batch.clips.filter(c => c.status === 'pending' || c.status === 'capturing' || c.status === 'processing');
+    const completedClips = batch.clips.filter(c => c.status === 'completed').length;
+    const failedClips = batch.clips.filter(c => c.status === 'error').length;
+
+    // Refresh job statuses from wizardProcessingJobs collection
+    const updatedClips = await Promise.all(batch.clips.map(async (clip) => {
+      if (clip.jobId && (clip.status === 'processing' || clip.status === 'capturing')) {
+        try {
+          const jobDoc = await db.collection('wizardProcessingJobs').doc(clip.jobId).get();
+          if (jobDoc.exists) {
+            const job = jobDoc.data();
+            return {
+              ...clip,
+              status: job.status,
+              progress: job.progress || clip.progress,
+              outputUrl: job.outputUrl || clip.outputUrl,
+              error: job.error || clip.error
+            };
+          }
+        } catch (e) {
+          console.warn(`Could not fetch job ${clip.jobId}:`, e.message);
+        }
+      }
+      return clip;
+    }));
+
+    // Recalculate stats
+    const actualCompleted = updatedClips.filter(c => c.status === 'completed').length;
+    const actualFailed = updatedClips.filter(c => c.status === 'error').length;
+    const allDone = (actualCompleted + actualFailed) === batch.totalClips;
+
+    // Update the batch if stats changed
+    if (actualCompleted !== completedClips || actualFailed !== failedClips || allDone) {
+      const updateData = {
+        clips: updatedClips,
+        completedClips: actualCompleted,
+        failedClips: actualFailed,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (allDone) {
+        updateData.status = actualFailed === batch.totalClips ? 'failed' : (actualFailed > 0 ? 'partial' : 'completed');
+        updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+      }
+
+      await batchDoc.ref.update(updateData);
+    }
+
+    return {
+      success: true,
+      batch: {
+        id: batchDoc.id,
+        projectId: batch.projectId,
+        status: allDone ? (actualFailed === batch.totalClips ? 'failed' : (actualFailed > 0 ? 'partial' : 'completed')) : 'processing',
+        clips: updatedClips,
+        totalClips: batch.totalClips,
+        completedClips: actualCompleted,
+        failedClips: actualFailed,
+        startedAt: batch.startedAt?.toDate?.()?.toISOString() || null,
+        completedAt: allDone ? new Date().toISOString() : null
+      }
+    };
+  } catch (error) {
+    console.error('[wizardGetPendingBatchExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * wizardCancelBatchExport - Cancel a batch export
+ */
+exports.wizardCancelBatchExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { batchId } = data;
+
+  if (!batchId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Batch ID required');
+  }
+
+  try {
+    const batchRef = db.collection('wizardBatchExports').doc(batchId);
+    const batchDoc = await batchRef.get();
+
+    if (!batchDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Batch export not found');
+    }
+
+    const batch = batchDoc.data();
+    if (batch.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    await batchRef.update({
+      status: 'cancelled',
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('[wizardCancelBatchExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ============================================
 // YOUTUBE OAUTH FUNCTIONS
 // ============================================
 
@@ -21241,9 +21547,9 @@ exports.adminDeleteWizardProject = functions.https.onCall(async (data, context) 
     }
 
     const projectData = projectDoc.data();
-    // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
-    const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
-    const bucket = admin.storage().bucket(STORAGE_BUCKET);
+    // Use the default bucket (most reliable) - Firebase admin SDK knows the correct bucket
+    const bucket = admin.storage().bucket();
+    const STORAGE_BUCKET = bucket.name;
 
     console.log(`[adminDeleteWizardProject] Using bucket: ${STORAGE_BUCKET}, videoId: ${projectData.videoId}`);
 
@@ -21339,9 +21645,58 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
       targetDocs = snapshot.docs;
     }
 
-    // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
-    const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
-    const bucket = admin.storage().bucket(STORAGE_BUCKET);
+    // CRITICAL: Try multiple bucket name formats - Firebase can use different formats
+    const BUCKET_FORMATS = [
+      'ytseo-6d1b0.firebasestorage.app',  // New format
+      'ytseo-6d1b0.appspot.com',           // Old format
+    ];
+
+    let bucket;
+    let STORAGE_BUCKET;
+
+    // First, try the default bucket (most reliable)
+    console.log('[adminBulkDeleteWizardProjects] Detecting correct bucket...');
+    const defaultBucket = admin.storage().bucket();
+    const defaultBucketName = defaultBucket.name;
+    console.log(`[adminBulkDeleteWizardProjects] Default bucket name: ${defaultBucketName}`);
+
+    // Test if default bucket has files
+    try {
+      const [testFiles] = await defaultBucket.getFiles({ prefix: 'processed-clips/', maxResults: 5 });
+      if (testFiles.length > 0) {
+        bucket = defaultBucket;
+        STORAGE_BUCKET = defaultBucketName;
+        console.log(`[adminBulkDeleteWizardProjects] Using default bucket: ${STORAGE_BUCKET} (found ${testFiles.length} files)`);
+      }
+    } catch (e) {
+      console.log(`[adminBulkDeleteWizardProjects] Default bucket test failed: ${e.message}`);
+    }
+
+    // If default bucket didn't have files, try explicit bucket names
+    if (!bucket) {
+      for (const bucketName of BUCKET_FORMATS) {
+        try {
+          const testBucket = admin.storage().bucket(bucketName);
+          const [testFiles] = await testBucket.getFiles({ prefix: 'processed-clips/', maxResults: 5 });
+          if (testFiles.length > 0) {
+            bucket = testBucket;
+            STORAGE_BUCKET = bucketName;
+            console.log(`[adminBulkDeleteWizardProjects] Using bucket: ${STORAGE_BUCKET} (found ${testFiles.length} files)`);
+            break;
+          }
+        } catch (e) {
+          console.log(`[adminBulkDeleteWizardProjects] ${bucketName} failed: ${e.message}`);
+        }
+      }
+    }
+
+    // If still no bucket, use default
+    if (!bucket) {
+      bucket = defaultBucket;
+      STORAGE_BUCKET = defaultBucketName;
+      console.log(`[adminBulkDeleteWizardProjects] No files found, using default bucket: ${STORAGE_BUCKET}`);
+    }
+
     let deletedCount = 0;
     let deletedFilesCount = 0;
 
@@ -21435,10 +21790,62 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
   const { dryRun = false } = data;
 
   try {
-    // CRITICAL: Explicitly specify the bucket name to ensure we target the correct storage
-    // The video-processor service uploads to this bucket
-    const STORAGE_BUCKET = 'ytseo-6d1b0.firebasestorage.app';
-    const bucket = admin.storage().bucket(STORAGE_BUCKET);
+    // Try multiple bucket name formats - Firebase can use different formats
+    const BUCKET_FORMATS = [
+      'ytseo-6d1b0.firebasestorage.app',  // New format
+      'ytseo-6d1b0.appspot.com',           // Old format
+    ];
+
+    let bucket;
+    let STORAGE_BUCKET;
+    let foundFiles = false;
+
+    // First, try the default bucket (most reliable)
+    console.log('[adminCleanWizardStorage] Trying default bucket first...');
+    const defaultBucket = admin.storage().bucket();
+    const defaultBucketName = defaultBucket.name;
+    console.log(`[adminCleanWizardStorage] Default bucket name: ${defaultBucketName}`);
+
+    try {
+      const [testFiles] = await defaultBucket.getFiles({ prefix: 'processed-clips/', maxResults: 5 });
+      console.log(`[adminCleanWizardStorage] Default bucket: found ${testFiles.length} files in processed-clips/`);
+      if (testFiles.length > 0) {
+        bucket = defaultBucket;
+        STORAGE_BUCKET = defaultBucketName;
+        foundFiles = true;
+        console.log(`[adminCleanWizardStorage] Using default bucket: ${STORAGE_BUCKET}`);
+      }
+    } catch (e) {
+      console.log(`[adminCleanWizardStorage] Default bucket test failed: ${e.message}`);
+    }
+
+    // If default bucket didn't have files, try explicit bucket names
+    if (!foundFiles) {
+      for (const bucketName of BUCKET_FORMATS) {
+        console.log(`[adminCleanWizardStorage] Trying bucket: ${bucketName}`);
+        try {
+          const testBucket = admin.storage().bucket(bucketName);
+          const [testFiles] = await testBucket.getFiles({ prefix: 'processed-clips/', maxResults: 5 });
+          console.log(`[adminCleanWizardStorage] ${bucketName}: found ${testFiles.length} files in processed-clips/`);
+          if (testFiles.length > 0) {
+            bucket = testBucket;
+            STORAGE_BUCKET = bucketName;
+            foundFiles = true;
+            console.log(`[adminCleanWizardStorage] Using bucket: ${STORAGE_BUCKET}`);
+            break;
+          }
+        } catch (e) {
+          console.log(`[adminCleanWizardStorage] ${bucketName} failed: ${e.message}`);
+        }
+      }
+    }
+
+    // If still no files found, use default bucket anyway and report what we find
+    if (!bucket) {
+      bucket = defaultBucket;
+      STORAGE_BUCKET = defaultBucketName;
+      console.log(`[adminCleanWizardStorage] No files found in any bucket, using default: ${STORAGE_BUCKET}`);
+    }
 
     console.log(`[adminCleanWizardStorage] Starting cleanup, bucket: ${STORAGE_BUCKET}, dryRun: ${dryRun}`);
 
