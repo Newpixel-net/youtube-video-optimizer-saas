@@ -1991,24 +1991,33 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
         }
       };
 
-      // Set playback speed and start (1x for reliable audio capture)
+      // Set playback speed
       videoElement.playbackRate = PLAYBACK_SPEED;
-      // IMPORTANT: Don't mute - let audio play to ensure it's captured
-      // muted=true prevents audio from being captured by captureStream()
-      videoElement.muted = false;
-      videoElement.volume = 1;
+
+      // CRITICAL FIX: Start MUTED for autoplay to work (Chrome policy)
+      // Chrome blocks autoplay of unmuted videos. We must start muted,
+      // then unmute AFTER playback begins for audio capture.
+      videoElement.muted = true;
+      videoElement.volume = 1; // Pre-set volume for when we unmute
 
       // Start recording
       const startRecording = () => {
         try {
           recorder.start(500);
           console.log('[EXT][CAPTURE] Recording started');
+
+          // NOW unmute to capture audio (after playback confirmed)
+          // Small delay to ensure playback is stable
+          setTimeout(() => {
+            videoElement.muted = false;
+            console.log('[EXT][CAPTURE] Video unmuted for audio capture');
+          }, 100);
         } catch (startErr) {
           reject(new Error(`Failed to start recording: ${startErr.message}`));
         }
       };
 
-      // Ensure video is playing before starting
+      // Ensure video is playing before starting (muted autoplay should work)
       if (videoElement.paused) {
         videoElement.play().then(startRecording).catch((e) => {
           console.warn('[EXT][CAPTURE] Play failed, trying anyway:', e.message);
@@ -2464,12 +2473,16 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
       console.warn(`[EXT][CAPTURE] Could not focus tab: ${focusErr.message}`);
     }
 
-    // CRITICAL: Do NOT switch back to Video Wizard tab yet!
-    // The YouTube tab MUST stay in foreground during capture.
-    // Chrome throttles background tabs, which causes captureStream() to capture frozen frames.
-    // We will switch back AFTER capture completes.
-    console.log(`[EXT][CAPTURE] Keeping YouTube tab in foreground for capture (savedOriginalTabId=${savedOriginalTabId})`);
-    // The switch back happens after captureResultPromise resolves
+    // Switch back to Video Wizard tab so user isn't disrupted
+    // v2.7.1 worked fine with this - the frozen video issue was caused by muted=false
+    if (savedOriginalTabId && savedOriginalTabId !== youtubeTab.id) {
+      try {
+        await chrome.tabs.update(savedOriginalTabId, { active: true });
+        console.log(`[EXT][CAPTURE] Switched back to Video Wizard tab ${savedOriginalTabId}`);
+      } catch (switchErr) {
+        console.warn(`[EXT][CAPTURE] Could not switch back: ${switchErr.message}`);
+      }
+    }
 
     // v2.7.2: Check for ads FIRST before attempting video loading
     // Improved ad detection to reduce false positives
@@ -3227,17 +3240,6 @@ async function captureAndUploadWithMediaRecorder(videoId, youtubeUrl, requestedS
 
     // Wait for the result via message passing
     const captureResult = await captureResultPromise;
-
-    // CRITICAL: Now that capture is complete, switch back to Video Wizard tab
-    // The YouTube tab was kept in foreground during capture to prevent Chrome throttling
-    if (savedOriginalTabId && savedOriginalTabId !== youtubeTab.id) {
-      try {
-        await chrome.tabs.update(savedOriginalTabId, { active: true });
-        console.log(`[EXT][CAPTURE] Capture complete - switched back to Video Wizard tab ${savedOriginalTabId}`);
-      } catch (switchErr) {
-        console.warn(`[EXT][CAPTURE] Could not switch back: ${switchErr.message}`);
-      }
-    }
 
     if (!captureResult.success) {
       console.error(`[EXT][CAPTURE] FAIL: ${captureResult.error}`);
