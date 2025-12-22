@@ -1316,12 +1316,675 @@ window.addEventListener('message', (event) => {
   }
 });
 
+// ============================================
+// CREATOR TOOLS SIDEBAR PANEL (vidIQ-style)
+// On-page panel showing Tags, SEO Score, Transcript
+// ============================================
+
+/**
+ * Creator Tools Panel - Injected directly into YouTube page
+ */
+const CreatorToolsPanel = {
+  container: null,
+  isVisible: false,
+  currentTab: 'tags',
+  cachedData: {
+    metadata: null,
+    transcript: null,
+    seoScore: null
+  },
+  lastVideoId: null,
+
+  /**
+   * Create the panel DOM structure
+   */
+  createPanel() {
+    if (this.container) return this.container;
+
+    const panel = document.createElement('div');
+    panel.id = 'yvo-creator-tools-panel';
+    panel.className = 'yvo-creator-panel';
+
+    panel.innerHTML = `
+      <div class="yvo-panel-header">
+        <div class="yvo-panel-logo">
+          <span class="yvo-logo-icon">🎬</span>
+          <span class="yvo-logo-text">YT Creator Tools</span>
+        </div>
+        <button class="yvo-panel-toggle" title="Minimize">−</button>
+      </div>
+      <div class="yvo-panel-tabs">
+        <button class="yvo-tab active" data-tab="tags">
+          <span class="yvo-tab-icon">🏷️</span>
+          <span class="yvo-tab-label">Tags</span>
+        </button>
+        <button class="yvo-tab" data-tab="seo">
+          <span class="yvo-tab-icon">📊</span>
+          <span class="yvo-tab-label">SEO</span>
+        </button>
+        <button class="yvo-tab" data-tab="transcript">
+          <span class="yvo-tab-icon">📝</span>
+          <span class="yvo-tab-label">Text</span>
+        </button>
+      </div>
+      <div class="yvo-panel-content">
+        <div class="yvo-tab-content active" data-content="tags">
+          <div class="yvo-loading">Loading tags...</div>
+        </div>
+        <div class="yvo-tab-content" data-content="seo">
+          <div class="yvo-loading">Loading SEO analysis...</div>
+        </div>
+        <div class="yvo-tab-content" data-content="transcript">
+          <div class="yvo-loading">Loading transcript...</div>
+        </div>
+      </div>
+      <div class="yvo-panel-footer">
+        <a href="#" class="yvo-viral-clip-link">🚀 Find Viral Clips</a>
+      </div>
+    `;
+
+    // Add event listeners
+    this.attachEventListeners(panel);
+
+    this.container = panel;
+    return panel;
+  },
+
+  /**
+   * Attach event listeners to panel elements
+   */
+  attachEventListeners(panel) {
+    // Toggle button
+    panel.querySelector('.yvo-panel-toggle').addEventListener('click', () => {
+      this.toggleMinimize();
+    });
+
+    // Tab buttons
+    panel.querySelectorAll('.yvo-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        this.switchTab(tab.dataset.tab);
+      });
+    });
+
+    // Viral clip link - open popup
+    panel.querySelector('.yvo-viral-clip-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      // Send message to background to open popup or redirect
+      chrome.runtime.sendMessage({ action: 'openViralClipDetector' });
+    });
+  },
+
+  /**
+   * Show the panel on the page
+   */
+  show() {
+    if (!this.container) {
+      this.createPanel();
+    }
+
+    // Find the secondary column (sidebar) on YouTube
+    const secondaryColumn = document.querySelector('#secondary, #secondary-inner, ytd-watch-flexy #secondary');
+
+    if (secondaryColumn) {
+      // Insert at the top of the sidebar
+      if (!secondaryColumn.contains(this.container)) {
+        secondaryColumn.insertBefore(this.container, secondaryColumn.firstChild);
+      }
+    } else {
+      // Fallback: Add to the right side of the page as fixed panel
+      if (!document.body.contains(this.container)) {
+        this.container.classList.add('yvo-fixed-mode');
+        document.body.appendChild(this.container);
+      }
+    }
+
+    this.isVisible = true;
+    this.loadData();
+  },
+
+  /**
+   * Hide the panel
+   */
+  hide() {
+    if (this.container && this.container.parentNode) {
+      this.container.parentNode.removeChild(this.container);
+    }
+    this.isVisible = false;
+  },
+
+  /**
+   * Toggle minimized state
+   */
+  toggleMinimize() {
+    if (!this.container) return;
+
+    const isMinimized = this.container.classList.toggle('yvo-minimized');
+    const toggleBtn = this.container.querySelector('.yvo-panel-toggle');
+    toggleBtn.textContent = isMinimized ? '+' : '−';
+    toggleBtn.title = isMinimized ? 'Expand' : 'Minimize';
+  },
+
+  /**
+   * Switch between tabs
+   */
+  switchTab(tabName) {
+    if (!this.container) return;
+
+    this.currentTab = tabName;
+
+    // Update tab buttons
+    this.container.querySelectorAll('.yvo-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+
+    // Update tab content
+    this.container.querySelectorAll('.yvo-tab-content').forEach(content => {
+      content.classList.toggle('active', content.dataset.content === tabName);
+    });
+
+    // Load data for the tab if not cached
+    this.loadTabData(tabName);
+  },
+
+  /**
+   * Load all data for current video
+   */
+  async loadData() {
+    const videoId = getVideoId();
+
+    // Check if video changed
+    if (videoId !== this.lastVideoId) {
+      this.lastVideoId = videoId;
+      this.cachedData = { metadata: null, transcript: null, seoScore: null };
+    }
+
+    if (!videoId) {
+      this.showError('No video detected');
+      return;
+    }
+
+    // Load data for current tab
+    await this.loadTabData(this.currentTab);
+  },
+
+  /**
+   * Load data for a specific tab
+   */
+  async loadTabData(tabName) {
+    switch (tabName) {
+      case 'tags':
+        await this.loadTags();
+        break;
+      case 'seo':
+        await this.loadSeoAnalysis();
+        break;
+      case 'transcript':
+        await this.loadTranscript();
+        break;
+    }
+  },
+
+  /**
+   * Load and display video tags
+   */
+  async loadTags() {
+    const content = this.container.querySelector('[data-content="tags"]');
+
+    if (this.cachedData.metadata) {
+      this.renderTags(this.cachedData.metadata.tags);
+      return;
+    }
+
+    content.innerHTML = '<div class="yvo-loading"><span class="yvo-spinner"></span>Loading tags...</div>';
+
+    try {
+      const result = await getVideoMetadata();
+
+      if (result.success) {
+        this.cachedData.metadata = result.metadata;
+        this.renderTags(result.metadata.tags);
+      } else {
+        this.renderTags([]);
+      }
+    } catch (error) {
+      content.innerHTML = '<div class="yvo-error">Failed to load tags</div>';
+    }
+  },
+
+  /**
+   * Render tags in the panel
+   */
+  renderTags(tags) {
+    const content = this.container.querySelector('[data-content="tags"]');
+
+    if (!tags || tags.length === 0) {
+      content.innerHTML = `
+        <div class="yvo-empty-state">
+          <span class="yvo-empty-icon">🏷️</span>
+          <p>No tags found for this video</p>
+          <small>This video has no public tags</small>
+        </div>
+      `;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="yvo-tags-header">
+        <span class="yvo-tags-count">${tags.length} tags found</span>
+        <button class="yvo-copy-all-btn" title="Copy all tags">📋 Copy All</button>
+      </div>
+      <div class="yvo-tags-list">
+        ${tags.map(tag => `
+          <span class="yvo-tag" title="Click to copy">
+            ${this.escapeHtml(tag)}
+          </span>
+        `).join('')}
+      </div>
+    `;
+
+    // Add click handlers
+    content.querySelector('.yvo-copy-all-btn').addEventListener('click', () => {
+      this.copyToClipboard(tags.join(', '), 'All tags copied!');
+    });
+
+    content.querySelectorAll('.yvo-tag').forEach((tagEl, index) => {
+      tagEl.addEventListener('click', () => {
+        this.copyToClipboard(tags[index], 'Tag copied!');
+      });
+    });
+  },
+
+  /**
+   * Load and display SEO analysis
+   */
+  async loadSeoAnalysis() {
+    const content = this.container.querySelector('[data-content="seo"]');
+
+    if (this.cachedData.seoScore) {
+      this.renderSeoScore(this.cachedData.seoScore);
+      return;
+    }
+
+    content.innerHTML = '<div class="yvo-loading"><span class="yvo-spinner"></span>Analyzing SEO...</div>';
+
+    try {
+      // Get metadata if not cached
+      if (!this.cachedData.metadata) {
+        const result = await getVideoMetadata();
+        if (result.success) {
+          this.cachedData.metadata = result.metadata;
+        } else {
+          throw new Error('Could not get video data');
+        }
+      }
+
+      const seoScore = this.analyzeSeo(this.cachedData.metadata);
+      this.cachedData.seoScore = seoScore;
+      this.renderSeoScore(seoScore);
+
+    } catch (error) {
+      content.innerHTML = '<div class="yvo-error">Failed to analyze SEO</div>';
+    }
+  },
+
+  /**
+   * Analyze SEO and return score breakdown
+   */
+  analyzeSeo(metadata) {
+    const scores = {
+      title: this.scoreTitleSeo(metadata.title),
+      description: this.scoreDescriptionSeo(metadata.description),
+      tags: this.scoreTagsSeo(metadata.tags),
+      thumbnail: metadata.hasCustomThumbnail ? 100 : 0
+    };
+
+    const total = Math.round(
+      (scores.title * 0.30) +
+      (scores.description * 0.30) +
+      (scores.tags * 0.25) +
+      (scores.thumbnail * 0.15)
+    );
+
+    return {
+      total,
+      breakdown: scores,
+      metadata
+    };
+  },
+
+  scoreTitleSeo(title) {
+    if (!title) return 0;
+    let score = 0;
+
+    // Length check (optimal: 40-60 chars)
+    if (title.length >= 40 && title.length <= 60) score += 40;
+    else if (title.length >= 30 && title.length <= 70) score += 25;
+    else if (title.length > 0) score += 10;
+
+    // Has numbers
+    if (/\d/.test(title)) score += 15;
+
+    // Capitalization (not all caps, not all lowercase)
+    if (title !== title.toUpperCase() && title !== title.toLowerCase()) score += 15;
+
+    // Has special characters/emoji (engagement)
+    if (/[!?|:]/.test(title)) score += 15;
+
+    // Reasonable length (not too short)
+    if (title.length >= 20) score += 15;
+
+    return Math.min(100, score);
+  },
+
+  scoreDescriptionSeo(desc) {
+    if (!desc) return 0;
+    let score = 0;
+
+    // Length (optimal: 200+ chars)
+    if (desc.length >= 500) score += 30;
+    else if (desc.length >= 200) score += 20;
+    else if (desc.length >= 100) score += 10;
+
+    // Has links
+    if (/https?:\/\//.test(desc)) score += 20;
+
+    // Has timestamps
+    if (/\d+:\d+/.test(desc)) score += 20;
+
+    // Has hashtags
+    if (/#\w+/.test(desc)) score += 15;
+
+    // Multiple lines (structured)
+    if ((desc.match(/\n/g) || []).length >= 3) score += 15;
+
+    return Math.min(100, score);
+  },
+
+  scoreTagsSeo(tags) {
+    if (!tags || tags.length === 0) return 0;
+    let score = 0;
+
+    // Number of tags (optimal: 8-15)
+    if (tags.length >= 8 && tags.length <= 15) score += 40;
+    else if (tags.length >= 5) score += 25;
+    else if (tags.length >= 1) score += 10;
+
+    // Has multi-word tags
+    const multiWord = tags.filter(t => t.includes(' ')).length;
+    if (multiWord >= 3) score += 30;
+    else if (multiWord >= 1) score += 15;
+
+    // Total character coverage
+    const totalChars = tags.join('').length;
+    if (totalChars >= 200) score += 30;
+    else if (totalChars >= 100) score += 15;
+
+    return Math.min(100, score);
+  },
+
+  /**
+   * Render SEO score in the panel
+   */
+  renderSeoScore(seoData) {
+    const content = this.container.querySelector('[data-content="seo"]');
+    const { total, breakdown } = seoData;
+
+    const getScoreClass = (score) => {
+      if (score >= 80) return 'excellent';
+      if (score >= 60) return 'good';
+      if (score >= 40) return 'fair';
+      return 'poor';
+    };
+
+    const getScoreColor = (score) => {
+      if (score >= 80) return '#10b981';
+      if (score >= 60) return '#f59e0b';
+      if (score >= 40) return '#f97316';
+      return '#ef4444';
+    };
+
+    content.innerHTML = `
+      <div class="yvo-seo-score-container">
+        <div class="yvo-seo-circle ${getScoreClass(total)}">
+          <svg viewBox="0 0 100 100">
+            <circle class="yvo-seo-circle-bg" cx="50" cy="50" r="45"/>
+            <circle class="yvo-seo-circle-progress" cx="50" cy="50" r="45"
+              style="stroke-dasharray: ${total * 2.83}, 283; stroke: ${getScoreColor(total)}"/>
+          </svg>
+          <div class="yvo-seo-score-value">${total}</div>
+          <div class="yvo-seo-score-label">SEO Score</div>
+        </div>
+      </div>
+      <div class="yvo-seo-breakdown">
+        ${this.renderSeoItem('📝', 'Title', breakdown.title)}
+        ${this.renderSeoItem('📄', 'Description', breakdown.description)}
+        ${this.renderSeoItem('🏷️', 'Tags', breakdown.tags)}
+        ${this.renderSeoItem('🖼️', 'Thumbnail', breakdown.thumbnail)}
+      </div>
+    `;
+  },
+
+  renderSeoItem(icon, label, score) {
+    const getBarClass = (s) => s >= 80 ? 'excellent' : s >= 60 ? 'good' : s >= 40 ? 'fair' : 'poor';
+    return `
+      <div class="yvo-seo-item">
+        <span class="yvo-seo-item-icon">${icon}</span>
+        <span class="yvo-seo-item-label">${label}</span>
+        <div class="yvo-seo-item-bar">
+          <div class="yvo-seo-item-fill ${getBarClass(score)}" style="width: ${score}%"></div>
+        </div>
+        <span class="yvo-seo-item-score">${score}</span>
+      </div>
+    `;
+  },
+
+  /**
+   * Load and display transcript
+   */
+  async loadTranscript() {
+    const content = this.container.querySelector('[data-content="transcript"]');
+
+    if (this.cachedData.transcript) {
+      this.renderTranscript(this.cachedData.transcript);
+      return;
+    }
+
+    content.innerHTML = '<div class="yvo-loading"><span class="yvo-spinner"></span>Loading transcript...</div>';
+
+    try {
+      const result = await getVideoTranscript();
+
+      if (result.success) {
+        this.cachedData.transcript = result.transcript;
+        this.renderTranscript(result.transcript);
+      } else {
+        content.innerHTML = `
+          <div class="yvo-empty-state">
+            <span class="yvo-empty-icon">📝</span>
+            <p>No transcript available</p>
+            <small>${result.error || 'This video has no captions'}</small>
+          </div>
+        `;
+      }
+    } catch (error) {
+      content.innerHTML = '<div class="yvo-error">Failed to load transcript</div>';
+    }
+  },
+
+  /**
+   * Render transcript in the panel
+   */
+  renderTranscript(transcript) {
+    const content = this.container.querySelector('[data-content="transcript"]');
+    const { segments, language, isAutoGenerated } = transcript;
+
+    if (!segments || segments.length === 0) {
+      content.innerHTML = `
+        <div class="yvo-empty-state">
+          <span class="yvo-empty-icon">📝</span>
+          <p>No transcript content</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Full text for copying
+    const fullText = segments.map(s => s.text).join(' ');
+
+    content.innerHTML = `
+      <div class="yvo-transcript-header">
+        <span class="yvo-transcript-lang">${language.toUpperCase()}${isAutoGenerated ? ' (Auto)' : ''}</span>
+        <button class="yvo-copy-transcript-btn" title="Copy transcript">📋 Copy</button>
+      </div>
+      <div class="yvo-transcript-list">
+        ${segments.slice(0, 100).map(seg => `
+          <div class="yvo-transcript-segment" data-time="${seg.start}">
+            <span class="yvo-transcript-time">${this.formatTime(seg.start)}</span>
+            <span class="yvo-transcript-text">${this.escapeHtml(seg.text)}</span>
+          </div>
+        `).join('')}
+        ${segments.length > 100 ? `<div class="yvo-transcript-more">+ ${segments.length - 100} more segments</div>` : ''}
+      </div>
+    `;
+
+    // Add event listeners
+    content.querySelector('.yvo-copy-transcript-btn').addEventListener('click', () => {
+      this.copyToClipboard(fullText, 'Transcript copied!');
+    });
+
+    content.querySelectorAll('.yvo-transcript-segment').forEach(seg => {
+      seg.addEventListener('click', () => {
+        const time = parseFloat(seg.dataset.time);
+        seekToTime(time);
+      });
+    });
+  },
+
+  /**
+   * Show error state
+   */
+  showError(message) {
+    if (!this.container) return;
+
+    const contents = this.container.querySelectorAll('.yvo-tab-content');
+    contents.forEach(content => {
+      content.innerHTML = `<div class="yvo-error">${message}</div>`;
+    });
+  },
+
+  /**
+   * Copy text to clipboard with feedback
+   */
+  async copyToClipboard(text, successMsg) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.showToast(successMsg, 'success');
+    } catch (error) {
+      this.showToast('Failed to copy', 'error');
+    }
+  },
+
+  /**
+   * Show a toast notification
+   */
+  showToast(message, type = 'info') {
+    // Remove existing toast
+    const existing = document.querySelector('.yvo-panel-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = `yvo-panel-toast yvo-toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => toast.classList.add('yvo-toast-visible'), 10);
+    setTimeout(() => {
+      toast.classList.remove('yvo-toast-visible');
+      setTimeout(() => toast.remove(), 300);
+    }, 2000);
+  },
+
+  /**
+   * Format seconds to MM:SS
+   */
+  formatTime(seconds) {
+    seconds = Math.round(seconds);
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  },
+
+  /**
+   * Escape HTML to prevent XSS
+   */
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  },
+
+  /**
+   * Check if we're on a video page
+   */
+  isVideoPage() {
+    return window.location.pathname === '/watch' ||
+           window.location.pathname.startsWith('/shorts/');
+  },
+
+  /**
+   * Initialize panel on video pages
+   */
+  init() {
+    if (this.isVideoPage()) {
+      // Wait a bit for YouTube to load its UI
+      setTimeout(() => this.show(), 1500);
+    }
+  },
+
+  /**
+   * Handle URL changes (YouTube is SPA)
+   */
+  handleNavigation() {
+    if (this.isVideoPage()) {
+      if (!this.isVisible) {
+        this.show();
+      } else {
+        // Video changed, reload data
+        this.loadData();
+      }
+    } else {
+      this.hide();
+    }
+  }
+};
+
+// Make panel accessible for debugging
+window.__YVO_CREATOR_PANEL__ = CreatorToolsPanel;
+
+// ============================================
+// END CREATOR TOOLS PANEL
+// ============================================
+
 // Initialize when document is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
   init();
 }
+
+// Initialize Creator Tools panel
+setTimeout(() => {
+  CreatorToolsPanel.init();
+}, 1000);
+
+// Watch for URL changes for Creator Tools
+let lastUrlForPanel = location.href;
+new MutationObserver(() => {
+  if (location.href !== lastUrlForPanel) {
+    lastUrlForPanel = location.href;
+    setTimeout(() => CreatorToolsPanel.handleNavigation(), 1000);
+  }
+}).observe(document, { subtree: true, childList: true });
 
 console.log('YouTube Video Optimizer content script loaded');
 

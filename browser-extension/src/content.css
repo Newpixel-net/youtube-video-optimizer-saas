@@ -331,3 +331,566 @@
 ytd-miniplayer .yvo-capture-overlay {
   display: none !important;
 }
+
+/* ============================================
+   CREATOR TOOLS SIDEBAR PANEL (vidIQ-style)
+   On-page panel in YouTube sidebar
+   ============================================ */
+
+.yvo-creator-panel {
+  width: 100%;
+  margin-bottom: 16px;
+  background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  color: #f1f5f9;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+/* Fixed mode for when sidebar is not available */
+.yvo-creator-panel.yvo-fixed-mode {
+  position: fixed;
+  top: 80px;
+  right: 16px;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  z-index: 9999;
+}
+
+/* Minimized state */
+.yvo-creator-panel.yvo-minimized {
+  max-height: 48px;
+}
+
+.yvo-creator-panel.yvo-minimized .yvo-panel-tabs,
+.yvo-creator-panel.yvo-minimized .yvo-panel-content,
+.yvo-creator-panel.yvo-minimized .yvo-panel-footer {
+  display: none;
+}
+
+/* Panel Header */
+.yvo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(139, 92, 246, 0.15));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.yvo-panel-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.yvo-logo-icon {
+  font-size: 18px;
+}
+
+.yvo-logo-text {
+  font-size: 14px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.yvo-panel-toggle {
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.yvo-panel-toggle:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+}
+
+/* Tabs */
+.yvo-panel-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.yvo-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 8px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.yvo-tab:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.yvo-tab.active {
+  color: #f1f5f9;
+  background: rgba(139, 92, 246, 0.15);
+}
+
+.yvo-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 2px;
+  background: linear-gradient(90deg, #ec4899, #8b5cf6);
+  border-radius: 2px 2px 0 0;
+}
+
+.yvo-tab-icon {
+  font-size: 16px;
+}
+
+.yvo-tab-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Tab Content */
+.yvo-panel-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.yvo-tab-content {
+  display: none;
+  padding: 14px;
+}
+
+.yvo-tab-content.active {
+  display: block;
+}
+
+/* Loading State */
+.yvo-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.yvo-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(139, 92, 246, 0.2);
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: yvo-spin 0.8s linear infinite;
+}
+
+/* Error State */
+.yvo-error {
+  padding: 20px;
+  text-align: center;
+  color: #f87171;
+  font-size: 13px;
+}
+
+/* Empty State */
+.yvo-empty-state {
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.yvo-empty-icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.yvo-empty-state p {
+  margin: 0 0 4px 0;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.yvo-empty-state small {
+  color: #64748b;
+  font-size: 11px;
+}
+
+/* ============================================
+   TAGS TAB
+   ============================================ */
+
+.yvo-tags-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.yvo-tags-count {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.yvo-copy-all-btn {
+  background: rgba(139, 92, 246, 0.2);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #c4b5fd;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.yvo-copy-all-btn:hover {
+  background: rgba(139, 92, 246, 0.3);
+  color: #e9d5ff;
+}
+
+.yvo-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.yvo-tag {
+  display: inline-block;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.yvo-tag:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #f1f5f9;
+}
+
+/* ============================================
+   SEO TAB
+   ============================================ */
+
+.yvo-seo-score-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.yvo-seo-circle {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+.yvo-seo-circle svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.yvo-seo-circle-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 8;
+}
+
+.yvo-seo-circle-progress {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.5s ease;
+}
+
+.yvo-seo-score-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+  font-size: 28px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.yvo-seo-score-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 60%);
+  font-size: 10px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.yvo-seo-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.yvo-seo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.yvo-seo-item-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.yvo-seo-item-label {
+  font-size: 12px;
+  color: #e2e8f0;
+  width: 80px;
+}
+
+.yvo-seo-item-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.yvo-seo-item-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.yvo-seo-item-fill.excellent {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.yvo-seo-item-fill.good {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.yvo-seo-item-fill.fair {
+  background: linear-gradient(90deg, #f97316, #fb923c);
+}
+
+.yvo-seo-item-fill.poor {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.yvo-seo-item-score {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  width: 28px;
+  text-align: right;
+}
+
+/* ============================================
+   TRANSCRIPT TAB
+   ============================================ */
+
+.yvo-transcript-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.yvo-transcript-lang {
+  font-size: 11px;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.yvo-copy-transcript-btn {
+  background: rgba(139, 92, 246, 0.2);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #c4b5fd;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.yvo-copy-transcript-btn:hover {
+  background: rgba(139, 92, 246, 0.3);
+  color: #e9d5ff;
+}
+
+.yvo-transcript-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.yvo-transcript-segment {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.yvo-transcript-segment:hover {
+  background: rgba(139, 92, 246, 0.15);
+}
+
+.yvo-transcript-time {
+  font-size: 11px;
+  color: #8b5cf6;
+  font-weight: 600;
+  min-width: 36px;
+  flex-shrink: 0;
+}
+
+.yvo-transcript-text {
+  font-size: 12px;
+  color: #e2e8f0;
+  line-height: 1.4;
+}
+
+.yvo-transcript-more {
+  text-align: center;
+  padding: 12px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* ============================================
+   PANEL FOOTER
+   ============================================ */
+
+.yvo-panel-footer {
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(139, 92, 246, 0.1));
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+
+.yvo-viral-clip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #ec4899;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.yvo-viral-clip-link:hover {
+  color: #f472b6;
+  text-decoration: none;
+}
+
+/* ============================================
+   TOAST NOTIFICATIONS
+   ============================================ */
+
+.yvo-panel-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  padding: 10px 20px;
+  background: #1f2937;
+  color: #f1f5f9;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 99999;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.yvo-panel-toast.yvo-toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.yvo-panel-toast.yvo-toast-success {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.yvo-panel-toast.yvo-toast-error {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+/* ============================================
+   RESPONSIVE / SCROLLBAR
+   ============================================ */
+
+.yvo-panel-content::-webkit-scrollbar,
+.yvo-transcript-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.yvo-panel-content::-webkit-scrollbar-track,
+.yvo-transcript-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.yvo-panel-content::-webkit-scrollbar-thumb,
+.yvo-transcript-list::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.4);
+  border-radius: 3px;
+}
+
+.yvo-panel-content::-webkit-scrollbar-thumb:hover,
+.yvo-transcript-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.6);
+}
+
+/* Hide panel in theater mode when sidebar is hidden */
+ytd-watch-flexy[theater] #secondary:empty .yvo-creator-panel {
+  display: none;
+}
+
+/* Adjust for mini-player */
+.ytd-miniplayer .yvo-creator-panel,
+ytd-miniplayer .yvo-creator-panel {
+  display: none !important;
+}
