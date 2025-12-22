@@ -66,9 +66,11 @@ const WIZARD_HOSTS = ['ytseo.siteuo.com', 'youtube-video-optimizer.web.app', 'yt
  * Initialize the popup
  */
 async function init() {
+  console.log('[YT Creator Tools] Popup initializing...');
   cacheElements();
   attachEventListeners();
   await checkCurrentTab();
+  console.log('[YT Creator Tools] Popup initialized');
 }
 
 /**
@@ -350,12 +352,14 @@ function showWizardActive() {
 }
 
 function showYoutubeReady() {
+  console.log('[YT Creator Tools] Showing YouTube Ready view');
   hideAllSections();
   elements.youtubeReady?.classList.remove('hidden');
   updateStatus('ready', 'Ready');
 }
 
 function showNotYoutube() {
+  console.log('[YT Creator Tools] Showing Not YouTube view');
   hideAllSections();
   elements.notYoutube?.classList.remove('hidden');
   updateStatus('warning', 'Inactive');
