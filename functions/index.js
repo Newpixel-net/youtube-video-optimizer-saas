@@ -17377,9 +17377,21 @@ exports.wizardAnalyzeVideo = functions
     );
   }
 
-  const { videoUrl, options, uploadedVideoUrl, uploadedVideoPath, uploadedVideoName, extensionData, useExtension } = data;
+  const { videoUrl, options, uploadedVideoUrl, uploadedVideoPath, uploadedVideoName, extensionData, useExtension, contentType, platformPreset } = data;
   const isUploadedFile = !!uploadedVideoUrl;
   const hasExtensionData = useExtension && extensionData && extensionData.videoInfo;
+
+  // Platform preset settings with defaults
+  const platform = contentType || 'youtube-shorts';
+  const presetConfig = platformPreset || {
+    minDuration: 45,
+    maxDuration: 60,
+    targetDuration: 55,
+    durationRange: '50-60',
+    aiPrompt: 'Each clip should be 50-60 seconds to maximize YouTube Shorts watch time. Focus on complete story arcs with satisfying conclusions.'
+  };
+
+  console.log('[wizardAnalyzeVideo] Platform settings:', { platform, targetDuration: presetConfig.targetDuration, durationRange: presetConfig.durationRange });
 
   // Log extension data if provided
   if (hasExtensionData) {
@@ -17720,9 +17732,10 @@ ${fullTranscript && fullTranscript.length > 4000 ? '\n[Transcript truncated...]'
 CRITICAL REQUIREMENTS:
 1. DIVERSITY: Each clip must focus on a DIFFERENT topic, moment, or theme - NO similar clips
 2. SPREAD: Distribute clips across the ENTIRE video duration (beginning, middle, end)
-3. NO OVERLAP: Clips must NOT overlap in time - minimum 30 second gap between clips
-4. VARIED LENGTHS: Mix of 15-30 second clips (hooks) and 30-60 second clips (stories)
-5. DIFFERENT START TIMES: Clips should NOT all start at similar timestamps
+3. NO OVERLAP: Clips must NOT overlap in time - minimum 60 second gap between clips
+4. TARGET DURATION: ${presetConfig.aiPrompt}
+5. CLIP LENGTH: Each clip should be ${presetConfig.durationRange} seconds (minimum ${presetConfig.minDuration}s, maximum ${presetConfig.maxDuration}s)
+6. DIFFERENT START TIMES: Clips should NOT all start at similar timestamps
 
 CLIP SELECTION CRITERIA (prioritize variety):
 - Opening hooks (first 60 seconds) - max 1 clip
@@ -17746,7 +17759,7 @@ RESPOND IN VALID JSON:
     {
       "startTime": <integer seconds from video start>,
       "endTime": <integer seconds from video start>,
-      "duration": <clip length in seconds, between 15-60>,
+      "duration": <clip length in seconds, between ${presetConfig.minDuration}-${presetConfig.maxDuration}>,
       "transcript": "The key quote or summary of what's said in this moment (be specific)",
       "viralityScore": <0-100 based on viral potential>,
       "uniqueAngle": "What makes THIS clip different from others",
@@ -17799,8 +17812,13 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
       const segmentSize = Math.floor(durationSeconds / numClips);
 
       for (let i = 0; i < numClips; i++) {
-        // Vary clip lengths between 20-50 seconds
-        const clipDuration = 20 + Math.floor(Math.random() * 30);
+        // Use platform-specific duration settings
+        const minDur = presetConfig.minDuration || 45;
+        const maxDur = presetConfig.maxDuration || 60;
+        const targetDur = presetConfig.targetDuration || 55;
+        // Generate clips around target duration with small variance
+        const variance = Math.floor((maxDur - minDur) / 2);
+        const clipDuration = Math.min(maxDur, Math.max(minDur, targetDur + Math.floor(Math.random() * variance * 2) - variance));
         // Start at different points within each segment
         const segmentStart = segmentSize * i;
         const startOffset = Math.floor(Math.random() * (segmentSize - clipDuration - 10)) + 5;
@@ -17832,16 +17850,17 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
     }
 
     // Validate and process clips - ensure no overlaps and proper spread
+    const defaultDuration = presetConfig.targetDuration || 55;
     let processedClips = (analysisResult.clips || [])
       .filter(clip => {
         // Validate timestamps
         const start = parseInt(clip.startTime) || 0;
-        const end = parseInt(clip.endTime) || start + 45;
+        const end = parseInt(clip.endTime) || start + defaultDuration;
         return start >= 0 && start < durationSeconds && end > start && end <= durationSeconds;
       })
       .map((clip, index) => {
         const start = parseInt(clip.startTime) || 0;
-        const end = parseInt(clip.endTime) || start + 45;
+        const end = parseInt(clip.endTime) || start + defaultDuration;
         // Get actual transcript for this clip's time range
         const actualTranscript = getTranscriptForTimeRange(transcriptSegments, start, end);
         return {
@@ -17903,6 +17922,14 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
       videoUrl,
       videoData,
       clips: processedClips,
+      // Platform preset used for clip generation
+      platform: platform,
+      platformPreset: {
+        minDuration: presetConfig.minDuration,
+        maxDuration: presetConfig.maxDuration,
+        targetDuration: presetConfig.targetDuration,
+        durationRange: presetConfig.durationRange
+      },
       // Store transcript data for SEO generation and other features
       transcriptSegments: transcriptSegments.slice(0, 500), // Limit to 500 segments
       fullTranscript: fullTranscript ? fullTranscript.substring(0, 10000) : '', // First 10k chars

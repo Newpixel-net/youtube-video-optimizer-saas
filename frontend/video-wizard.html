@@ -6427,6 +6427,185 @@
             border-color: rgba(239, 68, 68, 0.4);
         }
 
+        /* Platform Selection - Step 1 */
+        .platform-selection-section {
+            margin-bottom: 2rem;
+        }
+
+        .platform-selection-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .platform-selection-header h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+
+        .platform-selection-header p {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .platform-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .platform-cards-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .platform-cards-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .platform-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1.25rem 1rem;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .platform-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .platform-card.selected {
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(249, 115, 22, 0.05) 100%);
+            border-color: #f97316;
+            box-shadow: 0 0 20px rgba(249, 115, 22, 0.2);
+        }
+
+        .platform-card.selected::before {
+            content: '✓';
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            width: 1.25rem;
+            height: 1.25rem;
+            background: #f97316;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .platform-card-icon {
+            font-size: 2rem;
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+
+        .platform-card-name {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.25rem;
+        }
+
+        .platform-card-subtitle {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.5rem;
+        }
+
+        .platform-card-duration {
+            font-size: 0.7rem;
+            color: #f97316;
+            font-weight: 500;
+            padding: 0.25rem 0.5rem;
+            background: rgba(249, 115, 22, 0.1);
+            border-radius: 0.5rem;
+            display: inline-block;
+        }
+
+        .platform-card.selected .platform-card-duration {
+            background: rgba(249, 115, 22, 0.2);
+        }
+
+        .platform-multi-card {
+            grid-column: span 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .platform-multi-card {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .platform-multi-card {
+                grid-column: span 1;
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        .platform-multi-card .platform-card-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0;
+        }
+
+        .platform-multi-info {
+            text-align: left;
+        }
+
+        @media (max-width: 480px) {
+            .platform-multi-info {
+                text-align: center;
+            }
+        }
+
+        .platform-multi-info .platform-card-name {
+            margin-bottom: 0.125rem;
+        }
+
+        .platform-multi-info .platform-card-description {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .platform-selection-tip {
+            text-align: center;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.375rem;
+        }
+
+        .platform-selection-tip svg {
+            width: 14px;
+            height: 14px;
+            opacity: 0.6;
+        }
+
         /* YouTube Connection Panel - Step 1 */
         .youtube-connection-step1 {
             margin: 1.5rem 0;
@@ -7329,6 +7508,91 @@
             });
 
         /* ==========================================
+           4.1.1 PLATFORM PRESETS CONFIGURATION
+           ========================================== */
+
+        const PLATFORM_PRESETS = {
+            'youtube-shorts': {
+                id: 'youtube-shorts',
+                name: 'YouTube Shorts',
+                icon: '📺',
+                subtitle: 'Platform optimized',
+                minDuration: 45,
+                maxDuration: 60,
+                targetDuration: 55,
+                aspectRatio: '9:16',
+                description: 'Maximize the 60-second limit for better watch time',
+                aiPrompt: 'Each clip should be 50-60 seconds to maximize YouTube Shorts watch time. Focus on complete story arcs with satisfying conclusions.',
+                durationRange: '50-60'
+            },
+            'tiktok-viral': {
+                id: 'tiktok-viral',
+                name: 'TikTok Viral',
+                icon: '🎵',
+                subtitle: 'Trending style',
+                minDuration: 20,
+                maxDuration: 90,
+                targetDuration: 45,
+                aspectRatio: '9:16',
+                description: 'Hook-driven content with trending formats',
+                aiPrompt: 'Clips should be 30-60 seconds with extremely strong hooks in the first 2 seconds. Focus on trending, shareable moments.',
+                durationRange: '30-60'
+            },
+            'instagram-reels': {
+                id: 'instagram-reels',
+                name: 'Instagram Reels',
+                icon: '📷',
+                subtitle: 'Visual focus',
+                minDuration: 45,
+                maxDuration: 90,
+                targetDuration: 70,
+                aspectRatio: '9:16',
+                description: 'Visually striking moments for the gram',
+                aiPrompt: 'Clips should be 60-90 seconds focusing on visual impact and aesthetic appeal. Instagram rewards longer watch time.',
+                durationRange: '60-90'
+            },
+            'podcast-clip': {
+                id: 'podcast-clip',
+                name: 'Podcast Clip',
+                icon: '🎙️',
+                subtitle: 'Clean & clear',
+                minDuration: 30,
+                maxDuration: 120,
+                targetDuration: 60,
+                aspectRatio: '9:16',
+                description: 'Quotable insights and clear dialogue',
+                aiPrompt: 'Clips should be 45-90 seconds capturing complete thoughts and quotable insights. Focus on clear dialogue and valuable information.',
+                durationRange: '45-90'
+            },
+            'gaming-highlight': {
+                id: 'gaming-highlight',
+                name: 'Gaming Highlight',
+                icon: '🎮',
+                subtitle: 'Action-packed',
+                minDuration: 15,
+                maxDuration: 90,
+                targetDuration: 45,
+                aspectRatio: '9:16',
+                description: 'Peak action moments and reactions',
+                aiPrompt: 'Clips should be 30-60 seconds of peak action, impressive plays, reactions, or funny moments.',
+                durationRange: '30-60'
+            },
+            'multi-platform': {
+                id: 'multi-platform',
+                name: 'Multi-Platform',
+                icon: '🌐',
+                subtitle: 'Universal fit',
+                minDuration: 30,
+                maxDuration: 60,
+                targetDuration: 50,
+                aspectRatio: '9:16',
+                description: 'Optimized for all platforms',
+                aiPrompt: 'Clips should be 45-60 seconds to work well across all platforms. Focus on universal appeal with complete moments.',
+                durationRange: '45-60'
+            }
+        };
+
+        /* ==========================================
            4.2 APPLICATION STATE
            ========================================== */
 
@@ -7338,6 +7602,12 @@
             profile: null,
             loading: false,
             projectId: null, // Firestore project ID
+
+            // Content Type / Platform Selection
+            contentType: {
+                selected: 'youtube-shorts', // Default to YouTube Shorts
+                preset: PLATFORM_PRESETS['youtube-shorts']
+            },
 
             // Token system (synced with backend)
             tokens: {
@@ -7727,6 +7997,48 @@
 
         function renderStep1VideoInput() {
             var html = '';
+
+            // Platform Selection Section
+            html += '<div class="platform-selection-section">';
+            html += '<div class="platform-selection-header">';
+            html += '<h3>What are you creating?</h3>';
+            html += '<p>Choose your target platform for optimal clip lengths</p>';
+            html += '</div>';
+
+            html += '<div class="platform-cards-grid">';
+
+            // Main platform cards (excluding multi-platform)
+            var mainPlatforms = ['youtube-shorts', 'tiktok-viral', 'instagram-reels', 'podcast-clip', 'gaming-highlight'];
+            mainPlatforms.forEach(function(platformId) {
+                var preset = PLATFORM_PRESETS[platformId];
+                var isSelected = state.contentType.selected === platformId;
+                html += '<div class="platform-card' + (isSelected ? ' selected' : '') + '" onclick="app.selectPlatform(\'' + platformId + '\')">';
+                html += '<span class="platform-card-icon">' + preset.icon + '</span>';
+                html += '<div class="platform-card-name">' + preset.name + '</div>';
+                html += '<div class="platform-card-subtitle">' + preset.subtitle + '</div>';
+                html += '<div class="platform-card-duration">' + preset.durationRange + 's</div>';
+                html += '</div>';
+            });
+
+            // Multi-platform card (spans full width)
+            var multiPreset = PLATFORM_PRESETS['multi-platform'];
+            var isMultiSelected = state.contentType.selected === 'multi-platform';
+            html += '<div class="platform-card platform-multi-card' + (isMultiSelected ? ' selected' : '') + '" onclick="app.selectPlatform(\'multi-platform\')">';
+            html += '<span class="platform-card-icon">' + multiPreset.icon + '</span>';
+            html += '<div class="platform-multi-info">';
+            html += '<div class="platform-card-name">' + multiPreset.name + ' <span class="platform-card-duration">' + multiPreset.durationRange + 's</span></div>';
+            html += '<div class="platform-card-description">' + multiPreset.description + '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>'; // .platform-cards-grid
+
+            html += '<div class="platform-selection-tip">';
+            html += '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
+            html += 'Longer clips = more watch time = better algorithm performance';
+            html += '</div>';
+
+            html += '</div>'; // .platform-selection-section
 
             // Dropzone
             html += '<div class="video-dropzone" id="dropzone">';
@@ -10447,6 +10759,22 @@
                 render();
             },
 
+            // Select platform/content type preset
+            selectPlatform: function(platformId) {
+                if (!PLATFORM_PRESETS[platformId]) return;
+                state.contentType.selected = platformId;
+                state.contentType.preset = PLATFORM_PRESETS[platformId];
+
+                // Save selection to localStorage for persistence
+                try {
+                    localStorage.setItem('wizard_platform_preset', platformId);
+                } catch (e) {
+                    console.warn('Could not save platform preference');
+                }
+
+                render();
+            },
+
             // Handle video file upload from device
             handleVideoUpload: async function(input) {
                 var file = input.files[0];
@@ -10678,7 +11006,9 @@
 
                     // Prepare request data based on input type
                     var requestData = {
-                        options: state.videoInput.options
+                        options: state.videoInput.options,
+                        contentType: state.contentType.selected,
+                        platformPreset: state.contentType.preset
                     };
 
                     if (uploadedFile) {
@@ -15626,6 +15956,17 @@
                     console.error('[Video Wizard] Error parsing YouTube URL param:', e);
                 }
             }
+        }
+
+        // Load saved platform preference
+        try {
+            var savedPlatform = localStorage.getItem('wizard_platform_preset');
+            if (savedPlatform && PLATFORM_PRESETS[savedPlatform]) {
+                state.contentType.selected = savedPlatform;
+                state.contentType.preset = PLATFORM_PRESETS[savedPlatform];
+            }
+        } catch (e) {
+            console.warn('Could not load platform preference');
         }
 
         // Initialize extension check
