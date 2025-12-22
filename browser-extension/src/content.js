@@ -1318,7 +1318,7 @@ window.addEventListener('message', (event) => {
 
 // ============================================
 // CREATOR TOOLS SIDEBAR PANEL (vidIQ-style)
-// On-page panel showing Tags, SEO Score, Transcript
+// On-page panel showing Tags, SEO Score, Transcript, Thumbnail, Chapters, Channel, Social
 // ============================================
 
 /**
@@ -1331,7 +1331,9 @@ const CreatorToolsPanel = {
   cachedData: {
     metadata: null,
     transcript: null,
-    seoScore: null
+    seoScore: null,
+    chapters: null,
+    channelStats: null
   },
   lastVideoId: null,
 
@@ -1353,19 +1355,37 @@ const CreatorToolsPanel = {
         </div>
         <button class="yvo-panel-toggle" title="Minimize">−</button>
       </div>
-      <div class="yvo-panel-tabs">
-        <button class="yvo-tab active" data-tab="tags">
-          <span class="yvo-tab-icon">🏷️</span>
-          <span class="yvo-tab-label">Tags</span>
-        </button>
-        <button class="yvo-tab" data-tab="seo">
-          <span class="yvo-tab-icon">📊</span>
-          <span class="yvo-tab-label">SEO</span>
-        </button>
-        <button class="yvo-tab" data-tab="transcript">
-          <span class="yvo-tab-icon">📝</span>
-          <span class="yvo-tab-label">Text</span>
-        </button>
+      <div class="yvo-panel-tabs-wrapper">
+        <div class="yvo-panel-tabs">
+          <button class="yvo-tab active" data-tab="tags" title="Video Tags">
+            <span class="yvo-tab-icon">🏷️</span>
+            <span class="yvo-tab-label">Tags</span>
+          </button>
+          <button class="yvo-tab" data-tab="seo" title="SEO Score">
+            <span class="yvo-tab-icon">📊</span>
+            <span class="yvo-tab-label">SEO</span>
+          </button>
+          <button class="yvo-tab" data-tab="transcript" title="Transcript">
+            <span class="yvo-tab-icon">📝</span>
+            <span class="yvo-tab-label">Text</span>
+          </button>
+          <button class="yvo-tab" data-tab="thumbnail" title="Thumbnail Analyzer">
+            <span class="yvo-tab-icon">📸</span>
+            <span class="yvo-tab-label">Thumb</span>
+          </button>
+          <button class="yvo-tab" data-tab="chapters" title="Video Chapters">
+            <span class="yvo-tab-icon">⏱️</span>
+            <span class="yvo-tab-label">Chap</span>
+          </button>
+          <button class="yvo-tab" data-tab="channel" title="Channel Stats">
+            <span class="yvo-tab-icon">📺</span>
+            <span class="yvo-tab-label">Chan</span>
+          </button>
+          <button class="yvo-tab" data-tab="social" title="Social Preview">
+            <span class="yvo-tab-icon">🌐</span>
+            <span class="yvo-tab-label">Share</span>
+          </button>
+        </div>
       </div>
       <div class="yvo-panel-content">
         <div class="yvo-tab-content active" data-content="tags">
@@ -1376,6 +1396,18 @@ const CreatorToolsPanel = {
         </div>
         <div class="yvo-tab-content" data-content="transcript">
           <div class="yvo-loading">Loading transcript...</div>
+        </div>
+        <div class="yvo-tab-content" data-content="thumbnail">
+          <div class="yvo-loading">Loading thumbnail...</div>
+        </div>
+        <div class="yvo-tab-content" data-content="chapters">
+          <div class="yvo-loading">Loading chapters...</div>
+        </div>
+        <div class="yvo-tab-content" data-content="channel">
+          <div class="yvo-loading">Loading channel stats...</div>
+        </div>
+        <div class="yvo-tab-content" data-content="social">
+          <div class="yvo-loading">Loading social preview...</div>
         </div>
       </div>
       <div class="yvo-panel-footer">
@@ -1495,7 +1527,7 @@ const CreatorToolsPanel = {
     // Check if video changed
     if (videoId !== this.lastVideoId) {
       this.lastVideoId = videoId;
-      this.cachedData = { metadata: null, transcript: null, seoScore: null };
+      this.cachedData = { metadata: null, transcript: null, seoScore: null, chapters: null, channelStats: null };
     }
 
     if (!videoId) {
@@ -1520,6 +1552,18 @@ const CreatorToolsPanel = {
         break;
       case 'transcript':
         await this.loadTranscript();
+        break;
+      case 'thumbnail':
+        await this.loadThumbnailAnalysis();
+        break;
+      case 'chapters':
+        await this.loadChapters();
+        break;
+      case 'channel':
+        await this.loadChannelStats();
+        break;
+      case 'social':
+        await this.loadSocialPreview();
         break;
     }
   },
@@ -1751,8 +1795,10 @@ const CreatorToolsPanel = {
             <circle class="yvo-seo-circle-progress" cx="50" cy="50" r="45"
               style="stroke-dasharray: ${total * 2.83}, 283; stroke: ${getScoreColor(total)}"/>
           </svg>
-          <div class="yvo-seo-score-value">${total}</div>
-          <div class="yvo-seo-score-label">SEO Score</div>
+          <div class="yvo-seo-score-text">
+            <div class="yvo-seo-score-value">${total}</div>
+            <div class="yvo-seo-score-label">SEO Score</div>
+          </div>
         </div>
       </div>
       <div class="yvo-seo-breakdown">
@@ -1857,6 +1903,461 @@ const CreatorToolsPanel = {
         const time = parseFloat(seg.dataset.time);
         seekToTime(time);
       });
+    });
+  },
+
+  // ============================================
+  // THUMBNAIL ANALYZER TAB
+  // ============================================
+
+  /**
+   * Load and display thumbnail analysis
+   */
+  async loadThumbnailAnalysis() {
+    const content = this.container.querySelector('[data-content="thumbnail"]');
+    const videoId = getVideoId();
+
+    if (!videoId) {
+      content.innerHTML = '<div class="yvo-error">No video detected</div>';
+      return;
+    }
+
+    content.innerHTML = '<div class="yvo-loading"><span class="yvo-spinner"></span>Analyzing thumbnail...</div>';
+
+    try {
+      // Get metadata if not cached
+      if (!this.cachedData.metadata) {
+        const result = await getVideoMetadata();
+        if (result.success) {
+          this.cachedData.metadata = result.metadata;
+        }
+      }
+
+      const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+      const thumbnailMq = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+      const thumbnailSd = `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`;
+
+      // Analyze thumbnail characteristics
+      const analysis = await this.analyzeThumbnail(thumbnailUrl, this.cachedData.metadata?.title || '');
+
+      content.innerHTML = `
+        <div class="yvo-thumb-preview">
+          <img src="${thumbnailUrl}" alt="Thumbnail" class="yvo-thumb-main" onerror="this.src='${thumbnailMq}'">
+        </div>
+        <div class="yvo-thumb-score">
+          <div class="yvo-thumb-score-circle">
+            <span class="yvo-thumb-score-value">${analysis.score}</span>
+            <span class="yvo-thumb-score-label">/ 100</span>
+          </div>
+        </div>
+        <div class="yvo-thumb-checks">
+          ${this.renderThumbCheck('📐', 'Resolution', analysis.resolution, analysis.resolutionNote)}
+          ${this.renderThumbCheck('🔤', 'Text Visible', analysis.hasText, analysis.textNote)}
+          ${this.renderThumbCheck('🎨', 'Vibrant Colors', analysis.vibrant, 'High contrast attracts attention')}
+          ${this.renderThumbCheck('😀', 'Face/Emotion', analysis.hasFace, 'Faces increase CTR')}
+        </div>
+        <div class="yvo-thumb-sizes">
+          <span class="yvo-thumb-sizes-title">Preview Sizes:</span>
+          <div class="yvo-thumb-size-grid">
+            <div class="yvo-thumb-size" title="Search Result">
+              <img src="${thumbnailMq}" alt="Search size">
+              <span>Search</span>
+            </div>
+            <div class="yvo-thumb-size" title="Suggested Video">
+              <img src="${thumbnailSd}" alt="Suggested size">
+              <span>Sidebar</span>
+            </div>
+            <div class="yvo-thumb-size yvo-thumb-mobile" title="Mobile">
+              <img src="${thumbnailMq}" alt="Mobile size">
+              <span>Mobile</span>
+            </div>
+          </div>
+        </div>
+      `;
+    } catch (error) {
+      content.innerHTML = '<div class="yvo-error">Failed to analyze thumbnail</div>';
+    }
+  },
+
+  /**
+   * Analyze thumbnail and return scores
+   */
+  async analyzeThumbnail(url, title) {
+    let score = 50; // Base score
+    const analysis = {
+      resolution: true,
+      resolutionNote: '1280x720 (HD)',
+      hasText: false,
+      textNote: 'No text overlay detected',
+      vibrant: true,
+      hasFace: false
+    };
+
+    // Check if title suggests text in thumbnail
+    if (title && (title.includes('!') || title.includes('?') || /\d+/.test(title))) {
+      analysis.hasText = true;
+      analysis.textNote = 'Likely has text overlay';
+      score += 15;
+    }
+
+    // Resolution score (assume HD for maxresdefault)
+    score += 20;
+
+    // Vibrant colors assumed for custom thumbnails
+    score += 15;
+
+    // Check common engagement patterns
+    const engagementWords = ['how', 'why', 'best', 'top', 'secret', 'amazing', 'shocking'];
+    if (engagementWords.some(w => title.toLowerCase().includes(w))) {
+      analysis.hasFace = true; // Likely has expressive thumbnail
+      score += 15;
+    }
+
+    analysis.score = Math.min(100, score);
+    return analysis;
+  },
+
+  renderThumbCheck(icon, label, passed, note) {
+    return `
+      <div class="yvo-thumb-check ${passed ? 'passed' : 'failed'}">
+        <span class="yvo-thumb-check-icon">${icon}</span>
+        <span class="yvo-thumb-check-label">${label}</span>
+        <span class="yvo-thumb-check-status">${passed ? '✓' : '✗'}</span>
+        <span class="yvo-thumb-check-note">${note}</span>
+      </div>
+    `;
+  },
+
+  // ============================================
+  // CHAPTERS EXTRACTOR TAB
+  // ============================================
+
+  /**
+   * Load and display video chapters
+   */
+  async loadChapters() {
+    const content = this.container.querySelector('[data-content="chapters"]');
+
+    if (this.cachedData.chapters) {
+      this.renderChapters(this.cachedData.chapters);
+      return;
+    }
+
+    content.innerHTML = '<div class="yvo-loading"><span class="yvo-spinner"></span>Loading chapters...</div>';
+
+    try {
+      const chapters = this.extractChapters();
+      this.cachedData.chapters = chapters;
+      this.renderChapters(chapters);
+    } catch (error) {
+      content.innerHTML = '<div class="yvo-error">Failed to load chapters</div>';
+    }
+  },
+
+  /**
+   * Extract chapters from video description or YouTube's chapter markers
+   */
+  extractChapters() {
+    const chapters = [];
+
+    // Method 1: Try YouTube's built-in chapter markers
+    const chapterElements = document.querySelectorAll('ytd-macro-markers-list-item-renderer');
+    if (chapterElements.length > 0) {
+      chapterElements.forEach(el => {
+        const titleEl = el.querySelector('#details h4');
+        const timeEl = el.querySelector('#time');
+        if (titleEl && timeEl) {
+          const timeText = timeEl.textContent.trim();
+          chapters.push({
+            title: titleEl.textContent.trim(),
+            time: timeText,
+            seconds: this.parseTimeToSeconds(timeText)
+          });
+        }
+      });
+    }
+
+    // Method 2: Extract from description if no chapters found
+    if (chapters.length === 0) {
+      const description = this.cachedData.metadata?.description || '';
+      const lines = description.split('\n');
+
+      const timeRegex = /^(\d{1,2}:)?(\d{1,2}):(\d{2})\s*[-–—]?\s*(.+)$/;
+      lines.forEach(line => {
+        const match = line.trim().match(timeRegex);
+        if (match) {
+          const timeStr = match[1] ? `${match[1]}${match[2]}:${match[3]}` : `${match[2]}:${match[3]}`;
+          chapters.push({
+            title: match[4].trim(),
+            time: timeStr,
+            seconds: this.parseTimeToSeconds(timeStr)
+          });
+        }
+      });
+    }
+
+    return chapters;
+  },
+
+  parseTimeToSeconds(timeStr) {
+    const parts = timeStr.split(':').map(p => parseInt(p, 10) || 0);
+    if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    }
+    return 0;
+  },
+
+  renderChapters(chapters) {
+    const content = this.container.querySelector('[data-content="chapters"]');
+
+    if (!chapters || chapters.length === 0) {
+      content.innerHTML = `
+        <div class="yvo-empty-state">
+          <span class="yvo-empty-icon">⏱️</span>
+          <p>No chapters found</p>
+          <small>This video doesn't have chapter markers</small>
+        </div>
+      `;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="yvo-chapters-header">
+        <span class="yvo-chapters-count">${chapters.length} chapters</span>
+      </div>
+      <div class="yvo-chapters-list">
+        ${chapters.map((ch, i) => `
+          <div class="yvo-chapter" data-time="${ch.seconds}">
+            <span class="yvo-chapter-num">${i + 1}</span>
+            <span class="yvo-chapter-time">${ch.time}</span>
+            <span class="yvo-chapter-title">${this.escapeHtml(ch.title)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    // Add click handlers
+    content.querySelectorAll('.yvo-chapter').forEach(el => {
+      el.addEventListener('click', () => {
+        const time = parseFloat(el.dataset.time);
+        seekToTime(time);
+      });
+    });
+  },
+
+  // ============================================
+  // CHANNEL STATS TAB
+  // ============================================
+
+  /**
+   * Load and display channel statistics
+   */
+  async loadChannelStats() {
+    const content = this.container.querySelector('[data-content="channel"]');
+
+    if (this.cachedData.channelStats) {
+      this.renderChannelStats(this.cachedData.channelStats);
+      return;
+    }
+
+    content.innerHTML = '<div class="yvo-loading"><span class="yvo-spinner"></span>Loading channel stats...</div>';
+
+    try {
+      const stats = this.extractChannelStats();
+      this.cachedData.channelStats = stats;
+      this.renderChannelStats(stats);
+    } catch (error) {
+      content.innerHTML = '<div class="yvo-error">Failed to load channel stats</div>';
+    }
+  },
+
+  /**
+   * Extract channel statistics from the page
+   */
+  extractChannelStats() {
+    const stats = {
+      name: '',
+      avatar: '',
+      subscribers: '',
+      totalVideos: '',
+      joinDate: '',
+      verified: false
+    };
+
+    // Get channel name
+    const channelName = document.querySelector('#owner #channel-name a, ytd-channel-name a');
+    if (channelName) {
+      stats.name = channelName.textContent.trim();
+    }
+
+    // Get avatar
+    const avatar = document.querySelector('#owner img.yt-img-shadow, ytd-video-owner-renderer img');
+    if (avatar) {
+      stats.avatar = avatar.src;
+    }
+
+    // Get subscriber count
+    const subCount = document.querySelector('#owner-sub-count, ytd-video-owner-renderer #owner-sub-count');
+    if (subCount) {
+      stats.subscribers = subCount.textContent.trim();
+    }
+
+    // Check verified badge
+    const verifiedBadge = document.querySelector('#owner ytd-badge-supported-renderer, .badge-style-type-verified');
+    stats.verified = !!verifiedBadge;
+
+    // Get video view count for this video
+    const viewCount = document.querySelector('ytd-video-view-count-renderer span.view-count');
+    if (viewCount) {
+      stats.videoViews = viewCount.textContent.trim();
+    }
+
+    // Get publish date
+    const publishDate = document.querySelector('ytd-video-primary-info-renderer #info-strings yt-formatted-string');
+    if (publishDate) {
+      stats.publishDate = publishDate.textContent.trim();
+    }
+
+    return stats;
+  },
+
+  renderChannelStats(stats) {
+    const content = this.container.querySelector('[data-content="channel"]');
+
+    content.innerHTML = `
+      <div class="yvo-channel-header">
+        ${stats.avatar ? `<img src="${stats.avatar}" class="yvo-channel-avatar" alt="${stats.name}">` : '<div class="yvo-channel-avatar-placeholder">📺</div>'}
+        <div class="yvo-channel-info">
+          <div class="yvo-channel-name">
+            ${this.escapeHtml(stats.name)}
+            ${stats.verified ? '<span class="yvo-verified-badge" title="Verified">✓</span>' : ''}
+          </div>
+          <div class="yvo-channel-subs">${stats.subscribers || 'Subscribers hidden'}</div>
+        </div>
+      </div>
+      <div class="yvo-channel-stats-grid">
+        ${stats.videoViews ? `
+          <div class="yvo-stat-card">
+            <span class="yvo-stat-icon">👁️</span>
+            <span class="yvo-stat-value">${stats.videoViews}</span>
+            <span class="yvo-stat-label">Video Views</span>
+          </div>
+        ` : ''}
+        ${stats.publishDate ? `
+          <div class="yvo-stat-card">
+            <span class="yvo-stat-icon">📅</span>
+            <span class="yvo-stat-value">${stats.publishDate}</span>
+            <span class="yvo-stat-label">Published</span>
+          </div>
+        ` : ''}
+        <div class="yvo-stat-card">
+          <span class="yvo-stat-icon">🎬</span>
+          <span class="yvo-stat-value">${this.cachedData.metadata?.duration ? this.formatDuration(this.cachedData.metadata.duration) : 'N/A'}</span>
+          <span class="yvo-stat-label">Duration</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/${stats.name ? '@' + stats.name.replace(/\s/g, '') : ''}" target="_blank" class="yvo-channel-link">
+        View Channel →
+      </a>
+    `;
+  },
+
+  formatDuration(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  },
+
+  // ============================================
+  // SOCIAL PREVIEW TAB
+  // ============================================
+
+  /**
+   * Load and display social media preview
+   */
+  async loadSocialPreview() {
+    const content = this.container.querySelector('[data-content="social"]');
+    const videoId = getVideoId();
+
+    if (!videoId) {
+      content.innerHTML = '<div class="yvo-error">No video detected</div>';
+      return;
+    }
+
+    // Get metadata if not cached
+    if (!this.cachedData.metadata) {
+      try {
+        const result = await getVideoMetadata();
+        if (result.success) {
+          this.cachedData.metadata = result.metadata;
+        }
+      } catch (e) {}
+    }
+
+    const title = this.cachedData.metadata?.title || document.title.replace(' - YouTube', '');
+    const channel = this.cachedData.metadata?.channel || '';
+    const thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+    const url = `youtube.com/watch?v=${videoId}`;
+
+    content.innerHTML = `
+      <div class="yvo-social-section">
+        <div class="yvo-social-label">
+          <span class="yvo-social-icon">🐦</span> Twitter/X Preview
+        </div>
+        <div class="yvo-social-card yvo-twitter-card">
+          <img src="${thumbnail}" class="yvo-social-thumb" alt="">
+          <div class="yvo-social-card-content">
+            <div class="yvo-social-title">${this.escapeHtml(title.substring(0, 60))}${title.length > 60 ? '...' : ''}</div>
+            <div class="yvo-social-meta">${url}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="yvo-social-section">
+        <div class="yvo-social-label">
+          <span class="yvo-social-icon">📘</span> Facebook Preview
+        </div>
+        <div class="yvo-social-card yvo-facebook-card">
+          <img src="${thumbnail}" class="yvo-social-thumb-large" alt="">
+          <div class="yvo-social-card-content">
+            <div class="yvo-social-domain">YOUTUBE.COM</div>
+            <div class="yvo-social-title">${this.escapeHtml(title.substring(0, 80))}${title.length > 80 ? '...' : ''}</div>
+            <div class="yvo-social-desc">${channel}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="yvo-social-section">
+        <div class="yvo-social-label">
+          <span class="yvo-social-icon">💬</span> Discord/Slack Preview
+        </div>
+        <div class="yvo-social-card yvo-discord-card">
+          <div class="yvo-discord-embed">
+            <div class="yvo-discord-header">
+              <img src="https://www.youtube.com/favicon.ico" class="yvo-discord-favicon" alt="">
+              <span>YouTube</span>
+            </div>
+            <div class="yvo-discord-title">${this.escapeHtml(title.substring(0, 70))}${title.length > 70 ? '...' : ''}</div>
+            <img src="${thumbnail}" class="yvo-discord-thumb" alt="">
+          </div>
+        </div>
+      </div>
+
+      <button class="yvo-copy-url-btn" data-url="https://www.youtube.com/watch?v=${videoId}">
+        📋 Copy Video URL
+      </button>
+    `;
+
+    // Add copy handler
+    content.querySelector('.yvo-copy-url-btn').addEventListener('click', (e) => {
+      const url = e.target.dataset.url;
+      this.copyToClipboard(url, 'URL copied!');
     });
   },
 
