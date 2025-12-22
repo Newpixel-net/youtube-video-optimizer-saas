@@ -147,6 +147,7 @@ function getGpuEncodingParams(quality) {
     type: 'gpu',
     encoder: 'h264_nvenc',
     encoderArgs: [
+      '-pix_fmt', 'yuv420p',    // CRITICAL: Explicit pixel format for NVENC
       '-c:v', 'h264_nvenc',
       '-preset', preset.preset,
       // CRITICAL: Disable B-frames to prevent NVENC frozen video
@@ -165,8 +166,10 @@ function getGpuEncodingParams(quality) {
       '-c:a', 'aac',
       '-b:a', '128k'
     ],
-    // Hardware acceleration for decoding (use before -i)
-    hwaccel: ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda'],
+    // CRITICAL: Do NOT use hwaccel_output_format cuda without a GPU filter chain!
+    // It causes frames to get stuck in CUDA memory and only first frame gets encoded.
+    // CPU decoding is fast and reliable for intermediate files.
+    hwaccel: [],
     description: `GPU (NVENC) - ${quality} quality`
   };
 }
