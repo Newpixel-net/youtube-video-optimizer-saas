@@ -21298,7 +21298,7 @@ exports.adminDeleteWizardProject = functions.https.onCall(async (data, context) 
 exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, context) => {
   await requireAdmin(context);
 
-  const { projectIds, olderThanDays, userId, deleteAll } = data;
+  const { projectIds, olderThanDays, userId, deleteAll, cleanAllStorage } = data;
 
   try {
     let query = db.collection('wizardProjects');
@@ -21331,14 +21331,11 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
       targetDocs = snapshot.docs;
     }
 
-    if (targetDocs.length === 0) {
-      return { success: true, deleted: 0, message: 'No projects matched criteria' };
-    }
-
     const bucket = admin.storage().bucket();
     let deletedCount = 0;
     let deletedFilesCount = 0;
 
+    // Delete project-associated files
     for (const doc of targetDocs) {
       const projectData = doc.data();
 
@@ -21365,7 +21362,37 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
       deletedCount++;
     }
 
-    console.log(`[adminBulkDeleteWizardProjects] Deleted ${deletedCount} projects, ${deletedFilesCount} files`);
+    // If deleteAll or cleanAllStorage flag is set, also delete ALL files in extension-uploads
+    // This catches orphaned files not referenced by any project document
+    if (deleteAll || cleanAllStorage) {
+      console.log('[adminBulkDeleteWizardProjects] Cleaning ALL storage files...');
+
+      // Delete all files in extension-uploads/
+      const [extensionFiles] = await bucket.getFiles({ prefix: 'extension-uploads/' });
+      for (const file of extensionFiles) {
+        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        deletedFilesCount++;
+      }
+      console.log(`[adminBulkDeleteWizardProjects] Deleted ${extensionFiles.length} files from extension-uploads/`);
+
+      // Delete all files in wizard-videos/ (if exists)
+      const [wizardFiles] = await bucket.getFiles({ prefix: 'wizard-videos/' });
+      for (const file of wizardFiles) {
+        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        deletedFilesCount++;
+      }
+      console.log(`[adminBulkDeleteWizardProjects] Deleted ${wizardFiles.length} files from wizard-videos/`);
+
+      // Delete all files in video-uploads/ (wizard related)
+      const [uploadFiles] = await bucket.getFiles({ prefix: 'video-uploads/' });
+      for (const file of uploadFiles) {
+        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        deletedFilesCount++;
+      }
+      console.log(`[adminBulkDeleteWizardProjects] Deleted ${uploadFiles.length} files from video-uploads/`);
+    }
+
+    console.log(`[adminBulkDeleteWizardProjects] Total: Deleted ${deletedCount} projects, ${deletedFilesCount} files`);
 
     return {
       success: true,
@@ -21374,6 +21401,76 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
     };
   } catch (error) {
     console.error('[adminBulkDeleteWizardProjects] Error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * adminCleanWizardStorage - Clean ALL Video Wizard storage files (orphan cleanup)
+ * This deletes ALL files in wizard-related storage folders regardless of project references
+ */
+exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) => {
+  await requireAdmin(context);
+
+  const { dryRun = false } = data;
+
+  try {
+    const bucket = admin.storage().bucket();
+    const storagePrefixes = [
+      'extension-uploads/',
+      'wizard-videos/',
+      'video-uploads/',
+      'wizard-exports/',
+      'clip-exports/'
+    ];
+
+    let totalFiles = 0;
+    let totalSize = 0;
+    const results = {};
+
+    for (const prefix of storagePrefixes) {
+      const [files] = await bucket.getFiles({ prefix });
+      let folderSize = 0;
+
+      for (const file of files) {
+        try {
+          const [metadata] = await file.getMetadata();
+          folderSize += parseInt(metadata.size || 0);
+        } catch (e) {
+          // Ignore metadata errors
+        }
+
+        if (!dryRun) {
+          await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+        }
+      }
+
+      results[prefix] = {
+        fileCount: files.length,
+        sizeBytes: folderSize,
+        sizeMB: (folderSize / (1024 * 1024)).toFixed(2)
+      };
+
+      totalFiles += files.length;
+      totalSize += folderSize;
+    }
+
+    console.log(`[adminCleanWizardStorage] ${dryRun ? 'DRY RUN - ' : ''}Found ${totalFiles} files, ${(totalSize / (1024 * 1024)).toFixed(2)} MB total`);
+
+    return {
+      success: true,
+      dryRun,
+      totalFiles,
+      totalSizeBytes: totalSize,
+      totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
+      totalSizeGB: (totalSize / (1024 * 1024 * 1024)).toFixed(3),
+      breakdown: results,
+      message: dryRun
+        ? `Found ${totalFiles} files (${(totalSize / (1024 * 1024)).toFixed(2)} MB) that would be deleted`
+        : `Deleted ${totalFiles} files (${(totalSize / (1024 * 1024)).toFixed(2)} MB)`
+    };
+  } catch (error) {
+    console.error('[adminCleanWizardStorage] Error:', error);
     throw new functions.https.HttpsError('internal', error.message);
   }
 });

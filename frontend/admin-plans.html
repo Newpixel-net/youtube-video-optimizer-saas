@@ -5074,7 +5074,9 @@
             html += '</div>';
             html += '<button onclick="runManualCleanup()" class="btn-secondary" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); color: #f87171;">🗑️ Run Cleanup</button>';
             html += '<button onclick="deleteAllProjects()" class="btn-secondary" style="background: rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); color: #fca5a5;">⚠️ Delete ALL</button>';
+            html += '<button onclick="cleanOrphanStorage()" class="btn-secondary" style="background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24;">🧽 Clean Storage</button>';
             html += '</div>';
+            html += '<p style="margin-top: 0.75rem; font-size: 0.75rem; color: #64748b;">💡 "Clean Storage" removes orphaned files from Firebase Storage that are not linked to any project.</p>';
             html += '</div>';
 
             // Two Column Layout: Videos and Top Users
@@ -5386,7 +5388,7 @@
         }
 
         function deleteAllProjects() {
-            if (!confirm('⚠️ WARNING: This will delete ALL Video Wizard projects for ALL users. Are you absolutely sure?')) {
+            if (!confirm('⚠️ WARNING: This will delete ALL Video Wizard projects AND all storage files for ALL users. Are you absolutely sure?')) {
                 return;
             }
             if (!confirm('⚠️ FINAL WARNING: This action is IRREVERSIBLE. Type "DELETE" in the next prompt to confirm.')) {
@@ -5398,19 +5400,61 @@
                 return;
             }
 
-            showToast('Deleting all projects...', 'info');
+            showToast('Deleting all projects and storage files...', 'info');
 
             var adminBulkDeleteWizardProjects = firebase.functions().httpsCallable('adminBulkDeleteWizardProjects');
-            adminBulkDeleteWizardProjects({ deleteAll: true })
+            // Pass cleanAllStorage: true to ensure ALL storage files are deleted, including orphans
+            adminBulkDeleteWizardProjects({ deleteAll: true, cleanAllStorage: true })
                 .then(function(result) {
                     if (result.data.success) {
-                        showToast('Deleted ' + result.data.deleted + ' projects', 'success');
+                        showToast('Deleted ' + result.data.deleted + ' projects and ' + result.data.deletedFiles + ' storage files', 'success');
                         refreshWizardData();
                     }
                 })
                 .catch(function(error) {
                     console.error('Delete all error:', error);
                     showToast('Delete failed: ' + error.message, 'error');
+                });
+        }
+
+        function cleanOrphanStorage() {
+            if (!confirm('⚠️ This will scan and delete ALL orphaned storage files from extension-uploads and related folders. Continue?')) {
+                return;
+            }
+
+            showToast('Scanning storage for orphaned files...', 'info');
+
+            // First do a dry run to show what would be deleted
+            var adminCleanWizardStorage = firebase.functions().httpsCallable('adminCleanWizardStorage');
+            adminCleanWizardStorage({ dryRun: true })
+                .then(function(result) {
+                    if (result.data.success) {
+                        var msg = 'Found ' + result.data.totalFiles + ' files (' + result.data.totalSizeGB + ' GB).\n\n';
+                        msg += 'Breakdown:\n';
+                        for (var prefix in result.data.breakdown) {
+                            var info = result.data.breakdown[prefix];
+                            if (info.fileCount > 0) {
+                                msg += '- ' + prefix + ': ' + info.fileCount + ' files (' + info.sizeMB + ' MB)\n';
+                            }
+                        }
+                        msg += '\nDelete these files permanently?';
+
+                        if (confirm(msg)) {
+                            showToast('Deleting storage files...', 'info');
+                            return adminCleanWizardStorage({ dryRun: false });
+                        }
+                    }
+                    return null;
+                })
+                .then(function(result) {
+                    if (result && result.data.success) {
+                        showToast('Cleaned ' + result.data.totalFiles + ' files (' + result.data.totalSizeGB + ' GB)', 'success');
+                        loadWizardStats(); // Refresh stats
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Storage cleanup error:', error);
+                    showToast('Cleanup failed: ' + error.message, 'error');
                 });
         }
 
