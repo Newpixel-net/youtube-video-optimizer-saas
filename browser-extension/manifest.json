@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YouTube Video Optimizer",
-  "version": "2.7.6",
-  "description": "Smart pre-buffering for reliable capture of clips deep into long videos (v2.7.5)",
+  "version": "2.7.7",
+  "description": "Fix frozen video capture - ensure video is playing before captureStream (v2.7.7)",
 
   "permissions": [
     "activeTab",

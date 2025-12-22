@@ -1314,7 +1314,7 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
   // This ensures we always send a result back even if something breaks
   try {
     // IMMEDIATE LOG - if this doesn't appear, function isn't running at all
-    console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.4 ======`);
+    console.log(`[EXT][CAPTURE-PAGE] ====== CAPTURE FUNCTION STARTED v2.7.7 ======`);
     console.log(`[EXT][CAPTURE-PAGE] captureId=${captureId}`);
     console.log(`[EXT][CAPTURE-PAGE] startTime=${startTime}s, endTime=${endTime}s`);
     console.log(`[EXT][CAPTURE-PAGE] uploadUrl=${uploadUrl ? 'provided' : 'none'}`);
@@ -1756,6 +1756,31 @@ function captureVideoWithMessage(startTime, endTime, videoId, captureId, uploadU
 
     // Wait a moment for buffer after seek
     await sleep(500);
+
+    // CRITICAL: Ensure video is PLAYING before captureStream
+    // Seeking can pause the video, and captureStream() on a paused video captures frozen frames
+    console.log(`[EXT][CAPTURE] Pre-capture state: paused=${videoElement.paused}, readyState=${videoElement.readyState}`);
+    if (videoElement.paused) {
+      console.log('[EXT][CAPTURE] Video is paused after seek, resuming playback...');
+      try {
+        await videoElement.play();
+        await sleep(300); // Brief wait for playback to stabilize
+        console.log(`[EXT][CAPTURE] Video resumed, paused=${videoElement.paused}`);
+      } catch (playErr) {
+        console.warn(`[EXT][CAPTURE] Play failed: ${playErr.message}, trying YouTube API...`);
+        // Try YouTube player API as fallback
+        const ytPlayer = document.querySelector('#movie_player');
+        if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
+          ytPlayer.playVideo();
+          await sleep(500);
+        }
+      }
+    }
+
+    // Final verification before capture
+    if (videoElement.paused) {
+      console.error('[EXT][CAPTURE] WARNING: Video still paused before capture - output may be frozen!');
+    }
 
     // Capture the video stream
     console.log('[EXT][CAPTURE] Calling captureStream()...');
