@@ -15398,10 +15398,9 @@
                 // ===== END EXTENSION-ONLY EXPORT =====
 
                 // ===== SECONDARY VIDEO CAPTURE (if YouTube URL) =====
-                // DISABLED: Extension capture for secondary YouTube videos is unreliable
-                // and causes timeout issues. The backend will download via server-side methods instead.
-                // This provides a more stable export experience for multi-source split screen.
-                if (false && clipSettings.secondarySource &&
+                // Capture secondary YouTube videos via extension for reliable multi-source export
+                // Server-side download (yt-dlp) often fails due to YouTube restrictions
+                if (clipSettings.secondarySource &&
                     clipSettings.secondarySource.enabled &&
                     clipSettings.secondarySource.type === 'youtube' &&
                     clipSettings.secondarySource.youtubeVideoId &&
@@ -15502,9 +15501,9 @@
                 // ===== END SECONDARY VIDEO CAPTURE =====
 
                 // ===== TERTIARY VIDEO CAPTURE (for three_person mode) =====
-                // DISABLED: Extension capture for tertiary YouTube videos is unreliable
-                // and causes timeout issues. The backend will download via server-side methods instead.
-                if (false && clipSettings.tertiarySource &&
+                // Capture tertiary YouTube videos via extension for reliable three-person export
+                // Server-side download (yt-dlp) often fails due to YouTube restrictions
+                if (clipSettings.tertiarySource &&
                     clipSettings.tertiarySource.enabled &&
                     clipSettings.tertiarySource.type === 'youtube' &&
                     clipSettings.tertiarySource.youtubeVideoId &&
