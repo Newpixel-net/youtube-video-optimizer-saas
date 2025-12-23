@@ -2158,8 +2158,11 @@
             flex-direction: column;
             overflow: hidden;
             /* CSS variables for dynamic speaker positions (set via JavaScript) */
-            --speaker1-translate: -34%;  /* Default: 17% position → left 1/3 */
-            --speaker2-translate: -166%; /* Default: 83% position → right 1/3 */
+            /* Values are numbers that get multiplied by 1% in calc() for proper zoom scaling */
+            --speaker1-translate-pct: -34;  /* Default: 17% position → left 1/3 */
+            --speaker2-translate-pct: -166; /* Default: 83% position → right 1/3 */
+            --speaker1-zoom: 1;
+            --speaker2-zoom: 1;
         }
 
         .phone-video-area.reframe-split_screen .split-preview-top,
@@ -2192,7 +2195,8 @@
             left: 50%;
             object-fit: cover;
             /* Use CSS variables for position-aware cropping and zoom preview */
-            transform: translate(calc(-50% + var(--speaker1-translate) * var(--speaker1-zoom, 1)), -50%);
+            /* --speaker1-translate-pct is the X offset in percentage, multiplied by zoom for proper scaling */
+            transform: translate(calc(-50% + var(--speaker1-translate-pct, -34) * var(--speaker1-zoom, 1) * 1%), -50%);
         }
 
         .phone-video-area.reframe-split_screen .split-preview-bottom iframe,
@@ -2205,7 +2209,8 @@
             left: 50%;
             object-fit: cover;
             /* Use CSS variables for position-aware cropping and zoom preview */
-            transform: translate(calc(-50% + var(--speaker2-translate) * var(--speaker2-zoom, 1)), -50%);
+            /* --speaker2-translate-pct is the X offset in percentage, multiplied by zoom for proper scaling */
+            transform: translate(calc(-50% + var(--speaker2-translate-pct, -166) * var(--speaker2-zoom, 1) * 1%), -50%);
         }
 
         .phone-video-area.reframe-split_screen .split-label {
@@ -9153,8 +9158,9 @@
                 var speaker1Zoom = (splitSettings.speaker1?.zoom || 100) / 100;
                 var speaker2Zoom = (splitSettings.speaker2?.zoom || 100) / 100;
 
-                splitCssVars = ' --speaker1-translate: ' + speaker1Translate + '%;';
-                splitCssVars += ' --speaker2-translate: ' + speaker2Translate + '%;';
+                // Store translate values as numbers (without %) for proper CSS calc multiplication
+                splitCssVars = ' --speaker1-translate-pct: ' + speaker1Translate + ';';
+                splitCssVars += ' --speaker2-translate-pct: ' + speaker2Translate + ';';
                 splitCssVars += ' --speaker1-zoom: ' + speaker1Zoom + ';';
                 splitCssVars += ' --speaker2-zoom: ' + speaker2Zoom + ';';
                 splitCssVars += ' --split-top-ratio: ' + topRatio + ';';
@@ -12122,41 +12128,44 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33 },
-                        speaker2: { cropPosition: 83, cropWidth: 33 },
-                        preset: 'interview'
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
+                        preset: 'interview',
+                        layoutRatio: '50-50',
+                        border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
                 }
 
-                var settings;
+                // Preserve existing settings (zoom, layoutRatio, border) when changing presets
+                var currentSettings = state.clipSettings[activeClip.id].splitScreenSettings;
+                var existingZoom1 = currentSettings.speaker1?.zoom || 100;
+                var existingZoom2 = currentSettings.speaker2?.zoom || 100;
+                var existingLayoutRatio = currentSettings.layoutRatio || '50-50';
+                var existingBorder = currentSettings.border || { enabled: false, thickness: 2, color: '#ffffff' };
+
                 switch(preset) {
                     case 'interview':
-                        settings = {
-                            speaker1: { cropPosition: 17, cropWidth: 33 },
-                            speaker2: { cropPosition: 83, cropWidth: 33 },
-                            preset: 'interview'
-                        };
+                        currentSettings.speaker1 = { cropPosition: 17, cropWidth: 33, zoom: existingZoom1 };
+                        currentSettings.speaker2 = { cropPosition: 83, cropWidth: 33, zoom: existingZoom2 };
+                        currentSettings.preset = 'interview';
                         break;
                     case 'center':
-                        settings = {
-                            speaker1: { cropPosition: 50, cropWidth: 33 },
-                            speaker2: { cropPosition: 50, cropWidth: 33 },
-                            preset: 'center'
-                        };
+                        currentSettings.speaker1 = { cropPosition: 50, cropWidth: 33, zoom: existingZoom1 };
+                        currentSettings.speaker2 = { cropPosition: 50, cropWidth: 33, zoom: existingZoom2 };
+                        currentSettings.preset = 'center';
                         break;
                     case 'custom':
                         // Keep current positions but switch to custom mode
-                        settings = Object.assign({}, state.clipSettings[activeClip.id].splitScreenSettings);
-                        settings.preset = 'custom';
+                        currentSettings.preset = 'custom';
                         break;
                     default:
-                        settings = {
-                            speaker1: { cropPosition: 50, cropWidth: 33 },
-                            speaker2: { cropPosition: 50, cropWidth: 33 },
-                            preset: 'custom'
-                        };
+                        currentSettings.speaker1 = { cropPosition: 50, cropWidth: 33, zoom: existingZoom1 };
+                        currentSettings.speaker2 = { cropPosition: 50, cropWidth: 33, zoom: existingZoom2 };
+                        currentSettings.preset = 'custom';
                 }
-                state.clipSettings[activeClip.id].splitScreenSettings = settings;
+                // Ensure layoutRatio and border are preserved
+                currentSettings.layoutRatio = existingLayoutRatio;
+                currentSettings.border = existingBorder;
                 render();
             },
 
@@ -12170,9 +12179,11 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33 },
-                        speaker2: { cropPosition: 83, cropWidth: 33 },
-                        preset: 'custom'
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
+                        preset: 'custom',
+                        layoutRatio: '50-50',
+                        border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
                 }
 
@@ -12182,7 +12193,7 @@
 
                 var speakerKey = 'speaker' + speaker;
                 if (!state.clipSettings[activeClip.id].splitScreenSettings[speakerKey]) {
-                    state.clipSettings[activeClip.id].splitScreenSettings[speakerKey] = { cropPosition: 50, cropWidth: 33 };
+                    state.clipSettings[activeClip.id].splitScreenSettings[speakerKey] = { cropPosition: 50, cropWidth: 33, zoom: 100 };
                 }
                 state.clipSettings[activeClip.id].splitScreenSettings[speakerKey].cropPosition = posNum;
                 state.clipSettings[activeClip.id].splitScreenSettings.preset = 'custom';
@@ -12207,7 +12218,8 @@
                 // Update preview in real-time
                 var phoneVideoArea = document.querySelector('.phone-video-area');
                 if (phoneVideoArea) {
-                    phoneVideoArea.style.setProperty('--speaker' + speaker + '-translate', this.calculateSpeakerTranslate(posNum) + '%');
+                    // Use -pct suffix for proper CSS calc multiplication (value is a number, not %)
+                    phoneVideoArea.style.setProperty('--speaker' + speaker + '-translate-pct', this.calculateSpeakerTranslate(posNum));
                 }
             },
 
@@ -12232,15 +12244,15 @@
                 var splitSettings = state.clipSettings[activeClip.id].splitScreenSettings;
                 if (!splitSettings) {
                     splitSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33 },
-                        speaker2: { cropPosition: 83, cropWidth: 33 },
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
                         preset: 'custom',
                         layoutRatio: '50-50',
                         border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
                     state.clipSettings[activeClip.id].splitScreenSettings = splitSettings;
                 }
-                // Swap speaker1 and speaker2 positions
+                // Swap speaker1 and speaker2 positions (includes cropPosition, cropWidth, zoom)
                 var temp = Object.assign({}, splitSettings.speaker1);
                 splitSettings.speaker1 = Object.assign({}, splitSettings.speaker2);
                 splitSettings.speaker2 = temp;
@@ -12259,8 +12271,8 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33 },
-                        speaker2: { cropPosition: 83, cropWidth: 33 },
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
                         preset: 'custom',
                         layoutRatio: '50-50',
                         border: { enabled: false, thickness: 2, color: '#ffffff' }
@@ -12281,8 +12293,8 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33 },
-                        speaker2: { cropPosition: 83, cropWidth: 33 },
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
                         preset: 'custom',
                         layoutRatio: '50-50',
                         border: { enabled: false, thickness: 2, color: '#ffffff' }
