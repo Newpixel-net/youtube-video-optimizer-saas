@@ -655,13 +655,19 @@ RESPOND IN JSON:
 }`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', // Use mini for cost efficiency on repeated calls
-      messages: [{ role: 'user', content: scoringPrompt }],
-      response_format: { type: 'json_object' },
-      max_tokens: 800,
-      temperature: 0.5
-    });
+    // Add 15 second timeout per API call to prevent hanging
+    const response = await Promise.race([
+      openai.chat.completions.create({
+        model: 'gpt-4o-mini', // Use mini for cost efficiency on repeated calls
+        messages: [{ role: 'user', content: scoringPrompt }],
+        response_format: { type: 'json_object' },
+        max_tokens: 800,
+        temperature: 0.5
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('API timeout')), 15000)
+      )
+    ]);
 
     const result = JSON.parse(response.choices[0].message.content);
 
@@ -17628,12 +17634,20 @@ exports.wizardAnalyzeVideo = functions
     }
 
     // Get actual transcript using the working getVideoTranscript function
+    // Add 30 second timeout for transcript fetch
     let transcriptData = { segments: [], fullText: '' };
     try {
-      transcriptData = await getVideoTranscript(videoId);
+      const TRANSCRIPT_TIMEOUT_MS = 30000;
+      transcriptData = await Promise.race([
+        getVideoTranscript(videoId),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Transcript fetch timeout')), TRANSCRIPT_TIMEOUT_MS)
+        )
+      ]);
       console.log(`Fetched transcript: ${transcriptData.segments.length} segments, ${transcriptData.fullText.length} chars`);
     } catch (transcriptError) {
       console.log('Transcript fetch note:', transcriptError.message);
+      // Continue without transcript - AI can still analyze based on title/description
     }
 
     const transcriptSegments = transcriptData.segments;
@@ -17791,35 +17805,23 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
     // ~250 tokens per clip in JSON format
     const maxTokens = Math.min(8000, Math.max(3500, clipLimits.max * 200));
 
-    const aiResponse = await openai.chat.completions.create({
-      model: 'gpt-4o',  // Use GPT-4o for better analysis
-      messages: [{ role: 'user', content: clipAnalysisPrompt }],
-      response_format: { type: 'json_object' },
-      max_tokens: maxTokens,
-      temperature: 0.7
-    });
+    // Add 120 second timeout for main analysis (GPT-4o can be slow with long transcripts)
+    const AI_ANALYSIS_TIMEOUT_MS = 120000;
+    console.log('[wizardAnalyzeVideo] Starting AI clip analysis with 120s timeout...');
 
-    let analysisResult;
-    try {
-      analysisResult = JSON.parse(aiResponse.choices[0].message.content);
-      console.log(`[wizardAnalyzeVideo] AI returned ${analysisResult.clips?.length || 0} clips`);
-    } catch (e) {
-      console.error('Failed to parse AI response:', e);
-      // Fallback with diverse clips spread across video - uses dynamic limits
+    // Helper function to generate fallback clips
+    function generateFallbackClips() {
       const numClips = Math.min(clipLimits.max, Math.max(clipLimits.min, Math.floor(durationSeconds / 60)));
       console.log(`[wizardAnalyzeVideo] Fallback: generating ${numClips} clips`);
       const clips = [];
       const segmentSize = Math.floor(durationSeconds / numClips);
 
       for (let i = 0; i < numClips; i++) {
-        // Use platform-specific duration settings
         const minDur = presetConfig.minDuration || 45;
         const maxDur = presetConfig.maxDuration || 60;
         const targetDur = presetConfig.targetDuration || 55;
-        // Generate clips around target duration with small variance
         const variance = Math.floor((maxDur - minDur) / 2);
         const clipDuration = Math.min(maxDur, Math.max(minDur, targetDur + Math.floor(Math.random() * variance * 2) - variance));
-        // Start at different points within each segment
         const segmentStart = segmentSize * i;
         const startOffset = Math.floor(Math.random() * (segmentSize - clipDuration - 10)) + 5;
         const startTime = Math.max(0, segmentStart + startOffset);
@@ -17836,7 +17838,29 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
           reason: 'Potential viral moment'
         });
       }
-      analysisResult = { clips, overallPotential: 'Good', bestTopics: [], contentType: 'general' };
+      return { clips, overallPotential: 'Good', bestTopics: [], contentType: 'general' };
+    }
+
+    let analysisResult;
+    try {
+      const aiResponse = await Promise.race([
+        openai.chat.completions.create({
+          model: 'gpt-4o',  // Use GPT-4o for better analysis
+          messages: [{ role: 'user', content: clipAnalysisPrompt }],
+          response_format: { type: 'json_object' },
+          max_tokens: maxTokens,
+          temperature: 0.7
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('AI analysis timeout')), AI_ANALYSIS_TIMEOUT_MS)
+        )
+      ]);
+
+      analysisResult = JSON.parse(aiResponse.choices[0].message.content);
+      console.log(`[wizardAnalyzeVideo] AI returned ${analysisResult.clips?.length || 0} clips`);
+    } catch (e) {
+      console.error('[wizardAnalyzeVideo] AI analysis failed, using fallback:', e.message);
+      analysisResult = generateFallbackClips();
     }
 
     // Helper function to get actual transcript for a time range
@@ -17911,6 +17935,7 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
 
     // ENHANCED VIRALITY SCORING (OpusClip-style)
     // This adds detailed breakdown and predictions for top clips
+    // Add timeout protection to prevent function timeout (60 second limit for scoring)
     try {
       console.log('[wizardAnalyzeVideo] Running enhanced virality scoring on top clips...');
       const videoContext = {
@@ -17920,11 +17945,22 @@ durationSeconds > 1800 ? `  * First third (0-${Math.floor(durationSeconds * 0.33
         contentType: analysisResult.contentType || 'general'
       };
 
-      processedClips = await batchCalculateViralityScores(processedClips, videoContext);
+      // Race between enhanced scoring and a 60-second timeout
+      const SCORING_TIMEOUT_MS = 60000; // 60 seconds max for enhanced scoring
+      const scoringPromise = batchCalculateViralityScores(processedClips, videoContext);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Enhanced scoring timeout')), SCORING_TIMEOUT_MS)
+      );
+
+      processedClips = await Promise.race([scoringPromise, timeoutPromise]);
       console.log('[wizardAnalyzeVideo] Enhanced virality scoring complete');
     } catch (scoringError) {
       console.log('[wizardAnalyzeVideo] Enhanced scoring skipped:', scoringError.message);
-      // Continue with basic scores
+      // Continue with basic scores - add basic predictions for all clips
+      processedClips = processedClips.map(clip => ({
+        ...clip,
+        viralPrediction: clip.score >= 80 ? 'HIGH' : clip.score >= 60 ? 'MEDIUM' : 'LOW'
+      }));
     }
 
     const projectData = {
@@ -21772,37 +21808,28 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
     if (deleteAll || cleanAllStorage) {
       console.log('[adminBulkDeleteWizardProjects] Cleaning ALL storage files...');
 
-      // Delete all files in processed-clips/ (THIS IS WHERE EXPORTED CLIPS ARE!)
-      const [processedClips] = await bucket.getFiles({ prefix: 'processed-clips/' });
-      for (const file of processedClips) {
-        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
-        deletedFilesCount++;
-      }
-      console.log(`[adminBulkDeleteWizardProjects] Deleted ${processedClips.length} files from processed-clips/`);
+      // All storage folders that the Video Wizard uses
+      const storageFolders = [
+        'processed-clips/',     // Exported processed clips (video-processor)
+        'extension-uploads/',   // Extension video/audio captures
+        'uploads/',             // Frontend: file uploads, export captures, parallel exports
+        'video-cache/',         // FULL SOURCE VIDEOS cached by video-processor (HUGE!)
+        'thumbnails-pro/',      // Pro thumbnail generator (Gemini, DALL-E, Imagen)
+        'wizard-thumbnails/',   // Wizard clip AI thumbnails
+        'wizard-videos/',       // Legacy - may not exist
+        'video-uploads/',       // Legacy - may not exist
+      ];
 
-      // Delete all files in extension-uploads/
-      const [extensionFiles] = await bucket.getFiles({ prefix: 'extension-uploads/' });
-      for (const file of extensionFiles) {
-        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
-        deletedFilesCount++;
+      for (const folder of storageFolders) {
+        const [files] = await bucket.getFiles({ prefix: folder });
+        for (const file of files) {
+          await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+          deletedFilesCount++;
+        }
+        if (files.length > 0) {
+          console.log(`[adminBulkDeleteWizardProjects] Deleted ${files.length} files from ${folder}`);
+        }
       }
-      console.log(`[adminBulkDeleteWizardProjects] Deleted ${extensionFiles.length} files from extension-uploads/`);
-
-      // Delete all files in wizard-videos/ (if exists)
-      const [wizardFiles] = await bucket.getFiles({ prefix: 'wizard-videos/' });
-      for (const file of wizardFiles) {
-        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
-        deletedFilesCount++;
-      }
-      console.log(`[adminBulkDeleteWizardProjects] Deleted ${wizardFiles.length} files from wizard-videos/`);
-
-      // Delete all files in video-uploads/ (wizard related)
-      const [uploadFiles] = await bucket.getFiles({ prefix: 'video-uploads/' });
-      for (const file of uploadFiles) {
-        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
-        deletedFilesCount++;
-      }
-      console.log(`[adminBulkDeleteWizardProjects] Deleted ${uploadFiles.length} files from video-uploads/`);
     }
 
     console.log(`[adminBulkDeleteWizardProjects] Total: Deleted ${deletedCount} projects, ${deletedFilesCount} files`);
@@ -21888,15 +21915,17 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
     console.log(`[adminCleanWizardStorage] Starting cleanup, bucket: ${STORAGE_BUCKET}, dryRun: ${dryRun}`);
 
     // Check all possible storage locations used by Video Wizard
+    // IMPORTANT: These must match the ACTUAL folder names in Firebase Storage
     const storagePrefixes = [
-      'processed-clips/',    // THIS IS WHERE EXPORTED CLIPS ARE STORED
-      'extension-uploads/',
-      'wizard-videos/',
-      'video-uploads/',
-      'wizard-exports/',
-      'clip-exports/',
-      'thumbnails/',
-      'temp/'
+      'processed-clips/',     // Exported processed clips (video-processor)
+      'extension-uploads/',   // Extension video/audio captures
+      'uploads/',             // Frontend: file uploads, export captures, parallel exports (HIGH IMPACT!)
+      'video-cache/',         // FULL SOURCE VIDEOS cached by video-processor (HUGE!)
+      'thumbnails-pro/',      // Pro thumbnail generator (Gemini, DALL-E, Imagen)
+      'wizard-thumbnails/',   // Wizard clip AI thumbnails
+      'wizard-videos/',       // Legacy - may not exist
+      'video-uploads/',       // Legacy - may not exist
+      'temp/'                 // Temporary files
     ];
 
     let totalFiles = 0;
@@ -21976,6 +22005,26 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
 
     console.log(`[adminCleanWizardStorage] ${dryRun ? 'DRY RUN - ' : ''}Total: ${totalFiles} files, ${(totalSize / (1024 * 1024)).toFixed(2)} MB`);
 
+    // Also clean up the videoSourceCache Firestore collection (references to video-cache/ files)
+    let cacheDocsDeleted = 0;
+    try {
+      const cacheSnapshot = await db.collection('videoSourceCache').get();
+      if (!cacheSnapshot.empty) {
+        console.log(`[adminCleanWizardStorage] Found ${cacheSnapshot.size} videoSourceCache documents`);
+        if (!dryRun) {
+          const batch = db.batch();
+          cacheSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          cacheDocsDeleted = cacheSnapshot.size;
+          console.log(`[adminCleanWizardStorage] Deleted ${cacheDocsDeleted} videoSourceCache documents`);
+        } else {
+          cacheDocsDeleted = cacheSnapshot.size;
+        }
+      }
+    } catch (cacheError) {
+      console.log('[adminCleanWizardStorage] videoSourceCache cleanup note:', cacheError.message);
+    }
+
     return {
       success: true,
       dryRun,
@@ -21985,6 +22034,7 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
       totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
       totalSizeGB: (totalSize / (1024 * 1024 * 1024)).toFixed(3),
       breakdown: results,
+      cacheDocsDeleted,
       message: dryRun
         ? `Found ${totalFiles} files (${(totalSize / (1024 * 1024)).toFixed(2)} MB) that would be deleted`
         : `Deleted ${totalFiles} files (${(totalSize / (1024 * 1024)).toFixed(2)} MB)`

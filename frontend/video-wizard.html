@@ -14183,6 +14183,9 @@
                     console.log('[BatchExport] Partial completion: ' + completedCount + ' succeeded, ' + failedCount + ' failed');
                 }
 
+                // CRITICAL: Set active to false BEFORE updating UI so modal shows completion state
+                state.parallelExport.active = false;
+
                 // Update progress UI to show completion
                 app.updateParallelExportComplete();
 
@@ -14192,8 +14195,6 @@
                     exportBtn.textContent = '🎬 Export All ' + selectedClips.length + ' Clips Now';
                     exportBtn.onclick = function() { app.exportAllClipsParallel(); };
                 }
-
-                state.parallelExport.active = false;
             },
 
             /**
