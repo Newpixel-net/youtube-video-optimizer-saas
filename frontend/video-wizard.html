@@ -12505,6 +12505,35 @@
                 if (isNaN(posNum)) posNum = 50;
                 posNum = Math.max(0, Math.min(100, posNum));
 
+                // IMPORTANT: Save to state immediately during dragging (like onCropSliderChange)
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                var layoutRatio = '50-50';
+
+                if (activeClip) {
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+                    if (!state.clipSettings[activeClip.id].splitScreenSettings) {
+                        state.clipSettings[activeClip.id].splitScreenSettings = {
+                            speaker1: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                            speaker2: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                            preset: 'center',
+                            layoutRatio: '50-50',
+                            border: { enabled: false, thickness: 2, color: '#ffffff' }
+                        };
+                    }
+                    var speakerKey = 'speaker' + speaker;
+                    if (!state.clipSettings[activeClip.id].splitScreenSettings[speakerKey]) {
+                        state.clipSettings[activeClip.id].splitScreenSettings[speakerKey] = { cropPosition: 50, cropWidth: 33, zoom: 100 };
+                    }
+                    state.clipSettings[activeClip.id].splitScreenSettings[speakerKey].cropPosition = posNum;
+                    state.clipSettings[activeClip.id].splitScreenSettings.preset = 'custom';
+                    layoutRatio = state.clipSettings[activeClip.id].splitScreenSettings.layoutRatio || '50-50';
+                }
+
                 // Update value display
                 var sliderRows = document.querySelectorAll('.speaker-position-row');
                 if (sliderRows[speaker - 1]) {
@@ -12514,19 +12543,9 @@
                     }
                 }
 
-                // Update preview in real-time using current layout ratio
+                // Update preview in real-time
                 var phoneVideoArea = document.querySelector('.phone-video-area');
                 if (phoneVideoArea) {
-                    // Get current layout ratio from state to calculate correct scale
-                    var selectedClips = state.clips.filter(function(c) {
-                        return state.selectedClipIds.indexOf(c.id) !== -1;
-                    });
-                    var activeClip = selectedClips[state.customization.activeClipIndex];
-                    var layoutRatio = '50-50';
-                    if (activeClip && state.clipSettings[activeClip.id]?.splitScreenSettings?.layoutRatio) {
-                        layoutRatio = state.clipSettings[activeClip.id].splitScreenSettings.layoutRatio;
-                    }
-
                     // Calculate scale and translate
                     var translateValue = this.calculateSpeakerTranslate(speaker, posNum, layoutRatio);
                     phoneVideoArea.style.setProperty('--speaker' + speaker + '-translate-pct', translateValue);
@@ -12700,6 +12719,32 @@
                 if (isNaN(zoomNum)) zoomNum = 100;
                 zoomNum = Math.max(100, Math.min(200, zoomNum));
 
+                // IMPORTANT: Save to state immediately during dragging (like onCropSliderChange)
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+
+                if (activeClip) {
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+                    if (!state.clipSettings[activeClip.id].splitScreenSettings) {
+                        state.clipSettings[activeClip.id].splitScreenSettings = {
+                            speaker1: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                            speaker2: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                            preset: 'center',
+                            layoutRatio: '50-50',
+                            border: { enabled: false, thickness: 2, color: '#ffffff' }
+                        };
+                    }
+                    var speakerKey = 'speaker' + speaker;
+                    if (!state.clipSettings[activeClip.id].splitScreenSettings[speakerKey]) {
+                        state.clipSettings[activeClip.id].splitScreenSettings[speakerKey] = { cropPosition: 50, cropWidth: 33, zoom: 100 };
+                    }
+                    state.clipSettings[activeClip.id].splitScreenSettings[speakerKey].zoom = zoomNum;
+                }
+
                 // Update zoom value display
                 var zoomRows = document.querySelectorAll('.zoom-control-row');
                 if (zoomRows[speaker - 1]) {
@@ -12799,6 +12844,32 @@
                 if (isNaN(posNum)) posNum = 50;
                 posNum = Math.max(0, Math.min(100, posNum));
 
+                // IMPORTANT: Save to state immediately during dragging
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+
+                if (activeClip) {
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+                    if (!state.clipSettings[activeClip.id].threePersonSettings) {
+                        state.clipSettings[activeClip.id].threePersonSettings = {
+                            main: { cropPosition: 50, zoom: 100 },
+                            left: { cropPosition: 50, zoom: 100 },
+                            right: { cropPosition: 50, zoom: 100 },
+                            preset: 'center',
+                            layoutRatio: '50-50'
+                        };
+                    }
+                    if (!state.clipSettings[activeClip.id].threePersonSettings[zone]) {
+                        state.clipSettings[activeClip.id].threePersonSettings[zone] = { cropPosition: 50, zoom: 100 };
+                    }
+                    state.clipSettings[activeClip.id].threePersonSettings[zone].cropPosition = posNum;
+                    state.clipSettings[activeClip.id].threePersonSettings.preset = 'custom';
+                }
+
                 // Update value display
                 var zoneIndex = { 'main': 0, 'left': 1, 'right': 2 }[zone];
                 var sliderRows = document.querySelectorAll('.speaker-position-row');
@@ -12883,6 +12954,31 @@
                 var zoomNum = parseInt(zoom, 10);
                 if (isNaN(zoomNum)) zoomNum = 100;
                 zoomNum = Math.max(100, Math.min(200, zoomNum));
+
+                // IMPORTANT: Save to state immediately during dragging
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+
+                if (activeClip) {
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+                    if (!state.clipSettings[activeClip.id].threePersonSettings) {
+                        state.clipSettings[activeClip.id].threePersonSettings = {
+                            main: { cropPosition: 50, zoom: 100 },
+                            left: { cropPosition: 50, zoom: 100 },
+                            right: { cropPosition: 50, zoom: 100 },
+                            preset: 'center',
+                            layoutRatio: '50-50'
+                        };
+                    }
+                    if (!state.clipSettings[activeClip.id].threePersonSettings[zone]) {
+                        state.clipSettings[activeClip.id].threePersonSettings[zone] = { cropPosition: 50, zoom: 100 };
+                    }
+                    state.clipSettings[activeClip.id].threePersonSettings[zone].zoom = zoomNum;
+                }
 
                 // Update zoom value display
                 var zoneIndex = { 'main': 0, 'left': 1, 'right': 2 }[zone];
