@@ -6999,34 +6999,58 @@
             // Redraw canvas with mask overlay
             redrawCanvasWithMask: function() {
                 var canvas = document.getElementById('thumbnail-edit-canvas');
-                if (!canvas || !state.thumbnailEditOriginalData) return;
+                if (!canvas || !state.thumbnailEditOriginalData) {
+                    console.log('redrawCanvasWithMask: missing canvas or data');
+                    return;
+                }
 
                 var ctx = canvas.getContext('2d');
 
-                // Draw original image
-                ctx.putImageData(state.thumbnailEditOriginalData, 0, 0);
+                // Step 1: Draw original image using a temp canvas (putImageData bypasses compositing)
+                var imgCanvas = document.createElement('canvas');
+                imgCanvas.width = canvas.width;
+                imgCanvas.height = canvas.height;
+                var imgCtx = imgCanvas.getContext('2d');
+                imgCtx.putImageData(state.thumbnailEditOriginalData, 0, 0);
 
-                // Draw semi-transparent pink overlay for masked areas
-                ctx.save();
-                ctx.globalCompositeOperation = 'source-over';
+                // Clear and draw original
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(imgCanvas, 0, 0);
 
-                // Create a temporary canvas for the tinted mask
-                var tempCanvas = document.createElement('canvas');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
-                var tempCtx = tempCanvas.getContext('2d');
+                // Step 2: Draw pink overlay where mask is white
+                if (state.thumbnailEditMaskCanvas) {
+                    // Get mask data to check where we painted
+                    var maskCtx = state.thumbnailEditMaskCtx;
+                    var maskData = maskCtx.getImageData(0, 0, state.thumbnailEditMaskCanvas.width, state.thumbnailEditMaskCanvas.height);
 
-                // Fill with pink
-                tempCtx.fillStyle = 'rgba(236, 72, 153, 0.5)';
-                tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                    // Create overlay with pink where mask is white
+                    var overlayCanvas = document.createElement('canvas');
+                    overlayCanvas.width = canvas.width;
+                    overlayCanvas.height = canvas.height;
+                    var overlayCtx = overlayCanvas.getContext('2d');
 
-                // Use mask as alpha
-                tempCtx.globalCompositeOperation = 'destination-in';
-                tempCtx.drawImage(state.thumbnailEditMaskCanvas, 0, 0);
+                    // Draw the mask
+                    overlayCtx.drawImage(state.thumbnailEditMaskCanvas, 0, 0);
 
-                // Draw tinted mask onto main canvas
-                ctx.drawImage(tempCanvas, 0, 0);
-                ctx.restore();
+                    // Use the mask to create pink overlay
+                    var overlayData = overlayCtx.getImageData(0, 0, overlayCanvas.width, overlayCanvas.height);
+                    for (var i = 0; i < overlayData.data.length; i += 4) {
+                        if (overlayData.data[i] > 128) { // If red channel > 128 (white in mask)
+                            // Set to pink with transparency
+                            overlayData.data[i] = 236;     // R
+                            overlayData.data[i + 1] = 72;  // G
+                            overlayData.data[i + 2] = 153; // B
+                            overlayData.data[i + 3] = 128; // A (semi-transparent)
+                        } else {
+                            // Fully transparent
+                            overlayData.data[i + 3] = 0;
+                        }
+                    }
+                    overlayCtx.putImageData(overlayData, 0, 0);
+
+                    // Draw overlay on main canvas
+                    ctx.drawImage(overlayCanvas, 0, 0);
+                }
             },
 
             // Get mask as base64 PNG (scaled to original image dimensions)
@@ -10481,7 +10505,7 @@
                     html += '<button onclick="app.previewThumbnail(\'' + utils.escapeHtml(selectedImg.url) + '\')" class="btn-secondary inline-flex items-center justify-center gap-2"><span>🔍</span> Preview</button>';
 
                     // Edit with AI button
-                    html += '<button onclick="app.openThumbnailEditor(\'' + utils.escapeHtml(selectedImg.url) + '\', ' + state.selectedThumbnailIndex + ', \'single\')" class="btn-secondary bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 inline-flex items-center justify-center gap-2"><span>✨</span> Edit with AI</button>';
+                    html += '<button onclick="app.openThumbnailEditor(\'' + utils.escapeHtml(selectedImg.url) + '\', ' + state.selectedThumbnailIndex + ', \'single\')" class="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-lg hover:from-purple-600 hover:to-pink-600 shadow-md inline-flex items-center justify-center gap-2 transition-all"><span>✨</span> Edit with AI</button>';
                 }
                 html += '<button onclick="app.toggleYouTubePreview()" class="btn-secondary inline-flex items-center justify-center gap-2"><span>👁️</span> YouTube Preview</button>';
                 html += '<button onclick="app.resetThumbnailGenerator()" class="btn-secondary">🔄 Create New</button>';
