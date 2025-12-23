@@ -511,20 +511,65 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
   // [0:a] = primary audio, [1:a] = secondary audio
   let filterComplex = '';
 
+  // Get split screen settings for position-aware cropping
+  const splitSettings = safeSettings.splitScreenSettings || {};
+  const primaryCropPos = splitSettings.speaker1?.cropPosition ?? 50;  // Default: center
+  const secondaryCropPos = splitSettings.speaker2?.cropPosition ?? 50; // Default: center
+
+  console.log(`[${jobId}] Multi-source crop positions - Primary: ${primaryCropPos}%, Secondary: ${secondaryCropPos}%`);
+
+  // Calculate crop dimensions for each video based on its own dimensions
+  // We want to crop a 9:16 portion from each video before scaling to half height
+  const targetAspect = targetWidth / targetHeight;  // 9:16 = 0.5625
+
+  // Primary video crop calculation
+  const primaryInputAspect = primaryInfo.width / primaryInfo.height;
+  let primaryCropFilter;
+  if (primaryInputAspect > targetAspect) {
+    // Primary is wider - crop sides based on position
+    const primaryCropW = Math.floor(primaryInfo.height * targetAspect);
+    const primaryMaxX = primaryInfo.width - primaryCropW;
+    const primaryCropX = Math.floor((primaryCropPos / 100) * primaryMaxX);
+    primaryCropFilter = `crop=${primaryCropW}:${primaryInfo.height}:${primaryCropX}:0`;
+    console.log(`[${jobId}] Primary crop: ${primaryCropW}x${primaryInfo.height} at X=${primaryCropX}`);
+  } else {
+    // Primary is taller - crop top/bottom (center)
+    const primaryCropH = Math.floor(primaryInfo.width / targetAspect);
+    const primaryCropY = Math.floor((primaryInfo.height - primaryCropH) / 2);
+    primaryCropFilter = `crop=${primaryInfo.width}:${primaryCropH}:0:${primaryCropY}`;
+  }
+
+  // Secondary video crop calculation
+  const secondaryInputAspect = secondaryInfo.width / secondaryInfo.height;
+  let secondaryCropFilter;
+  if (secondaryInputAspect > targetAspect) {
+    // Secondary is wider - crop sides based on position
+    const secondaryCropW = Math.floor(secondaryInfo.height * targetAspect);
+    const secondaryMaxX = secondaryInfo.width - secondaryCropW;
+    const secondaryCropX = Math.floor((secondaryCropPos / 100) * secondaryMaxX);
+    secondaryCropFilter = `crop=${secondaryCropW}:${secondaryInfo.height}:${secondaryCropX}:0`;
+    console.log(`[${jobId}] Secondary crop: ${secondaryCropW}x${secondaryInfo.height} at X=${secondaryCropX}`);
+  } else {
+    // Secondary is taller - crop top/bottom (center)
+    const secondaryCropH = Math.floor(secondaryInfo.width / targetAspect);
+    const secondaryCropY = Math.floor((secondaryInfo.height - secondaryCropH) / 2);
+    secondaryCropFilter = `crop=${secondaryInfo.width}:${secondaryCropH}:0:${secondaryCropY}`;
+  }
+
   // Determine video positions based on settings
   // 'top' means secondary on top, primary on bottom
   // 'bottom' means primary on top, secondary on bottom (default)
   if (position === 'top') {
     filterComplex = `
-      [0:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight},setsar=1[primary];
-      [1:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight},setsar=1[secondary];
+      [0:v]${primaryCropFilter},scale=${targetWidth}:${halfHeight},setsar=1[primary];
+      [1:v]${secondaryCropFilter},scale=${targetWidth}:${halfHeight},setsar=1[secondary];
       [secondary][primary]vstack=inputs=2[vout]
     `.replace(/\n\s*/g, '');
   } else {
     // Default: primary on top, secondary on bottom
     filterComplex = `
-      [0:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight},setsar=1[primary];
-      [1:v]scale=${targetWidth}:${halfHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${halfHeight},setsar=1[secondary];
+      [0:v]${primaryCropFilter},scale=${targetWidth}:${halfHeight},setsar=1[primary];
+      [1:v]${secondaryCropFilter},scale=${targetWidth}:${halfHeight},setsar=1[secondary];
       [primary][secondary]vstack=inputs=2[vout]
     `.replace(/\n\s*/g, '');
   }
@@ -2779,16 +2824,34 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 
   // Step 1: Reframe/Crop based on mode
   switch (normalizedMode) {
-    case 'split_screen':
-      // Split screen: Show left and right speakers stacked vertically (for podcasts)
-      // Take left 1/3 and right 1/3 of the video, stack them
-      const splitCropW = Math.floor(validWidth / 3);
+    case 'split_screen': {
+      // Split screen: Show two speakers stacked vertically (for podcasts/interviews)
+      // Uses splitScreenSettings for position control, with fallback to legacy behavior
+      const splitSettings = settings?.splitScreenSettings;
+      const speaker1Pos = splitSettings?.speaker1?.cropPosition ?? 17;  // Default: left side
+      const speaker2Pos = splitSettings?.speaker2?.cropPosition ?? 83;  // Default: right side
+      const cropWidthPercent = splitSettings?.speaker1?.cropWidth ?? 33; // Default: 1/3 width
+
+      console.log(`[FFmpeg] Split screen settings - Speaker1: ${speaker1Pos}%, Speaker2: ${speaker2Pos}%, Width: ${cropWidthPercent}%`);
+
+      // Calculate crop dimensions based on percentage
+      const splitCropW = Math.floor(validWidth * (cropWidthPercent / 100));
       const splitHalfH = Math.floor(targetHeight / 2);
-      filters.push(`split[left][right]`);
-      filters.push(`[left]crop=${splitCropW}:${validHeight}:0:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[l]`);
-      filters.push(`[right]crop=${splitCropW}:${validHeight}:${validWidth - splitCropW}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[r]`);
-      filters.push(`[l][r]vstack`);
+
+      // Calculate X positions based on percentages (0% = left edge, 100% = right edge)
+      const maxCropX = validWidth - splitCropW;
+      const speaker1X = Math.floor((speaker1Pos / 100) * maxCropX);
+      const speaker2X = Math.floor((speaker2Pos / 100) * maxCropX);
+
+      console.log(`[FFmpeg] Split crop calculations - CropW: ${splitCropW}, MaxX: ${maxCropX}`);
+      console.log(`[FFmpeg] Speaker1 X: ${speaker1X} (${speaker1Pos}%), Speaker2 X: ${speaker2X} (${speaker2Pos}%)`);
+
+      filters.push(`split[s1][s2]`);
+      filters.push(`[s1]crop=${splitCropW}:${validHeight}:${speaker1X}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[top]`);
+      filters.push(`[s2]crop=${splitCropW}:${validHeight}:${speaker2X}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[bottom]`);
+      filters.push(`[top][bottom]vstack`);
       break;
+    }
 
     case 'three_person':
       // Three person: Show three speakers - top (center), bottom-left, bottom-right
