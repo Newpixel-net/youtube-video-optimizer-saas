@@ -10557,9 +10557,9 @@
                 html += '<div class="apply-all-bar">';
                 html += '<div class="apply-all-info">';
                 html += '<span class="apply-all-icon">⚡</span>';
-                html += '<span>Apply style to all ' + selectedClips.length + ' clips (video sources stay separate)</span>';
+                html += '<span>Apply captions, audio & effects to all clips (layout & videos stay separate)</span>';
                 html += '</div>';
-                html += '<button class="apply-all-btn" onclick="app.applySettingsToAllClips()">Apply Style to All</button>';
+                html += '<button class="apply-all-btn" onclick="app.applySettingsToAllClips()">Apply Common Settings</button>';
                 html += '</div>';
             }
 
@@ -13506,53 +13506,39 @@
                 sourceCropPosition = Math.max(0, Math.min(100, sourceCropPosition));
 
                 // Apply STYLE settings to all clips
-                // Video sources (secondary/tertiary) and trim times are CLIP-SPECIFIC and preserved
+                // CLIP-SPECIFIC (preserved): reframeMode, cropPosition, splitScreenSettings, video sources, trim
+                // APPLIED TO ALL: caption style, output settings, audio, effects, transitions
                 var appliedCount = 0;
                 selectedClips.forEach(function(clip) {
                     if (clip.id !== activeClip.id) {
                         var clipSettings = state.clipSettings[clip.id] || getDefaultSettings();
 
-                        // Preserve clip-specific video sources (don't overwrite with source clip's videos)
+                        // PRESERVE all clip-specific settings
+                        var existingReframeMode = clipSettings.reframeMode;
+                        var existingCropPosition = clipSettings.cropPosition;
+                        var existingSplitScreenSettings = clipSettings.splitScreenSettings;
                         var existingSecondary = clipSettings.secondarySource;
                         var existingTertiary = clipSettings.tertiarySource;
 
-                        // If target clip has its own secondary source, only update position (not video content)
-                        var mergedSecondary = undefined;
-                        if (existingSecondary && existingSecondary.enabled) {
-                            // Keep the target clip's video content, apply source clip's position settings
-                            mergedSecondary = Object.assign({}, existingSecondary);
-                            if (sourceSettings.secondarySource) {
-                                // Only copy position-related settings, not video content
-                                mergedSecondary.position = sourceSettings.secondarySource.position;
-                            }
-                        }
-
-                        // Same for tertiary source
-                        var mergedTertiary = undefined;
-                        if (existingTertiary && existingTertiary.enabled) {
-                            mergedTertiary = Object.assign({}, existingTertiary);
-                            if (sourceSettings.tertiarySource) {
-                                mergedTertiary.position = sourceSettings.tertiarySource.position;
-                            }
-                        }
-
-                        // Copy STYLE settings (not video content)
+                        // Copy only COMMON STYLE settings (not layout/reframe which is clip-specific)
                         state.clipSettings[clip.id] = {
-                            // Caption settings
+                            // Caption settings (APPLIED)
                             captionStyle: sourceSettings.captionStyle,
-                            captionSource: sourceSettings.captionSource,  // Which audio track for captions
+                            captionSource: sourceSettings.captionSource,
                             customCaptionStyle: sourceSettings.customCaptionStyle ? Object.assign({}, sourceSettings.customCaptionStyle) : undefined,
-                            // Reframe/crop settings
-                            reframeMode: sourceSettings.reframeMode,
-                            cropPosition: sourceCropPosition,  // Use validated value
-                            aiSmartCrop: sourceSettings.aiSmartCrop || false,
+
+                            // PRESERVED: Reframe/layout settings are clip-specific
+                            reframeMode: existingReframeMode || 'auto_center',
+                            cropPosition: existingCropPosition ?? 50,
+                            aiSmartCrop: clipSettings.aiSmartCrop || false,
+                            splitScreenSettings: existingSplitScreenSettings,
+
+                            // Output settings (APPLIED)
                             outputAspect: sourceSettings.outputAspect,
-                            // Split screen settings (crop positions, zoom, layout - NOT video sources)
-                            splitScreenSettings: sourceSettings.splitScreenSettings ? JSON.parse(JSON.stringify(sourceSettings.splitScreenSettings)) : undefined,
-                            // Output settings
                             outputQuality: sourceSettings.outputQuality,
                             frameRate: sourceSettings.frameRate,
-                            // Audio settings
+
+                            // Audio settings (APPLIED)
                             removeFiller: sourceSettings.removeFiller,
                             enhanceAudio: sourceSettings.enhanceAudio,
                             audioDucking: sourceSettings.audioDucking,
@@ -13560,21 +13546,27 @@
                             addMusic: sourceSettings.addMusic,
                             musicVolume: sourceSettings.musicVolume,
                             selectedTrack: sourceSettings.selectedTrack,
-                            // Transition settings
+
+                            // Transition settings (APPLIED)
                             introTransition: sourceSettings.introTransition,
                             outroTransition: sourceSettings.outroTransition,
-                            // Visual effects
+
+                            // Visual effects (APPLIED)
                             autoZoom: sourceSettings.autoZoom,
                             vignette: sourceSettings.vignette,
                             colorGrade: sourceSettings.colorGrade,
-                            // AI features
+
+                            // AI features (APPLIED)
                             selectedHook: sourceSettings.selectedHook,
-                            // Copy audio mix settings (volume levels, not mute states which depend on clip's sources)
+
+                            // Audio mix (APPLIED - volume levels)
                             audioMix: sourceSettings.audioMix ? Object.assign({}, sourceSettings.audioMix) : undefined,
-                            // PRESERVE clip-specific video sources (merged with position from source)
-                            secondarySource: mergedSecondary,
-                            tertiarySource: mergedTertiary,
-                            // PRESERVE clip-specific trim values
+
+                            // PRESERVED: Clip-specific video sources
+                            secondarySource: existingSecondary,
+                            tertiarySource: existingTertiary,
+
+                            // PRESERVED: Clip-specific trim values
                             trimStart: clipSettings.trimStart || 0,
                             trimEnd: clipSettings.trimEnd || clip.duration
                         };
@@ -13583,10 +13575,10 @@
                 });
 
                 // DEBUG: Show what was applied
-                console.log('[applySettingsToAllClips] Applied style settings to', appliedCount, 'clips. Video sources preserved.');
+                console.log('[applySettingsToAllClips] Applied common settings (captions, audio, effects) to', appliedCount, 'clips. Layout & videos preserved.');
 
                 render();
-                utils.showToast('Style settings applied to ' + appliedCount + ' clips. Video sources preserved.', 'success');
+                utils.showToast('Captions, audio & effects applied to ' + appliedCount + ' clips. Layout preserved.', 'success');
             },
 
             // Timeline trimming
