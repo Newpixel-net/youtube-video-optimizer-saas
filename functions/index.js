@@ -20006,12 +20006,19 @@ exports.wizardProcessClip = functions
     console.log(`[wizardProcessClip] ========== MULTI-SOURCE DEBUG ==========`);
     console.log(`[wizardProcessClip] secondarySource exists: ${!!clipSettings.secondarySource}`);
     console.log(`[wizardProcessClip] secondarySource.enabled: ${clipSettings.secondarySource?.enabled}`);
+    console.log(`[wizardProcessClip] secondarySource.type: ${clipSettings.secondarySource?.type}`);
     console.log(`[wizardProcessClip] secondarySource.youtubeVideoId: ${clipSettings.secondarySource?.youtubeVideoId}`);
-    console.log(`[wizardProcessClip] secondarySource.uploadedUrl: ${clipSettings.secondarySource?.uploadedUrl ? 'YES' : 'NO'}`);
+    console.log(`[wizardProcessClip] secondarySource.uploadedUrl: ${clipSettings.secondarySource?.uploadedUrl ? 'SET (' + clipSettings.secondarySource.uploadedUrl.substring(0, 50) + '...)' : 'NOT SET'}`);
     console.log(`[wizardProcessClip] tertiarySource exists: ${!!clipSettings.tertiarySource}`);
     console.log(`[wizardProcessClip] tertiarySource.enabled: ${clipSettings.tertiarySource?.enabled}`);
+    console.log(`[wizardProcessClip] tertiarySource.type: ${clipSettings.tertiarySource?.type}`);
     console.log(`[wizardProcessClip] tertiarySource.youtubeVideoId: ${clipSettings.tertiarySource?.youtubeVideoId}`);
-    console.log(`[wizardProcessClip] tertiarySource.uploadedUrl: ${clipSettings.tertiarySource?.uploadedUrl ? 'YES' : 'NO'}`);
+    console.log(`[wizardProcessClip] tertiarySource.uploadedUrl: ${clipSettings.tertiarySource?.uploadedUrl ? 'SET (' + clipSettings.tertiarySource.uploadedUrl.substring(0, 50) + '...)' : 'NOT SET'}`);
+    // Check if conditions for three_person mode are met
+    const hasSecondaryForLog = clipSettings.secondarySource?.enabled && (clipSettings.secondarySource?.uploadedUrl || clipSettings.secondarySource?.youtubeVideoId);
+    const hasTertiaryForLog = clipSettings.tertiarySource?.enabled && (clipSettings.tertiarySource?.uploadedUrl || clipSettings.tertiarySource?.youtubeVideoId);
+    console.log(`[wizardProcessClip] THREE_PERSON conditions: reframeMode=${clipSettings.reframeMode}, hasSecondary=${hasSecondaryForLog}, hasTertiary=${hasTertiaryForLog}`);
+    console.log(`[wizardProcessClip] Will processor use three_person?: ${clipSettings.reframeMode === 'three_person' && hasSecondaryForLog && hasTertiaryForLog}`);
     console.log(`[wizardProcessClip] ==========================================`);
 
     // SOURCE ASSET PRIORITY:

@@ -15587,18 +15587,51 @@
                             // Update clipSettings with the captured tertiary video URL
                             if (tertStorageUrl) {
                                 console.log('[EXPORT][EXT] Tertiary video captured successfully, updating settings');
+                                console.log('[EXPORT][EXT] Tertiary URL:', tertStorageUrl.substring(0, 80) + '...');
                                 clipSettings.tertiarySource.uploadedUrl = tertStorageUrl;
                                 clipSettings.tertiarySource.capturedViaExtension = true;
+                                console.log('[EXPORT][EXT] Tertiary state after update:', JSON.stringify({
+                                    enabled: clipSettings.tertiarySource.enabled,
+                                    type: clipSettings.tertiarySource.type,
+                                    youtubeVideoId: clipSettings.tertiarySource.youtubeVideoId,
+                                    uploadedUrl: clipSettings.tertiarySource.uploadedUrl ? 'SET' : 'NOT SET'
+                                }));
+                            } else {
+                                console.error('[EXPORT][EXT] Tertiary capture succeeded but NO URL returned!');
+                                console.error('[EXPORT][EXT] tertHasStorageUrl:', tertHasStorageUrl);
+                                console.error('[EXPORT][EXT] tertHasLocalData:', tertHasLocalData);
                             }
                         } else {
                             console.warn('[EXPORT][EXT] Tertiary capture failed');
                             console.warn('[EXPORT][EXT] Error:', tertCaptureResult?.error || 'Unknown');
+                            console.warn('[EXPORT][EXT] Full result:', JSON.stringify(tertCaptureResult, null, 2));
                         }
                     } catch (tertCaptureErr) {
                         console.error('[EXPORT][EXT] Tertiary capture exception:', tertCaptureErr.message);
                     }
                 }
                 // ===== END TERTIARY VIDEO CAPTURE =====
+
+                // ===== POST-CAPTURE DEBUG LOGGING =====
+                // Log the FINAL state of settings being sent to backend AFTER all captures
+                console.log('=== POST-CAPTURE SETTINGS DEBUG ===');
+                console.log('[POST-CAPTURE] reframeMode:', clipSettings.reframeMode);
+                console.log('[POST-CAPTURE] PRIMARY source:', state.videoInput.isUpload ? 'upload' : 'youtube');
+                console.log('[POST-CAPTURE] SECONDARY enabled:', clipSettings.secondarySource?.enabled);
+                console.log('[POST-CAPTURE] SECONDARY type:', clipSettings.secondarySource?.type);
+                console.log('[POST-CAPTURE] SECONDARY youtubeVideoId:', clipSettings.secondarySource?.youtubeVideoId);
+                console.log('[POST-CAPTURE] SECONDARY uploadedUrl:', clipSettings.secondarySource?.uploadedUrl ? 'SET (' + clipSettings.secondarySource.uploadedUrl.substring(0, 60) + '...)' : 'NOT SET');
+                console.log('[POST-CAPTURE] TERTIARY enabled:', clipSettings.tertiarySource?.enabled);
+                console.log('[POST-CAPTURE] TERTIARY type:', clipSettings.tertiarySource?.type);
+                console.log('[POST-CAPTURE] TERTIARY youtubeVideoId:', clipSettings.tertiarySource?.youtubeVideoId);
+                console.log('[POST-CAPTURE] TERTIARY uploadedUrl:', clipSettings.tertiarySource?.uploadedUrl ? 'SET (' + clipSettings.tertiarySource.uploadedUrl.substring(0, 60) + '...)' : 'NOT SET');
+                console.log('[POST-CAPTURE] All three sources for three_person?:',
+                    (clipSettings.reframeMode === 'three_person') + ' && ' +
+                    (!!clipSettings.secondarySource?.enabled && !!(clipSettings.secondarySource?.uploadedUrl || clipSettings.secondarySource?.youtubeVideoId)) + ' && ' +
+                    (!!clipSettings.tertiarySource?.enabled && !!(clipSettings.tertiarySource?.uploadedUrl || clipSettings.tertiarySource?.youtubeVideoId))
+                );
+                console.log('===================================');
+                // ===== END POST-CAPTURE DEBUG LOGGING =====
 
                 // Show processing state
                 utils.showToast('Starting video processing...', 'info');
