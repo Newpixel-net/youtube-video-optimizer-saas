@@ -2158,41 +2158,59 @@
             flex-direction: column;
             overflow: hidden;
             /* CSS variables for dynamic speaker positions (set via JavaScript) */
-            --speaker1-translate: -34%;  /* Default: 17% position → left 1/3 */
-            --speaker2-translate: -166%; /* Default: 83% position → right 1/3 */
+            /* Values are numbers that get multiplied by 1% in calc() for proper zoom scaling */
+            --speaker1-translate-pct: -34;  /* Default: 17% position → left 1/3 */
+            --speaker2-translate-pct: -166; /* Default: 83% position → right 1/3 */
+            --speaker1-zoom: 1;
+            --speaker2-zoom: 1;
         }
 
         .phone-video-area.reframe-split_screen .split-preview-top,
         .phone-video-area.reframe-split_screen .split-preview-bottom {
-            flex: 1;
             overflow: hidden;
             position: relative;
+        }
+
+        .phone-video-area.reframe-split_screen .split-preview-top {
+            flex: var(--split-top-ratio, 1);
+        }
+
+        .phone-video-area.reframe-split_screen .split-preview-bottom {
+            flex: var(--split-bottom-ratio, 1);
+        }
+
+        .phone-video-area.reframe-split_screen .split-border-line {
+            height: var(--split-border-height, 0);
+            background-color: var(--split-border-color, #ffffff);
+            flex-shrink: 0;
         }
 
         .phone-video-area.reframe-split_screen .split-preview-top iframe,
         .phone-video-area.reframe-split_screen .split-preview-top img,
         .phone-video-area.reframe-split_screen .split-preview-top video {
             position: absolute;
-            width: 300%;
-            height: 200%;
-            top: 0;
-            left: 0;
+            width: calc(300% * var(--speaker1-zoom, 1));
+            height: calc(200% * var(--speaker1-zoom, 1));
+            top: 50%;
+            left: 50%;
             object-fit: cover;
-            /* Use CSS variable for position-aware cropping preview */
-            transform: translateX(var(--speaker1-translate));
+            /* Use CSS variables for position-aware cropping and zoom preview */
+            /* --speaker1-translate-pct is the X offset in percentage, multiplied by zoom for proper scaling */
+            transform: translate(calc(-50% + var(--speaker1-translate-pct, -34) * var(--speaker1-zoom, 1) * 1%), -50%);
         }
 
         .phone-video-area.reframe-split_screen .split-preview-bottom iframe,
         .phone-video-area.reframe-split_screen .split-preview-bottom img,
         .phone-video-area.reframe-split_screen .split-preview-bottom video {
             position: absolute;
-            width: 300%;
-            height: 200%;
-            top: 0;
-            left: 0;
+            width: calc(300% * var(--speaker2-zoom, 1));
+            height: calc(200% * var(--speaker2-zoom, 1));
+            top: 50%;
+            left: 50%;
             object-fit: cover;
-            /* Use CSS variable for position-aware cropping preview */
-            transform: translateX(var(--speaker2-translate));
+            /* Use CSS variables for position-aware cropping and zoom preview */
+            /* --speaker2-translate-pct is the X offset in percentage, multiplied by zoom for proper scaling */
+            transform: translate(calc(-50% + var(--speaker2-translate-pct, -166) * var(--speaker2-zoom, 1) * 1%), -50%);
         }
 
         .phone-video-area.reframe-split_screen .split-label {
@@ -2224,6 +2242,66 @@
             right: auto;
             transform: translateX(-50%);
             object-fit: cover;
+        }
+
+        /* Split screen preview play/stop buttons */
+        .split-preview-play-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            width: 70px;
+            height: 70px;
+            background: rgba(236, 72, 153, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 20px rgba(236, 72, 153, 0.4);
+        }
+
+        .split-preview-play-btn:hover {
+            background: rgba(236, 72, 153, 1);
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        .split-preview-play-btn .play-icon {
+            font-size: 1.2rem;
+        }
+
+        .split-preview-play-btn .play-label {
+            font-size: 0.55rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .split-preview-stop-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            padding: 8px 16px;
+            background: rgba(239, 68, 68, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .split-preview-stop-btn:hover {
+            background: rgba(239, 68, 68, 1);
         }
 
         /* Three-person mode */
@@ -2808,6 +2886,334 @@
             border-radius: 0.25rem;
             cursor: pointer;
             background: transparent;
+        }
+
+        /* Caption Source Panel (for multi-source) */
+        .caption-source-panel {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 0.5rem;
+        }
+
+        .caption-source-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .caption-source-options {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .caption-source-btn {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+        }
+
+        .caption-source-btn:hover {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .caption-source-btn.active {
+            background: rgba(59, 130, 246, 0.25);
+            border-color: rgba(59, 130, 246, 0.6);
+            color: #60a5fa;
+        }
+
+        .caption-source-btn .source-icon {
+            font-size: 0.65rem;
+        }
+
+        /* Phase 2: Swap Button */
+        .swap-button-row {
+            display: flex;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+
+        .swap-positions-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1.25rem;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 0.5rem;
+            color: #a78bfa;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .swap-positions-btn:hover {
+            background: rgba(139, 92, 246, 0.25);
+            border-color: rgba(139, 92, 246, 0.6);
+            transform: scale(1.02);
+        }
+
+        .swap-positions-btn .swap-icon {
+            font-size: 1rem;
+            line-height: 1;
+        }
+
+        /* Phase 2: Layout Ratio */
+        .split-layout-section {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .split-section-label {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .layout-ratio-options {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .layout-ratio-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.6rem 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .layout-ratio-btn:hover {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .layout-ratio-btn.active {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: rgba(139, 92, 246, 0.5);
+        }
+
+        .ratio-visual {
+            display: flex;
+            flex-direction: column;
+            width: 24px;
+            height: 32px;
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .ratio-top {
+            background: rgba(236, 72, 153, 0.6);
+        }
+
+        .ratio-bottom {
+            background: rgba(59, 130, 246, 0.6);
+        }
+
+        .ratio-label {
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .layout-ratio-btn.active .ratio-label {
+            color: #a78bfa;
+        }
+
+        /* Phase 2: Border/Divider Options */
+        .border-options-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .border-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .border-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #8b5cf6;
+            cursor: pointer;
+        }
+
+        .border-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .border-thickness-slider {
+            width: 80px;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .border-thickness-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #8b5cf6;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .border-thickness-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: #8b5cf6;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .border-color-picker {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            cursor: pointer;
+            background: transparent;
+        }
+
+        .border-color-picker::-webkit-color-swatch-wrapper {
+            padding: 2px;
+        }
+
+        .border-color-picker::-webkit-color-swatch {
+            border: none;
+            border-radius: 2px;
+        }
+
+        /* Phase 3: Zoom Controls */
+        .zoom-controls-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .zoom-control-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .zoom-clip-label {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+            min-width: 65px;
+        }
+
+        .zoom-clip-label .speaker-badge {
+            width: 16px;
+            height: 16px;
+            font-size: 0.6rem;
+        }
+
+        .zoom-slider-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .zoom-slider {
+            flex: 1;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(to right, rgba(16, 185, 129, 0.3) 0%, rgba(249, 115, 22, 0.3) 100%);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .zoom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: linear-gradient(135deg, #10b981 0%, #f97316 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .zoom-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: linear-gradient(135deg, #10b981 0%, #f97316 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .zoom-value {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.6);
+            min-width: 35px;
+            text-align: right;
+            font-family: monospace;
+        }
+
+        .zoom-reset-btn {
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .zoom-reset-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.8);
         }
 
         .clip-nav {
@@ -8727,14 +9133,40 @@
             if (reframeMode === 'split_screen') {
                 var splitSettings = settings.splitScreenSettings || {
                     speaker1: { cropPosition: 17 },
-                    speaker2: { cropPosition: 83 }
+                    speaker2: { cropPosition: 83 },
+                    layoutRatio: '50-50',
+                    border: { enabled: false, thickness: 2, color: '#ffffff' }
                 };
                 var speaker1Pos = splitSettings.speaker1?.cropPosition ?? 17;
                 var speaker2Pos = splitSettings.speaker2?.cropPosition ?? 83;
                 // Calculate translate values: for 300% width (3x scale), translate = -(pos/100) * (3-1) * 100
                 var speaker1Translate = -(speaker1Pos / 100) * 200;
                 var speaker2Translate = -(speaker2Pos / 100) * 200;
-                splitCssVars = ' --speaker1-translate: ' + speaker1Translate + '%; --speaker2-translate: ' + speaker2Translate + '%;';
+
+                // Calculate layout ratio
+                var layoutRatio = splitSettings.layoutRatio || '50-50';
+                var topRatio = 1, bottomRatio = 1;
+                if (layoutRatio === '60-40') { topRatio = 1.5; bottomRatio = 1; }
+                else if (layoutRatio === '70-30') { topRatio = 2.33; bottomRatio = 1; }
+
+                // Border settings
+                var border = splitSettings.border || { enabled: false, thickness: 2, color: '#ffffff' };
+                var borderHeight = border.enabled ? (border.thickness || 2) : 0;
+                var borderColor = border.color || '#ffffff';
+
+                // Zoom settings (100 = 1x, 200 = 2x)
+                var speaker1Zoom = (splitSettings.speaker1?.zoom || 100) / 100;
+                var speaker2Zoom = (splitSettings.speaker2?.zoom || 100) / 100;
+
+                // Store translate values as numbers (without %) for proper CSS calc multiplication
+                splitCssVars = ' --speaker1-translate-pct: ' + speaker1Translate + ';';
+                splitCssVars += ' --speaker2-translate-pct: ' + speaker2Translate + ';';
+                splitCssVars += ' --speaker1-zoom: ' + speaker1Zoom + ';';
+                splitCssVars += ' --speaker2-zoom: ' + speaker2Zoom + ';';
+                splitCssVars += ' --split-top-ratio: ' + topRatio + ';';
+                splitCssVars += ' --split-bottom-ratio: ' + bottomRatio + ';';
+                splitCssVars += ' --split-border-height: ' + borderHeight + 'px;';
+                splitCssVars += ' --split-border-color: ' + borderColor + ';';
             }
 
             html += '<div class="' + videoAreaClasses + '" data-crop-percent="' + cropPosPercent + '" style="--crop-position: ' + objectPosX + ';' + splitCssVars + '">';
@@ -8762,11 +9194,25 @@
                     // No secondary - split primary video
                     topMedia = mediaElement;
                     bottomMedia = mediaElement;
-                    topLabel = 'Speaker 1';
-                    bottomLabel = 'Speaker 2';
+                    topLabel = 'Top';
+                    bottomLabel = 'Bottom';
                 }
                 html += '<div class="split-preview-top">' + topMedia + '<span class="split-label">' + topLabel + '</span></div>';
+                // Add border line between top and bottom (visible only when border is enabled via CSS var)
+                html += '<div class="split-border-line"></div>';
                 html += '<div class="split-preview-bottom">' + bottomMedia + '<span class="split-label">' + bottomLabel + '</span></div>';
+
+                // Add preview play button for split screen
+                if (!state.customization.playingInFrame) {
+                    html += '<button class="split-preview-play-btn" onclick="app.playInFrameVideo()" title="Preview split screen">';
+                    html += '<span class="play-icon">▶</span>';
+                    html += '<span class="play-label">Preview</span>';
+                    html += '</button>';
+                } else {
+                    html += '<button class="split-preview-stop-btn" onclick="app.stopInFrameVideo()" title="Stop preview">';
+                    html += '✕ Stop';
+                    html += '</button>';
+                }
             } else if (reframeMode === 'three_person') {
                 // Three person: Main top, two bottom (left=secondary, right=tertiary)
                 var mainMedia = mediaElement, leftMedia = mediaElement, rightMedia = mediaElement;
@@ -9070,6 +9516,31 @@
                 html += '</div>';
             }
 
+            // Caption Source selector (only show when multi-source split is enabled)
+            var secondarySource = settings.secondarySource || { enabled: false };
+            var hasSecondaryForCaptions = secondarySource.enabled &&
+                (secondarySource.youtubeVideoId || secondarySource.uploadedUrl) &&
+                ['split_screen', 'three_person', 'broll_split'].indexOf(settings.reframeMode) !== -1;
+
+            if (hasSecondaryForCaptions && settings.captionStyle !== 'none') {
+                html += '<div class="caption-source-panel">';
+                html += '<div class="caption-source-label">🎙️ Generate captions from:</div>';
+                html += '<div class="caption-source-options">';
+
+                var captionSource = settings.captionSource || 'primary';
+
+                html += '<button class="caption-source-btn' + (captionSource === 'primary' ? ' active' : '') + '" onclick="app.setCaptionSource(\'primary\')">';
+                html += '<span class="source-icon">▲</span> Top Video';
+                html += '</button>';
+
+                html += '<button class="caption-source-btn' + (captionSource === 'secondary' ? ' active' : '') + '" onclick="app.setCaptionSource(\'secondary\')">';
+                html += '<span class="source-icon">▼</span> Bottom Video';
+                html += '</button>';
+
+                html += '</div>';
+                html += '</div>';
+            }
+
             html += '</div>';
 
             // Reframe Panel with visual diagrams
@@ -9141,31 +9612,31 @@
 
                 html += '<div class="customization-panel split-position-panel">';
                 html += '<div class="panel-header">';
-                html += '<span class="panel-icon">📍</span>';
-                html += '<span class="panel-title">SPEAKER POSITIONS</span>';
+                html += '<span class="panel-icon">⬛</span>';
+                html += '<span class="panel-title">CLIP POSITIONS</span>';
                 html += '</div>';
 
                 // Preset buttons
                 html += '<div class="split-presets-row">';
                 html += '<button class="split-preset-btn' + (splitSettings.preset === 'interview' ? ' active' : '') + '" onclick="app.setSplitPreset(\'interview\')">';
-                html += '<span class="preset-icon">👥</span> Interview (L+R)';
+                html += '<span class="preset-icon">◧</span> Left + Right';
                 html += '</button>';
                 html += '<button class="split-preset-btn' + (splitSettings.preset === 'center' ? ' active' : '') + '" onclick="app.setSplitPreset(\'center\')">';
-                html += '<span class="preset-icon">🎯</span> Both Center';
+                html += '<span class="preset-icon">⊡</span> Both Center';
                 html += '</button>';
                 html += '<button class="split-preset-btn' + (splitSettings.preset === 'custom' ? ' active' : '') + '" onclick="app.setSplitPreset(\'custom\')">';
-                html += '<span class="preset-icon">✏️</span> Custom';
+                html += '<span class="preset-icon">✎</span> Custom';
                 html += '</button>';
                 html += '</div>';
 
-                // Speaker position sliders (show expanded when custom or always show)
+                // Position sliders (show expanded when custom or always show)
                 html += '<div class="speaker-position-controls' + (splitSettings.preset === 'custom' ? ' expanded' : '') + '">';
 
-                // Speaker 1 (Top)
+                // Top clip
                 html += '<div class="speaker-position-row">';
                 html += '<div class="speaker-position-label">';
-                html += '<span class="speaker-badge speaker-1">1</span>';
-                html += '<span>Speaker 1 (Top)</span>';
+                html += '<span class="speaker-badge speaker-1">▲</span>';
+                html += '<span>Top</span>';
                 html += '</div>';
                 html += '<div class="speaker-position-slider">';
                 html += '<span class="slider-label-left">L</span>';
@@ -9176,11 +9647,18 @@
                 html += '</div>';
                 html += '</div>';
 
-                // Speaker 2 (Bottom)
+                // Swap button
+                html += '<div class="swap-button-row">';
+                html += '<button class="swap-positions-btn" onclick="app.swapSplitPositions()" title="Swap top and bottom positions">';
+                html += '<span class="swap-icon">⇅</span> Swap';
+                html += '</button>';
+                html += '</div>';
+
+                // Bottom clip
                 html += '<div class="speaker-position-row">';
                 html += '<div class="speaker-position-label">';
-                html += '<span class="speaker-badge speaker-2">2</span>';
-                html += '<span>Speaker 2 (Bottom)</span>';
+                html += '<span class="speaker-badge speaker-2">▼</span>';
+                html += '<span>Bottom</span>';
                 html += '</div>';
                 html += '<div class="speaker-position-slider">';
                 html += '<span class="slider-label-left">L</span>';
@@ -9192,6 +9670,79 @@
                 html += '</div>';
 
                 html += '</div>'; // speaker-position-controls
+
+                // Zoom Controls Section
+                html += '<div class="split-layout-section">';
+                html += '<div class="split-section-label">Zoom Level</div>';
+                html += '<div class="zoom-controls-grid">';
+
+                // Top clip zoom
+                var topZoom = splitSettings.speaker1?.zoom || 100;
+                html += '<div class="zoom-control-row">';
+                html += '<span class="zoom-clip-label"><span class="speaker-badge speaker-1">▲</span> Top</span>';
+                html += '<div class="zoom-slider-wrap">';
+                html += '<input type="range" class="zoom-slider" min="100" max="200" value="' + topZoom + '" ';
+                html += 'oninput="app.onZoomChange(1, this.value)" onchange="app.setClipZoom(1, this.value)">';
+                html += '<span class="zoom-value">' + topZoom + '%</span>';
+                html += '</div>';
+                html += '<button class="zoom-reset-btn" onclick="app.setClipZoom(1, 100)" title="Reset to 100%">↺</button>';
+                html += '</div>';
+
+                // Bottom clip zoom
+                var bottomZoom = splitSettings.speaker2?.zoom || 100;
+                html += '<div class="zoom-control-row">';
+                html += '<span class="zoom-clip-label"><span class="speaker-badge speaker-2">▼</span> Bottom</span>';
+                html += '<div class="zoom-slider-wrap">';
+                html += '<input type="range" class="zoom-slider" min="100" max="200" value="' + bottomZoom + '" ';
+                html += 'oninput="app.onZoomChange(2, this.value)" onchange="app.setClipZoom(2, this.value)">';
+                html += '<span class="zoom-value">' + bottomZoom + '%</span>';
+                html += '</div>';
+                html += '<button class="zoom-reset-btn" onclick="app.setClipZoom(2, 100)" title="Reset to 100%">↺</button>';
+                html += '</div>';
+
+                html += '</div>'; // zoom-controls-grid
+                html += '</div>'; // split-layout-section
+
+                // Layout Ratio Section
+                html += '<div class="split-layout-section">';
+                html += '<div class="split-section-label">Layout Ratio</div>';
+                html += '<div class="layout-ratio-options">';
+                var layoutRatio = splitSettings.layoutRatio || '50-50';
+                html += '<button class="layout-ratio-btn' + (layoutRatio === '50-50' ? ' active' : '') + '" onclick="app.setLayoutRatio(\'50-50\')">';
+                html += '<span class="ratio-visual"><span class="ratio-top" style="flex:1"></span><span class="ratio-bottom" style="flex:1"></span></span>';
+                html += '<span class="ratio-label">50/50</span>';
+                html += '</button>';
+                html += '<button class="layout-ratio-btn' + (layoutRatio === '60-40' ? ' active' : '') + '" onclick="app.setLayoutRatio(\'60-40\')">';
+                html += '<span class="ratio-visual"><span class="ratio-top" style="flex:1.5"></span><span class="ratio-bottom" style="flex:1"></span></span>';
+                html += '<span class="ratio-label">60/40</span>';
+                html += '</button>';
+                html += '<button class="layout-ratio-btn' + (layoutRatio === '70-30' ? ' active' : '') + '" onclick="app.setLayoutRatio(\'70-30\')">';
+                html += '<span class="ratio-visual"><span class="ratio-top" style="flex:2.33"></span><span class="ratio-bottom" style="flex:1"></span></span>';
+                html += '<span class="ratio-label">70/30</span>';
+                html += '</button>';
+                html += '</div>';
+                html += '</div>';
+
+                // Border/Divider Section
+                html += '<div class="split-layout-section">';
+                html += '<div class="split-section-label">Divider Line</div>';
+                var border = splitSettings.border || { enabled: false, thickness: 2, color: '#ffffff' };
+                html += '<div class="border-options-row">';
+                html += '<label class="border-toggle">';
+                html += '<input type="checkbox" ' + (border.enabled ? 'checked' : '') + ' onchange="app.toggleSplitBorder(this.checked)">';
+                html += '<span>Show divider</span>';
+                html += '</label>';
+                if (border.enabled) {
+                    html += '<div class="border-controls">';
+                    html += '<input type="range" class="border-thickness-slider" min="1" max="10" value="' + (border.thickness || 2) + '" ';
+                    html += 'onchange="app.setBorderThickness(this.value)" title="Thickness: ' + (border.thickness || 2) + 'px">';
+                    html += '<input type="color" class="border-color-picker" value="' + (border.color || '#ffffff') + '" ';
+                    html += 'onchange="app.setBorderColor(this.value)" title="Line color">';
+                    html += '</div>';
+                }
+                html += '</div>';
+                html += '</div>';
+
                 html += '</div>'; // customization-panel
             }
 
@@ -10002,6 +10553,7 @@
             return {
                 // Caption settings
                 captionStyle: 'karaoke',
+                captionSource: 'primary',  // Which video's audio to use for captions: 'primary' or 'secondary'
 
                 // Reframe settings
                 reframeMode: 'auto_center',
@@ -10012,13 +10564,21 @@
                 splitScreenSettings: {
                     speaker1: {
                         cropPosition: 17,  // Default: left 1/3 center (0-100%)
-                        cropWidth: 33      // Percentage of source width to crop
+                        cropWidth: 33,     // Percentage of source width to crop
+                        zoom: 100          // Zoom level: 100% = fit, >100 = zoom in
                     },
                     speaker2: {
                         cropPosition: 83,  // Default: right 1/3 center (0-100%)
-                        cropWidth: 33
+                        cropWidth: 33,
+                        zoom: 100          // Zoom level: 100% = fit, >100 = zoom in
                     },
-                    preset: 'interview'    // 'interview', 'center', 'custom'
+                    preset: 'interview',   // 'interview', 'center', 'custom'
+                    layoutRatio: '50-50',  // '50-50', '60-40', '70-30' (top-bottom percentages)
+                    border: {
+                        enabled: false,
+                        thickness: 2,      // 1-10 pixels
+                        color: '#ffffff'   // Border color
+                    }
                 },
 
                 // Timeline/trim settings
@@ -11517,6 +12077,19 @@
                 render();
             },
 
+            setCaptionSource: function(source) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].captionSource = source;
+                utils.showToast('Captions will be generated from ' + (source === 'primary' ? 'Top' : 'Bottom') + ' video audio', 'info');
+                render();
+            },
+
             setCustomCaptionStyle: function(property, value) {
                 var selectedClips = state.clips.filter(function(c) {
                     return state.selectedClipIds.indexOf(c.id) !== -1;
@@ -11555,41 +12128,44 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33 },
-                        speaker2: { cropPosition: 83, cropWidth: 33 },
-                        preset: 'interview'
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
+                        preset: 'interview',
+                        layoutRatio: '50-50',
+                        border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
                 }
 
-                var settings;
+                // Preserve existing settings (zoom, layoutRatio, border) when changing presets
+                var currentSettings = state.clipSettings[activeClip.id].splitScreenSettings;
+                var existingZoom1 = currentSettings.speaker1?.zoom || 100;
+                var existingZoom2 = currentSettings.speaker2?.zoom || 100;
+                var existingLayoutRatio = currentSettings.layoutRatio || '50-50';
+                var existingBorder = currentSettings.border || { enabled: false, thickness: 2, color: '#ffffff' };
+
                 switch(preset) {
                     case 'interview':
-                        settings = {
-                            speaker1: { cropPosition: 17, cropWidth: 33 },
-                            speaker2: { cropPosition: 83, cropWidth: 33 },
-                            preset: 'interview'
-                        };
+                        currentSettings.speaker1 = { cropPosition: 17, cropWidth: 33, zoom: existingZoom1 };
+                        currentSettings.speaker2 = { cropPosition: 83, cropWidth: 33, zoom: existingZoom2 };
+                        currentSettings.preset = 'interview';
                         break;
                     case 'center':
-                        settings = {
-                            speaker1: { cropPosition: 50, cropWidth: 33 },
-                            speaker2: { cropPosition: 50, cropWidth: 33 },
-                            preset: 'center'
-                        };
+                        currentSettings.speaker1 = { cropPosition: 50, cropWidth: 33, zoom: existingZoom1 };
+                        currentSettings.speaker2 = { cropPosition: 50, cropWidth: 33, zoom: existingZoom2 };
+                        currentSettings.preset = 'center';
                         break;
                     case 'custom':
                         // Keep current positions but switch to custom mode
-                        settings = Object.assign({}, state.clipSettings[activeClip.id].splitScreenSettings);
-                        settings.preset = 'custom';
+                        currentSettings.preset = 'custom';
                         break;
                     default:
-                        settings = {
-                            speaker1: { cropPosition: 50, cropWidth: 33 },
-                            speaker2: { cropPosition: 50, cropWidth: 33 },
-                            preset: 'custom'
-                        };
+                        currentSettings.speaker1 = { cropPosition: 50, cropWidth: 33, zoom: existingZoom1 };
+                        currentSettings.speaker2 = { cropPosition: 50, cropWidth: 33, zoom: existingZoom2 };
+                        currentSettings.preset = 'custom';
                 }
-                state.clipSettings[activeClip.id].splitScreenSettings = settings;
+                // Ensure layoutRatio and border are preserved
+                currentSettings.layoutRatio = existingLayoutRatio;
+                currentSettings.border = existingBorder;
                 render();
             },
 
@@ -11603,9 +12179,11 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33 },
-                        speaker2: { cropPosition: 83, cropWidth: 33 },
-                        preset: 'custom'
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
+                        preset: 'custom',
+                        layoutRatio: '50-50',
+                        border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
                 }
 
@@ -11615,7 +12193,7 @@
 
                 var speakerKey = 'speaker' + speaker;
                 if (!state.clipSettings[activeClip.id].splitScreenSettings[speakerKey]) {
-                    state.clipSettings[activeClip.id].splitScreenSettings[speakerKey] = { cropPosition: 50, cropWidth: 33 };
+                    state.clipSettings[activeClip.id].splitScreenSettings[speakerKey] = { cropPosition: 50, cropWidth: 33, zoom: 100 };
                 }
                 state.clipSettings[activeClip.id].splitScreenSettings[speakerKey].cropPosition = posNum;
                 state.clipSettings[activeClip.id].splitScreenSettings.preset = 'custom';
@@ -11640,7 +12218,8 @@
                 // Update preview in real-time
                 var phoneVideoArea = document.querySelector('.phone-video-area');
                 if (phoneVideoArea) {
-                    phoneVideoArea.style.setProperty('--speaker' + speaker + '-translate', this.calculateSpeakerTranslate(posNum) + '%');
+                    // Use -pct suffix for proper CSS calc multiplication (value is a number, not %)
+                    phoneVideoArea.style.setProperty('--speaker' + speaker + '-translate-pct', this.calculateSpeakerTranslate(posNum));
                 }
             },
 
@@ -11651,6 +12230,169 @@
                 var cropWidthPercent = 33.33;
                 var scaleX = 100 / cropWidthPercent;  // ~3
                 return -(position / 100) * (scaleX - 1) * 100;
+            },
+
+            // Phase 2: Swap top and bottom positions
+            swapSplitPositions: function() {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                var splitSettings = state.clipSettings[activeClip.id].splitScreenSettings;
+                if (!splitSettings) {
+                    splitSettings = {
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
+                        preset: 'custom',
+                        layoutRatio: '50-50',
+                        border: { enabled: false, thickness: 2, color: '#ffffff' }
+                    };
+                    state.clipSettings[activeClip.id].splitScreenSettings = splitSettings;
+                }
+                // Swap speaker1 and speaker2 positions (includes cropPosition, cropWidth, zoom)
+                var temp = Object.assign({}, splitSettings.speaker1);
+                splitSettings.speaker1 = Object.assign({}, splitSettings.speaker2);
+                splitSettings.speaker2 = temp;
+                splitSettings.preset = 'custom';
+                render();
+            },
+
+            // Phase 2: Set layout ratio (50-50, 60-40, 70-30)
+            setLayoutRatio: function(ratio) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].splitScreenSettings) {
+                    state.clipSettings[activeClip.id].splitScreenSettings = {
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
+                        preset: 'custom',
+                        layoutRatio: '50-50',
+                        border: { enabled: false, thickness: 2, color: '#ffffff' }
+                    };
+                }
+                state.clipSettings[activeClip.id].splitScreenSettings.layoutRatio = ratio;
+                render();
+            },
+
+            // Phase 2: Toggle split screen border/divider
+            toggleSplitBorder: function(enabled) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].splitScreenSettings) {
+                    state.clipSettings[activeClip.id].splitScreenSettings = {
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
+                        preset: 'custom',
+                        layoutRatio: '50-50',
+                        border: { enabled: false, thickness: 2, color: '#ffffff' }
+                    };
+                }
+                if (!state.clipSettings[activeClip.id].splitScreenSettings.border) {
+                    state.clipSettings[activeClip.id].splitScreenSettings.border = { enabled: false, thickness: 2, color: '#ffffff' };
+                }
+                state.clipSettings[activeClip.id].splitScreenSettings.border.enabled = enabled;
+                render();
+            },
+
+            // Phase 2: Set border thickness
+            setBorderThickness: function(thickness) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id] || !state.clipSettings[activeClip.id].splitScreenSettings) {
+                    return;
+                }
+                var thicknessNum = parseInt(thickness, 10);
+                if (isNaN(thicknessNum)) thicknessNum = 2;
+                thicknessNum = Math.max(1, Math.min(10, thicknessNum));
+                if (!state.clipSettings[activeClip.id].splitScreenSettings.border) {
+                    state.clipSettings[activeClip.id].splitScreenSettings.border = { enabled: true, thickness: 2, color: '#ffffff' };
+                }
+                state.clipSettings[activeClip.id].splitScreenSettings.border.thickness = thicknessNum;
+                // No full render needed for smooth slider interaction
+            },
+
+            // Phase 2: Set border color
+            setBorderColor: function(color) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id] || !state.clipSettings[activeClip.id].splitScreenSettings) {
+                    return;
+                }
+                if (!state.clipSettings[activeClip.id].splitScreenSettings.border) {
+                    state.clipSettings[activeClip.id].splitScreenSettings.border = { enabled: true, thickness: 2, color: '#ffffff' };
+                }
+                state.clipSettings[activeClip.id].splitScreenSettings.border.color = color;
+                // No full render needed
+            },
+
+            // Phase 3: Set zoom level for a clip (1 = top, 2 = bottom)
+            setClipZoom: function(speaker, zoom) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].splitScreenSettings) {
+                    state.clipSettings[activeClip.id].splitScreenSettings = {
+                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
+                        preset: 'custom',
+                        layoutRatio: '50-50',
+                        border: { enabled: false, thickness: 2, color: '#ffffff' }
+                    };
+                }
+                var zoomNum = parseInt(zoom, 10);
+                if (isNaN(zoomNum)) zoomNum = 100;
+                zoomNum = Math.max(100, Math.min(200, zoomNum));
+
+                var speakerKey = 'speaker' + speaker;
+                if (!state.clipSettings[activeClip.id].splitScreenSettings[speakerKey]) {
+                    state.clipSettings[activeClip.id].splitScreenSettings[speakerKey] = { cropPosition: 50, cropWidth: 33, zoom: 100 };
+                }
+                state.clipSettings[activeClip.id].splitScreenSettings[speakerKey].zoom = zoomNum;
+                state.clipSettings[activeClip.id].splitScreenSettings.preset = 'custom';
+                render();
+            },
+
+            // Phase 3: Real-time zoom change (updates UI without full render)
+            onZoomChange: function(speaker, zoom) {
+                var zoomNum = parseInt(zoom, 10);
+                if (isNaN(zoomNum)) zoomNum = 100;
+                zoomNum = Math.max(100, Math.min(200, zoomNum));
+
+                // Update zoom value display
+                var zoomRows = document.querySelectorAll('.zoom-control-row');
+                if (zoomRows[speaker - 1]) {
+                    var zoomValue = zoomRows[speaker - 1].querySelector('.zoom-value');
+                    if (zoomValue) {
+                        zoomValue.textContent = zoomNum + '%';
+                    }
+                }
+
+                // Update preview in real-time
+                var phoneVideoArea = document.querySelector('.phone-video-area');
+                if (phoneVideoArea) {
+                    phoneVideoArea.style.setProperty('--speaker' + speaker + '-zoom', (zoomNum / 100));
+                }
             },
 
             toggleAdvancedOptions: function() {

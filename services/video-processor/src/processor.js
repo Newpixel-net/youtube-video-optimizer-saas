@@ -477,7 +477,6 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
 
   const targetWidth = output?.resolution?.width || 1080;
   const targetHeight = output?.resolution?.height || 1920;
-  const halfHeight = Math.floor(targetHeight / 2);
   const targetFps = output?.fps || 30;
 
   const safeSettings = settings || {};
@@ -515,63 +514,132 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
   const splitSettings = safeSettings.splitScreenSettings || {};
   const primaryCropPos = splitSettings.speaker1?.cropPosition ?? 50;  // Default: center
   const secondaryCropPos = splitSettings.speaker2?.cropPosition ?? 50; // Default: center
+  const layoutRatio = splitSettings.layoutRatio ?? '50-50';  // Default: equal split
+  const border = splitSettings.border ?? { enabled: false, thickness: 2, color: '#ffffff' };
+
+  // Phase 3: Zoom settings (100 = 1x, 200 = 2x zoom)
+  const primaryZoom = Math.max(100, Math.min(200, splitSettings.speaker1?.zoom ?? 100));
+  const secondaryZoom = Math.max(100, Math.min(200, splitSettings.speaker2?.zoom ?? 100));
 
   console.log(`[${jobId}] Multi-source crop positions - Primary: ${primaryCropPos}%, Secondary: ${secondaryCropPos}%`);
+  console.log(`[${jobId}] Layout ratio: ${layoutRatio}, Border: ${border.enabled ? `${border.thickness}px ${border.color}` : 'none'}`);
+  console.log(`[${jobId}] Zoom levels - Primary: ${primaryZoom}%, Secondary: ${secondaryZoom}%`);
+
+  // Calculate height ratio based on layoutRatio setting
+  let topRatio = 0.5;
+  let bottomRatio = 0.5;
+  if (layoutRatio === '60-40') {
+    topRatio = 0.6;
+    bottomRatio = 0.4;
+  } else if (layoutRatio === '70-30') {
+    topRatio = 0.7;
+    bottomRatio = 0.3;
+  }
+
+  // Account for border thickness if enabled
+  const borderH = border.enabled ? Math.max(1, Math.min(10, border.thickness || 2)) : 0;
+  const usableHeight = targetHeight - borderH;
+  const topHeight = Math.floor(usableHeight * topRatio);
+  const bottomHeight = usableHeight - topHeight;
+
+  console.log(`[${jobId}] Multi-source heights - Top: ${topHeight}, Bottom: ${bottomHeight}, Border: ${borderH}`);
 
   // Calculate crop dimensions for each video based on its own dimensions
-  // We want to crop a 9:16 portion from each video before scaling to half height
+  // We want to crop a 9:16 portion from each video before scaling
   const targetAspect = targetWidth / targetHeight;  // 9:16 = 0.5625
 
-  // Primary video crop calculation
+  // Primary video crop calculation with zoom support
   const primaryInputAspect = primaryInfo.width / primaryInfo.height;
   let primaryCropFilter;
   if (primaryInputAspect > targetAspect) {
     // Primary is wider - crop sides based on position
-    const primaryCropW = Math.floor(primaryInfo.height * targetAspect);
+    // Apply zoom: higher zoom = smaller crop area
+    const basePrimaryCropW = Math.floor(primaryInfo.height * targetAspect);
+    const primaryCropW = Math.floor(basePrimaryCropW * (100 / primaryZoom));
+    const primaryCropH = Math.floor(primaryInfo.height * (100 / primaryZoom));
     const primaryMaxX = primaryInfo.width - primaryCropW;
+    const primaryMaxY = primaryInfo.height - primaryCropH;
     const primaryCropX = Math.floor((primaryCropPos / 100) * primaryMaxX);
-    primaryCropFilter = `crop=${primaryCropW}:${primaryInfo.height}:${primaryCropX}:0`;
-    console.log(`[${jobId}] Primary crop: ${primaryCropW}x${primaryInfo.height} at X=${primaryCropX}`);
+    const primaryCropY = Math.floor(primaryMaxY / 2); // Center vertically
+    primaryCropFilter = `crop=${primaryCropW}:${primaryCropH}:${primaryCropX}:${primaryCropY}`;
+    console.log(`[${jobId}] Primary crop: ${primaryCropW}x${primaryCropH} at X=${primaryCropX}, Y=${primaryCropY} (zoom: ${primaryZoom}%)`);
   } else {
     // Primary is taller - crop top/bottom (center)
-    const primaryCropH = Math.floor(primaryInfo.width / targetAspect);
-    const primaryCropY = Math.floor((primaryInfo.height - primaryCropH) / 2);
-    primaryCropFilter = `crop=${primaryInfo.width}:${primaryCropH}:0:${primaryCropY}`;
+    const basePrimaryCropH = Math.floor(primaryInfo.width / targetAspect);
+    const primaryCropW = Math.floor(primaryInfo.width * (100 / primaryZoom));
+    const primaryCropH = Math.floor(basePrimaryCropH * (100 / primaryZoom));
+    const primaryMaxX = primaryInfo.width - primaryCropW;
+    const primaryMaxY = primaryInfo.height - primaryCropH;
+    const primaryCropX = Math.floor((primaryCropPos / 100) * primaryMaxX);
+    const primaryCropY = Math.floor(primaryMaxY / 2);
+    primaryCropFilter = `crop=${primaryCropW}:${primaryCropH}:${primaryCropX}:${primaryCropY}`;
+    console.log(`[${jobId}] Primary crop: ${primaryCropW}x${primaryCropH} at X=${primaryCropX}, Y=${primaryCropY} (zoom: ${primaryZoom}%)`);
   }
 
-  // Secondary video crop calculation
+  // Secondary video crop calculation with zoom support
   const secondaryInputAspect = secondaryInfo.width / secondaryInfo.height;
   let secondaryCropFilter;
   if (secondaryInputAspect > targetAspect) {
     // Secondary is wider - crop sides based on position
-    const secondaryCropW = Math.floor(secondaryInfo.height * targetAspect);
+    // Apply zoom: higher zoom = smaller crop area
+    const baseSecondaryCropW = Math.floor(secondaryInfo.height * targetAspect);
+    const secondaryCropW = Math.floor(baseSecondaryCropW * (100 / secondaryZoom));
+    const secondaryCropH = Math.floor(secondaryInfo.height * (100 / secondaryZoom));
     const secondaryMaxX = secondaryInfo.width - secondaryCropW;
+    const secondaryMaxY = secondaryInfo.height - secondaryCropH;
     const secondaryCropX = Math.floor((secondaryCropPos / 100) * secondaryMaxX);
-    secondaryCropFilter = `crop=${secondaryCropW}:${secondaryInfo.height}:${secondaryCropX}:0`;
-    console.log(`[${jobId}] Secondary crop: ${secondaryCropW}x${secondaryInfo.height} at X=${secondaryCropX}`);
+    const secondaryCropY = Math.floor(secondaryMaxY / 2); // Center vertically
+    secondaryCropFilter = `crop=${secondaryCropW}:${secondaryCropH}:${secondaryCropX}:${secondaryCropY}`;
+    console.log(`[${jobId}] Secondary crop: ${secondaryCropW}x${secondaryCropH} at X=${secondaryCropX}, Y=${secondaryCropY} (zoom: ${secondaryZoom}%)`);
   } else {
     // Secondary is taller - crop top/bottom (center)
-    const secondaryCropH = Math.floor(secondaryInfo.width / targetAspect);
-    const secondaryCropY = Math.floor((secondaryInfo.height - secondaryCropH) / 2);
-    secondaryCropFilter = `crop=${secondaryInfo.width}:${secondaryCropH}:0:${secondaryCropY}`;
+    const baseSecondaryCropH = Math.floor(secondaryInfo.width / targetAspect);
+    const secondaryCropW = Math.floor(secondaryInfo.width * (100 / secondaryZoom));
+    const secondaryCropH = Math.floor(baseSecondaryCropH * (100 / secondaryZoom));
+    const secondaryMaxX = secondaryInfo.width - secondaryCropW;
+    const secondaryMaxY = secondaryInfo.height - secondaryCropH;
+    const secondaryCropX = Math.floor((secondaryCropPos / 100) * secondaryMaxX);
+    const secondaryCropY = Math.floor(secondaryMaxY / 2);
+    secondaryCropFilter = `crop=${secondaryCropW}:${secondaryCropH}:${secondaryCropX}:${secondaryCropY}`;
+    console.log(`[${jobId}] Secondary crop: ${secondaryCropW}x${secondaryCropH} at X=${secondaryCropX}, Y=${secondaryCropY} (zoom: ${secondaryZoom}%)`);
   }
 
   // Determine video positions based on settings
   // 'top' means secondary on top, primary on bottom
   // 'bottom' means primary on top, secondary on bottom (default)
   if (position === 'top') {
-    filterComplex = `
-      [0:v]${primaryCropFilter},scale=${targetWidth}:${halfHeight},setsar=1[primary];
-      [1:v]${secondaryCropFilter},scale=${targetWidth}:${halfHeight},setsar=1[secondary];
-      [secondary][primary]vstack=inputs=2[vout]
-    `.replace(/\n\s*/g, '');
+    if (border.enabled && borderH > 0) {
+      const borderColor = (border.color || '#ffffff').replace('#', '0x');
+      filterComplex = `
+        [0:v]${primaryCropFilter},scale=${targetWidth}:${bottomHeight},setsar=1[primary];
+        [1:v]${secondaryCropFilter},scale=${targetWidth}:${topHeight},setsar=1[secondary];
+        color=c=${borderColor}:s=${targetWidth}x${borderH}:d=1[borderbar];
+        [secondary][borderbar][primary]vstack=inputs=3[vout]
+      `.replace(/\n\s*/g, '');
+    } else {
+      filterComplex = `
+        [0:v]${primaryCropFilter},scale=${targetWidth}:${bottomHeight},setsar=1[primary];
+        [1:v]${secondaryCropFilter},scale=${targetWidth}:${topHeight},setsar=1[secondary];
+        [secondary][primary]vstack=inputs=2[vout]
+      `.replace(/\n\s*/g, '');
+    }
   } else {
     // Default: primary on top, secondary on bottom
-    filterComplex = `
-      [0:v]${primaryCropFilter},scale=${targetWidth}:${halfHeight},setsar=1[primary];
-      [1:v]${secondaryCropFilter},scale=${targetWidth}:${halfHeight},setsar=1[secondary];
-      [primary][secondary]vstack=inputs=2[vout]
-    `.replace(/\n\s*/g, '');
+    if (border.enabled && borderH > 0) {
+      const borderColor = (border.color || '#ffffff').replace('#', '0x');
+      filterComplex = `
+        [0:v]${primaryCropFilter},scale=${targetWidth}:${topHeight},setsar=1[primary];
+        [1:v]${secondaryCropFilter},scale=${targetWidth}:${bottomHeight},setsar=1[secondary];
+        color=c=${borderColor}:s=${targetWidth}x${borderH}:d=1[borderbar];
+        [primary][borderbar][secondary]vstack=inputs=3[vout]
+      `.replace(/\n\s*/g, '');
+    } else {
+      filterComplex = `
+        [0:v]${primaryCropFilter},scale=${targetWidth}:${topHeight},setsar=1[primary];
+        [1:v]${secondaryCropFilter},scale=${targetWidth}:${bottomHeight},setsar=1[secondary];
+        [primary][secondary]vstack=inputs=2[vout]
+      `.replace(/\n\s*/g, '');
+    }
   }
 
   // Add caption filter if captions were generated
@@ -2831,25 +2899,72 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       const speaker1Pos = splitSettings?.speaker1?.cropPosition ?? 17;  // Default: left side
       const speaker2Pos = splitSettings?.speaker2?.cropPosition ?? 83;  // Default: right side
       const cropWidthPercent = splitSettings?.speaker1?.cropWidth ?? 33; // Default: 1/3 width
+      const layoutRatio = splitSettings?.layoutRatio ?? '50-50';  // Default: equal split
+      const border = splitSettings?.border ?? { enabled: false, thickness: 2, color: '#ffffff' };
+
+      // Phase 3: Zoom settings (100 = 1x, 200 = 2x zoom)
+      const speaker1Zoom = Math.max(100, Math.min(200, splitSettings?.speaker1?.zoom ?? 100));
+      const speaker2Zoom = Math.max(100, Math.min(200, splitSettings?.speaker2?.zoom ?? 100));
 
       console.log(`[FFmpeg] Split screen settings - Speaker1: ${speaker1Pos}%, Speaker2: ${speaker2Pos}%, Width: ${cropWidthPercent}%`);
+      console.log(`[FFmpeg] Layout ratio: ${layoutRatio}, Border: ${border.enabled ? `${border.thickness}px ${border.color}` : 'none'}`);
+      console.log(`[FFmpeg] Zoom levels - Speaker1: ${speaker1Zoom}%, Speaker2: ${speaker2Zoom}%`);
 
-      // Calculate crop dimensions based on percentage
-      const splitCropW = Math.floor(validWidth * (cropWidthPercent / 100));
-      const splitHalfH = Math.floor(targetHeight / 2);
+      // Calculate base crop dimensions based on percentage
+      const baseCropW = Math.floor(validWidth * (cropWidthPercent / 100));
+
+      // Apply zoom: higher zoom = smaller crop (e.g., 200% zoom = 50% crop width)
+      const speaker1CropW = Math.floor(baseCropW * (100 / speaker1Zoom));
+      const speaker2CropW = Math.floor(baseCropW * (100 / speaker2Zoom));
+      const speaker1CropH = Math.floor(validHeight * (100 / speaker1Zoom));
+      const speaker2CropH = Math.floor(validHeight * (100 / speaker2Zoom));
+
+      // Calculate height ratio based on layoutRatio setting
+      let topRatio = 0.5;
+      let bottomRatio = 0.5;
+      if (layoutRatio === '60-40') {
+        topRatio = 0.6;
+        bottomRatio = 0.4;
+      } else if (layoutRatio === '70-30') {
+        topRatio = 0.7;
+        bottomRatio = 0.3;
+      }
+
+      // Account for border thickness if enabled
+      const borderH = border.enabled ? Math.max(1, Math.min(10, border.thickness || 2)) : 0;
+      const usableHeight = targetHeight - borderH;
+      const topH = Math.floor(usableHeight * topRatio);
+      const bottomH = usableHeight - topH;
 
       // Calculate X positions based on percentages (0% = left edge, 100% = right edge)
-      const maxCropX = validWidth - splitCropW;
-      const speaker1X = Math.floor((speaker1Pos / 100) * maxCropX);
-      const speaker2X = Math.floor((speaker2Pos / 100) * maxCropX);
+      // Adjust max positions based on actual crop widths
+      const speaker1MaxX = validWidth - speaker1CropW;
+      const speaker2MaxX = validWidth - speaker2CropW;
+      const speaker1X = Math.floor((speaker1Pos / 100) * speaker1MaxX);
+      const speaker2X = Math.floor((speaker2Pos / 100) * speaker2MaxX);
 
-      console.log(`[FFmpeg] Split crop calculations - CropW: ${splitCropW}, MaxX: ${maxCropX}`);
-      console.log(`[FFmpeg] Speaker1 X: ${speaker1X} (${speaker1Pos}%), Speaker2 X: ${speaker2X} (${speaker2Pos}%)`);
+      // Calculate Y position for zoom (center vertically)
+      const speaker1Y = Math.floor((validHeight - speaker1CropH) / 2);
+      const speaker2Y = Math.floor((validHeight - speaker2CropH) / 2);
+
+      console.log(`[FFmpeg] Split crop calculations - Base CropW: ${baseCropW}`);
+      console.log(`[FFmpeg] Speaker1: crop=${speaker1CropW}x${speaker1CropH} at X=${speaker1X}, Y=${speaker1Y} (zoom: ${speaker1Zoom}%)`);
+      console.log(`[FFmpeg] Speaker2: crop=${speaker2CropW}x${speaker2CropH} at X=${speaker2X}, Y=${speaker2Y} (zoom: ${speaker2Zoom}%)`);
+      console.log(`[FFmpeg] Heights - Top: ${topH}, Bottom: ${bottomH}, Border: ${borderH}`);
 
       filters.push(`split[s1][s2]`);
-      filters.push(`[s1]crop=${splitCropW}:${validHeight}:${speaker1X}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[top]`);
-      filters.push(`[s2]crop=${splitCropW}:${validHeight}:${speaker2X}:0,scale=${targetWidth}:${splitHalfH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${splitHalfH}[bottom]`);
-      filters.push(`[top][bottom]vstack`);
+      filters.push(`[s1]crop=${speaker1CropW}:${speaker1CropH}:${speaker1X}:${speaker1Y},scale=${targetWidth}:${topH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topH}[top]`);
+      filters.push(`[s2]crop=${speaker2CropW}:${speaker2CropH}:${speaker2X}:${speaker2Y},scale=${targetWidth}:${bottomH}:force_original_aspect_ratio=increase,crop=${targetWidth}:${bottomH}[bottom]`);
+
+      if (border.enabled && borderH > 0) {
+        // Create a colored border bar and stack: top + border + bottom
+        // Convert hex color to FFmpeg format (0xRRGGBB)
+        const borderColor = (border.color || '#ffffff').replace('#', '0x');
+        filters.push(`color=c=${borderColor}:s=${targetWidth}x${borderH}:d=1[borderbar]`);
+        filters.push(`[top][borderbar][bottom]vstack=inputs=3`);
+      } else {
+        filters.push(`[top][bottom]vstack`);
+      }
       break;
     }
 
