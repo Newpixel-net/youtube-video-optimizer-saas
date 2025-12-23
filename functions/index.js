@@ -20099,6 +20099,7 @@ exports.wizardProcessClip = functions
       quality: outputQuality,
       settings: {
         captionStyle: clipSettings.captionStyle || 'karaoke',
+        captionSource: clipSettings.captionSource || 'primary',  // Which video's audio to use for captions
         customCaptionStyle: clipSettings.customCaptionStyle || null,
         reframeMode: clipSettings.reframeMode || 'auto_center',
         cropPosition: clipSettings.cropPosition !== undefined ? clipSettings.cropPosition : 50,

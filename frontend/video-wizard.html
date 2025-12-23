@@ -2226,6 +2226,66 @@
             object-fit: cover;
         }
 
+        /* Split screen preview play/stop buttons */
+        .split-preview-play-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            width: 70px;
+            height: 70px;
+            background: rgba(236, 72, 153, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 20px rgba(236, 72, 153, 0.4);
+        }
+
+        .split-preview-play-btn:hover {
+            background: rgba(236, 72, 153, 1);
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        .split-preview-play-btn .play-icon {
+            font-size: 1.2rem;
+        }
+
+        .split-preview-play-btn .play-label {
+            font-size: 0.55rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .split-preview-stop-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            padding: 8px 16px;
+            background: rgba(239, 68, 68, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .split-preview-stop-btn:hover {
+            background: rgba(239, 68, 68, 1);
+        }
+
         /* Three-person mode */
         .phone-video-area.reframe-three_person {
             display: grid;
@@ -2808,6 +2868,58 @@
             border-radius: 0.25rem;
             cursor: pointer;
             background: transparent;
+        }
+
+        /* Caption Source Panel (for multi-source) */
+        .caption-source-panel {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 0.5rem;
+        }
+
+        .caption-source-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .caption-source-options {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .caption-source-btn {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.375rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+        }
+
+        .caption-source-btn:hover {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .caption-source-btn.active {
+            background: rgba(59, 130, 246, 0.25);
+            border-color: rgba(59, 130, 246, 0.6);
+            color: #60a5fa;
+        }
+
+        .caption-source-btn .source-icon {
+            font-size: 0.65rem;
         }
 
         .clip-nav {
@@ -8762,11 +8874,23 @@
                     // No secondary - split primary video
                     topMedia = mediaElement;
                     bottomMedia = mediaElement;
-                    topLabel = 'Speaker 1';
-                    bottomLabel = 'Speaker 2';
+                    topLabel = 'Top';
+                    bottomLabel = 'Bottom';
                 }
                 html += '<div class="split-preview-top">' + topMedia + '<span class="split-label">' + topLabel + '</span></div>';
                 html += '<div class="split-preview-bottom">' + bottomMedia + '<span class="split-label">' + bottomLabel + '</span></div>';
+
+                // Add preview play button for split screen
+                if (!state.customization.playingInFrame) {
+                    html += '<button class="split-preview-play-btn" onclick="app.playInFrameVideo()" title="Preview split screen">';
+                    html += '<span class="play-icon">▶</span>';
+                    html += '<span class="play-label">Preview</span>';
+                    html += '</button>';
+                } else {
+                    html += '<button class="split-preview-stop-btn" onclick="app.stopInFrameVideo()" title="Stop preview">';
+                    html += '✕ Stop';
+                    html += '</button>';
+                }
             } else if (reframeMode === 'three_person') {
                 // Three person: Main top, two bottom (left=secondary, right=tertiary)
                 var mainMedia = mediaElement, leftMedia = mediaElement, rightMedia = mediaElement;
@@ -9070,6 +9194,31 @@
                 html += '</div>';
             }
 
+            // Caption Source selector (only show when multi-source split is enabled)
+            var secondarySource = settings.secondarySource || { enabled: false };
+            var hasSecondaryForCaptions = secondarySource.enabled &&
+                (secondarySource.youtubeVideoId || secondarySource.uploadedUrl) &&
+                ['split_screen', 'three_person', 'broll_split'].indexOf(settings.reframeMode) !== -1;
+
+            if (hasSecondaryForCaptions && settings.captionStyle !== 'none') {
+                html += '<div class="caption-source-panel">';
+                html += '<div class="caption-source-label">🎙️ Generate captions from:</div>';
+                html += '<div class="caption-source-options">';
+
+                var captionSource = settings.captionSource || 'primary';
+
+                html += '<button class="caption-source-btn' + (captionSource === 'primary' ? ' active' : '') + '" onclick="app.setCaptionSource(\'primary\')">';
+                html += '<span class="source-icon">▲</span> Top Video';
+                html += '</button>';
+
+                html += '<button class="caption-source-btn' + (captionSource === 'secondary' ? ' active' : '') + '" onclick="app.setCaptionSource(\'secondary\')">';
+                html += '<span class="source-icon">▼</span> Bottom Video';
+                html += '</button>';
+
+                html += '</div>';
+                html += '</div>';
+            }
+
             html += '</div>';
 
             // Reframe Panel with visual diagrams
@@ -9141,31 +9290,31 @@
 
                 html += '<div class="customization-panel split-position-panel">';
                 html += '<div class="panel-header">';
-                html += '<span class="panel-icon">📍</span>';
-                html += '<span class="panel-title">SPEAKER POSITIONS</span>';
+                html += '<span class="panel-icon">⬛</span>';
+                html += '<span class="panel-title">CLIP POSITIONS</span>';
                 html += '</div>';
 
                 // Preset buttons
                 html += '<div class="split-presets-row">';
                 html += '<button class="split-preset-btn' + (splitSettings.preset === 'interview' ? ' active' : '') + '" onclick="app.setSplitPreset(\'interview\')">';
-                html += '<span class="preset-icon">👥</span> Interview (L+R)';
+                html += '<span class="preset-icon">◧</span> Left + Right';
                 html += '</button>';
                 html += '<button class="split-preset-btn' + (splitSettings.preset === 'center' ? ' active' : '') + '" onclick="app.setSplitPreset(\'center\')">';
-                html += '<span class="preset-icon">🎯</span> Both Center';
+                html += '<span class="preset-icon">⊡</span> Both Center';
                 html += '</button>';
                 html += '<button class="split-preset-btn' + (splitSettings.preset === 'custom' ? ' active' : '') + '" onclick="app.setSplitPreset(\'custom\')">';
-                html += '<span class="preset-icon">✏️</span> Custom';
+                html += '<span class="preset-icon">✎</span> Custom';
                 html += '</button>';
                 html += '</div>';
 
-                // Speaker position sliders (show expanded when custom or always show)
+                // Position sliders (show expanded when custom or always show)
                 html += '<div class="speaker-position-controls' + (splitSettings.preset === 'custom' ? ' expanded' : '') + '">';
 
-                // Speaker 1 (Top)
+                // Top clip
                 html += '<div class="speaker-position-row">';
                 html += '<div class="speaker-position-label">';
-                html += '<span class="speaker-badge speaker-1">1</span>';
-                html += '<span>Speaker 1 (Top)</span>';
+                html += '<span class="speaker-badge speaker-1">▲</span>';
+                html += '<span>Top</span>';
                 html += '</div>';
                 html += '<div class="speaker-position-slider">';
                 html += '<span class="slider-label-left">L</span>';
@@ -9176,11 +9325,11 @@
                 html += '</div>';
                 html += '</div>';
 
-                // Speaker 2 (Bottom)
+                // Bottom clip
                 html += '<div class="speaker-position-row">';
                 html += '<div class="speaker-position-label">';
-                html += '<span class="speaker-badge speaker-2">2</span>';
-                html += '<span>Speaker 2 (Bottom)</span>';
+                html += '<span class="speaker-badge speaker-2">▼</span>';
+                html += '<span>Bottom</span>';
                 html += '</div>';
                 html += '<div class="speaker-position-slider">';
                 html += '<span class="slider-label-left">L</span>';
@@ -10002,6 +10151,7 @@
             return {
                 // Caption settings
                 captionStyle: 'karaoke',
+                captionSource: 'primary',  // Which video's audio to use for captions: 'primary' or 'secondary'
 
                 // Reframe settings
                 reframeMode: 'auto_center',
@@ -11514,6 +11664,19 @@
                     state.clipSettings[activeClip.id] = getDefaultSettings();
                 }
                 state.clipSettings[activeClip.id].captionStyle = style;
+                render();
+            },
+
+            setCaptionSource: function(source) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].captionSource = source;
+                utils.showToast('Captions will be generated from ' + (source === 'primary' ? 'Top' : 'Bottom') + ' video audio', 'info');
                 render();
             },
 
