@@ -7141,14 +7141,21 @@
                     return;
                 }
 
-                if (!state.thumbnailEditPrompt.trim()) {
-                    state.thumbnailEditError = 'Please enter what you want to change';
-                    render();
-                    return;
-                }
-
                 // Mask is OPTIONAL - if not provided, AI will edit based on prompt alone
                 var maskBase64 = app.getMaskAsBase64();
+
+                // Get prompt - if empty but mask exists, default to "remove marked area"
+                var editPrompt = state.thumbnailEditPrompt.trim();
+                if (!editPrompt) {
+                    if (maskBase64) {
+                        // User painted something but didn't write text - default to remove
+                        editPrompt = 'Remove/erase the marked area and fill with appropriate background';
+                    } else {
+                        state.thumbnailEditError = 'Please enter what you want to change, or paint an area to remove';
+                        render();
+                        return;
+                    }
+                }
 
                 state.thumbnailEditLoading = true;
                 state.thumbnailEditError = null;
@@ -7158,7 +7165,7 @@
                     var editThumbnail = firebase.functions().httpsCallable('editThumbnailWithAI');
                     var requestData = {
                         imageUrl: state.thumbnailEditingImage.url,
-                        editPrompt: state.thumbnailEditPrompt.trim()
+                        editPrompt: editPrompt
                     };
 
                     // Only include mask if user painted something
@@ -11787,13 +11794,13 @@
                     // Before
                     html += '<div class="text-center">';
                     html += '<p class="text-sm font-semibold text-gray-600 mb-2">Before</p>';
-                    html += '<img src="' + utils.escapeHtml(state.thumbnailEditResult.originalUrl) + '" class="w-full rounded-xl shadow-lg border-2 border-gray-200" style="aspect-ratio: 16/9; object-fit: cover;" />';
+                    html += '<img src="' + utils.escapeHtml(state.thumbnailEditResult.originalUrl) + '" class="w-full rounded-xl shadow-lg border-2 border-gray-200" style="max-height: 350px; object-fit: contain;" />';
                     html += '</div>';
 
                     // After
                     html += '<div class="text-center">';
                     html += '<p class="text-sm font-semibold text-green-600 mb-2">After (Edited)</p>';
-                    html += '<img src="' + utils.escapeHtml(state.thumbnailEditResult.editedUrl) + '" class="w-full rounded-xl shadow-lg border-2 border-green-400" style="aspect-ratio: 16/9; object-fit: cover;" />';
+                    html += '<img src="' + utils.escapeHtml(state.thumbnailEditResult.editedUrl) + '" class="w-full rounded-xl shadow-lg border-2 border-green-400" style="max-height: 350px; object-fit: contain;" />';
                     html += '</div>';
 
                     html += '</div>';
