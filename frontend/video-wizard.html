@@ -2313,9 +2313,21 @@
         /* Three-person mode */
         .phone-video-area.reframe-three_person {
             display: grid;
-            grid-template-rows: 1fr 1fr;
+            grid-template-rows: var(--three-top-ratio, 1fr) var(--three-bottom-ratio, 1fr);
             grid-template-columns: 1fr 1fr;
             overflow: hidden;
+            /* CSS variables for dynamic positioning (set via JavaScript) */
+            --main-scale: 1.58;
+            --main-translate-pct: 0;
+            --main-zoom: 1;
+            --left-scale: 1.58;
+            --left-translate-pct: 0;
+            --left-zoom: 1;
+            --right-scale: 1.58;
+            --right-translate-pct: 0;
+            --right-zoom: 1;
+            --three-top-ratio: 1fr;
+            --three-bottom-ratio: 1fr;
         }
 
         .phone-video-area.reframe-three_person .three-zone {
@@ -2327,34 +2339,43 @@
             grid-column: 1 / -1;
         }
 
-        .phone-video-area.reframe-three_person .three-zone iframe,
-        .phone-video-area.reframe-three_person .three-zone img,
-        .phone-video-area.reframe-three_person .three-zone video {
-            width: 200%;
-            height: 200%;
-            object-fit: cover;
-        }
-
+        /* Main (top) video - uses dynamic scale and position */
         .phone-video-area.reframe-three_person .three-zone-main iframe,
         .phone-video-area.reframe-three_person .three-zone-main img,
         .phone-video-area.reframe-three_person .three-zone-main video {
             position: absolute;
+            width: calc(var(--main-scale, 1.58) * var(--main-zoom, 1) * 100%);
+            height: 100%;
+            top: 0;
             left: 50%;
-            transform: translateX(-50%);
+            object-fit: cover;
+            transform: translateX(calc(-50% + var(--main-translate-pct, 0) * var(--main-zoom, 1) * 1%));
         }
 
+        /* Left (bottom-left) video - uses dynamic scale and position */
         .phone-video-area.reframe-three_person .three-zone-left iframe,
         .phone-video-area.reframe-three_person .three-zone-left img,
         .phone-video-area.reframe-three_person .three-zone-left video {
             position: absolute;
-            left: 0;
+            width: calc(var(--left-scale, 1.58) * var(--left-zoom, 1) * 100%);
+            height: 100%;
+            top: 0;
+            left: 50%;
+            object-fit: cover;
+            transform: translateX(calc(-50% + var(--left-translate-pct, 0) * var(--left-zoom, 1) * 1%));
         }
 
+        /* Right (bottom-right) video - uses dynamic scale and position */
         .phone-video-area.reframe-three_person .three-zone-right iframe,
         .phone-video-area.reframe-three_person .three-zone-right img,
         .phone-video-area.reframe-three_person .three-zone-right video {
             position: absolute;
-            right: 0;
+            width: calc(var(--right-scale, 1.58) * var(--right-zoom, 1) * 100%);
+            height: 100%;
+            top: 0;
+            left: 50%;
+            object-fit: cover;
+            transform: translateX(calc(-50% + var(--right-translate-pct, 0) * var(--right-zoom, 1) * 1%));
         }
 
         .phone-video-area.reframe-three_person .zone-label {
@@ -2371,16 +2392,41 @@
             z-index: 5;
         }
 
-        /* Multi-source three person mode - center all zones */
-        .phone-video-area.reframe-three_person.multi-source .three-zone iframe,
-        .phone-video-area.reframe-three_person.multi-source .three-zone img,
-        .phone-video-area.reframe-three_person.multi-source .three-zone video {
+        /* Multi-source three person mode - same dynamic positioning */
+        .phone-video-area.reframe-three_person.multi-source .three-zone-main iframe,
+        .phone-video-area.reframe-three_person.multi-source .three-zone-main img,
+        .phone-video-area.reframe-three_person.multi-source .three-zone-main video {
             position: absolute;
-            width: 200%;
+            width: calc(var(--main-scale, 1.58) * var(--main-zoom, 1) * 100%);
             height: 100%;
+            top: 0;
             left: 50%;
-            transform: translateX(-50%);
             object-fit: cover;
+            transform: translateX(calc(-50% + var(--main-translate-pct, 0) * var(--main-zoom, 1) * 1%));
+        }
+
+        .phone-video-area.reframe-three_person.multi-source .three-zone-left iframe,
+        .phone-video-area.reframe-three_person.multi-source .three-zone-left img,
+        .phone-video-area.reframe-three_person.multi-source .three-zone-left video {
+            position: absolute;
+            width: calc(var(--left-scale, 1.58) * var(--left-zoom, 1) * 100%);
+            height: 100%;
+            top: 0;
+            left: 50%;
+            object-fit: cover;
+            transform: translateX(calc(-50% + var(--left-translate-pct, 0) * var(--left-zoom, 1) * 1%));
+        }
+
+        .phone-video-area.reframe-three_person.multi-source .three-zone-right iframe,
+        .phone-video-area.reframe-three_person.multi-source .three-zone-right img,
+        .phone-video-area.reframe-three_person.multi-source .three-zone-right video {
+            position: absolute;
+            width: calc(var(--right-scale, 1.58) * var(--right-zoom, 1) * 100%);
+            height: 100%;
+            top: 0;
+            left: 50%;
+            object-fit: cover;
+            transform: translateX(calc(-50% + var(--right-translate-pct, 0) * var(--right-zoom, 1) * 1%));
         }
 
         /* Gameplay mode */
@@ -9197,7 +9243,71 @@
                 splitCssVars += ' --split-border-color: ' + borderColor + ';';
             }
 
-            html += '<div class="' + videoAreaClasses + '" data-crop-percent="' + cropPosPercent + '" style="--crop-position: ' + objectPosX + ';' + splitCssVars + '">';
+            // Calculate CSS variables for three_person mode
+            var threeCssVars = '';
+            if (reframeMode === 'three_person') {
+                var threeSettings = settings.threePersonSettings || {
+                    main: { cropPosition: 50, zoom: 100 },
+                    left: { cropPosition: 50, zoom: 100 },
+                    right: { cropPosition: 50, zoom: 100 },
+                    layoutRatio: '50-50',
+                    preset: 'center'
+                };
+                var mainPos = threeSettings.main?.cropPosition ?? 50;
+                var leftPos = threeSettings.left?.cropPosition ?? 50;
+                var rightPos = threeSettings.right?.cropPosition ?? 50;
+
+                // Calculate layout ratio
+                var layoutRatio = threeSettings.layoutRatio || '50-50';
+                var topHeightFraction = 0.5, bottomHeightFraction = 0.5;
+                var topRatioFr = '1fr', bottomRatioFr = '1fr';
+                if (layoutRatio === '60-40') {
+                    topHeightFraction = 0.6; bottomHeightFraction = 0.4;
+                    topRatioFr = '1.5fr'; bottomRatioFr = '1fr';
+                } else if (layoutRatio === '70-30') {
+                    topHeightFraction = 0.7; bottomHeightFraction = 0.3;
+                    topRatioFr = '2.33fr'; bottomRatioFr = '1fr';
+                }
+
+                // Calculate scale factors based on aspect ratios
+                // Assume 16:9 input for YouTube videos, 9:16 output
+                var inputAspect = 16 / 9;  // 1.778
+                var outputAspect = 9 / 16; // 0.5625
+
+                // Main (top) takes full width, variable height
+                var mainAspect = outputAspect / topHeightFraction;
+                var mainScale = inputAspect / mainAspect;
+
+                // Left and Right (bottom) each take half width, variable height
+                // Bottom zone aspect = (outputWidth/2) / bottomHeight = (outputAspect/2) / bottomHeightFraction
+                var bottomZoneAspect = (outputAspect / 2) / bottomHeightFraction;
+                var bottomScale = inputAspect / bottomZoneAspect;
+
+                // Calculate translate values: offset = (50 - position) * (scale - 1)
+                var mainTranslate = (50 - mainPos) * (mainScale - 1);
+                var leftTranslate = (50 - leftPos) * (bottomScale - 1);
+                var rightTranslate = (50 - rightPos) * (bottomScale - 1);
+
+                // Zoom settings (100 = 1x, 200 = 2x)
+                var mainZoom = (threeSettings.main?.zoom || 100) / 100;
+                var leftZoom = (threeSettings.left?.zoom || 100) / 100;
+                var rightZoom = (threeSettings.right?.zoom || 100) / 100;
+
+                // Set CSS variables
+                threeCssVars = ' --main-scale: ' + mainScale.toFixed(4) + ';';
+                threeCssVars += ' --main-translate-pct: ' + mainTranslate.toFixed(2) + ';';
+                threeCssVars += ' --main-zoom: ' + mainZoom + ';';
+                threeCssVars += ' --left-scale: ' + bottomScale.toFixed(4) + ';';
+                threeCssVars += ' --left-translate-pct: ' + leftTranslate.toFixed(2) + ';';
+                threeCssVars += ' --left-zoom: ' + leftZoom + ';';
+                threeCssVars += ' --right-scale: ' + bottomScale.toFixed(4) + ';';
+                threeCssVars += ' --right-translate-pct: ' + rightTranslate.toFixed(2) + ';';
+                threeCssVars += ' --right-zoom: ' + rightZoom + ';';
+                threeCssVars += ' --three-top-ratio: ' + topRatioFr + ';';
+                threeCssVars += ' --three-bottom-ratio: ' + bottomRatioFr + ';';
+            }
+
+            html += '<div class="' + videoAreaClasses + '" data-crop-percent="' + cropPosPercent + '" style="--crop-position: ' + objectPosX + ';' + splitCssVars + threeCssVars + '">';
 
             // Generate reframe-specific content
             // Determine which media goes where based on secondary position
@@ -9768,6 +9878,149 @@
                     html += 'onchange="app.setBorderColor(this.value)" title="Line color">';
                     html += '</div>';
                 }
+                html += '</div>';
+                html += '</div>';
+
+                html += '</div>'; // customization-panel
+            }
+
+            // Three Person Position Controls (only show when three_person mode is selected)
+            if (settings.reframeMode === 'three_person') {
+                var threeSettings = settings.threePersonSettings || {
+                    main: { cropPosition: 50, zoom: 100 },
+                    left: { cropPosition: 50, zoom: 100 },
+                    right: { cropPosition: 50, zoom: 100 },
+                    preset: 'center',
+                    layoutRatio: '50-50'
+                };
+
+                html += '<div class="customization-panel split-position-panel">';
+                html += '<div class="panel-header">';
+                html += '<span class="panel-icon">⬛</span>';
+                html += '<span class="panel-title">CLIP POSITIONS</span>';
+                html += '</div>';
+
+                // Preset buttons
+                html += '<div class="split-presets-row">';
+                html += '<button class="split-preset-btn' + (threeSettings.preset === 'center' ? ' active' : '') + '" onclick="app.setThreePersonPreset(\'center\')">';
+                html += '<span class="preset-icon">⊡</span> All Center';
+                html += '</button>';
+                html += '<button class="split-preset-btn' + (threeSettings.preset === 'custom' ? ' active' : '') + '" onclick="app.setThreePersonPreset(\'custom\')">';
+                html += '<span class="preset-icon">✎</span> Custom';
+                html += '</button>';
+                html += '</div>';
+
+                // Position sliders
+                html += '<div class="speaker-position-controls expanded">';
+
+                // Main (top) clip
+                html += '<div class="speaker-position-row">';
+                html += '<div class="speaker-position-label">';
+                html += '<span class="speaker-badge speaker-1">▲</span>';
+                html += '<span>Main</span>';
+                html += '</div>';
+                html += '<div class="speaker-position-slider">';
+                html += '<span class="slider-label-left">L</span>';
+                html += '<input type="range" min="0" max="100" value="' + (threeSettings.main?.cropPosition ?? 50) + '" ';
+                html += 'oninput="app.onThreePersonPositionChange(\'main\', this.value)" onchange="app.setThreePersonPosition(\'main\', this.value)">';
+                html += '<span class="slider-label-right">R</span>';
+                html += '<span class="speaker-position-value">' + (threeSettings.main?.cropPosition ?? 50) + '%</span>';
+                html += '</div>';
+                html += '</div>';
+
+                // Left (bottom-left) clip
+                html += '<div class="speaker-position-row">';
+                html += '<div class="speaker-position-label">';
+                html += '<span class="speaker-badge speaker-2">◀</span>';
+                html += '<span>Left</span>';
+                html += '</div>';
+                html += '<div class="speaker-position-slider">';
+                html += '<span class="slider-label-left">L</span>';
+                html += '<input type="range" min="0" max="100" value="' + (threeSettings.left?.cropPosition ?? 50) + '" ';
+                html += 'oninput="app.onThreePersonPositionChange(\'left\', this.value)" onchange="app.setThreePersonPosition(\'left\', this.value)">';
+                html += '<span class="slider-label-right">R</span>';
+                html += '<span class="speaker-position-value">' + (threeSettings.left?.cropPosition ?? 50) + '%</span>';
+                html += '</div>';
+                html += '</div>';
+
+                // Right (bottom-right) clip
+                html += '<div class="speaker-position-row">';
+                html += '<div class="speaker-position-label">';
+                html += '<span class="speaker-badge" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">▶</span>';
+                html += '<span>Right</span>';
+                html += '</div>';
+                html += '<div class="speaker-position-slider">';
+                html += '<span class="slider-label-left">L</span>';
+                html += '<input type="range" min="0" max="100" value="' + (threeSettings.right?.cropPosition ?? 50) + '" ';
+                html += 'oninput="app.onThreePersonPositionChange(\'right\', this.value)" onchange="app.setThreePersonPosition(\'right\', this.value)">';
+                html += '<span class="slider-label-right">R</span>';
+                html += '<span class="speaker-position-value">' + (threeSettings.right?.cropPosition ?? 50) + '%</span>';
+                html += '</div>';
+                html += '</div>';
+
+                html += '</div>'; // speaker-position-controls
+
+                // Zoom Controls Section
+                html += '<div class="split-layout-section">';
+                html += '<div class="split-section-label">Zoom Level</div>';
+                html += '<div class="zoom-controls-grid">';
+
+                // Main zoom
+                var mainZoom = threeSettings.main?.zoom || 100;
+                html += '<div class="zoom-control-row">';
+                html += '<span class="zoom-clip-label"><span class="speaker-badge speaker-1">▲</span> Main</span>';
+                html += '<div class="zoom-slider-wrap">';
+                html += '<input type="range" class="zoom-slider" min="100" max="200" value="' + mainZoom + '" ';
+                html += 'oninput="app.onThreePersonZoomChange(\'main\', this.value)" onchange="app.setThreePersonZoom(\'main\', this.value)">';
+                html += '<span class="zoom-value">' + mainZoom + '%</span>';
+                html += '</div>';
+                html += '<button class="zoom-reset-btn" onclick="app.setThreePersonZoom(\'main\', 100)" title="Reset to 100%">↺</button>';
+                html += '</div>';
+
+                // Left zoom
+                var leftZoom = threeSettings.left?.zoom || 100;
+                html += '<div class="zoom-control-row">';
+                html += '<span class="zoom-clip-label"><span class="speaker-badge speaker-2">◀</span> Left</span>';
+                html += '<div class="zoom-slider-wrap">';
+                html += '<input type="range" class="zoom-slider" min="100" max="200" value="' + leftZoom + '" ';
+                html += 'oninput="app.onThreePersonZoomChange(\'left\', this.value)" onchange="app.setThreePersonZoom(\'left\', this.value)">';
+                html += '<span class="zoom-value">' + leftZoom + '%</span>';
+                html += '</div>';
+                html += '<button class="zoom-reset-btn" onclick="app.setThreePersonZoom(\'left\', 100)" title="Reset to 100%">↺</button>';
+                html += '</div>';
+
+                // Right zoom
+                var rightZoom = threeSettings.right?.zoom || 100;
+                html += '<div class="zoom-control-row">';
+                html += '<span class="zoom-clip-label"><span class="speaker-badge" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">▶</span> Right</span>';
+                html += '<div class="zoom-slider-wrap">';
+                html += '<input type="range" class="zoom-slider" min="100" max="200" value="' + rightZoom + '" ';
+                html += 'oninput="app.onThreePersonZoomChange(\'right\', this.value)" onchange="app.setThreePersonZoom(\'right\', this.value)">';
+                html += '<span class="zoom-value">' + rightZoom + '%</span>';
+                html += '</div>';
+                html += '<button class="zoom-reset-btn" onclick="app.setThreePersonZoom(\'right\', 100)" title="Reset to 100%">↺</button>';
+                html += '</div>';
+
+                html += '</div>'; // zoom-controls-grid
+                html += '</div>'; // split-layout-section
+
+                // Layout Ratio Section
+                html += '<div class="split-layout-section">';
+                html += '<div class="split-section-label">Layout Ratio</div>';
+                html += '<div class="layout-ratio-options">';
+                var layoutRatio = threeSettings.layoutRatio || '50-50';
+                html += '<button class="layout-ratio-btn' + (layoutRatio === '50-50' ? ' active' : '') + '" onclick="app.setThreePersonLayoutRatio(\'50-50\')">';
+                html += '<span class="ratio-visual"><span class="ratio-top" style="flex:1"></span><span class="ratio-bottom" style="flex:1"></span></span>';
+                html += '<span class="ratio-label">50/50</span>';
+                html += '</button>';
+                html += '<button class="layout-ratio-btn' + (layoutRatio === '60-40' ? ' active' : '') + '" onclick="app.setThreePersonLayoutRatio(\'60-40\')">';
+                html += '<span class="ratio-visual"><span class="ratio-top" style="flex:1.5"></span><span class="ratio-bottom" style="flex:1"></span></span>';
+                html += '<span class="ratio-label">60/40</span>';
+                html += '</button>';
+                html += '<button class="layout-ratio-btn' + (layoutRatio === '70-30' ? ' active' : '') + '" onclick="app.setThreePersonLayoutRatio(\'70-30\')">';
+                html += '<span class="ratio-visual"><span class="ratio-top" style="flex:2.33"></span><span class="ratio-bottom" style="flex:1"></span></span>';
+                html += '<span class="ratio-label">70/30</span>';
+                html += '</button>';
                 html += '</div>';
                 html += '</div>';
 
@@ -10607,6 +10860,24 @@
                         thickness: 2,      // 1-10 pixels
                         color: '#ffffff'   // Border color
                     }
+                },
+
+                // Three person specific settings (for three_person mode)
+                threePersonSettings: {
+                    main: {
+                        cropPosition: 50,  // Default: center (0-100%)
+                        zoom: 100          // Zoom level: 100% = fit, >100 = zoom in
+                    },
+                    left: {
+                        cropPosition: 50,  // Default: center (0-100%)
+                        zoom: 100
+                    },
+                    right: {
+                        cropPosition: 50,  // Default: center (0-100%)
+                        zoom: 100
+                    },
+                    preset: 'center',      // 'center', 'custom'
+                    layoutRatio: '50-50'   // '50-50', '60-40', '70-30' (top-bottom percentages)
                 },
 
                 // Timeline/trim settings
@@ -12443,6 +12714,213 @@
                 if (phoneVideoArea) {
                     phoneVideoArea.style.setProperty('--speaker' + speaker + '-zoom', (zoomNum / 100));
                 }
+            },
+
+            // ===== THREE PERSON MODE HANDLERS =====
+
+            setThreePersonPreset: function(preset) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].threePersonSettings) {
+                    state.clipSettings[activeClip.id].threePersonSettings = {
+                        main: { cropPosition: 50, zoom: 100 },
+                        left: { cropPosition: 50, zoom: 100 },
+                        right: { cropPosition: 50, zoom: 100 },
+                        preset: 'center',
+                        layoutRatio: '50-50'
+                    };
+                }
+
+                var currentSettings = state.clipSettings[activeClip.id].threePersonSettings;
+                var existingZooms = {
+                    main: currentSettings.main?.zoom || 100,
+                    left: currentSettings.left?.zoom || 100,
+                    right: currentSettings.right?.zoom || 100
+                };
+                var existingLayoutRatio = currentSettings.layoutRatio || '50-50';
+
+                switch(preset) {
+                    case 'center':
+                        currentSettings.main = { cropPosition: 50, zoom: existingZooms.main };
+                        currentSettings.left = { cropPosition: 50, zoom: existingZooms.left };
+                        currentSettings.right = { cropPosition: 50, zoom: existingZooms.right };
+                        currentSettings.preset = 'center';
+                        break;
+                    case 'custom':
+                        currentSettings.preset = 'custom';
+                        break;
+                    default:
+                        currentSettings.main = { cropPosition: 50, zoom: existingZooms.main };
+                        currentSettings.left = { cropPosition: 50, zoom: existingZooms.left };
+                        currentSettings.right = { cropPosition: 50, zoom: existingZooms.right };
+                        currentSettings.preset = 'center';
+                }
+                currentSettings.layoutRatio = existingLayoutRatio;
+                render();
+            },
+
+            setThreePersonPosition: function(zone, position) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].threePersonSettings) {
+                    state.clipSettings[activeClip.id].threePersonSettings = {
+                        main: { cropPosition: 50, zoom: 100 },
+                        left: { cropPosition: 50, zoom: 100 },
+                        right: { cropPosition: 50, zoom: 100 },
+                        preset: 'center',
+                        layoutRatio: '50-50'
+                    };
+                }
+
+                var posNum = parseInt(position, 10);
+                if (isNaN(posNum)) posNum = 50;
+                posNum = Math.max(0, Math.min(100, posNum));
+
+                if (!state.clipSettings[activeClip.id].threePersonSettings[zone]) {
+                    state.clipSettings[activeClip.id].threePersonSettings[zone] = { cropPosition: 50, zoom: 100 };
+                }
+                state.clipSettings[activeClip.id].threePersonSettings[zone].cropPosition = posNum;
+                state.clipSettings[activeClip.id].threePersonSettings.preset = 'custom';
+                render();
+            },
+
+            onThreePersonPositionChange: function(zone, position) {
+                var posNum = parseInt(position, 10);
+                if (isNaN(posNum)) posNum = 50;
+                posNum = Math.max(0, Math.min(100, posNum));
+
+                // Update value display
+                var zoneIndex = { 'main': 0, 'left': 1, 'right': 2 }[zone];
+                var sliderRows = document.querySelectorAll('.speaker-position-row');
+                if (sliderRows[zoneIndex]) {
+                    var valueDisplay = sliderRows[zoneIndex].querySelector('.speaker-position-value');
+                    if (valueDisplay) {
+                        valueDisplay.textContent = posNum + '%';
+                    }
+                }
+
+                // Update preview in real-time
+                var phoneVideoArea = document.querySelector('.phone-video-area');
+                if (phoneVideoArea) {
+                    var translateValue = this.calculateThreePersonTranslate(zone, posNum);
+                    var cssVarName = '--' + zone + '-translate-pct';
+                    phoneVideoArea.style.setProperty(cssVarName, translateValue);
+                }
+            },
+
+            calculateThreePersonTranslate: function(zone, position) {
+                // Get current layout ratio from state
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                var layoutRatio = '50-50';
+                if (activeClip && state.clipSettings[activeClip.id]?.threePersonSettings?.layoutRatio) {
+                    layoutRatio = state.clipSettings[activeClip.id].threePersonSettings.layoutRatio;
+                }
+
+                var inputAspect = 16 / 9;
+                var outputAspect = 9 / 16;
+                var topHeightFraction = 0.5, bottomHeightFraction = 0.5;
+                if (layoutRatio === '60-40') {
+                    topHeightFraction = 0.6; bottomHeightFraction = 0.4;
+                } else if (layoutRatio === '70-30') {
+                    topHeightFraction = 0.7; bottomHeightFraction = 0.3;
+                }
+
+                var scale;
+                if (zone === 'main') {
+                    var mainAspect = outputAspect / topHeightFraction;
+                    scale = inputAspect / mainAspect;
+                } else {
+                    var bottomZoneAspect = (outputAspect / 2) / bottomHeightFraction;
+                    scale = inputAspect / bottomZoneAspect;
+                }
+
+                return (50 - position) * (scale - 1);
+            },
+
+            setThreePersonZoom: function(zone, zoom) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].threePersonSettings) {
+                    state.clipSettings[activeClip.id].threePersonSettings = {
+                        main: { cropPosition: 50, zoom: 100 },
+                        left: { cropPosition: 50, zoom: 100 },
+                        right: { cropPosition: 50, zoom: 100 },
+                        preset: 'center',
+                        layoutRatio: '50-50'
+                    };
+                }
+
+                var zoomNum = parseInt(zoom, 10);
+                if (isNaN(zoomNum)) zoomNum = 100;
+                zoomNum = Math.max(100, Math.min(200, zoomNum));
+
+                if (!state.clipSettings[activeClip.id].threePersonSettings[zone]) {
+                    state.clipSettings[activeClip.id].threePersonSettings[zone] = { cropPosition: 50, zoom: 100 };
+                }
+                state.clipSettings[activeClip.id].threePersonSettings[zone].zoom = zoomNum;
+                render();
+            },
+
+            onThreePersonZoomChange: function(zone, zoom) {
+                var zoomNum = parseInt(zoom, 10);
+                if (isNaN(zoomNum)) zoomNum = 100;
+                zoomNum = Math.max(100, Math.min(200, zoomNum));
+
+                // Update zoom value display
+                var zoneIndex = { 'main': 0, 'left': 1, 'right': 2 }[zone];
+                var zoomRows = document.querySelectorAll('.zoom-control-row');
+                if (zoomRows[zoneIndex]) {
+                    var zoomValue = zoomRows[zoneIndex].querySelector('.zoom-value');
+                    if (zoomValue) {
+                        zoomValue.textContent = zoomNum + '%';
+                    }
+                }
+
+                // Update preview in real-time
+                var phoneVideoArea = document.querySelector('.phone-video-area');
+                if (phoneVideoArea) {
+                    var cssVarName = '--' + zone + '-zoom';
+                    phoneVideoArea.style.setProperty(cssVarName, (zoomNum / 100));
+                }
+            },
+
+            setThreePersonLayoutRatio: function(ratio) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].threePersonSettings) {
+                    state.clipSettings[activeClip.id].threePersonSettings = {
+                        main: { cropPosition: 50, zoom: 100 },
+                        left: { cropPosition: 50, zoom: 100 },
+                        right: { cropPosition: 50, zoom: 100 },
+                        preset: 'center',
+                        layoutRatio: '50-50'
+                    };
+                }
+                state.clipSettings[activeClip.id].threePersonSettings.layoutRatio = ratio;
+                render();
             },
 
             toggleAdvancedOptions: function() {
