@@ -20002,6 +20002,18 @@ exports.wizardProcessClip = functions
     console.log(`[wizardProcessClip] clipSettings.reframeMode: ${clipSettings.reframeMode}`);
     console.log(`[wizardProcessClip] ==========================================`);
 
+    // Log multi-source settings for three_person debugging
+    console.log(`[wizardProcessClip] ========== MULTI-SOURCE DEBUG ==========`);
+    console.log(`[wizardProcessClip] secondarySource exists: ${!!clipSettings.secondarySource}`);
+    console.log(`[wizardProcessClip] secondarySource.enabled: ${clipSettings.secondarySource?.enabled}`);
+    console.log(`[wizardProcessClip] secondarySource.youtubeVideoId: ${clipSettings.secondarySource?.youtubeVideoId}`);
+    console.log(`[wizardProcessClip] secondarySource.uploadedUrl: ${clipSettings.secondarySource?.uploadedUrl ? 'YES' : 'NO'}`);
+    console.log(`[wizardProcessClip] tertiarySource exists: ${!!clipSettings.tertiarySource}`);
+    console.log(`[wizardProcessClip] tertiarySource.enabled: ${clipSettings.tertiarySource?.enabled}`);
+    console.log(`[wizardProcessClip] tertiarySource.youtubeVideoId: ${clipSettings.tertiarySource?.youtubeVideoId}`);
+    console.log(`[wizardProcessClip] tertiarySource.uploadedUrl: ${clipSettings.tertiarySource?.uploadedUrl ? 'YES' : 'NO'}`);
+    console.log(`[wizardProcessClip] ==========================================`);
+
     // SOURCE ASSET PRIORITY:
     // 1. extensionCaptureData - ALWAYS preferred when provided (clip-specific capture)
     // 2. sourceAsset - full source video stored during analysis
