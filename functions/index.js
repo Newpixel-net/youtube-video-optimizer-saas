@@ -21808,37 +21808,27 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
     if (deleteAll || cleanAllStorage) {
       console.log('[adminBulkDeleteWizardProjects] Cleaning ALL storage files...');
 
-      // Delete all files in processed-clips/ (THIS IS WHERE EXPORTED CLIPS ARE!)
-      const [processedClips] = await bucket.getFiles({ prefix: 'processed-clips/' });
-      for (const file of processedClips) {
-        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
-        deletedFilesCount++;
-      }
-      console.log(`[adminBulkDeleteWizardProjects] Deleted ${processedClips.length} files from processed-clips/`);
+      // All storage folders that the Video Wizard uses
+      const storageFolders = [
+        'processed-clips/',     // Exported processed clips (video-processor)
+        'extension-uploads/',   // Extension video/audio captures
+        'uploads/',             // Frontend: file uploads, export captures, parallel exports
+        'thumbnails-pro/',      // Pro thumbnail generator (Gemini, DALL-E, Imagen)
+        'wizard-thumbnails/',   // Wizard clip AI thumbnails
+        'wizard-videos/',       // Legacy - may not exist
+        'video-uploads/',       // Legacy - may not exist
+      ];
 
-      // Delete all files in extension-uploads/
-      const [extensionFiles] = await bucket.getFiles({ prefix: 'extension-uploads/' });
-      for (const file of extensionFiles) {
-        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
-        deletedFilesCount++;
+      for (const folder of storageFolders) {
+        const [files] = await bucket.getFiles({ prefix: folder });
+        for (const file of files) {
+          await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
+          deletedFilesCount++;
+        }
+        if (files.length > 0) {
+          console.log(`[adminBulkDeleteWizardProjects] Deleted ${files.length} files from ${folder}`);
+        }
       }
-      console.log(`[adminBulkDeleteWizardProjects] Deleted ${extensionFiles.length} files from extension-uploads/`);
-
-      // Delete all files in wizard-videos/ (if exists)
-      const [wizardFiles] = await bucket.getFiles({ prefix: 'wizard-videos/' });
-      for (const file of wizardFiles) {
-        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
-        deletedFilesCount++;
-      }
-      console.log(`[adminBulkDeleteWizardProjects] Deleted ${wizardFiles.length} files from wizard-videos/`);
-
-      // Delete all files in video-uploads/ (wizard related)
-      const [uploadFiles] = await bucket.getFiles({ prefix: 'video-uploads/' });
-      for (const file of uploadFiles) {
-        await file.delete().catch((e) => console.warn(`Failed to delete ${file.name}:`, e.message));
-        deletedFilesCount++;
-      }
-      console.log(`[adminBulkDeleteWizardProjects] Deleted ${uploadFiles.length} files from video-uploads/`);
     }
 
     console.log(`[adminBulkDeleteWizardProjects] Total: Deleted ${deletedCount} projects, ${deletedFilesCount} files`);
@@ -21924,15 +21914,16 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
     console.log(`[adminCleanWizardStorage] Starting cleanup, bucket: ${STORAGE_BUCKET}, dryRun: ${dryRun}`);
 
     // Check all possible storage locations used by Video Wizard
+    // IMPORTANT: These must match the ACTUAL folder names in Firebase Storage
     const storagePrefixes = [
-      'processed-clips/',    // THIS IS WHERE EXPORTED CLIPS ARE STORED
-      'extension-uploads/',
-      'wizard-videos/',
-      'video-uploads/',
-      'wizard-exports/',
-      'clip-exports/',
-      'thumbnails/',
-      'temp/'
+      'processed-clips/',     // Exported processed clips (video-processor)
+      'extension-uploads/',   // Extension video/audio captures
+      'uploads/',             // Frontend: file uploads, export captures, parallel exports (HIGH IMPACT!)
+      'thumbnails-pro/',      // Pro thumbnail generator (Gemini, DALL-E, Imagen)
+      'wizard-thumbnails/',   // Wizard clip AI thumbnails
+      'wizard-videos/',       // Legacy - may not exist
+      'video-uploads/',       // Legacy - may not exist
+      'temp/'                 // Temporary files
     ];
 
     let totalFiles = 0;
