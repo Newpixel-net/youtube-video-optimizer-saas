@@ -6783,12 +6783,21 @@
             _editLastX: 0,
             _editLastY: 0,
             _editCanvasReady: false,
+            _editListenersAttached: false,
 
             // Initialize the canvas for editing
             initThumbnailEditCanvas: function() {
+                console.log('initThumbnailEditCanvas called');
+
                 var canvas = document.getElementById('thumbnail-edit-canvas');
-                if (!canvas || !state.thumbnailEditingImage) {
-                    console.log('Canvas init failed: canvas or image missing');
+                if (!canvas) {
+                    console.log('Canvas element not found, retrying in 200ms');
+                    setTimeout(function() { app.initThumbnailEditCanvas(); }, 200);
+                    return;
+                }
+
+                if (!state.thumbnailEditingImage) {
+                    console.log('No image to edit');
                     return;
                 }
 
@@ -6796,16 +6805,24 @@
                 app._editDrawing = false;
                 app._editCanvasReady = false;
 
+                // Set up document-level event listeners (only once)
+                if (!app._editListenersAttached) {
+                    app.setupEditEventListeners();
+                    app._editListenersAttached = true;
+                }
+
                 var ctx = canvas.getContext('2d');
                 var img = new Image();
                 img.crossOrigin = 'anonymous';
 
                 img.onload = function() {
-                    // Set canvas size - maintain aspect ratio, max width 700px
-                    var maxWidth = 700;
+                    console.log('Image loaded:', img.width, 'x', img.height);
+
+                    // Set canvas size - maintain aspect ratio, max width 650px
+                    var maxWidth = 650;
                     var scale = Math.min(1, maxWidth / img.width);
-                    canvas.width = img.width * scale;
-                    canvas.height = img.height * scale;
+                    canvas.width = Math.floor(img.width * scale);
+                    canvas.height = Math.floor(img.height * scale);
 
                     // Store original dimensions for export
                     canvas.dataset.originalWidth = img.width;
@@ -6815,7 +6832,14 @@
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
                     // Store original image data
-                    state.thumbnailEditOriginalData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    try {
+                        state.thumbnailEditOriginalData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    } catch (e) {
+                        console.error('Failed to get image data (CORS?):', e);
+                        state.thumbnailEditError = 'Cannot edit this image due to security restrictions.';
+                        render();
+                        return;
+                    }
 
                     // Create mask canvas (overlay)
                     var maskCanvas = document.createElement('canvas');
@@ -6831,96 +6855,105 @@
                     // Mark canvas as ready
                     app._editCanvasReady = true;
 
-                    // Attach event listeners AFTER canvas is ready
-                    app.attachCanvasListeners(canvas);
+                    // Set cursor
+                    canvas.style.cursor = 'crosshair';
 
-                    console.log('Thumbnail edit canvas initialized:', canvas.width, 'x', canvas.height);
+                    console.log('Canvas ready for drawing:', canvas.width, 'x', canvas.height);
                 };
 
-                img.onerror = function() {
-                    console.error('Failed to load image for editing');
-                    state.thumbnailEditError = 'Failed to load image for editing. Please try again.';
+                img.onerror = function(e) {
+                    console.error('Failed to load image:', e);
+                    state.thumbnailEditError = 'Failed to load image. Please try again.';
                     render();
                 };
 
                 img.src = state.thumbnailEditingImage.url;
             },
 
-            // Attach event listeners to canvas
-            attachCanvasListeners: function(canvas) {
-                // Remove any existing listeners by cloning and replacing
-                var newCanvas = canvas.cloneNode(true);
-                canvas.parentNode.replaceChild(newCanvas, canvas);
-                canvas = newCanvas;
+            // Setup document-level event listeners for drawing
+            setupEditEventListeners: function() {
+                console.log('Setting up edit event listeners');
 
-                // Redraw the image on the new canvas (cloneNode doesn't copy canvas content)
-                if (state.thumbnailEditOriginalData) {
-                    var ctx = canvas.getContext('2d');
-                    ctx.putImageData(state.thumbnailEditOriginalData, 0, 0);
-                }
+                // Mouse events at document level
+                document.addEventListener('mousedown', function(e) {
+                    var canvas = document.getElementById('thumbnail-edit-canvas');
+                    if (!canvas || e.target !== canvas || !app._editCanvasReady) return;
 
-                // Mouse events
-                canvas.addEventListener('mousedown', function(e) {
-                    if (!app._editCanvasReady) return;
                     e.preventDefault();
                     app._editDrawing = true;
+
                     var rect = canvas.getBoundingClientRect();
-                    app._editLastX = (e.clientX - rect.left) * (canvas.width / rect.width);
-                    app._editLastY = (e.clientY - rect.top) * (canvas.height / rect.height);
+                    var scaleX = canvas.width / rect.width;
+                    var scaleY = canvas.height / rect.height;
+                    app._editLastX = (e.clientX - rect.left) * scaleX;
+                    app._editLastY = (e.clientY - rect.top) * scaleY;
+
                     app.saveEditHistory();
                     app.paintMask(app._editLastX, app._editLastY);
                 });
 
-                canvas.addEventListener('mousemove', function(e) {
+                document.addEventListener('mousemove', function(e) {
                     if (!app._editDrawing || !app._editCanvasReady) return;
-                    e.preventDefault();
+
+                    var canvas = document.getElementById('thumbnail-edit-canvas');
+                    if (!canvas) return;
+
                     var rect = canvas.getBoundingClientRect();
-                    var x = (e.clientX - rect.left) * (canvas.width / rect.width);
-                    var y = (e.clientY - rect.top) * (canvas.height / rect.height);
+                    var scaleX = canvas.width / rect.width;
+                    var scaleY = canvas.height / rect.height;
+                    var x = (e.clientX - rect.left) * scaleX;
+                    var y = (e.clientY - rect.top) * scaleY;
+
                     app.paintMaskLine(app._editLastX, app._editLastY, x, y);
                     app._editLastX = x;
                     app._editLastY = y;
                 });
 
-                canvas.addEventListener('mouseup', function(e) {
+                document.addEventListener('mouseup', function(e) {
                     app._editDrawing = false;
                 });
 
-                canvas.addEventListener('mouseleave', function(e) {
-                    app._editDrawing = false;
-                });
+                // Touch events
+                document.addEventListener('touchstart', function(e) {
+                    var canvas = document.getElementById('thumbnail-edit-canvas');
+                    if (!canvas || e.target !== canvas || !app._editCanvasReady) return;
 
-                // Touch events for mobile
-                canvas.addEventListener('touchstart', function(e) {
-                    if (!app._editCanvasReady) return;
                     e.preventDefault();
                     app._editDrawing = true;
-                    var rect = canvas.getBoundingClientRect();
+
                     var touch = e.touches[0];
-                    app._editLastX = (touch.clientX - rect.left) * (canvas.width / rect.width);
-                    app._editLastY = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                    var rect = canvas.getBoundingClientRect();
+                    var scaleX = canvas.width / rect.width;
+                    var scaleY = canvas.height / rect.height;
+                    app._editLastX = (touch.clientX - rect.left) * scaleX;
+                    app._editLastY = (touch.clientY - rect.top) * scaleY;
+
                     app.saveEditHistory();
                     app.paintMask(app._editLastX, app._editLastY);
                 }, { passive: false });
 
-                canvas.addEventListener('touchmove', function(e) {
+                document.addEventListener('touchmove', function(e) {
                     if (!app._editDrawing || !app._editCanvasReady) return;
+
+                    var canvas = document.getElementById('thumbnail-edit-canvas');
+                    if (!canvas) return;
+
                     e.preventDefault();
-                    var rect = canvas.getBoundingClientRect();
                     var touch = e.touches[0];
-                    var x = (touch.clientX - rect.left) * (canvas.width / rect.width);
-                    var y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                    var rect = canvas.getBoundingClientRect();
+                    var scaleX = canvas.width / rect.width;
+                    var scaleY = canvas.height / rect.height;
+                    var x = (touch.clientX - rect.left) * scaleX;
+                    var y = (touch.clientY - rect.top) * scaleY;
+
                     app.paintMaskLine(app._editLastX, app._editLastY, x, y);
                     app._editLastX = x;
                     app._editLastY = y;
                 }, { passive: false });
 
-                canvas.addEventListener('touchend', function(e) {
+                document.addEventListener('touchend', function(e) {
                     app._editDrawing = false;
                 });
-
-                // Change cursor to indicate drawable area
-                canvas.style.cursor = 'crosshair';
             },
 
             // Paint a single point on the mask
@@ -7148,7 +7181,7 @@
                     }
                 } else if (info.mode === 'bulk') {
                     if (state.bulkUrls && state.bulkUrls[info.index]) {
-                        state.bulkUrls[info.index].generatedThumbnailUrl = editedUrl;
+                        state.bulkUrls[info.index].generatedThumbnail = editedUrl;
                         state.bulkUrls[info.index].hdUrl = null;
                     }
                 }
@@ -10710,7 +10743,10 @@
                                         html += '<button onclick="app.upscaleThumbnail(\'' + item.generatedThumbnail + '\', ' + idx + ', \'bulk\')" ' + (isUpscaling ? 'disabled' : '') + ' class="bg-indigo-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-indigo-600 ' + (isUpscaling ? 'opacity-70' : '') + '">' + (isUpscaling ? '<span class="animate-spin inline-block">⏳</span>' : '⬆️ Upscale') + '</button>';
                                     }
                                     html += '</div>';
+                                    html += '<div class="flex gap-2">';
                                     html += '<button onclick="app.previewThumbnail(\'' + item.generatedThumbnail + '\')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">🔍 Preview</button>';
+                                    html += '<button onclick="app.openThumbnailEditor(\'' + item.generatedThumbnail + '\', ' + idx + ', \'bulk\')" class="bg-purple-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-purple-600">✨ Edit</button>';
+                                    html += '</div>';
                                     html += '</div>';
                                     html += '<div class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">✓</div>';
                                     if (item.hdUrl) {
