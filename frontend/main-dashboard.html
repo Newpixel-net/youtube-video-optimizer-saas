@@ -3401,6 +3401,20 @@
             hdUpscalingMode: null,                // Mode of item being upscaled ('single'|'bulk'|'playlist')
             hdUpscaleCost: 1,                     // Cost per image (tokens)
 
+            // Thumbnail Editing State (AI Inpainting)
+            thumbnailEditMode: false,             // Is editing modal open
+            thumbnailEditingImage: null,          // { url, index, mode } - image being edited
+            thumbnailEditMask: null,              // Canvas mask data URL
+            thumbnailEditPrompt: '',              // Edit prompt text
+            thumbnailEditLoading: false,          // Processing state
+            thumbnailEditError: null,             // Error message
+            thumbnailEditResult: null,            // { originalUrl, editedUrl } - result for comparison
+            thumbnailEditBrushSize: 30,           // Brush size in pixels
+            thumbnailEditHistory: [],             // For undo functionality
+            thumbnailEditOriginalData: null,      // Original canvas image data
+            thumbnailEditMaskCanvas: null,        // Mask canvas element
+            thumbnailEditMaskCtx: null,           // Mask canvas 2D context
+
             // Quota settings (from getUserProfile)
             quotaInfo: null,           // Quota info for each tool with reset times
             resetTimeMinutes: 1440,    // Admin-configured reset time in minutes
@@ -6722,6 +6736,390 @@
                 render();
             },
 
+            /* ------------------------------------------
+               4.5.7c Thumbnail AI Editing (Inpainting)
+               ------------------------------------------ */
+
+            // Open the thumbnail editor modal
+            openThumbnailEditor: function(imageUrl, itemIndex, mode) {
+                state.thumbnailEditMode = true;
+                state.thumbnailEditingImage = {
+                    url: imageUrl,
+                    index: itemIndex,
+                    mode: mode // 'single' | 'playlist' | 'bulk'
+                };
+                state.thumbnailEditPrompt = '';
+                state.thumbnailEditError = null;
+                state.thumbnailEditResult = null;
+                state.thumbnailEditHistory = [];
+                render();
+
+                // Initialize canvas after render
+                setTimeout(function() {
+                    app.initThumbnailEditCanvas();
+                }, 100);
+            },
+
+            // Close the thumbnail editor modal
+            closeThumbnailEditor: function() {
+                state.thumbnailEditMode = false;
+                state.thumbnailEditingImage = null;
+                state.thumbnailEditPrompt = '';
+                state.thumbnailEditError = null;
+                state.thumbnailEditResult = null;
+                state.thumbnailEditLoading = false;
+                state.thumbnailEditOriginalData = null;
+                state.thumbnailEditMaskCanvas = null;
+                state.thumbnailEditMaskCtx = null;
+                state.thumbnailEditHistory = [];
+                render();
+            },
+
+            // Initialize the canvas for editing
+            initThumbnailEditCanvas: function() {
+                var canvas = document.getElementById('thumbnail-edit-canvas');
+                if (!canvas || !state.thumbnailEditingImage) return;
+
+                var ctx = canvas.getContext('2d');
+                var img = new Image();
+                img.crossOrigin = 'anonymous';
+
+                img.onload = function() {
+                    // Set canvas size - maintain aspect ratio, max width 800px
+                    var maxWidth = 800;
+                    var scale = Math.min(1, maxWidth / img.width);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+
+                    // Store original dimensions for export
+                    canvas.dataset.originalWidth = img.width;
+                    canvas.dataset.originalHeight = img.height;
+
+                    // Draw image
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    // Store original image data
+                    state.thumbnailEditOriginalData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                    // Create mask canvas (overlay)
+                    var maskCanvas = document.createElement('canvas');
+                    maskCanvas.width = canvas.width;
+                    maskCanvas.height = canvas.height;
+                    state.thumbnailEditMaskCanvas = maskCanvas;
+                    state.thumbnailEditMaskCtx = maskCanvas.getContext('2d');
+
+                    // Fill with black (unmasked)
+                    state.thumbnailEditMaskCtx.fillStyle = 'black';
+                    state.thumbnailEditMaskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+                    console.log('Thumbnail edit canvas initialized:', canvas.width, 'x', canvas.height);
+                };
+
+                img.onerror = function() {
+                    state.thumbnailEditError = 'Failed to load image for editing';
+                    render();
+                };
+
+                img.src = state.thumbnailEditingImage.url;
+
+                // Add drawing event listeners
+                var isDrawing = false;
+                var lastX = 0, lastY = 0;
+
+                canvas.addEventListener('mousedown', function(e) {
+                    isDrawing = true;
+                    var rect = canvas.getBoundingClientRect();
+                    lastX = (e.clientX - rect.left) * (canvas.width / rect.width);
+                    lastY = (e.clientY - rect.top) * (canvas.height / rect.height);
+                    app.saveEditHistory();
+                    app.paintMask(lastX, lastY);
+                });
+
+                canvas.addEventListener('mousemove', function(e) {
+                    if (!isDrawing) return;
+                    var rect = canvas.getBoundingClientRect();
+                    var x = (e.clientX - rect.left) * (canvas.width / rect.width);
+                    var y = (e.clientY - rect.top) * (canvas.height / rect.height);
+                    app.paintMaskLine(lastX, lastY, x, y);
+                    lastX = x;
+                    lastY = y;
+                });
+
+                canvas.addEventListener('mouseup', function() { isDrawing = false; });
+                canvas.addEventListener('mouseleave', function() { isDrawing = false; });
+
+                // Touch support for mobile
+                canvas.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    isDrawing = true;
+                    var rect = canvas.getBoundingClientRect();
+                    var touch = e.touches[0];
+                    lastX = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                    lastY = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                    app.saveEditHistory();
+                    app.paintMask(lastX, lastY);
+                });
+
+                canvas.addEventListener('touchmove', function(e) {
+                    e.preventDefault();
+                    if (!isDrawing) return;
+                    var rect = canvas.getBoundingClientRect();
+                    var touch = e.touches[0];
+                    var x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                    var y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                    app.paintMaskLine(lastX, lastY, x, y);
+                    lastX = x;
+                    lastY = y;
+                });
+
+                canvas.addEventListener('touchend', function() { isDrawing = false; });
+            },
+
+            // Paint a single point on the mask
+            paintMask: function(x, y) {
+                if (!state.thumbnailEditMaskCtx) return;
+
+                var canvas = document.getElementById('thumbnail-edit-canvas');
+                var ctx = canvas.getContext('2d');
+
+                // Paint on mask canvas (white for area to edit)
+                state.thumbnailEditMaskCtx.fillStyle = 'white';
+                state.thumbnailEditMaskCtx.beginPath();
+                state.thumbnailEditMaskCtx.arc(x, y, state.thumbnailEditBrushSize / 2, 0, Math.PI * 2);
+                state.thumbnailEditMaskCtx.fill();
+
+                // Redraw with overlay
+                app.redrawCanvasWithMask();
+            },
+
+            // Paint a line on the mask (for smooth strokes)
+            paintMaskLine: function(x1, y1, x2, y2) {
+                if (!state.thumbnailEditMaskCtx) return;
+
+                // Draw line on mask
+                state.thumbnailEditMaskCtx.strokeStyle = 'white';
+                state.thumbnailEditMaskCtx.lineWidth = state.thumbnailEditBrushSize;
+                state.thumbnailEditMaskCtx.lineCap = 'round';
+                state.thumbnailEditMaskCtx.lineJoin = 'round';
+                state.thumbnailEditMaskCtx.beginPath();
+                state.thumbnailEditMaskCtx.moveTo(x1, y1);
+                state.thumbnailEditMaskCtx.lineTo(x2, y2);
+                state.thumbnailEditMaskCtx.stroke();
+
+                // Redraw with overlay
+                app.redrawCanvasWithMask();
+            },
+
+            // Redraw canvas with mask overlay
+            redrawCanvasWithMask: function() {
+                var canvas = document.getElementById('thumbnail-edit-canvas');
+                if (!canvas || !state.thumbnailEditOriginalData) return;
+
+                var ctx = canvas.getContext('2d');
+
+                // Draw original image
+                ctx.putImageData(state.thumbnailEditOriginalData, 0, 0);
+
+                // Draw semi-transparent pink overlay for masked areas
+                ctx.save();
+                ctx.globalCompositeOperation = 'source-over';
+
+                // Create a temporary canvas for the tinted mask
+                var tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                var tempCtx = tempCanvas.getContext('2d');
+
+                // Fill with pink
+                tempCtx.fillStyle = 'rgba(236, 72, 153, 0.5)';
+                tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+                // Use mask as alpha
+                tempCtx.globalCompositeOperation = 'destination-in';
+                tempCtx.drawImage(state.thumbnailEditMaskCanvas, 0, 0);
+
+                // Draw tinted mask onto main canvas
+                ctx.drawImage(tempCanvas, 0, 0);
+                ctx.restore();
+            },
+
+            // Get mask as base64 PNG (scaled to original image dimensions)
+            getMaskAsBase64: function() {
+                if (!state.thumbnailEditMaskCanvas) return null;
+
+                var canvas = document.getElementById('thumbnail-edit-canvas');
+                var originalWidth = parseInt(canvas.dataset.originalWidth) || 1280;
+                var originalHeight = parseInt(canvas.dataset.originalHeight) || 720;
+
+                // Create export canvas at original image size
+                var exportCanvas = document.createElement('canvas');
+                exportCanvas.width = originalWidth;
+                exportCanvas.height = originalHeight;
+                var ctx = exportCanvas.getContext('2d');
+
+                // Fill with black background
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+                // Draw scaled mask
+                ctx.drawImage(state.thumbnailEditMaskCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+
+                // Check if mask has any white pixels (edited areas)
+                var imageData = ctx.getImageData(0, 0, exportCanvas.width, exportCanvas.height);
+                var hasContent = false;
+                for (var i = 0; i < imageData.data.length; i += 4) {
+                    if (imageData.data[i] > 128) { // R channel > 128 means white
+                        hasContent = true;
+                        break;
+                    }
+                }
+
+                if (!hasContent) return null;
+
+                return exportCanvas.toDataURL('image/png').split(',')[1];
+            },
+
+            // Set brush size
+            setEditBrushSize: function(size) {
+                state.thumbnailEditBrushSize = parseInt(size) || 30;
+                // Update cursor size indicator if we want to show it
+            },
+
+            // Set edit prompt
+            setEditPrompt: function(prompt) {
+                state.thumbnailEditPrompt = prompt;
+            },
+
+            // Clear the mask
+            clearEditMask: function() {
+                if (!state.thumbnailEditMaskCtx) return;
+
+                app.saveEditHistory();
+                state.thumbnailEditMaskCtx.fillStyle = 'black';
+                state.thumbnailEditMaskCtx.fillRect(0, 0, state.thumbnailEditMaskCanvas.width, state.thumbnailEditMaskCanvas.height);
+                app.redrawCanvasWithMask();
+            },
+
+            // Save current mask state to history for undo
+            saveEditHistory: function() {
+                if (!state.thumbnailEditMaskCanvas) return;
+
+                // Keep max 10 history items
+                if (state.thumbnailEditHistory.length >= 10) {
+                    state.thumbnailEditHistory.shift();
+                }
+
+                state.thumbnailEditHistory.push(
+                    state.thumbnailEditMaskCtx.getImageData(0, 0, state.thumbnailEditMaskCanvas.width, state.thumbnailEditMaskCanvas.height)
+                );
+            },
+
+            // Undo last mask stroke
+            undoEditMask: function() {
+                if (!state.thumbnailEditMaskCtx || state.thumbnailEditHistory.length === 0) return;
+
+                var lastState = state.thumbnailEditHistory.pop();
+                state.thumbnailEditMaskCtx.putImageData(lastState, 0, 0);
+                app.redrawCanvasWithMask();
+            },
+
+            // Apply the edit via AI
+            applyThumbnailEdit: async function() {
+                if (!state.thumbnailEditingImage) {
+                    state.thumbnailEditError = 'No image selected for editing';
+                    render();
+                    return;
+                }
+
+                if (!state.thumbnailEditPrompt.trim()) {
+                    state.thumbnailEditError = 'Please enter what you want to change';
+                    render();
+                    return;
+                }
+
+                var maskBase64 = app.getMaskAsBase64();
+                if (!maskBase64) {
+                    state.thumbnailEditError = 'Please paint the area you want to edit';
+                    render();
+                    return;
+                }
+
+                state.thumbnailEditLoading = true;
+                state.thumbnailEditError = null;
+                render();
+
+                try {
+                    var editThumbnail = firebase.functions().httpsCallable('editThumbnailWithAI');
+                    var result = await editThumbnail({
+                        imageUrl: state.thumbnailEditingImage.url,
+                        maskBase64: maskBase64,
+                        editPrompt: state.thumbnailEditPrompt.trim()
+                    });
+
+                    if (result.data.success) {
+                        state.thumbnailEditResult = {
+                            originalUrl: state.thumbnailEditingImage.url,
+                            editedUrl: result.data.editedUrl
+                        };
+
+                        // Update token balance
+                        if (result.data.remainingBalance !== undefined) {
+                            state.thumbnailTokenBalance = result.data.remainingBalance;
+                        }
+
+                        showToast('Edit applied! Review the changes below.', 'success');
+                    } else {
+                        throw new Error(result.data.error || 'Edit failed');
+                    }
+                } catch (error) {
+                    console.error('Thumbnail edit error:', error);
+                    state.thumbnailEditError = error.message || 'Failed to edit thumbnail. Please try again.';
+                }
+
+                state.thumbnailEditLoading = false;
+                render();
+            },
+
+            // Accept the edited thumbnail
+            acceptEdit: function() {
+                if (!state.thumbnailEditResult || !state.thumbnailEditingImage) return;
+
+                var editedUrl = state.thumbnailEditResult.editedUrl;
+                var info = state.thumbnailEditingImage;
+
+                // Update the appropriate array based on mode
+                if (info.mode === 'single') {
+                    if (state.generatedThumbnails[info.index]) {
+                        state.generatedThumbnails[info.index].url = editedUrl;
+                        state.generatedThumbnails[info.index].hdUrl = null; // Reset HD since image changed
+                    }
+                } else if (info.mode === 'playlist') {
+                    if (state.playlistResults[info.index]) {
+                        state.playlistResults[info.index].thumbnailUrl = editedUrl;
+                        state.playlistResults[info.index].hdUrl = null;
+                    }
+                } else if (info.mode === 'bulk') {
+                    if (state.bulkUrls && state.bulkUrls[info.index]) {
+                        state.bulkUrls[info.index].generatedThumbnailUrl = editedUrl;
+                        state.bulkUrls[info.index].hdUrl = null;
+                    }
+                }
+
+                app.closeThumbnailEditor();
+                showToast('Thumbnail updated successfully!', 'success');
+            },
+
+            // Revert to start a new edit
+            revertEdit: function() {
+                state.thumbnailEditResult = null;
+                state.thumbnailEditPrompt = '';
+                // Reinitialize canvas
+                setTimeout(function() {
+                    app.initThumbnailEditCanvas();
+                }, 100);
+                render();
+            },
+
             // Download HD version of a thumbnail
             downloadHdThumbnail: async function(hdUrl, index) {
                 try {
@@ -9985,6 +10383,9 @@
                     }
 
                     html += '<button onclick="app.previewThumbnail(\'' + utils.escapeHtml(selectedImg.url) + '\')" class="btn-secondary inline-flex items-center justify-center gap-2"><span>🔍</span> Preview</button>';
+
+                    // Edit with AI button
+                    html += '<button onclick="app.openThumbnailEditor(\'' + utils.escapeHtml(selectedImg.url) + '\', ' + state.selectedThumbnailIndex + ', \'single\')" class="btn-secondary bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 inline-flex items-center justify-center gap-2"><span>✨</span> Edit with AI</button>';
                 }
                 html += '<button onclick="app.toggleYouTubePreview()" class="btn-secondary inline-flex items-center justify-center gap-2"><span>👁️</span> YouTube Preview</button>';
                 html += '<button onclick="app.resetThumbnailGenerator()" class="btn-secondary">🔄 Create New</button>';
@@ -10642,7 +11043,10 @@
                                         html += '<button onclick="app.upscaleThumbnail(\'' + item.thumbnailUrl + '\', ' + idx + ', \'playlist\')" ' + (isUpscalingPlaylist ? 'disabled' : '') + ' class="bg-indigo-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-indigo-600 ' + (isUpscalingPlaylist ? 'opacity-70' : '') + '">' + (isUpscalingPlaylist ? '<span class="animate-spin inline-block">⏳</span>' : '⬆️ Upscale') + '</button>';
                                     }
                                     html += '</div>';
+                                    html += '<div class="flex gap-2">';
                                     html += '<button onclick="app.previewThumbnail(\'' + item.thumbnailUrl + '\')" class="bg-white text-gray-800 px-2 py-1 rounded text-xs font-medium hover:bg-gray-100">🔍 Preview</button>';
+                                    html += '<button onclick="app.openThumbnailEditor(\'' + item.thumbnailUrl + '\', ' + idx + ', \'playlist\')" class="bg-purple-500 text-white px-2 py-1 rounded text-xs font-medium hover:bg-purple-600">✨ Edit</button>';
+                                    html += '</div>';
                                     html += '</div>';
                                     html += '<div class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">✓</div>';
                                     if (item.hdUrl) {
@@ -11216,6 +11620,148 @@
                 html += '</div>';
 
                 html += '<button onclick="app.toggleYouTubePreview()" class="w-full btn-secondary">Close Preview</button>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // ========== THUMBNAIL EDITING MODAL ==========
+            if (state.thumbnailEditMode && state.thumbnailEditingImage) {
+                html += '<div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">';
+                html += '<div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">';
+
+                // Header
+                html += '<div class="p-4 border-b flex items-center justify-between bg-gradient-to-r from-purple-50 to-pink-50">';
+                html += '<div class="flex items-center gap-3">';
+                html += '<div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-xl">✨</div>';
+                html += '<div>';
+                html += '<h3 class="text-xl font-bold text-gray-800">Edit Thumbnail with AI</h3>';
+                html += '<p class="text-sm text-gray-500">Paint the area you want to change</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '<button onclick="app.closeThumbnailEditor()" class="text-gray-400 hover:text-gray-600 text-2xl p-2 hover:bg-gray-100 rounded-lg transition-colors">&times;</button>';
+                html += '</div>';
+
+                // Main content
+                html += '<div class="flex-1 overflow-y-auto p-6">';
+
+                // Error display
+                if (state.thumbnailEditError) {
+                    html += '<div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center gap-2">';
+                    html += '<span>⚠️</span> ' + utils.escapeHtml(state.thumbnailEditError);
+                    html += '</div>';
+                }
+
+                // Show comparison if we have a result
+                if (state.thumbnailEditResult) {
+                    html += '<div class="mb-6">';
+                    html += '<div class="text-center mb-4">';
+                    html += '<span class="inline-block bg-green-100 text-green-700 px-4 py-2 rounded-full font-semibold">✨ Edit Complete! Review the changes</span>';
+                    html += '</div>';
+
+                    // Before/After comparison
+                    html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+
+                    // Before
+                    html += '<div class="text-center">';
+                    html += '<p class="text-sm font-semibold text-gray-600 mb-2">Before</p>';
+                    html += '<img src="' + utils.escapeHtml(state.thumbnailEditResult.originalUrl) + '" class="w-full rounded-xl shadow-lg border-2 border-gray-200" style="aspect-ratio: 16/9; object-fit: cover;" />';
+                    html += '</div>';
+
+                    // After
+                    html += '<div class="text-center">';
+                    html += '<p class="text-sm font-semibold text-green-600 mb-2">After (Edited)</p>';
+                    html += '<img src="' + utils.escapeHtml(state.thumbnailEditResult.editedUrl) + '" class="w-full rounded-xl shadow-lg border-2 border-green-400" style="aspect-ratio: 16/9; object-fit: cover;" />';
+                    html += '</div>';
+
+                    html += '</div>';
+                    html += '</div>';
+
+                } else {
+                    // Show canvas for painting
+                    html += '<div class="mb-6">';
+                    html += '<div class="relative bg-gray-100 rounded-xl p-4 flex justify-center">';
+                    html += '<canvas id="thumbnail-edit-canvas" class="max-w-full rounded-xl shadow-lg cursor-crosshair" style="max-height: 400px;"></canvas>';
+                    if (state.thumbnailEditLoading) {
+                        html += '<div class="absolute inset-0 bg-white/80 flex flex-col items-center justify-center rounded-xl">';
+                        html += '<div class="loading-emoji text-4xl mb-4">🎨</div>';
+                        html += '<p class="font-semibold text-gray-700">AI is editing your thumbnail...</p>';
+                        html += '<p class="text-sm text-gray-500">This may take 10-20 seconds</p>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+
+                    // Brush controls
+                    html += '<div class="mb-4 p-4 bg-gray-50 rounded-xl">';
+                    html += '<div class="flex flex-wrap items-center justify-center gap-4">';
+
+                    // Brush size slider
+                    html += '<div class="flex items-center gap-2">';
+                    html += '<label class="text-sm font-medium text-gray-600">🖌️ Brush Size:</label>';
+                    html += '<input type="range" min="10" max="100" value="' + state.thumbnailEditBrushSize + '" oninput="app.setEditBrushSize(this.value); document.getElementById(\'brush-size-label\').textContent = this.value + \'px\'" class="w-32 accent-pink-500" />';
+                    html += '<span id="brush-size-label" class="text-sm text-gray-500 w-12">' + state.thumbnailEditBrushSize + 'px</span>';
+                    html += '</div>';
+
+                    // Action buttons
+                    html += '<button type="button" onclick="app.clearEditMask()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">';
+                    html += '🗑️ Clear';
+                    html += '</button>';
+
+                    html += '<button type="button" onclick="app.undoEditMask()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">';
+                    html += '↩️ Undo';
+                    html += '</button>';
+
+                    html += '</div>';
+                    html += '<p class="text-xs text-gray-400 text-center mt-2">Tip: Paint over text, objects, or any area you want AI to modify</p>';
+                    html += '</div>';
+
+                    // Edit prompt input
+                    html += '<div class="mb-4">';
+                    html += '<label class="block text-gray-700 font-semibold mb-2">What should AI change?</label>';
+                    html += '<input type="text" id="thumbnail-edit-prompt" placeholder="e.g., Change \'dreams\' to \'dream\', remove the arrow, make text bigger, add a glow effect..." value="' + utils.escapeHtml(state.thumbnailEditPrompt) + '" oninput="app.setEditPrompt(this.value)" class="w-full p-3 border border-gray-200 rounded-xl focus:border-pink-500 focus:ring-2 focus:ring-pink-200 outline-none transition-all" />';
+                    html += '<p class="text-xs text-gray-400 mt-1">Be specific about what you want to change in the painted area</p>';
+                    html += '</div>';
+
+                    // Example prompts
+                    html += '<div class="mb-4">';
+                    html += '<p class="text-xs text-gray-500 mb-2">Quick examples:</p>';
+                    html += '<div class="flex flex-wrap gap-2">';
+                    var examples = ["Fix the typo", "Remove this text", "Change text to: ", "Make it brighter", "Add glow effect", "Remove the object"];
+                    examples.forEach(function(ex) {
+                        html += '<button type="button" onclick="app.setEditPrompt(\'' + ex + '\'); document.getElementById(\'thumbnail-edit-prompt\').value = \'' + ex + '\';" class="px-2 py-1 bg-gray-100 hover:bg-pink-100 text-gray-600 hover:text-pink-600 rounded text-xs transition-colors">' + ex + '</button>';
+                    });
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+
+                // Footer
+                html += '<div class="p-4 border-t flex items-center justify-between bg-gray-50">';
+                html += '<div class="text-sm text-gray-500">Cost: <span class="font-semibold text-pink-600">2 tokens</span> per edit</div>';
+                html += '<div class="flex gap-3">';
+
+                if (state.thumbnailEditResult) {
+                    // After edit - show accept/revert buttons
+                    html += '<button type="button" onclick="app.revertEdit()" class="px-4 py-2 bg-white border border-gray-300 rounded-lg font-medium text-gray-600 hover:bg-gray-100 transition-colors">';
+                    html += '↩️ Try Again';
+                    html += '</button>';
+                    html += '<button type="button" onclick="app.acceptEdit()" class="px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold rounded-lg shadow-lg transition-all">';
+                    html += '✓ Accept Edit';
+                    html += '</button>';
+                } else {
+                    // Before edit - show cancel/apply buttons
+                    html += '<button type="button" onclick="app.closeThumbnailEditor()" class="px-4 py-2 bg-white border border-gray-300 rounded-lg font-medium text-gray-600 hover:bg-gray-100 transition-colors">';
+                    html += 'Cancel';
+                    html += '</button>';
+                    html += '<button type="button" onclick="app.applyThumbnailEdit()" ' + (state.thumbnailEditLoading ? 'disabled' : '') + ' class="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-semibold rounded-lg shadow-lg transition-all ' + (state.thumbnailEditLoading ? 'opacity-50 cursor-not-allowed' : '') + '">';
+                    html += state.thumbnailEditLoading ? '⏳ Processing...' : '✨ Apply Edit';
+                    html += '</button>';
+                }
+
+                html += '</div>';
+                html += '</div>';
+
                 html += '</div>';
                 html += '</div>';
             }

@@ -6951,6 +6951,291 @@ exports.upscaleThumbnail = functions
     }
   });
 
+// =============================================
+// THUMBNAIL EDITING - AI Inpainting/Generative Fill
+// Uses Gemini for targeted modifications with mask
+// =============================================
+
+/**
+ * editThumbnailWithAI - Edit a thumbnail using AI inpainting
+ * Allows users to paint/select areas and provide edit prompts
+ * Uses Gemini image editing with fal.ai fallback
+ *
+ * @param {string} imageUrl - URL of the original thumbnail
+ * @param {string} maskBase64 - Base64 PNG of the mask (white = edit area)
+ * @param {string} editPrompt - What to change in the masked area
+ * @param {number} editStrength - 0.5-1.0 (how much to modify)
+ * @returns {object} { success, editedUrl, originalUrl, tokenCost, remainingBalance }
+ */
+exports.editThumbnailWithAI = functions
+  .runWith({ timeoutSeconds: 120, memory: '1GB' })
+  .https.onCall(async (data, context) => {
+    const uid = await verifyAuth(context);
+    checkRateLimit(uid, 'editThumbnail', 10); // 10 per minute
+
+    const { imageUrl, maskBase64, editPrompt, editStrength = 0.85 } = data;
+    const TOKEN_COST = 2; // Edit cost - cheaper than regeneration
+
+    // Validation
+    if (!imageUrl) {
+      throw new functions.https.HttpsError('invalid-argument', 'Image URL is required');
+    }
+    if (!maskBase64) {
+      throw new functions.https.HttpsError('invalid-argument', 'Mask is required - please paint the area to edit');
+    }
+    if (!editPrompt || editPrompt.trim().length < 3) {
+      throw new functions.https.HttpsError('invalid-argument', 'Edit prompt is required (min 3 characters)');
+    }
+
+    // Check token balance
+    const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+    if (!tokenDoc.exists) {
+      throw new functions.https.HttpsError('failed-precondition', 'Token balance not found. Please contact support.');
+    }
+
+    const balance = tokenDoc.data().balance || 0;
+    if (balance < TOKEN_COST) {
+      throw new functions.https.HttpsError('resource-exhausted',
+        `Insufficient tokens. Need ${TOKEN_COST}, have ${balance}`);
+    }
+
+    try {
+      // Fetch original image
+      console.log(`[EditThumbnail] Starting edit for user ${uid}: ${imageUrl}`);
+      console.log(`[EditThumbnail] Edit prompt: "${editPrompt}"`);
+
+      const imageResponse = await axios.get(imageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: { 'User-Agent': 'ThumbnailEditor/1.0' }
+      });
+      const imageBase64 = Buffer.from(imageResponse.data).toString('base64');
+      const imageMimeType = imageResponse.headers['content-type'] || 'image/png';
+
+      let editedImageUrl;
+      let usedModel;
+
+      // Use Gemini for image editing
+      const geminiApiKey = functions.config().gemini?.key;
+      if (geminiApiKey) {
+        try {
+          const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+          // Build comprehensive edit prompt
+          const fullPrompt = `You are performing a PRECISE IMAGE EDIT on a YouTube thumbnail.
+
+═══════════════════════════════════════════════════════════════
+EDITING INSTRUCTIONS - READ CAREFULLY
+═══════════════════════════════════════════════════════════════
+
+TWO IMAGES PROVIDED:
+1. ORIGINAL IMAGE: The YouTube thumbnail to edit
+2. MASK IMAGE: White areas show WHERE to make changes
+
+USER'S EDIT REQUEST: "${editPrompt.trim()}"
+
+CRITICAL RULES:
+1. ONLY modify the WHITE/MASKED areas
+2. Keep ALL BLACK/UNMASKED areas PIXEL-PERFECT IDENTICAL
+3. The edit must blend SEAMLESSLY with surrounding areas
+4. Match lighting, shadows, and style perfectly
+5. Maintain the professional YouTube thumbnail quality
+
+COMMON EDIT TYPES:
+- Text changes: If fixing text, ensure new text is crisp, readable, same font style
+- Object removal: Replace with appropriate background/fill
+- Object addition: Match the image's style and lighting
+- Color/style changes: Apply consistently within masked area
+
+OUTPUT REQUIREMENTS:
+- Same dimensions as input (1280x720 or similar)
+- High quality, no artifacts at edit boundaries
+- The edit should look like it was always part of the original
+
+Generate the edited thumbnail now.`;
+
+          console.log(`[EditThumbnail] Calling Gemini with mask and prompt`);
+
+          const result = await ai.models.generateContent({
+            model: 'gemini-3-pro-image-preview',
+            contents: [{
+              role: 'user',
+              parts: [
+                { inlineData: { mimeType: imageMimeType, data: imageBase64 } },
+                { inlineData: { mimeType: 'image/png', data: maskBase64 } },
+                { text: fullPrompt }
+              ]
+            }],
+            config: {
+              responseModalities: ['image', 'text']
+            }
+          });
+
+          // Extract image from response
+          const candidates = result.candidates || (result.response && result.response.candidates);
+          if (candidates && candidates.length > 0) {
+            const parts = candidates[0].content?.parts || candidates[0].parts || [];
+            for (const part of parts) {
+              const inlineData = part.inlineData || part.inline_data;
+              if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
+                const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
+                const mimeType = inlineData.mimeType || inlineData.mime_type || 'image/png';
+                const extension = mimeType.includes('jpeg') ? 'jpg' : 'png';
+
+                // Save to Storage
+                const storage = admin.storage().bucket();
+                const timestamp = Date.now();
+                const fileName = `thumbnails-edited/${uid}/${timestamp}-edited.${extension}`;
+                const file = storage.file(fileName);
+
+                const buffer = Buffer.from(imageBytes, 'base64');
+                await file.save(buffer, {
+                  metadata: {
+                    contentType: mimeType,
+                    metadata: {
+                      originalUrl: imageUrl,
+                      editPrompt: editPrompt.substring(0, 200),
+                      model: 'gemini-3-pro-image-preview',
+                      editedAt: new Date().toISOString()
+                    }
+                  }
+                });
+
+                await file.makePublic();
+                editedImageUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+                usedModel = 'gemini-3-pro';
+                console.log(`[EditThumbnail] Gemini edit successful: ${editedImageUrl}`);
+                break;
+              }
+            }
+          }
+
+          if (!editedImageUrl) {
+            console.log('[EditThumbnail] Gemini returned no image, trying fallback');
+          }
+        } catch (geminiError) {
+          console.error('[EditThumbnail] Gemini edit failed:', geminiError.message);
+          // Will try fallback below
+        }
+      }
+
+      // Fallback to fal.ai if Gemini didn't work
+      if (!editedImageUrl) {
+        console.log('[EditThumbnail] Using fal.ai inpainting fallback');
+
+        const falKey = process.env.FAL_KEY || functions.config().fal?.key;
+        if (!falKey) {
+          throw new Error('Image editing service not available. Please try again later.');
+        }
+
+        // Upload mask to temporary storage for fal.ai
+        const storage = admin.storage().bucket();
+        const maskFileName = `temp-masks/${uid}/${Date.now()}-mask.png`;
+        const maskFile = storage.file(maskFileName);
+        await maskFile.save(Buffer.from(maskBase64, 'base64'), {
+          metadata: { contentType: 'image/png' }
+        });
+        await maskFile.makePublic();
+        const maskUrl = `https://storage.googleapis.com/${storage.name}/${maskFileName}`;
+
+        // Configure fal.ai
+        fal.config({ credentials: falKey });
+
+        // Call fal.ai inpainting
+        const falResult = await fal.subscribe('fal-ai/flux/inpaint', {
+          input: {
+            image_url: imageUrl,
+            mask_url: maskUrl,
+            prompt: `YouTube thumbnail edit: ${editPrompt}. Professional quality, seamless blend.`,
+            strength: editStrength,
+            num_inference_steps: 50
+          }
+        });
+
+        if (falResult.data?.images?.[0]?.url) {
+          // Download and save the result
+          const editedResponse = await axios.get(falResult.data.images[0].url, {
+            responseType: 'arraybuffer',
+            timeout: 30000
+          });
+
+          const timestamp = Date.now();
+          const fileName = `thumbnails-edited/${uid}/${timestamp}-edited.png`;
+          const file = storage.file(fileName);
+
+          await file.save(editedResponse.data, {
+            metadata: {
+              contentType: 'image/png',
+              metadata: {
+                originalUrl: imageUrl,
+                editPrompt: editPrompt.substring(0, 200),
+                model: 'fal-flux-inpaint',
+                editedAt: new Date().toISOString()
+              }
+            }
+          });
+
+          await file.makePublic();
+          editedImageUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+          usedModel = 'fal-flux-inpaint';
+          console.log(`[EditThumbnail] fal.ai edit successful: ${editedImageUrl}`);
+        }
+
+        // Clean up temp mask
+        await maskFile.delete().catch(err => console.log('Mask cleanup error:', err.message));
+      }
+
+      if (!editedImageUrl) {
+        throw new Error('Failed to generate edited image. Please try again.');
+      }
+
+      // Deduct tokens
+      await db.collection('creativeTokens').doc(uid).update({
+        balance: admin.firestore.FieldValue.increment(-TOKEN_COST),
+        lastUsed: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      const newBalance = balance - TOKEN_COST;
+
+      // Save to edit history
+      await db.collection('thumbnailEditHistory').add({
+        userId: uid,
+        originalUrl: imageUrl,
+        editedUrl: editedImageUrl,
+        editPrompt: editPrompt,
+        model: usedModel,
+        tokenCost: TOKEN_COST,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Log usage
+      await logUsage(uid, 'thumbnail_edit', {
+        originalUrl: imageUrl,
+        editedUrl: editedImageUrl,
+        editPrompt: editPrompt.substring(0, 100),
+        model: usedModel,
+        tokenCost: TOKEN_COST
+      });
+
+      console.log(`[EditThumbnail] Complete for ${uid}. Model: ${usedModel}, Cost: ${TOKEN_COST} tokens`);
+
+      return {
+        success: true,
+        editedUrl: editedImageUrl,
+        originalUrl: imageUrl,
+        model: usedModel,
+        tokenCost: TOKEN_COST,
+        remainingBalance: newBalance
+      };
+
+    } catch (error) {
+      console.error('[EditThumbnail] Error:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal',
+        error.message || 'Failed to edit thumbnail. Please try again.');
+    }
+  });
+
 /**
  * upscaleBatch - Upscale multiple thumbnails to HD
  * Processes in parallel for efficiency
