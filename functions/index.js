@@ -20146,7 +20146,13 @@ exports.wizardProcessClip = functions
             cropPosition: clipSettings.splitScreenSettings.speaker2?.cropPosition ?? 83,
             cropWidth: clipSettings.splitScreenSettings.speaker2?.cropWidth ?? 33
           },
-          preset: clipSettings.splitScreenSettings.preset || 'interview'
+          preset: clipSettings.splitScreenSettings.preset || 'interview',
+          layoutRatio: clipSettings.splitScreenSettings.layoutRatio || '50-50',
+          border: clipSettings.splitScreenSettings.border ? {
+            enabled: clipSettings.splitScreenSettings.border.enabled ?? false,
+            thickness: clipSettings.splitScreenSettings.border.thickness ?? 2,
+            color: clipSettings.splitScreenSettings.border.color || '#ffffff'
+          } : { enabled: false, thickness: 2, color: '#ffffff' }
         } : null
       },
 
