@@ -20128,12 +20128,24 @@ exports.wizardProcessClip = functions
           timeOffset: clipSettings.secondarySource.timeOffset || 0
         } : null,
 
+        // Tertiary source for three_person mode (third video)
+        tertiarySource: clipSettings.tertiarySource && clipSettings.tertiarySource.enabled ? {
+          enabled: true,
+          type: clipSettings.tertiarySource.type || null,
+          uploadedUrl: clipSettings.tertiarySource.uploadedUrl || null,
+          youtubeUrl: clipSettings.tertiarySource.youtubeUrl || null,
+          youtubeVideoId: clipSettings.tertiarySource.youtubeVideoId || null,
+          timeOffset: clipSettings.tertiarySource.timeOffset || 0
+        } : null,
+
         // Audio mixing settings (for multi-source)
         audioMix: clipSettings.audioMix ? {
           primaryVolume: clipSettings.audioMix.primaryVolume ?? 100,
           secondaryVolume: clipSettings.audioMix.secondaryVolume ?? 0,
+          tertiaryVolume: clipSettings.audioMix.tertiaryVolume ?? 0,
           primaryMuted: clipSettings.audioMix.primaryMuted ?? false,
-          secondaryMuted: clipSettings.audioMix.secondaryMuted ?? true
+          secondaryMuted: clipSettings.audioMix.secondaryMuted ?? true,
+          tertiaryMuted: clipSettings.audioMix.tertiaryMuted ?? true
         } : null,
 
         // Split screen speaker position settings
