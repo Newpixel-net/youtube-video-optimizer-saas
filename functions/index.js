@@ -20140,11 +20140,13 @@ exports.wizardProcessClip = functions
         splitScreenSettings: clipSettings.splitScreenSettings ? {
           speaker1: {
             cropPosition: clipSettings.splitScreenSettings.speaker1?.cropPosition ?? 17,
-            cropWidth: clipSettings.splitScreenSettings.speaker1?.cropWidth ?? 33
+            cropWidth: clipSettings.splitScreenSettings.speaker1?.cropWidth ?? 33,
+            zoom: clipSettings.splitScreenSettings.speaker1?.zoom ?? 100
           },
           speaker2: {
             cropPosition: clipSettings.splitScreenSettings.speaker2?.cropPosition ?? 83,
-            cropWidth: clipSettings.splitScreenSettings.speaker2?.cropWidth ?? 33
+            cropWidth: clipSettings.splitScreenSettings.speaker2?.cropWidth ?? 33,
+            zoom: clipSettings.splitScreenSettings.speaker2?.zoom ?? 100
           },
           preset: clipSettings.splitScreenSettings.preset || 'interview',
           layoutRatio: clipSettings.splitScreenSettings.layoutRatio || '50-50',
