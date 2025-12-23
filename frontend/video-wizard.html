@@ -2193,12 +2193,17 @@
         .phone-video-area.reframe-split_screen .split-preview-top img,
         .phone-video-area.reframe-split_screen .split-preview-top video {
             position: absolute;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
+            top: 0;
+            left: 50%;
+            right: auto;
+            bottom: auto;
             /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
             width: calc(var(--speaker1-scale, 1.58) * var(--speaker1-zoom, 1) * 100%);
             height: 100%;
-            top: 0;
-            left: 50%;
             object-fit: cover;
+            object-position: center center;
             /* Use CSS variables for position-aware cropping and zoom preview */
             /* --speaker1-translate-pct is the X offset based on (50-position)*(scale-1) */
             transform: translateX(calc(-50% + var(--speaker1-translate-pct, 0) * var(--speaker1-zoom, 1) * 1%));
@@ -2208,12 +2213,17 @@
         .phone-video-area.reframe-split_screen .split-preview-bottom img,
         .phone-video-area.reframe-split_screen .split-preview-bottom video {
             position: absolute;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
+            top: 0;
+            left: 50%;
+            right: auto;
+            bottom: auto;
             /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
             width: calc(var(--speaker2-scale, 1.58) * var(--speaker2-zoom, 1) * 100%);
             height: 100%;
-            top: 0;
-            left: 50%;
             object-fit: cover;
+            object-position: center center;
             /* Use CSS variables for position-aware cropping and zoom preview */
             /* --speaker2-translate-pct is the X offset based on (50-position)*(scale-1) */
             transform: translateX(calc(-50% + var(--speaker2-translate-pct, 0) * var(--speaker2-zoom, 1) * 1%));
@@ -2233,21 +2243,43 @@
             z-index: 5;
         }
 
-        /* Multi-source split screen - different videos need centered positioning */
+        /* Multi-source split screen - different videos need centered positioning with position/zoom support */
         .phone-video-area.reframe-split_screen.multi-source .split-preview-top iframe,
         .phone-video-area.reframe-split_screen.multi-source .split-preview-top img,
-        .phone-video-area.reframe-split_screen.multi-source .split-preview-top video,
+        .phone-video-area.reframe-split_screen.multi-source .split-preview-top video {
+            position: absolute;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
+            top: 0;
+            left: 50%;
+            right: auto;
+            bottom: auto;
+            /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
+            width: calc(var(--speaker1-scale, 1.58) * var(--speaker1-zoom, 1) * 100%);
+            height: 100%;
+            object-fit: cover;
+            object-position: center center;
+            /* Use CSS variables for position-aware cropping and zoom preview */
+            transform: translateX(calc(-50% + var(--speaker1-translate-pct, 0) * var(--speaker1-zoom, 1) * 1%));
+        }
+
         .phone-video-area.reframe-split_screen.multi-source .split-preview-bottom iframe,
         .phone-video-area.reframe-split_screen.multi-source .split-preview-bottom img,
         .phone-video-area.reframe-split_screen.multi-source .split-preview-bottom video {
             position: absolute;
-            width: 200%;
-            height: 100%;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
             top: 0;
             left: 50%;
             right: auto;
-            transform: translateX(-50%);
+            bottom: auto;
+            /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
+            width: calc(var(--speaker2-scale, 1.58) * var(--speaker2-zoom, 1) * 100%);
+            height: 100%;
             object-fit: cover;
+            object-position: center center;
+            /* Use CSS variables for position-aware cropping and zoom preview */
+            transform: translateX(calc(-50% + var(--speaker2-translate-pct, 0) * var(--speaker2-zoom, 1) * 1%));
         }
 
         /* Split screen preview play/stop buttons */
@@ -2344,11 +2376,16 @@
         .phone-video-area.reframe-three_person .three-zone-main img,
         .phone-video-area.reframe-three_person .three-zone-main video {
             position: absolute;
-            width: calc(var(--main-scale, 1.58) * var(--main-zoom, 1) * 100%);
-            height: 100%;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
             top: 0;
             left: 50%;
+            right: auto;
+            bottom: auto;
+            width: calc(var(--main-scale, 1.58) * var(--main-zoom, 1) * 100%);
+            height: 100%;
             object-fit: cover;
+            object-position: center center;
             transform: translateX(calc(-50% + var(--main-translate-pct, 0) * var(--main-zoom, 1) * 1%));
         }
 
@@ -2357,11 +2394,16 @@
         .phone-video-area.reframe-three_person .three-zone-left img,
         .phone-video-area.reframe-three_person .three-zone-left video {
             position: absolute;
-            width: calc(var(--left-scale, 1.58) * var(--left-zoom, 1) * 100%);
-            height: 100%;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
             top: 0;
             left: 50%;
+            right: auto;
+            bottom: auto;
+            width: calc(var(--left-scale, 1.58) * var(--left-zoom, 1) * 100%);
+            height: 100%;
             object-fit: cover;
+            object-position: center center;
             transform: translateX(calc(-50% + var(--left-translate-pct, 0) * var(--left-zoom, 1) * 1%));
         }
 
@@ -2370,11 +2412,16 @@
         .phone-video-area.reframe-three_person .three-zone-right img,
         .phone-video-area.reframe-three_person .three-zone-right video {
             position: absolute;
-            width: calc(var(--right-scale, 1.58) * var(--right-zoom, 1) * 100%);
-            height: 100%;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
             top: 0;
             left: 50%;
+            right: auto;
+            bottom: auto;
+            width: calc(var(--right-scale, 1.58) * var(--right-zoom, 1) * 100%);
+            height: 100%;
             object-fit: cover;
+            object-position: center center;
             transform: translateX(calc(-50% + var(--right-translate-pct, 0) * var(--right-zoom, 1) * 1%));
         }
 
@@ -2397,11 +2444,16 @@
         .phone-video-area.reframe-three_person.multi-source .three-zone-main img,
         .phone-video-area.reframe-three_person.multi-source .three-zone-main video {
             position: absolute;
-            width: calc(var(--main-scale, 1.58) * var(--main-zoom, 1) * 100%);
-            height: 100%;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
             top: 0;
             left: 50%;
+            right: auto;
+            bottom: auto;
+            width: calc(var(--main-scale, 1.58) * var(--main-zoom, 1) * 100%);
+            height: 100%;
             object-fit: cover;
+            object-position: center center;
             transform: translateX(calc(-50% + var(--main-translate-pct, 0) * var(--main-zoom, 1) * 1%));
         }
 
@@ -2409,11 +2461,16 @@
         .phone-video-area.reframe-three_person.multi-source .three-zone-left img,
         .phone-video-area.reframe-three_person.multi-source .three-zone-left video {
             position: absolute;
-            width: calc(var(--left-scale, 1.58) * var(--left-zoom, 1) * 100%);
-            height: 100%;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
             top: 0;
             left: 50%;
+            right: auto;
+            bottom: auto;
+            width: calc(var(--left-scale, 1.58) * var(--left-zoom, 1) * 100%);
+            height: 100%;
             object-fit: cover;
+            object-position: center center;
             transform: translateX(calc(-50% + var(--left-translate-pct, 0) * var(--left-zoom, 1) * 1%));
         }
 
@@ -2421,11 +2478,16 @@
         .phone-video-area.reframe-three_person.multi-source .three-zone-right img,
         .phone-video-area.reframe-three_person.multi-source .three-zone-right video {
             position: absolute;
-            width: calc(var(--right-scale, 1.58) * var(--right-zoom, 1) * 100%);
-            height: 100%;
+            /* Override inset:0 from .preview-media - must explicitly reset all positioning */
+            inset: auto;
             top: 0;
             left: 50%;
+            right: auto;
+            bottom: auto;
+            width: calc(var(--right-scale, 1.58) * var(--right-zoom, 1) * 100%);
+            height: 100%;
             object-fit: cover;
+            object-position: center center;
             transform: translateX(calc(-50% + var(--right-translate-pct, 0) * var(--right-zoom, 1) * 1%));
         }
 
