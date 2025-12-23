@@ -2896,9 +2896,8 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       // Split screen: Show two speakers stacked vertically (for podcasts/interviews)
       // Uses splitScreenSettings for position control, with fallback to legacy behavior
       const splitSettings = settings?.splitScreenSettings;
-      const speaker1Pos = splitSettings?.speaker1?.cropPosition ?? 17;  // Default: left side
-      const speaker2Pos = splitSettings?.speaker2?.cropPosition ?? 83;  // Default: right side
-      const cropWidthPercent = splitSettings?.speaker1?.cropWidth ?? 33; // Default: 1/3 width
+      const speaker1Pos = splitSettings?.speaker1?.cropPosition ?? 50;  // Default: center (changed from 17)
+      const speaker2Pos = splitSettings?.speaker2?.cropPosition ?? 50;  // Default: center (changed from 83)
       const layoutRatio = splitSettings?.layoutRatio ?? '50-50';  // Default: equal split
       const border = splitSettings?.border ?? { enabled: false, thickness: 2, color: '#ffffff' };
 
@@ -2906,18 +2905,9 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       const speaker1Zoom = Math.max(100, Math.min(200, splitSettings?.speaker1?.zoom ?? 100));
       const speaker2Zoom = Math.max(100, Math.min(200, splitSettings?.speaker2?.zoom ?? 100));
 
-      console.log(`[FFmpeg] Split screen settings - Speaker1: ${speaker1Pos}%, Speaker2: ${speaker2Pos}%, Width: ${cropWidthPercent}%`);
+      console.log(`[FFmpeg] Split screen settings - Speaker1: ${speaker1Pos}%, Speaker2: ${speaker2Pos}%`);
       console.log(`[FFmpeg] Layout ratio: ${layoutRatio}, Border: ${border.enabled ? `${border.thickness}px ${border.color}` : 'none'}`);
       console.log(`[FFmpeg] Zoom levels - Speaker1: ${speaker1Zoom}%, Speaker2: ${speaker2Zoom}%`);
-
-      // Calculate base crop dimensions based on percentage
-      const baseCropW = Math.floor(validWidth * (cropWidthPercent / 100));
-
-      // Apply zoom: higher zoom = smaller crop (e.g., 200% zoom = 50% crop width)
-      const speaker1CropW = Math.floor(baseCropW * (100 / speaker1Zoom));
-      const speaker2CropW = Math.floor(baseCropW * (100 / speaker2Zoom));
-      const speaker1CropH = Math.floor(validHeight * (100 / speaker1Zoom));
-      const speaker2CropH = Math.floor(validHeight * (100 / speaker2Zoom));
 
       // Calculate height ratio based on layoutRatio setting
       let topRatio = 0.5;
@@ -2936,20 +2926,60 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
       const topH = Math.floor(usableHeight * topRatio);
       const bottomH = usableHeight - topH;
 
+      // Calculate the correct crop width based on output aspect ratio (like auto_center and multi-source do)
+      // Each half has dimensions targetWidth x halfHeight
+      // For 1080x1920 output with 50-50 split: each half is 1080x960
+      // halfAspect = 1080/960 = 1.125 (wider than 9:16)
+      const topHalfAspect = targetWidth / topH;
+      const bottomHalfAspect = targetWidth / bottomH;
+
+      // Calculate crop widths based on aspect ratios (same approach as auto_center)
+      // For input wider than half output, crop width = inputHeight * halfAspect
+      const inputAspect = validWidth / validHeight;
+
+      let speaker1CropW, speaker1CropH, speaker2CropW, speaker2CropH;
+
+      if (inputAspect > topHalfAspect) {
+        // Input is wider - crop sides (most common case for 16:9 input)
+        speaker1CropW = Math.floor(validHeight * topHalfAspect);
+        speaker1CropH = validHeight;
+      } else {
+        // Input is taller - crop top/bottom
+        speaker1CropW = validWidth;
+        speaker1CropH = Math.floor(validWidth / topHalfAspect);
+      }
+
+      if (inputAspect > bottomHalfAspect) {
+        speaker2CropW = Math.floor(validHeight * bottomHalfAspect);
+        speaker2CropH = validHeight;
+      } else {
+        speaker2CropW = validWidth;
+        speaker2CropH = Math.floor(validWidth / bottomHalfAspect);
+      }
+
+      // Apply zoom: higher zoom = smaller crop (e.g., 200% zoom = 50% crop width)
+      speaker1CropW = Math.floor(speaker1CropW * (100 / speaker1Zoom));
+      speaker1CropH = Math.floor(speaker1CropH * (100 / speaker1Zoom));
+      speaker2CropW = Math.floor(speaker2CropW * (100 / speaker2Zoom));
+      speaker2CropH = Math.floor(speaker2CropH * (100 / speaker2Zoom));
+
       // Calculate X positions based on percentages (0% = left edge, 100% = right edge)
-      // Adjust max positions based on actual crop widths
+      // Same calculation as auto_center mode
       const speaker1MaxX = validWidth - speaker1CropW;
       const speaker2MaxX = validWidth - speaker2CropW;
-      const speaker1X = Math.floor((speaker1Pos / 100) * speaker1MaxX);
-      const speaker2X = Math.floor((speaker2Pos / 100) * speaker2MaxX);
+      const speaker1X = Math.floor((speaker1Pos / 100) * Math.max(0, speaker1MaxX));
+      const speaker2X = Math.floor((speaker2Pos / 100) * Math.max(0, speaker2MaxX));
 
       // Calculate Y position for zoom (center vertically)
-      const speaker1Y = Math.floor((validHeight - speaker1CropH) / 2);
-      const speaker2Y = Math.floor((validHeight - speaker2CropH) / 2);
+      const speaker1MaxY = validHeight - speaker1CropH;
+      const speaker2MaxY = validHeight - speaker2CropH;
+      const speaker1Y = Math.floor(speaker1MaxY / 2);
+      const speaker2Y = Math.floor(speaker2MaxY / 2);
 
-      console.log(`[FFmpeg] Split crop calculations - Base CropW: ${baseCropW}`);
-      console.log(`[FFmpeg] Speaker1: crop=${speaker1CropW}x${speaker1CropH} at X=${speaker1X}, Y=${speaker1Y} (zoom: ${speaker1Zoom}%)`);
-      console.log(`[FFmpeg] Speaker2: crop=${speaker2CropW}x${speaker2CropH} at X=${speaker2X}, Y=${speaker2Y} (zoom: ${speaker2Zoom}%)`);
+      console.log(`[FFmpeg] Input: ${validWidth}x${validHeight}, aspect=${inputAspect.toFixed(4)}`);
+      console.log(`[FFmpeg] Top half aspect: ${topHalfAspect.toFixed(4)}, Bottom half aspect: ${bottomHalfAspect.toFixed(4)}`);
+      console.log(`[FFmpeg] Speaker1: crop=${speaker1CropW}x${speaker1CropH} at X=${speaker1X}, Y=${speaker1Y} (pos: ${speaker1Pos}%, zoom: ${speaker1Zoom}%)`);
+      console.log(`[FFmpeg] Speaker2: crop=${speaker2CropW}x${speaker2CropH} at X=${speaker2X}, Y=${speaker2Y} (pos: ${speaker2Pos}%, zoom: ${speaker2Zoom}%)`);
       console.log(`[FFmpeg] Heights - Top: ${topH}, Bottom: ${bottomH}, Border: ${borderH}`);
 
       filters.push(`split[s1][s2]`);
