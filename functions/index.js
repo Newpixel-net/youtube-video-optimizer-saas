@@ -21813,6 +21813,7 @@ exports.adminBulkDeleteWizardProjects = functions.https.onCall(async (data, cont
         'processed-clips/',     // Exported processed clips (video-processor)
         'extension-uploads/',   // Extension video/audio captures
         'uploads/',             // Frontend: file uploads, export captures, parallel exports
+        'video-cache/',         // FULL SOURCE VIDEOS cached by video-processor (HUGE!)
         'thumbnails-pro/',      // Pro thumbnail generator (Gemini, DALL-E, Imagen)
         'wizard-thumbnails/',   // Wizard clip AI thumbnails
         'wizard-videos/',       // Legacy - may not exist
@@ -21919,6 +21920,7 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
       'processed-clips/',     // Exported processed clips (video-processor)
       'extension-uploads/',   // Extension video/audio captures
       'uploads/',             // Frontend: file uploads, export captures, parallel exports (HIGH IMPACT!)
+      'video-cache/',         // FULL SOURCE VIDEOS cached by video-processor (HUGE!)
       'thumbnails-pro/',      // Pro thumbnail generator (Gemini, DALL-E, Imagen)
       'wizard-thumbnails/',   // Wizard clip AI thumbnails
       'wizard-videos/',       // Legacy - may not exist
@@ -22003,6 +22005,26 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
 
     console.log(`[adminCleanWizardStorage] ${dryRun ? 'DRY RUN - ' : ''}Total: ${totalFiles} files, ${(totalSize / (1024 * 1024)).toFixed(2)} MB`);
 
+    // Also clean up the videoSourceCache Firestore collection (references to video-cache/ files)
+    let cacheDocsDeleted = 0;
+    try {
+      const cacheSnapshot = await db.collection('videoSourceCache').get();
+      if (!cacheSnapshot.empty) {
+        console.log(`[adminCleanWizardStorage] Found ${cacheSnapshot.size} videoSourceCache documents`);
+        if (!dryRun) {
+          const batch = db.batch();
+          cacheSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          cacheDocsDeleted = cacheSnapshot.size;
+          console.log(`[adminCleanWizardStorage] Deleted ${cacheDocsDeleted} videoSourceCache documents`);
+        } else {
+          cacheDocsDeleted = cacheSnapshot.size;
+        }
+      }
+    } catch (cacheError) {
+      console.log('[adminCleanWizardStorage] videoSourceCache cleanup note:', cacheError.message);
+    }
+
     return {
       success: true,
       dryRun,
@@ -22012,6 +22034,7 @@ exports.adminCleanWizardStorage = functions.https.onCall(async (data, context) =
       totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
       totalSizeGB: (totalSize / (1024 * 1024 * 1024)).toFixed(3),
       breakdown: results,
+      cacheDocsDeleted,
       message: dryRun
         ? `Found ${totalFiles} files (${(totalSize / (1024 * 1024)).toFixed(2)} MB) that would be deleted`
         : `Deleted ${totalFiles} files (${(totalSize / (1024 * 1024)).toFixed(2)} MB)`
