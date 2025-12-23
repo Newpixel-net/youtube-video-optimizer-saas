@@ -9668,10 +9668,10 @@
                 html += '</div>';
                 html += '<div class="speaker-position-slider">';
                 html += '<span class="slider-label-left">L</span>';
-                html += '<input type="range" min="0" max="100" value="' + (splitSettings.speaker1?.cropPosition || 17) + '" ';
+                html += '<input type="range" min="0" max="100" value="' + (splitSettings.speaker1?.cropPosition ?? 50) + '" ';
                 html += 'oninput="app.onSpeakerPositionChange(1, this.value)" onchange="app.setSpeakerPosition(1, this.value)">';
                 html += '<span class="slider-label-right">R</span>';
-                html += '<span class="speaker-position-value">' + (splitSettings.speaker1?.cropPosition || 17) + '%</span>';
+                html += '<span class="speaker-position-value">' + (splitSettings.speaker1?.cropPosition ?? 50) + '%</span>';
                 html += '</div>';
                 html += '</div>';
 
@@ -9690,10 +9690,10 @@
                 html += '</div>';
                 html += '<div class="speaker-position-slider">';
                 html += '<span class="slider-label-left">L</span>';
-                html += '<input type="range" min="0" max="100" value="' + (splitSettings.speaker2?.cropPosition || 83) + '" ';
+                html += '<input type="range" min="0" max="100" value="' + (splitSettings.speaker2?.cropPosition ?? 50) + '" ';
                 html += 'oninput="app.onSpeakerPositionChange(2, this.value)" onchange="app.setSpeakerPosition(2, this.value)">';
                 html += '<span class="slider-label-right">R</span>';
-                html += '<span class="speaker-position-value">' + (splitSettings.speaker2?.cropPosition || 83) + '%</span>';
+                html += '<span class="speaker-position-value">' + (splitSettings.speaker2?.cropPosition ?? 50) + '%</span>';
                 html += '</div>';
                 html += '</div>';
 
@@ -12243,21 +12243,43 @@
                     }
                 }
 
-                // Update preview in real-time
+                // Update preview in real-time using current layout ratio
                 var phoneVideoArea = document.querySelector('.phone-video-area');
                 if (phoneVideoArea) {
-                    // Use -pct suffix for proper CSS calc multiplication (value is a number, not %)
-                    phoneVideoArea.style.setProperty('--speaker' + speaker + '-translate-pct', this.calculateSpeakerTranslate(posNum));
+                    // Get current layout ratio from state to calculate correct scale
+                    var selectedClips = state.clips.filter(function(c) {
+                        return state.selectedClipIds.indexOf(c.id) !== -1;
+                    });
+                    var activeClip = selectedClips[state.customization.activeClipIndex];
+                    var layoutRatio = '50-50';
+                    if (activeClip && state.clipSettings[activeClip.id]?.splitScreenSettings?.layoutRatio) {
+                        layoutRatio = state.clipSettings[activeClip.id].splitScreenSettings.layoutRatio;
+                    }
+
+                    // Calculate scale and translate
+                    var translateValue = this.calculateSpeakerTranslate(speaker, posNum, layoutRatio);
+                    phoneVideoArea.style.setProperty('--speaker' + speaker + '-translate-pct', translateValue);
                 }
             },
 
-            calculateSpeakerTranslate: function(position) {
-                // Calculate CSS translate value to match FFmpeg crop
-                // For 16:9 source cropped to 1/3 width (33%), scale factor is 3x (300%)
-                // The translate moves the crop region within the scaled video
-                var cropWidthPercent = 33.33;
-                var scaleX = 100 / cropWidthPercent;  // ~3
-                return -(position / 100) * (scaleX - 1) * 100;
+            calculateSpeakerTranslate: function(speaker, position, layoutRatio) {
+                // Calculate CSS translate value to match FFmpeg crop (aspect ratio based)
+                // Same formula as in preview rendering: offset = (50 - position) * (scale - 1)
+                var inputAspect = 16 / 9;  // 1.778
+                var outputAspect = 9 / 16; // 0.5625
+
+                var heightFraction = 0.5;
+                if (layoutRatio === '60-40') {
+                    heightFraction = (speaker === 1) ? 0.6 : 0.4;
+                } else if (layoutRatio === '70-30') {
+                    heightFraction = (speaker === 1) ? 0.7 : 0.3;
+                }
+
+                var halfAspect = outputAspect / heightFraction;
+                var scale = inputAspect / halfAspect;
+
+                // offset = (50 - position) * (scale - 1)
+                return (50 - position) * (scale - 1);
             },
 
             // Phase 2: Swap top and bottom positions
