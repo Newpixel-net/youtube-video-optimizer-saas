@@ -747,12 +747,42 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
 
   const targetWidth = output?.resolution?.width || 1080;
   const targetHeight = output?.resolution?.height || 1920;
-  const topHeight = Math.floor(targetHeight * 0.5);     // Main video: 50% height
-  const bottomHeight = Math.floor(targetHeight * 0.5);  // Bottom videos: 50% height
-  const halfWidth = Math.floor(targetWidth / 2);        // Each bottom video: 50% width
   const targetFps = output?.fps || 30;
 
   const safeSettings = settings || {};
+
+  // Get threePersonSettings for positioning
+  const threeSettings = safeSettings.threePersonSettings || {
+    main: { cropPosition: 50, zoom: 100 },
+    left: { cropPosition: 50, zoom: 100 },
+    right: { cropPosition: 50, zoom: 100 },
+    layoutRatio: '50-50'
+  };
+
+  // Calculate layout heights based on ratio
+  const layoutRatio = threeSettings.layoutRatio || '50-50';
+  let topRatio = 0.5, bottomRatio = 0.5;
+  if (layoutRatio === '60-40') {
+    topRatio = 0.6; bottomRatio = 0.4;
+  } else if (layoutRatio === '70-30') {
+    topRatio = 0.7; bottomRatio = 0.3;
+  }
+
+  const topHeight = Math.floor(targetHeight * topRatio);
+  const bottomHeight = targetHeight - topHeight;
+  const halfWidth = Math.floor(targetWidth / 2);
+
+  console.log(`[${jobId}] Three-person layout: ${layoutRatio}, top=${topHeight}px, bottom=${bottomHeight}px`);
+  console.log(`[${jobId}] Three-person settings:`, JSON.stringify(threeSettings));
+
+  // Get position and zoom settings for each zone
+  const mainPos = threeSettings.main?.cropPosition ?? 50;
+  const mainZoom = (threeSettings.main?.zoom ?? 100) / 100;
+  const leftPos = threeSettings.left?.cropPosition ?? 50;
+  const leftZoom = (threeSettings.left?.zoom ?? 100) / 100;
+  const rightPos = threeSettings.right?.cropPosition ?? 50;
+  const rightZoom = (threeSettings.right?.zoom ?? 100) / 100;
+
   const audioMix = safeSettings.audioMix || {
     primaryVolume: 100,
     secondaryVolume: 0,
@@ -779,16 +809,28 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
     }
   }
 
-  // Build complex filter graph for three inputs
+  // Build complex filter graph for three inputs with position controls
   // [0:v] = primary video (main/top), [1:v] = secondary (bottom-left), [2:v] = tertiary (bottom-right)
-  // Layout: Main video at top (full width), two videos at bottom (split)
-  let filterComplex = `
-    [0:v]scale=${targetWidth}:${topHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topHeight},setsar=1[main];
-    [1:v]scale=${halfWidth}:${bottomHeight}:force_original_aspect_ratio=increase,crop=${halfWidth}:${bottomHeight},setsar=1[left];
-    [2:v]scale=${halfWidth}:${bottomHeight}:force_original_aspect_ratio=increase,crop=${halfWidth}:${bottomHeight},setsar=1[right];
-    [left][right]hstack=inputs=2[bottom];
-    [main][bottom]vstack=inputs=2[vout]
-  `.replace(/\n\s*/g, '');
+  // Each video is scaled, cropped with position control, then combined
+
+  // For main (top): Calculate crop based on aspect ratio and position
+  // Main zone aspect = targetWidth / topHeight
+  const mainAspect = targetWidth / topHeight;
+
+  // For bottom zones: each is halfWidth x bottomHeight
+  const bottomAspect = halfWidth / bottomHeight;
+
+  // Build filter for main video (assumes 16:9 input)
+  // Scale to fit height, then crop with position control
+  const mainFilter = `[0:v]scale=-1:${Math.floor(topHeight * mainZoom)}:force_original_aspect_ratio=increase,crop=${targetWidth}:${topHeight}:(iw-${targetWidth})*${mainPos}/100:(ih-${topHeight})/2,setsar=1[main]`;
+
+  // Build filter for left video
+  const leftFilter = `[1:v]scale=-1:${Math.floor(bottomHeight * leftZoom)}:force_original_aspect_ratio=increase,crop=${halfWidth}:${bottomHeight}:(iw-${halfWidth})*${leftPos}/100:(ih-${bottomHeight})/2,setsar=1[left]`;
+
+  // Build filter for right video
+  const rightFilter = `[2:v]scale=-1:${Math.floor(bottomHeight * rightZoom)}:force_original_aspect_ratio=increase,crop=${halfWidth}:${bottomHeight}:(iw-${halfWidth})*${rightPos}/100:(ih-${bottomHeight})/2,setsar=1[right]`;
+
+  let filterComplex = `${mainFilter};${leftFilter};${rightFilter};[left][right]hstack=inputs=2[bottom];[main][bottom]vstack=inputs=2[vout]`;
 
   // Add caption filter if captions were generated
   if (captionFile && fs.existsSync(captionFile)) {

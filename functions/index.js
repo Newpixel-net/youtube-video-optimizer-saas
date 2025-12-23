@@ -20139,22 +20139,40 @@ exports.wizardProcessClip = functions
         // Split screen speaker position settings
         splitScreenSettings: clipSettings.splitScreenSettings ? {
           speaker1: {
-            cropPosition: clipSettings.splitScreenSettings.speaker1?.cropPosition ?? 17,
+            cropPosition: clipSettings.splitScreenSettings.speaker1?.cropPosition ?? 50,
             cropWidth: clipSettings.splitScreenSettings.speaker1?.cropWidth ?? 33,
             zoom: clipSettings.splitScreenSettings.speaker1?.zoom ?? 100
           },
           speaker2: {
-            cropPosition: clipSettings.splitScreenSettings.speaker2?.cropPosition ?? 83,
+            cropPosition: clipSettings.splitScreenSettings.speaker2?.cropPosition ?? 50,
             cropWidth: clipSettings.splitScreenSettings.speaker2?.cropWidth ?? 33,
             zoom: clipSettings.splitScreenSettings.speaker2?.zoom ?? 100
           },
-          preset: clipSettings.splitScreenSettings.preset || 'interview',
+          preset: clipSettings.splitScreenSettings.preset || 'center',
           layoutRatio: clipSettings.splitScreenSettings.layoutRatio || '50-50',
           border: clipSettings.splitScreenSettings.border ? {
             enabled: clipSettings.splitScreenSettings.border.enabled ?? false,
             thickness: clipSettings.splitScreenSettings.border.thickness ?? 2,
             color: clipSettings.splitScreenSettings.border.color || '#ffffff'
           } : { enabled: false, thickness: 2, color: '#ffffff' }
+        } : null,
+
+        // Three person mode position settings
+        threePersonSettings: clipSettings.threePersonSettings ? {
+          main: {
+            cropPosition: clipSettings.threePersonSettings.main?.cropPosition ?? 50,
+            zoom: clipSettings.threePersonSettings.main?.zoom ?? 100
+          },
+          left: {
+            cropPosition: clipSettings.threePersonSettings.left?.cropPosition ?? 50,
+            zoom: clipSettings.threePersonSettings.left?.zoom ?? 100
+          },
+          right: {
+            cropPosition: clipSettings.threePersonSettings.right?.cropPosition ?? 50,
+            zoom: clipSettings.threePersonSettings.right?.zoom ?? 100
+          },
+          preset: clipSettings.threePersonSettings.preset || 'center',
+          layoutRatio: clipSettings.threePersonSettings.layoutRatio || '50-50'
         } : null
       },
 
