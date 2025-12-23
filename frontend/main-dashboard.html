@@ -6958,10 +6958,12 @@
 
             // Paint a single point on the mask
             paintMask: function(x, y) {
-                if (!state.thumbnailEditMaskCtx) return;
+                if (!state.thumbnailEditMaskCtx) {
+                    console.log('paintMask: No mask context');
+                    return;
+                }
 
-                var canvas = document.getElementById('thumbnail-edit-canvas');
-                var ctx = canvas.getContext('2d');
+                console.log('paintMask at:', x, y, 'brush size:', state.thumbnailEditBrushSize);
 
                 // Paint on mask canvas (white for area to edit)
                 state.thumbnailEditMaskCtx.fillStyle = 'white';
@@ -6975,7 +6977,10 @@
 
             // Paint a line on the mask (for smooth strokes)
             paintMaskLine: function(x1, y1, x2, y2) {
-                if (!state.thumbnailEditMaskCtx) return;
+                if (!state.thumbnailEditMaskCtx) {
+                    console.log('paintMaskLine: No mask context');
+                    return;
+                }
 
                 // Draw line on mask
                 state.thumbnailEditMaskCtx.strokeStyle = 'white';
@@ -7118,12 +7123,8 @@
                     return;
                 }
 
+                // Mask is OPTIONAL - if not provided, AI will edit based on prompt alone
                 var maskBase64 = app.getMaskAsBase64();
-                if (!maskBase64) {
-                    state.thumbnailEditError = 'Please paint the area you want to edit';
-                    render();
-                    return;
-                }
 
                 state.thumbnailEditLoading = true;
                 state.thumbnailEditError = null;
@@ -7131,11 +7132,17 @@
 
                 try {
                     var editThumbnail = firebase.functions().httpsCallable('editThumbnailWithAI');
-                    var result = await editThumbnail({
+                    var requestData = {
                         imageUrl: state.thumbnailEditingImage.url,
-                        maskBase64: maskBase64,
                         editPrompt: state.thumbnailEditPrompt.trim()
-                    });
+                    };
+
+                    // Only include mask if user painted something
+                    if (maskBase64) {
+                        requestData.maskBase64 = maskBase64;
+                    }
+
+                    var result = await editThumbnail(requestData);
 
                     if (result.data.success) {
                         state.thumbnailEditResult = {
@@ -11727,7 +11734,7 @@
                 html += '<div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-xl">✨</div>';
                 html += '<div>';
                 html += '<h3 class="text-xl font-bold text-gray-800">Edit Thumbnail with AI</h3>';
-                html += '<p class="text-sm text-gray-500">Paint the area you want to change</p>';
+                html += '<p class="text-sm text-gray-500">Describe your edit - painting is optional</p>';
                 html += '</div>';
                 html += '</div>';
                 html += '<button onclick="app.closeThumbnailEditor()" class="text-gray-400 hover:text-gray-600 text-2xl p-2 hover:bg-gray-100 rounded-lg transition-colors">&times;</button>';
@@ -11804,14 +11811,14 @@
                     html += '</button>';
 
                     html += '</div>';
-                    html += '<p class="text-xs text-gray-400 text-center mt-2">Tip: Paint over text, objects, or any area you want AI to modify</p>';
+                    html += '<p class="text-xs text-gray-400 text-center mt-2">💡 <strong>Optional:</strong> Paint to select specific areas, or skip to edit the entire image</p>';
                     html += '</div>';
 
                     // Edit prompt input
                     html += '<div class="mb-4">';
-                    html += '<label class="block text-gray-700 font-semibold mb-2">What should AI change?</label>';
+                    html += '<label class="block text-gray-700 font-semibold mb-2">What should AI change? <span class="text-pink-500">*</span></label>';
                     html += '<input type="text" id="thumbnail-edit-prompt" placeholder="e.g., Change \'dreams\' to \'dream\', remove the arrow, make text bigger, add a glow effect..." value="' + utils.escapeHtml(state.thumbnailEditPrompt) + '" oninput="app.setEditPrompt(this.value)" class="w-full p-3 border border-gray-200 rounded-xl focus:border-pink-500 focus:ring-2 focus:ring-pink-200 outline-none transition-all" />';
-                    html += '<p class="text-xs text-gray-400 mt-1">Be specific about what you want to change in the painted area</p>';
+                    html += '<p class="text-xs text-gray-400 mt-1">Describe what you want to change. If you painted an area, the edit will focus there.</p>';
                     html += '</div>';
 
                     // Example prompts

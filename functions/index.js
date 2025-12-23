@@ -6975,14 +6975,13 @@ exports.editThumbnailWithAI = functions
 
     const { imageUrl, maskBase64, editPrompt, editStrength = 0.85 } = data;
     const TOKEN_COST = 2; // Edit cost - cheaper than regeneration
+    const hasMask = maskBase64 && maskBase64.length > 100; // Check if mask has actual content
 
     // Validation
     if (!imageUrl) {
       throw new functions.https.HttpsError('invalid-argument', 'Image URL is required');
     }
-    if (!maskBase64) {
-      throw new functions.https.HttpsError('invalid-argument', 'Mask is required - please paint the area to edit');
-    }
+    // Mask is now OPTIONAL - if not provided, AI will edit entire image based on prompt
     if (!editPrompt || editPrompt.trim().length < 3) {
       throw new functions.https.HttpsError('invalid-argument', 'Edit prompt is required (min 3 characters)');
     }
@@ -7021,11 +7020,16 @@ exports.editThumbnailWithAI = functions
         try {
           const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
-          // Build comprehensive edit prompt
-          const fullPrompt = `You are performing a PRECISE IMAGE EDIT on a YouTube thumbnail.
+          // Build prompt based on whether mask is provided
+          let fullPrompt;
+          let contentParts;
+
+          if (hasMask) {
+            // WITH MASK - targeted editing
+            fullPrompt = `You are performing a PRECISE IMAGE EDIT on a YouTube thumbnail.
 
 ═══════════════════════════════════════════════════════════════
-EDITING INSTRUCTIONS - READ CAREFULLY
+EDITING INSTRUCTIONS - MASKED AREA EDIT
 ═══════════════════════════════════════════════════════════════
 
 TWO IMAGES PROVIDED:
@@ -7041,12 +7045,6 @@ CRITICAL RULES:
 4. Match lighting, shadows, and style perfectly
 5. Maintain the professional YouTube thumbnail quality
 
-COMMON EDIT TYPES:
-- Text changes: If fixing text, ensure new text is crisp, readable, same font style
-- Object removal: Replace with appropriate background/fill
-- Object addition: Match the image's style and lighting
-- Color/style changes: Apply consistently within masked area
-
 OUTPUT REQUIREMENTS:
 - Same dimensions as input (1280x720 or similar)
 - High quality, no artifacts at edit boundaries
@@ -7054,17 +7052,47 @@ OUTPUT REQUIREMENTS:
 
 Generate the edited thumbnail now.`;
 
-          console.log(`[EditThumbnail] Calling Gemini with mask and prompt`);
+            contentParts = [
+              { inlineData: { mimeType: imageMimeType, data: imageBase64 } },
+              { inlineData: { mimeType: 'image/png', data: maskBase64 } },
+              { text: fullPrompt }
+            ];
+            console.log(`[EditThumbnail] Calling Gemini WITH mask`);
+          } else {
+            // WITHOUT MASK - general editing based on prompt
+            fullPrompt = `You are editing a YouTube thumbnail based on the user's instructions.
+
+═══════════════════════════════════════════════════════════════
+EDITING INSTRUCTIONS - GENERAL EDIT
+═══════════════════════════════════════════════════════════════
+
+USER'S EDIT REQUEST: "${editPrompt.trim()}"
+
+Apply the requested changes to the thumbnail. Use your judgment to:
+- Identify what needs to be changed based on the prompt
+- Make the changes while maintaining the overall style and quality
+- Ensure text is crisp and readable if text changes are requested
+- Preserve elements that should not be changed
+
+OUTPUT REQUIREMENTS:
+- Same dimensions as input (1280x720 or similar)
+- High quality YouTube thumbnail
+- Professional appearance
+
+Generate the edited thumbnail now.`;
+
+            contentParts = [
+              { inlineData: { mimeType: imageMimeType, data: imageBase64 } },
+              { text: fullPrompt }
+            ];
+            console.log(`[EditThumbnail] Calling Gemini WITHOUT mask (prompt-only edit)`);
+          }
 
           const result = await ai.models.generateContent({
             model: 'gemini-3-pro-image-preview',
             contents: [{
               role: 'user',
-              parts: [
-                { inlineData: { mimeType: imageMimeType, data: imageBase64 } },
-                { inlineData: { mimeType: 'image/png', data: maskBase64 } },
-                { text: fullPrompt }
-              ]
+              parts: contentParts
             }],
             config: {
               responseModalities: ['image', 'text']
