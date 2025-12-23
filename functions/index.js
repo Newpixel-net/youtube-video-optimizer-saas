@@ -20133,6 +20133,19 @@ exports.wizardProcessClip = functions
           secondaryVolume: clipSettings.audioMix.secondaryVolume ?? 0,
           primaryMuted: clipSettings.audioMix.primaryMuted ?? false,
           secondaryMuted: clipSettings.audioMix.secondaryMuted ?? true
+        } : null,
+
+        // Split screen speaker position settings
+        splitScreenSettings: clipSettings.splitScreenSettings ? {
+          speaker1: {
+            cropPosition: clipSettings.splitScreenSettings.speaker1?.cropPosition ?? 17,
+            cropWidth: clipSettings.splitScreenSettings.speaker1?.cropWidth ?? 33
+          },
+          speaker2: {
+            cropPosition: clipSettings.splitScreenSettings.speaker2?.cropPosition ?? 83,
+            cropWidth: clipSettings.splitScreenSettings.speaker2?.cropWidth ?? 33
+          },
+          preset: clipSettings.splitScreenSettings.preset || 'interview'
         } : null
       },
 

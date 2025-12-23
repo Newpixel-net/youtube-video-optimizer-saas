@@ -2157,6 +2157,9 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            /* CSS variables for dynamic speaker positions (set via JavaScript) */
+            --speaker1-translate: -34%;  /* Default: 17% position → left 1/3 */
+            --speaker2-translate: -166%; /* Default: 83% position → right 1/3 */
         }
 
         .phone-video-area.reframe-split_screen .split-preview-top,
@@ -2175,7 +2178,8 @@
             top: 0;
             left: 0;
             object-fit: cover;
-            transform-origin: left center;
+            /* Use CSS variable for position-aware cropping preview */
+            transform: translateX(var(--speaker1-translate));
         }
 
         .phone-video-area.reframe-split_screen .split-preview-bottom iframe,
@@ -2185,10 +2189,10 @@
             width: 300%;
             height: 200%;
             top: 0;
-            right: 0;
-            left: auto;
+            left: 0;
             object-fit: cover;
-            transform-origin: right center;
+            /* Use CSS variable for position-aware cropping preview */
+            transform: translateX(var(--speaker2-translate));
         }
 
         .phone-video-area.reframe-split_screen .split-label {
@@ -3155,6 +3159,144 @@
 
         .reframe-layout-card.selected .reframe-layout-name {
             color: white;
+        }
+
+        /* Split Position Panel */
+        .split-position-panel {
+            margin-top: 0.75rem;
+        }
+
+        .split-presets-row {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .split-preset-btn {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+        }
+
+        .split-preset-btn:hover {
+            background: rgba(236, 72, 153, 0.15);
+            border-color: rgba(236, 72, 153, 0.4);
+        }
+
+        .split-preset-btn.active {
+            background: rgba(236, 72, 153, 0.25);
+            border-color: rgba(236, 72, 153, 0.6);
+            color: white;
+        }
+
+        .preset-icon {
+            font-size: 0.9rem;
+        }
+
+        .speaker-position-controls {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        .speaker-position-controls.expanded {
+            max-height: 200px;
+            opacity: 1;
+        }
+
+        .speaker-position-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .speaker-position-row:last-child {
+            border-bottom: none;
+        }
+
+        .speaker-position-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .speaker-badge {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .speaker-badge.speaker-1 {
+            background: rgba(236, 72, 153, 0.4);
+            color: white;
+        }
+
+        .speaker-badge.speaker-2 {
+            background: rgba(139, 92, 246, 0.4);
+            color: white;
+        }
+
+        .speaker-position-slider {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex: 1;
+            max-width: 180px;
+        }
+
+        .speaker-position-slider input[type="range"] {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .speaker-position-slider input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ec4899;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .slider-label-left,
+        .slider-label-right {
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 600;
+        }
+
+        .speaker-position-value {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.6);
+            min-width: 32px;
+            text-align: right;
         }
 
         /* Secondary Source Panel */
@@ -8579,7 +8721,23 @@
             }
             // Calculate object-position for percentage-based cropping
             var objectPosX = cropPosPercent + '%';
-            html += '<div class="' + videoAreaClasses + '" data-crop-percent="' + cropPosPercent + '" style="--crop-position: ' + objectPosX + ';">';
+
+            // Calculate CSS variables for split screen speaker positions
+            var splitCssVars = '';
+            if (reframeMode === 'split_screen') {
+                var splitSettings = settings.splitScreenSettings || {
+                    speaker1: { cropPosition: 17 },
+                    speaker2: { cropPosition: 83 }
+                };
+                var speaker1Pos = splitSettings.speaker1?.cropPosition ?? 17;
+                var speaker2Pos = splitSettings.speaker2?.cropPosition ?? 83;
+                // Calculate translate values: for 300% width (3x scale), translate = -(pos/100) * (3-1) * 100
+                var speaker1Translate = -(speaker1Pos / 100) * 200;
+                var speaker2Translate = -(speaker2Pos / 100) * 200;
+                splitCssVars = ' --speaker1-translate: ' + speaker1Translate + '%; --speaker2-translate: ' + speaker2Translate + '%;';
+            }
+
+            html += '<div class="' + videoAreaClasses + '" data-crop-percent="' + cropPosPercent + '" style="--crop-position: ' + objectPosX + ';' + splitCssVars + '">';
 
             // Generate reframe-specific content
             // Determine which media goes where based on secondary position
@@ -8972,6 +9130,70 @@
 
             html += '</div>';
             html += '</div>';
+
+            // Split Screen Position Controls (only show when split_screen mode is selected)
+            if (settings.reframeMode === 'split_screen') {
+                var splitSettings = settings.splitScreenSettings || {
+                    speaker1: { cropPosition: 17 },
+                    speaker2: { cropPosition: 83 },
+                    preset: 'interview'
+                };
+
+                html += '<div class="customization-panel split-position-panel">';
+                html += '<div class="panel-header">';
+                html += '<span class="panel-icon">📍</span>';
+                html += '<span class="panel-title">SPEAKER POSITIONS</span>';
+                html += '</div>';
+
+                // Preset buttons
+                html += '<div class="split-presets-row">';
+                html += '<button class="split-preset-btn' + (splitSettings.preset === 'interview' ? ' active' : '') + '" onclick="app.setSplitPreset(\'interview\')">';
+                html += '<span class="preset-icon">👥</span> Interview (L+R)';
+                html += '</button>';
+                html += '<button class="split-preset-btn' + (splitSettings.preset === 'center' ? ' active' : '') + '" onclick="app.setSplitPreset(\'center\')">';
+                html += '<span class="preset-icon">🎯</span> Both Center';
+                html += '</button>';
+                html += '<button class="split-preset-btn' + (splitSettings.preset === 'custom' ? ' active' : '') + '" onclick="app.setSplitPreset(\'custom\')">';
+                html += '<span class="preset-icon">✏️</span> Custom';
+                html += '</button>';
+                html += '</div>';
+
+                // Speaker position sliders (show expanded when custom or always show)
+                html += '<div class="speaker-position-controls' + (splitSettings.preset === 'custom' ? ' expanded' : '') + '">';
+
+                // Speaker 1 (Top)
+                html += '<div class="speaker-position-row">';
+                html += '<div class="speaker-position-label">';
+                html += '<span class="speaker-badge speaker-1">1</span>';
+                html += '<span>Speaker 1 (Top)</span>';
+                html += '</div>';
+                html += '<div class="speaker-position-slider">';
+                html += '<span class="slider-label-left">L</span>';
+                html += '<input type="range" min="0" max="100" value="' + (splitSettings.speaker1?.cropPosition || 17) + '" ';
+                html += 'oninput="app.onSpeakerPositionChange(1, this.value)" onchange="app.setSpeakerPosition(1, this.value)">';
+                html += '<span class="slider-label-right">R</span>';
+                html += '<span class="speaker-position-value">' + (splitSettings.speaker1?.cropPosition || 17) + '%</span>';
+                html += '</div>';
+                html += '</div>';
+
+                // Speaker 2 (Bottom)
+                html += '<div class="speaker-position-row">';
+                html += '<div class="speaker-position-label">';
+                html += '<span class="speaker-badge speaker-2">2</span>';
+                html += '<span>Speaker 2 (Bottom)</span>';
+                html += '</div>';
+                html += '<div class="speaker-position-slider">';
+                html += '<span class="slider-label-left">L</span>';
+                html += '<input type="range" min="0" max="100" value="' + (splitSettings.speaker2?.cropPosition || 83) + '" ';
+                html += 'oninput="app.onSpeakerPositionChange(2, this.value)" onchange="app.setSpeakerPosition(2, this.value)">';
+                html += '<span class="slider-label-right">R</span>';
+                html += '<span class="speaker-position-value">' + (splitSettings.speaker2?.cropPosition || 83) + '%</span>';
+                html += '</div>';
+                html += '</div>';
+
+                html += '</div>'; // speaker-position-controls
+                html += '</div>'; // customization-panel
+            }
 
             // Secondary Source Panel (only show for split-related modes)
             var showSecondarySource = ['split_screen', 'three_person', 'gameplay', 'broll_split'].indexOf(settings.reframeMode) !== -1;
@@ -9785,6 +10007,19 @@
                 reframeMode: 'auto_center',
                 cropPosition: 50, // 0-100 percentage (0=left, 50=center, 100=right)
                 aiSmartCrop: false, // Whether AI detected the position
+
+                // Split screen specific settings (for split_screen mode)
+                splitScreenSettings: {
+                    speaker1: {
+                        cropPosition: 17,  // Default: left 1/3 center (0-100%)
+                        cropWidth: 33      // Percentage of source width to crop
+                    },
+                    speaker2: {
+                        cropPosition: 83,  // Default: right 1/3 center (0-100%)
+                        cropWidth: 33
+                    },
+                    preset: 'interview'    // 'interview', 'center', 'custom'
+                },
 
                 // Timeline/trim settings
                 trimStart: 0,
@@ -11307,6 +11542,115 @@
                 }
                 state.clipSettings[activeClip.id].reframeMode = mode;
                 render();
+            },
+
+            // Split screen preset and position functions
+            setSplitPreset: function(preset) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].splitScreenSettings) {
+                    state.clipSettings[activeClip.id].splitScreenSettings = {
+                        speaker1: { cropPosition: 17, cropWidth: 33 },
+                        speaker2: { cropPosition: 83, cropWidth: 33 },
+                        preset: 'interview'
+                    };
+                }
+
+                var settings;
+                switch(preset) {
+                    case 'interview':
+                        settings = {
+                            speaker1: { cropPosition: 17, cropWidth: 33 },
+                            speaker2: { cropPosition: 83, cropWidth: 33 },
+                            preset: 'interview'
+                        };
+                        break;
+                    case 'center':
+                        settings = {
+                            speaker1: { cropPosition: 50, cropWidth: 33 },
+                            speaker2: { cropPosition: 50, cropWidth: 33 },
+                            preset: 'center'
+                        };
+                        break;
+                    case 'custom':
+                        // Keep current positions but switch to custom mode
+                        settings = Object.assign({}, state.clipSettings[activeClip.id].splitScreenSettings);
+                        settings.preset = 'custom';
+                        break;
+                    default:
+                        settings = {
+                            speaker1: { cropPosition: 50, cropWidth: 33 },
+                            speaker2: { cropPosition: 50, cropWidth: 33 },
+                            preset: 'custom'
+                        };
+                }
+                state.clipSettings[activeClip.id].splitScreenSettings = settings;
+                render();
+            },
+
+            setSpeakerPosition: function(speaker, position) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                if (!state.clipSettings[activeClip.id].splitScreenSettings) {
+                    state.clipSettings[activeClip.id].splitScreenSettings = {
+                        speaker1: { cropPosition: 17, cropWidth: 33 },
+                        speaker2: { cropPosition: 83, cropWidth: 33 },
+                        preset: 'custom'
+                    };
+                }
+
+                var posNum = parseInt(position, 10);
+                if (isNaN(posNum)) posNum = 50;
+                posNum = Math.max(0, Math.min(100, posNum));
+
+                var speakerKey = 'speaker' + speaker;
+                if (!state.clipSettings[activeClip.id].splitScreenSettings[speakerKey]) {
+                    state.clipSettings[activeClip.id].splitScreenSettings[speakerKey] = { cropPosition: 50, cropWidth: 33 };
+                }
+                state.clipSettings[activeClip.id].splitScreenSettings[speakerKey].cropPosition = posNum;
+                state.clipSettings[activeClip.id].splitScreenSettings.preset = 'custom';
+                render();
+            },
+
+            onSpeakerPositionChange: function(speaker, position) {
+                // Real-time update of the UI without full render (for smooth slider interaction)
+                var posNum = parseInt(position, 10);
+                if (isNaN(posNum)) posNum = 50;
+                posNum = Math.max(0, Math.min(100, posNum));
+
+                // Update value display
+                var sliderRows = document.querySelectorAll('.speaker-position-row');
+                if (sliderRows[speaker - 1]) {
+                    var valueDisplay = sliderRows[speaker - 1].querySelector('.speaker-position-value');
+                    if (valueDisplay) {
+                        valueDisplay.textContent = posNum + '%';
+                    }
+                }
+
+                // Update preview in real-time
+                var phoneVideoArea = document.querySelector('.phone-video-area');
+                if (phoneVideoArea) {
+                    phoneVideoArea.style.setProperty('--speaker' + speaker + '-translate', this.calculateSpeakerTranslate(posNum) + '%');
+                }
+            },
+
+            calculateSpeakerTranslate: function(position) {
+                // Calculate CSS translate value to match FFmpeg crop
+                // For 16:9 source cropped to 1/3 width (33%), scale factor is 3x (300%)
+                // The translate moves the crop region within the scaled video
+                var cropWidthPercent = 33.33;
+                var scaleX = 100 / cropWidthPercent;  // ~3
+                return -(position / 100) * (scaleX - 1) * 100;
             },
 
             toggleAdvancedOptions: function() {
