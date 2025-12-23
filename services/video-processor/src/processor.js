@@ -2124,6 +2124,13 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
     if (isThreePersonMode) {
       // Three person mode: main video at top, two videos at bottom
       console.log(`[${jobId}] Starting three-source processing (three_person mode)`);
+      console.log(`[${jobId}] ========== VIDEO IDs FOR DOWNLOAD ==========`);
+      console.log(`[${jobId}] Primary videoId: ${job.videoId}`);
+      console.log(`[${jobId}] Secondary videoId: ${secondarySource?.youtubeVideoId || 'NONE'}`);
+      console.log(`[${jobId}] Tertiary videoId: ${tertiarySource?.youtubeVideoId || 'NONE'}`);
+      console.log(`[${jobId}] Secondary uploadedUrl: ${secondarySource?.uploadedUrl ? 'YES' : 'NO'}`);
+      console.log(`[${jobId}] Tertiary uploadedUrl: ${tertiarySource?.uploadedUrl ? 'YES' : 'NO'}`);
+      console.log(`[${jobId}] ==========================================`);
       await updateProgress(jobRef, 35, 'Downloading secondary videos...');
 
       const secondaryFile = await downloadSecondarySource({
@@ -2144,6 +2151,14 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
 
       if (secondaryFile && tertiaryFile) {
         console.log(`[${jobId}] All three sources downloaded, starting three-source processing`);
+        console.log(`[${jobId}] ========== THREE SOURCE FILES ==========`);
+        console.log(`[${jobId}] Primary file: ${downloadedFile}`);
+        console.log(`[${jobId}] Secondary file: ${secondaryFile}`);
+        console.log(`[${jobId}] Tertiary file: ${tertiaryFile}`);
+        console.log(`[${jobId}] Primary size: ${fs.statSync(downloadedFile).size} bytes`);
+        console.log(`[${jobId}] Secondary size: ${fs.statSync(secondaryFile).size} bytes`);
+        console.log(`[${jobId}] Tertiary size: ${fs.statSync(tertiaryFile).size} bytes`);
+        console.log(`[${jobId}] ==========================================`);
         await updateProgress(jobRef, 50, 'Processing three person split...');
         processedFile = await processThreeSourceVideo({
           jobId,
