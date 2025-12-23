@@ -15098,8 +15098,23 @@
                 console.log('CROP POSITION:', clipSettings.cropPosition, '(type:', typeof clipSettings.cropPosition, ')');
                 console.log('Caption Style:', clipSettings.captionStyle);
                 console.log('Secondary Source:', JSON.stringify(clipSettings.secondarySource, null, 2));
+                console.log('Tertiary Source:', JSON.stringify(clipSettings.tertiarySource, null, 2));
                 console.log('Audio Mix:', JSON.stringify(clipSettings.audioMix, null, 2));
-                console.log('Full clipSettings:', JSON.stringify(clipSettings, null, 2));
+                console.log('Full clipSettings (excluding large objects):', JSON.stringify({
+                    reframeMode: clipSettings.reframeMode,
+                    secondarySource: clipSettings.secondarySource ? {
+                        enabled: clipSettings.secondarySource.enabled,
+                        type: clipSettings.secondarySource.type,
+                        youtubeVideoId: clipSettings.secondarySource.youtubeVideoId,
+                        uploadedUrl: clipSettings.secondarySource.uploadedUrl ? 'HAS_URL' : null
+                    } : null,
+                    tertiarySource: clipSettings.tertiarySource ? {
+                        enabled: clipSettings.tertiarySource.enabled,
+                        type: clipSettings.tertiarySource.type,
+                        youtubeVideoId: clipSettings.tertiarySource.youtubeVideoId,
+                        uploadedUrl: clipSettings.tertiarySource.uploadedUrl ? 'HAS_URL' : null
+                    } : null
+                }, null, 2));
                 console.log('=============================')
 
                 // Get clip timing info
