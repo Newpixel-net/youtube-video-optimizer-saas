@@ -2102,12 +2102,17 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
     console.log(`[${jobId}] Tertiary source exists: ${!!tertiarySource}`);
     if (tertiarySource) {
       console.log(`[${jobId}] Tertiary enabled: ${tertiarySource.enabled}`);
-      console.log(`[${jobId}] Tertiary uploadedUrl: ${tertiarySource.uploadedUrl ? 'YES' : 'NO'}`);
-      console.log(`[${jobId}] Tertiary youtubeVideoId: ${tertiarySource.youtubeVideoId || 'NO'}`);
+      console.log(`[${jobId}] Tertiary type: ${tertiarySource.type}`);
+      console.log(`[${jobId}] Tertiary uploadedUrl: ${tertiarySource.uploadedUrl ? 'SET (' + tertiarySource.uploadedUrl.substring(0, 60) + '...)' : 'NOT SET'}`);
+      console.log(`[${jobId}] Tertiary youtubeVideoId: ${tertiarySource.youtubeVideoId || 'NOT SET'}`);
+    } else {
+      console.log(`[${jobId}] WARNING: No tertiarySource in job.settings!`);
     }
 
     const hasSecondary = secondarySource?.enabled && (secondarySource.uploadedUrl || secondarySource.youtubeVideoId);
     const hasTertiary = tertiarySource?.enabled && (tertiarySource.uploadedUrl || tertiarySource.youtubeVideoId);
+    console.log(`[${jobId}] hasSecondary (enabled + url): ${hasSecondary}`);
+    console.log(`[${jobId}] hasTertiary (enabled + url): ${hasTertiary}`);
 
     // Determine processing mode
     const isThreePersonMode = reframeMode === 'three_person' && hasSecondary && hasTertiary;
@@ -2148,6 +2153,13 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
         primaryDuration,
         youtubeAuth
       });
+
+      // Detailed logging of download results
+      console.log(`[${jobId}] ========== DOWNLOAD RESULTS ==========`);
+      console.log(`[${jobId}] secondaryFile: ${secondaryFile ? 'SUCCESS (' + secondaryFile + ')' : 'FAILED (null)'}`);
+      console.log(`[${jobId}] tertiaryFile: ${tertiaryFile ? 'SUCCESS (' + tertiaryFile + ')' : 'FAILED (null)'}`);
+      console.log(`[${jobId}] Both downloads successful?: ${!!(secondaryFile && tertiaryFile)}`);
+      console.log(`[${jobId}] =====================================`);
 
       if (secondaryFile && tertiaryFile) {
         console.log(`[${jobId}] All three sources downloaded, starting three-source processing`);
