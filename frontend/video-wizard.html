@@ -2199,14 +2199,15 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
-            width: calc(var(--speaker1-scale, 1.58) * var(--speaker1-zoom, 1) * 100%);
+            /* Base width scales for 16:9 in half of 9:16 container */
+            width: calc(var(--speaker1-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            /* Use CSS variables for position-aware cropping and zoom preview */
-            /* --speaker1-translate-pct is the X offset based on (50-position)*(scale-1) */
-            transform: translateX(calc(-50% + var(--speaker1-translate-pct, 0) * var(--speaker1-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            /* Zoom uses scale() which visually zooms the content */
+            transform: translateX(calc(-50% + var(--speaker1-translate-pct, 0) * 1%)) scale(var(--speaker1-zoom, 1));
+            transform-origin: center center;
         }
 
         .phone-video-area.reframe-split_screen .split-preview-bottom iframe,
@@ -2219,14 +2220,15 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
-            width: calc(var(--speaker2-scale, 1.58) * var(--speaker2-zoom, 1) * 100%);
+            /* Base width scales for 16:9 in half of 9:16 container */
+            width: calc(var(--speaker2-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            /* Use CSS variables for position-aware cropping and zoom preview */
-            /* --speaker2-translate-pct is the X offset based on (50-position)*(scale-1) */
-            transform: translateX(calc(-50% + var(--speaker2-translate-pct, 0) * var(--speaker2-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            /* Zoom uses scale() which visually zooms the content */
+            transform: translateX(calc(-50% + var(--speaker2-translate-pct, 0) * 1%)) scale(var(--speaker2-zoom, 1));
+            transform-origin: center center;
         }
 
         .phone-video-area.reframe-split_screen .split-label {
@@ -2254,13 +2256,14 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
-            width: calc(var(--speaker1-scale, 1.58) * var(--speaker1-zoom, 1) * 100%);
+            /* Base width scales for 16:9 in half of 9:16 container */
+            width: calc(var(--speaker1-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            /* Use CSS variables for position-aware cropping and zoom preview */
-            transform: translateX(calc(-50% + var(--speaker1-translate-pct, 0) * var(--speaker1-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            transform: translateX(calc(-50% + var(--speaker1-translate-pct, 0) * 1%)) scale(var(--speaker1-zoom, 1));
+            transform-origin: center center;
         }
 
         .phone-video-area.reframe-split_screen.multi-source .split-preview-bottom iframe,
@@ -2273,13 +2276,14 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
-            width: calc(var(--speaker2-scale, 1.58) * var(--speaker2-zoom, 1) * 100%);
+            /* Base width scales for 16:9 in half of 9:16 container */
+            width: calc(var(--speaker2-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            /* Use CSS variables for position-aware cropping and zoom preview */
-            transform: translateX(calc(-50% + var(--speaker2-translate-pct, 0) * var(--speaker2-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            transform: translateX(calc(-50% + var(--speaker2-translate-pct, 0) * 1%)) scale(var(--speaker2-zoom, 1));
+            transform-origin: center center;
         }
 
         /* Split screen preview play/stop buttons */
@@ -2382,11 +2386,13 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            width: calc(var(--main-scale, 1.58) * var(--main-zoom, 1) * 100%);
+            width: calc(var(--main-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            transform: translateX(calc(-50% + var(--main-translate-pct, 0) * var(--main-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            transform: translateX(calc(-50% + var(--main-translate-pct, 0) * 1%)) scale(var(--main-zoom, 1));
+            transform-origin: center center;
         }
 
         /* Left (bottom-left) video - uses dynamic scale and position */
@@ -2400,11 +2406,13 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            width: calc(var(--left-scale, 1.58) * var(--left-zoom, 1) * 100%);
+            width: calc(var(--left-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            transform: translateX(calc(-50% + var(--left-translate-pct, 0) * var(--left-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            transform: translateX(calc(-50% + var(--left-translate-pct, 0) * 1%)) scale(var(--left-zoom, 1));
+            transform-origin: center center;
         }
 
         /* Right (bottom-right) video - uses dynamic scale and position */
@@ -2418,11 +2426,13 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            width: calc(var(--right-scale, 1.58) * var(--right-zoom, 1) * 100%);
+            width: calc(var(--right-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            transform: translateX(calc(-50% + var(--right-translate-pct, 0) * var(--right-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            transform: translateX(calc(-50% + var(--right-translate-pct, 0) * 1%)) scale(var(--right-zoom, 1));
+            transform-origin: center center;
         }
 
         .phone-video-area.reframe-three_person .zone-label {
@@ -2450,11 +2460,13 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            width: calc(var(--main-scale, 1.58) * var(--main-zoom, 1) * 100%);
+            width: calc(var(--main-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            transform: translateX(calc(-50% + var(--main-translate-pct, 0) * var(--main-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            transform: translateX(calc(-50% + var(--main-translate-pct, 0) * 1%)) scale(var(--main-zoom, 1));
+            transform-origin: center center;
         }
 
         .phone-video-area.reframe-three_person.multi-source .three-zone-left iframe,
@@ -2467,11 +2479,13 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            width: calc(var(--left-scale, 1.58) * var(--left-zoom, 1) * 100%);
+            width: calc(var(--left-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            transform: translateX(calc(-50% + var(--left-translate-pct, 0) * var(--left-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            transform: translateX(calc(-50% + var(--left-translate-pct, 0) * 1%)) scale(var(--left-zoom, 1));
+            transform-origin: center center;
         }
 
         .phone-video-area.reframe-three_person.multi-source .three-zone-right iframe,
@@ -2484,11 +2498,13 @@
             left: 50%;
             right: auto;
             bottom: auto;
-            width: calc(var(--right-scale, 1.58) * var(--right-zoom, 1) * 100%);
+            width: calc(var(--right-scale, 1.58) * 100%);
             height: 100%;
             object-fit: cover;
             object-position: center center;
-            transform: translateX(calc(-50% + var(--right-translate-pct, 0) * var(--right-zoom, 1) * 1%));
+            /* Transform: translateX for position + scale for zoom */
+            transform: translateX(calc(-50% + var(--right-translate-pct, 0) * 1%)) scale(var(--right-zoom, 1));
+            transform-origin: center center;
         }
 
         /* Gameplay mode */
@@ -9433,6 +9449,18 @@
                 html += '<div class="three-zone three-zone-main">' + mainMedia + '<span class="zone-label">' + mainLabel + '</span></div>';
                 html += '<div class="three-zone three-zone-left">' + leftMedia + '<span class="zone-label">' + leftLabel + '</span></div>';
                 html += '<div class="three-zone three-zone-right">' + rightMedia + '<span class="zone-label">' + rightLabel + '</span></div>';
+
+                // Add preview play button for three person
+                if (!state.customization.playingInFrame) {
+                    html += '<button class="split-preview-play-btn" onclick="app.playInFrameVideo()" title="Preview three person">';
+                    html += '<span class="play-icon">▶</span>';
+                    html += '<span class="play-label">Preview</span>';
+                    html += '</button>';
+                } else {
+                    html += '<button class="split-preview-stop-btn" onclick="app.stopInFrameVideo()" title="Stop preview">';
+                    html += '✕ Stop';
+                    html += '</button>';
+                }
             } else if (reframeMode === 'gameplay') {
                 // Gameplay: Main video (gameplay) with facecam overlay in corner
                 // Primary video is always the gameplay, secondary is facecam
