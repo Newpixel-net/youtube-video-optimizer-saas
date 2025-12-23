@@ -10506,16 +10506,16 @@
                     if (selectedImg.hdUrl) {
                         html += '<button data-hd-download-btn="' + state.selectedThumbnailIndex + '" onclick="app.downloadHdThumbnail(\'' + utils.escapeHtml(selectedImg.hdUrl) + '\', ' + state.selectedThumbnailIndex + ')" class="btn-primary bg-gradient-to-r from-blue-500 to-indigo-600 inline-flex items-center justify-center gap-2"><span>⬆️</span> Download HD</button>';
                     } else {
-                        html += '<button onclick="app.upscaleThumbnail(\'' + utils.escapeHtml(selectedImg.url) + '\', ' + state.selectedThumbnailIndex + ', \'single\')" ' + (state.hdUpscaleLoading ? 'disabled' : '') + ' class="btn-secondary inline-flex items-center justify-center gap-2 ' + (state.hdUpscaleLoading ? 'opacity-50 cursor-not-allowed' : '') + '"><span>' + (state.hdUpscaleLoading ? '⏳' : '⬆️') + '</span> ' + (state.hdUpscaleLoading ? 'Upscaling...' : 'Upscale HD (1 credit)') + '</button>';
+                        html += '<button onclick="app.upscaleThumbnail(\'' + utils.escapeHtml(selectedImg.url) + '\', ' + state.selectedThumbnailIndex + ', \'single\')" ' + (state.hdUpscaleLoading ? 'disabled' : '') + ' class="px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-200 inline-flex items-center justify-center gap-2 transition-all ' + (state.hdUpscaleLoading ? 'opacity-50 cursor-not-allowed' : '') + '"><span>' + (state.hdUpscaleLoading ? '⏳' : '⬆️') + '</span> ' + (state.hdUpscaleLoading ? 'Upscaling...' : 'Upscale HD (1 credit)') + '</button>';
                     }
 
-                    html += '<button onclick="app.previewThumbnail(\'' + utils.escapeHtml(selectedImg.url) + '\')" class="btn-secondary inline-flex items-center justify-center gap-2"><span>🔍</span> Preview</button>';
+                    html += '<button onclick="app.previewThumbnail(\'' + utils.escapeHtml(selectedImg.url) + '\')" class="px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-200 inline-flex items-center justify-center gap-2 transition-all"><span>🔍</span> Preview</button>';
 
                     // Edit with AI button
                     html += '<button onclick="app.openThumbnailEditor(\'' + utils.escapeHtml(selectedImg.url) + '\', ' + state.selectedThumbnailIndex + ', \'single\')" class="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-lg hover:from-purple-600 hover:to-pink-600 shadow-md inline-flex items-center justify-center gap-2 transition-all"><span>✨</span> Edit with AI</button>';
                 }
-                html += '<button onclick="app.toggleYouTubePreview()" class="btn-secondary inline-flex items-center justify-center gap-2"><span>👁️</span> YouTube Preview</button>';
-                html += '<button onclick="app.resetThumbnailGenerator()" class="btn-secondary">🔄 Create New</button>';
+                html += '<button onclick="app.toggleYouTubePreview()" class="px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-200 inline-flex items-center justify-center gap-2 transition-all"><span>👁️</span> YouTube Preview</button>';
+                html += '<button onclick="app.resetThumbnailGenerator()" class="px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-200 inline-flex items-center justify-center gap-2 transition-all">🔄 Create New</button>';
                 html += '</div>';
 
             } else if (!state.loading) {
