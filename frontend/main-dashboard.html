@@ -6772,21 +6772,37 @@
                 state.thumbnailEditMaskCanvas = null;
                 state.thumbnailEditMaskCtx = null;
                 state.thumbnailEditHistory = [];
+                // Reset drawing state
+                app._editCanvasReady = false;
+                app._editDrawing = false;
                 render();
             },
+
+            // Drawing state (needs to be accessible across event handlers)
+            _editDrawing: false,
+            _editLastX: 0,
+            _editLastY: 0,
+            _editCanvasReady: false,
 
             // Initialize the canvas for editing
             initThumbnailEditCanvas: function() {
                 var canvas = document.getElementById('thumbnail-edit-canvas');
-                if (!canvas || !state.thumbnailEditingImage) return;
+                if (!canvas || !state.thumbnailEditingImage) {
+                    console.log('Canvas init failed: canvas or image missing');
+                    return;
+                }
+
+                // Reset drawing state
+                app._editDrawing = false;
+                app._editCanvasReady = false;
 
                 var ctx = canvas.getContext('2d');
                 var img = new Image();
                 img.crossOrigin = 'anonymous';
 
                 img.onload = function() {
-                    // Set canvas size - maintain aspect ratio, max width 800px
-                    var maxWidth = 800;
+                    // Set canvas size - maintain aspect ratio, max width 700px
+                    var maxWidth = 700;
                     var scale = Math.min(1, maxWidth / img.width);
                     canvas.width = img.width * scale;
                     canvas.height = img.height * scale;
@@ -6812,67 +6828,99 @@
                     state.thumbnailEditMaskCtx.fillStyle = 'black';
                     state.thumbnailEditMaskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
 
+                    // Mark canvas as ready
+                    app._editCanvasReady = true;
+
+                    // Attach event listeners AFTER canvas is ready
+                    app.attachCanvasListeners(canvas);
+
                     console.log('Thumbnail edit canvas initialized:', canvas.width, 'x', canvas.height);
                 };
 
                 img.onerror = function() {
-                    state.thumbnailEditError = 'Failed to load image for editing';
+                    console.error('Failed to load image for editing');
+                    state.thumbnailEditError = 'Failed to load image for editing. Please try again.';
                     render();
                 };
 
                 img.src = state.thumbnailEditingImage.url;
+            },
 
-                // Add drawing event listeners
-                var isDrawing = false;
-                var lastX = 0, lastY = 0;
+            // Attach event listeners to canvas
+            attachCanvasListeners: function(canvas) {
+                // Remove any existing listeners by cloning and replacing
+                var newCanvas = canvas.cloneNode(true);
+                canvas.parentNode.replaceChild(newCanvas, canvas);
+                canvas = newCanvas;
 
+                // Redraw the image on the new canvas (cloneNode doesn't copy canvas content)
+                if (state.thumbnailEditOriginalData) {
+                    var ctx = canvas.getContext('2d');
+                    ctx.putImageData(state.thumbnailEditOriginalData, 0, 0);
+                }
+
+                // Mouse events
                 canvas.addEventListener('mousedown', function(e) {
-                    isDrawing = true;
+                    if (!app._editCanvasReady) return;
+                    e.preventDefault();
+                    app._editDrawing = true;
                     var rect = canvas.getBoundingClientRect();
-                    lastX = (e.clientX - rect.left) * (canvas.width / rect.width);
-                    lastY = (e.clientY - rect.top) * (canvas.height / rect.height);
+                    app._editLastX = (e.clientX - rect.left) * (canvas.width / rect.width);
+                    app._editLastY = (e.clientY - rect.top) * (canvas.height / rect.height);
                     app.saveEditHistory();
-                    app.paintMask(lastX, lastY);
+                    app.paintMask(app._editLastX, app._editLastY);
                 });
 
                 canvas.addEventListener('mousemove', function(e) {
-                    if (!isDrawing) return;
+                    if (!app._editDrawing || !app._editCanvasReady) return;
+                    e.preventDefault();
                     var rect = canvas.getBoundingClientRect();
                     var x = (e.clientX - rect.left) * (canvas.width / rect.width);
                     var y = (e.clientY - rect.top) * (canvas.height / rect.height);
-                    app.paintMaskLine(lastX, lastY, x, y);
-                    lastX = x;
-                    lastY = y;
+                    app.paintMaskLine(app._editLastX, app._editLastY, x, y);
+                    app._editLastX = x;
+                    app._editLastY = y;
                 });
 
-                canvas.addEventListener('mouseup', function() { isDrawing = false; });
-                canvas.addEventListener('mouseleave', function() { isDrawing = false; });
+                canvas.addEventListener('mouseup', function(e) {
+                    app._editDrawing = false;
+                });
 
-                // Touch support for mobile
+                canvas.addEventListener('mouseleave', function(e) {
+                    app._editDrawing = false;
+                });
+
+                // Touch events for mobile
                 canvas.addEventListener('touchstart', function(e) {
+                    if (!app._editCanvasReady) return;
                     e.preventDefault();
-                    isDrawing = true;
+                    app._editDrawing = true;
                     var rect = canvas.getBoundingClientRect();
                     var touch = e.touches[0];
-                    lastX = (touch.clientX - rect.left) * (canvas.width / rect.width);
-                    lastY = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                    app._editLastX = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                    app._editLastY = (touch.clientY - rect.top) * (canvas.height / rect.height);
                     app.saveEditHistory();
-                    app.paintMask(lastX, lastY);
-                });
+                    app.paintMask(app._editLastX, app._editLastY);
+                }, { passive: false });
 
                 canvas.addEventListener('touchmove', function(e) {
+                    if (!app._editDrawing || !app._editCanvasReady) return;
                     e.preventDefault();
-                    if (!isDrawing) return;
                     var rect = canvas.getBoundingClientRect();
                     var touch = e.touches[0];
                     var x = (touch.clientX - rect.left) * (canvas.width / rect.width);
                     var y = (touch.clientY - rect.top) * (canvas.height / rect.height);
-                    app.paintMaskLine(lastX, lastY, x, y);
-                    lastX = x;
-                    lastY = y;
+                    app.paintMaskLine(app._editLastX, app._editLastY, x, y);
+                    app._editLastX = x;
+                    app._editLastY = y;
+                }, { passive: false });
+
+                canvas.addEventListener('touchend', function(e) {
+                    app._editDrawing = false;
                 });
 
-                canvas.addEventListener('touchend', function() { isDrawing = false; });
+                // Change cursor to indicate drawable area
+                canvas.style.cursor = 'crosshair';
             },
 
             // Paint a single point on the mask
@@ -7113,11 +7161,19 @@
             revertEdit: function() {
                 state.thumbnailEditResult = null;
                 state.thumbnailEditPrompt = '';
-                // Reinitialize canvas
+                state.thumbnailEditError = null;
+                state.thumbnailEditHistory = [];
+                // Reset canvas state
+                state.thumbnailEditOriginalData = null;
+                state.thumbnailEditMaskCanvas = null;
+                state.thumbnailEditMaskCtx = null;
+                app._editCanvasReady = false;
+                app._editDrawing = false;
+                render();
+                // Reinitialize canvas after render
                 setTimeout(function() {
                     app.initThumbnailEditCanvas();
-                }, 100);
-                render();
+                }, 150);
             },
 
             // Download HD version of a thumbnail
