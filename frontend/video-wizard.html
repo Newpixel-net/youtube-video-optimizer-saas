@@ -2158,9 +2158,13 @@
             flex-direction: column;
             overflow: hidden;
             /* CSS variables for dynamic speaker positions (set via JavaScript) */
-            /* Values are numbers that get multiplied by 1% in calc() for proper zoom scaling */
-            --speaker1-translate-pct: -34;  /* Default: 17% position → left 1/3 */
-            --speaker2-translate-pct: -166; /* Default: 83% position → right 1/3 */
+            /* Scale factors calculated from aspect ratios: for 16:9 input to 9:16 output */
+            /* Default 50-50 split: each half aspect = 9:8 = 1.125, scale = (16/9)/1.125 = 1.58 */
+            --speaker1-scale: 1.58;
+            --speaker2-scale: 1.58;
+            /* Translate offset: (50 - position) * (scale - 1), default position = 50 (center) */
+            --speaker1-translate-pct: 0;  /* Default: 50% position → center */
+            --speaker2-translate-pct: 0;  /* Default: 50% position → center */
             --speaker1-zoom: 1;
             --speaker2-zoom: 1;
         }
@@ -2189,28 +2193,30 @@
         .phone-video-area.reframe-split_screen .split-preview-top img,
         .phone-video-area.reframe-split_screen .split-preview-top video {
             position: absolute;
-            width: calc(300% * var(--speaker1-zoom, 1));
-            height: calc(200% * var(--speaker1-zoom, 1));
-            top: 50%;
+            /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
+            width: calc(var(--speaker1-scale, 1.58) * var(--speaker1-zoom, 1) * 100%);
+            height: 100%;
+            top: 0;
             left: 50%;
             object-fit: cover;
             /* Use CSS variables for position-aware cropping and zoom preview */
-            /* --speaker1-translate-pct is the X offset in percentage, multiplied by zoom for proper scaling */
-            transform: translate(calc(-50% + var(--speaker1-translate-pct, -34) * var(--speaker1-zoom, 1) * 1%), -50%);
+            /* --speaker1-translate-pct is the X offset based on (50-position)*(scale-1) */
+            transform: translateX(calc(-50% + var(--speaker1-translate-pct, 0) * var(--speaker1-zoom, 1) * 1%));
         }
 
         .phone-video-area.reframe-split_screen .split-preview-bottom iframe,
         .phone-video-area.reframe-split_screen .split-preview-bottom img,
         .phone-video-area.reframe-split_screen .split-preview-bottom video {
             position: absolute;
-            width: calc(300% * var(--speaker2-zoom, 1));
-            height: calc(200% * var(--speaker2-zoom, 1));
-            top: 50%;
+            /* Scale width based on aspect ratio: scale * zoom, height 100% to fill container */
+            width: calc(var(--speaker2-scale, 1.58) * var(--speaker2-zoom, 1) * 100%);
+            height: 100%;
+            top: 0;
             left: 50%;
             object-fit: cover;
             /* Use CSS variables for position-aware cropping and zoom preview */
-            /* --speaker2-translate-pct is the X offset in percentage, multiplied by zoom for proper scaling */
-            transform: translate(calc(-50% + var(--speaker2-translate-pct, -166) * var(--speaker2-zoom, 1) * 1%), -50%);
+            /* --speaker2-translate-pct is the X offset based on (50-position)*(scale-1) */
+            transform: translateX(calc(-50% + var(--speaker2-translate-pct, 0) * var(--speaker2-zoom, 1) * 1%));
         }
 
         .phone-video-area.reframe-split_screen .split-label {
@@ -9132,22 +9138,42 @@
             var splitCssVars = '';
             if (reframeMode === 'split_screen') {
                 var splitSettings = settings.splitScreenSettings || {
-                    speaker1: { cropPosition: 17 },
-                    speaker2: { cropPosition: 83 },
+                    speaker1: { cropPosition: 50 },
+                    speaker2: { cropPosition: 50 },
                     layoutRatio: '50-50',
                     border: { enabled: false, thickness: 2, color: '#ffffff' }
                 };
-                var speaker1Pos = splitSettings.speaker1?.cropPosition ?? 17;
-                var speaker2Pos = splitSettings.speaker2?.cropPosition ?? 83;
-                // Calculate translate values: for 300% width (3x scale), translate = -(pos/100) * (3-1) * 100
-                var speaker1Translate = -(speaker1Pos / 100) * 200;
-                var speaker2Translate = -(speaker2Pos / 100) * 200;
+                var speaker1Pos = splitSettings.speaker1?.cropPosition ?? 50;
+                var speaker2Pos = splitSettings.speaker2?.cropPosition ?? 50;
 
-                // Calculate layout ratio
+                // Calculate layout ratio (flex values for CSS)
                 var layoutRatio = splitSettings.layoutRatio || '50-50';
                 var topRatio = 1, bottomRatio = 1;
-                if (layoutRatio === '60-40') { topRatio = 1.5; bottomRatio = 1; }
-                else if (layoutRatio === '70-30') { topRatio = 2.33; bottomRatio = 1; }
+                var topHeightFraction = 0.5, bottomHeightFraction = 0.5;
+                if (layoutRatio === '60-40') {
+                    topRatio = 1.5; bottomRatio = 1;
+                    topHeightFraction = 0.6; bottomHeightFraction = 0.4;
+                } else if (layoutRatio === '70-30') {
+                    topRatio = 2.33; bottomRatio = 1;
+                    topHeightFraction = 0.7; bottomHeightFraction = 0.3;
+                }
+
+                // Calculate scale factors based on aspect ratios
+                // Assume 16:9 input for YouTube videos, 9:16 output
+                var inputAspect = 16 / 9;  // 1.778
+                var outputAspect = 9 / 16; // 0.5625
+                // Half container aspect = (output width) / (half height) = 1 / (heightFraction / outputAspect)
+                // For 50-50: halfAspect = 1 / (0.5 / 0.5625) = 1 / 0.889 = 1.125
+                var topHalfAspect = outputAspect / topHeightFraction;
+                var bottomHalfAspect = outputAspect / bottomHeightFraction;
+                // Scale factor = inputAspect / halfAspect (when input is wider)
+                var speaker1Scale = inputAspect / topHalfAspect;
+                var speaker2Scale = inputAspect / bottomHalfAspect;
+
+                // Calculate translate values: offset = (50 - position) * (scale - 1)
+                // This positions the crop region correctly based on the scale
+                var speaker1Translate = (50 - speaker1Pos) * (speaker1Scale - 1);
+                var speaker2Translate = (50 - speaker2Pos) * (speaker2Scale - 1);
 
                 // Border settings
                 var border = splitSettings.border || { enabled: false, thickness: 2, color: '#ffffff' };
@@ -9158,9 +9184,11 @@
                 var speaker1Zoom = (splitSettings.speaker1?.zoom || 100) / 100;
                 var speaker2Zoom = (splitSettings.speaker2?.zoom || 100) / 100;
 
-                // Store translate values as numbers (without %) for proper CSS calc multiplication
-                splitCssVars = ' --speaker1-translate-pct: ' + speaker1Translate + ';';
-                splitCssVars += ' --speaker2-translate-pct: ' + speaker2Translate + ';';
+                // Set CSS variables for scale, translate, zoom
+                splitCssVars = ' --speaker1-scale: ' + speaker1Scale.toFixed(4) + ';';
+                splitCssVars += ' --speaker2-scale: ' + speaker2Scale.toFixed(4) + ';';
+                splitCssVars += ' --speaker1-translate-pct: ' + speaker1Translate.toFixed(2) + ';';
+                splitCssVars += ' --speaker2-translate-pct: ' + speaker2Translate.toFixed(2) + ';';
                 splitCssVars += ' --speaker1-zoom: ' + speaker1Zoom + ';';
                 splitCssVars += ' --speaker2-zoom: ' + speaker2Zoom + ';';
                 splitCssVars += ' --split-top-ratio: ' + topRatio + ';';
@@ -9605,8 +9633,8 @@
             // Split Screen Position Controls (only show when split_screen mode is selected)
             if (settings.reframeMode === 'split_screen') {
                 var splitSettings = settings.splitScreenSettings || {
-                    speaker1: { cropPosition: 17 },
-                    speaker2: { cropPosition: 83 },
+                    speaker1: { cropPosition: 50 },
+                    speaker2: { cropPosition: 50 },
                     preset: 'interview'
                 };
 
@@ -10563,16 +10591,16 @@
                 // Split screen specific settings (for split_screen mode)
                 splitScreenSettings: {
                     speaker1: {
-                        cropPosition: 17,  // Default: left 1/3 center (0-100%)
-                        cropWidth: 33,     // Percentage of source width to crop
+                        cropPosition: 50,  // Default: center (0-100%)
+                        cropWidth: 33,     // Percentage of source width to crop (legacy, now calculated dynamically)
                         zoom: 100          // Zoom level: 100% = fit, >100 = zoom in
                     },
                     speaker2: {
-                        cropPosition: 83,  // Default: right 1/3 center (0-100%)
-                        cropWidth: 33,
+                        cropPosition: 50,  // Default: center (0-100%)
+                        cropWidth: 33,     // Percentage of source width to crop (legacy, now calculated dynamically)
                         zoom: 100          // Zoom level: 100% = fit, >100 = zoom in
                     },
-                    preset: 'interview',   // 'interview', 'center', 'custom'
+                    preset: 'center',      // 'interview', 'center', 'custom'
                     layoutRatio: '50-50',  // '50-50', '60-40', '70-30' (top-bottom percentages)
                     border: {
                         enabled: false,
@@ -12128,9 +12156,9 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
-                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
-                        preset: 'interview',
+                        speaker1: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        preset: 'center',
                         layoutRatio: '50-50',
                         border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
@@ -12179,9 +12207,9 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
-                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
-                        preset: 'custom',
+                        speaker1: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        preset: 'center',
                         layoutRatio: '50-50',
                         border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
@@ -12244,9 +12272,9 @@
                 var splitSettings = state.clipSettings[activeClip.id].splitScreenSettings;
                 if (!splitSettings) {
                     splitSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
-                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
-                        preset: 'custom',
+                        speaker1: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        preset: 'center',
                         layoutRatio: '50-50',
                         border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
@@ -12271,9 +12299,9 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
-                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
-                        preset: 'custom',
+                        speaker1: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        preset: 'center',
                         layoutRatio: '50-50',
                         border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
@@ -12293,9 +12321,9 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
-                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
-                        preset: 'custom',
+                        speaker1: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        preset: 'center',
                         layoutRatio: '50-50',
                         border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
@@ -12353,9 +12381,9 @@
                 }
                 if (!state.clipSettings[activeClip.id].splitScreenSettings) {
                     state.clipSettings[activeClip.id].splitScreenSettings = {
-                        speaker1: { cropPosition: 17, cropWidth: 33, zoom: 100 },
-                        speaker2: { cropPosition: 83, cropWidth: 33, zoom: 100 },
-                        preset: 'custom',
+                        speaker1: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        speaker2: { cropPosition: 50, cropWidth: 33, zoom: 100 },
+                        preset: 'center',
                         layoutRatio: '50-50',
                         border: { enabled: false, thickness: 2, color: '#ffffff' }
                     };
