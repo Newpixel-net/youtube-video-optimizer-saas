@@ -10557,9 +10557,9 @@
                 html += '<div class="apply-all-bar">';
                 html += '<div class="apply-all-info">';
                 html += '<span class="apply-all-icon">⚡</span>';
-                html += '<span>Apply current settings to all ' + selectedClips.length + ' clips</span>';
+                html += '<span>Apply style to all ' + selectedClips.length + ' clips (video sources stay separate)</span>';
                 html += '</div>';
-                html += '<button class="apply-all-btn" onclick="app.applySettingsToAllClips()">Apply to All Clips</button>';
+                html += '<button class="apply-all-btn" onclick="app.applySettingsToAllClips()">Apply Style to All</button>';
                 html += '</div>';
             }
 
@@ -13505,21 +13505,50 @@
                 }
                 sourceCropPosition = Math.max(0, Math.min(100, sourceCropPosition));
 
-                // Apply settings to all clips (except trim times which are clip-specific)
+                // Apply STYLE settings to all clips
+                // Video sources (secondary/tertiary) and trim times are CLIP-SPECIFIC and preserved
                 var appliedCount = 0;
                 selectedClips.forEach(function(clip) {
                     if (clip.id !== activeClip.id) {
                         var clipSettings = state.clipSettings[clip.id] || getDefaultSettings();
-                        // Copy ALL settings except trim (which is clip-specific)
+
+                        // Preserve clip-specific video sources (don't overwrite with source clip's videos)
+                        var existingSecondary = clipSettings.secondarySource;
+                        var existingTertiary = clipSettings.tertiarySource;
+
+                        // If target clip has its own secondary source, only update position (not video content)
+                        var mergedSecondary = undefined;
+                        if (existingSecondary && existingSecondary.enabled) {
+                            // Keep the target clip's video content, apply source clip's position settings
+                            mergedSecondary = Object.assign({}, existingSecondary);
+                            if (sourceSettings.secondarySource) {
+                                // Only copy position-related settings, not video content
+                                mergedSecondary.position = sourceSettings.secondarySource.position;
+                            }
+                        }
+
+                        // Same for tertiary source
+                        var mergedTertiary = undefined;
+                        if (existingTertiary && existingTertiary.enabled) {
+                            mergedTertiary = Object.assign({}, existingTertiary);
+                            if (sourceSettings.tertiarySource) {
+                                mergedTertiary.position = sourceSettings.tertiarySource.position;
+                            }
+                        }
+
+                        // Copy STYLE settings (not video content)
                         state.clipSettings[clip.id] = {
                             // Caption settings
                             captionStyle: sourceSettings.captionStyle,
+                            captionSource: sourceSettings.captionSource,  // Which audio track for captions
                             customCaptionStyle: sourceSettings.customCaptionStyle ? Object.assign({}, sourceSettings.customCaptionStyle) : undefined,
                             // Reframe/crop settings
                             reframeMode: sourceSettings.reframeMode,
                             cropPosition: sourceCropPosition,  // Use validated value
                             aiSmartCrop: sourceSettings.aiSmartCrop || false,
                             outputAspect: sourceSettings.outputAspect,
+                            // Split screen settings (crop positions, zoom, layout - NOT video sources)
+                            splitScreenSettings: sourceSettings.splitScreenSettings ? JSON.parse(JSON.stringify(sourceSettings.splitScreenSettings)) : undefined,
                             // Output settings
                             outputQuality: sourceSettings.outputQuality,
                             frameRate: sourceSettings.frameRate,
@@ -13540,13 +13569,12 @@
                             colorGrade: sourceSettings.colorGrade,
                             // AI features
                             selectedHook: sourceSettings.selectedHook,
-                            // Copy audio mix settings (deep copy)
+                            // Copy audio mix settings (volume levels, not mute states which depend on clip's sources)
                             audioMix: sourceSettings.audioMix ? Object.assign({}, sourceSettings.audioMix) : undefined,
-                            // Copy secondary source settings (deep copy)
-                            secondarySource: sourceSettings.secondarySource ? Object.assign({}, sourceSettings.secondarySource) : undefined,
-                            // Copy tertiary source settings (deep copy)
-                            tertiarySource: sourceSettings.tertiarySource ? Object.assign({}, sourceSettings.tertiarySource) : undefined,
-                            // Keep original trim values (clip-specific)
+                            // PRESERVE clip-specific video sources (merged with position from source)
+                            secondarySource: mergedSecondary,
+                            tertiarySource: mergedTertiary,
+                            // PRESERVE clip-specific trim values
                             trimStart: clipSettings.trimStart || 0,
                             trimEnd: clipSettings.trimEnd || clip.duration
                         };
@@ -13554,11 +13582,11 @@
                     }
                 });
 
-                // DEBUG: Show what crop position was applied
-                console.log('[applySettingsToAllClips] Applied cropPosition:', sourceCropPosition, 'from clip:', activeClip.id);
+                // DEBUG: Show what was applied
+                console.log('[applySettingsToAllClips] Applied style settings to', appliedCount, 'clips. Video sources preserved.');
 
                 render();
-                utils.showToast('Settings applied to ' + appliedCount + ' clips! (Crop: ' + sourceCropPosition + '%)', 'success');
+                utils.showToast('Style settings applied to ' + appliedCount + ' clips. Video sources preserved.', 'success');
             },
 
             // Timeline trimming
