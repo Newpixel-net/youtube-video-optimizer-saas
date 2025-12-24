@@ -5074,6 +5074,58 @@
 
             html += '</div>';
 
+            // Storage Breakdown Section
+            html += '<div class="card" style="margin-bottom: 1.5rem;">';
+            html += '<h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">📁 Storage Breakdown by Folder</h3>';
+            if (stats && stats.folderStats) {
+                html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">';
+
+                // Sort folders by size (largest first)
+                var sortedFolders = Object.keys(stats.folderStats).sort(function(a, b) {
+                    return stats.folderStats[b].size - stats.folderStats[a].size;
+                });
+
+                // Folder icons and colors
+                var folderMeta = {
+                    'extension-uploads': { icon: '📹', color: '#3b82f6', desc: 'Video captures' },
+                    'uploads': { icon: '📤', color: '#8b5cf6', desc: 'User uploads' },
+                    'video-cache': { icon: '💾', color: '#ef4444', desc: 'Cached videos (large!)' },
+                    'processed-clips': { icon: '🎬', color: '#10b981', desc: 'Exported clips' },
+                    'wizard-thumbnails': { icon: '🖼️', color: '#f59e0b', desc: 'AI thumbnails' },
+                    'thumbnails': { icon: '🖼️', color: '#06b6d4', desc: 'Basic thumbnails' },
+                    'thumbnails-pro': { icon: '✨', color: '#ec4899', desc: 'Pro thumbnails' },
+                    'thumbnails-hd': { icon: '🔍', color: '#14b8a6', desc: 'HD thumbnails' },
+                    'thumbnails-edited': { icon: '✏️', color: '#a855f7', desc: 'Edited thumbnails' }
+                };
+
+                for (var i = 0; i < sortedFolders.length; i++) {
+                    var folder = sortedFolders[i];
+                    var folderData = stats.folderStats[folder];
+                    var sizeMB = (folderData.size / (1024 * 1024)).toFixed(1);
+                    var sizeGB = (folderData.size / (1024 * 1024 * 1024)).toFixed(2);
+                    var displaySize = folderData.size > 1024 * 1024 * 1024 ? sizeGB + ' GB' : sizeMB + ' MB';
+                    var meta = folderMeta[folder] || { icon: '📂', color: '#64748b', desc: '' };
+                    var percentage = stats.totalSize > 0 ? ((folderData.size / stats.totalSize) * 100).toFixed(1) : 0;
+
+                    html += '<div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem;">';
+                    html += '<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">';
+                    html += '<span style="font-size: 1.1rem;">' + meta.icon + '</span>';
+                    html += '<span style="font-size: 0.85rem; font-weight: 600; color: ' + meta.color + ';">' + folder + '</span>';
+                    html += '</div>';
+                    html += '<div style="font-size: 1.25rem; font-weight: 700; color: white;">' + displaySize + '</div>';
+                    html += '<div style="font-size: 0.7rem; color: #64748b;">' + folderData.files + ' files (' + percentage + '%)</div>';
+                    if (meta.desc) {
+                        html += '<div style="font-size: 0.65rem; color: #475569; margin-top: 0.25rem;">' + meta.desc + '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            } else {
+                html += '<div style="color: #64748b; font-size: 0.85rem;">Loading storage breakdown...</div>';
+            }
+            html += '</div>';
+
             // Configuration Section
             html += '<div class="card" style="margin-bottom: 1.5rem;">';
             html += '<h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">⚙️ Configuration</h3>';

@@ -348,6 +348,7 @@ async function enforceMaxProjects(uid, maxProjects = 8) {
 
       for (const doc of docs) {
         const projectData = doc.data();
+        const projectId = doc.id;
 
         // Clean up storage files associated with this project
         try {
@@ -359,19 +360,53 @@ async function enforceMaxProjects(uid, maxProjects = 8) {
           if (projectData.uploadedVideoPath) {
             await bucket.file(projectData.uploadedVideoPath).delete().catch(() => {});
           }
-          // Delete any clip-specific captures
-          const clipCapturesPath = `extension-uploads/${projectData.videoId}`;
-          const [files] = await bucket.getFiles({ prefix: clipCapturesPath });
-          for (const file of files) {
-            await file.delete().catch(() => {});
+          // Delete any clip-specific captures from extension-uploads/{videoId}/
+          if (projectData.videoId) {
+            const clipCapturesPath = `extension-uploads/${projectData.videoId}`;
+            const [captureFiles] = await bucket.getFiles({ prefix: clipCapturesPath });
+            for (const file of captureFiles) {
+              await file.delete().catch(() => {});
+            }
+          }
+
+          // Delete wizard-thumbnails for clips in this project
+          // Thumbnails are stored as: wizard-thumbnails/{uid}/{timestamp}-{clipId}-{idx}.{ext}
+          if (projectData.clips && Array.isArray(projectData.clips)) {
+            for (const clip of projectData.clips) {
+              if (clip.id) {
+                // List and delete thumbnails containing this clipId
+                const [thumbFiles] = await bucket.getFiles({ prefix: `wizard-thumbnails/${uid}/` });
+                for (const file of thumbFiles) {
+                  if (file.name.includes(clip.id)) {
+                    await file.delete().catch(() => {});
+                  }
+                }
+              }
+            }
           }
         } catch (storageError) {
-          console.log(`[enforceMaxProjects] Storage cleanup error for project ${doc.id}:`, storageError.message);
+          console.log(`[enforceMaxProjects] Storage cleanup error for project ${projectId}:`, storageError.message);
+        }
+
+        // Delete related processing jobs
+        try {
+          const jobsSnapshot = await db.collection('processingJobs')
+            .where('projectId', '==', projectId)
+            .get();
+
+          if (!jobsSnapshot.empty) {
+            const batch = db.batch();
+            jobsSnapshot.forEach(jobDoc => batch.delete(jobDoc.ref));
+            await batch.commit();
+            console.log(`[enforceMaxProjects] Deleted ${jobsSnapshot.size} processing jobs for project ${projectId}`);
+          }
+        } catch (jobsError) {
+          console.log(`[enforceMaxProjects] Jobs cleanup error for project ${projectId}:`, jobsError.message);
         }
 
         // Delete the project document
-        await db.collection('wizardProjects').doc(doc.id).delete();
-        console.log(`[enforceMaxProjects] Deleted old project ${doc.id} (${projectData.videoId || 'uploaded'})`);
+        await db.collection('wizardProjects').doc(projectId).delete();
+        console.log(`[enforceMaxProjects] Deleted old project ${projectId} (${projectData.videoId || 'uploaded'})`);
       }
     }
 
@@ -20428,13 +20463,29 @@ exports.wizardDuplicateProject = functions.https.onCall(async (data, context) =>
       throw new functions.https.HttpsError('permission-denied', 'Not authorized');
     }
 
+    // Enforce max projects limit before creating duplicate
+    const maxProjects = await getMaxProjectsLimit();
+    await enforceMaxProjects(uid, maxProjects);
+
     // Create duplicate with new ID
+    // Note: Clear storage references since they point to original project's files
+    // User will need to re-capture/upload for the duplicate
     const newProject = {
       ...project,
       videoData: {
         ...project.videoData,
-        title: `${project.videoData?.title || 'Project'} (Copy)`
+        title: `${project.videoData?.title || 'Project'} (Copy)`,
+        // Clear upload-specific fields from videoData
+        uploadedVideoUrl: null,
+        uploadedVideoPath: null
       },
+      // Clear storage references - duplicate doesn't own original's files
+      sourceAsset: null,
+      uploadedVideoPath: null,
+      uploadedVideoName: null,
+      // For YouTube videos, keep the videoId so they can re-capture
+      // For uploads, generate new videoId to avoid storage path conflicts
+      videoId: project.isUpload ? `upload_${Date.now()}_${uid}` : project.videoId,
       status: 'draft',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -20445,7 +20496,7 @@ exports.wizardDuplicateProject = functions.https.onCall(async (data, context) =>
     return {
       success: true,
       newProjectId: newDoc.id,
-      message: 'Project duplicated successfully'
+      message: 'Project duplicated successfully. Note: You may need to re-capture the video source.'
     };
 
   } catch (error) {
