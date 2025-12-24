@@ -1304,6 +1304,7 @@
             adminUsers: [],
             usersLoading: false,
             resetTimeMinutes: 1440,
+            tokenBypassCosts: {},
 
             // Unified Notifications System
             notifications: [],
@@ -2203,6 +2204,50 @@
 
             html += '</div>'; // End grid-2
 
+            // Token Bypass Costs Section
+            html += '<div style="margin-top: 1.5rem;">';
+            html += '<div class="card">';
+            html += '<h3 class="card-title">🪙 Token Bypass Costs</h3>';
+            html += '<p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 1rem;">Set how many tokens users need to bypass quota limits when they\'ve exhausted their free uses.</p>';
+
+            html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">';
+
+            var toolsForBypass = [
+                { key: 'warpOptimizer', name: 'Warp Optimizer', emoji: '🚀' },
+                { key: 'competitorAnalysis', name: 'Competitor Analysis', emoji: '🎯' },
+                { key: 'trendPredictor', name: 'Trend Predictor', emoji: '📈' },
+                { key: 'thumbnailGenerator', name: 'AI Thumbnails', emoji: '🎨' },
+                { key: 'channelAudit', name: 'Channel Audit', emoji: '🔍' }
+            ];
+
+            for (var t = 0; t < toolsForBypass.length; t++) {
+                var tool = toolsForBypass[t];
+                var currentCost = (state.tokenBypassCosts && state.tokenBypassCosts[tool.key]) || 3;
+                if (tool.key === 'thumbnailGenerator') currentCost = (state.tokenBypassCosts && state.tokenBypassCosts[tool.key]) || 5;
+
+                html += '<div style="background: rgba(255,255,255,0.03); border-radius: 0.5rem; padding: 0.75rem;">';
+                html += '<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">';
+                html += '<span>' + tool.emoji + '</span>';
+                html += '<span style="font-size: 0.85rem; color: rgba(255,255,255,0.8);">' + tool.name + '</span>';
+                html += '</div>';
+                html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+                html += '<input type="number" id="bypass-cost-' + tool.key + '" value="' + currentCost + '" min="1" max="100" class="input-field" style="width: 70px; padding: 0.4rem; text-align: center;" />';
+                html += '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">tokens</span>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            html += '<div style="margin-top: 1rem; display: flex; gap: 0.75rem; align-items: center;">';
+            html += '<button onclick="saveTokenBypassCosts()" class="btn-primary" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">💾 Save Token Costs</button>';
+            html += '<span id="token-cost-save-status" style="font-size: 0.85rem; color: rgba(255,255,255,0.6);"></span>';
+            html += '</div>';
+
+            html += '<p style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.75rem;">When users exhaust their quota and need to wait for reset, they can use tokens to bypass the wait. Higher costs for more valuable tools.</p>';
+            html += '</div>';
+            html += '</div>';
+
             return html;
         }
 
@@ -3062,8 +3107,60 @@
                     render();
                 });
 
-            // Also load quota reset time
+            // Also load quota reset time and token bypass costs
             loadQuotaResetTime();
+            loadTokenBypassCosts();
+        }
+
+        function loadTokenBypassCosts() {
+            var adminGetTokenBypassCosts = functions.httpsCallable('adminGetTokenBypassCosts');
+            adminGetTokenBypassCosts()
+                .then(function(result) {
+                    if (result.data && result.data.costs) {
+                        state.tokenBypassCosts = result.data.costs;
+                        render();
+                    }
+                })
+                .catch(function(error) {
+                    console.log('Using default token bypass costs');
+                });
+        }
+
+        function saveTokenBypassCosts() {
+            var tools = ['warpOptimizer', 'competitorAnalysis', 'trendPredictor', 'thumbnailGenerator', 'channelAudit'];
+            var costs = {};
+
+            for (var i = 0; i < tools.length; i++) {
+                var tool = tools[i];
+                var input = document.getElementById('bypass-cost-' + tool);
+                if (input) {
+                    var cost = parseInt(input.value, 10);
+                    if (isNaN(cost) || cost < 1 || cost > 100) {
+                        showToast('Invalid cost for ' + tool + '. Must be 1-100.', 'error');
+                        return;
+                    }
+                    costs[tool] = cost;
+                }
+            }
+
+            var statusEl = document.getElementById('token-cost-save-status');
+            if (statusEl) statusEl.textContent = 'Saving...';
+
+            var adminSetTokenBypassCosts = functions.httpsCallable('adminSetTokenBypassCosts');
+            adminSetTokenBypassCosts({ costs: costs })
+                .then(function(result) {
+                    state.tokenBypassCosts = costs;
+                    showToast('Token bypass costs saved successfully!', 'success');
+                    if (statusEl) statusEl.textContent = '✓ Saved';
+                    setTimeout(function() {
+                        if (statusEl) statusEl.textContent = '';
+                    }, 3000);
+                })
+                .catch(function(error) {
+                    console.error('Error saving token bypass costs:', error);
+                    showToast('Failed to save: ' + error.message, 'error');
+                    if (statusEl) statusEl.textContent = '✗ Failed';
+                });
         }
 
         function loadQuotaResetTime() {

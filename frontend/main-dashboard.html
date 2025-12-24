@@ -349,6 +349,37 @@
             background: rgba(255, 255, 255, 0.15);
         }
 
+        /* Token Display in Header */
+        .token-display {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.2) 100%);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-right: 8px;
+        }
+
+        .token-display:hover {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.3) 0%, rgba(245, 158, 11, 0.3) 100%);
+            border-color: rgba(251, 191, 36, 0.5);
+            transform: scale(1.02);
+        }
+
+        .token-icon {
+            font-size: 1.1rem;
+        }
+
+        .token-amount {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #fbbf24;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
         .notification-dropdown {
             position: absolute;
             top: 100%;
@@ -3463,6 +3494,14 @@
             resetTimeMinutes: 1440,    // Admin-configured reset time in minutes
             countdownInterval: null,    // Interval for countdown timer
 
+            // Quota Bypass Modal (use tokens to skip wait)
+            showQuotaBypassModal: false,
+            quotaBypassData: null,     // { tool, toolName, tokenCost, tokenBalance, remainingMs, canBypass, pendingAction }
+
+            // Token Modal (unified token display and management)
+            showTokenModal: false,
+            tokenBypassCosts: null,    // Admin-configured token costs per tool
+
             // Admin settings
             adminQuotaSettings: null,   // For admin panel
             adminSelectedUser: null,    // Selected user for bonus uses
@@ -4250,6 +4289,16 @@
                         stopLoadingProgress();
                         state.channelAuditLoading = false;
                         state.loading = false;
+                        // Check for token bypass option
+                        if (e.code === 'functions/resource-exhausted' && e.details && e.details.tokenBypass && e.details.tokenBypass.available) {
+                            app.showQuotaBypassModal(
+                                e.details.toolType || 'channelAudit',
+                                'Channel Audit',
+                                e.details,
+                                function() { app.auditChannel({ preventDefault: function(){} }); }
+                            );
+                            return;
+                        }
                         state.error = { message: 'Failed to audit channel: ' + e.message };
                         render();
                     });
@@ -4743,6 +4792,20 @@
                                     errorMessage = 'You must be logged in to optimize videos.';
                                     break;
                                 case 'functions/resource-exhausted':
+                                    // Check if token bypass is available
+                                    if (e.details && e.details.tokenBypass && e.details.tokenBypass.available) {
+                                        // Show the quota bypass modal instead of error
+                                        app.showQuotaBypassModal(
+                                            e.details.toolType || 'warpOptimizer',
+                                            'WARP Optimizer',
+                                            e.details,
+                                            function() {
+                                                // Retry the optimization after token bypass
+                                                app.warpOptimizer();
+                                            }
+                                        );
+                                        return; // Don't show error, modal will handle it
+                                    }
                                     if (e.message && e.message.includes('quota')) {
                                         errorMessage = 'YouTube API quota exceeded. Please try again later.';
                                         errorDetails = 'The daily API limit has been reached. Try again tomorrow.';
@@ -5135,6 +5198,16 @@
                     .catch(function(e) {
                         stopLoadingProgress();
                         state.loading = false;
+                        // Check for token bypass option
+                        if (e.code === 'functions/resource-exhausted' && e.details && e.details.tokenBypass && e.details.tokenBypass.available) {
+                            app.showQuotaBypassModal(
+                                e.details.toolType || 'competitorAnalysis',
+                                'Competitor Analysis',
+                                e.details,
+                                function() { app.analyzeCompetitor({ preventDefault: function(){} }); }
+                            );
+                            return;
+                        }
                         state.error = { message: 'Analysis failed: ' + e.message };
                         render();
                     });
@@ -5176,6 +5249,16 @@
                     .catch(function(e) {
                         stopLoadingProgress();
                         state.loading = false;
+                        // Check for token bypass option
+                        if (e.code === 'functions/resource-exhausted' && e.details && e.details.tokenBypass && e.details.tokenBypass.available) {
+                            app.showQuotaBypassModal(
+                                e.details.toolType || 'trendPredictor',
+                                'Trend Predictor',
+                                e.details,
+                                function() { app.predictTrends({ preventDefault: function(){} }); }
+                            );
+                            return;
+                        }
                         state.error = { message: 'Prediction failed: ' + e.message };
                         render();
                     });
@@ -5241,6 +5324,16 @@
                     .catch(function(e) {
                         stopLoadingProgress();
                         state.loading = false;
+                        // Check for token bypass option
+                        if (e.code === 'functions/resource-exhausted' && e.details && e.details.tokenBypass && e.details.tokenBypass.available) {
+                            app.showQuotaBypassModal(
+                                e.details.toolType || 'thumbnailGenerator',
+                                'Thumbnail Generator',
+                                e.details,
+                                function() { app.generateThumbnail({ preventDefault: function(){} }); }
+                            );
+                            return;
+                        }
                         state.error = { message: 'Generation failed: ' + e.message };
                         render();
                     });
@@ -6430,6 +6523,120 @@
                 render();
             },
 
+            // Quota Bypass Modal Functions
+            showQuotaBypassModal: function(tool, toolName, errorDetails, pendingAction) {
+                var tokenBypass = errorDetails.tokenBypass || {};
+                state.quotaBypassData = {
+                    tool: tool,
+                    toolName: toolName,
+                    tokenCost: tokenBypass.cost || 3,
+                    tokenBalance: tokenBypass.balance || 0,
+                    remainingMs: errorDetails.remainingMs || 0,
+                    canBypass: tokenBypass.canBypass || false,
+                    pendingAction: pendingAction // Function to call after bypass
+                };
+                state.showQuotaBypassModal = true;
+                render();
+            },
+
+            hideQuotaBypassModal: function() {
+                state.showQuotaBypassModal = false;
+                state.quotaBypassData = null;
+                render();
+            },
+
+            useTokensForBypass: function() {
+                if (!state.quotaBypassData) return;
+
+                var tool = state.quotaBypassData.tool;
+                var pendingAction = state.quotaBypassData.pendingAction;
+                var tokenCost = state.quotaBypassData.tokenCost;
+
+                // Show loading state
+                state.quotaBypassData.processing = true;
+                render();
+
+                var useTokensForQuotaBypass = functions.httpsCallable('useTokensForQuotaBypass');
+                useTokensForQuotaBypass({ tool: tool })
+                    .then(function(result) {
+                        if (result.data && result.data.success) {
+                            // Update token balance in state
+                            state.thumbnailTokenBalance = result.data.newBalance;
+
+                            // Close modal
+                            app.hideQuotaBypassModal();
+
+                            // Show success toast
+                            utils.showToast('Used ' + tokenCost + ' tokens - proceeding with ' + state.quotaBypassData.toolName, 'success');
+
+                            // Execute the pending action if provided
+                            if (pendingAction && typeof pendingAction === 'function') {
+                                pendingAction(true); // true = bypassed with tokens
+                            }
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Token bypass error:', error);
+                        state.quotaBypassData.processing = false;
+                        state.quotaBypassData.error = error.message || 'Failed to use tokens';
+                        render();
+                    });
+            },
+
+            formatBypassCountdown: function(ms) {
+                if (!ms || ms <= 0) return '0m';
+                var totalSeconds = Math.ceil(ms / 1000);
+                var hours = Math.floor(totalSeconds / 3600);
+                var minutes = Math.floor((totalSeconds % 3600) / 60);
+                var seconds = totalSeconds % 60;
+
+                if (hours > 0) {
+                    return hours + 'h ' + minutes + 'm';
+                } else if (minutes > 0) {
+                    return minutes + 'm ' + seconds + 's';
+                } else {
+                    return seconds + 's';
+                }
+            },
+
+            // Token Modal Functions
+            showTokenModal: function() {
+                // Load token bypass costs if not already loaded
+                if (!state.tokenBypassCosts) {
+                    app.loadTokenBypassCosts();
+                }
+                state.showTokenModal = true;
+                render();
+            },
+
+            hideTokenModal: function() {
+                state.showTokenModal = false;
+                render();
+            },
+
+            loadTokenBypassCosts: function() {
+                var getTokenBypassInfo = functions.httpsCallable('getTokenBypassInfo');
+                getTokenBypassInfo({ tool: 'all' })
+                    .then(function(result) {
+                        if (result.data) {
+                            state.tokenBypassCosts = result.data.costs || {};
+                            // Also update token balance
+                            if (result.data.balance !== undefined) {
+                                state.thumbnailTokenBalance = result.data.balance;
+                            }
+                            render();
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Failed to load token bypass costs:', error);
+                    });
+            },
+
+            topUpTokens: function() {
+                // Placeholder for token top-up - will be implemented with payment integration
+                utils.showToast('Token TopUp coming soon! Contact support for now.', 'info');
+            },
+
             handleReferenceUpload: function(e) {
                 var file = e.target.files[0];
                 if (!file) return;
@@ -6614,6 +6821,16 @@
                     .catch(function(e) {
                         stopLoadingProgress();
                         state.loading = false;
+                        // Check for token bypass option
+                        if (e.code === 'functions/resource-exhausted' && e.details && e.details.tokenBypass && e.details.tokenBypass.available) {
+                            app.showQuotaBypassModal(
+                                e.details.toolType || 'thumbnailGeneratorPro',
+                                'Thumbnail Generator Pro',
+                                e.details,
+                                function() { app.generateThumbnailPro({ preventDefault: function(){} }); }
+                            );
+                            return;
+                        }
                         state.error = { message: 'Generation failed: ' + e.message };
                         render();
                     });
@@ -7422,6 +7639,16 @@
                         stopLoadingProgress();
                         state.placementLoading = false;
                         state.loading = false;
+                        // Check for token bypass option
+                        if (e.code === 'functions/resource-exhausted' && e.details && e.details.tokenBypass && e.details.tokenBypass.available) {
+                            app.showQuotaBypassModal(
+                                e.details.toolType || 'placementFinder',
+                                'Placement Finder',
+                                e.details,
+                                function() { app.findPlacements({ preventDefault: function(){} }); }
+                            );
+                            return;
+                        }
                         state.error = { message: 'Failed to find placements: ' + e.message };
                         render();
                     });
@@ -10545,6 +10772,145 @@
                 html += '</div></div>';
             }
 
+            // Quota Bypass Modal (use tokens to skip wait time)
+            if (state.showQuotaBypassModal && state.quotaBypassData) {
+                var qd = state.quotaBypassData;
+                html += '<div class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="app.hideQuotaBypassModal()">';
+                html += '<div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 relative border border-white/10" onclick="event.stopPropagation()">';
+                html += '<button onclick="app.hideQuotaBypassModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl transition-colors">&times;</button>';
+
+                // Header
+                html += '<div class="text-center mb-6">';
+                html += '<div class="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3 shadow-lg">⏰</div>';
+                html += '<h3 class="text-2xl font-bold text-white">Limit Reached</h3>';
+                html += '<p class="text-gray-400 mt-1">You\'ve used all your free ' + qd.toolName + ' slots</p>';
+                html += '</div>';
+
+                // Options
+                html += '<div class="space-y-3">';
+
+                // Option 1: Wait
+                html += '<div class="bg-white/5 rounded-xl p-4 border border-white/10">';
+                html += '<div class="flex items-center justify-between">';
+                html += '<div>';
+                html += '<h4 class="font-semibold text-white flex items-center gap-2"><span>⏳</span> Wait for free refresh</h4>';
+                html += '<p class="text-sm text-gray-400 mt-1">Your slots will reset in <span class="text-amber-400 font-semibold">' + app.formatBypassCountdown(qd.remainingMs) + '</span></p>';
+                html += '</div>';
+                html += '<button onclick="app.hideQuotaBypassModal()" class="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors text-sm font-medium">Wait</button>';
+                html += '</div>';
+                html += '</div>';
+
+                // Option 2: Use Tokens
+                html += '<div class="bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-xl p-4 border border-amber-500/30">';
+                html += '<div class="flex items-center justify-between">';
+                html += '<div>';
+                html += '<h4 class="font-semibold text-white flex items-center gap-2"><span>🪙</span> Skip wait with tokens</h4>';
+                html += '<p class="text-sm text-gray-300 mt-1">Use <span class="text-amber-400 font-bold">' + qd.tokenCost + ' tokens</span> to proceed now</p>';
+                html += '<p class="text-xs text-gray-500 mt-1">Your balance: ' + qd.tokenBalance + ' tokens</p>';
+                html += '</div>';
+
+                if (qd.canBypass) {
+                    if (qd.processing) {
+                        html += '<button disabled class="px-4 py-2 bg-amber-500/50 text-white rounded-lg text-sm font-medium cursor-wait">';
+                        html += '<span class="animate-pulse">Processing...</span>';
+                        html += '</button>';
+                    } else {
+                        html += '<button onclick="app.useTokensForBypass()" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all text-sm font-medium shadow-lg">';
+                        html += '🪙 Use ' + qd.tokenCost + ' Tokens';
+                        html += '</button>';
+                    }
+                } else {
+                    html += '<div class="text-right">';
+                    html += '<span class="text-xs text-red-400 block">Insufficient tokens</span>';
+                    html += '<button onclick="app.showTokenUsageModal(); app.hideQuotaBypassModal();" class="text-xs text-amber-400 hover:text-amber-300 mt-1">Get more →</button>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                if (qd.error) {
+                    html += '<p class="text-red-400 text-sm mt-2">' + qd.error + '</p>';
+                }
+                html += '</div>';
+
+                html += '</div>';
+
+                // Tip
+                html += '<p class="text-center text-gray-500 text-xs mt-4">💡 Upgrade your plan for more daily uses</p>';
+
+                html += '</div></div>';
+            }
+
+            // Token Info Modal
+            if (state.showTokenModal) {
+                var tokenCosts = state.tokenBypassCosts || {};
+                var toolLabels = {
+                    warpOptimizer: 'WARP Optimizer',
+                    competitorAnalysis: 'Competitor Analysis',
+                    trendPredictor: 'Trend Predictor',
+                    thumbnailGenerator: 'Thumbnail Generator',
+                    channelAudit: 'Channel Audit',
+                    scriptGenerator: 'Script Generator',
+                    titleGenerator: 'Title Generator',
+                    placementFinder: 'Placement Finder'
+                };
+
+                html += '<div class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="app.hideTokenModal()">';
+                html += '<div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 relative border border-white/10" onclick="event.stopPropagation()">';
+                html += '<button onclick="app.hideTokenModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl transition-colors">&times;</button>';
+
+                // Header with balance
+                html += '<div class="text-center mb-6">';
+                html += '<div class="w-20 h-20 bg-gradient-to-br from-amber-400 to-yellow-600 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg shadow-amber-500/30">🪙</div>';
+                html += '<h3 class="text-2xl font-bold text-white">Your Token Balance</h3>';
+                html += '<div class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500 mt-2">' + (state.thumbnailTokenBalance || 0) + '</div>';
+                html += '<p class="text-gray-400 mt-1">Creative Tokens Available</p>';
+                html += '</div>';
+
+                // Plan info
+                if (state.profile && state.profile.plan) {
+                    html += '<div class="bg-white/5 rounded-xl p-4 mb-4 border border-white/10">';
+                    html += '<div class="flex items-center justify-between">';
+                    html += '<div class="flex items-center gap-3">';
+                    html += '<span class="text-2xl">📊</span>';
+                    html += '<div>';
+                    html += '<p class="text-white font-semibold">Current Plan</p>';
+                    html += '<p class="text-amber-400 font-bold capitalize">' + (state.profile.plan || 'Free') + '</p>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '<a href="pricing.html" class="text-sm text-purple-400 hover:text-purple-300">Upgrade →</a>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Token bypass costs info
+                html += '<div class="bg-white/5 rounded-xl p-4 mb-4 border border-white/10">';
+                html += '<h4 class="text-white font-semibold mb-3 flex items-center gap-2"><span>💡</span> Quota Bypass Costs</h4>';
+                html += '<p class="text-gray-400 text-sm mb-3">When you run out of free uses, tokens can skip the wait time:</p>';
+                html += '<div class="grid grid-cols-2 gap-2">';
+
+                var toolKeys = Object.keys(toolLabels);
+                for (var ti = 0; ti < toolKeys.length; ti++) {
+                    var toolKey = toolKeys[ti];
+                    var cost = tokenCosts[toolKey] || '?';
+                    html += '<div class="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2">';
+                    html += '<span class="text-gray-300 text-xs">' + toolLabels[toolKey] + '</span>';
+                    html += '<span class="text-amber-400 font-bold text-sm">' + cost + ' 🪙</span>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                html += '</div>';
+
+                // TopUp button
+                html += '<button onclick="app.topUpTokens()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2">';
+                html += '<span class="text-xl">💳</span> TopUp Tokens';
+                html += '</button>';
+
+                html += '<p class="text-center text-gray-500 text-xs mt-3">Contact support for custom token packages</p>';
+
+                html += '</div></div>';
+            }
+
             // Loading Section
             if (state.loading && state.generatedThumbnails.length === 0) {
                 html += '<div class="bg-white rounded-2xl shadow-xl p-8 mobile-padding mb-6 fade-in">';
@@ -13600,6 +13966,12 @@
             // Global header
             html += '<div class="global-header">';
             html += '<div class="global-header-content">';
+
+            // Token Balance Display (clickable)
+            html += '<div class="token-display" onclick="event.stopPropagation(); app.showTokenModal()">';
+            html += '<span class="token-icon">🪙</span>';
+            html += '<span class="token-amount">' + (state.thumbnailTokenBalance || 0) + '</span>';
+            html += '</div>';
 
             // Unified Notification Bell
             html += '<div class="notification-bell relative" onclick="event.stopPropagation(); app.toggleNotifications()">';

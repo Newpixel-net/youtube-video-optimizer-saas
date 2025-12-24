@@ -958,6 +958,11 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
+        .token-display { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.2) 100%); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 20px; cursor: pointer; transition: all 0.2s ease; }
+        .token-display:hover { background: linear-gradient(135deg, rgba(251, 191, 36, 0.3) 0%, rgba(245, 158, 11, 0.3) 100%); border-color: rgba(251, 191, 36, 0.5); transform: scale(1.02); }
+        .token-icon { font-size: 1.1rem; }
+        .token-amount { font-size: 0.9rem; font-weight: 700; color: #fbbf24; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
+
         .notification-badge {
             position: absolute;
             top: -4px;
@@ -5791,6 +5796,10 @@
             showNotifications: false,
             notificationTab: 'reports',
 
+            // Token Modal
+            showTokenModal: false,
+            tokenBypassCosts: null,
+
             // History (user's creations)
             history: [],
             historyLoading: false,
@@ -6956,6 +6965,37 @@
                     state.showNotifications = false;
                     render();
                 }
+            },
+
+            // Token Modal Functions
+            showTokenModal: function() {
+                if (!state.tokenBypassCosts) {
+                    this.loadTokenBypassCosts();
+                }
+                state.showTokenModal = true;
+                render();
+            },
+
+            hideTokenModal: function() {
+                state.showTokenModal = false;
+                render();
+            },
+
+            loadTokenBypassCosts: function() {
+                functions.httpsCallable('getTokenBypassInfo')({ tool: 'all' })
+                    .then(function(result) {
+                        if (result.data) {
+                            state.tokenBypassCosts = result.data.costs || {};
+                            render();
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Failed to load token bypass costs:', error);
+                    });
+            },
+
+            topUpTokens: function() {
+                utils.showToast('Token TopUp coming soon! Contact support for now.', 'info');
             },
 
             setNotificationTab: function(tab) {
@@ -9044,6 +9084,7 @@
 
             html += '<div class="global-header">';
             html += '<div class="global-header-content">';
+            html += '<div class="token-display" onclick="event.stopPropagation(); app.showTokenModal()"><span class="token-icon">🪙</span><span class="token-amount">' + (state.tokens.balance || 0) + '</span></div>';
             html += '<div class="plan-badge"><span>⭐</span><span>' + planName + '</span></div>';
             html += '<div class="notification-bell" onclick="event.stopPropagation(); app.toggleNotifications()">';
             html += '<span style="font-size:1.25rem;">🔔</span>';
@@ -9085,6 +9126,37 @@
             return html;
         }
 
+        // Token Modal
+        function renderTokenModal() {
+            if (!state.showTokenModal) return '';
+            var tokenCosts = state.tokenBypassCosts || {};
+            var toolLabels = {
+                warpOptimizer: 'WARP Optimizer', competitorAnalysis: 'Competitor Analysis',
+                trendPredictor: 'Trend Predictor', thumbnailGenerator: 'Thumbnail Generator',
+                channelAudit: 'Channel Audit', scriptGenerator: 'Script Generator',
+                titleGenerator: 'Title Generator', placementFinder: 'Placement Finder'
+            };
+            var html = '<div class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="app.hideTokenModal()">';
+            html += '<div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 relative border border-white/10" onclick="event.stopPropagation()">';
+            html += '<button onclick="app.hideTokenModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl transition-colors">&times;</button>';
+            html += '<div class="text-center mb-6"><div class="w-20 h-20 bg-gradient-to-br from-amber-400 to-yellow-600 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg shadow-amber-500/30">🪙</div>';
+            html += '<h3 class="text-2xl font-bold text-white">Your Token Balance</h3>';
+            html += '<div class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500 mt-2">' + (state.tokens.balance || 0) + '</div>';
+            html += '<p class="text-gray-400 mt-1">Creative Tokens Available</p></div>';
+            var planName = (state.tokens.plan || 'free').charAt(0).toUpperCase() + (state.tokens.plan || 'free').slice(1);
+            html += '<div class="bg-white/5 rounded-xl p-4 mb-4 border border-white/10"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><span class="text-2xl">📊</span><div><p class="text-white font-semibold">Current Plan</p><p class="text-amber-400 font-bold capitalize">' + planName + '</p></div></div><a href="pricing.html" class="text-sm text-purple-400 hover:text-purple-300">Upgrade →</a></div></div>';
+            html += '<div class="bg-white/5 rounded-xl p-4 mb-4 border border-white/10"><h4 class="text-white font-semibold mb-3 flex items-center gap-2"><span>💡</span> Quota Bypass Costs</h4>';
+            html += '<p class="text-gray-400 text-sm mb-3">When you run out of free uses, tokens can skip the wait time:</p><div class="grid grid-cols-2 gap-2">';
+            Object.keys(toolLabels).forEach(function(toolKey) {
+                var cost = tokenCosts[toolKey] || '?';
+                html += '<div class="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2"><span class="text-gray-300 text-xs">' + toolLabels[toolKey] + '</span><span class="text-amber-400 font-bold text-sm">' + cost + ' 🪙</span></div>';
+            });
+            html += '</div></div>';
+            html += '<button onclick="app.topUpTokens()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2"><span class="text-xl">💳</span> TopUp Tokens</button>';
+            html += '<p class="text-center text-gray-500 text-xs mt-3">Contact support for custom token packages</p></div></div>';
+            return html;
+        }
+
         // Main render dispatcher
         function render() {
             var root = document.getElementById('app-root');
@@ -9095,6 +9167,7 @@
             } else {
                 html = renderStudio();
                 html += renderGlobalHeader();
+                html += renderTokenModal();
             }
 
             root.innerHTML = html;

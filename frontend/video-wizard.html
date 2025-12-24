@@ -8242,6 +8242,10 @@
                 }
             },
 
+            // Token Modal
+            showTokenModal: false,
+            tokenBypassCosts: null,
+
             // Step 1: Video Input
             videoInput: {
                 url: '',
@@ -8528,6 +8532,35 @@
             html += '</div>'; // wizard-content
             html += '</div>'; // wizard-container
 
+            // Token Modal
+            if (state.showTokenModal) {
+                var tokenCosts = state.tokenBypassCosts || {};
+                var toolLabels = {
+                    warpOptimizer: 'WARP Optimizer', competitorAnalysis: 'Competitor Analysis',
+                    trendPredictor: 'Trend Predictor', thumbnailGenerator: 'Thumbnail Generator',
+                    channelAudit: 'Channel Audit', scriptGenerator: 'Script Generator',
+                    titleGenerator: 'Title Generator', placementFinder: 'Placement Finder'
+                };
+                html += '<div class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="app.hideTokenModal()">';
+                html += '<div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 relative border border-white/10" onclick="event.stopPropagation()">';
+                html += '<button onclick="app.hideTokenModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl transition-colors">&times;</button>';
+                html += '<div class="text-center mb-6"><div class="w-20 h-20 bg-gradient-to-br from-amber-400 to-yellow-600 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg shadow-amber-500/30">🪙</div>';
+                html += '<h3 class="text-2xl font-bold text-white">Your Token Balance</h3>';
+                html += '<div class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500 mt-2">' + (state.tokens.balance || 0) + '</div>';
+                html += '<p class="text-gray-400 mt-1">Wizard Tokens Available</p></div>';
+                var planName = (state.tokens.plan || 'free').charAt(0).toUpperCase() + (state.tokens.plan || 'free').slice(1);
+                html += '<div class="bg-white/5 rounded-xl p-4 mb-4 border border-white/10"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><span class="text-2xl">📊</span><div><p class="text-white font-semibold">Current Plan</p><p class="text-amber-400 font-bold capitalize">' + planName + '</p></div></div><a href="pricing.html" class="text-sm text-purple-400 hover:text-purple-300">Upgrade →</a></div></div>';
+                html += '<div class="bg-white/5 rounded-xl p-4 mb-4 border border-white/10"><h4 class="text-white font-semibold mb-3 flex items-center gap-2"><span>💡</span> Quota Bypass Costs</h4>';
+                html += '<p class="text-gray-400 text-sm mb-3">When you run out of free uses, tokens can skip the wait time:</p><div class="grid grid-cols-2 gap-2">';
+                Object.keys(toolLabels).forEach(function(toolKey) {
+                    var cost = tokenCosts[toolKey] || '?';
+                    html += '<div class="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2"><span class="text-gray-300 text-xs">' + toolLabels[toolKey] + '</span><span class="text-amber-400 font-bold text-sm">' + cost + ' 🪙</span></div>';
+                });
+                html += '</div></div>';
+                html += '<button onclick="app.topUpTokens()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2"><span class="text-xl">💳</span> TopUp Tokens</button>';
+                html += '<p class="text-center text-gray-500 text-xs mt-3">Contact support for custom token packages</p></div></div>';
+            }
+
             root.innerHTML = html;
             attachEventListeners();
         }
@@ -8551,8 +8584,8 @@
             html += '<span>Dashboard</span>';
             html += '</a>';
 
-            // Token display
-            html += '<div class="header-token-display">';
+            // Token display (clickable)
+            html += '<div class="header-token-display" onclick="app.showTokenModal()" style="cursor:pointer;">';
             html += '<span>🪙</span>';
             html += '<span class="token-value">' + state.tokens.balance + '</span>';
             html += '<span class="token-label">tokens</span>';
@@ -11882,6 +11915,37 @@
             toggleOption: function(key) {
                 state.videoInput.options[key] = !state.videoInput.options[key];
                 render();
+            },
+
+            // Token Modal Functions
+            showTokenModal: function() {
+                if (!state.tokenBypassCosts) {
+                    this.loadTokenBypassCosts();
+                }
+                state.showTokenModal = true;
+                render();
+            },
+
+            hideTokenModal: function() {
+                state.showTokenModal = false;
+                render();
+            },
+
+            loadTokenBypassCosts: function() {
+                functions.httpsCallable('getTokenBypassInfo')({ tool: 'all' })
+                    .then(function(result) {
+                        if (result.data) {
+                            state.tokenBypassCosts = result.data.costs || {};
+                            render();
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Failed to load token bypass costs:', error);
+                    });
+            },
+
+            topUpTokens: function() {
+                utils.showToast('Token TopUp coming soon! Contact support for now.', 'info');
             },
 
             // Select platform/content type preset

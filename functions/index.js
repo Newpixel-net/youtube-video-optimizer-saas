@@ -250,6 +250,36 @@ async function checkUsageLimit(uid, toolType) {
     const remainingSeconds = Math.ceil(remainingMs / 1000);
     const remainingMinutes = Math.ceil(remainingSeconds / 60);
 
+    // Get token bypass info for this tool
+    let tokenBypassInfo = { available: false, balance: 0, cost: 0 };
+    try {
+      const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+      const tokenBalance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 0;
+
+      // Get bypass costs (use inline defaults if getTokenBypassCosts not yet defined)
+      let bypassCosts;
+      try {
+        const costDoc = await db.collection('settings').doc('tokenBypassCosts').get();
+        bypassCosts = costDoc.exists ? costDoc.data().costs : {};
+      } catch (e) {
+        bypassCosts = {};
+      }
+      const defaultCosts = {
+        warpOptimizer: 3, competitorAnalysis: 3, trendPredictor: 3,
+        thumbnailGenerator: 5, channelAudit: 3
+      };
+      const toolCost = bypassCosts[toolType] || defaultCosts[toolType] || 3;
+
+      tokenBypassInfo = {
+        available: true,
+        balance: tokenBalance,
+        cost: toolCost,
+        canBypass: tokenBalance >= toolCost
+      };
+    } catch (tokenErr) {
+      console.log('Could not get token bypass info:', tokenErr.message);
+    }
+
     throw new functions.https.HttpsError(
       'resource-exhausted',
       `Quota exhausted (${usage.usedToday}/${totalLimit}). Resets in ${remainingMinutes} minutes.`,
@@ -260,7 +290,9 @@ async function checkUsageLimit(uid, toolType) {
         resetAtMs: resetAtMs,
         remainingMs: remainingMs,
         remainingSeconds: remainingSeconds,
-        remainingMinutes: remainingMinutes
+        remainingMinutes: remainingMinutes,
+        toolType: toolType,
+        tokenBypass: tokenBypassInfo
       }
     );
   }
@@ -2854,6 +2886,205 @@ exports.adminSetQuotaSettings = functions.https.onCall(async (data, context) => 
     }
 
     throw new functions.https.HttpsError('internal', errorMessage);
+  }
+});
+
+// ============================================
+// TOKEN BYPASS COSTS FOR QUOTA-LIMITED TOOLS
+// ============================================
+
+// Default token costs for bypassing quota limits (used when no custom settings exist)
+const DEFAULT_TOKEN_BYPASS_COSTS = {
+  warpOptimizer: 3,
+  competitorAnalysis: 3,
+  trendPredictor: 3,
+  thumbnailGenerator: 5,
+  channelAudit: 3,
+  placementFinder: 3,
+  viralPredictor: 3,
+  monetizationAnalyzer: 3,
+  scriptWriter: 5,
+  sponsorshipCalculator: 3,
+  revenueDiversification: 3,
+  cpmBooster: 3,
+  audienceProfiler: 3,
+  digitalProductArchitect: 3,
+  affiliateFinder: 3,
+  multiIncomeConverter: 3,
+  brandDealMatchmaker: 3,
+  licensingScout: 3,
+  automationPipeline: 3
+};
+
+// Get token bypass costs (admin or default)
+async function getTokenBypassCosts() {
+  try {
+    const settingsDoc = await db.collection('settings').doc('tokenBypassCosts').get();
+    if (settingsDoc.exists) {
+      return { ...DEFAULT_TOKEN_BYPASS_COSTS, ...settingsDoc.data().costs };
+    }
+  } catch (e) {
+    console.log('Using default token bypass costs');
+  }
+  return DEFAULT_TOKEN_BYPASS_COSTS;
+}
+
+// Admin: Get token bypass costs
+exports.adminGetTokenBypassCosts = functions.https.onCall(async (data, context) => {
+  try {
+    await requireAdmin(context);
+
+    const costs = await getTokenBypassCosts();
+
+    return {
+      success: true,
+      costs: costs
+    };
+  } catch (error) {
+    console.error('adminGetTokenBypassCosts error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to get token bypass costs');
+  }
+});
+
+// Admin: Set token bypass costs
+exports.adminSetTokenBypassCosts = functions.https.onCall(async (data, context) => {
+  try {
+    const adminId = await requireAdmin(context);
+
+    const { costs } = data || {};
+
+    if (!costs || typeof costs !== 'object') {
+      throw new functions.https.HttpsError('invalid-argument', 'Costs object required');
+    }
+
+    // Validate all costs are positive integers
+    const validatedCosts = {};
+    for (const [tool, cost] of Object.entries(costs)) {
+      const costNum = parseInt(cost);
+      if (isNaN(costNum) || costNum < 1 || costNum > 100) {
+        throw new functions.https.HttpsError('invalid-argument', `Invalid cost for ${tool}: must be 1-100`);
+      }
+      validatedCosts[tool] = costNum;
+    }
+
+    await db.collection('settings').doc('tokenBypassCosts').set({
+      costs: validatedCosts,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: context.auth.uid
+    }, { merge: true });
+
+    console.log('Token bypass costs updated by admin:', adminId.substring(0, 8) + '...');
+
+    return {
+      success: true,
+      message: 'Token bypass costs updated successfully'
+    };
+  } catch (error) {
+    console.error('adminSetTokenBypassCosts error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to update token bypass costs');
+  }
+});
+
+// Get user's token balance and bypass cost for a specific tool
+exports.getTokenBypassInfo = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { tool } = data || {};
+
+  if (!tool) {
+    throw new functions.https.HttpsError('invalid-argument', 'Tool name required');
+  }
+
+  try {
+    // Get token balance
+    const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+    const balance = tokenDoc.exists ? (tokenDoc.data().balance || 0) : 0;
+
+    // Get bypass costs
+    const costs = await getTokenBypassCosts();
+    const toolCost = costs[tool] || 3; // Default 3 if tool not found
+
+    return {
+      success: true,
+      balance: balance,
+      toolCost: toolCost,
+      canBypass: balance >= toolCost
+    };
+  } catch (error) {
+    console.error('getTokenBypassInfo error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get token bypass info');
+  }
+});
+
+// Use tokens to bypass quota limit for a tool
+exports.useTokensForQuotaBypass = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { tool } = data || {};
+
+  if (!tool) {
+    throw new functions.https.HttpsError('invalid-argument', 'Tool name required');
+  }
+
+  try {
+    // Get bypass costs
+    const costs = await getTokenBypassCosts();
+    const toolCost = costs[tool];
+
+    if (!toolCost) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid tool: ' + tool);
+    }
+
+    const tokenRef = db.collection('creativeTokens').doc(uid);
+
+    // Use transaction to ensure atomic deduction
+    const result = await db.runTransaction(async (transaction) => {
+      const tokenDoc = await transaction.get(tokenRef);
+
+      if (!tokenDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Token balance not found. Please refresh the page.');
+      }
+
+      const currentBalance = tokenDoc.data().balance || 0;
+
+      if (currentBalance < toolCost) {
+        throw new functions.https.HttpsError('resource-exhausted',
+          `Insufficient tokens. Need ${toolCost}, have ${currentBalance}`);
+      }
+
+      const newBalance = currentBalance - toolCost;
+
+      transaction.update(tokenRef, {
+        balance: newBalance,
+        lastUsed: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return { newBalance, deducted: toolCost };
+    });
+
+    // Log the transaction
+    await db.collection('tokenTransactions').add({
+      userId: uid,
+      type: 'quota_bypass',
+      amount: -result.deducted,
+      balanceAfter: result.newBalance,
+      tool: tool,
+      reason: `Quota bypass for ${tool}`,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`User ${uid.substring(0, 8)}... used ${result.deducted} tokens to bypass ${tool} quota`);
+
+    return {
+      success: true,
+      deducted: result.deducted,
+      newBalance: result.newBalance,
+      bypassGranted: true
+    };
+  } catch (error) {
+    console.error('useTokensForQuotaBypass error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', 'Failed to process token bypass');
   }
 });
 
