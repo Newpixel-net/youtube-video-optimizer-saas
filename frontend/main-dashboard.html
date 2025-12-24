@@ -3266,7 +3266,17 @@
          All views are rendered dynamically into #app-root
          See render functions in Section 4.5
          ============================================ -->
-    <div id="app-root"></div>
+    <div id="app-root">
+        <!-- Static loading screen - shown immediately while Firebase loads -->
+        <div class="min-h-screen flex items-center justify-center" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);">
+            <div class="text-center">
+                <div style="font-size:4.5rem;margin-bottom:1.5rem;">🎬</div>
+                <div style="width:40px;height:40px;border:3px solid rgba(139,92,246,0.3);border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem;"></div>
+                <p style="color:rgba(255,255,255,0.8);font-size:1.125rem;">Loading...</p>
+            </div>
+        </div>
+        <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+    </div>
 
     <!-- ============================================
          SECTION 4: SCRIPTS
@@ -3279,37 +3289,53 @@
            4.1 FIREBASE CONFIGURATION
            ========================================== */
 
-        // Robust Firebase check - waits for window.onload if needed
-        function initializeApp() {
-            // Firebase should be available now - proceed with app
-            if (typeof firebase === 'undefined') {
-                // Still not available after window.onload - show error
-                document.getElementById('app-root').innerHTML =
-                    '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">' +
-                    '<div style="background:rgba(30,41,59,0.95);border-radius:1rem;padding:3rem;text-align:center;max-width:400px;border:1px solid rgba(255,255,255,0.1);">' +
-                    '<h2 style="color:#ef4444;font-size:1.5rem;font-weight:bold;margin-bottom:1rem;">Connection Error</h2>' +
-                    '<p style="color:#9ca3af;margin-bottom:1.5rem;">Failed to load required resources. This may be due to a slow connection or ad blocker.</p>' +
-                    '<button onclick="location.reload()" style="padding:0.75rem 2rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:0.5rem;cursor:pointer;font-weight:600;font-size:1rem;">Try Again</button></div></div>';
+        // Graceful Firebase loading with retry mechanism
+        // Prevents "Connection Error" flash when navigating back from other pages
+        var firebaseRetryCount = 0;
+        var maxFirebaseRetries = 15; // ~3 seconds total with progressive delays
+
+        function showConnectionError() {
+            document.getElementById('app-root').innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);">' +
+                '<div style="background:rgba(30,41,59,0.95);border-radius:1rem;padding:3rem;text-align:center;max-width:400px;border:1px solid rgba(255,255,255,0.1);">' +
+                '<h2 style="color:#ef4444;font-size:1.5rem;font-weight:bold;margin-bottom:1rem;">Connection Error</h2>' +
+                '<p style="color:#9ca3af;margin-bottom:1.5rem;">Failed to load required resources. This may be due to a slow connection or ad blocker.</p>' +
+                '<button onclick="location.reload()" style="padding:0.75rem 2rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:0.5rem;cursor:pointer;font-weight:600;font-size:1rem;">Try Again</button></div></div>';
+        }
+
+        function waitForFirebase() {
+            // Firebase is ready - run the app
+            if (typeof firebase !== 'undefined') {
+                runApp();
                 return;
             }
 
-            // Firebase is ready - continue with initialization
-            runApp();
+            // Still waiting - increment retry count
+            firebaseRetryCount++;
+
+            // Give up after max retries (~3 seconds)
+            if (firebaseRetryCount > maxFirebaseRetries) {
+                showConnectionError();
+                return;
+            }
+
+            // Progressive delay: starts at 50ms, increases with each retry
+            // 50, 100, 150, 200... gives Firebase plenty of time in slow conditions
+            var delay = Math.min(50 + (firebaseRetryCount * 50), 300);
+            setTimeout(waitForFirebase, delay);
         }
 
-        // Check if Firebase is already loaded (normal fast path)
+        // Start checking for Firebase
+        // If already loaded (normal case), runs immediately
+        // Otherwise, retries with progressive delays
         if (typeof firebase !== 'undefined') {
-            // Firebase ready - run immediately
-            initializeApp();
+            runApp();
+        } else if (document.readyState === 'complete') {
+            // Page loaded but Firebase not ready - start retry loop
+            waitForFirebase();
         } else {
-            // Firebase not ready - wait for all scripts to load
-            if (document.readyState === 'complete') {
-                // Page already loaded but Firebase missing - wait a bit more
-                setTimeout(initializeApp, 200);
-            } else {
-                // Wait for window.onload (all scripts loaded)
-                window.addEventListener('load', initializeApp);
-            }
+            // Wait for page load, then check Firebase
+            window.addEventListener('load', waitForFirebase);
         }
 
         function runApp() {
