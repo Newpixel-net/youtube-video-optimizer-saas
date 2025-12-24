@@ -136,7 +136,7 @@
         /* ==========================================
            BACKGROUND EFFECTS
            ========================================== */
-        /* Liquid Ether Background Effect - Pure CSS (works in all iframes) */
+        /* Liquid Ether Background Effect - Embedded iframe for WebGL */
         .liquid-ether-bg {
             position: fixed;
             top: 0;
@@ -148,105 +148,11 @@
             background: #0a0a0f;
         }
 
-        .liquid-blob {
-            position: absolute;
-            border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
-            filter: blur(60px);
-            opacity: 0.8;
-            mix-blend-mode: screen;
-            animation: blob-morph 15s ease-in-out infinite, blob-float 20s ease-in-out infinite;
-        }
-
-        .liquid-blob-1 {
-            width: 600px;
-            height: 600px;
-            background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 50%, #7c3aed 100%);
-            top: -10%;
-            left: -5%;
-            animation-delay: 0s;
-        }
-
-        .liquid-blob-2 {
-            width: 500px;
-            height: 500px;
-            background: linear-gradient(135deg, #ec4899 0%, #f472b6 50%, #db2777 100%);
-            top: 30%;
-            right: -10%;
-            animation-delay: -5s;
-            animation-duration: 18s, 22s;
-        }
-
-        .liquid-blob-3 {
-            width: 450px;
-            height: 450px;
-            background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%);
-            bottom: -5%;
-            left: 20%;
-            animation-delay: -10s;
-            animation-duration: 20s, 25s;
-        }
-
-        .liquid-blob-4 {
-            width: 350px;
-            height: 350px;
-            background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 50%, #0891b2 100%);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            animation-delay: -7s;
-            animation-duration: 16s, 18s;
-        }
-
-        .liquid-blob-5 {
-            width: 400px;
-            height: 400px;
-            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-            top: 60%;
-            right: 20%;
-            animation-delay: -12s;
-            animation-duration: 22s, 28s;
-        }
-
-        @keyframes blob-morph {
-            0%, 100% {
-                border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
-            }
-            25% {
-                border-radius: 70% 30% 50% 50% / 30% 30% 70% 70%;
-            }
-            50% {
-                border-radius: 50% 60% 30% 60% / 70% 40% 50% 40%;
-            }
-            75% {
-                border-radius: 30% 40% 60% 70% / 50% 60% 40% 60%;
-            }
-        }
-
-        @keyframes blob-float {
-            0%, 100% {
-                transform: translate(0, 0) rotate(0deg) scale(1);
-            }
-            25% {
-                transform: translate(30px, -50px) rotate(5deg) scale(1.05);
-            }
-            50% {
-                transform: translate(-20px, 20px) rotate(-5deg) scale(0.95);
-            }
-            75% {
-                transform: translate(50px, 30px) rotate(3deg) scale(1.02);
-            }
-        }
-
-        /* Overlay gradient for depth */
-        .liquid-ether-bg::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: radial-gradient(ellipse at center, transparent 0%, rgba(10,10,15,0.4) 100%);
-            pointer-events: none;
+        .liquid-ether-bg iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
         }
 
         /* ==========================================
@@ -2215,13 +2121,9 @@
     </style>
 </head>
 <body>
-    <!-- Liquid Ether Background Effect - Pure CSS -->
+    <!-- Liquid Ether Background Effect - WebGL via iframe -->
     <div class="liquid-ether-bg">
-        <div class="liquid-blob liquid-blob-1"></div>
-        <div class="liquid-blob liquid-blob-2"></div>
-        <div class="liquid-blob liquid-blob-3"></div>
-        <div class="liquid-blob liquid-blob-4"></div>
-        <div class="liquid-blob liquid-blob-5"></div>
+        <iframe src="fluid-bg.html" allow="accelerometer; autoplay; encrypted-media; gyroscope" loading="eager" title="Fluid Background"></iframe>
     </div>
 
     <!-- ==========================================
