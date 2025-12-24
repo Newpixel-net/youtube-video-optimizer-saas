@@ -1,5 +1,5 @@
 <!-- ================================================================
-     YOUTUBE VIDEO OPTIMIZER - LANDING PAGE
+     YOUTUBEHUB - LANDING PAGE
      ================================================================
 
      This is the public landing page for the platform.
@@ -16,7 +16,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Video Optimizer - AI-Powered Video Optimization Platform</title>
+    <title>YouTubeHub - AI-Powered Video Optimization Platform</title>
     <meta name="description" content="Optimize your YouTube videos with AI-powered tools. Generate titles, descriptions, thumbnails, and boost your channel growth.">
 
     <!-- Theme & Favicon -->
@@ -270,6 +270,45 @@
             font-size: 1.5rem;
             cursor: pointer;
             padding: 0.5rem;
+            z-index: 110;
+        }
+
+        /* Mobile menu overlay */
+        .mobile-menu {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 15, 0.98);
+            z-index: 105;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+        }
+
+        .mobile-menu.active {
+            display: flex;
+        }
+
+        .mobile-menu a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.5rem;
+            font-weight: 600;
+            padding: 1rem 2rem;
+            transition: color 0.2s ease;
+        }
+
+        .mobile-menu a:hover {
+            color: #a78bfa;
+        }
+
+        .mobile-menu .btn-cta {
+            margin-top: 1rem;
+            font-size: 1.1rem;
         }
 
         /* ==========================================
@@ -1367,7 +1406,7 @@
                         <polygon points="5 3 19 12 5 21 5 3"/>
                     </svg>
                 </div>
-                <span>YT Optimizer</span>
+                <span>YouTubeHub</span>
             </a>
 
             <div class="nav-links">
@@ -1387,6 +1426,15 @@
             </button>
         </nav>
     </header>
+
+    <!-- Mobile Menu Overlay -->
+    <div class="mobile-menu" id="mobile-menu">
+        <a href="#features" class="mobile-nav-link">Features</a>
+        <a href="#tools" class="mobile-nav-link">Tools</a>
+        <a href="#testimonials" class="mobile-nav-link">Testimonials</a>
+        <a href="/video-optimizer" class="mobile-nav-link" id="mobile-login-btn">Log In</a>
+        <a href="/video-optimizer#register" class="btn-cta" id="mobile-cta-btn">Get Started Free</a>
+    </div>
 
     <!-- ==========================================
          HERO SECTION
@@ -2152,7 +2200,7 @@
                         <polygon points="5 3 19 12 5 21 5 3"/>
                     </svg>
                 </div>
-                <span>YT Optimizer</span>
+                <span>YouTubeHub</span>
             </a>
             <div class="footer-links">
                 <a href="#features" class="footer-link">Features</a>
@@ -2160,7 +2208,7 @@
                 <a href="#testimonials" class="footer-link">Testimonials</a>
                 <a href="/video-optimizer" class="footer-link">Dashboard</a>
             </div>
-            <p class="footer-copyright">2025 YT Optimizer. All rights reserved.</p>
+            <p class="footer-copyright">2025 YouTubeHub. All rights reserved.</p>
         </div>
     </footer>
 
@@ -2213,22 +2261,52 @@
                     finalCtaBtn.innerHTML = '<span>Go to Dashboard</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
                     finalCtaBtn.href = '/video-optimizer';
                 }
+
+                // Update mobile menu buttons
+                const mobileLoginBtn = document.getElementById('mobile-login-btn');
+                const mobileCtaBtn = document.getElementById('mobile-cta-btn');
+                if (mobileLoginBtn) {
+                    mobileLoginBtn.textContent = 'Dashboard';
+                    mobileLoginBtn.href = '/video-optimizer';
+                }
+                if (mobileCtaBtn) {
+                    mobileCtaBtn.textContent = 'Go to Dashboard';
+                    mobileCtaBtn.href = '/video-optimizer';
+                }
             }
         });
 
-        // Mobile menu toggle (placeholder - will implement fully later)
+        // Mobile menu toggle
         const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
+
         mobileMenuBtn.addEventListener('click', () => {
-            // Will implement mobile menu in later section
-            window.location.href = '/video-optimizer';
+            mobileMenu.classList.toggle('active');
+            // Toggle hamburger to X
+            if (mobileMenu.classList.contains('active')) {
+                mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+            } else {
+                mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>';
+            }
+        });
+
+        // Close mobile menu when clicking a link
+        mobileNavLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenu.classList.remove('active');
+                mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>';
+            });
         });
 
         // Wizard Step Interaction
         const wizardSteps = document.querySelectorAll('.wizard-step');
         const wizardPreviews = document.querySelectorAll('.wizard-preview-content');
         let autoAdvanceInterval;
+        let currentStep = 1;
 
         function setActiveStep(stepNum) {
+            currentStep = parseInt(stepNum);
             wizardSteps.forEach(step => {
                 step.classList.toggle('active', step.dataset.step === String(stepNum));
             });
@@ -2248,7 +2326,6 @@
 
         // Auto-advance through steps
         function startAutoAdvance() {
-            let currentStep = 1;
             autoAdvanceInterval = setInterval(() => {
                 currentStep = currentStep >= 6 ? 1 : currentStep + 1;
                 setActiveStep(currentStep);

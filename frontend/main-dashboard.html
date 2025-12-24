@@ -29,10 +29,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>YouTube Video Optimizer</title>
+    <title>YouTubeHub</title>
 
     <!-- PWA Manifest & Theme (Inline - no external file needed) -->
-    <link rel="manifest" href='data:application/manifest+json,{"name":"YouTube Video Optimizer","short_name":"YT Optimizer","description":"AI-powered YouTube video optimization and campaign analysis platform","start_url":"/main-dashboard.html","display":"standalone","background_color":"#0f172a","theme_color":"#7c3aed","orientation":"portrait-primary","icons":[{"src":"https://ytseo.siteuo.com/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"https://ytseo.siteuo.com/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}],"categories":["productivity","business","utilities"],"lang":"en","dir":"ltr"}'>
+    <link rel="manifest" href='data:application/manifest+json,{"name":"YouTubeHub","short_name":"YouTubeHub","description":"AI-powered YouTube video optimization and campaign analysis platform","start_url":"/video-optimizer","display":"standalone","background_color":"#0f172a","theme_color":"#7c3aed","orientation":"portrait-primary","icons":[{"src":"https://ytseo.siteuo.com/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"https://ytseo.siteuo.com/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}],"categories":["productivity","business","utilities"],"lang":"en","dir":"ltr"}'>
     <meta name="theme-color" content="#7c3aed">
 
     <!-- ============================================
@@ -8007,7 +8007,7 @@
                         pdf.setFontSize(8);
                         pdf.setTextColor(220, 220, 220);
                         pdf.text('Generated on ' + new Date().toLocaleDateString(), margin, 19);
-                        pdf.text('YouTube Video Optimizer - Campaign Report', margin, 25);
+                        pdf.text('YouTubeHub - Campaign Report', margin, 25);
 
                         pdf.setFontSize(9);
                         pdf.text('Page ' + pageNum + ' of ' + totalPages, pageWidth - margin - 22, 19);
@@ -8017,7 +8017,7 @@
                     function addFooter() {
                         pdf.setFontSize(7);
                         pdf.setTextColor(107, 114, 128);
-                        pdf.text('Powered by YouTube Video Optimizer - ytseo.siteuo.com', margin, pageHeight - 6);
+                        pdf.text('Powered by YouTubeHub', margin, pageHeight - 6);
                     }
 
                     // Identify section boundaries for intelligent page breaks
@@ -8699,7 +8699,7 @@
             // Header
             html += '<div class="text-center mb-8 fade-in">';
             html += '<div class="text-6xl mb-4">🎬</div>';
-            html += '<h1 class="text-4xl mobile-text-xl font-bold text-white mb-2">YouTube Video Optimizer</h1>';
+            html += '<h1 class="text-4xl mobile-text-xl font-bold text-white mb-2">YouTubeHub</h1>';
             html += '<p class="text-white/80 text-lg mobile-text-lg">AI-powered video optimization</p>';
             html += '</div>';
 
@@ -9537,7 +9537,7 @@
 
             // Version Footer
             html += '<div class="text-center py-6 mt-8">';
-            html += '<p class="text-white/40 text-sm">YouTube Video Optimizer v' + PLATFORM_VERSION + '</p>';
+            html += '<p class="text-white/40 text-sm">YouTubeHub v' + PLATFORM_VERSION + '</p>';
             html += '</div>';
 
             // Bonus History Modal
