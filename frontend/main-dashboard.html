@@ -1249,173 +1249,33 @@
         }
 
         /* ========== PDF EXPORT STYLES ========== */
-        /* Applied when generating PDF for print-friendly output */
+        /* Keeps original design, only adds structural rules for proper page breaks */
 
         .pdf-mode {
             width: 800px !important;
             max-width: 800px !important;
             margin: 0 auto;
-            background: #ffffff !important;
+        }
+
+        /* Structural rules only - preserve original colors */
+        .pdf-mode .strategic-section,
+        .pdf-mode .health-score-container,
+        .pdf-mode .metric-tile,
+        .pdf-mode .action-card,
+        .pdf-mode .growth-projection,
+        .pdf-mode .youtube-hero,
+        .pdf-mode .report-image-item,
+        .pdf-mode .bg-gray-50.rounded-xl.p-5 {
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .pdf-mode .strategic-section {
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
-            border: 2px solid #e2e8f0 !important;
-            color: #1e293b !important;
-            page-break-inside: avoid;
-            break-inside: avoid;
-            margin-bottom: 20px;
-        }
-
-        .pdf-mode .strategic-section-title,
-        .pdf-mode .strategic-section-subtitle {
-            color: #1e293b !important;
-        }
-
-        .pdf-mode .strategic-section-subtitle {
-            color: #64748b !important;
-        }
-
-        .pdf-mode .health-score-container {
-            background: #ffffff !important;
-            border: 1px solid #e2e8f0 !important;
-        }
-
-        .pdf-mode .health-score-breakdown {
-            color: #1e293b !important;
-        }
-
-        .pdf-mode .score-category-name {
-            color: #374151 !important;
-        }
-
-        .pdf-mode .metrics-dashboard {
-            gap: 12px;
-        }
-
-        .pdf-mode .metric-tile {
-            background: #ffffff !important;
-            border: 1px solid #e2e8f0 !important;
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }
-
-        .pdf-mode .metric-tile-label {
-            color: #64748b !important;
+            margin-bottom: 16px;
         }
 
         .pdf-mode .action-card {
-            background: #ffffff !important;
-            border: 1px solid #e2e8f0 !important;
-            page-break-inside: avoid;
-            break-inside: avoid;
-            margin-bottom: 12px;
-        }
-
-        .pdf-mode .action-card-title {
-            color: #1e293b !important;
-        }
-
-        .pdf-mode .action-card-description {
-            color: #475569 !important;
-        }
-
-        .pdf-mode .action-card-category {
-            color: #64748b !important;
-        }
-
-        .pdf-mode .growth-projection {
-            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
-            border: 2px solid #a7f3d0 !important;
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }
-
-        .pdf-mode .growth-projection-title,
-        .pdf-mode .growth-projection-text {
-            color: #065f46 !important;
-        }
-
-        .pdf-mode .growth-value-number {
-            color: #059669 !important;
-        }
-
-        .pdf-mode .growth-value-label {
-            color: #047857 !important;
-        }
-
-        .pdf-mode .youtube-hero {
-            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%) !important;
-            border: 2px solid #fecaca !important;
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }
-
-        .pdf-mode .youtube-hero-title {
-            color: #dc2626 !important;
-        }
-
-        .pdf-mode .youtube-views-label {
-            color: #7f1d1d !important;
-        }
-
-        .pdf-mode .youtube-views-value {
-            color: #b91c1c !important;
-        }
-
-        .pdf-mode .youtube-metric-card {
-            background: #ffffff !important;
-            border: 1px solid #fecaca !important;
-        }
-
-        .pdf-mode .youtube-metric-label {
-            color: #991b1b !important;
-        }
-
-        .pdf-mode .youtube-video-info {
-            background: rgba(255, 255, 255, 0.8) !important;
-            border: 1px solid #fecaca !important;
-        }
-
-        .pdf-mode .youtube-video-title {
-            color: #7f1d1d !important;
-        }
-
-        .pdf-mode .youtube-video-tag {
-            background: #fee2e2 !important;
-            color: #991b1b !important;
-        }
-
-        .pdf-mode .report-image-item {
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }
-
-        .pdf-mode .bg-gray-50.rounded-xl.p-5 {
-            background: #f9fafb !important;
-            border: 1px solid #e5e7eb !important;
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }
-
-        .pdf-mode .strategic-section-header {
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
-            padding: 16px !important;
-            border-radius: 12px !important;
-            border: 1px solid #e2e8f0 !important;
-            margin-bottom: 8px !important;
-        }
-
-        .pdf-mode .action-cards-grid {
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 12px !important;
-        }
-
-        .pdf-mode .metrics-dashboard {
-            display: grid !important;
-            grid-template-columns: repeat(3, 1fr) !important;
-            gap: 12px !important;
+            margin-bottom: 10px;
         }
 
         /* PDF Section Wrapper for page breaks */
@@ -7949,185 +7809,129 @@
                         pdf.text('Powered by YouTube Video Optimizer - ytseo.siteuo.com', margin, pageHeight - 6);
                     }
 
-                    // Identify all major sections to capture separately
-                    var sections = [];
+                    // Identify section boundaries for intelligent page breaks
+                    var sectionSelectors = [
+                        '.youtube-hero',
+                        '.bg-gradient-to-r.from-purple-50',  // Executive Summary
+                        '.bg-gradient-to-r.from-blue-50',    // Detailed Analysis
+                        '.strategic-section',
+                        '.bg-gradient-to-r.from-green-500'   // CTA
+                    ];
 
-                    // YouTube Hero section
-                    var heroSection = element.querySelector('.youtube-hero');
-                    if (heroSection) sections.push({ el: heroSection, name: 'YouTube Performance' });
+                    var sectionBoundaries = [];
+                    var elementRect = element.getBoundingClientRect();
+                    var elementTop = elementRect.top;
 
-                    // Main content card sections
-                    var mainCard = element.querySelector('.bg-white.rounded-2xl');
-                    if (mainCard) {
-                        // Executive Summary
-                        var summarySection = mainCard.querySelector('.bg-gradient-to-r.from-purple-50');
-                        if (summarySection) sections.push({ el: summarySection, name: 'Executive Summary' });
-
-                        // Detailed Analysis (narrative)
-                        var narrativeSection = mainCard.querySelector('.bg-gradient-to-r.from-blue-50');
-                        if (narrativeSection) sections.push({ el: narrativeSection, name: 'Detailed Analysis' });
-
-                        // Campaign Screenshots - capture header + each image row
-                        var screenshotsWrapper = null;
-                        var screenshotsHeader = mainCard.querySelector('h3.font-bold');
-                        if (screenshotsHeader && screenshotsHeader.textContent.includes('Screenshots')) {
-                            screenshotsWrapper = screenshotsHeader.closest('.mb-8');
-                        }
-                        if (screenshotsWrapper) {
-                            // Capture header area
-                            var headerArea = screenshotsWrapper.querySelector('.flex.items-center.justify-between');
-                            if (headerArea) {
-                                sections.push({ el: headerArea, name: 'Screenshots Header' });
-                            }
-                            // Capture images grid
-                            var imagesGrid = screenshotsWrapper.querySelector('.grid');
-                            if (imagesGrid) {
-                                sections.push({ el: imagesGrid, name: 'Campaign Screenshots' });
-                            }
-                        }
-
-                        // Visual Analysis - capture each analysis card separately if many
-                        var visualAnalysisItems = mainCard.querySelectorAll('.bg-gray-50.rounded-xl.p-5');
-                        if (visualAnalysisItems.length > 0) {
-                            // Get the parent section header
-                            var firstItem = visualAnalysisItems[0];
-                            var visualParent = firstItem.closest('.mb-8');
-                            if (visualParent) {
-                                var visualHeader = visualParent.querySelector('.flex.items-center.gap-3');
-                                if (visualHeader) {
-                                    sections.push({ el: visualHeader, name: 'Visual Analysis Header' });
-                                }
-                            }
-                            // Capture each analysis card
-                            visualAnalysisItems.forEach(function(item, idx) {
-                                sections.push({ el: item, name: 'Screenshot ' + (idx + 1) + ' Analysis' });
+                    sectionSelectors.forEach(function(selector) {
+                        var els = element.querySelectorAll(selector);
+                        els.forEach(function(el) {
+                            var rect = el.getBoundingClientRect();
+                            sectionBoundaries.push({
+                                top: rect.top - elementTop,
+                                bottom: rect.bottom - elementTop
                             });
-                        }
-                    }
-
-                    // Strategic sections (Channel Health, Metrics, Action Plan)
-                    var strategicSections = element.querySelectorAll('.strategic-section');
-                    strategicSections.forEach(function(sec, idx) {
-                        var titleEl = sec.querySelector('.strategic-section-title');
-                        var name = titleEl ? titleEl.textContent : 'Section ' + (idx + 1);
-
-                        // Check if this is the Action Plan section with multiple cards
-                        var actionCards = sec.querySelectorAll('.action-card');
-                        if (actionCards.length > 2) {
-                            // Capture header separately
-                            var headerEl = sec.querySelector('.strategic-section-header');
-                            if (headerEl) {
-                                sections.push({ el: headerEl, name: name + ' Header' });
-                            }
-                            // Capture each action card separately
-                            actionCards.forEach(function(card, cardIdx) {
-                                sections.push({ el: card, name: 'Recommendation ' + (cardIdx + 1) });
-                            });
-                            // Capture growth projection if present
-                            var growthProj = sec.querySelector('.growth-projection');
-                            if (growthProj) {
-                                sections.push({ el: growthProj, name: 'Growth Projection' });
-                            }
-                        } else {
-                            // Capture the whole section
-                            sections.push({ el: sec, name: name });
-                        }
+                        });
                     });
 
-                    // Call to Action
-                    var ctaSection = element.querySelector('.bg-gradient-to-r.from-green-500');
-                    if (ctaSection) sections.push({ el: ctaSection, name: 'Call to Action' });
+                    // Sort boundaries by position
+                    sectionBoundaries.sort(function(a, b) { return a.top - b.top; });
 
-                    // Report date footer
-                    var dateFooter = element.querySelector('.mt-8.pt-6.border-t');
-                    if (dateFooter) sections.push({ el: dateFooter, name: 'Footer' });
+                    // Capture the entire element as one image (preserves all styling)
+                    var canvas = await html2canvas(element, {
+                        backgroundColor: null, // Preserve original backgrounds
+                        scale: 2,
+                        useCORS: true,
+                        logging: false,
+                        allowTaint: true,
+                        imageTimeout: 30000
+                    });
 
-                    // If no sections found, fall back to capturing the whole element
-                    if (sections.length === 0) {
-                        sections.push({ el: element, name: 'Full Report' });
-                    }
+                    // Calculate dimensions
+                    var imgWidth = contentWidth;
+                    var imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    var scaleFactor = imgWidth / canvas.width;
 
-                    // Capture all sections
-                    var capturedSections = [];
-                    for (var i = 0; i < sections.length; i++) {
-                        var section = sections[i];
-                        try {
-                            var canvas = await html2canvas(section.el, {
-                                backgroundColor: '#ffffff',
-                                scale: 2,
-                                useCORS: true,
-                                logging: false,
-                                allowTaint: true,
-                                imageTimeout: 15000
-                            });
+                    // Calculate page breaks at section boundaries
+                    var pageBreakPositions = [0]; // Start of first page
+                    var currentPageEnd = usableHeight;
 
-                            var imgData = canvas.toDataURL('image/jpeg', 0.92);
-                            var imgWidth = contentWidth;
-                            var imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    // Convert section boundaries to PDF coordinates
+                    var pdfSectionBoundaries = sectionBoundaries.map(function(b) {
+                        return {
+                            top: b.top * scaleFactor * 2, // Account for scale
+                            bottom: b.bottom * scaleFactor * 2
+                        };
+                    });
 
-                            capturedSections.push({
-                                name: section.name,
-                                imgData: imgData,
-                                width: imgWidth,
-                                height: imgHeight
-                            });
-                        } catch (err) {
-                            console.warn('Failed to capture section:', section.name, err);
+                    // Find optimal page break points
+                    while (currentPageEnd < imgHeight) {
+                        // Find the best section boundary to break at
+                        var bestBreakPoint = currentPageEnd;
+
+                        for (var i = 0; i < pdfSectionBoundaries.length; i++) {
+                            var boundary = pdfSectionBoundaries[i];
+                            // If section top is before page end and provides a good break point
+                            if (boundary.top > pageBreakPositions[pageBreakPositions.length - 1] + 20 &&
+                                boundary.top <= currentPageEnd &&
+                                boundary.top > bestBreakPoint - usableHeight * 0.3) {
+                                bestBreakPoint = boundary.top;
+                            }
                         }
-                    }
 
-                    // Calculate total pages needed with intelligent breaks
-                    var currentY = 0;
-                    var pageBreaks = [0]; // Track where each page starts (section index)
-
-                    for (var s = 0; s < capturedSections.length; s++) {
-                        var sec = capturedSections[s];
-
-                        // Check if this section fits on the current page
-                        if (currentY + sec.height > usableHeight && currentY > 0) {
-                            // Start new page
-                            pageBreaks.push(s);
-                            currentY = sec.height;
-                        } else {
-                            currentY += sec.height + 4; // 4mm gap between sections
+                        // If no good boundary found, use the calculated end
+                        if (bestBreakPoint === currentPageEnd) {
+                            // Try to avoid breaking in the middle of content
+                            bestBreakPoint = Math.max(pageBreakPositions[pageBreakPositions.length - 1] + usableHeight * 0.5, currentPageEnd - 20);
                         }
+
+                        pageBreakPositions.push(bestBreakPoint);
+                        currentPageEnd = bestBreakPoint + usableHeight;
                     }
 
-                    var totalPages = pageBreaks.length;
+                    var totalPages = pageBreakPositions.length;
 
-                    // Now render each page
-                    var currentPage = 0;
-                    var yPosition = headerHeight + 2;
-
-                    // Add first page header
-                    addHeader(1, totalPages);
-
-                    for (var j = 0; j < capturedSections.length; j++) {
-                        var sec = capturedSections[j];
-
-                        // Check if we need to start a new page
-                        var needsNewPage = pageBreaks.indexOf(j) > currentPage;
-
-                        if (needsNewPage || (yPosition + sec.height > pageHeight - footerHeight && yPosition > headerHeight + 10)) {
-                            // Add footer to current page
-                            addFooter();
-
-                            // Start new page
+                    // Render each page
+                    for (var page = 0; page < totalPages; page++) {
+                        if (page > 0) {
                             pdf.addPage();
-                            currentPage++;
-                            yPosition = headerHeight + 2;
-
-                            // Add header to new page
-                            addHeader(currentPage + 1, totalPages);
                         }
 
-                        // Add section image
-                        pdf.addImage(sec.imgData, 'JPEG', margin, yPosition, sec.width, sec.height);
-                        yPosition += sec.height + 3; // 3mm gap
-                    }
+                        // Add header
+                        addHeader(page + 1, totalPages);
 
-                    // Add footer to last page
-                    addFooter();
+                        // Calculate source region for this page
+                        var sourceY = pageBreakPositions[page] / (scaleFactor * 2) * 2; // Convert back to canvas coords
+                        var nextBreak = page < totalPages - 1 ? pageBreakPositions[page + 1] : imgHeight;
+                        var sourceHeight = (nextBreak - pageBreakPositions[page]) / (scaleFactor * 2) * 2;
+
+                        // Clamp values
+                        sourceY = Math.max(0, Math.min(sourceY, canvas.height));
+                        sourceHeight = Math.min(sourceHeight, canvas.height - sourceY);
+
+                        if (sourceHeight > 0) {
+                            // Create temporary canvas for this page portion
+                            var pageCanvas = document.createElement('canvas');
+                            pageCanvas.width = canvas.width;
+                            pageCanvas.height = sourceHeight;
+
+                            var ctx = pageCanvas.getContext('2d');
+                            ctx.drawImage(
+                                canvas,
+                                0, sourceY,
+                                canvas.width, sourceHeight,
+                                0, 0,
+                                canvas.width, sourceHeight
+                            );
+
+                            var pageImgData = pageCanvas.toDataURL('image/jpeg', 0.92);
+                            var pageImgHeight = (sourceHeight * imgWidth) / canvas.width;
+
+                            pdf.addImage(pageImgData, 'JPEG', margin, headerHeight + 2, imgWidth, pageImgHeight);
+                        }
+
+                        // Add footer
+                        addFooter();
+                    }
 
                     // Remove PDF mode class
                     element.classList.remove('pdf-mode');
