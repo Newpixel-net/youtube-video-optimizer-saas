@@ -48,8 +48,8 @@ steps:
       - '0'
       - '--max-instances'
       - '10'
-      - '--set-env-vars'
-      - 'BUCKET_NAME=ytseo-6d1b0.firebasestorage.app,NODE_ENV=production,RAPIDAPI_KEY=${_RAPIDAPI_KEY},VIDEO_DOWNLOAD_API_KEY=${_VIDEO_DOWNLOAD_API_KEY}'
+      - '--update-env-vars'
+      - 'BUCKET_NAME=ytseo-6d1b0.firebasestorage.app,NODE_ENV=production'
       - '--allow-unauthenticated'
 
 images:
@@ -62,7 +62,6 @@ options:
 
 timeout: '1800s'
 
-# Substitution variables (set these in Cloud Build triggers or command line)
-substitutions:
-  _RAPIDAPI_KEY: ''
-  _VIDEO_DOWNLOAD_API_KEY: ''
+# Note: API keys (OPENAI_API_KEY, RAPIDAPI_KEY, etc.) should be set directly
+# on Cloud Run via console or gcloud, NOT in this file. Using --update-env-vars
+# ensures these keys persist across deployments.
