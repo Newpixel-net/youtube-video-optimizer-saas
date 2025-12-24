@@ -136,48 +136,22 @@
         /* ==========================================
            BACKGROUND EFFECTS
            ========================================== */
-        .aurora-bg {
+        /* Liquid Ether Background Effect */
+        .liquid-ether-bg {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
             z-index: 0;
             overflow: hidden;
+            touch-action: none;
         }
 
-        .aurora-blob {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(100px);
-            animation: aurora 20s ease-in-out infinite;
-        }
-
-        .aurora-blob-1 {
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%);
-            top: -200px;
-            left: -200px;
-        }
-
-        .aurora-blob-2 {
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, rgba(236, 72, 153, 0.3) 0%, transparent 70%);
-            top: 20%;
-            right: -150px;
-            animation-delay: -5s;
-        }
-
-        .aurora-blob-3 {
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%);
-            bottom: 10%;
-            left: 20%;
-            animation-delay: -10s;
+        .liquid-ether-bg canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
         }
 
         /* ==========================================
@@ -2146,12 +2120,8 @@
     </style>
 </head>
 <body>
-    <!-- Aurora Background Effect -->
-    <div class="aurora-bg">
-        <div class="aurora-blob aurora-blob-1"></div>
-        <div class="aurora-blob aurora-blob-2"></div>
-        <div class="aurora-blob aurora-blob-3"></div>
-    </div>
+    <!-- Liquid Ether Background Effect -->
+    <div class="liquid-ether-bg" id="liquid-ether-container"></div>
 
     <!-- ==========================================
          HEADER / NAVIGATION
@@ -2973,6 +2943,506 @@
     <!-- ==========================================
          SCRIPTS
          ========================================== -->
+
+    <!-- Liquid Ether Effect -->
+    <script>
+    (function() {
+        'use strict';
+
+        // Configuration
+        const CONFIG = {
+            colors: ['#8b5cf6', '#ec4899', '#3b82f6'],  // YouTubeHub brand colors
+            mouseForce: 15,
+            cursorSize: 0.8,
+            autoDemo: true,
+            autoSpeed: 2.5,
+            resolution: 0.4,
+            colorBlending: 0.4,
+            densityDissipation: 0.97,
+            velocityDissipation: 0.98,
+            pressureIterations: 20
+        };
+
+        // Shader sources
+        const SHADERS = {
+            advection: `
+                precision highp float;
+                uniform sampler2D uVelocity;
+                uniform sampler2D uSource;
+                uniform vec2 texelSize;
+                uniform float dt;
+                uniform float dissipation;
+                varying vec2 vUv;
+
+                void main() {
+                    vec2 coord = vUv - dt * texture2D(uVelocity, vUv).xy * texelSize;
+                    gl_FragColor = dissipation * texture2D(uSource, coord);
+                }
+            `,
+            divergence: `
+                precision highp float;
+                uniform sampler2D uVelocity;
+                uniform vec2 texelSize;
+                varying vec2 vUv;
+
+                void main() {
+                    float L = texture2D(uVelocity, vUv - vec2(texelSize.x, 0.0)).x;
+                    float R = texture2D(uVelocity, vUv + vec2(texelSize.x, 0.0)).x;
+                    float T = texture2D(uVelocity, vUv + vec2(0.0, texelSize.y)).y;
+                    float B = texture2D(uVelocity, vUv - vec2(0.0, texelSize.y)).y;
+                    gl_FragColor = vec4(0.5 * (R - L + T - B), 0.0, 0.0, 1.0);
+                }
+            `,
+            pressure: `
+                precision highp float;
+                uniform sampler2D uPressure;
+                uniform sampler2D uDivergence;
+                uniform vec2 texelSize;
+                varying vec2 vUv;
+
+                void main() {
+                    float L = texture2D(uPressure, vUv - vec2(texelSize.x, 0.0)).x;
+                    float R = texture2D(uPressure, vUv + vec2(texelSize.x, 0.0)).x;
+                    float T = texture2D(uPressure, vUv + vec2(0.0, texelSize.y)).x;
+                    float B = texture2D(uPressure, vUv - vec2(0.0, texelSize.y)).x;
+                    float C = texture2D(uDivergence, vUv).x;
+                    gl_FragColor = vec4((L + R + T + B - C) * 0.25, 0.0, 0.0, 1.0);
+                }
+            `,
+            gradientSubtract: `
+                precision highp float;
+                uniform sampler2D uPressure;
+                uniform sampler2D uVelocity;
+                uniform vec2 texelSize;
+                varying vec2 vUv;
+
+                void main() {
+                    float L = texture2D(uPressure, vUv - vec2(texelSize.x, 0.0)).x;
+                    float R = texture2D(uPressure, vUv + vec2(texelSize.x, 0.0)).x;
+                    float T = texture2D(uPressure, vUv + vec2(0.0, texelSize.y)).x;
+                    float B = texture2D(uPressure, vUv - vec2(0.0, texelSize.y)).x;
+                    vec2 velocity = texture2D(uVelocity, vUv).xy;
+                    velocity.xy -= vec2(R - L, T - B);
+                    gl_FragColor = vec4(velocity, 0.0, 1.0);
+                }
+            `,
+            splat: `
+                precision highp float;
+                uniform sampler2D uTarget;
+                uniform float aspectRatio;
+                uniform vec3 color;
+                uniform vec2 point;
+                uniform float radius;
+                varying vec2 vUv;
+
+                void main() {
+                    vec2 p = vUv - point;
+                    p.x *= aspectRatio;
+                    vec3 splat = exp(-dot(p, p) / radius) * color;
+                    vec3 base = texture2D(uTarget, vUv).xyz;
+                    gl_FragColor = vec4(base + splat, 1.0);
+                }
+            `,
+            display: `
+                precision highp float;
+                uniform sampler2D uTexture;
+                uniform float colorBlending;
+                varying vec2 vUv;
+
+                void main() {
+                    vec3 color = texture2D(uTexture, vUv).rgb;
+                    float brightness = max(color.r, max(color.g, color.b));
+                    color = mix(color, color * 1.5, colorBlending);
+                    gl_FragColor = vec4(color * 0.7, brightness * 0.6);
+                }
+            `,
+            vertex: `
+                precision highp float;
+                attribute vec2 position;
+                varying vec2 vUv;
+
+                void main() {
+                    vUv = position * 0.5 + 0.5;
+                    gl_Position = vec4(position, 0.0, 1.0);
+                }
+            `
+        };
+
+        // Convert hex to RGB
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16) / 255,
+                g: parseInt(result[2], 16) / 255,
+                b: parseInt(result[3], 16) / 255
+            } : { r: 0.5, g: 0.2, b: 0.8 };
+        }
+
+        class LiquidEther {
+            constructor(container) {
+                this.container = container;
+                this.canvas = document.createElement('canvas');
+                this.container.appendChild(this.canvas);
+
+                this.gl = this.canvas.getContext('webgl', {
+                    alpha: true,
+                    premultipliedAlpha: false,
+                    antialias: false
+                });
+
+                if (!this.gl) {
+                    console.warn('WebGL not supported, falling back to simple background');
+                    this.container.style.background = 'radial-gradient(ellipse at center, #1a0a2e 0%, #0a0a0f 100%)';
+                    return;
+                }
+
+                this.programs = {};
+                this.framebuffers = {};
+                this.textures = {};
+
+                this.mouse = { x: 0.5, y: 0.5, dx: 0, dy: 0, moved: false };
+                this.autoTime = 0;
+                this.colorIndex = 0;
+                this.lastTime = 0;
+                this.isRunning = true;
+
+                this.init();
+            }
+
+            init() {
+                const gl = this.gl;
+
+                // Enable blending for transparency
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+                // Create shaders and programs
+                this.vertexShader = this.createShader(gl.VERTEX_SHADER, SHADERS.vertex);
+
+                this.programs.advection = this.createProgram(SHADERS.advection);
+                this.programs.divergence = this.createProgram(SHADERS.divergence);
+                this.programs.pressure = this.createProgram(SHADERS.pressure);
+                this.programs.gradientSubtract = this.createProgram(SHADERS.gradientSubtract);
+                this.programs.splat = this.createProgram(SHADERS.splat);
+                this.programs.display = this.createProgram(SHADERS.display);
+
+                // Create vertex buffer
+                this.vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                    -1, -1, 1, -1, -1, 1, 1, 1
+                ]), gl.STATIC_DRAW);
+
+                // Initialize size and framebuffers
+                this.resize();
+
+                // Event listeners
+                this.setupEvents();
+
+                // Start animation
+                this.animate();
+            }
+
+            createShader(type, source) {
+                const gl = this.gl;
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                    return null;
+                }
+                return shader;
+            }
+
+            createProgram(fragmentSource) {
+                const gl = this.gl;
+                const fragmentShader = this.createShader(gl.FRAGMENT_SHADER, fragmentSource);
+                const program = gl.createProgram();
+
+                gl.attachShader(program, this.vertexShader);
+                gl.attachShader(program, fragmentShader);
+                gl.linkProgram(program);
+
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    console.error('Program link error:', gl.getProgramInfoLog(program));
+                    return null;
+                }
+
+                const uniforms = {};
+                const uniformCount = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+                for (let i = 0; i < uniformCount; i++) {
+                    const info = gl.getActiveUniform(program, i);
+                    uniforms[info.name] = gl.getUniformLocation(program, info.name);
+                }
+
+                return { program, uniforms };
+            }
+
+            createFramebuffer(width, height) {
+                const gl = this.gl;
+                const texture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.FLOAT || gl.UNSIGNED_BYTE, null);
+
+                const fbo = gl.createFramebuffer();
+                gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+
+                return { texture, fbo, width, height };
+            }
+
+            createDoubleFBO(width, height) {
+                return {
+                    read: this.createFramebuffer(width, height),
+                    write: this.createFramebuffer(width, height),
+                    swap() {
+                        const temp = this.read;
+                        this.read = this.write;
+                        this.write = temp;
+                    }
+                };
+            }
+
+            resize() {
+                const gl = this.gl;
+                const width = this.container.clientWidth;
+                const height = this.container.clientHeight;
+
+                this.canvas.width = width;
+                this.canvas.height = height;
+                gl.viewport(0, 0, width, height);
+
+                const simWidth = Math.floor(width * CONFIG.resolution);
+                const simHeight = Math.floor(height * CONFIG.resolution);
+
+                this.texelSize = { x: 1 / simWidth, y: 1 / simHeight };
+                this.aspectRatio = width / height;
+
+                // Create simulation framebuffers
+                this.velocity = this.createDoubleFBO(simWidth, simHeight);
+                this.density = this.createDoubleFBO(simWidth, simHeight);
+                this.pressure = this.createDoubleFBO(simWidth, simHeight);
+                this.divergenceFBO = this.createFramebuffer(simWidth, simHeight);
+            }
+
+            setupEvents() {
+                const updateMouse = (x, y) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const newX = (x - rect.left) / rect.width;
+                    const newY = 1 - (y - rect.top) / rect.height;
+
+                    this.mouse.dx = (newX - this.mouse.x) * 10;
+                    this.mouse.dy = (newY - this.mouse.y) * 10;
+                    this.mouse.x = newX;
+                    this.mouse.y = newY;
+                    this.mouse.moved = true;
+                };
+
+                this.canvas.addEventListener('mousemove', (e) => updateMouse(e.clientX, e.clientY));
+                this.canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    updateMouse(e.touches[0].clientX, e.touches[0].clientY);
+                }, { passive: false });
+
+                window.addEventListener('resize', () => this.resize());
+
+                // Visibility change to pause when tab is hidden
+                document.addEventListener('visibilitychange', () => {
+                    this.isRunning = !document.hidden;
+                    if (this.isRunning) this.lastTime = performance.now();
+                });
+            }
+
+            useProgram(prog) {
+                const gl = this.gl;
+                gl.useProgram(prog.program);
+
+                const positionLoc = gl.getAttribLocation(prog.program, 'position');
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.enableVertexAttribArray(positionLoc);
+                gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+            }
+
+            blit(target) {
+                const gl = this.gl;
+                if (target) {
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+                    gl.viewport(0, 0, target.width, target.height);
+                } else {
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+                }
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            }
+
+            splat(x, y, dx, dy, color) {
+                const gl = this.gl;
+                const prog = this.programs.splat;
+
+                this.useProgram(prog);
+
+                // Splat velocity
+                gl.uniform1i(prog.uniforms.uTarget, 0);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.texture);
+                gl.uniform1f(prog.uniforms.aspectRatio, this.aspectRatio);
+                gl.uniform2f(prog.uniforms.point, x, y);
+                gl.uniform3f(prog.uniforms.color, dx * CONFIG.mouseForce, dy * CONFIG.mouseForce, 0);
+                gl.uniform1f(prog.uniforms.radius, CONFIG.cursorSize / 100);
+                this.blit(this.velocity.write);
+                this.velocity.swap();
+
+                // Splat density (color)
+                gl.bindTexture(gl.TEXTURE_2D, this.density.read.texture);
+                gl.uniform3f(prog.uniforms.color, color.r, color.g, color.b);
+                gl.uniform1f(prog.uniforms.radius, CONFIG.cursorSize / 100);
+                this.blit(this.density.write);
+                this.density.swap();
+            }
+
+            step(dt) {
+                const gl = this.gl;
+
+                // Advect velocity
+                this.useProgram(this.programs.advection);
+                gl.uniform2f(this.programs.advection.uniforms.texelSize, this.texelSize.x, this.texelSize.y);
+                gl.uniform1f(this.programs.advection.uniforms.dt, dt);
+                gl.uniform1f(this.programs.advection.uniforms.dissipation, CONFIG.velocityDissipation);
+                gl.uniform1i(this.programs.advection.uniforms.uVelocity, 0);
+                gl.uniform1i(this.programs.advection.uniforms.uSource, 0);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.texture);
+                this.blit(this.velocity.write);
+                this.velocity.swap();
+
+                // Advect density
+                gl.uniform1f(this.programs.advection.uniforms.dissipation, CONFIG.densityDissipation);
+                gl.uniform1i(this.programs.advection.uniforms.uSource, 1);
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, this.density.read.texture);
+                this.blit(this.density.write);
+                this.density.swap();
+
+                // Divergence
+                this.useProgram(this.programs.divergence);
+                gl.uniform2f(this.programs.divergence.uniforms.texelSize, this.texelSize.x, this.texelSize.y);
+                gl.uniform1i(this.programs.divergence.uniforms.uVelocity, 0);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.texture);
+                this.blit(this.divergenceFBO);
+
+                // Pressure solve
+                this.useProgram(this.programs.pressure);
+                gl.uniform2f(this.programs.pressure.uniforms.texelSize, this.texelSize.x, this.texelSize.y);
+                gl.uniform1i(this.programs.pressure.uniforms.uDivergence, 1);
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, this.divergenceFBO.texture);
+
+                for (let i = 0; i < CONFIG.pressureIterations; i++) {
+                    gl.uniform1i(this.programs.pressure.uniforms.uPressure, 0);
+                    gl.activeTexture(gl.TEXTURE0);
+                    gl.bindTexture(gl.TEXTURE_2D, this.pressure.read.texture);
+                    this.blit(this.pressure.write);
+                    this.pressure.swap();
+                }
+
+                // Gradient subtract
+                this.useProgram(this.programs.gradientSubtract);
+                gl.uniform2f(this.programs.gradientSubtract.uniforms.texelSize, this.texelSize.x, this.texelSize.y);
+                gl.uniform1i(this.programs.gradientSubtract.uniforms.uPressure, 0);
+                gl.uniform1i(this.programs.gradientSubtract.uniforms.uVelocity, 1);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, this.pressure.read.texture);
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.texture);
+                this.blit(this.velocity.write);
+                this.velocity.swap();
+            }
+
+            render() {
+                const gl = this.gl;
+
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                this.useProgram(this.programs.display);
+                gl.uniform1i(this.programs.display.uniforms.uTexture, 0);
+                gl.uniform1f(this.programs.display.uniforms.colorBlending, CONFIG.colorBlending);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, this.density.read.texture);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            }
+
+            animate(time = 0) {
+                if (!this.isRunning) {
+                    requestAnimationFrame((t) => this.animate(t));
+                    return;
+                }
+
+                const dt = Math.min((time - this.lastTime) / 1000, 0.016);
+                this.lastTime = time;
+
+                // Auto-demo mode
+                if (CONFIG.autoDemo) {
+                    this.autoTime += dt * CONFIG.autoSpeed;
+
+                    // Create flowing circular motion
+                    const autoX = 0.5 + 0.3 * Math.cos(this.autoTime * 0.5);
+                    const autoY = 0.5 + 0.3 * Math.sin(this.autoTime * 0.7);
+                    const autoDx = Math.cos(this.autoTime) * 0.3;
+                    const autoDy = Math.sin(this.autoTime * 1.3) * 0.3;
+
+                    // Cycle through colors
+                    if (Math.floor(this.autoTime) % 2 === 0 && !this._colorCycled) {
+                        this.colorIndex = (this.colorIndex + 1) % CONFIG.colors.length;
+                        this._colorCycled = true;
+                    } else if (Math.floor(this.autoTime) % 2 !== 0) {
+                        this._colorCycled = false;
+                    }
+
+                    const color = hexToRgb(CONFIG.colors[this.colorIndex]);
+                    this.splat(autoX, autoY, autoDx, autoDy, color);
+                }
+
+                // Mouse/touch input
+                if (this.mouse.moved) {
+                    const color = hexToRgb(CONFIG.colors[this.colorIndex]);
+                    this.splat(this.mouse.x, this.mouse.y, this.mouse.dx, this.mouse.dy, color);
+                    this.mouse.moved = false;
+                    this.mouse.dx *= 0.8;
+                    this.mouse.dy *= 0.8;
+                }
+
+                this.step(dt);
+                this.render();
+
+                requestAnimationFrame((t) => this.animate(t));
+            }
+        }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.getElementById('liquid-ether-container');
+            if (container) {
+                try {
+                    new LiquidEther(container);
+                } catch (e) {
+                    console.warn('Liquid Ether effect failed to initialize:', e);
+                    container.style.background = 'radial-gradient(ellipse at center, #1a0a2e 0%, #0a0a0f 100%)';
+                }
+            }
+        });
+    })();
+    </script>
+
     <script>
         // Firebase Configuration
         const firebaseConfig = {
