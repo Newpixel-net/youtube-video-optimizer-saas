@@ -1248,6 +1248,189 @@
             }
         }
 
+        /* ========== PDF EXPORT STYLES ========== */
+        /* Applied when generating PDF for print-friendly output */
+
+        .pdf-mode {
+            width: 800px !important;
+            max-width: 800px !important;
+            margin: 0 auto;
+            background: #ffffff !important;
+        }
+
+        .pdf-mode .strategic-section {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+            border: 2px solid #e2e8f0 !important;
+            color: #1e293b !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            margin-bottom: 20px;
+        }
+
+        .pdf-mode .strategic-section-title,
+        .pdf-mode .strategic-section-subtitle {
+            color: #1e293b !important;
+        }
+
+        .pdf-mode .strategic-section-subtitle {
+            color: #64748b !important;
+        }
+
+        .pdf-mode .health-score-container {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+
+        .pdf-mode .health-score-breakdown {
+            color: #1e293b !important;
+        }
+
+        .pdf-mode .score-category-name {
+            color: #374151 !important;
+        }
+
+        .pdf-mode .metrics-dashboard {
+            gap: 12px;
+        }
+
+        .pdf-mode .metric-tile {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .pdf-mode .metric-tile-label {
+            color: #64748b !important;
+        }
+
+        .pdf-mode .action-card {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            margin-bottom: 12px;
+        }
+
+        .pdf-mode .action-card-title {
+            color: #1e293b !important;
+        }
+
+        .pdf-mode .action-card-description {
+            color: #475569 !important;
+        }
+
+        .pdf-mode .action-card-category {
+            color: #64748b !important;
+        }
+
+        .pdf-mode .growth-projection {
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
+            border: 2px solid #a7f3d0 !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .pdf-mode .growth-projection-title,
+        .pdf-mode .growth-projection-text {
+            color: #065f46 !important;
+        }
+
+        .pdf-mode .growth-value-number {
+            color: #059669 !important;
+        }
+
+        .pdf-mode .growth-value-label {
+            color: #047857 !important;
+        }
+
+        .pdf-mode .youtube-hero {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%) !important;
+            border: 2px solid #fecaca !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .pdf-mode .youtube-hero-title {
+            color: #dc2626 !important;
+        }
+
+        .pdf-mode .youtube-views-label {
+            color: #7f1d1d !important;
+        }
+
+        .pdf-mode .youtube-views-value {
+            color: #b91c1c !important;
+        }
+
+        .pdf-mode .youtube-metric-card {
+            background: #ffffff !important;
+            border: 1px solid #fecaca !important;
+        }
+
+        .pdf-mode .youtube-metric-label {
+            color: #991b1b !important;
+        }
+
+        .pdf-mode .youtube-video-info {
+            background: rgba(255, 255, 255, 0.8) !important;
+            border: 1px solid #fecaca !important;
+        }
+
+        .pdf-mode .youtube-video-title {
+            color: #7f1d1d !important;
+        }
+
+        .pdf-mode .youtube-video-tag {
+            background: #fee2e2 !important;
+            color: #991b1b !important;
+        }
+
+        .pdf-mode .report-image-item {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .pdf-mode .bg-gray-50.rounded-xl.p-5 {
+            background: #f9fafb !important;
+            border: 1px solid #e5e7eb !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .pdf-mode .strategic-section-header {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+            padding: 16px !important;
+            border-radius: 12px !important;
+            border: 1px solid #e2e8f0 !important;
+            margin-bottom: 8px !important;
+        }
+
+        .pdf-mode .action-cards-grid {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 12px !important;
+        }
+
+        .pdf-mode .metrics-dashboard {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 12px !important;
+        }
+
+        /* PDF Section Wrapper for page breaks */
+        .pdf-section {
+            page-break-inside: avoid;
+            break-inside: avoid;
+            margin-bottom: 16px;
+        }
+
+        .pdf-page-break {
+            page-break-after: always;
+            break-after: page;
+            height: 1px;
+        }
+
         .client-report-card {
             background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
             border-radius: 20px;
@@ -7679,8 +7862,8 @@
                 }
             },
 
-            // PDF Download for Campaign Reports
-            downloadReportPDF: function() {
+            // PDF Download for Campaign Reports - Section-aware intelligent generation
+            downloadReportPDF: async function() {
                 var element = document.getElementById('pdf-report-content');
                 if (!element) {
                     console.error('PDF content element not found');
@@ -7718,110 +7901,248 @@
                 var content = report.editedContent || {};
                 var reportTitle = content.title || report.campaignName || 'Campaign Report';
 
-                // Use html2canvas with optimized settings for smaller file size
-                html2canvas(element, {
-                    backgroundColor: '#ffffff',
-                    scale: 1.5, // Reduced from 2 for smaller file size while maintaining good quality
-                    useCORS: true,
-                    logging: false,
-                    allowTaint: true,
-                    foreignObjectRendering: false,
-                    imageTimeout: 15000,
-                    removeContainer: true
-                }).then(function(canvas) {
-                    try {
-                        var pdf = new jsPDFClass({
-                            orientation: 'portrait',
-                            unit: 'mm',
-                            format: 'a4',
-                            compress: true // Enable compression
-                        });
+                // Add PDF mode class for print-friendly styles
+                element.classList.add('pdf-mode');
 
-                        // Page dimensions
-                        var pageWidth = pdf.internal.pageSize.getWidth();
-                        var pageHeight = pdf.internal.pageSize.getHeight();
-                        var margin = 10;
-                        var contentWidth = pageWidth - (margin * 2);
-                        var headerHeight = 35;
-                        var footerHeight = 15;
-                        var usableHeight = pageHeight - headerHeight - footerHeight;
+                // Wait for styles to apply
+                await new Promise(function(resolve) { setTimeout(resolve, 100); });
 
-                        // Calculate image dimensions to fit page width
-                        var imgWidth = contentWidth;
-                        var imgHeight = (canvas.height * imgWidth) / canvas.width;
+                try {
+                    var pdf = new jsPDFClass({
+                        orientation: 'portrait',
+                        unit: 'mm',
+                        format: 'a4',
+                        compress: true
+                    });
 
-                        // Calculate how many pages we need
-                        var totalPages = Math.ceil(imgHeight / usableHeight);
+                    // Page dimensions
+                    var pageWidth = pdf.internal.pageSize.getWidth();
+                    var pageHeight = pdf.internal.pageSize.getHeight();
+                    var margin = 10;
+                    var contentWidth = pageWidth - (margin * 2);
+                    var headerHeight = 32;
+                    var footerHeight = 12;
+                    var usableHeight = pageHeight - headerHeight - footerHeight;
 
-                        // Calculate the portion of the canvas for each page
-                        var canvasPageHeight = canvas.height / totalPages;
+                    // Helper function to add header
+                    function addHeader(pageNum, totalPages) {
+                        pdf.setFillColor(88, 28, 135); // Purple
+                        pdf.rect(0, 0, pageWidth, headerHeight, 'F');
 
-                        for (var page = 0; page < totalPages; page++) {
-                            if (page > 0) {
-                                pdf.addPage();
+                        pdf.setFontSize(14);
+                        pdf.setTextColor(255, 255, 255);
+                        pdf.text(reportTitle, margin, 12);
+
+                        pdf.setFontSize(8);
+                        pdf.setTextColor(220, 220, 220);
+                        pdf.text('Generated on ' + new Date().toLocaleDateString(), margin, 19);
+                        pdf.text('YouTube Video Optimizer - Campaign Report', margin, 25);
+
+                        pdf.setFontSize(9);
+                        pdf.text('Page ' + pageNum + ' of ' + totalPages, pageWidth - margin - 22, 19);
+                    }
+
+                    // Helper function to add footer
+                    function addFooter() {
+                        pdf.setFontSize(7);
+                        pdf.setTextColor(107, 114, 128);
+                        pdf.text('Powered by YouTube Video Optimizer - ytseo.siteuo.com', margin, pageHeight - 6);
+                    }
+
+                    // Identify all major sections to capture separately
+                    var sections = [];
+
+                    // YouTube Hero section
+                    var heroSection = element.querySelector('.youtube-hero');
+                    if (heroSection) sections.push({ el: heroSection, name: 'YouTube Performance' });
+
+                    // Main content card sections
+                    var mainCard = element.querySelector('.bg-white.rounded-2xl');
+                    if (mainCard) {
+                        // Executive Summary
+                        var summarySection = mainCard.querySelector('.bg-gradient-to-r.from-purple-50');
+                        if (summarySection) sections.push({ el: summarySection, name: 'Executive Summary' });
+
+                        // Detailed Analysis (narrative)
+                        var narrativeSection = mainCard.querySelector('.bg-gradient-to-r.from-blue-50');
+                        if (narrativeSection) sections.push({ el: narrativeSection, name: 'Detailed Analysis' });
+
+                        // Campaign Screenshots - capture header + each image row
+                        var screenshotsWrapper = null;
+                        var screenshotsHeader = mainCard.querySelector('h3.font-bold');
+                        if (screenshotsHeader && screenshotsHeader.textContent.includes('Screenshots')) {
+                            screenshotsWrapper = screenshotsHeader.closest('.mb-8');
+                        }
+                        if (screenshotsWrapper) {
+                            // Capture header area
+                            var headerArea = screenshotsWrapper.querySelector('.flex.items-center.justify-between');
+                            if (headerArea) {
+                                sections.push({ el: headerArea, name: 'Screenshots Header' });
                             }
-
-                            // Add header on each page
-                            pdf.setFillColor(88, 28, 135); // Purple
-                            pdf.rect(0, 0, pageWidth, headerHeight, 'F');
-
-                            pdf.setFontSize(16);
-                            pdf.setTextColor(255, 255, 255);
-                            pdf.text(reportTitle, margin, 14);
-
-                            pdf.setFontSize(9);
-                            pdf.setTextColor(200, 200, 200);
-                            pdf.text('Generated on ' + new Date().toLocaleDateString(), margin, 21);
-                            pdf.text('YouTube Video Optimizer - Campaign Report', margin, 27);
-
-                            if (totalPages > 1) {
-                                pdf.setFontSize(8);
-                                pdf.text('Page ' + (page + 1) + ' of ' + totalPages, pageWidth - margin - 20, 27);
+                            // Capture images grid
+                            var imagesGrid = screenshotsWrapper.querySelector('.grid');
+                            if (imagesGrid) {
+                                sections.push({ el: imagesGrid, name: 'Campaign Screenshots' });
                             }
-
-                            // Create a temporary canvas for this page's portion
-                            var pageCanvas = document.createElement('canvas');
-                            pageCanvas.width = canvas.width;
-                            pageCanvas.height = Math.min(canvasPageHeight, canvas.height - (page * canvasPageHeight));
-
-                            var ctx = pageCanvas.getContext('2d');
-                            // Draw the portion of the original canvas for this page
-                            ctx.drawImage(
-                                canvas,
-                                0, page * canvasPageHeight, // Source x, y
-                                canvas.width, pageCanvas.height, // Source width, height
-                                0, 0, // Destination x, y
-                                pageCanvas.width, pageCanvas.height // Destination width, height
-                            );
-
-                            // Convert to JPEG with quality setting (much smaller than PNG)
-                            var pageImgData = pageCanvas.toDataURL('image/jpeg', 0.85);
-
-                            // Calculate the height for this page's content
-                            var pageImgHeight = (pageCanvas.height * imgWidth) / pageCanvas.width;
-
-                            // Add this page's image portion
-                            pdf.addImage(pageImgData, 'JPEG', margin, headerHeight + 2, imgWidth, pageImgHeight);
-
-                            // Add footer
-                            pdf.setFontSize(7);
-                            pdf.setTextColor(107, 114, 128);
-                            pdf.text('Powered by YouTube Video Optimizer - ytseo.siteuo.com', margin, pageHeight - 8);
                         }
 
-                        // Download the PDF
-                        var filename = 'campaign-report-' + new Date().toISOString().slice(0, 10) + '.pdf';
-                        pdf.save(filename);
-
-                        showToast('PDF downloaded successfully!', 'success');
-                    } catch (pdfError) {
-                        console.error('PDF creation error:', pdfError);
-                        showToast('Failed to create PDF: ' + pdfError.message, 'error');
+                        // Visual Analysis - capture each analysis card separately if many
+                        var visualAnalysisItems = mainCard.querySelectorAll('.bg-gray-50.rounded-xl.p-5');
+                        if (visualAnalysisItems.length > 0) {
+                            // Get the parent section header
+                            var firstItem = visualAnalysisItems[0];
+                            var visualParent = firstItem.closest('.mb-8');
+                            if (visualParent) {
+                                var visualHeader = visualParent.querySelector('.flex.items-center.gap-3');
+                                if (visualHeader) {
+                                    sections.push({ el: visualHeader, name: 'Visual Analysis Header' });
+                                }
+                            }
+                            // Capture each analysis card
+                            visualAnalysisItems.forEach(function(item, idx) {
+                                sections.push({ el: item, name: 'Screenshot ' + (idx + 1) + ' Analysis' });
+                            });
+                        }
                     }
-                }).catch(function(error) {
-                    console.error('html2canvas error:', error);
-                    showToast('Failed to capture content: ' + error.message, 'error');
-                });
+
+                    // Strategic sections (Channel Health, Metrics, Action Plan)
+                    var strategicSections = element.querySelectorAll('.strategic-section');
+                    strategicSections.forEach(function(sec, idx) {
+                        var titleEl = sec.querySelector('.strategic-section-title');
+                        var name = titleEl ? titleEl.textContent : 'Section ' + (idx + 1);
+
+                        // Check if this is the Action Plan section with multiple cards
+                        var actionCards = sec.querySelectorAll('.action-card');
+                        if (actionCards.length > 2) {
+                            // Capture header separately
+                            var headerEl = sec.querySelector('.strategic-section-header');
+                            if (headerEl) {
+                                sections.push({ el: headerEl, name: name + ' Header' });
+                            }
+                            // Capture each action card separately
+                            actionCards.forEach(function(card, cardIdx) {
+                                sections.push({ el: card, name: 'Recommendation ' + (cardIdx + 1) });
+                            });
+                            // Capture growth projection if present
+                            var growthProj = sec.querySelector('.growth-projection');
+                            if (growthProj) {
+                                sections.push({ el: growthProj, name: 'Growth Projection' });
+                            }
+                        } else {
+                            // Capture the whole section
+                            sections.push({ el: sec, name: name });
+                        }
+                    });
+
+                    // Call to Action
+                    var ctaSection = element.querySelector('.bg-gradient-to-r.from-green-500');
+                    if (ctaSection) sections.push({ el: ctaSection, name: 'Call to Action' });
+
+                    // Report date footer
+                    var dateFooter = element.querySelector('.mt-8.pt-6.border-t');
+                    if (dateFooter) sections.push({ el: dateFooter, name: 'Footer' });
+
+                    // If no sections found, fall back to capturing the whole element
+                    if (sections.length === 0) {
+                        sections.push({ el: element, name: 'Full Report' });
+                    }
+
+                    // Capture all sections
+                    var capturedSections = [];
+                    for (var i = 0; i < sections.length; i++) {
+                        var section = sections[i];
+                        try {
+                            var canvas = await html2canvas(section.el, {
+                                backgroundColor: '#ffffff',
+                                scale: 2,
+                                useCORS: true,
+                                logging: false,
+                                allowTaint: true,
+                                imageTimeout: 15000
+                            });
+
+                            var imgData = canvas.toDataURL('image/jpeg', 0.92);
+                            var imgWidth = contentWidth;
+                            var imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                            capturedSections.push({
+                                name: section.name,
+                                imgData: imgData,
+                                width: imgWidth,
+                                height: imgHeight
+                            });
+                        } catch (err) {
+                            console.warn('Failed to capture section:', section.name, err);
+                        }
+                    }
+
+                    // Calculate total pages needed with intelligent breaks
+                    var currentY = 0;
+                    var pageBreaks = [0]; // Track where each page starts (section index)
+
+                    for (var s = 0; s < capturedSections.length; s++) {
+                        var sec = capturedSections[s];
+
+                        // Check if this section fits on the current page
+                        if (currentY + sec.height > usableHeight && currentY > 0) {
+                            // Start new page
+                            pageBreaks.push(s);
+                            currentY = sec.height;
+                        } else {
+                            currentY += sec.height + 4; // 4mm gap between sections
+                        }
+                    }
+
+                    var totalPages = pageBreaks.length;
+
+                    // Now render each page
+                    var currentPage = 0;
+                    var yPosition = headerHeight + 2;
+
+                    // Add first page header
+                    addHeader(1, totalPages);
+
+                    for (var j = 0; j < capturedSections.length; j++) {
+                        var sec = capturedSections[j];
+
+                        // Check if we need to start a new page
+                        var needsNewPage = pageBreaks.indexOf(j) > currentPage;
+
+                        if (needsNewPage || (yPosition + sec.height > pageHeight - footerHeight && yPosition > headerHeight + 10)) {
+                            // Add footer to current page
+                            addFooter();
+
+                            // Start new page
+                            pdf.addPage();
+                            currentPage++;
+                            yPosition = headerHeight + 2;
+
+                            // Add header to new page
+                            addHeader(currentPage + 1, totalPages);
+                        }
+
+                        // Add section image
+                        pdf.addImage(sec.imgData, 'JPEG', margin, yPosition, sec.width, sec.height);
+                        yPosition += sec.height + 3; // 3mm gap
+                    }
+
+                    // Add footer to last page
+                    addFooter();
+
+                    // Remove PDF mode class
+                    element.classList.remove('pdf-mode');
+
+                    // Download the PDF
+                    var filename = 'campaign-report-' + new Date().toISOString().slice(0, 10) + '.pdf';
+                    pdf.save(filename);
+
+                    showToast('PDF downloaded successfully!', 'success');
+
+                } catch (pdfError) {
+                    console.error('PDF creation error:', pdfError);
+                    element.classList.remove('pdf-mode');
+                    showToast('Failed to create PDF: ' + pdfError.message, 'error');
+                }
             },
 
             // AI Analysis
