@@ -146,15 +146,8 @@
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: -1;
+            z-index: 0;
             overflow: hidden;
-            /* Fallback gradient if iframe fails */
-            background:
-                radial-gradient(ellipse at 20% 20%, rgba(139,92,246,0.3) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 30%, rgba(236,72,153,0.25) 0%, transparent 50%),
-                radial-gradient(ellipse at 40% 80%, rgba(59,130,246,0.2) 0%, transparent 50%),
-                #0a0a0f;
-            pointer-events: none;
         }
 
         .liquid-ether-bg iframe {
@@ -162,8 +155,12 @@
             height: 100%;
             border: none;
             display: block;
-            pointer-events: auto;
-            background: transparent;
+        }
+
+        /* Ensure all content appears above the background */
+        .header, main, section, footer, .hero, .mobile-menu {
+            position: relative;
+            z-index: 1;
         }
 
         /* ==========================================
