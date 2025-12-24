@@ -27,10 +27,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>AI Tools Hub - YouTube Video Optimizer</title>
+    <title>AI Tools Hub - YouTubeHub</title>
 
     <!-- PWA Manifest & Theme (Inline - no external file needed) -->
-    <link rel="manifest" href='data:application/manifest+json,{"name":"YouTube Video Optimizer","short_name":"YT Optimizer","description":"AI-powered YouTube video optimization and campaign analysis platform","start_url":"/main-dashboard.html","display":"standalone","background_color":"#0f172a","theme_color":"#7c3aed","orientation":"portrait-primary","icons":[{"src":"https://ytseo.siteuo.com/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"https://ytseo.siteuo.com/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}],"categories":["productivity","business","utilities"],"lang":"en","dir":"ltr"}'>
+    <link rel="manifest" href='data:application/manifest+json,{"name":"YouTubeHub","short_name":"YouTubeHub","description":"AI-powered YouTube video optimization and campaign analysis platform","start_url":"/video-optimizer","display":"standalone","background_color":"#0f172a","theme_color":"#7c3aed","orientation":"portrait-primary","icons":[{"src":"https://ytseo.siteuo.com/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"https://ytseo.siteuo.com/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}],"categories":["productivity","business","utilities"],"lang":"en","dir":"ltr"}'>
     <meta name="theme-color" content="#7c3aed">
 
     <!-- ============================================
@@ -4707,7 +4707,7 @@
                             pdf.setFontSize(9);
                             pdf.setTextColor(156, 163, 175);
                             pdf.text('Generated on ' + new Date().toLocaleDateString(), margin, 21);
-                            pdf.text('YouTube Video Optimizer', margin, 27);
+                            pdf.text('YouTubeHub', margin, 27);
 
                             if (totalPages > 1) {
                                 pdf.setFontSize(8);
@@ -4741,7 +4741,7 @@
                             // Add footer
                             pdf.setFontSize(7);
                             pdf.setTextColor(107, 114, 128);
-                            pdf.text('Powered by YouTube Video Optimizer - ytseo.siteuo.com', margin, pageHeight - 8);
+                            pdf.text('Powered by YouTubeHub', margin, pageHeight - 8);
                         }
 
                         // Download the PDF

@@ -1,5 +1,5 @@
 <!-- ================================================================
-     YOUTUBE VIDEO OPTIMIZER - LANDING PAGE
+     YOUTUBEHUB - LANDING PAGE
      ================================================================
 
      This is the public landing page for the platform.
@@ -16,7 +16,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Video Optimizer - AI-Powered Video Optimization Platform</title>
+    <title>YouTubeHub - AI-Powered Video Optimization Platform</title>
     <meta name="description" content="Optimize your YouTube videos with AI-powered tools. Generate titles, descriptions, thumbnails, and boost your channel growth.">
 
     <!-- Theme & Favicon -->
@@ -169,14 +169,15 @@
             left: 0;
             right: 0;
             z-index: 100;
-            padding: 1rem 2rem;
+            padding: 1.25rem 3rem;
             transition: all 0.3s ease;
         }
 
         .header.scrolled {
-            background: rgba(10, 10, 15, 0.9);
+            background: rgba(10, 10, 15, 0.95);
             backdrop-filter: blur(20px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem 3rem;
         }
 
         .nav-container {
@@ -190,34 +191,34 @@
         .logo {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
-            font-size: 1.5rem;
-            font-weight: 700;
+            gap: 1rem;
+            font-size: 1.75rem;
+            font-weight: 800;
             text-decoration: none;
             color: white;
         }
 
         .logo-icon {
-            width: 40px;
-            height: 40px;
+            width: 48px;
+            height: 48px;
             background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-            border-radius: 10px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.25rem;
+            font-size: 1.5rem;
         }
 
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 2rem;
+            gap: 2.5rem;
         }
 
         .nav-link {
-            color: rgba(255, 255, 255, 0.7);
+            color: rgba(255, 255, 255, 0.8);
             text-decoration: none;
-            font-size: 0.95rem;
+            font-size: 1.1rem;
             font-weight: 500;
             transition: color 0.2s ease;
         }
@@ -227,27 +228,27 @@
         }
 
         .btn-login {
-            padding: 0.5rem 1.25rem;
-            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
             font-weight: 600;
-            font-size: 0.95rem;
+            font-size: 1.05rem;
             text-decoration: none;
             transition: all 0.2s ease;
             color: white;
             background: transparent;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.25);
         }
 
         .btn-login:hover {
             background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.4);
         }
 
         .btn-cta {
-            padding: 0.5rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.95rem;
+            padding: 0.75rem 2rem;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 1.05rem;
             text-decoration: none;
             transition: all 0.3s ease;
             background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
@@ -258,7 +259,7 @@
 
         .btn-cta:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 40px rgba(139, 92, 246, 0.4);
+            box-shadow: 0 15px 40px rgba(139, 92, 246, 0.5);
         }
 
         /* Mobile menu button */
@@ -270,6 +271,45 @@
             font-size: 1.5rem;
             cursor: pointer;
             padding: 0.5rem;
+            z-index: 110;
+        }
+
+        /* Mobile menu overlay */
+        .mobile-menu {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 15, 0.98);
+            z-index: 105;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+        }
+
+        .mobile-menu.active {
+            display: flex;
+        }
+
+        .mobile-menu a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.5rem;
+            font-weight: 600;
+            padding: 1rem 2rem;
+            transition: color 0.2s ease;
+        }
+
+        .mobile-menu a:hover {
+            color: #a78bfa;
+        }
+
+        .mobile-menu .btn-cta {
+            margin-top: 1rem;
+            font-size: 1.1rem;
         }
 
         /* ==========================================
@@ -280,13 +320,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 8rem 2rem 6rem;
+            padding: 10rem 3rem 8rem;
             position: relative;
             z-index: 1;
         }
 
         .hero-content {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
             text-align: center;
         }
@@ -294,30 +334,31 @@
         .hero-badge {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
             background: rgba(139, 92, 246, 0.15);
             border: 1px solid rgba(139, 92, 246, 0.3);
             border-radius: 50px;
-            font-size: 0.875rem;
+            font-size: 1rem;
+            font-weight: 500;
             color: #a78bfa;
-            margin-bottom: 1.5rem;
+            margin-bottom: 2rem;
         }
 
         .hero-badge-dot {
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             background: #22c55e;
             border-radius: 50%;
             animation: pulse-glow 2s ease-in-out infinite;
         }
 
         .hero-title {
-            font-size: clamp(2.5rem, 8vw, 4.5rem);
+            font-size: clamp(3rem, 10vw, 5.5rem);
             font-weight: 800;
-            line-height: 1.1;
-            margin-bottom: 1.5rem;
-            letter-spacing: -0.02em;
+            line-height: 1.05;
+            margin-bottom: 2rem;
+            letter-spacing: -0.03em;
         }
 
         .hero-title-gradient {
@@ -330,29 +371,29 @@
         }
 
         .hero-subtitle {
-            font-size: clamp(1.1rem, 2.5vw, 1.35rem);
-            color: rgba(255, 255, 255, 0.7);
-            max-width: 700px;
-            margin: 0 auto 2.5rem;
-            line-height: 1.6;
+            font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+            color: rgba(255, 255, 255, 0.75);
+            max-width: 800px;
+            margin: 0 auto 3rem;
+            line-height: 1.7;
         }
 
         .hero-cta-group {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 1rem;
-            margin-bottom: 3rem;
+            gap: 1.25rem;
+            margin-bottom: 4rem;
         }
 
         .btn-hero-primary {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 1rem 2rem;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 1.1rem;
+            gap: 0.75rem;
+            padding: 1.25rem 2.5rem;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1.25rem;
             text-decoration: none;
             transition: all 0.3s ease;
             background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
@@ -363,46 +404,46 @@
         }
 
         .btn-hero-primary:hover {
-            transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 20px 60px rgba(139, 92, 246, 0.5);
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 25px 60px rgba(139, 92, 246, 0.5);
         }
 
         .btn-hero-secondary {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 1rem 2rem;
-            border-radius: 12px;
+            gap: 0.75rem;
+            padding: 1.25rem 2.5rem;
+            border-radius: 14px;
             font-weight: 600;
-            font-size: 1.1rem;
+            font-size: 1.25rem;
             text-decoration: none;
             transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.2);
             color: white;
             cursor: pointer;
         }
 
         .btn-hero-secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.3);
-            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.35);
+            transform: translateY(-3px);
         }
 
         /* Hero Mockup/Visual */
         .hero-visual {
             position: relative;
-            max-width: 1000px;
+            max-width: 1100px;
             margin: 0 auto;
-            perspective: 1000px;
+            perspective: 1200px;
         }
 
         .hero-mockup {
-            background: linear-gradient(135deg, rgba(30, 30, 45, 0.9) 0%, rgba(20, 20, 35, 0.9) 100%);
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 1rem;
-            box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5), 0 0 60px rgba(139, 92, 246, 0.2);
+            background: linear-gradient(135deg, rgba(30, 30, 45, 0.95) 0%, rgba(20, 20, 35, 0.95) 100%);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 1.5rem;
+            box-shadow: 0 50px 120px rgba(0, 0, 0, 0.6), 0 0 80px rgba(139, 92, 246, 0.25);
             transform: rotateX(5deg);
             animation: float 6s ease-in-out infinite;
         }
@@ -410,15 +451,15 @@
         .mockup-header {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            padding-bottom: 0.75rem;
+            gap: 0.6rem;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .mockup-dot {
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
         }
 
@@ -429,27 +470,28 @@
         .mockup-content {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1rem;
+            gap: 1.25rem;
         }
 
         .mockup-card {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 1.25rem;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .mockup-card-title {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.5rem;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.6rem;
+            font-weight: 500;
         }
 
         .mockup-metric {
-            font-size: 1.75rem;
-            font-weight: 700;
+            font-size: 2.25rem;
+            font-weight: 800;
             color: white;
         }
 
@@ -459,16 +501,16 @@
         .mockup-metric.blue { color: #60a5fa; }
 
         .mockup-bar {
-            height: 8px;
+            height: 10px;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            margin-top: 0.75rem;
+            border-radius: 5px;
+            margin-top: 1rem;
             overflow: hidden;
         }
 
         .mockup-bar-fill {
             height: 100%;
-            border-radius: 4px;
+            border-radius: 5px;
             background: linear-gradient(90deg, #8b5cf6, #ec4899);
         }
 
@@ -510,12 +552,12 @@
         .stats-bar {
             position: relative;
             z-index: 1;
-            padding: 4rem 2rem;
+            padding: 5rem 3rem;
             background: linear-gradient(180deg, rgba(10, 10, 15, 0) 0%, rgba(20, 20, 30, 0.5) 50%, rgba(10, 10, 15, 0) 100%);
         }
 
         .stats-container {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -524,46 +566,51 @@
 
         .stat-item {
             text-align: center;
-            padding: 1.5rem;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
+            padding: 2rem 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 20px;
             transition: all 0.3s ease;
         }
 
         .stat-item:hover {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(139, 92, 246, 0.3);
-            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(139, 92, 246, 0.35);
+            transform: translateY(-8px);
         }
 
         .stat-number {
-            font-size: clamp(2rem, 4vw, 3rem);
+            font-size: clamp(2.5rem, 5vw, 3.5rem);
             font-weight: 800;
             background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             line-height: 1.2;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
         }
 
         .stat-label {
-            font-size: 0.95rem;
-            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.7);
             font-weight: 500;
         }
 
         .stat-icon {
-            width: 48px;
-            height: 48px;
-            margin: 0 auto 1rem;
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 1.25rem;
             background: rgba(139, 92, 246, 0.15);
-            border-radius: 12px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #a78bfa;
+        }
+
+        .stat-icon svg {
+            width: 28px;
+            height: 28px;
         }
 
         /* ==========================================
@@ -572,56 +619,56 @@
         .features {
             position: relative;
             z-index: 1;
-            padding: 6rem 2rem;
+            padding: 8rem 3rem;
         }
 
         .section-header {
             text-align: center;
-            max-width: 800px;
-            margin: 0 auto 4rem;
+            max-width: 900px;
+            margin: 0 auto 5rem;
         }
 
         .section-label {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: rgba(139, 92, 246, 0.1);
-            border: 1px solid rgba(139, 92, 246, 0.2);
+            gap: 0.6rem;
+            padding: 0.6rem 1.25rem;
+            background: rgba(139, 92, 246, 0.12);
+            border: 1px solid rgba(139, 92, 246, 0.25);
             border-radius: 50px;
-            font-size: 0.875rem;
+            font-size: 1rem;
             color: #a78bfa;
-            margin-bottom: 1rem;
-            font-weight: 500;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
         }
 
         .section-title {
-            font-size: clamp(2rem, 5vw, 3rem);
+            font-size: clamp(2.5rem, 6vw, 4rem);
             font-weight: 800;
-            margin-bottom: 1rem;
+            margin-bottom: 1.25rem;
             color: white;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.025em;
         }
 
         .section-subtitle {
-            font-size: 1.1rem;
-            color: rgba(255, 255, 255, 0.6);
-            line-height: 1.6;
+            font-size: 1.3rem;
+            color: rgba(255, 255, 255, 0.65);
+            line-height: 1.7;
         }
 
         .features-grid {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 2rem;
+            gap: 2.5rem;
         }
 
         .feature-card {
-            background: linear-gradient(135deg, rgba(30, 30, 45, 0.6) 0%, rgba(20, 20, 35, 0.6) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 24px;
-            padding: 2.5rem;
+            background: linear-gradient(135deg, rgba(30, 30, 45, 0.7) 0%, rgba(20, 20, 35, 0.7) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 28px;
+            padding: 3rem;
             position: relative;
             overflow: hidden;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -652,13 +699,13 @@
         }
 
         .feature-card-icon {
-            width: 64px;
-            height: 64px;
-            border-radius: 16px;
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.75rem;
             position: relative;
             z-index: 1;
         }
@@ -680,25 +727,25 @@
         }
 
         .feature-card-icon svg {
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             color: white;
         }
 
         .feature-card-title {
-            font-size: 1.5rem;
+            font-size: 1.75rem;
             font-weight: 700;
             color: white;
-            margin-bottom: 0.75rem;
+            margin-bottom: 1rem;
             position: relative;
             z-index: 1;
         }
 
         .feature-card-description {
-            font-size: 1rem;
-            color: rgba(255, 255, 255, 0.6);
-            line-height: 1.6;
-            margin-bottom: 1.5rem;
+            font-size: 1.15rem;
+            color: rgba(255, 255, 255, 0.65);
+            line-height: 1.7;
+            margin-bottom: 1.75rem;
             position: relative;
             z-index: 1;
         }
@@ -706,26 +753,27 @@
         .feature-card-features {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
+            gap: 0.6rem;
+            margin-bottom: 1.75rem;
             position: relative;
             z-index: 1;
         }
 
         .feature-tag {
-            padding: 0.375rem 0.75rem;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 50px;
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.75);
+            font-weight: 500;
         }
 
         .feature-card-link {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            font-size: 0.95rem;
+            gap: 0.6rem;
+            font-size: 1.1rem;
             font-weight: 600;
             color: #a78bfa;
             text-decoration: none;
@@ -736,36 +784,38 @@
 
         .feature-card-link:hover {
             color: #c4b5fd;
-            gap: 0.75rem;
+            gap: 0.85rem;
         }
 
         .feature-card-link svg {
             transition: transform 0.3s ease;
+            width: 18px;
+            height: 18px;
         }
 
         .feature-card:hover .feature-card-link svg {
-            transform: translateX(4px);
+            transform: translateX(5px);
         }
 
         /* Glow effect on corners */
         .feature-card-glow {
             position: absolute;
-            width: 200px;
-            height: 200px;
+            width: 250px;
+            height: 250px;
             border-radius: 50%;
-            filter: blur(80px);
+            filter: blur(100px);
             opacity: 0;
             transition: opacity 0.4s ease;
             pointer-events: none;
         }
 
         .feature-card-glow.top-right {
-            top: -100px;
-            right: -100px;
+            top: -120px;
+            right: -120px;
         }
 
         .feature-card:hover .feature-card-glow {
-            opacity: 0.3;
+            opacity: 0.35;
         }
 
         .feature-card-glow.purple { background: #8b5cf6; }
@@ -779,7 +829,7 @@
         .wizard-section {
             position: relative;
             z-index: 1;
-            padding: 6rem 2rem;
+            padding: 8rem 3rem;
             background: linear-gradient(180deg, rgba(20, 20, 30, 0.3) 0%, rgba(10, 10, 15, 0) 100%);
         }
 
@@ -793,18 +843,18 @@
         }
 
         .wizard-content h2 {
-            font-size: clamp(2rem, 4vw, 2.75rem);
+            font-size: clamp(2.25rem, 5vw, 3.25rem);
             font-weight: 800;
             color: white;
-            margin-bottom: 1rem;
+            margin-bottom: 1.25rem;
             letter-spacing: -0.02em;
         }
 
         .wizard-content p {
-            font-size: 1.1rem;
-            color: rgba(255, 255, 255, 0.6);
-            line-height: 1.6;
-            margin-bottom: 2rem;
+            font-size: 1.25rem;
+            color: rgba(255, 255, 255, 0.65);
+            line-height: 1.7;
+            margin-bottom: 2.5rem;
         }
 
         .wizard-steps {
@@ -816,11 +866,11 @@
         .wizard-step {
             display: flex;
             align-items: center;
-            gap: 1rem;
-            padding: 1rem 1.25rem;
+            gap: 1.25rem;
+            padding: 1.25rem 1.5rem;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 12px;
+            border-radius: 14px;
             cursor: pointer;
             transition: all 0.3s ease;
         }
@@ -835,15 +885,15 @@
         }
 
         .wizard-step-number {
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 0.875rem;
+            font-size: 1rem;
             color: rgba(255, 255, 255, 0.5);
             flex-shrink: 0;
             transition: all 0.3s ease;
@@ -861,13 +911,13 @@
         .wizard-step-title {
             font-weight: 600;
             color: white;
-            font-size: 0.95rem;
-            margin-bottom: 0.25rem;
+            font-size: 1.1rem;
+            margin-bottom: 0.35rem;
         }
 
         .wizard-step-desc {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.55);
         }
 
         .wizard-step-icon {
@@ -884,9 +934,9 @@
             position: relative;
             background: linear-gradient(135deg, rgba(30, 30, 45, 0.8) 0%, rgba(20, 20, 35, 0.8) 100%);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 2rem;
-            min-height: 400px;
+            border-radius: 24px;
+            padding: 2.5rem;
+            min-height: 450px;
             overflow: hidden;
         }
 
@@ -900,7 +950,7 @@
         }
 
         .wizard-visual-title {
-            font-size: 1rem;
+            font-size: 1.15rem;
             font-weight: 600;
             color: white;
         }
@@ -931,9 +981,9 @@
         }
 
         .preview-text {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 0.95rem;
-            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 1.05rem;
+            line-height: 1.6;
         }
 
         .preview-shimmer {
@@ -971,22 +1021,22 @@
         .tools-section {
             position: relative;
             z-index: 1;
-            padding: 6rem 2rem;
+            padding: 8rem 3rem;
         }
 
         .tools-grid {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1.25rem;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1.5rem;
         }
 
         .tool-card {
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 16px;
-            padding: 1.5rem;
+            border-radius: 20px;
+            padding: 2rem;
             text-align: center;
             transition: all 0.3s ease;
             cursor: pointer;
@@ -996,22 +1046,23 @@
         .tool-card:hover {
             background: rgba(139, 92, 246, 0.1);
             border-color: rgba(139, 92, 246, 0.3);
-            transform: translateY(-5px);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
         }
 
         .tool-card-icon {
-            width: 48px;
-            height: 48px;
-            margin: 0 auto 1rem;
-            border-radius: 12px;
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 1.25rem;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .tool-card-icon svg {
-            width: 24px;
-            height: 24px;
+            width: 28px;
+            height: 28px;
         }
 
         .tool-card-icon.purple { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
@@ -1022,16 +1073,16 @@
         .tool-card-icon.cyan { background: rgba(6, 182, 212, 0.2); color: #22d3ee; }
 
         .tool-card-title {
-            font-size: 0.95rem;
+            font-size: 1.1rem;
             font-weight: 600;
             color: white;
-            margin-bottom: 0.375rem;
+            margin-bottom: 0.5rem;
         }
 
         .tool-card-desc {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.5);
-            line-height: 1.4;
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.55);
+            line-height: 1.5;
         }
 
         /* ==========================================
@@ -1040,80 +1091,81 @@
         .testimonials-section {
             position: relative;
             z-index: 1;
-            padding: 6rem 2rem;
+            padding: 8rem 3rem;
             background: linear-gradient(180deg, rgba(10, 10, 15, 0) 0%, rgba(20, 20, 30, 0.5) 50%, rgba(10, 10, 15, 0) 100%);
         }
 
         .testimonials-grid {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 2rem;
+            gap: 2.5rem;
         }
 
         .testimonial-card {
             background: linear-gradient(135deg, rgba(30, 30, 45, 0.6) 0%, rgba(20, 20, 35, 0.6) 100%);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 20px;
-            padding: 2rem;
+            border-radius: 24px;
+            padding: 2.5rem;
             transition: all 0.3s ease;
         }
 
         .testimonial-card:hover {
             border-color: rgba(139, 92, 246, 0.3);
-            transform: translateY(-5px);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
         }
 
         .testimonial-stars {
             display: flex;
-            gap: 0.25rem;
-            margin-bottom: 1rem;
+            gap: 0.35rem;
+            margin-bottom: 1.25rem;
         }
 
         .testimonial-stars svg {
-            width: 18px;
-            height: 18px;
+            width: 22px;
+            height: 22px;
             fill: #fbbf24;
             stroke: none;
         }
 
         .testimonial-text {
-            font-size: 1rem;
-            color: rgba(255, 255, 255, 0.8);
-            line-height: 1.6;
-            margin-bottom: 1.5rem;
+            font-size: 1.15rem;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.7;
+            margin-bottom: 2rem;
         }
 
         .testimonial-author {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 1.25rem;
         }
 
         .testimonial-avatar {
-            width: 48px;
-            height: 48px;
+            width: 56px;
+            height: 56px;
             border-radius: 50%;
             background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 1.1rem;
+            font-size: 1.25rem;
             color: white;
         }
 
         .testimonial-info h4 {
-            font-size: 0.95rem;
+            font-size: 1.1rem;
             font-weight: 600;
             color: white;
-            margin-bottom: 0.125rem;
+            margin-bottom: 0.25rem;
         }
 
         .testimonial-info p {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.55);
         }
 
         /* ==========================================
@@ -1122,27 +1174,28 @@
         .final-cta {
             position: relative;
             z-index: 1;
-            padding: 8rem 2rem;
+            padding: 10rem 3rem;
             text-align: center;
         }
 
         .final-cta-container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
         .final-cta h2 {
-            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-size: clamp(2.5rem, 6vw, 4rem);
             font-weight: 800;
             color: white;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
             letter-spacing: -0.02em;
         }
 
         .final-cta p {
-            font-size: 1.2rem;
-            color: rgba(255, 255, 255, 0.6);
-            margin-bottom: 2.5rem;
+            font-size: 1.35rem;
+            color: rgba(255, 255, 255, 0.65);
+            margin-bottom: 3rem;
+            line-height: 1.7;
         }
 
         .final-cta-buttons {
@@ -1158,35 +1211,35 @@
         .footer {
             position: relative;
             z-index: 1;
-            padding: 3rem 2rem;
+            padding: 4rem 3rem;
             border-top: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .footer-container {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 1.5rem;
+            gap: 2rem;
         }
 
         .footer-logo {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.875rem;
             text-decoration: none;
             color: white;
             font-weight: 700;
-            font-size: 1.25rem;
+            font-size: 1.4rem;
         }
 
         .footer-logo-icon {
-            width: 36px;
-            height: 36px;
+            width: 42px;
+            height: 42px;
             background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-            border-radius: 8px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1194,13 +1247,13 @@
 
         .footer-links {
             display: flex;
-            gap: 2rem;
+            gap: 2.5rem;
         }
 
         .footer-link {
-            color: rgba(255, 255, 255, 0.5);
+            color: rgba(255, 255, 255, 0.55);
             text-decoration: none;
-            font-size: 0.9rem;
+            font-size: 1.05rem;
             transition: color 0.2s ease;
         }
 
@@ -1209,14 +1262,48 @@
         }
 
         .footer-copyright {
-            color: rgba(255, 255, 255, 0.4);
-            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.45);
+            font-size: 1rem;
         }
 
         /* ==========================================
-           RESPONSIVE STYLES
+           RESPONSIVE STYLES - TABLET (1024px)
+           ========================================== */
+        @media (max-width: 1024px) {
+            .header {
+                padding: 1rem 1.5rem;
+            }
+
+            .header.scrolled {
+                padding: 0.75rem 1.5rem;
+            }
+
+            .features-grid {
+                gap: 1.75rem;
+            }
+
+            .wizard-container {
+                gap: 3rem;
+            }
+
+            .testimonials-grid {
+                gap: 1.5rem;
+            }
+        }
+
+        /* ==========================================
+           RESPONSIVE STYLES - MOBILE (768px)
            ========================================== */
         @media (max-width: 768px) {
+            /* Header Mobile */
+            .header {
+                padding: 0.875rem 1.25rem;
+            }
+
+            .header.scrolled {
+                padding: 0.75rem 1.25rem;
+            }
+
             .nav-links {
                 display: none;
             }
@@ -1225,28 +1312,101 @@
                 display: block;
             }
 
+            .logo {
+                font-size: 1.35rem;
+                gap: 0.75rem;
+            }
+
+            .logo-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 1.25rem;
+            }
+
+            /* Hero Mobile */
             .hero {
-                padding: 7rem 1.5rem 4rem;
+                min-height: auto;
+                padding: 6.5rem 1.25rem 4rem;
+            }
+
+            .hero-badge {
+                padding: 0.6rem 1.1rem;
+                font-size: 0.85rem;
+                margin-bottom: 1.5rem;
+            }
+
+            .hero-title {
+                font-size: clamp(2rem, 9vw, 2.75rem);
+                margin-bottom: 1.25rem;
+                line-height: 1.1;
+            }
+
+            .hero-subtitle {
+                font-size: 1.05rem;
+                margin-bottom: 2rem;
+                line-height: 1.6;
             }
 
             .hero-cta-group {
                 flex-direction: column;
-                align-items: center;
+                align-items: stretch;
+                gap: 1rem;
+                margin-bottom: 3rem;
             }
 
             .btn-hero-primary,
             .btn-hero-secondary {
                 width: 100%;
-                max-width: 300px;
+                padding: 1rem 1.5rem;
+                font-size: 1.05rem;
                 justify-content: center;
+                border-radius: 12px;
+            }
+
+            .btn-hero-primary {
+                animation: none;
+            }
+
+            /* Mockup Mobile */
+            .hero-mockup {
+                transform: none;
+                animation: none;
+                padding: 1rem;
+                border-radius: 16px;
             }
 
             .mockup-content {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 0.75rem;
             }
 
-            .hero-mockup {
-                transform: none;
+            .mockup-card {
+                padding: 0.875rem;
+                border-radius: 10px;
+            }
+
+            .mockup-card-title {
+                font-size: 0.65rem;
+                margin-bottom: 0.25rem;
+            }
+
+            .mockup-metric {
+                font-size: 1.35rem;
+            }
+
+            .mockup-bar {
+                height: 6px;
+                margin-top: 0.5rem;
+            }
+
+            .mockup-dot {
+                width: 10px;
+                height: 10px;
+            }
+
+            /* Stats Bar Mobile */
+            .stats-bar {
+                padding: 3rem 1.25rem;
             }
 
             .stats-container {
@@ -1255,32 +1415,109 @@
             }
 
             .stat-item {
-                padding: 1rem;
+                padding: 1.25rem 1rem;
+                border-radius: 16px;
             }
 
             .stat-icon {
-                width: 40px;
-                height: 40px;
+                width: 44px;
+                height: 44px;
+                margin-bottom: 0.875rem;
+                border-radius: 11px;
             }
 
+            .stat-icon svg {
+                width: 22px;
+                height: 22px;
+            }
+
+            .stat-number {
+                font-size: clamp(1.5rem, 6vw, 2rem);
+                margin-bottom: 0.375rem;
+            }
+
+            .stat-label {
+                font-size: 0.85rem;
+            }
+
+            /* Features Mobile */
             .features {
-                padding: 4rem 1.5rem;
+                padding: 4rem 1.25rem;
+            }
+
+            .section-header {
+                margin-bottom: 2.5rem;
+            }
+
+            .section-label {
+                font-size: 0.85rem;
+                padding: 0.5rem 1rem;
+                margin-bottom: 1rem;
+            }
+
+            .section-title {
+                font-size: clamp(1.75rem, 7vw, 2.25rem);
+                margin-bottom: 0.875rem;
+            }
+
+            .section-subtitle {
+                font-size: 1rem;
+                line-height: 1.6;
             }
 
             .features-grid {
                 grid-template-columns: 1fr;
+                gap: 1.25rem;
             }
 
             .feature-card {
                 padding: 1.75rem;
+                border-radius: 20px;
             }
 
             .feature-card:hover {
-                transform: translateY(-5px);
+                transform: translateY(-4px);
             }
 
+            .feature-card-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+                margin-bottom: 1.25rem;
+            }
+
+            .feature-card-icon svg {
+                width: 28px;
+                height: 28px;
+            }
+
+            .feature-card-title {
+                font-size: 1.35rem;
+                margin-bottom: 0.75rem;
+            }
+
+            .feature-card-description {
+                font-size: 1rem;
+                margin-bottom: 1.25rem;
+            }
+
+            .feature-card-features {
+                margin-bottom: 1.25rem;
+                gap: 0.5rem;
+            }
+
+            .feature-tag {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.875rem;
+            }
+
+            .feature-card-link {
+                font-size: 1rem;
+            }
+
+            /* Wizard Mobile */
             .wizard-section {
-                padding: 4rem 1.5rem;
+                padding: 4rem 1.25rem;
             }
 
             .wizard-container {
@@ -1288,44 +1525,364 @@
                 gap: 2rem;
             }
 
-            .wizard-visual {
-                min-height: 300px;
+            .wizard-content h2 {
+                font-size: clamp(1.6rem, 6vw, 2rem);
+                text-align: center;
+                margin-bottom: 0.875rem;
             }
 
+            .wizard-content p {
+                font-size: 1rem;
+                text-align: center;
+                margin-bottom: 1.75rem;
+            }
+
+            .wizard-steps {
+                gap: 0.625rem;
+            }
+
+            .wizard-step {
+                padding: 1rem 1.125rem;
+                gap: 1rem;
+                border-radius: 12px;
+            }
+
+            .wizard-step-number {
+                width: 34px;
+                height: 34px;
+                font-size: 0.9rem;
+            }
+
+            .wizard-step-title {
+                font-size: 0.95rem;
+                margin-bottom: 0.2rem;
+            }
+
+            .wizard-step-desc {
+                font-size: 0.8rem;
+            }
+
+            .wizard-visual {
+                min-height: 280px;
+                padding: 1.5rem;
+                border-radius: 18px;
+                order: -1;
+            }
+
+            .wizard-visual-header {
+                margin-bottom: 1rem;
+                padding-bottom: 0.75rem;
+            }
+
+            .wizard-visual-title {
+                font-size: 0.95rem;
+            }
+
+            .preview-box {
+                padding: 1rem;
+                border-radius: 10px;
+            }
+
+            .preview-text {
+                font-size: 0.9rem;
+            }
+
+            .preview-tag {
+                font-size: 0.7rem;
+                padding: 0.3rem 0.625rem;
+            }
+
+            /* Tools Grid Mobile */
             .tools-section {
-                padding: 4rem 1.5rem;
+                padding: 4rem 1.25rem;
             }
 
             .tools-grid {
                 grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
             }
 
+            .tool-card {
+                padding: 1.25rem 1rem;
+                border-radius: 16px;
+            }
+
+            .tool-card:hover {
+                transform: translateY(-4px);
+            }
+
+            .tool-card-icon {
+                width: 48px;
+                height: 48px;
+                margin-bottom: 0.875rem;
+                border-radius: 11px;
+            }
+
+            .tool-card-icon svg {
+                width: 22px;
+                height: 22px;
+            }
+
+            .tool-card-title {
+                font-size: 0.9rem;
+                margin-bottom: 0.25rem;
+            }
+
+            .tool-card-desc {
+                font-size: 0.75rem;
+                line-height: 1.4;
+            }
+
+            /* Testimonials Mobile */
             .testimonials-section {
-                padding: 4rem 1.5rem;
+                padding: 4rem 1.25rem;
             }
 
             .testimonials-grid {
                 grid-template-columns: 1fr;
+                gap: 1.25rem;
             }
 
+            .testimonial-card {
+                padding: 1.75rem;
+                border-radius: 18px;
+            }
+
+            .testimonial-card:hover {
+                transform: translateY(-4px);
+            }
+
+            .testimonial-stars {
+                margin-bottom: 1rem;
+                gap: 0.25rem;
+            }
+
+            .testimonial-stars svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .testimonial-text {
+                font-size: 1rem;
+                line-height: 1.6;
+                margin-bottom: 1.5rem;
+            }
+
+            .testimonial-author {
+                gap: 1rem;
+            }
+
+            .testimonial-avatar {
+                width: 46px;
+                height: 46px;
+                font-size: 1rem;
+            }
+
+            .testimonial-info h4 {
+                font-size: 0.95rem;
+            }
+
+            .testimonial-info p {
+                font-size: 0.8rem;
+            }
+
+            /* Final CTA Mobile */
             .final-cta {
-                padding: 5rem 1.5rem;
+                padding: 5rem 1.25rem;
+            }
+
+            .final-cta h2 {
+                font-size: clamp(1.75rem, 7vw, 2.25rem);
+                margin-bottom: 1rem;
+            }
+
+            .final-cta p {
+                font-size: 1.05rem;
+                margin-bottom: 2rem;
             }
 
             .final-cta-buttons {
                 flex-direction: column;
-                align-items: center;
+                align-items: stretch;
+                gap: 1rem;
+            }
+
+            .final-cta-buttons .btn-hero-primary,
+            .final-cta-buttons .btn-hero-secondary {
+                width: 100%;
+            }
+
+            /* Footer Mobile */
+            .footer {
+                padding: 2.5rem 1.25rem;
             }
 
             .footer-container {
                 flex-direction: column;
                 text-align: center;
+                gap: 1.5rem;
+            }
+
+            .footer-logo {
+                font-size: 1.25rem;
+                gap: 0.625rem;
+            }
+
+            .footer-logo-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 8px;
             }
 
             .footer-links {
                 flex-wrap: wrap;
                 justify-content: center;
+                gap: 1.25rem 1.5rem;
+            }
+
+            .footer-link {
+                font-size: 0.95rem;
+            }
+
+            .footer-copyright {
+                font-size: 0.85rem;
+            }
+
+            /* Mobile Menu Styles */
+            .mobile-menu {
+                padding: 5rem 1.5rem 2rem;
+            }
+
+            .mobile-menu a {
+                font-size: 1.35rem;
+                padding: 0.875rem 1.5rem;
+            }
+
+            .mobile-menu .btn-cta {
+                margin-top: 1.5rem;
+                padding: 1rem 2rem;
+                font-size: 1.1rem;
+                width: 100%;
+                max-width: 280px;
+                text-align: center;
+            }
+        }
+
+        /* ==========================================
+           RESPONSIVE STYLES - SMALL MOBILE (480px)
+           ========================================== */
+        @media (max-width: 480px) {
+            .hero {
+                padding: 6rem 1rem 3rem;
+            }
+
+            .hero-title {
+                font-size: clamp(1.75rem, 10vw, 2.25rem);
+            }
+
+            .hero-subtitle {
+                font-size: 0.95rem;
+            }
+
+            .btn-hero-primary,
+            .btn-hero-secondary {
+                padding: 0.9rem 1.25rem;
+                font-size: 1rem;
+            }
+
+            .mockup-content {
+                grid-template-columns: 1fr 1fr;
+                gap: 0.5rem;
+            }
+
+            .mockup-card {
+                padding: 0.75rem;
+            }
+
+            .mockup-metric {
+                font-size: 1.15rem;
+            }
+
+            .stats-container {
+                gap: 0.75rem;
+            }
+
+            .stat-item {
+                padding: 1rem 0.75rem;
+            }
+
+            .stat-number {
+                font-size: clamp(1.35rem, 5.5vw, 1.75rem);
+            }
+
+            .stat-label {
+                font-size: 0.75rem;
+            }
+
+            .section-title {
+                font-size: clamp(1.5rem, 8vw, 1.875rem);
+            }
+
+            .section-subtitle {
+                font-size: 0.9rem;
+            }
+
+            .feature-card {
+                padding: 1.5rem;
+            }
+
+            .feature-card-title {
+                font-size: 1.2rem;
+            }
+
+            .feature-card-description {
+                font-size: 0.9rem;
+            }
+
+            .tools-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 0.75rem;
+            }
+
+            .tool-card {
+                padding: 1rem 0.75rem;
+            }
+
+            .tool-card-icon {
+                width: 42px;
+                height: 42px;
+            }
+
+            .tool-card-title {
+                font-size: 0.8rem;
+            }
+
+            .tool-card-desc {
+                font-size: 0.7rem;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+
+            .testimonial-card {
+                padding: 1.5rem;
+            }
+
+            .final-cta h2 {
+                font-size: clamp(1.5rem, 8vw, 2rem);
+            }
+
+            .final-cta p {
+                font-size: 0.95rem;
+            }
+
+            .footer-links {
                 gap: 1rem;
+            }
+
+            .footer-link {
+                font-size: 0.85rem;
             }
         }
 
@@ -1367,15 +1924,15 @@
                         <polygon points="5 3 19 12 5 21 5 3"/>
                     </svg>
                 </div>
-                <span>YT Optimizer</span>
+                <span>YouTubeHub</span>
             </a>
 
             <div class="nav-links">
                 <a href="#features" class="nav-link">Features</a>
                 <a href="#tools" class="nav-link">Tools</a>
                 <a href="#testimonials" class="nav-link">Testimonials</a>
-                <a href="main-dashboard.html" class="btn-login" id="nav-login-btn">Log In</a>
-                <a href="main-dashboard.html#register" class="btn-cta" id="nav-cta-btn">Get Started Free</a>
+                <a href="/video-optimizer" class="btn-login" id="nav-login-btn">Log In</a>
+                <a href="/video-optimizer#register" class="btn-cta" id="nav-cta-btn">Get Started Free</a>
             </div>
 
             <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu">
@@ -1387,6 +1944,15 @@
             </button>
         </nav>
     </header>
+
+    <!-- Mobile Menu Overlay -->
+    <div class="mobile-menu" id="mobile-menu">
+        <a href="#features" class="mobile-nav-link">Features</a>
+        <a href="#tools" class="mobile-nav-link">Tools</a>
+        <a href="#testimonials" class="mobile-nav-link">Testimonials</a>
+        <a href="/video-optimizer" class="mobile-nav-link" id="mobile-login-btn">Log In</a>
+        <a href="/video-optimizer#register" class="btn-cta" id="mobile-cta-btn">Get Started Free</a>
+    </div>
 
     <!-- ==========================================
          HERO SECTION
@@ -1413,7 +1979,7 @@
 
             <!-- CTA Buttons -->
             <div class="hero-cta-group animate-fade-in-up delay-300">
-                <a href="main-dashboard.html#register" class="btn-hero-primary" id="hero-cta-btn">
+                <a href="/video-optimizer#register" class="btn-hero-primary" id="hero-cta-btn">
                     <span>Start Optimizing Free</span>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -1564,7 +2130,7 @@
 
         <div class="features-grid">
             <!-- Video Wizard Card -->
-            <div class="feature-card" onclick="window.location.href='video-wizard.html'">
+            <div class="feature-card" onclick="window.location.href='/video-wizard'">
                 <div class="feature-card-glow purple top-right"></div>
                 <div class="feature-card-icon purple">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1583,7 +2149,7 @@
                     <span class="feature-tag">Thumbnails</span>
                     <span class="feature-tag">SEO Optimization</span>
                 </div>
-                <a href="video-wizard.html" class="feature-card-link">
+                <a href="/video-wizard" class="feature-card-link">
                     <span>Launch Wizard</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -1592,7 +2158,7 @@
             </div>
 
             <!-- Video Optimizer Card -->
-            <div class="feature-card" onclick="window.location.href='main-dashboard.html#optimizer'">
+            <div class="feature-card" onclick="window.location.href='/video-optimizer#optimizer'">
                 <div class="feature-card-glow pink top-right"></div>
                 <div class="feature-card-icon pink">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1611,7 +2177,7 @@
                     <span class="feature-tag">Tag Suggestions</span>
                     <span class="feature-tag">SEO Score</span>
                 </div>
-                <a href="main-dashboard.html#optimizer" class="feature-card-link">
+                <a href="/video-optimizer#optimizer" class="feature-card-link">
                     <span>Optimize Video</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -1620,7 +2186,7 @@
             </div>
 
             <!-- Thumbnail Creator Card -->
-            <div class="feature-card" onclick="window.location.href='main-dashboard.html#thumbnail'">
+            <div class="feature-card" onclick="window.location.href='/video-optimizer#thumbnail'">
                 <div class="feature-card-glow blue top-right"></div>
                 <div class="feature-card-icon blue">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1639,7 +2205,7 @@
                     <span class="feature-tag">A/B Testing</span>
                     <span class="feature-tag">Templates</span>
                 </div>
-                <a href="main-dashboard.html#thumbnail" class="feature-card-link">
+                <a href="/video-optimizer#thumbnail" class="feature-card-link">
                     <span>Create Thumbnails</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -1648,7 +2214,7 @@
             </div>
 
             <!-- Creative Studio Card -->
-            <div class="feature-card" onclick="window.location.href='creative-studio.html'">
+            <div class="feature-card" onclick="window.location.href='/creative-studio'">
                 <div class="feature-card-glow green top-right"></div>
                 <div class="feature-card-icon green">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1667,7 +2233,7 @@
                     <span class="feature-tag">Repurposing</span>
                     <span class="feature-tag">Export Options</span>
                 </div>
-                <a href="creative-studio.html" class="feature-card-link">
+                <a href="/creative-studio" class="feature-card-link">
                     <span>Open Studio</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -1876,7 +2442,7 @@
                             <span style="color: rgba(255,255,255,0.8);">2 Thumbnail Designs</span>
                         </div>
                     </div>
-                    <button class="btn-cta" style="width: 100%; margin-top: 1rem; padding: 0.875rem;" onclick="window.location.href='video-wizard.html'">
+                    <button class="btn-cta" style="width: 100%; margin-top: 1rem; padding: 0.875rem;" onclick="window.location.href='/video-wizard'">
                         Try Video Wizard Free
                     </button>
                 </div>
@@ -1903,7 +2469,7 @@
         </div>
 
         <div class="tools-grid">
-            <a href="main-dashboard.html#optimizer" class="tool-card">
+            <a href="/video-optimizer#optimizer" class="tool-card">
                 <div class="tool-card-icon purple">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"/>
@@ -1913,7 +2479,7 @@
                 <div class="tool-card-title">Video Optimizer</div>
                 <div class="tool-card-desc">SEO-optimize any video</div>
             </a>
-            <a href="video-wizard.html" class="tool-card">
+            <a href="/video-wizard" class="tool-card">
                 <div class="tool-card-icon pink">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 2L2 7l10 5 10-5-10-5z"/>
@@ -1924,7 +2490,7 @@
                 <div class="tool-card-title">Video Wizard</div>
                 <div class="tool-card-desc">End-to-end campaign creation</div>
             </a>
-            <a href="main-dashboard.html#thumbnail" class="tool-card">
+            <a href="/video-optimizer#thumbnail" class="tool-card">
                 <div class="tool-card-icon blue">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -1935,7 +2501,7 @@
                 <div class="tool-card-title">Thumbnail Creator</div>
                 <div class="tool-card-desc">AI-designed thumbnails</div>
             </a>
-            <a href="creative-studio.html" class="tool-card">
+            <a href="/creative-studio" class="tool-card">
                 <div class="tool-card-icon green">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polygon points="12 2 2 7 12 12 22 7 12 2"/>
@@ -1946,7 +2512,7 @@
                 <div class="tool-card-title">Creative Studio</div>
                 <div class="tool-card-desc">Advanced video editing</div>
             </a>
-            <a href="main-dashboard.html#competitor" class="tool-card">
+            <a href="/video-optimizer#competitor" class="tool-card">
                 <div class="tool-card-icon orange">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -1958,7 +2524,7 @@
                 <div class="tool-card-title">Competitor Analysis</div>
                 <div class="tool-card-desc">Analyze rival channels</div>
             </a>
-            <a href="main-dashboard.html#trends" class="tool-card">
+            <a href="/video-optimizer#trends" class="tool-card">
                 <div class="tool-card-icon cyan">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -1967,7 +2533,7 @@
                 <div class="tool-card-title">Trend Analysis</div>
                 <div class="tool-card-desc">Discover trending topics</div>
             </a>
-            <a href="main-dashboard.html#channelAudit" class="tool-card">
+            <a href="/video-optimizer#channelAudit" class="tool-card">
                 <div class="tool-card-icon purple">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M9 11H3a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h3"/>
@@ -1979,7 +2545,7 @@
                 <div class="tool-card-title">Channel Audit</div>
                 <div class="tool-card-desc">Full channel analysis</div>
             </a>
-            <a href="main-dashboard.html#placement" class="tool-card">
+            <a href="/video-optimizer#placement" class="tool-card">
                 <div class="tool-card-icon pink">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
@@ -1990,7 +2556,7 @@
                 <div class="tool-card-title">Ad Placement</div>
                 <div class="tool-card-desc">Optimize ad positions</div>
             </a>
-            <a href="aitools.html" class="tool-card">
+            <a href="/aitools" class="tool-card">
                 <div class="tool-card-icon blue">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -2004,7 +2570,7 @@
                 <div class="tool-card-title">AI Tools Suite</div>
                 <div class="tool-card-desc">Advanced AI features</div>
             </a>
-            <a href="main-dashboard.html#history" class="tool-card">
+            <a href="/video-optimizer#history" class="tool-card">
                 <div class="tool-card-icon green">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/>
@@ -2014,7 +2580,7 @@
                 <div class="tool-card-title">History</div>
                 <div class="tool-card-desc">View past optimizations</div>
             </a>
-            <a href="main-dashboard.html#client-reports" class="tool-card">
+            <a href="/video-optimizer#client-reports" class="tool-card">
                 <div class="tool-card-icon orange">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -2027,7 +2593,7 @@
                 <div class="tool-card-title">Client Reports</div>
                 <div class="tool-card-desc">Professional PDF reports</div>
             </a>
-            <a href="enterprise.html" class="tool-card">
+            <a href="/enterprise-suite" class="tool-card">
                 <div class="tool-card-icon cyan">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
@@ -2128,13 +2694,13 @@
                 Join thousands of creators using AI to optimize their YouTube content and accelerate their growth.
             </p>
             <div class="final-cta-buttons">
-                <a href="main-dashboard.html#register" class="btn-hero-primary" id="final-cta-btn">
+                <a href="/video-optimizer#register" class="btn-hero-primary" id="final-cta-btn">
                     <span>Get Started Free</span>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M12 5l7 7-7 7"/>
                     </svg>
                 </a>
-                <a href="main-dashboard.html" class="btn-hero-secondary">
+                <a href="/video-optimizer" class="btn-hero-secondary">
                     <span>View Demo</span>
                 </a>
             </div>
@@ -2152,15 +2718,15 @@
                         <polygon points="5 3 19 12 5 21 5 3"/>
                     </svg>
                 </div>
-                <span>YT Optimizer</span>
+                <span>YouTubeHub</span>
             </a>
             <div class="footer-links">
                 <a href="#features" class="footer-link">Features</a>
                 <a href="#tools" class="footer-link">Tools</a>
                 <a href="#testimonials" class="footer-link">Testimonials</a>
-                <a href="main-dashboard.html" class="footer-link">Dashboard</a>
+                <a href="/video-optimizer" class="footer-link">Dashboard</a>
             </div>
-            <p class="footer-copyright">2025 YT Optimizer. All rights reserved.</p>
+            <p class="footer-copyright">2025 YouTubeHub. All rights reserved.</p>
         </div>
     </footer>
 
@@ -2201,34 +2767,64 @@
             if (user) {
                 // User is logged in - show "Go to Dashboard"
                 navLoginBtn.textContent = 'Dashboard';
-                navLoginBtn.href = 'main-dashboard.html';
+                navLoginBtn.href = '/video-optimizer';
                 navCtaBtn.textContent = 'Go to Dashboard';
-                navCtaBtn.href = 'main-dashboard.html';
+                navCtaBtn.href = '/video-optimizer';
                 heroCtaBtn.innerHTML = '<span>Go to Dashboard</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
-                heroCtaBtn.href = 'main-dashboard.html';
+                heroCtaBtn.href = '/video-optimizer';
 
                 // Update final CTA button
                 const finalCtaBtn = document.getElementById('final-cta-btn');
                 if (finalCtaBtn) {
                     finalCtaBtn.innerHTML = '<span>Go to Dashboard</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
-                    finalCtaBtn.href = 'main-dashboard.html';
+                    finalCtaBtn.href = '/video-optimizer';
+                }
+
+                // Update mobile menu buttons
+                const mobileLoginBtn = document.getElementById('mobile-login-btn');
+                const mobileCtaBtn = document.getElementById('mobile-cta-btn');
+                if (mobileLoginBtn) {
+                    mobileLoginBtn.textContent = 'Dashboard';
+                    mobileLoginBtn.href = '/video-optimizer';
+                }
+                if (mobileCtaBtn) {
+                    mobileCtaBtn.textContent = 'Go to Dashboard';
+                    mobileCtaBtn.href = '/video-optimizer';
                 }
             }
         });
 
-        // Mobile menu toggle (placeholder - will implement fully later)
+        // Mobile menu toggle
         const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
+
         mobileMenuBtn.addEventListener('click', () => {
-            // Will implement mobile menu in later section
-            window.location.href = 'main-dashboard.html';
+            mobileMenu.classList.toggle('active');
+            // Toggle hamburger to X
+            if (mobileMenu.classList.contains('active')) {
+                mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+            } else {
+                mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>';
+            }
+        });
+
+        // Close mobile menu when clicking a link
+        mobileNavLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenu.classList.remove('active');
+                mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>';
+            });
         });
 
         // Wizard Step Interaction
         const wizardSteps = document.querySelectorAll('.wizard-step');
         const wizardPreviews = document.querySelectorAll('.wizard-preview-content');
         let autoAdvanceInterval;
+        let currentStep = 1;
 
         function setActiveStep(stepNum) {
+            currentStep = parseInt(stepNum);
             wizardSteps.forEach(step => {
                 step.classList.toggle('active', step.dataset.step === String(stepNum));
             });
@@ -2248,7 +2844,6 @@
 
         // Auto-advance through steps
         function startAutoAdvance() {
-            let currentStep = 1;
             autoAdvanceInterval = setInterval(() => {
                 currentStep = currentStep >= 6 ? 1 : currentStep + 1;
                 setActiveStep(currentStep);
