@@ -196,6 +196,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
  * Get style configuration for caption style
  */
 function getStyleConfig(captionStyle, customStyle) {
+  // Map frontend style IDs to backend style IDs
+  // Frontend uses different IDs than backend for some styles
+  const styleAliases = {
+    beasty: 'bold',       // Frontend 'beasty' (MrBeast) -> backend 'bold'
+    deepdiver: 'minimal', // Frontend 'deepdiver' (Minimal) -> backend 'minimal'
+    podp: 'podcast'       // Frontend 'podp' (Podcast) -> backend 'podcast'
+  };
+
+  // Normalize the style ID using alias mapping
+  const normalizedStyle = styleAliases[captionStyle] || captionStyle;
+
   const styles = {
     // Karaoke style - word-by-word highlight
     karaoke: {
@@ -258,7 +269,8 @@ function getStyleConfig(captionStyle, customStyle) {
     }
   };
 
-  return styles[captionStyle] || styles.podcast;
+  // Use normalized style, default to karaoke if not found
+  return styles[normalizedStyle] || styles.karaoke;
 }
 
 /**

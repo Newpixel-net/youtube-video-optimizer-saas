@@ -490,6 +490,9 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
 
   // Generate captions if requested (from primary audio)
   let captionFile = null;
+  console.log(`[${jobId}] ========== CAPTION GENERATION (MULTI-SOURCE) ==========`);
+  console.log(`[${jobId}] captionStyle from settings: "${safeSettings.captionStyle}"`);
+
   if (safeSettings.captionStyle && safeSettings.captionStyle !== 'none') {
     console.log(`[${jobId}] Generating captions with style: ${safeSettings.captionStyle}`);
     try {
@@ -500,10 +503,19 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
         captionStyle: safeSettings.captionStyle,
         customStyle: safeSettings.customCaptionStyle
       });
+
+      if (captionFile) {
+        console.log(`[${jobId}] ✓ CAPTIONS GENERATED: ${captionFile}`);
+      } else {
+        console.log(`[${jobId}] ✗ CAPTION GENERATION RETURNED NULL`);
+      }
     } catch (captionError) {
-      console.error(`[${jobId}] Caption generation failed:`, captionError.message);
+      console.error(`[${jobId}] ✗ CAPTION GENERATION FAILED:`, captionError.message);
     }
+  } else {
+    console.log(`[${jobId}] ✗ CAPTIONS SKIPPED - captionStyle is "${safeSettings.captionStyle}"`);
   }
+  console.log(`[${jobId}] ========================================================`);
 
   // Build complex filter graph for two inputs
   // [0:v] = primary video, [1:v] = secondary video
@@ -794,6 +806,9 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
 
   // Generate captions if requested (from primary audio)
   let captionFile = null;
+  console.log(`[${jobId}] ========== CAPTION GENERATION (THREE-SOURCE) ==========`);
+  console.log(`[${jobId}] captionStyle from settings: "${safeSettings.captionStyle}"`);
+
   if (safeSettings.captionStyle && safeSettings.captionStyle !== 'none') {
     console.log(`[${jobId}] Generating captions with style: ${safeSettings.captionStyle}`);
     try {
@@ -804,10 +819,19 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
         captionStyle: safeSettings.captionStyle,
         customStyle: safeSettings.customCaptionStyle
       });
+
+      if (captionFile) {
+        console.log(`[${jobId}] ✓ CAPTIONS GENERATED: ${captionFile}`);
+      } else {
+        console.log(`[${jobId}] ✗ CAPTION GENERATION RETURNED NULL`);
+      }
     } catch (captionError) {
-      console.error(`[${jobId}] Caption generation failed:`, captionError.message);
+      console.error(`[${jobId}] ✗ CAPTION GENERATION FAILED:`, captionError.message);
     }
+  } else {
+    console.log(`[${jobId}] ✗ CAPTIONS SKIPPED - captionStyle is "${safeSettings.captionStyle}"`);
   }
+  console.log(`[${jobId}] =========================================================`);
 
   // Build complex filter graph for three inputs with position controls
   // [0:v] = primary video (main/top), [1:v] = secondary (bottom-left), [2:v] = tertiary (bottom-right)
@@ -980,6 +1004,9 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
 
   // Generate captions if requested (from primary audio)
   let captionFile = null;
+  console.log(`[${jobId}] ========== CAPTION GENERATION (GAMEPLAY) ==========`);
+  console.log(`[${jobId}] captionStyle from settings: "${safeSettings.captionStyle}"`);
+
   if (safeSettings.captionStyle && safeSettings.captionStyle !== 'none') {
     console.log(`[${jobId}] Generating captions with style: ${safeSettings.captionStyle}`);
     try {
@@ -990,10 +1017,19 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
         captionStyle: safeSettings.captionStyle,
         customStyle: safeSettings.customCaptionStyle
       });
+
+      if (captionFile) {
+        console.log(`[${jobId}] ✓ CAPTIONS GENERATED: ${captionFile}`);
+      } else {
+        console.log(`[${jobId}] ✗ CAPTION GENERATION RETURNED NULL`);
+      }
     } catch (captionError) {
-      console.error(`[${jobId}] Caption generation failed:`, captionError.message);
+      console.error(`[${jobId}] ✗ CAPTION GENERATION FAILED:`, captionError.message);
     }
+  } else {
+    console.log(`[${jobId}] ✗ CAPTIONS SKIPPED - captionStyle is "${safeSettings.captionStyle}"`);
   }
+  console.log(`[${jobId}] =====================================================`);
 
   // Build complex filter graph for gameplay with facecam overlay
   // [0:v] = primary (gameplay), [1:v] = secondary (facecam)
@@ -2499,6 +2535,9 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 
   // Generate captions if requested
   let captionFile = null;
+  console.log(`[${jobId}] ========== CAPTION GENERATION ==========`);
+  console.log(`[${jobId}] captionStyle from settings: "${safeSettings.captionStyle}" (type: ${typeof safeSettings.captionStyle})`);
+
   if (safeSettings.captionStyle && safeSettings.captionStyle !== 'none') {
     console.log(`[${jobId}] Generating captions with style: ${safeSettings.captionStyle}`);
     try {
@@ -2509,10 +2548,20 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         captionStyle: safeSettings.captionStyle,
         customStyle: safeSettings.customCaptionStyle
       });
+
+      if (captionFile) {
+        console.log(`[${jobId}] ✓ CAPTIONS GENERATED SUCCESSFULLY: ${captionFile}`);
+      } else {
+        console.log(`[${jobId}] ✗ CAPTION GENERATION RETURNED NULL - no captions will be added`);
+      }
     } catch (captionError) {
-      console.error(`[${jobId}] Caption generation failed (continuing without captions):`, captionError.message);
+      console.error(`[${jobId}] ✗ CAPTION GENERATION FAILED (continuing without captions):`, captionError.message);
+      console.error(`[${jobId}] Caption error stack:`, captionError.stack);
     }
+  } else {
+    console.log(`[${jobId}] ✗ CAPTIONS SKIPPED - captionStyle is "${safeSettings.captionStyle}" (falsy or 'none')`);
   }
+  console.log(`[${jobId}] ==========================================`);
 
   // Determine if this is a complex filter mode (uses labeled streams)
   const reframeMode = safeSettings.reframeMode || 'auto_center';
