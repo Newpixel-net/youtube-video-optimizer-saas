@@ -1767,7 +1767,17 @@
     <!-- ============================================
          SECTION 3: HTML CONTAINER
          ============================================ -->
-    <div id="app-root"></div>
+    <div id="app-root">
+        <!-- Static loading screen - shown immediately while Firebase loads -->
+        <div class="min-h-screen flex items-center justify-center" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);">
+            <div class="text-center">
+                <div style="font-size:4.5rem;margin-bottom:1.5rem;">🤖</div>
+                <div style="width:40px;height:40px;border:3px solid rgba(139,92,246,0.3);border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem;"></div>
+                <p style="color:rgba(255,255,255,0.8);font-size:1.125rem;">Loading AI Tools...</p>
+            </div>
+        </div>
+        <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+    </div>
 
     <!-- ============================================
          SECTION 4: SCRIPTS
@@ -1780,28 +1790,39 @@
            4.1 FIREBASE CONFIGURATION
            ========================================== */
 
-        // Robust Firebase check - waits for window.onload if needed
-        function initializeApp() {
-            if (typeof firebase === 'undefined') {
-                document.getElementById('app-root').innerHTML =
-                    '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;">' +
-                    '<div style="background:rgba(30,41,59,0.95);border-radius:1rem;padding:3rem;text-align:center;max-width:400px;border:1px solid rgba(255,255,255,0.1);">' +
-                    '<h2 style="color:#ef4444;font-size:1.5rem;font-weight:bold;margin-bottom:1rem;">Connection Error</h2>' +
-                    '<p style="color:#9ca3af;margin-bottom:1.5rem;">Failed to load required resources. This may be due to a slow connection or ad blocker.</p>' +
-                    '<button onclick="location.reload()" style="padding:0.75rem 2rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:0.5rem;cursor:pointer;font-weight:600;font-size:1rem;">Try Again</button></div></div>';
+        // Graceful Firebase loading with retry mechanism
+        var firebaseRetryCount = 0;
+        var maxFirebaseRetries = 15;
+
+        function showConnectionError() {
+            document.getElementById('app-root').innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);">' +
+                '<div style="background:rgba(30,41,59,0.95);border-radius:1rem;padding:3rem;text-align:center;max-width:400px;border:1px solid rgba(255,255,255,0.1);">' +
+                '<h2 style="color:#ef4444;font-size:1.5rem;font-weight:bold;margin-bottom:1rem;">Connection Error</h2>' +
+                '<p style="color:#9ca3af;margin-bottom:1.5rem;">Failed to load required resources. This may be due to a slow connection or ad blocker.</p>' +
+                '<button onclick="location.reload()" style="padding:0.75rem 2rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:0.5rem;cursor:pointer;font-weight:600;font-size:1rem;">Try Again</button></div></div>';
+        }
+
+        function waitForFirebase() {
+            if (typeof firebase !== 'undefined') {
+                runApp();
                 return;
             }
-            runApp();
+            firebaseRetryCount++;
+            if (firebaseRetryCount > maxFirebaseRetries) {
+                showConnectionError();
+                return;
+            }
+            var delay = Math.min(50 + (firebaseRetryCount * 50), 300);
+            setTimeout(waitForFirebase, delay);
         }
 
         if (typeof firebase !== 'undefined') {
-            initializeApp();
+            runApp();
+        } else if (document.readyState === 'complete') {
+            waitForFirebase();
         } else {
-            if (document.readyState === 'complete') {
-                setTimeout(initializeApp, 200);
-            } else {
-                window.addEventListener('load', initializeApp);
-            }
+            window.addEventListener('load', waitForFirebase);
         }
 
         function runApp() {
