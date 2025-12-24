@@ -1802,10 +1802,13 @@
         /* Crop positions using CSS variable for percentage-based positioning */
         .phone-video-area {
             --crop-position: 50%; /* Default to center */
+            --video-zoom: 1; /* Zoom level for single video mode */
         }
 
         .phone-video-area .preview-media {
             object-position: var(--crop-position) center;
+            transform: scale(var(--video-zoom, 1));
+            transform-origin: var(--crop-position) center;
         }
 
         /* YouTube iframe cropping - make it fill and overflow */
@@ -1814,6 +1817,8 @@
             inset: 0;
             overflow: hidden;
             z-index: 1;
+            transform: scale(var(--video-zoom, 1));
+            transform-origin: var(--crop-position) center;
         }
 
         .phone-video-area .preview-iframe-wrapper iframe {
@@ -9258,6 +9263,10 @@
             // Calculate object-position for percentage-based cropping
             var objectPosX = cropPosPercent + '%';
 
+            // Calculate zoom for single video mode
+            var videoZoom = (settings.zoom || 100) / 100;
+            var videoZoomVar = ' --video-zoom: ' + videoZoom + ';';
+
             // Calculate CSS variables for split screen speaker positions
             var splitCssVars = '';
             if (reframeMode === 'split_screen') {
@@ -9385,7 +9394,7 @@
                 threeCssVars += ' --three-bottom-ratio: ' + bottomRatioFr + ';';
             }
 
-            html += '<div class="' + videoAreaClasses + '" data-crop-percent="' + cropPosPercent + '" style="--crop-position: ' + objectPosX + ';' + splitCssVars + threeCssVars + '">';
+            html += '<div class="' + videoAreaClasses + '" data-crop-percent="' + cropPosPercent + '" style="--crop-position: ' + objectPosX + ';' + videoZoomVar + splitCssVars + threeCssVars + '">';
 
             // Generate reframe-specific content
             // Determine which media goes where based on secondary position
@@ -10531,6 +10540,25 @@
                 });
                 html += '</div>';
                 html += '<p class="advanced-option-hint">Or use the slider in Source Preview for fine control</p>';
+                html += '</div>';
+
+                // Zoom level for single video
+                html += '<div class="advanced-option-group">';
+                html += '<div class="advanced-option-row">';
+                html += '<span class="advanced-option-label">Zoom Level</span>';
+                html += '</div>';
+                var videoZoom = settings.zoom || 100;
+                html += '<div class="zoom-controls-grid">';
+                html += '<div class="zoom-control-row">';
+                html += '<span class="zoom-clip-label">🔍 Zoom</span>';
+                html += '<div class="zoom-slider-wrap">';
+                html += '<input type="range" class="zoom-slider" id="single-video-zoom" min="100" max="200" value="' + videoZoom + '" ';
+                html += 'oninput="app.onVideoZoomChange(this.value)" onchange="app.setVideoZoom(this.value)">';
+                html += '<span class="zoom-value" id="single-zoom-value">' + videoZoom + '%</span>';
+                html += '</div>';
+                html += '<button class="zoom-reset-btn" onclick="app.setVideoZoom(100)" title="Reset to 100%">↺</button>';
+                html += '</div>';
+                html += '</div>';
                 html += '</div>';
 
                 // Output quality
@@ -12848,6 +12876,56 @@
                 var phoneVideoArea = document.querySelector('.phone-video-area');
                 if (phoneVideoArea) {
                     phoneVideoArea.style.setProperty('--speaker' + speaker + '-zoom', (zoomNum / 100));
+                }
+            },
+
+            // ===== SINGLE VIDEO ZOOM HANDLERS =====
+
+            setVideoZoom: function(zoom) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+
+                var zoomNum = parseInt(zoom, 10);
+                if (isNaN(zoomNum)) zoomNum = 100;
+                zoomNum = Math.max(100, Math.min(200, zoomNum));
+
+                state.clipSettings[activeClip.id].zoom = zoomNum;
+                render();
+            },
+
+            onVideoZoomChange: function(zoom) {
+                var zoomNum = parseInt(zoom, 10);
+                if (isNaN(zoomNum)) zoomNum = 100;
+                zoomNum = Math.max(100, Math.min(200, zoomNum));
+
+                // Save to state immediately during dragging
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+
+                if (activeClip) {
+                    if (!state.clipSettings[activeClip.id]) {
+                        state.clipSettings[activeClip.id] = getDefaultSettings();
+                    }
+                    state.clipSettings[activeClip.id].zoom = zoomNum;
+                }
+
+                // Update zoom value display
+                var zoomValue = document.getElementById('single-zoom-value');
+                if (zoomValue) {
+                    zoomValue.textContent = zoomNum + '%';
+                }
+
+                // Update preview in real-time
+                var phoneVideoArea = document.querySelector('.phone-video-area');
+                if (phoneVideoArea) {
+                    phoneVideoArea.style.setProperty('--video-zoom', (zoomNum / 100));
                 }
             },
 
