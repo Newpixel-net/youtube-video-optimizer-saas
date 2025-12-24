@@ -15,7 +15,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>YouTubeHub - AI-Powered Video Optimization Platform</title>
     <meta name="description" content="Optimize your YouTube videos with AI-powered tools. Generate titles, descriptions, thumbnails, and boost your channel growth.">
 
@@ -45,8 +45,15 @@
             padding: 0;
         }
 
+        /* CRITICAL: Fix for iframe/website builder embedding */
         html {
             scroll-behavior: smooth;
+            /* Force consistent base font-size even in iframes */
+            font-size: 16px !important;
+            /* Prevent iOS Safari from auto-adjusting text sizes */
+            -webkit-text-size-adjust: 100%;
+            -moz-text-size-adjust: 100%;
+            text-size-adjust: 100%;
         }
 
         body {
@@ -54,7 +61,20 @@
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
             overflow-x: hidden;
+            /* Ensure body takes full width in iframe */
+            min-width: 100%;
+            /* Prevent text inflation on mobile */
+            text-rendering: optimizeLegibility;
+        }
+
+        /* Force minimum font sizes for readability in any context */
+        @media screen {
+            body {
+                font-size: max(16px, 1rem);
+                line-height: 1.5;
+            }
         }
 
         /* ==========================================
@@ -1361,33 +1381,36 @@
             }
 
             .hero-title {
-                font-size: 2.5rem;
+                /* Using px with !important to override any iframe/builder styles */
+                font-size: 40px !important;
                 font-weight: 800;
                 line-height: 1.1;
-                margin-bottom: 1.5rem;
+                margin-bottom: 24px;
                 letter-spacing: -0.03em;
             }
 
             .hero-subtitle {
-                font-size: 1.125rem;
+                /* 18px equivalent, forced with !important */
+                font-size: 18px !important;
                 line-height: 1.65;
                 color: rgba(255, 255, 255, 0.85);
-                margin-bottom: 2.5rem;
+                margin-bottom: 40px;
                 max-width: 100%;
             }
 
             .hero-cta-group {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 1rem;
-                margin-bottom: 3rem;
+                gap: 16px;
+                margin-bottom: 48px;
             }
 
             .btn-hero-primary {
                 width: 100%;
                 height: 56px;
-                padding: 0 2rem;
-                font-size: 1.1rem;
+                padding: 0 32px;
+                /* 18px forced */
+                font-size: 18px !important;
                 font-weight: 700;
                 border-radius: 14px;
                 justify-content: center;
@@ -1398,8 +1421,9 @@
             .btn-hero-secondary {
                 width: 100%;
                 height: 56px;
-                padding: 0 2rem;
-                font-size: 1.1rem;
+                padding: 0 32px;
+                /* 18px forced */
+                font-size: 18px !important;
                 font-weight: 600;
                 border-radius: 14px;
                 justify-content: center;
@@ -1489,13 +1513,15 @@
             }
 
             .stat-number {
-                font-size: 2rem;
+                /* 32px forced for visibility */
+                font-size: 32px !important;
                 font-weight: 800;
-                margin-bottom: 0.5rem;
+                margin-bottom: 8px;
             }
 
             .stat-label {
-                font-size: 0.9rem;
+                /* 14px minimum for readability */
+                font-size: 14px !important;
                 font-weight: 500;
                 color: rgba(255, 255, 255, 0.7);
             }
@@ -1517,15 +1543,17 @@
             }
 
             .section-title {
-                font-size: 2rem;
+                /* 32px forced */
+                font-size: 32px !important;
                 font-weight: 800;
                 line-height: 1.15;
-                margin-bottom: 1rem;
+                margin-bottom: 16px;
                 letter-spacing: -0.02em;
             }
 
             .section-subtitle {
-                font-size: 1.1rem;
+                /* 17px forced */
+                font-size: 17px !important;
                 line-height: 1.6;
                 color: rgba(255, 255, 255, 0.75);
             }
@@ -1561,17 +1589,19 @@
             }
 
             .feature-card-title {
-                font-size: 1.5rem;
+                /* 24px forced */
+                font-size: 24px !important;
                 font-weight: 700;
-                margin-bottom: 0.875rem;
+                margin-bottom: 14px;
                 letter-spacing: -0.01em;
             }
 
             .feature-card-description {
-                font-size: 1.05rem;
+                /* 17px forced */
+                font-size: 17px !important;
                 line-height: 1.65;
                 color: rgba(255, 255, 255, 0.75);
-                margin-bottom: 1.5rem;
+                margin-bottom: 24px;
             }
 
             .feature-card-features {
@@ -1580,14 +1610,16 @@
             }
 
             .feature-tag {
-                font-size: 0.875rem;
+                /* 14px forced */
+                font-size: 14px !important;
                 font-weight: 500;
-                padding: 0.5rem 1rem;
+                padding: 8px 16px;
                 border-radius: 100px;
             }
 
             .feature-card-link {
-                font-size: 1.05rem;
+                /* 17px forced */
+                font-size: 17px !important;
                 font-weight: 600;
             }
 
@@ -1602,18 +1634,20 @@
             }
 
             .wizard-content h2 {
-                font-size: 2rem;
+                /* 32px forced */
+                font-size: 32px !important;
                 font-weight: 800;
                 text-align: center;
-                margin-bottom: 1rem;
+                margin-bottom: 16px;
                 letter-spacing: -0.02em;
             }
 
             .wizard-content p {
-                font-size: 1.1rem;
+                /* 17px forced */
+                font-size: 17px !important;
                 text-align: center;
                 color: rgba(255, 255, 255, 0.75);
-                margin-bottom: 2rem;
+                margin-bottom: 32px;
                 line-height: 1.6;
             }
 
@@ -1636,13 +1670,15 @@
             }
 
             .wizard-step-title {
-                font-size: 1.1rem;
+                /* 17px forced */
+                font-size: 17px !important;
                 font-weight: 600;
-                margin-bottom: 0.25rem;
+                margin-bottom: 4px;
             }
 
             .wizard-step-desc {
-                font-size: 0.9rem;
+                /* 14px forced */
+                font-size: 14px !important;
                 color: rgba(255, 255, 255, 0.6);
             }
 
@@ -1688,13 +1724,15 @@
             }
 
             .tool-card-title {
-                font-size: 1rem;
+                /* 16px forced */
+                font-size: 16px !important;
                 font-weight: 600;
-                margin-bottom: 0.375rem;
+                margin-bottom: 6px;
             }
 
             .tool-card-desc {
-                font-size: 0.85rem;
+                /* 14px forced */
+                font-size: 14px !important;
                 line-height: 1.45;
                 color: rgba(255, 255, 255, 0.6);
             }
@@ -1729,53 +1767,59 @@
             }
 
             .testimonial-text {
-                font-size: 1.1rem;
+                /* 17px forced */
+                font-size: 17px !important;
                 font-weight: 400;
                 line-height: 1.7;
                 color: rgba(255, 255, 255, 0.9);
-                margin-bottom: 1.75rem;
+                margin-bottom: 28px;
             }
 
             .testimonial-author {
-                gap: 1rem;
+                gap: 16px;
             }
 
             .testimonial-avatar {
                 width: 52px;
                 height: 52px;
-                font-size: 1.15rem;
+                /* 18px forced */
+                font-size: 18px !important;
                 font-weight: 700;
             }
 
             .testimonial-info h4 {
-                font-size: 1.05rem;
+                /* 17px forced */
+                font-size: 17px !important;
                 font-weight: 600;
-                margin-bottom: 0.25rem;
+                margin-bottom: 4px;
             }
 
             .testimonial-info p {
-                font-size: 0.9rem;
+                /* 14px forced */
+                font-size: 14px !important;
                 color: rgba(255, 255, 255, 0.6);
             }
 
             /* ===== FINAL CTA MOBILE - PREMIUM ===== */
             .final-cta {
-                padding: 6rem 1.5rem;
+                padding: 96px 24px;
             }
 
             .final-cta h2 {
-                font-size: 2rem;
+                /* 32px forced */
+                font-size: 32px !important;
                 font-weight: 800;
                 line-height: 1.15;
-                margin-bottom: 1.25rem;
+                margin-bottom: 20px;
                 letter-spacing: -0.02em;
             }
 
             .final-cta p {
-                font-size: 1.1rem;
+                /* 17px forced */
+                font-size: 17px !important;
                 line-height: 1.6;
                 color: rgba(255, 255, 255, 0.75);
-                margin-bottom: 2.5rem;
+                margin-bottom: 40px;
             }
 
             .final-cta-buttons {
@@ -1825,25 +1869,28 @@
             }
 
             .footer-link {
-                font-size: 1rem;
+                /* 16px forced */
+                font-size: 16px !important;
                 font-weight: 500;
             }
 
             .footer-copyright {
-                font-size: 0.9rem;
+                /* 14px forced */
+                font-size: 14px !important;
                 color: rgba(255, 255, 255, 0.5);
             }
 
             /* ===== MOBILE MENU - PREMIUM ===== */
             .mobile-menu {
-                padding: 6rem 2rem 3rem;
-                gap: 0.5rem;
+                padding: 96px 32px 48px;
+                gap: 8px;
             }
 
             .mobile-menu a {
-                font-size: 1.75rem;
+                /* 28px forced */
+                font-size: 28px !important;
                 font-weight: 600;
-                padding: 1rem 1.5rem;
+                padding: 16px 24px;
                 border-radius: 12px;
                 transition: background 0.2s ease;
             }
@@ -1854,10 +1901,11 @@
             }
 
             .mobile-menu .btn-cta {
-                margin-top: 2rem;
+                margin-top: 32px;
                 height: 56px;
-                padding: 0 2.5rem;
-                font-size: 1.15rem;
+                padding: 0 40px;
+                /* 18px forced */
+                font-size: 18px !important;
                 font-weight: 700;
                 width: 100%;
                 max-width: 320px;
@@ -1871,11 +1919,11 @@
            ========================================== */
         @media (max-width: 480px) {
             .header {
-                padding: 0.875rem 1rem;
+                padding: 14px 16px;
             }
 
             .logo {
-                font-size: 1.35rem;
+                font-size: 21px !important;
             }
 
             .logo-icon {
@@ -1889,37 +1937,39 @@
             }
 
             .hero {
-                padding: 6.5rem 1.25rem 2.5rem;
+                padding: 104px 20px 40px;
             }
 
             .hero-title {
-                font-size: 2.125rem;
+                /* 34px for small phones */
+                font-size: 34px !important;
             }
 
             .hero-subtitle {
-                font-size: 1.05rem;
+                /* 17px maintained */
+                font-size: 17px !important;
             }
 
             .btn-hero-primary,
             .btn-hero-secondary {
                 height: 52px;
-                font-size: 1.05rem;
+                font-size: 17px !important;
             }
 
             .mockup-card {
-                padding: 0.875rem;
+                padding: 14px;
             }
 
             .mockup-metric {
-                font-size: 1.35rem;
+                font-size: 22px !important;
             }
 
             .stats-bar {
-                padding: 3.5rem 1.25rem;
+                padding: 56px 20px;
             }
 
             .stat-item {
-                padding: 1.25rem 0.875rem;
+                padding: 20px 14px;
             }
 
             .stat-icon {
@@ -1928,30 +1978,32 @@
             }
 
             .stat-number {
-                font-size: 1.75rem;
+                /* 28px for small phones */
+                font-size: 28px !important;
             }
 
             .stat-label {
-                font-size: 0.8rem;
+                font-size: 13px !important;
             }
 
             .features,
             .wizard-section,
             .tools-section,
             .testimonials-section {
-                padding: 4rem 1.25rem;
+                padding: 64px 20px;
             }
 
             .section-title {
-                font-size: 1.75rem;
+                /* 28px for small phones */
+                font-size: 28px !important;
             }
 
             .section-subtitle {
-                font-size: 1rem;
+                font-size: 16px !important;
             }
 
             .feature-card {
-                padding: 1.75rem;
+                padding: 28px;
             }
 
             .feature-card-icon {
@@ -1960,19 +2012,21 @@
             }
 
             .feature-card-title {
-                font-size: 1.35rem;
+                /* 22px for small phones */
+                font-size: 22px !important;
             }
 
             .feature-card-description {
-                font-size: 1rem;
+                font-size: 16px !important;
             }
 
             .wizard-content h2 {
-                font-size: 1.75rem;
+                /* 28px for small phones */
+                font-size: 28px !important;
             }
 
             .wizard-step {
-                padding: 1rem 1.25rem;
+                padding: 16px 20px;
             }
 
             .wizard-step-number {
@@ -1981,11 +2035,11 @@
             }
 
             .wizard-step-title {
-                font-size: 1rem;
+                font-size: 16px !important;
             }
 
             .tool-card {
-                padding: 1.25rem 0.875rem;
+                padding: 20px 14px;
             }
 
             .tool-card-icon {
@@ -1994,47 +2048,47 @@
             }
 
             .tool-card-title {
-                font-size: 0.9rem;
+                font-size: 15px !important;
             }
 
             .tool-card-desc {
-                font-size: 0.8rem;
+                font-size: 13px !important;
             }
 
             .testimonial-card {
-                padding: 1.75rem;
+                padding: 28px;
             }
 
             .testimonial-text {
-                font-size: 1.05rem;
+                font-size: 17px !important;
             }
 
             .final-cta {
-                padding: 5rem 1.25rem;
+                padding: 80px 20px;
             }
 
             .final-cta h2 {
-                font-size: 1.75rem;
+                font-size: 28px !important;
             }
 
             .final-cta p {
-                font-size: 1rem;
+                font-size: 16px !important;
             }
 
             .footer {
-                padding: 2.5rem 1.25rem;
+                padding: 40px 20px;
             }
 
             .footer-links {
-                gap: 1rem 1.5rem;
+                gap: 16px 24px;
             }
 
             .footer-link {
-                font-size: 0.9rem;
+                font-size: 15px !important;
             }
 
             .mobile-menu a {
-                font-size: 1.5rem;
+                font-size: 24px !important;
             }
         }
 
@@ -2043,31 +2097,32 @@
            ========================================== */
         @media (max-width: 360px) {
             .hero-title {
-                font-size: 1.875rem;
+                /* 30px minimum for very small phones */
+                font-size: 30px !important;
             }
 
             .hero-subtitle {
-                font-size: 1rem;
+                font-size: 16px !important;
             }
 
             .stat-number {
-                font-size: 1.5rem;
+                font-size: 24px !important;
             }
 
             .section-title {
-                font-size: 1.5rem;
+                font-size: 24px !important;
             }
 
             .feature-card-title {
-                font-size: 1.25rem;
+                font-size: 20px !important;
             }
 
             .tool-card-title {
-                font-size: 0.85rem;
+                font-size: 14px !important;
             }
 
             .tool-card-desc {
-                font-size: 0.75rem;
+                font-size: 12px !important;
             }
         }
 
