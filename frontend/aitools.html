@@ -1790,9 +1790,9 @@
            4.1 FIREBASE CONFIGURATION
            ========================================== */
 
-        // Graceful Firebase loading with retry mechanism
-        var firebaseRetryCount = 0;
-        var maxFirebaseRetries = 15;
+        // Ultra-patient Firebase loading for iframe/embed contexts
+        var firebaseCheckStart = Date.now();
+        var firebaseMaxWait = 15000; // 15 seconds
 
         function showConnectionError() {
             document.getElementById('app-root').innerHTML =
@@ -1808,21 +1808,17 @@
                 runApp();
                 return;
             }
-            firebaseRetryCount++;
-            if (firebaseRetryCount > maxFirebaseRetries) {
+            if (Date.now() - firebaseCheckStart > firebaseMaxWait) {
                 showConnectionError();
                 return;
             }
-            var delay = Math.min(50 + (firebaseRetryCount * 50), 300);
-            setTimeout(waitForFirebase, delay);
+            setTimeout(waitForFirebase, 100);
         }
 
         if (typeof firebase !== 'undefined') {
             runApp();
-        } else if (document.readyState === 'complete') {
-            waitForFirebase();
         } else {
-            window.addEventListener('load', waitForFirebase);
+            waitForFirebase();
         }
 
         function runApp() {
