@@ -3289,10 +3289,10 @@
            4.1 FIREBASE CONFIGURATION
            ========================================== */
 
-        // Graceful Firebase loading with retry mechanism
-        // Prevents "Connection Error" flash when navigating back from other pages
-        var firebaseRetryCount = 0;
-        var maxFirebaseRetries = 15; // ~3 seconds total with progressive delays
+        // Ultra-patient Firebase loading for iframe/embed contexts
+        // Shows loading screen for up to 15 seconds before showing error
+        var firebaseCheckStart = Date.now();
+        var firebaseMaxWait = 15000; // 15 seconds - very patient for iframe contexts
 
         function showConnectionError() {
             document.getElementById('app-root').innerHTML =
@@ -3304,38 +3304,31 @@
         }
 
         function waitForFirebase() {
-            // Firebase is ready - run the app
+            // Firebase is ready - run the app immediately
             if (typeof firebase !== 'undefined') {
                 runApp();
                 return;
             }
 
-            // Still waiting - increment retry count
-            firebaseRetryCount++;
-
-            // Give up after max retries (~3 seconds)
-            if (firebaseRetryCount > maxFirebaseRetries) {
+            // Check if we've waited too long (15 seconds)
+            var elapsed = Date.now() - firebaseCheckStart;
+            if (elapsed > firebaseMaxWait) {
                 showConnectionError();
                 return;
             }
 
-            // Progressive delay: starts at 50ms, increases with each retry
-            // 50, 100, 150, 200... gives Firebase plenty of time in slow conditions
-            var delay = Math.min(50 + (firebaseRetryCount * 50), 300);
-            setTimeout(waitForFirebase, delay);
+            // Keep checking every 100ms - very patient
+            setTimeout(waitForFirebase, 100);
         }
 
         // Start checking for Firebase
-        // If already loaded (normal case), runs immediately
-        // Otherwise, retries with progressive delays
         if (typeof firebase !== 'undefined') {
+            // Firebase already loaded (normal fast path)
             runApp();
-        } else if (document.readyState === 'complete') {
-            // Page loaded but Firebase not ready - start retry loop
-            waitForFirebase();
         } else {
-            // Wait for page load, then check Firebase
-            window.addEventListener('load', waitForFirebase);
+            // Firebase not ready - start patient polling
+            // Don't wait for load event - start checking immediately
+            waitForFirebase();
         }
 
         function runApp() {
