@@ -139,6 +139,15 @@ async function transcribeWithWhisper(jobId, audioFile) {
     });
 
     console.log(`[${jobId}] Transcription complete: ${response.words?.length || 0} words`);
+    console.log(`[${jobId}] Transcription text preview: "${(response.text || '').substring(0, 200)}..."`);
+
+    // Log first few words with timestamps for debugging
+    if (response.words && response.words.length > 0) {
+      console.log(`[${jobId}] First 5 words with timestamps:`);
+      response.words.slice(0, 5).forEach((w, i) => {
+        console.log(`[${jobId}]   ${i + 1}. "${w.word}" (${w.start?.toFixed(2)}s - ${w.end?.toFixed(2)}s)`);
+      });
+    }
 
     return {
       text: response.text,
@@ -190,12 +199,31 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
   fs.writeFileSync(outputFile, assContent);
   console.log(`[${jobId}] ASS file written: ${outputFile}`);
+
+  // Log a preview of the ASS content for debugging
+  const lines = assContent.split('\n');
+  console.log(`[${jobId}] ASS file preview (first 10 lines):`);
+  lines.slice(0, 10).forEach((line, i) => {
+    console.log(`[${jobId}]   ${i + 1}: ${line}`);
+  });
+  console.log(`[${jobId}] Total lines in ASS file: ${lines.length}`);
 }
 
 /**
  * Get style configuration for caption style
  */
 function getStyleConfig(captionStyle, customStyle) {
+  // Map frontend style IDs to backend style IDs
+  // Frontend uses different IDs than backend for some styles
+  const styleAliases = {
+    beasty: 'bold',       // Frontend 'beasty' (MrBeast) -> backend 'bold'
+    deepdiver: 'minimal', // Frontend 'deepdiver' (Minimal) -> backend 'minimal'
+    podp: 'podcast'       // Frontend 'podp' (Podcast) -> backend 'podcast'
+  };
+
+  // Normalize the style ID using alias mapping
+  const normalizedStyle = styleAliases[captionStyle] || captionStyle;
+
   const styles = {
     // Karaoke style - word-by-word highlight
     karaoke: {
@@ -258,7 +286,8 @@ function getStyleConfig(captionStyle, customStyle) {
     }
   };
 
-  return styles[captionStyle] || styles.podcast;
+  // Use normalized style, default to karaoke if not found
+  return styles[normalizedStyle] || styles.karaoke;
 }
 
 /**
