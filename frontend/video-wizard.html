@@ -10957,6 +10957,7 @@
                 // Reframe settings
                 reframeMode: 'auto_center',
                 cropPosition: 50, // 0-100 percentage (0=left, 50=center, 100=right)
+                zoom: 100, // Zoom level for single video mode: 100% = no zoom, 200% = 2x zoom
                 aiSmartCrop: false, // Whether AI detected the position
 
                 // Split screen specific settings (for split_screen mode)
@@ -14319,6 +14320,7 @@
                             autoZoom: sourceSettings.autoZoom,
                             vignette: sourceSettings.vignette,
                             colorGrade: sourceSettings.colorGrade,
+                            zoom: sourceSettings.zoom || 100, // Single video zoom level
 
                             // AI features (APPLIED)
                             selectedHook: sourceSettings.selectedHook,

@@ -20435,6 +20435,7 @@ exports.wizardProcessClip = functions
         customCaptionStyle: clipSettings.customCaptionStyle || null,
         reframeMode: clipSettings.reframeMode || 'auto_center',
         cropPosition: clipSettings.cropPosition !== undefined ? clipSettings.cropPosition : 50,
+        zoom: clipSettings.zoom || 100, // Single video zoom: 100 = no zoom, 200 = 2x zoom
         trimStart: clipSettings.trimStart || 0,
         trimEnd: clipSettings.trimEnd || clip.duration,
         introTransition: clipSettings.introTransition || 'none',
