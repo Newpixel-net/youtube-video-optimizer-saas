@@ -145,7 +145,12 @@
             height: 100%;
             z-index: -1;
             overflow: hidden;
-            background: #0a0a0f;
+            /* Fallback gradient if iframe fails */
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(139,92,246,0.3) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 30%, rgba(236,72,153,0.25) 0%, transparent 50%),
+                radial-gradient(ellipse at 40% 80%, rgba(59,130,246,0.2) 0%, transparent 50%),
+                #0a0a0f;
             pointer-events: none;
         }
 
@@ -155,6 +160,7 @@
             border: none;
             display: block;
             pointer-events: auto;
+            background: transparent;
         }
 
         /* ==========================================
@@ -2125,7 +2131,7 @@
 <body>
     <!-- Liquid Ether Background Effect - WebGL via iframe -->
     <div class="liquid-ether-bg">
-        <iframe src="/fluid-bg" allow="accelerometer; autoplay; encrypted-media; gyroscope" loading="eager" title="Fluid Background"></iframe>
+        <iframe src="fluid-bg" allow="accelerometer; autoplay; encrypted-media; gyroscope" loading="eager" title="Fluid Background"></iframe>
     </div>
 
     <!-- ==========================================
