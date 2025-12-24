@@ -56,8 +56,11 @@
             text-size-adjust: 100%;
         }
 
+        html, body {
+            background: #0a0a0f !important;
+        }
+
         body {
-            background: #0a0a0f;
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
             -webkit-font-smoothing: antialiased;
@@ -2129,9 +2132,10 @@
     </style>
 </head>
 <body>
-    <!-- Liquid Ether Background Effect -->
-    <!-- To add WebGL effect: replace this div's content with an iframe pointing to externally hosted fluid-bg.html -->
-    <div class="liquid-ether-bg" id="fluid-container"></div>
+    <!-- Liquid Ether Background Effect - Hosted on Netlify -->
+    <div class="liquid-ether-bg">
+        <iframe src="https://dulcet-marigold-06183e.netlify.app/" allow="accelerometer; autoplay" loading="eager"></iframe>
+    </div>
 
     <!-- ==========================================
          HEADER / NAVIGATION
