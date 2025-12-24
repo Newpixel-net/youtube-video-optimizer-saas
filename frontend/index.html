@@ -157,10 +157,20 @@
             display: block;
         }
 
-        /* Ensure all content appears above the background */
+        /* Content layering - allow mouse through to fluid effect */
         .header, main, section, footer, .hero, .mobile-menu {
             position: relative;
             z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Re-enable clicks on all interactive elements */
+        a, button, input, select, textarea,
+        .btn-cta, .btn-login, .btn-hero-primary, .btn-hero-secondary,
+        .nav-link, .mobile-nav-link, .mobile-menu-btn,
+        .wizard-step, .tool-card, .testimonial-card,
+        .logo, .footer-link, [onclick], [role="button"] {
+            pointer-events: auto;
         }
 
         /* ==========================================
