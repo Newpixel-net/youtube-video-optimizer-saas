@@ -2520,6 +2520,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     targetHeight,
     reframeMode: reframeMode,
     cropPosition: safeSettings.cropPosition !== undefined ? safeSettings.cropPosition : 50,
+    zoom: safeSettings.zoom || 100, // Single video zoom: 100 = no zoom, 200 = 2x zoom
     autoZoom: safeSettings.autoZoom,
     vignette: safeSettings.vignette,
     colorGrade: safeSettings.colorGrade
@@ -2926,7 +2927,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
 /**
  * Build FFmpeg video filter chain
  */
-function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, reframeMode, cropPosition, autoZoom, vignette, colorGrade }) {
+function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, reframeMode, cropPosition, zoom = 100, autoZoom, vignette, colorGrade }) {
   const filters = [];
 
   // Validate and fix input dimensions - CRITICAL for crop calculations
@@ -3120,12 +3121,16 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 
     case 'auto_center':
     default:
-      // Crop to 9:16 based on cropPosition
+      // Crop to 9:16 based on cropPosition and zoom
       // Supports both legacy strings ('left', 'center', 'right') and numeric percentage (0-100)
+      // Zoom: 100 = no zoom, 200 = 2x zoom (crop area is half)
+      const zoomFactor = Math.max(100, Math.min(200, zoom || 100)) / 100; // 1.0 to 2.0
+
       console.log(`[FFmpeg] ========== CROP CALCULATION DEBUG ==========`);
       console.log(`[FFmpeg] Input: ${validWidth}x${validHeight}, Aspect: ${inputAspect.toFixed(4)}`);
       console.log(`[FFmpeg] Target aspect: ${targetAspect.toFixed(4)} (9:16 = 0.5625)`);
       console.log(`[FFmpeg] cropPosition received: '${cropPosition}' (type: ${typeof cropPosition})`);
+      console.log(`[FFmpeg] zoom: ${zoom}% (factor: ${zoomFactor})`);
       console.log(`[FFmpeg] auto_center mode: inputAspect(${inputAspect.toFixed(4)}) > targetAspect(${targetAspect.toFixed(4)}) = ${inputAspect > targetAspect}`);
 
       // Check if input aspect ratio is close to 16:9 (standard video)
@@ -3138,11 +3143,21 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 
       if (inputAspect > targetAspect) {
         // Video is wider than target - crop sides based on position
-        // For 16:9 (1920x1080) -> 9:16: cropWidth = 1080 * 0.5625 = 607
-        const cropWidth = Math.floor(validHeight * targetAspect);
-        let cropX;
+        // For 16:9 (1920x1080) -> 9:16: baseCropWidth = 1080 * 0.5625 = 607
+        // Apply zoom: higher zoom = smaller crop area (zoom 2x = crop area / 2)
+        const baseCropWidth = Math.floor(validHeight * targetAspect);
+        const baseCropHeight = validHeight;
 
-        // Handle both legacy string values and new numeric percentage
+        // Apply zoom - reduce crop area by zoom factor
+        const cropWidth = Math.floor(baseCropWidth / zoomFactor);
+        const cropHeight = Math.floor(baseCropHeight / zoomFactor);
+
+        let cropX, cropY;
+
+        // Calculate vertical crop position (center when zoom is applied)
+        cropY = Math.floor((validHeight - cropHeight) / 2);
+
+        // Handle both legacy string values and new numeric percentage for horizontal position
         if (cropPosition === 'left') {
           cropX = 0; // Crop from left edge
           console.log(`[FFmpeg] Using 'left' position -> cropX = 0`);
@@ -3174,34 +3189,44 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
         }
 
         // Validate crop dimensions
-        if (cropWidth <= 0 || cropWidth > validWidth || cropX < 0 || cropX > validWidth - cropWidth) {
-          console.error(`[FFmpeg] INVALID CROP: crop=${cropWidth}:${validHeight}:${cropX}:0 for input ${validWidth}x${validHeight}`);
+        if (cropWidth <= 0 || cropWidth > validWidth || cropHeight <= 0 || cropHeight > validHeight || cropX < 0 || cropX > validWidth - cropWidth || cropY < 0) {
+          console.error(`[FFmpeg] INVALID CROP: crop=${cropWidth}:${cropHeight}:${cropX}:${cropY} for input ${validWidth}x${validHeight}`);
           // Fallback to center crop with corrected values
           const safeCropWidth = Math.min(cropWidth, validWidth);
+          const safeCropHeight = Math.min(cropHeight, validHeight);
           cropX = Math.floor((validWidth - safeCropWidth) / 2);
-          filters.push(`crop=${safeCropWidth}:${validHeight}:${cropX}:0`);
+          cropY = Math.floor((validHeight - safeCropHeight) / 2);
+          filters.push(`crop=${safeCropWidth}:${safeCropHeight}:${cropX}:${cropY}`);
         } else {
-          filters.push(`crop=${cropWidth}:${validHeight}:${cropX}:0`);
+          filters.push(`crop=${cropWidth}:${cropHeight}:${cropX}:${cropY}`);
         }
 
-        console.log(`[FFmpeg] FINAL CROP FILTER: crop=${cropWidth}:${validHeight}:${cropX}:0`);
+        console.log(`[FFmpeg] FINAL CROP FILTER: crop=${cropWidth}:${cropHeight}:${cropX}:${cropY} (zoom: ${zoomFactor}x)`);
         console.log(`[FFmpeg] ==============================================`);
 
       } else {
         // Video is taller than target - crop top/bottom (position doesn't apply here)
-        const cropHeight = Math.floor(validWidth / targetAspect);
+        const baseCropWidth = validWidth;
+        const baseCropHeight = Math.floor(validWidth / targetAspect);
+
+        // Apply zoom - reduce crop area by zoom factor
+        const cropWidth = Math.floor(baseCropWidth / zoomFactor);
+        const cropHeight = Math.floor(baseCropHeight / zoomFactor);
+
+        // Center the crop
+        const cropX = Math.floor((validWidth - cropWidth) / 2);
         const cropY = Math.floor((validHeight - cropHeight) / 2);
 
         // Validate crop dimensions
-        if (cropHeight <= 0 || cropHeight > validHeight || cropY < 0) {
-          console.error(`[FFmpeg] INVALID CROP: crop=${validWidth}:${cropHeight}:0:${cropY} for input ${validWidth}x${validHeight}`);
+        if (cropWidth <= 0 || cropWidth > validWidth || cropHeight <= 0 || cropHeight > validHeight || cropX < 0 || cropY < 0) {
+          console.error(`[FFmpeg] INVALID CROP: crop=${cropWidth}:${cropHeight}:${cropX}:${cropY} for input ${validWidth}x${validHeight}`);
           // Fallback to full frame
           filters.push(`crop=${validWidth}:${validHeight}:0:0`);
         } else {
-          filters.push(`crop=${validWidth}:${cropHeight}:0:${cropY}`);
+          filters.push(`crop=${cropWidth}:${cropHeight}:${cropX}:${cropY}`);
         }
 
-        console.log(`[FFmpeg] CROP FILTER (vertical): crop=${validWidth}:${cropHeight}:0:${cropY}`);
+        console.log(`[FFmpeg] CROP FILTER (vertical): crop=${cropWidth}:${cropHeight}:${cropX}:${cropY} (zoom: ${zoomFactor}x)`);
       }
       // Scale to target resolution
       filters.push(`scale=${targetWidth}:${targetHeight}`);
