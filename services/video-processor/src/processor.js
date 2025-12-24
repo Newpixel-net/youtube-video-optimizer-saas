@@ -2621,6 +2621,15 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   // For simple linear chains, use -vf
   const filterFlag = isComplexFilter ? '-filter_complex' : '-vf';
 
+  // Log the complete filter chain for debugging
+  console.log(`[${jobId}] ========== FINAL FILTER CHAIN ==========`);
+  console.log(`[${jobId}] Filter flag: ${filterFlag}`);
+  console.log(`[${jobId}] Captions included: ${escapedCaptionPath ? 'YES' : 'NO'}`);
+  console.log(`[${jobId}] Filter chain length: ${filters.length} chars`);
+  console.log(`[${jobId}] Complete filter chain:`);
+  console.log(`[${jobId}]   ${filters}`);
+  console.log(`[${jobId}] ==========================================`);
+
   // Calculate expected duration for validation using actual video info
   const expectedDuration = videoInfo.duration || 30;
 
