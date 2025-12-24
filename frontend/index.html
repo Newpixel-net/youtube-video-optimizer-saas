@@ -1,0 +1,2269 @@
+<!-- ================================================================
+     YOUTUBE VIDEO OPTIMIZER - LANDING PAGE
+     ================================================================
+
+     This is the public landing page for the platform.
+     Showcases features and drives user sign-ups.
+
+     Navigation Flow:
+     - Landing Page (this file) → Login/Register → Main Dashboard
+     - Back button on dashboards returns to Main Dashboard (not here)
+
+     Last Updated: December 2025
+     ================================================================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Optimizer - AI-Powered Video Optimization Platform</title>
+    <meta name="description" content="Optimize your YouTube videos with AI-powered tools. Generate titles, descriptions, thumbnails, and boost your channel growth.">
+
+    <!-- Theme & Favicon -->
+    <meta name="theme-color" content="#7c3aed">
+    <link rel="icon" type="image/png" href="https://ytseo.siteuo.com/icon-192.png">
+
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+
+    <style>
+        /* ==========================================
+           BASE STYLES
+           ========================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: #0a0a0f;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* ==========================================
+           ANIMATIONS
+           ========================================== */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(2deg); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% {
+                box-shadow: 0 0 20px rgba(139, 92, 246, 0.3), 0 0 40px rgba(139, 92, 246, 0.1);
+            }
+            50% {
+                box-shadow: 0 0 40px rgba(139, 92, 246, 0.5), 0 0 80px rgba(139, 92, 246, 0.2);
+            }
+        }
+
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes aurora {
+            0% { transform: rotate(0deg) scale(1); opacity: 0.3; }
+            50% { transform: rotate(180deg) scale(1.2); opacity: 0.5; }
+            100% { transform: rotate(360deg) scale(1); opacity: 0.3; }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .animate-fade-in-up {
+            animation: fadeInUp 0.8s ease-out forwards;
+            opacity: 0;
+        }
+
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        .delay-300 { animation-delay: 0.3s; }
+        .delay-400 { animation-delay: 0.4s; }
+        .delay-500 { animation-delay: 0.5s; }
+
+        /* ==========================================
+           BACKGROUND EFFECTS
+           ========================================== */
+        .aurora-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .aurora-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            animation: aurora 20s ease-in-out infinite;
+        }
+
+        .aurora-blob-1 {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%);
+            top: -200px;
+            left: -200px;
+        }
+
+        .aurora-blob-2 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(236, 72, 153, 0.3) 0%, transparent 70%);
+            top: 20%;
+            right: -150px;
+            animation-delay: -5s;
+        }
+
+        .aurora-blob-3 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%);
+            bottom: 10%;
+            left: 20%;
+            animation-delay: -10s;
+        }
+
+        /* ==========================================
+           HEADER STYLES
+           ========================================== */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 1rem 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .header.scrolled {
+            background: rgba(10, 10, 15, 0.9);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-decoration: none;
+            color: white;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: white;
+        }
+
+        .btn-login {
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            color: white;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-login:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-cta {
+            padding: 0.5rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(139, 92, 246, 0.4);
+        }
+
+        /* Mobile menu button */
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+        }
+
+        /* ==========================================
+           HERO SECTION
+           ========================================== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8rem 2rem 6rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            color: #a78bfa;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-badge-dot {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        .hero-title {
+            font-size: clamp(2.5rem, 8vw, 4.5rem);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .hero-title-gradient {
+            background: linear-gradient(135deg, #ffffff 0%, #a78bfa 50%, #ec4899 100%);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 5s ease infinite;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.1rem, 2.5vw, 1.35rem);
+            color: rgba(255, 255, 255, 0.7);
+            max-width: 700px;
+            margin: 0 auto 2.5rem;
+            line-height: 1.6;
+        }
+
+        .hero-cta-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+        }
+
+        .btn-hero-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            animation: pulse-glow 3s ease-in-out infinite;
+        }
+
+        .btn-hero-primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 20px 60px rgba(139, 92, 246, 0.5);
+        }
+
+        .btn-hero-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+        }
+
+        .btn-hero-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        /* Hero Mockup/Visual */
+        .hero-visual {
+            position: relative;
+            max-width: 1000px;
+            margin: 0 auto;
+            perspective: 1000px;
+        }
+
+        .hero-mockup {
+            background: linear-gradient(135deg, rgba(30, 30, 45, 0.9) 0%, rgba(20, 20, 35, 0.9) 100%);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5), 0 0 60px rgba(139, 92, 246, 0.2);
+            transform: rotateX(5deg);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .mockup-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mockup-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .mockup-dot.red { background: #ff5f57; }
+        .mockup-dot.yellow { background: #febc2e; }
+        .mockup-dot.green { background: #28c840; }
+
+        .mockup-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .mockup-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .mockup-card-title {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .mockup-metric {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .mockup-metric.green { color: #22c55e; }
+        .mockup-metric.purple { color: #a78bfa; }
+        .mockup-metric.pink { color: #f472b6; }
+        .mockup-metric.blue { color: #60a5fa; }
+
+        .mockup-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin-top: 0.75rem;
+            overflow: hidden;
+        }
+
+        .mockup-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #8b5cf6, #ec4899);
+        }
+
+        /* Floating elements around hero */
+        .floating-element {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            animation: float 8s ease-in-out infinite;
+            display: none; /* Hidden on mobile */
+        }
+
+        .floating-1 {
+            top: 20%;
+            left: -5%;
+            animation-delay: -2s;
+        }
+
+        .floating-2 {
+            top: 40%;
+            right: -5%;
+            animation-delay: -4s;
+        }
+
+        .floating-3 {
+            bottom: 20%;
+            left: -3%;
+            animation-delay: -6s;
+        }
+
+        /* ==========================================
+           STATS BAR SECTION
+           ========================================== */
+        .stats-bar {
+            position: relative;
+            z-index: 1;
+            padding: 4rem 2rem;
+            background: linear-gradient(180deg, rgba(10, 10, 15, 0) 0%, rgba(20, 20, 30, 0.5) 50%, rgba(10, 10, 15, 0) 100%);
+        }
+
+        .stats-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: 800;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 1rem;
+            background: rgba(139, 92, 246, 0.15);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #a78bfa;
+        }
+
+        /* ==========================================
+           FEATURE CARDS SECTION
+           ========================================== */
+        .features {
+            position: relative;
+            z-index: 1;
+            padding: 6rem 2rem;
+        }
+
+        .section-header {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto 4rem;
+        }
+
+        .section-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            color: #a78bfa;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .section-title {
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 800;
+            margin-bottom: 1rem;
+            color: white;
+            letter-spacing: -0.02em;
+        }
+
+        .section-subtitle {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.6;
+        }
+
+        .features-grid {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, rgba(30, 30, 45, 0.6) 0%, rgba(20, 20, 35, 0.6) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 2.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            transform-style: preserve-3d;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px) rotateX(5deg);
+            border-color: rgba(139, 92, 246, 0.4);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3), 0 0 40px rgba(139, 92, 246, 0.15);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-card-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-card-icon.purple {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        }
+
+        .feature-card-icon.pink {
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+        }
+
+        .feature-card-icon.blue {
+            background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+        }
+
+        .feature-card-icon.green {
+            background: linear-gradient(135deg, #22c55e 0%, #4ade80 100%);
+        }
+
+        .feature-card-icon svg {
+            width: 32px;
+            height: 32px;
+            color: white;
+        }
+
+        .feature-card-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.75rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-card-description {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-card-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-tag {
+            padding: 0.375rem 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .feature-card-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #a78bfa;
+            text-decoration: none;
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card-link:hover {
+            color: #c4b5fd;
+            gap: 0.75rem;
+        }
+
+        .feature-card-link svg {
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover .feature-card-link svg {
+            transform: translateX(4px);
+        }
+
+        /* Glow effect on corners */
+        .feature-card-glow {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+
+        .feature-card-glow.top-right {
+            top: -100px;
+            right: -100px;
+        }
+
+        .feature-card:hover .feature-card-glow {
+            opacity: 0.3;
+        }
+
+        .feature-card-glow.purple { background: #8b5cf6; }
+        .feature-card-glow.pink { background: #ec4899; }
+        .feature-card-glow.blue { background: #3b82f6; }
+        .feature-card-glow.green { background: #22c55e; }
+
+        /* ==========================================
+           VIDEO WIZARD DEEP DIVE SECTION
+           ========================================== */
+        .wizard-section {
+            position: relative;
+            z-index: 1;
+            padding: 6rem 2rem;
+            background: linear-gradient(180deg, rgba(20, 20, 30, 0.3) 0%, rgba(10, 10, 15, 0) 100%);
+        }
+
+        .wizard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .wizard-content h2 {
+            font-size: clamp(2rem, 4vw, 2.75rem);
+            font-weight: 800;
+            color: white;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .wizard-content p {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+
+        .wizard-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .wizard-step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .wizard-step:hover, .wizard-step.active {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .wizard-step.active {
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+        }
+
+        .wizard-step-number {
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.5);
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .wizard-step.active .wizard-step-number {
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            color: white;
+        }
+
+        .wizard-step-text {
+            flex: 1;
+        }
+
+        .wizard-step-title {
+            font-weight: 600;
+            color: white;
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .wizard-step-desc {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .wizard-step-icon {
+            color: rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .wizard-step.active .wizard-step-icon {
+            color: #a78bfa;
+        }
+
+        /* Wizard Visual Preview */
+        .wizard-visual {
+            position: relative;
+            background: linear-gradient(135deg, rgba(30, 30, 45, 0.8) 0%, rgba(20, 20, 35, 0.8) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 2rem;
+            min-height: 400px;
+            overflow: hidden;
+        }
+
+        .wizard-visual-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .wizard-visual-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .wizard-preview-content {
+            display: none;
+            animation: fadeInUp 0.4s ease;
+        }
+
+        .wizard-preview-content.active {
+            display: block;
+        }
+
+        .preview-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+
+        .preview-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .preview-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .preview-shimmer {
+            height: 12px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+
+        .preview-shimmer:last-child {
+            width: 60%;
+            margin-bottom: 0;
+        }
+
+        .preview-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .preview-tag {
+            padding: 0.375rem 0.75rem;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 50px;
+            font-size: 0.8rem;
+            color: #a78bfa;
+        }
+
+        /* ==========================================
+           ALL TOOLS GRID SECTION
+           ========================================== */
+        .tools-section {
+            position: relative;
+            z-index: 1;
+            padding: 6rem 2rem;
+        }
+
+        .tools-grid {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .tool-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .tool-card:hover {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-5px);
+        }
+
+        .tool-card-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 1rem;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tool-card-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .tool-card-icon.purple { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
+        .tool-card-icon.pink { background: rgba(236, 72, 153, 0.2); color: #f472b6; }
+        .tool-card-icon.blue { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .tool-card-icon.green { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .tool-card-icon.orange { background: rgba(249, 115, 22, 0.2); color: #fb923c; }
+        .tool-card-icon.cyan { background: rgba(6, 182, 212, 0.2); color: #22d3ee; }
+
+        .tool-card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.375rem;
+        }
+
+        .tool-card-desc {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.4;
+        }
+
+        /* ==========================================
+           TESTIMONIALS SECTION
+           ========================================== */
+        .testimonials-section {
+            position: relative;
+            z-index: 1;
+            padding: 6rem 2rem;
+            background: linear-gradient(180deg, rgba(10, 10, 15, 0) 0%, rgba(20, 20, 30, 0.5) 50%, rgba(10, 10, 15, 0) 100%);
+        }
+
+        .testimonials-grid {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+        }
+
+        .testimonial-card {
+            background: linear-gradient(135deg, rgba(30, 30, 45, 0.6) 0%, rgba(20, 20, 35, 0.6) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .testimonial-card:hover {
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-5px);
+        }
+
+        .testimonial-stars {
+            display: flex;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .testimonial-stars svg {
+            width: 18px;
+            height: 18px;
+            fill: #fbbf24;
+            stroke: none;
+        }
+
+        .testimonial-text {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .testimonial-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: white;
+        }
+
+        .testimonial-info h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 0.125rem;
+        }
+
+        .testimonial-info p {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* ==========================================
+           FINAL CTA SECTION
+           ========================================== */
+        .final-cta {
+            position: relative;
+            z-index: 1;
+            padding: 8rem 2rem;
+            text-align: center;
+        }
+
+        .final-cta-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .final-cta h2 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            color: white;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .final-cta p {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 2.5rem;
+        }
+
+        .final-cta-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        /* ==========================================
+           FOOTER
+           ========================================== */
+        .footer {
+            position: relative;
+            z-index: 1;
+            padding: 3rem 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: white;
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+
+        .footer-logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .footer-link {
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s ease;
+        }
+
+        .footer-link:hover {
+            color: white;
+        }
+
+        .footer-copyright {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.85rem;
+        }
+
+        /* ==========================================
+           RESPONSIVE STYLES
+           ========================================== */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .hero {
+                padding: 7rem 1.5rem 4rem;
+            }
+
+            .hero-cta-group {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn-hero-primary,
+            .btn-hero-secondary {
+                width: 100%;
+                max-width: 300px;
+                justify-content: center;
+            }
+
+            .mockup-content {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-mockup {
+                transform: none;
+            }
+
+            .stats-container {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+
+            .stat-item {
+                padding: 1rem;
+            }
+
+            .stat-icon {
+                width: 40px;
+                height: 40px;
+            }
+
+            .features {
+                padding: 4rem 1.5rem;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .feature-card {
+                padding: 1.75rem;
+            }
+
+            .feature-card:hover {
+                transform: translateY(-5px);
+            }
+
+            .wizard-section {
+                padding: 4rem 1.5rem;
+            }
+
+            .wizard-container {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .wizard-visual {
+                min-height: 300px;
+            }
+
+            .tools-section {
+                padding: 4rem 1.5rem;
+            }
+
+            .tools-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .testimonials-section {
+                padding: 4rem 1.5rem;
+            }
+
+            .testimonials-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .final-cta {
+                padding: 5rem 1.5rem;
+            }
+
+            .final-cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .footer-container {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .footer-links {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 1rem;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .floating-element {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+        }
+
+        /* ==========================================
+           UTILITY CLASSES
+           ========================================== */
+        .text-gradient {
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+<body>
+    <!-- Aurora Background Effect -->
+    <div class="aurora-bg">
+        <div class="aurora-blob aurora-blob-1"></div>
+        <div class="aurora-blob aurora-blob-2"></div>
+        <div class="aurora-blob aurora-blob-3"></div>
+    </div>
+
+    <!-- ==========================================
+         HEADER / NAVIGATION
+         ========================================== -->
+    <header class="header" id="header">
+        <nav class="nav-container">
+            <a href="#" class="logo">
+                <div class="logo-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                </div>
+                <span>YT Optimizer</span>
+            </a>
+
+            <div class="nav-links">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#tools" class="nav-link">Tools</a>
+                <a href="#testimonials" class="nav-link">Testimonials</a>
+                <a href="main-dashboard.html" class="btn-login" id="nav-login-btn">Log In</a>
+                <a href="main-dashboard.html#register" class="btn-cta" id="nav-cta-btn">Get Started Free</a>
+            </div>
+
+            <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+        </nav>
+    </header>
+
+    <!-- ==========================================
+         HERO SECTION
+         ========================================== -->
+    <section class="hero" id="hero">
+        <div class="hero-content">
+            <!-- Badge -->
+            <div class="hero-badge animate-fade-in-up">
+                <span class="hero-badge-dot"></span>
+                <span>AI-Powered Video Optimization</span>
+            </div>
+
+            <!-- Title -->
+            <h1 class="hero-title animate-fade-in-up delay-100">
+                <span class="hero-title-gradient">Optimize Your YouTube</span><br>
+                <span>Videos with AI</span>
+            </h1>
+
+            <!-- Subtitle -->
+            <p class="hero-subtitle animate-fade-in-up delay-200">
+                Generate click-worthy titles, descriptions, and thumbnails in seconds.
+                Boost your video's discoverability and grow your channel faster than ever.
+            </p>
+
+            <!-- CTA Buttons -->
+            <div class="hero-cta-group animate-fade-in-up delay-300">
+                <a href="main-dashboard.html#register" class="btn-hero-primary" id="hero-cta-btn">
+                    <span>Start Optimizing Free</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                <a href="#features" class="btn-hero-secondary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polygon points="10 8 16 12 10 16 10 8"/>
+                    </svg>
+                    <span>See How It Works</span>
+                </a>
+            </div>
+
+            <!-- Hero Visual / Mockup -->
+            <div class="hero-visual animate-fade-in-up delay-400">
+                <!-- Floating Elements -->
+                <div class="floating-element floating-1">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <span>+127% Views</span>
+                </div>
+                <div class="floating-element floating-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span>AI Analysis</span>
+                </div>
+                <div class="floating-element floating-3">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="2">
+                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                    </svg>
+                    <span>92% CTR Boost</span>
+                </div>
+
+                <!-- Main Mockup -->
+                <div class="hero-mockup">
+                    <div class="mockup-header">
+                        <span class="mockup-dot red"></span>
+                        <span class="mockup-dot yellow"></span>
+                        <span class="mockup-dot green"></span>
+                    </div>
+                    <div class="mockup-content">
+                        <div class="mockup-card">
+                            <div class="mockup-card-title">Videos Optimized</div>
+                            <div class="mockup-metric purple">2,847</div>
+                            <div class="mockup-bar">
+                                <div class="mockup-bar-fill" style="width: 78%;"></div>
+                            </div>
+                        </div>
+                        <div class="mockup-card">
+                            <div class="mockup-card-title">Views Generated</div>
+                            <div class="mockup-metric green">1.2M+</div>
+                            <div class="mockup-bar">
+                                <div class="mockup-bar-fill" style="width: 92%;"></div>
+                            </div>
+                        </div>
+                        <div class="mockup-card">
+                            <div class="mockup-card-title">CTR Improvement</div>
+                            <div class="mockup-metric pink">+156%</div>
+                            <div class="mockup-bar">
+                                <div class="mockup-bar-fill" style="width: 85%;"></div>
+                            </div>
+                        </div>
+                        <div class="mockup-card">
+                            <div class="mockup-card-title">Thumbnails Created</div>
+                            <div class="mockup-metric blue">12,459</div>
+                            <div class="mockup-bar">
+                                <div class="mockup-bar-fill" style="width: 67%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         STATS BAR SECTION
+         ========================================== -->
+    <section class="stats-bar" id="stats">
+        <div class="stats-container">
+            <div class="stat-item">
+                <div class="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                </div>
+                <div class="stat-number" data-target="50000">50,000+</div>
+                <div class="stat-label">Videos Optimized</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/>
+                        <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                </div>
+                <div class="stat-number" data-target="25000">25,000+</div>
+                <div class="stat-label">Shorts Created</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </div>
+                <div class="stat-number" data-target="100">100M+</div>
+                <div class="stat-label">Views Generated</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                    </svg>
+                </div>
+                <div class="stat-number" data-target="4.9">4.9/5</div>
+                <div class="stat-label">User Rating</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         FEATURES SECTION
+         ========================================== -->
+    <section class="features" id="features">
+        <div class="section-header">
+            <span class="section-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                Powerful Features
+            </span>
+            <h2 class="section-title">Everything You Need to Grow</h2>
+            <p class="section-subtitle">
+                Our suite of AI-powered tools helps you create, optimize, and scale your YouTube content
+                for maximum engagement and growth.
+            </p>
+        </div>
+
+        <div class="features-grid">
+            <!-- Video Wizard Card -->
+            <div class="feature-card" onclick="window.location.href='video-wizard.html'">
+                <div class="feature-card-glow purple top-right"></div>
+                <div class="feature-card-icon purple">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                </div>
+                <h3 class="feature-card-title">Video Wizard</h3>
+                <p class="feature-card-description">
+                    End-to-end video campaign creation. From script to Shorts, create everything in one streamlined workflow.
+                </p>
+                <div class="feature-card-features">
+                    <span class="feature-tag">Script Writing</span>
+                    <span class="feature-tag">Shorts Generation</span>
+                    <span class="feature-tag">Thumbnails</span>
+                    <span class="feature-tag">SEO Optimization</span>
+                </div>
+                <a href="video-wizard.html" class="feature-card-link">
+                    <span>Launch Wizard</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Video Optimizer Card -->
+            <div class="feature-card" onclick="window.location.href='main-dashboard.html#optimizer'">
+                <div class="feature-card-glow pink top-right"></div>
+                <div class="feature-card-icon pink">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                        <path d="M11 8v6M8 11h6"/>
+                    </svg>
+                </div>
+                <h3 class="feature-card-title">Video Optimizer</h3>
+                <p class="feature-card-description">
+                    AI-powered SEO analysis and optimization. Get titles, descriptions, and tags that boost your discoverability.
+                </p>
+                <div class="feature-card-features">
+                    <span class="feature-tag">Title Generation</span>
+                    <span class="feature-tag">Description Writing</span>
+                    <span class="feature-tag">Tag Suggestions</span>
+                    <span class="feature-tag">SEO Score</span>
+                </div>
+                <a href="main-dashboard.html#optimizer" class="feature-card-link">
+                    <span>Optimize Video</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Thumbnail Creator Card -->
+            <div class="feature-card" onclick="window.location.href='main-dashboard.html#thumbnail'">
+                <div class="feature-card-glow blue top-right"></div>
+                <div class="feature-card-icon blue">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                </div>
+                <h3 class="feature-card-title">Thumbnail Creator</h3>
+                <p class="feature-card-description">
+                    Create eye-catching thumbnails with AI-powered design suggestions and CTR prediction analysis.
+                </p>
+                <div class="feature-card-features">
+                    <span class="feature-tag">AI Design</span>
+                    <span class="feature-tag">CTR Prediction</span>
+                    <span class="feature-tag">A/B Testing</span>
+                    <span class="feature-tag">Templates</span>
+                </div>
+                <a href="main-dashboard.html#thumbnail" class="feature-card-link">
+                    <span>Create Thumbnails</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Creative Studio Card -->
+            <div class="feature-card" onclick="window.location.href='creative-studio.html'">
+                <div class="feature-card-glow green top-right"></div>
+                <div class="feature-card-icon green">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                        <polyline points="2 17 12 22 22 17"/>
+                        <polyline points="2 12 12 17 22 12"/>
+                    </svg>
+                </div>
+                <h3 class="feature-card-title">Creative Studio</h3>
+                <p class="feature-card-description">
+                    Advanced creative tools for video editing, effects, and content repurposing across platforms.
+                </p>
+                <div class="feature-card-features">
+                    <span class="feature-tag">Video Editor</span>
+                    <span class="feature-tag">Effects Library</span>
+                    <span class="feature-tag">Repurposing</span>
+                    <span class="feature-tag">Export Options</span>
+                </div>
+                <a href="creative-studio.html" class="feature-card-link">
+                    <span>Open Studio</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         VIDEO WIZARD DEEP DIVE SECTION
+         ========================================== -->
+    <section class="wizard-section" id="wizard">
+        <div class="wizard-container">
+            <div class="wizard-content">
+                <span class="section-label">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    Video Wizard
+                </span>
+                <h2>Create Complete Video Campaigns in Minutes</h2>
+                <p>
+                    Our 6-step Video Wizard guides you through the entire content creation process,
+                    from initial concept to fully optimized videos with Shorts and thumbnails.
+                </p>
+
+                <div class="wizard-steps">
+                    <div class="wizard-step active" data-step="1">
+                        <div class="wizard-step-number">1</div>
+                        <div class="wizard-step-text">
+                            <div class="wizard-step-title">Input Your Video Topic</div>
+                            <div class="wizard-step-desc">Enter your video idea or paste a URL</div>
+                        </div>
+                        <svg class="wizard-step-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                    <div class="wizard-step" data-step="2">
+                        <div class="wizard-step-number">2</div>
+                        <div class="wizard-step-text">
+                            <div class="wizard-step-title">AI Script Generation</div>
+                            <div class="wizard-step-desc">Get a professional script tailored to your style</div>
+                        </div>
+                        <svg class="wizard-step-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                    <div class="wizard-step" data-step="3">
+                        <div class="wizard-step-number">3</div>
+                        <div class="wizard-step-text">
+                            <div class="wizard-step-title">Shorts Generation</div>
+                            <div class="wizard-step-desc">Auto-create engaging Shorts from your content</div>
+                        </div>
+                        <svg class="wizard-step-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                    <div class="wizard-step" data-step="4">
+                        <div class="wizard-step-number">4</div>
+                        <div class="wizard-step-text">
+                            <div class="wizard-step-title">SEO Optimization</div>
+                            <div class="wizard-step-desc">Titles, descriptions, and tags optimized for reach</div>
+                        </div>
+                        <svg class="wizard-step-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                    <div class="wizard-step" data-step="5">
+                        <div class="wizard-step-number">5</div>
+                        <div class="wizard-step-text">
+                            <div class="wizard-step-title">Thumbnail Creation</div>
+                            <div class="wizard-step-desc">Eye-catching thumbnails with CTR prediction</div>
+                        </div>
+                        <svg class="wizard-step-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                    <div class="wizard-step" data-step="6">
+                        <div class="wizard-step-number">6</div>
+                        <div class="wizard-step-text">
+                            <div class="wizard-step-title">Export & Publish</div>
+                            <div class="wizard-step-desc">Download everything or publish directly</div>
+                        </div>
+                        <svg class="wizard-step-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wizard-visual">
+                <div class="wizard-visual-header">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span class="wizard-visual-title">Live Preview</span>
+                </div>
+
+                <!-- Step 1 Preview -->
+                <div class="wizard-preview-content active" data-preview="1">
+                    <div class="preview-label">Enter Your Video Topic</div>
+                    <div class="preview-box">
+                        <input type="text" placeholder="e.g., How to grow on YouTube in 2025" style="width: 100%; background: transparent; border: none; color: white; font-size: 1rem; outline: none;" readonly>
+                    </div>
+                    <div class="preview-tags">
+                        <span class="preview-tag">Tutorial</span>
+                        <span class="preview-tag">Growth Tips</span>
+                        <span class="preview-tag">Strategy</span>
+                    </div>
+                </div>
+
+                <!-- Step 2 Preview -->
+                <div class="wizard-preview-content" data-preview="2">
+                    <div class="preview-label">Generated Script</div>
+                    <div class="preview-box">
+                        <p class="preview-text">"Welcome back to the channel! Today I'm going to share the exact strategies that helped me grow to 100K subscribers..."</p>
+                    </div>
+                    <div class="preview-shimmer"></div>
+                    <div class="preview-shimmer"></div>
+                    <div class="preview-shimmer" style="width: 75%;"></div>
+                </div>
+
+                <!-- Step 3 Preview -->
+                <div class="wizard-preview-content" data-preview="3">
+                    <div class="preview-label">Generated Shorts</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+                        <div class="preview-box" style="aspect-ratio: 9/16; display: flex; align-items: center; justify-content: center;">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </div>
+                        <div class="preview-box" style="aspect-ratio: 9/16; display: flex; align-items: center; justify-content: center;">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </div>
+                        <div class="preview-box" style="aspect-ratio: 9/16; display: flex; align-items: center; justify-content: center;">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4 Preview -->
+                <div class="wizard-preview-content" data-preview="4">
+                    <div class="preview-label">Optimized SEO</div>
+                    <div class="preview-box">
+                        <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-bottom: 0.25rem;">TITLE</div>
+                        <p class="preview-text" style="font-weight: 600;">How I Grew to 100K Subscribers in 6 Months (Full Strategy)</p>
+                    </div>
+                    <div class="preview-tags">
+                        <span class="preview-tag">youtube growth</span>
+                        <span class="preview-tag">100k subscribers</span>
+                        <span class="preview-tag">youtube tips 2025</span>
+                    </div>
+                </div>
+
+                <!-- Step 5 Preview -->
+                <div class="wizard-preview-content" data-preview="5">
+                    <div class="preview-label">Thumbnail Options</div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+                        <div class="preview-box" style="aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(139,92,246,0.3) 0%, rgba(236,72,153,0.3) 100%);">
+                            <span style="font-weight: 700; font-size: 0.875rem;">Design A</span>
+                        </div>
+                        <div class="preview-box" style="aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(59,130,246,0.3) 0%, rgba(34,197,94,0.3) 100%);">
+                            <span style="font-weight: 700; font-size: 0.875rem;">Design B</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem;">
+                        <span style="color: #22c55e; font-size: 0.875rem;">Predicted CTR: 8.4%</span>
+                    </div>
+                </div>
+
+                <!-- Step 6 Preview -->
+                <div class="wizard-preview-content" data-preview="6">
+                    <div class="preview-label">Ready to Export</div>
+                    <div class="preview-box">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span style="color: rgba(255,255,255,0.8);">Main Video Script</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span style="color: rgba(255,255,255,0.8);">3 Shorts Generated</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span style="color: rgba(255,255,255,0.8);">SEO Optimized</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span style="color: rgba(255,255,255,0.8);">2 Thumbnail Designs</span>
+                        </div>
+                    </div>
+                    <button class="btn-cta" style="width: 100%; margin-top: 1rem; padding: 0.875rem;" onclick="window.location.href='video-wizard.html'">
+                        Try Video Wizard Free
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         ALL TOOLS SECTION
+         ========================================== -->
+    <section class="tools-section" id="tools">
+        <div class="section-header">
+            <span class="section-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                </svg>
+                Complete Toolkit
+            </span>
+            <h2 class="section-title">All the Tools You Need</h2>
+            <p class="section-subtitle">
+                A comprehensive suite of 15+ AI-powered tools designed to help you create,
+                optimize, and grow your YouTube channel.
+            </p>
+        </div>
+
+        <div class="tools-grid">
+            <a href="main-dashboard.html#optimizer" class="tool-card">
+                <div class="tool-card-icon purple">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Video Optimizer</div>
+                <div class="tool-card-desc">SEO-optimize any video</div>
+            </a>
+            <a href="video-wizard.html" class="tool-card">
+                <div class="tool-card-icon pink">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Video Wizard</div>
+                <div class="tool-card-desc">End-to-end campaign creation</div>
+            </a>
+            <a href="main-dashboard.html#thumbnail" class="tool-card">
+                <div class="tool-card-icon blue">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Thumbnail Creator</div>
+                <div class="tool-card-desc">AI-designed thumbnails</div>
+            </a>
+            <a href="creative-studio.html" class="tool-card">
+                <div class="tool-card-icon green">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                        <polyline points="2 17 12 22 22 17"/>
+                        <polyline points="2 12 12 17 22 12"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Creative Studio</div>
+                <div class="tool-card-desc">Advanced video editing</div>
+            </a>
+            <a href="main-dashboard.html#competitor" class="tool-card">
+                <div class="tool-card-icon orange">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Competitor Analysis</div>
+                <div class="tool-card-desc">Analyze rival channels</div>
+            </a>
+            <a href="main-dashboard.html#trends" class="tool-card">
+                <div class="tool-card-icon cyan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Trend Analysis</div>
+                <div class="tool-card-desc">Discover trending topics</div>
+            </a>
+            <a href="main-dashboard.html#channelAudit" class="tool-card">
+                <div class="tool-card-icon purple">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 11H3a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h3"/>
+                        <path d="M9 11V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v5"/>
+                        <path d="M16 11h5a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-5"/>
+                        <path d="M9 18v2a2 2 0 0 0 2 2h3a2 2 0 0 0 2-2v-2"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Channel Audit</div>
+                <div class="tool-card-desc">Full channel analysis</div>
+            </a>
+            <a href="main-dashboard.html#placement" class="tool-card">
+                <div class="tool-card-icon pink">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/>
+                        <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Ad Placement</div>
+                <div class="tool-card-desc">Optimize ad positions</div>
+            </a>
+            <a href="aitools.html" class="tool-card">
+                <div class="tool-card-icon blue">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
+                        <polyline points="7.5 19.79 7.5 14.6 3 12"/>
+                        <polyline points="21 12 16.5 14.6 16.5 19.79"/>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                        <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">AI Tools Suite</div>
+                <div class="tool-card-desc">Advanced AI features</div>
+            </a>
+            <a href="main-dashboard.html#history" class="tool-card">
+                <div class="tool-card-icon green">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">History</div>
+                <div class="tool-card-desc">View past optimizations</div>
+            </a>
+            <a href="main-dashboard.html#client-reports" class="tool-card">
+                <div class="tool-card-icon orange">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Client Reports</div>
+                <div class="tool-card-desc">Professional PDF reports</div>
+            </a>
+            <a href="enterprise.html" class="tool-card">
+                <div class="tool-card-icon cyan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                    </svg>
+                </div>
+                <div class="tool-card-title">Enterprise</div>
+                <div class="tool-card-desc">Team & agency features</div>
+            </a>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         TESTIMONIALS SECTION
+         ========================================== -->
+    <section class="testimonials-section" id="testimonials">
+        <div class="section-header">
+            <span class="section-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                Testimonials
+            </span>
+            <h2 class="section-title">Loved by Creators</h2>
+            <p class="section-subtitle">
+                Join thousands of content creators who've transformed their YouTube channels with our platform.
+            </p>
+        </div>
+
+        <div class="testimonials-grid">
+            <div class="testimonial-card">
+                <div class="testimonial-stars">
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </div>
+                <p class="testimonial-text">
+                    "The Video Wizard completely changed my workflow. I went from spending hours on SEO to minutes. My views increased by 200% in just two months!"
+                </p>
+                <div class="testimonial-author">
+                    <div class="testimonial-avatar">JM</div>
+                    <div class="testimonial-info">
+                        <h4>Jake Miller</h4>
+                        <p>Tech YouTuber, 150K subs</p>
+                    </div>
+                </div>
+            </div>
+            <div class="testimonial-card">
+                <div class="testimonial-stars">
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </div>
+                <p class="testimonial-text">
+                    "As a marketing agency, we manage dozens of YouTube channels. This platform has become essential for our team. The thumbnail creator alone is worth it!"
+                </p>
+                <div class="testimonial-author">
+                    <div class="testimonial-avatar">SR</div>
+                    <div class="testimonial-info">
+                        <h4>Sarah Rodriguez</h4>
+                        <p>Digital Marketing Agency</p>
+                    </div>
+                </div>
+            </div>
+            <div class="testimonial-card">
+                <div class="testimonial-stars">
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </div>
+                <p class="testimonial-text">
+                    "The Shorts generator is incredible! I create a full video and it automatically gives me 3-5 Shorts. My channel growth has been exponential."
+                </p>
+                <div class="testimonial-author">
+                    <div class="testimonial-avatar">AK</div>
+                    <div class="testimonial-info">
+                        <h4>Alex Kim</h4>
+                        <p>Lifestyle Creator, 500K subs</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         FINAL CTA SECTION
+         ========================================== -->
+    <section class="final-cta">
+        <div class="final-cta-container">
+            <h2>Ready to Grow Your Channel?</h2>
+            <p>
+                Join thousands of creators using AI to optimize their YouTube content and accelerate their growth.
+            </p>
+            <div class="final-cta-buttons">
+                <a href="main-dashboard.html#register" class="btn-hero-primary" id="final-cta-btn">
+                    <span>Get Started Free</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                <a href="main-dashboard.html" class="btn-hero-secondary">
+                    <span>View Demo</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         FOOTER
+         ========================================== -->
+    <footer class="footer">
+        <div class="footer-container">
+            <a href="#" class="footer-logo">
+                <div class="footer-logo-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                </div>
+                <span>YT Optimizer</span>
+            </a>
+            <div class="footer-links">
+                <a href="#features" class="footer-link">Features</a>
+                <a href="#tools" class="footer-link">Tools</a>
+                <a href="#testimonials" class="footer-link">Testimonials</a>
+                <a href="main-dashboard.html" class="footer-link">Dashboard</a>
+            </div>
+            <p class="footer-copyright">2025 YT Optimizer. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- ==========================================
+         SCRIPTS
+         ========================================== -->
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCWAoBl2J3mcv-xjqPPwLpCQf6Ads8JTUE",
+            authDomain: "yt-seo-test.firebaseapp.com",
+            projectId: "yt-seo-test",
+            storageBucket: "yt-seo-test.firebasestorage.app",
+            messagingSenderId: "696270520567",
+            appId: "1:696270520567:web:cbfb516f4820b5a5ac9f0f"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        // Header scroll effect
+        const header = document.getElementById('header');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        });
+
+        // Check auth state and update buttons
+        auth.onAuthStateChanged(user => {
+            const navLoginBtn = document.getElementById('nav-login-btn');
+            const navCtaBtn = document.getElementById('nav-cta-btn');
+            const heroCtaBtn = document.getElementById('hero-cta-btn');
+
+            if (user) {
+                // User is logged in - show "Go to Dashboard"
+                navLoginBtn.textContent = 'Dashboard';
+                navLoginBtn.href = 'main-dashboard.html';
+                navCtaBtn.textContent = 'Go to Dashboard';
+                navCtaBtn.href = 'main-dashboard.html';
+                heroCtaBtn.innerHTML = '<span>Go to Dashboard</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+                heroCtaBtn.href = 'main-dashboard.html';
+
+                // Update final CTA button
+                const finalCtaBtn = document.getElementById('final-cta-btn');
+                if (finalCtaBtn) {
+                    finalCtaBtn.innerHTML = '<span>Go to Dashboard</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+                    finalCtaBtn.href = 'main-dashboard.html';
+                }
+            }
+        });
+
+        // Mobile menu toggle (placeholder - will implement fully later)
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        mobileMenuBtn.addEventListener('click', () => {
+            // Will implement mobile menu in later section
+            window.location.href = 'main-dashboard.html';
+        });
+
+        // Wizard Step Interaction
+        const wizardSteps = document.querySelectorAll('.wizard-step');
+        const wizardPreviews = document.querySelectorAll('.wizard-preview-content');
+        let autoAdvanceInterval;
+
+        function setActiveStep(stepNum) {
+            wizardSteps.forEach(step => {
+                step.classList.toggle('active', step.dataset.step === String(stepNum));
+            });
+            wizardPreviews.forEach(preview => {
+                preview.classList.toggle('active', preview.dataset.preview === String(stepNum));
+            });
+        }
+
+        // Click handler for steps
+        wizardSteps.forEach(step => {
+            step.addEventListener('click', () => {
+                clearInterval(autoAdvanceInterval);
+                setActiveStep(step.dataset.step);
+                startAutoAdvance();
+            });
+        });
+
+        // Auto-advance through steps
+        function startAutoAdvance() {
+            let currentStep = 1;
+            autoAdvanceInterval = setInterval(() => {
+                currentStep = currentStep >= 6 ? 1 : currentStep + 1;
+                setActiveStep(currentStep);
+            }, 4000);
+        }
+
+        // Start auto-advance when page loads
+        startAutoAdvance();
+
+        // Pause auto-advance when user hovers over wizard section
+        const wizardSection = document.querySelector('.wizard-section');
+        if (wizardSection) {
+            wizardSection.addEventListener('mouseenter', () => clearInterval(autoAdvanceInterval));
+            wizardSection.addEventListener('mouseleave', startAutoAdvance);
+        }
+    </script>
+</body>
+</html>
