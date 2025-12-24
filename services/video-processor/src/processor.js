@@ -2277,7 +2277,14 @@ async function processVideo({ jobId, jobRef, job, storage, bucketName, tempDir, 
       }
     } else {
       // Standard single-source processing
-      console.log(`[${jobId}] Using standard single-source processing`);
+      // Note: This path is also used for split_screen mode without a secondary video
+      // In that case, buildFilterChain will use FFmpeg's 'split' filter to create two views of the same video
+      const isSplitWithoutSecondary = ['split_screen', 'broll_split'].includes(reframeMode) && !hasSecondary;
+      if (isSplitWithoutSecondary) {
+        console.log(`[${jobId}] Using SINGLE-SOURCE split_screen mode (splitting primary video into two views)`);
+      } else {
+        console.log(`[${jobId}] Using standard single-source processing`);
+      }
       processedFile = await processVideoFile({
         jobId,
         inputFile: downloadedFile,
@@ -2964,7 +2971,10 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
   switch (normalizedMode) {
     case 'split_screen': {
       // Split screen: Show two speakers stacked vertically (for podcasts/interviews)
+      // When called from single-source processing (no secondary video), this uses FFmpeg's 'split' filter
+      // to duplicate the input stream and show two different crop positions from the same video
       // Uses splitScreenSettings for position control, with fallback to legacy behavior
+      console.log(`[FFmpeg] Split screen mode: Using FFmpeg split filter for single-source dual-view`);
       const splitSettings = settings?.splitScreenSettings;
       const speaker1Pos = splitSettings?.speaker1?.cropPosition ?? 50;  // Default: center (changed from 17)
       const speaker2Pos = splitSettings?.speaker2?.cropPosition ?? 50;  // Default: center (changed from 83)
@@ -3256,6 +3266,16 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 
     // Ensure output pixel format is compatible with all encoders
     filters.push('format=yuv420p');
+  } else {
+    // For complex filter chains (split_screen, three_person), add format filter
+    // The last filter should be vstack - we append format to it
+    // This ensures encoder compatibility for the final output
+    const lastIndex = filters.length - 1;
+    if (lastIndex >= 0 && filters[lastIndex].includes('vstack')) {
+      // Append format filter inline with vstack (e.g., "[top][bottom]vstack,format=yuv420p")
+      filters[lastIndex] = filters[lastIndex] + ',format=yuv420p';
+      console.log(`[FFmpeg] Added format=yuv420p to complex filter chain output`);
+    }
   }
 
   // For complex filter graphs (with labeled streams), join with semicolons
