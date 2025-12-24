@@ -143,9 +143,10 @@
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 0;
+            z-index: -1;
             overflow: hidden;
             background: #0a0a0f;
+            pointer-events: none;
         }
 
         .liquid-ether-bg iframe {
@@ -153,6 +154,7 @@
             height: 100%;
             border: none;
             display: block;
+            pointer-events: auto;
         }
 
         /* ==========================================
@@ -2123,7 +2125,7 @@
 <body>
     <!-- Liquid Ether Background Effect - WebGL via iframe -->
     <div class="liquid-ether-bg">
-        <iframe src="fluid-bg.html" allow="accelerometer; autoplay; encrypted-media; gyroscope" loading="eager" title="Fluid Background"></iframe>
+        <iframe src="/fluid-bg" allow="accelerometer; autoplay; encrypted-media; gyroscope" loading="eager" title="Fluid Background"></iframe>
     </div>
 
     <!-- ==========================================
