@@ -27,6 +27,9 @@ RUN apt-get update && apt-get install -y \
     git \
     chromium-browser \
     fonts-liberation \
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-freefont-ttf \
     libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
@@ -59,6 +62,12 @@ RUN apt-get update && \
     /usr/local/bin/ffmpeg -version && \
     echo "=== NVENC Encoders ===" && \
     /usr/local/bin/ffmpeg -encoders 2>/dev/null | grep nvenc || echo "NVENC will be available at runtime with GPU"
+
+# Rebuild font cache for ASS subtitle rendering
+# The ASS filter requires fonts to render captions properly
+RUN fc-cache -fv && \
+    echo "=== Available Fonts for Captions ===" && \
+    fc-list : family | sort | uniq | head -20
 
 # NVIDIA environment configuration for Cloud Run GPU
 # These env vars tell the runtime to expose GPU video encoding capabilities
