@@ -4965,6 +4965,20 @@
                 initializeAnimationScenes();
             }
 
+            // Calculate scene readiness stats
+            const voiceoversReady = animationScenes.filter(s => s.voiceoverUrl).length;
+            const animatedScenes = animationScenes.filter(s => s.videoUrl).length;
+            const stockVideoScenes = storyboardScenes.filter(s => s.source === 'stock-video' && s.videoUrl).length;
+            const staticImageScenes = storyboardScenes.filter(s => s.imageUrl && s.source !== 'stock-video').length;
+
+            // A scene is ready if it has voiceover AND (animated OR stock-video OR image)
+            const readyScenes = storyboardScenes.filter(sb => {
+                const anim = animationScenes.find(a => a.sceneId === sb.sceneId);
+                const hasVoiceover = anim?.voiceoverUrl;
+                const hasVisual = anim?.videoUrl || (sb.source === 'stock-video' && sb.videoUrl) || sb.imageUrl;
+                return hasVoiceover && hasVisual;
+            }).length;
+
             let html = '<div class="fade-in">';
 
             // Header with global settings
@@ -4974,8 +4988,34 @@
                         <div class="content-card-icon">🎬</div>
                         <div style="flex: 1;">
                             <div class="content-card-title">Animation Studio</div>
-                            <div class="content-card-subtitle">Generate voiceovers and animate your scenes • ${animationScenes.filter(s => s.videoUrl).length}/${storyboardScenes.length} videos ready</div>
+                            <div class="content-card-subtitle">Generate voiceovers and optionally animate scenes • ${readyScenes}/${storyboardScenes.length} ready</div>
                         </div>
+                    </div>
+
+                    <!-- Progress Stats -->
+                    <div style="display: flex; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                        <div style="background: rgba(139, 92, 246, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
+                            <span style="color: #a78bfa;">🎙️ Voiceovers:</span>
+                            <span style="color: ${voiceoversReady >= storyboardScenes.length ? '#10b981' : 'white'}; font-weight: 600;">${voiceoversReady}/${storyboardScenes.length}</span>
+                        </div>
+                        <div style="background: rgba(6, 182, 212, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
+                            <span style="color: #06b6d4;">🎬 Animated:</span>
+                            <span style="color: white; font-weight: 600;">${animatedScenes}</span>
+                            <span style="color: rgba(255,255,255,0.5);">(optional)</span>
+                        </div>
+                        <div style="background: rgba(16, 185, 129, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
+                            <span style="color: #10b981;">📹 Stock Videos:</span>
+                            <span style="color: white; font-weight: 600;">${stockVideoScenes}</span>
+                        </div>
+                        <div style="background: rgba(251, 191, 36, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
+                            <span style="color: #fbbf24;">🖼️ Static Images:</span>
+                            <span style="color: white; font-weight: 600;">${staticImageScenes - animatedScenes}</span>
+                        </div>
+                    </div>
+
+                    <!-- Info Banner -->
+                    <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 0.5rem; padding: 0.75rem; margin-top: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.7);">
+                        💡 <strong>Animation is optional!</strong> Scenes with static images will display for the correct duration. Stock videos play as-is. Only animate if you want Ken Burns zoom/pan effects.
                     </div>
 
                     <!-- Global Voice Settings -->
@@ -5004,9 +5044,9 @@
                                 <span>🎙️</span> Generate All Voiceovers
                             </button>
                             <button onclick="animateAllScenes()"
-                                    ${animationScenes.filter(s => s.voiceoverUrl).length < storyboardScenes.length ? 'disabled' : ''}
-                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: none; background: ${animationScenes.filter(s => s.voiceoverUrl).length >= storyboardScenes.length ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)'}; color: ${animationScenes.filter(s => s.voiceoverUrl).length >= storyboardScenes.length ? 'white' : 'rgba(255,255,255,0.4)'}; cursor: ${animationScenes.filter(s => s.voiceoverUrl).length >= storyboardScenes.length ? 'pointer' : 'not-allowed'}; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                                <span>🎬</span> Animate All Scenes
+                                    ${voiceoversReady < storyboardScenes.length ? 'disabled' : ''}
+                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: none; background: ${voiceoversReady >= storyboardScenes.length ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)'}; color: ${voiceoversReady >= storyboardScenes.length ? 'white' : 'rgba(255,255,255,0.4)'}; cursor: ${voiceoversReady >= storyboardScenes.length ? 'pointer' : 'not-allowed'}; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <span>🎬</span> Animate All (Optional)
                             </button>
                         </div>
                     </div>
@@ -5024,9 +5064,23 @@
 
             html += `</div>`;
 
-            // Navigation
-            const hasAllVideos = animationScenes.filter(s => s.videoUrl).length >= storyboardScenes.length;
-            html += renderNavButtons(4, hasAllVideos ? 6 : null);
+            // Navigation - Check if scenes are ready for assembly
+            // A scene is ready if it has: voiceover + visual (animated video, stock video, OR static image)
+            const allScenesReady = storyboardScenes.every(storyboardScene => {
+                const animScene = animationScenes.find(a => a.sceneId === storyboardScene.sceneId) || {};
+
+                // Must have voiceover
+                const hasVoiceover = !!animScene.voiceoverUrl;
+
+                // Must have visual: animated video, stock video, or at least a static image
+                const hasAnimatedVideo = !!animScene.videoUrl;
+                const hasStockVideo = storyboardScene.source === 'stock-video' && storyboardScene.videoUrl;
+                const hasImage = !!storyboardScene.imageUrl;
+
+                return hasVoiceover && (hasAnimatedVideo || hasStockVideo || hasImage);
+            });
+
+            html += renderNavButtons(4, allScenesReady ? 6 : null);
 
             html += '</div>';
             return html;
