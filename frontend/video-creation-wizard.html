@@ -987,7 +987,7 @@
         <!-- Content rendered by JavaScript -->
         <div class="loading-overlay" id="initial-loading">
             <div class="loading-spinner"></div>
-            <div class="loading-text">Loading Video Creation Wizard...</div>
+            <div class="loading-text" id="loading-text">Authenticating...</div>
         </div>
     </div>
 
@@ -1521,45 +1521,53 @@
         // ==========================================
         // 6.2 AUTHENTICATION
         // ==========================================
-        let authInitialized = false;
+        let authResolved = false;
+        let authTimeoutId = null;
 
         async function initAuth() {
             return new Promise((resolve, reject) => {
-                // Give Firebase a moment to restore auth state from storage
+                // Set up a maximum wait time for auth (2.5 seconds)
+                // This handles the race condition where Firebase takes time to restore auth state
+                authTimeoutId = setTimeout(() => {
+                    if (authResolved) return; // Already resolved
+
+                    // Final check before redirecting
+                    const currentUser = auth.currentUser;
+                    if (currentUser) {
+                        authResolved = true;
+                        state.user = currentUser;
+                        loadUserTokens().then(() => resolve(currentUser));
+                    } else {
+                        // Truly not authenticated after waiting - redirect to login
+                        console.log('Auth timeout: No user found, redirecting to login');
+                        window.location.href = '/video-optimizer';
+                        reject('Not authenticated');
+                    }
+                }, 2500);
+
+                // Listen for auth state changes
                 const unsubscribe = auth.onAuthStateChanged(async (user) => {
-                    // Only process once auth is truly initialized
-                    // Firebase may fire this immediately with null, then again with the real user
-                    if (!authInitialized) {
-                        authInitialized = true;
+                    // If already resolved, ignore subsequent calls
+                    if (authResolved) return;
 
-                        // If user is immediately available, proceed
-                        if (user) {
-                            state.user = user;
-                            await loadUserTokens();
-                            resolve(user);
-                            return;
+                    if (user) {
+                        // User is authenticated - clear timeout and proceed
+                        authResolved = true;
+                        if (authTimeoutId) {
+                            clearTimeout(authTimeoutId);
+                            authTimeoutId = null;
                         }
-
-                        // Wait a brief moment for auth state to fully load
-                        // This handles the race condition where auth hasn't loaded yet
-                        setTimeout(async () => {
-                            const currentUser = auth.currentUser;
-                            if (currentUser) {
-                                state.user = currentUser;
-                                await loadUserTokens();
-                                resolve(currentUser);
-                            } else {
-                                // Truly not authenticated - redirect to login
-                                window.location.href = '/video-optimizer';
-                                reject('Not authenticated');
-                            }
-                        }, 500);
-                    } else if (user && !state.user) {
-                        // Auth state changed after initialization (user logged in)
                         state.user = user;
                         await loadUserTokens();
                         resolve(user);
+                        return;
                     }
+
+                    // User is null - this could be:
+                    // 1. Initial call before Firebase loads auth from storage (wait for real state)
+                    // 2. User is truly not authenticated
+                    // The timeout above will handle the final decision
+                    console.log('Auth state: waiting for Firebase to restore session...');
                 });
             });
         }
@@ -4841,6 +4849,12 @@
         async function init() {
             try {
                 await initAuth();
+
+                // Update loading text after auth
+                const loadingText = document.getElementById('loading-text');
+                if (loadingText) {
+                    loadingText.textContent = 'Loading Video Creation Wizard...';
+                }
 
                 // Check if loading an existing project
                 const projectId = checkUrlForProject();
