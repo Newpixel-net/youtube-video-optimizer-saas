@@ -2492,7 +2492,10 @@
             mediaType: 'image', // 'image' | 'video'
             activeTab: 'images', // 'images' | 'videos'
             query: '',
-            suggestedQuery: '', // Smart suggestion from script
+            suggestedQuery: '', // Primary AI suggestion
+            alternativeQueries: [], // Additional AI suggestions
+            suggestedCategory: '', // AI-suggested category
+            loadingAiSuggestions: false, // Loading state for AI suggestions
             results: [],
             videoResults: [], // Separate storage for video results
             loading: false,
@@ -2506,7 +2509,7 @@
             isPreviewPlaying: false
         };
 
-        function openStockBrowser(sceneId, mediaType = 'image') {
+        async function openStockBrowser(sceneId, mediaType = 'image') {
             stockBrowserState.isOpen = true;
             stockBrowserState.targetSceneId = sceneId;
             stockBrowserState.mediaType = mediaType;
@@ -2518,24 +2521,117 @@
             stockBrowserState.selectedVideo = null;
             stockBrowserState.trimStart = 0;
             stockBrowserState.trimEnd = null;
+            stockBrowserState.alternativeQueries = [];
+            stockBrowserState.suggestedCategory = '';
+            stockBrowserState.loadingAiSuggestions = true;
 
-            // Smart suggestion: Extract keywords from scene description
+            // Get scene for smart suggestions
             const scene = state.script.scenes.find(s => s.id === sceneId);
+
+            // Use basic extraction as initial placeholder
             if (scene) {
-                const smartQuery = extractSmartKeywords(scene);
-                stockBrowserState.query = smartQuery;
-                stockBrowserState.suggestedQuery = smartQuery;
+                const basicQuery = extractSmartKeywords(scene);
+                stockBrowserState.query = basicQuery;
+                stockBrowserState.suggestedQuery = basicQuery;
             } else {
-                stockBrowserState.query = 'nature background';
+                stockBrowserState.query = 'cinematic background';
                 stockBrowserState.suggestedQuery = '';
             }
 
             renderStockBrowserModal();
 
-            // Auto-search with smart suggestion
+            // Start initial search with basic query
             if (stockBrowserState.query) {
-                setTimeout(() => searchStockMedia(stockBrowserState.query), 100);
+                searchStockMedia(stockBrowserState.query);
             }
+
+            // Simultaneously fetch AI-powered smart suggestions
+            if (scene) {
+                try {
+                    const generateQueriesFn = functions.httpsCallable('generateSmartStockQueries');
+                    const result = await generateQueriesFn({
+                        sceneDescription: scene.visual || '',
+                        narration: scene.narration || '',
+                        mediaType: stockBrowserState.activeTab === 'videos' ? 'video' : 'image'
+                    });
+
+                    if (result.data.success) {
+                        stockBrowserState.suggestedQuery = result.data.primaryQuery;
+                        stockBrowserState.alternativeQueries = result.data.queries.slice(1) || [];
+                        stockBrowserState.suggestedCategory = result.data.category || '';
+                        stockBrowserState.loadingAiSuggestions = false;
+
+                        // Update the search input with AI suggestion
+                        const searchInput = document.getElementById('stock-search-input');
+                        if (searchInput && stockBrowserState.query !== result.data.primaryQuery) {
+                            searchInput.value = result.data.primaryQuery;
+                            stockBrowserState.query = result.data.primaryQuery;
+                        }
+
+                        // Re-render to show AI suggestions
+                        updateStockSuggestionsUI();
+
+                        // Re-search with AI query if different from basic
+                        if (result.data.primaryQuery && result.data.primaryQuery !== extractSmartKeywords(scene)) {
+                            searchStockMedia(result.data.primaryQuery);
+                        }
+                    }
+                } catch (error) {
+                    console.error('AI suggestions error:', error);
+                    stockBrowserState.loadingAiSuggestions = false;
+                    updateStockSuggestionsUI();
+                }
+            } else {
+                stockBrowserState.loadingAiSuggestions = false;
+            }
+        }
+
+        // Update just the suggestions UI without re-rendering entire modal
+        function updateStockSuggestionsUI() {
+            const suggestionsArea = document.getElementById('stock-ai-suggestions');
+            if (!suggestionsArea) return;
+
+            let suggestionsHtml = '';
+
+            if (stockBrowserState.loadingAiSuggestions) {
+                suggestionsHtml = `
+                    <div style="padding: 0.5rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="animate-spin" style="width: 14px; height: 14px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #a78bfa; border-radius: 50%;"></span>
+                        <span style="color: #a78bfa; font-size: 0.75rem;">AI analyzing your scene...</span>
+                    </div>
+                `;
+            } else if (stockBrowserState.suggestedQuery) {
+                suggestionsHtml = `
+                    <div style="padding: 0.6rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+                            <span style="color: #a78bfa; font-size: 0.7rem;">🧠 AI Smart Suggestions:</span>
+                            ${stockBrowserState.suggestedCategory ? `<span style="background: rgba(139,92,246,0.3); color: #c4b5fd; padding: 0.1rem 0.4rem; border-radius: 1rem; font-size: 0.6rem;">${stockBrowserState.suggestedCategory}</span>` : ''}
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                            <button onclick="applyStockSuggestion('${stockBrowserState.suggestedQuery.replace(/'/g, "\\'")}')"
+                                    style="padding: 0.3rem 0.6rem; background: linear-gradient(135deg, rgba(139,92,246,0.4), rgba(236,72,153,0.3)); border: 1px solid rgba(139,92,246,0.5); border-radius: 1rem; color: white; cursor: pointer; font-size: 0.75rem; font-weight: 500;">
+                                ✨ ${stockBrowserState.suggestedQuery}
+                            </button>
+                            ${stockBrowserState.alternativeQueries.map(q => `
+                                <button onclick="applyStockSuggestion('${q.replace(/'/g, "\\'")}')"
+                                        style="padding: 0.3rem 0.6rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 1rem; color: rgba(255,255,255,0.8); cursor: pointer; font-size: 0.7rem;">
+                                    ${q}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            suggestionsArea.innerHTML = suggestionsHtml;
+        }
+
+        // Apply a suggestion to search
+        function applyStockSuggestion(query) {
+            stockBrowserState.query = query;
+            const searchInput = document.getElementById('stock-search-input');
+            if (searchInput) searchInput.value = query;
+            searchStockMedia(query);
         }
 
         // Extract smart keywords from scene description for stock search
@@ -2677,7 +2773,7 @@
         }
 
         // Switch between Images and Videos tabs
-        function switchStockTab(tab) {
+        async function switchStockTab(tab) {
             stockBrowserState.activeTab = tab;
             stockBrowserState.selectedVideo = null;
             stockBrowserState.trimStart = 0;
@@ -2685,11 +2781,41 @@
 
             // Search with current query for new media type
             const mediaType = tab === 'videos' ? 'video' : 'image';
-            if (stockBrowserState.query && stockBrowserState.mediaType !== mediaType) {
-                stockBrowserState.mediaType = mediaType;
+            const needsNewSuggestions = stockBrowserState.mediaType !== mediaType;
+            stockBrowserState.mediaType = mediaType;
+
+            if (stockBrowserState.query) {
                 searchStockMedia(stockBrowserState.query);
             } else {
                 renderStockBrowserModal();
+            }
+
+            // Regenerate AI suggestions for new media type
+            if (needsNewSuggestions && stockBrowserState.targetSceneId) {
+                const scene = state.script.scenes.find(s => s.id === stockBrowserState.targetSceneId);
+                if (scene) {
+                    stockBrowserState.loadingAiSuggestions = true;
+                    updateStockSuggestionsUI();
+
+                    try {
+                        const generateQueriesFn = functions.httpsCallable('generateSmartStockQueries');
+                        const result = await generateQueriesFn({
+                            sceneDescription: scene.visual || '',
+                            narration: scene.narration || '',
+                            mediaType: mediaType
+                        });
+
+                        if (result.data.success) {
+                            stockBrowserState.suggestedQuery = result.data.primaryQuery;
+                            stockBrowserState.alternativeQueries = result.data.queries.slice(1) || [];
+                            stockBrowserState.suggestedCategory = result.data.category || '';
+                        }
+                    } catch (error) {
+                        console.error('AI suggestions error on tab switch:', error);
+                    }
+                    stockBrowserState.loadingAiSuggestions = false;
+                    updateStockSuggestionsUI();
+                }
             }
         }
 
@@ -2833,13 +2959,34 @@
                             </button>
                         </div>
 
-                        <!-- Smart Suggestion Banner -->
-                        ${stockBrowserState.suggestedQuery ? `
-                            <div style="padding: 0.5rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="color: #a78bfa; font-size: 0.75rem;">✨ Smart suggestion based on your script:</span>
-                                <span style="color: white; font-size: 0.8rem; font-weight: 500;">"${stockBrowserState.suggestedQuery}"</span>
-                            </div>
-                        ` : ''}
+                        <!-- AI Smart Suggestions Container -->
+                        <div id="stock-ai-suggestions">
+                            ${stockBrowserState.loadingAiSuggestions ? `
+                                <div style="padding: 0.5rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span class="animate-spin" style="width: 14px; height: 14px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #a78bfa; border-radius: 50%;"></span>
+                                    <span style="color: #a78bfa; font-size: 0.75rem;">AI analyzing your scene...</span>
+                                </div>
+                            ` : stockBrowserState.suggestedQuery ? `
+                                <div style="padding: 0.6rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+                                        <span style="color: #a78bfa; font-size: 0.7rem;">🧠 AI Smart Suggestions:</span>
+                                        ${stockBrowserState.suggestedCategory ? `<span style="background: rgba(139,92,246,0.3); color: #c4b5fd; padding: 0.1rem 0.4rem; border-radius: 1rem; font-size: 0.6rem;">${stockBrowserState.suggestedCategory}</span>` : ''}
+                                    </div>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                                        <button onclick="applyStockSuggestion('${stockBrowserState.suggestedQuery.replace(/'/g, "\\'")}')"
+                                                style="padding: 0.3rem 0.6rem; background: linear-gradient(135deg, rgba(139,92,246,0.4), rgba(236,72,153,0.3)); border: 1px solid rgba(139,92,246,0.5); border-radius: 1rem; color: white; cursor: pointer; font-size: 0.75rem; font-weight: 500;">
+                                            ✨ ${stockBrowserState.suggestedQuery}
+                                        </button>
+                                        ${(stockBrowserState.alternativeQueries || []).map(q => `
+                                            <button onclick="applyStockSuggestion('${q.replace(/'/g, "\\'")}')"
+                                                    style="padding: 0.3rem 0.6rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 1rem; color: rgba(255,255,255,0.8); cursor: pointer; font-size: 0.7rem;">
+                                                ${q}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
 
                         <!-- Search Bar -->
                         <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1);">

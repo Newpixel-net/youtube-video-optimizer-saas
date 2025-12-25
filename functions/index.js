@@ -24938,6 +24938,136 @@ exports.creationWizardCancelExport = functions.https.onCall(async (data, context
 // ==============================================
 
 /**
+ * generateSmartStockQueries - AI-powered stock search query generator
+ *
+ * Uses Gemini to understand the visual intent of a scene description
+ * and generate optimized search queries for stock media sites.
+ *
+ * @param {string} sceneDescription - The visual description of the scene
+ * @param {string} narration - Optional narration text for context
+ * @param {string} mediaType - 'image' | 'video' - affects query optimization
+ */
+exports.generateSmartStockQueries = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { sceneDescription, narration = '', mediaType = 'image' } = data;
+
+  if (!sceneDescription || sceneDescription.trim().length < 5) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scene description is required');
+  }
+
+  const geminiKey = functions.config().gemini?.key;
+  if (!geminiKey) {
+    // Fallback to basic extraction if no Gemini key
+    console.log('[generateSmartStockQueries] No Gemini key, using fallback');
+    return {
+      success: true,
+      queries: [extractBasicKeywords(sceneDescription)],
+      primaryQuery: extractBasicKeywords(sceneDescription),
+      category: 'general',
+      fallback: true
+    };
+  }
+
+  try {
+    const genAI = new GoogleGenAI({ apiKey: geminiKey });
+
+    const prompt = `You are an expert at finding stock ${mediaType}s. Analyze this scene description and generate optimal search queries for stock media websites (Pexels, Pixabay).
+
+SCENE DESCRIPTION: "${sceneDescription}"
+${narration ? `NARRATION CONTEXT: "${narration}"` : ''}
+MEDIA TYPE: ${mediaType}
+
+Your task:
+1. Understand the VISUAL INTENT - what should the viewer SEE (not abstract concepts)
+2. Generate search queries that will find RELEVANT stock ${mediaType}s
+3. Focus on concrete visual elements, not metaphors
+
+IMPORTANT RULES:
+- Stock sites have photos/videos of REAL things - not abstract concepts
+- "bar graph" should search for "chart", "data visualization", "statistics screen" - NOT "bar" (drinking establishment)
+- "dollar signs" should search for "money", "currency", "finance", "cash" - NOT abstract symbols
+- "animated" is usually NOT searchable - focus on the SUBJECT instead
+- Think about what a photographer would actually capture
+- For abstract concepts, find visual METAPHORS (e.g., "growth" → "plant growing", "arrow up", "stairs")
+
+Return a JSON object with this exact structure:
+{
+  "primaryQuery": "the single best 2-3 word search query",
+  "alternativeQueries": ["query2", "query3", "query4"],
+  "category": "one of: nature, business, technology, people, city, abstract, motion, aerial, food, health, education, entertainment",
+  "visualElements": ["main visual element 1", "element 2"],
+  "avoid": ["words that might return wrong results"]
+}
+
+Return ONLY the JSON object, no markdown or explanation.`;
+
+    const result = await genAI.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: prompt
+    });
+
+    const responseText = result.text.trim();
+
+    // Parse JSON from response (handle potential markdown wrapping)
+    let jsonStr = responseText;
+    if (responseText.includes('```')) {
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) jsonStr = jsonMatch[1].trim();
+    }
+
+    const parsed = JSON.parse(jsonStr);
+
+    // Validate and structure the response
+    const queries = [
+      parsed.primaryQuery,
+      ...(parsed.alternativeQueries || [])
+    ].filter(q => q && typeof q === 'string' && q.trim().length > 0).slice(0, 5);
+
+    return {
+      success: true,
+      primaryQuery: parsed.primaryQuery || queries[0] || 'cinematic background',
+      queries: queries,
+      category: parsed.category || 'general',
+      visualElements: parsed.visualElements || [],
+      avoid: parsed.avoid || [],
+      aiGenerated: true
+    };
+
+  } catch (error) {
+    console.error('[generateSmartStockQueries] Error:', error);
+
+    // Fallback to basic extraction on error
+    const fallbackQuery = extractBasicKeywords(sceneDescription);
+    return {
+      success: true,
+      queries: [fallbackQuery],
+      primaryQuery: fallbackQuery,
+      category: 'general',
+      fallback: true,
+      error: error.message
+    };
+  }
+});
+
+// Helper function for basic keyword extraction (fallback)
+function extractBasicKeywords(text) {
+  const stopWords = new Set(['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+    'must', 'shall', 'can', 'need', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
+    'up', 'about', 'into', 'over', 'after', 'show', 'showing', 'shows', 'scene', 'image', 'video',
+    'clip', 'animated', 'animation', 'illustration', 'style', 'mood', 'feeling']);
+
+  const words = text.toLowerCase()
+    .replace(/[^a-z\s]/g, '')
+    .split(/\s+/)
+    .filter(word => word.length > 2 && !stopWords.has(word));
+
+  // Return first 3 meaningful words
+  return words.slice(0, 3).join(' ') || 'cinematic background';
+}
+
+/**
  * searchStockMedia - Search for royalty-free images and videos
  * Sources: Pexels, Pixabay
  *
