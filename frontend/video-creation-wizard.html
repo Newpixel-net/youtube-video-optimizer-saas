@@ -145,38 +145,54 @@
         async _preloadMedia() {
             const loadPromises = [];
             let loaded = 0;
-            const total = this.scenes.length * 2;
+            let total = 0;
+
+            // Count total media items to load
+            for (const scene of this.scenes) {
+                if (scene.imageUrl && !scene.videoUrl) total++;
+                if (scene.videoUrl) total++;
+                if (scene.voiceoverUrl) total++;
+            }
+
+            // If no media to load, still report progress
+            if (total === 0) {
+                this.onLoadProgress(1);
+                return;
+            }
+
+            const updateProgress = () => {
+                loaded++;
+                this.onLoadProgress(Math.min(loaded / total, 1));
+            };
 
             for (const scene of this.scenes) {
                 if (scene.imageUrl && !scene.videoUrl) {
                     loadPromises.push(
-                        this._loadImage(scene.imageUrl).then(() => {
-                            loaded++;
-                            this.onLoadProgress(loaded / total);
-                        })
+                        this._loadImage(scene.imageUrl)
+                            .then(updateProgress)
+                            .catch(updateProgress) // Still update progress on error
                     );
                 }
 
                 if (scene.videoUrl) {
                     loadPromises.push(
-                        this._loadVideo(scene.videoUrl).then(() => {
-                            loaded++;
-                            this.onLoadProgress(loaded / total);
-                        })
+                        this._loadVideo(scene.videoUrl)
+                            .then(updateProgress)
+                            .catch(updateProgress)
                     );
                 }
 
                 if (scene.voiceoverUrl) {
                     loadPromises.push(
-                        this._loadAudio(scene.id, scene.voiceoverUrl).then(() => {
-                            loaded++;
-                            this.onLoadProgress(loaded / total);
-                        })
+                        this._loadAudio(scene.id, scene.voiceoverUrl)
+                            .then(updateProgress)
+                            .catch(updateProgress)
                     );
                 }
             }
 
-            await Promise.all(loadPromises);
+            // Use allSettled to ensure we complete even if some fail
+            await Promise.allSettled(loadPromises);
         }
 
         _loadImage(url) {
@@ -524,14 +540,43 @@
         }
 
         _renderPlaceholder(scene) {
-            this.ctx.fillStyle = '#1a1a2e';
+            // Gradient background
+            const gradient = this.ctx.createLinearGradient(0, 0, this.width, this.height);
+            gradient.addColorStop(0, '#1a1a2e');
+            gradient.addColorStop(1, '#2d1b4e');
+            this.ctx.fillStyle = gradient;
             this.ctx.fillRect(0, 0, this.width, this.height);
 
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-            this.ctx.font = 'bold 48px system-ui';
+            // Scene number badge
+            this.ctx.fillStyle = 'rgba(139, 92, 246, 0.3)';
+            this.ctx.beginPath();
+            this.ctx.arc(this.width / 2, this.height / 2 - 40, 60, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            this.ctx.font = 'bold 42px system-ui';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(`Scene ${scene.index + 1}`, this.width / 2, this.height / 2);
+            this.ctx.fillText(`${scene.index + 1}`, this.width / 2, this.height / 2 - 40);
+
+            // "Scene X" label
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            this.ctx.font = '24px system-ui';
+            this.ctx.fillText(`Scene ${scene.index + 1}`, this.width / 2, this.height / 2 + 30);
+
+            // Show first part of narration if available
+            const narration = scene.caption || scene.narration || '';
+            if (narration) {
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                this.ctx.font = '18px system-ui';
+                const truncated = narration.length > 80 ? narration.substring(0, 80) + '...' : narration;
+                this.ctx.fillText(truncated, this.width / 2, this.height / 2 + 70);
+            }
+
+            // Duration indicator
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            this.ctx.font = '16px system-ui';
+            this.ctx.fillText(`${scene.duration || 8}s`, this.width / 2, this.height - 30);
         }
 
         _renderTransition(fromScene, toScene, progress) {
@@ -6202,6 +6247,11 @@
                         ${renderCaptionSettings()}
                         ${renderAudioMixSettings()}
                     </div>
+                    <!-- Save Assembly Button - Outside the scrollable container -->
+                    <button onclick="saveAssemblySettings()"
+                            style="width: 100%; padding: 0.85rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; font-size: 0.9rem; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);">
+                        💾 Save Assembly Settings
+                    </button>
                 </div>
             `;
 
@@ -6543,12 +6593,6 @@
                                    style="width: 100%; height: 6px; cursor: pointer;">
                         </div>
                     </div>
-
-                    <!-- Save Assembly Button -->
-                    <button onclick="saveAssemblySettings()"
-                            style="width: 100%; margin-top: 1rem; padding: 0.75rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
-                        💾 Save Assembly Settings
-                    </button>
                 </div>
             `;
         }
