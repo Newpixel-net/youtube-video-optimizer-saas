@@ -786,6 +786,148 @@
             this._renderFrame();
         }
 
+        // Export video using MediaRecorder (client-side rendering)
+        async exportToVideo(onProgress = () => {}) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    // Pause any current playback
+                    this.pause();
+                    this.seek(0);
+
+                    // Wait a bit for seek to complete
+                    await new Promise(r => setTimeout(r, 100));
+
+                    // Get canvas stream
+                    const canvasStream = this.canvas.captureStream(30); // 30 FPS
+
+                    // Create audio context for mixing audio
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const destination = audioContext.createMediaStreamDestination();
+
+                    // Load and connect all audio sources
+                    const audioPromises = [];
+                    for (const scene of this.scenes) {
+                        if (scene.voiceoverUrl) {
+                            audioPromises.push(
+                                fetch(scene.voiceoverUrl)
+                                    .then(r => r.arrayBuffer())
+                                    .then(buffer => audioContext.decodeAudioData(buffer))
+                                    .then(audioBuffer => ({
+                                        buffer: audioBuffer,
+                                        startTime: scene.startTime,
+                                        sceneId: scene.id
+                                    }))
+                                    .catch(err => {
+                                        console.warn('Failed to load audio for scene:', scene.id, err);
+                                        return null;
+                                    })
+                            );
+                        }
+                    }
+
+                    const audioBuffers = (await Promise.all(audioPromises)).filter(Boolean);
+
+                    // Combine video and audio streams
+                    const combinedStream = new MediaStream([
+                        ...canvasStream.getVideoTracks(),
+                        ...destination.stream.getAudioTracks()
+                    ]);
+
+                    // Setup MediaRecorder
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+                        ? 'video/webm;codecs=vp9,opus'
+                        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+                            ? 'video/webm;codecs=vp8,opus'
+                            : 'video/webm';
+
+                    const recorder = new MediaRecorder(combinedStream, {
+                        mimeType,
+                        videoBitsPerSecond: 5000000 // 5 Mbps
+                    });
+
+                    const chunks = [];
+                    recorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) chunks.push(e.data);
+                    };
+
+                    recorder.onstop = () => {
+                        audioContext.close();
+                        const blob = new Blob(chunks, { type: mimeType });
+                        resolve(blob);
+                    };
+
+                    recorder.onerror = (e) => {
+                        audioContext.close();
+                        reject(new Error('Recording failed: ' + e.error));
+                    };
+
+                    // Schedule all audio to play at correct times
+                    const scheduledSources = [];
+                    for (const audio of audioBuffers) {
+                        const source = audioContext.createBufferSource();
+                        source.buffer = audio.buffer;
+                        source.connect(destination);
+                        scheduledSources.push({ source, startTime: audio.startTime });
+                    }
+
+                    // Start recording
+                    recorder.start(100); // Collect data every 100ms
+
+                    // Start audio context time reference
+                    const audioStartTime = audioContext.currentTime;
+
+                    // Schedule audio playback
+                    for (const { source, startTime } of scheduledSources) {
+                        source.start(audioStartTime + startTime);
+                    }
+
+                    // Play through the video
+                    this.isPlaying = true;
+                    this.currentTime = 0;
+                    this.lastFrameTime = performance.now();
+
+                    const exportRenderLoop = () => {
+                        if (!this.isPlaying) return;
+
+                        const now = performance.now();
+                        const delta = (now - this.lastFrameTime) / 1000;
+                        this.lastFrameTime = now;
+
+                        this.currentTime += delta;
+
+                        // Update progress
+                        const progress = Math.min(this.currentTime / this.totalDuration, 1);
+                        onProgress(Math.round(progress * 100));
+
+                        // Render current frame
+                        this._renderFrame();
+
+                        if (this.currentTime >= this.totalDuration) {
+                            // Export complete
+                            this.isPlaying = false;
+                            this.currentTime = this.totalDuration;
+
+                            // Stop recording after a small delay to capture final frame
+                            setTimeout(() => {
+                                recorder.stop();
+                                // Stop all audio sources
+                                for (const { source } of scheduledSources) {
+                                    try { source.stop(); } catch(e) {}
+                                }
+                            }, 200);
+                        } else {
+                            requestAnimationFrame(exportRenderLoop);
+                        }
+                    };
+
+                    requestAnimationFrame(exportRenderLoop);
+
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+
         destroy() {
             this.pause();
 
@@ -8765,96 +8907,90 @@
 
         function renderExportComplete(exportState) {
             const outputUrl = exportState.outputUrl;
-            const exportType = exportState.exportType || (outputUrl ? 'video' : 'images-only');
-            const exportNote = exportState.exportNote || '';
-            const imageUrls = exportState.imageUrls || [];
-            const previewThumbnail = exportState.previewThumbnail;
+            const fileName = exportState.fileName || 'video.webm';
             const hasVideo = outputUrl && outputUrl.length > 0;
+
+            // Calculate video stats
+            const totalScenes = state.script.scenes?.length || 0;
+            const totalDuration = state.script.scenes?.reduce((sum, s) => sum + (s.duration || 8), 0) || 0;
 
             return `
                 <div class="content-card" style="text-align: center; padding: 3rem 2rem; margin-top: 1rem;">
-                    <div style="font-size: 4rem; margin-bottom: 1.5rem;">${hasVideo ? '🎉' : '✅'}</div>
+                    <div style="font-size: 4rem; margin-bottom: 1.5rem;">🎉</div>
                     <div style="font-size: 1.5rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
-                        ${hasVideo ? 'Export Complete!' : 'Processing Complete'}
+                        Video Export Complete!
                     </div>
-                    <div style="color: rgba(255,255,255,0.6); margin-bottom: 1rem;">
-                        ${hasVideo ? 'Your video is ready to download' : 'Your content is ready'}
+                    <div style="color: rgba(255,255,255,0.6); margin-bottom: 1.5rem;">
+                        Your video is ready to download and share
                     </div>
-
-                    ${exportNote ? `
-                        <div style="max-width: 500px; margin: 0 auto 1.5rem; padding: 0.75rem 1rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 0.5rem;">
-                            <div style="font-size: 0.8rem; color: #f59e0b;">
-                                ℹ️ ${exportNote}
-                            </div>
-                        </div>
-                    ` : ''}
 
                     <!-- Video Preview -->
                     ${hasVideo ? `
-                        <div style="max-width: 600px; margin: 0 auto 2rem; border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
-                            <video src="${outputUrl}" controls autoplay muted style="width: 100%; display: block;"></video>
+                        <div style="max-width: 700px; margin: 0 auto 2rem; border-radius: 1rem; overflow: hidden; border: 2px solid rgba(139, 92, 246, 0.3); box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+                            <video id="export-preview-video" src="${outputUrl}" controls style="width: 100%; display: block; background: black;"></video>
                         </div>
-                    ` : previewThumbnail ? `
-                        <div style="max-width: 400px; margin: 0 auto 2rem; border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
-                            <img src="${previewThumbnail}" alt="Preview" style="width: 100%; display: block;">
-                            <div style="padding: 0.75rem; background: rgba(255,255,255,0.05); font-size: 0.8rem; color: rgba(255,255,255,0.6);">
-                                Preview thumbnail (video processing requires backend service)
-                            </div>
+
+                        <!-- Video Info -->
+                        <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem; color: rgba(255,255,255,0.6); font-size: 0.85rem;">
+                            <span>📹 ${totalScenes} scenes</span>
+                            <span>⏱️ ${formatDuration(totalDuration)}</span>
+                            <span>🎬 WebM format</span>
                         </div>
-                    ` : ''}
+                    ` : `
+                        <div style="padding: 2rem; color: rgba(255,255,255,0.5);">
+                            No video available
+                        </div>
+                    `}
 
                     <!-- Action Buttons -->
-                    <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+                    <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem;">
                         ${hasVideo ? `
-                            <a href="${outputUrl}" download
-                               style="padding: 0.75rem 2rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
-                                <span>⬇️</span>
+                            <button onclick="downloadExportedVideo()"
+                                    style="padding: 1rem 2.5rem; border-radius: 0.75rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 700; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);">
+                                <span style="font-size: 1.25rem;">⬇️</span>
                                 <span>Download Video</span>
-                            </a>
-                            <button onclick="copyExportUrl()"
-                                    style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
-                                <span>📋</span>
-                                <span>Copy Link</span>
                             </button>
-                        ` : `
-                            <button onclick="downloadAllImages()"
-                                    style="padding: 0.75rem 2rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
-                                <span>🖼️</span>
-                                <span>Download Images</span>
-                            </button>
-                        `}
+                        ` : ''}
                         <button onclick="exportAgain()"
-                                style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                                style="padding: 1rem 1.5rem; border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                             <span>🔄</span>
                             <span>Export Again</span>
                         </button>
                     </div>
 
                     ${hasVideo ? `
-                        <!-- Share Options -->
-                        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin-bottom: 1rem;">Share your video</div>
-                            <div style="display: flex; justify-content: center; gap: 0.75rem;">
-                                ${['YouTube', 'TikTok', 'Instagram', 'Twitter'].map(platform => `
-                                    <button onclick="shareToSocial('${platform.toLowerCase()}')"
-                                            style="width: 3rem; height: 3rem; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 1.25rem; display: flex; align-items: center; justify-content: center;"
-                                            title="Share to ${platform}">
-                                        ${platform === 'YouTube' ? '📺' : platform === 'TikTok' ? '🎵' : platform === 'Instagram' ? '📸' : '🐦'}
-                                    </button>
-                                `).join('')}
+                        <!-- Share Info -->
+                        <div style="padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.75rem; max-width: 500px; margin: 0 auto;">
+                            <div style="font-size: 0.9rem; color: #10b981; margin-bottom: 0.5rem; font-weight: 600;">
+                                ✅ Ready to upload!
+                            </div>
+                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6);">
+                                Download your video and upload it directly to YouTube, TikTok, Instagram, or any other platform.
                             </div>
                         </div>
-                    ` : `
-                        <!-- Tip for video export -->
-                        <div style="margin-top: 2rem; padding: 1rem; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.5rem; max-width: 500px; margin-left: auto; margin-right: auto;">
-                            <div style="font-size: 0.85rem; color: #a78bfa;">
-                                💡 <strong>Tip:</strong> To create a full video with Ken Burns effects and transitions,
-                                animate your scenes in the Animation step first, then export.
-                            </div>
-                        </div>
-                    `}
+                    ` : ''}
                 </div>
             `;
+        }
+
+        // Download the exported video
+        function downloadExportedVideo() {
+            const outputUrl = state.export.outputUrl;
+            const fileName = state.export.fileName || 'video.webm';
+
+            if (!outputUrl) {
+                showToast('No video to download', 'error');
+                return;
+            }
+
+            const link = document.createElement('a');
+            link.href = outputUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast('Download started!', 'success');
         }
 
         // Download all storyboard images
@@ -8991,42 +9127,154 @@
                 return;
             }
 
-            // Warn if no voiceovers but allow export
-            if (!hasVoiceovers) {
-                console.log('[Export] No voiceovers found - video will be silent or music-only');
-            }
-
             state.export.status = 'exporting';
             state.export.progress = 0;
-            state.export.currentStage = 'Starting export...';
+            state.export.currentStage = 'Preparing video export...';
+            state.export.exportType = 'client-render';
             render();
 
             try {
-                // Capture timeline state before export
-                const timelineState = saveTimelineState();
-                console.log('[Export] Timeline state:', timelineState);
+                // Use client-side rendering with VideoPreviewEngine
+                console.log('[Export] Starting client-side video rendering');
 
-                const startExport = firebase.functions().httpsCallable('creationWizardStartExport');
-                const result = await startExport({
-                    projectId: state.project.id,
-                    quality: state.export.selectedQuality || '1080p',
-                    format: 'mp4',
-                    timelineState // Include timeline edits
+                // Create or get export canvas (hidden, high quality)
+                let exportCanvas = document.getElementById('export-canvas');
+                if (!exportCanvas) {
+                    exportCanvas = document.createElement('canvas');
+                    exportCanvas.id = 'export-canvas';
+                    exportCanvas.style.display = 'none';
+                    document.body.appendChild(exportCanvas);
+                }
+
+                // Determine resolution based on quality setting
+                const quality = state.export.selectedQuality || '1080p';
+                const resolutions = {
+                    '720p': { width: 1280, height: 720 },
+                    '1080p': { width: 1920, height: 1080 },
+                    '4k': { width: 3840, height: 2160 }
+                };
+                const res = resolutions[quality] || resolutions['1080p'];
+
+                // Adjust for aspect ratio
+                const aspectRatio = state.platform.aspectRatio || '16:9';
+                let width = res.width;
+                let height = res.height;
+                if (aspectRatio === '9:16') {
+                    width = res.height * 9 / 16;
+                    height = res.height;
+                } else if (aspectRatio === '1:1') {
+                    width = height = Math.min(res.width, res.height);
+                }
+
+                // Create export engine
+                const exportEngine = new VideoPreviewEngine(exportCanvas, {
+                    width: Math.round(width),
+                    height: Math.round(height),
+                    onLoadProgress: (p) => {
+                        state.export.progress = Math.round(p * 20); // 0-20% for loading
+                        state.export.currentStage = 'Loading media... ' + Math.round(p * 100) + '%';
+                        updateExportProgressBar(state.export.progress, state.export.currentStage);
+                    }
                 });
 
-                state.export.jobId = result.data.jobId;
-                showToast('Export started!', 'success');
+                // Build scenes for export
+                const exportScenes = buildExportScenes();
+                console.log('[Export] Scenes to export:', exportScenes.length);
 
-                // Start polling for progress
-                pollExportStatus();
+                // Load scenes into export engine
+                state.export.currentStage = 'Loading media assets...';
+                updateExportProgressBar(state.export.progress, state.export.currentStage);
+                await exportEngine.loadScenes(exportScenes);
+
+                // Start rendering
+                state.export.progress = 20;
+                state.export.currentStage = 'Rendering video...';
+                updateExportProgressBar(state.export.progress, state.export.currentStage);
+
+                const videoBlob = await exportEngine.exportToVideo((progress) => {
+                    // Map 0-100 progress to 20-95 range
+                    const mappedProgress = 20 + Math.round(progress * 0.75);
+                    state.export.progress = mappedProgress;
+                    state.export.currentStage = 'Rendering video... ' + progress + '%';
+                    updateExportProgressBar(state.export.progress, state.export.currentStage);
+                });
+
+                // Clean up export engine
+                exportEngine.destroy();
+
+                // Create downloadable URL
+                state.export.progress = 95;
+                state.export.currentStage = 'Finalizing...';
+                updateExportProgressBar(state.export.progress, state.export.currentStage);
+
+                const videoUrl = URL.createObjectURL(videoBlob);
+                const fileName = (state.script.title || 'video').replace(/[^a-z0-9]/gi, '_') + '_' + Date.now() + '.webm';
+
+                // Store export result
+                state.export.status = 'completed';
+                state.export.progress = 100;
+                state.export.outputUrl = videoUrl;
+                state.export.outputBlob = videoBlob;
+                state.export.fileName = fileName;
+                state.export.currentStage = 'Export complete!';
+                state.export.exportType = 'client-render';
+                state.export.exportNote = null;
+
+                showToast('Video exported successfully!', 'success');
+                render();
+
+                // Save export record to project (optional, for history)
+                try {
+                    await saveProject();
+                } catch (e) {
+                    console.warn('Could not save export record:', e);
+                }
 
             } catch (error) {
                 console.error('Export error:', error);
                 state.export.status = 'failed';
-                state.export.error = error.message;
-                showToast('Failed to start export: ' + error.message, 'error');
+                state.export.error = error.message || 'Export failed';
+                showToast('Export failed: ' + error.message, 'error');
                 render();
             }
+        }
+
+        // Build scenes array for export engine
+        function buildExportScenes() {
+            const scriptScenes = state.script.scenes || [];
+            const animationScenes = state.animation.scenes || [];
+            const storyboardScenes = state.storyboard.scenes || [];
+            const sceneOrder = state.assembly.sceneOrder?.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+
+            return sceneOrder.map((sceneId, index) => {
+                const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                const animScene = animationScenes.find(s => s.sceneId === sceneId);
+                const storyboardScene = storyboardScenes.find(s => s.sceneId === sceneId);
+
+                return {
+                    id: sceneId,
+                    index,
+                    narration: scriptScene?.narration || '',
+                    visualDuration: scriptScene?.visualDuration || scriptScene?.duration || 8,
+                    duration: scriptScene?.duration || 8,
+                    // Prefer video if available, otherwise image
+                    videoUrl: animScene?.videoUrl || null,
+                    imageUrl: storyboardScene?.imageUrl || null,
+                    voiceoverUrl: animScene?.voiceoverUrl || null,
+                    // Ken Burns parameters for images
+                    kenBurns: {
+                        startScale: 1.0 + Math.random() * 0.2,
+                        endScale: 1.1 + Math.random() * 0.2,
+                        startX: 0.4 + Math.random() * 0.2,
+                        startY: 0.4 + Math.random() * 0.2,
+                        endX: 0.4 + Math.random() * 0.2,
+                        endY: 0.4 + Math.random() * 0.2
+                    },
+                    transition: state.assembly.transitions?.[sceneId]?.type || 'fade'
+                };
+            });
         }
 
         async function pollExportStatus() {
