@@ -24990,21 +24990,27 @@ exports.searchStockMedia = functions.https.onCall(async (data, context) => {
       });
 
       if (type === 'video') {
-        results.pexels = (pexelsResponse.data.videos || []).map(v => ({
-          id: `pexels-${v.id}`,
-          source: 'pexels',
-          type: 'video',
-          thumbnail: v.image,
-          preview: v.video_files?.find(f => f.quality === 'sd')?.link || v.video_files?.[0]?.link,
-          url: v.video_files?.find(f => f.quality === 'hd')?.link || v.video_files?.[0]?.link,
-          width: v.width,
-          height: v.height,
-          duration: v.duration,
-          author: v.user?.name || 'Pexels',
-          authorUrl: v.user?.url,
-          license: 'Pexels License (Free)',
-          originalUrl: v.url
-        }));
+        results.pexels = (pexelsResponse.data.videos || []).map(v => {
+          const hdVideo = v.video_files?.find(f => f.quality === 'hd');
+          const sdVideo = v.video_files?.find(f => f.quality === 'sd');
+          const videoUrl = hdVideo?.link || sdVideo?.link || v.video_files?.[0]?.link;
+          return {
+            id: `pexels-${v.id}`,
+            source: 'pexels',
+            type: 'video',
+            thumbnail: v.image, // Pexels provides image thumbnail
+            preview: sdVideo?.link || v.video_files?.[0]?.link,
+            url: videoUrl,
+            videoUrl: videoUrl, // Explicit video URL field
+            width: v.width,
+            height: v.height,
+            duration: v.duration,
+            author: v.user?.name || 'Pexels',
+            authorUrl: v.user?.url,
+            license: 'Pexels License (Free)',
+            originalUrl: v.url
+          };
+        });
       } else {
         results.pexels = (pexelsResponse.data.photos || []).map(p => ({
           id: `pexels-${p.id}`,
@@ -25052,22 +25058,35 @@ exports.searchStockMedia = functions.https.onCall(async (data, context) => {
       });
 
       if (type === 'video') {
-        results.pixabay = (pixabayResponse.data.hits || []).map(v => ({
-          id: `pixabay-${v.id}`,
-          source: 'pixabay',
-          type: 'video',
-          thumbnail: `https://i.vimeocdn.com/video/${v.picture_id}_295x166.jpg`,
-          preview: v.videos?.small?.url || v.videos?.tiny?.url,
-          url: v.videos?.large?.url || v.videos?.medium?.url || v.videos?.small?.url,
-          width: v.videos?.large?.width || v.videos?.medium?.width || 1920,
-          height: v.videos?.large?.height || v.videos?.medium?.height || 1080,
-          duration: v.duration,
-          author: v.user,
-          authorUrl: `https://pixabay.com/users/${v.user}-${v.user_id}/`,
-          license: 'Pixabay License (Free)',
-          originalUrl: v.pageURL,
-          tags: v.tags
-        }));
+        results.pixabay = (pixabayResponse.data.hits || []).map(v => {
+          const videoUrl = v.videos?.large?.url || v.videos?.medium?.url || v.videos?.small?.url;
+          // Pixabay video thumbnails - try multiple formats
+          // picture_id can be used with Vimeo CDN or we use a fallback
+          const thumbnailFormats = [
+            `https://i.vimeocdn.com/video/${v.picture_id}_640x360.jpg`,
+            `https://i.vimeocdn.com/video/${v.picture_id}_295x166.jpg`,
+            v.userImageURL // Fallback to user image if needed
+          ];
+          return {
+            id: `pixabay-${v.id}`,
+            source: 'pixabay',
+            type: 'video',
+            thumbnail: thumbnailFormats[0],
+            thumbnailFallback: thumbnailFormats[1], // Provide fallback
+            preview: v.videos?.small?.url || v.videos?.tiny?.url,
+            url: videoUrl,
+            videoUrl: videoUrl, // Explicit video URL field
+            width: v.videos?.large?.width || v.videos?.medium?.width || 1920,
+            height: v.videos?.large?.height || v.videos?.medium?.height || 1080,
+            duration: v.duration,
+            author: v.user,
+            authorUrl: `https://pixabay.com/users/${v.user}-${v.user_id}/`,
+            license: 'Pixabay License (Free)',
+            originalUrl: v.pageURL,
+            tags: v.tags,
+            pictureId: v.picture_id // Include for debugging
+          };
+        });
       } else {
         results.pixabay = (pixabayResponse.data.hits || []).map(p => ({
           id: `pixabay-${p.id}`,
@@ -25189,7 +25208,17 @@ exports.searchStockMusic = functions.https.onCall(async (data, context) => {
 exports.importStockMedia = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
 
-  const { mediaId, url, type = 'image', projectId } = data;
+  const {
+    mediaId,
+    url,
+    type = 'image',
+    projectId,
+    // Video-specific options
+    thumbnailUrl,
+    trimStart = 0,
+    trimEnd = null,
+    originalDuration = null
+  } = data;
 
   if (!url) {
     throw new functions.https.HttpsError('invalid-argument', 'Media URL required');
@@ -25199,7 +25228,7 @@ exports.importStockMedia = functions.https.onCall(async (data, context) => {
     // Download the media
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
-      timeout: 60000, // 60s for large videos
+      timeout: 120000, // 120s for large videos
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; VideoWizard/1.0)'
       }
@@ -25209,23 +25238,38 @@ exports.importStockMedia = functions.https.onCall(async (data, context) => {
     const contentType = response.headers['content-type'] || (type === 'video' ? 'video/mp4' : 'image/jpeg');
     const extension = type === 'video' ? 'mp4' : 'jpg';
 
-    // Generate filename
+    // Generate filename - include trim info for videos
     const timestamp = Date.now();
-    const fileName = `creation-projects/${projectId || uid}/stock/${mediaId}_${timestamp}.${extension}`;
+    const trimSuffix = type === 'video' && (trimStart > 0 || trimEnd) ? `_trim${trimStart}-${trimEnd || 'end'}` : '';
+    const fileName = `creation-projects/${projectId || uid}/stock/${mediaId}${trimSuffix}_${timestamp}.${extension}`;
 
     // Upload to Firebase Storage
     const bucket = admin.storage().bucket();
     const file = bucket.file(fileName);
 
+    // Prepare metadata - include trim info for videos
+    const fileMetadata = {
+      originalUrl: url,
+      mediaId: mediaId,
+      importedAt: new Date().toISOString(),
+      source: mediaId.split('-')[0] // 'pexels' or 'pixabay'
+    };
+
+    // Add video-specific metadata
+    if (type === 'video') {
+      fileMetadata.trimStart = String(trimStart || 0);
+      fileMetadata.trimEnd = trimEnd ? String(trimEnd) : '';
+      fileMetadata.originalDuration = originalDuration ? String(originalDuration) : '';
+      fileMetadata.clipDuration = trimEnd ? String(trimEnd - trimStart) : '';
+      if (thumbnailUrl) {
+        fileMetadata.thumbnailUrl = thumbnailUrl;
+      }
+    }
+
     await file.save(buffer, {
       metadata: {
         contentType: contentType,
-        metadata: {
-          originalUrl: url,
-          mediaId: mediaId,
-          importedAt: new Date().toISOString(),
-          source: mediaId.split('-')[0] // 'pexels' or 'pixabay'
-        }
+        metadata: fileMetadata
       }
     });
 
@@ -25241,16 +25285,36 @@ exports.importStockMedia = functions.https.onCall(async (data, context) => {
       mediaType: type,
       originalUrl: url,
       cachedUrl: publicUrl,
+      ...(type === 'video' && {
+        trimStart: trimStart || 0,
+        trimEnd: trimEnd,
+        originalDuration: originalDuration,
+        clipDuration: trimEnd ? trimEnd - trimStart : null
+      }),
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    return {
+    // Return response with trim info for videos
+    const result = {
       success: true,
       url: publicUrl,
       mediaId,
       type,
       cached: true
     };
+
+    // Add video-specific info to response
+    if (type === 'video') {
+      result.trimStart = trimStart || 0;
+      result.trimEnd = trimEnd;
+      result.originalDuration = originalDuration;
+      result.clipDuration = trimEnd ? trimEnd - trimStart : originalDuration;
+      result.thumbnailUrl = thumbnailUrl; // Pass through for frontend reference
+      // Note: Actual trimming will be applied during video assembly/export
+      result.trimNote = 'Trim settings stored. Will be applied during final video assembly.';
+    }
+
+    return result;
 
   } catch (error) {
     console.error('[importStockMedia] Error:', error);

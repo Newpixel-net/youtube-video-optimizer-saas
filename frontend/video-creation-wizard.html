@@ -2721,6 +2721,9 @@
             const trimStart = stockBrowserState.trimStart || 0;
             const trimEnd = stockBrowserState.trimEnd || stockBrowserState.videoDuration;
 
+            // Store thumbnail from search results (Pexels/Pixabay allow hotlinking thumbnails)
+            const thumbnailUrl = media.thumbnail || media.preview || media.image;
+
             showToast('Importing video...', 'info');
 
             try {
@@ -2730,8 +2733,10 @@
                     url: media.videoUrl || media.url,
                     type: 'video',
                     projectId: state.project.id,
+                    thumbnailUrl: thumbnailUrl, // Pass thumbnail for reference
                     trimStart: trimStart,
-                    trimEnd: trimEnd
+                    trimEnd: trimEnd,
+                    originalDuration: media.duration || stockBrowserState.videoDuration
                 });
 
                 if (result.data.success) {
@@ -2748,7 +2753,8 @@
                         state.storyboard.scenes.push(storyboardScene);
                     }
 
-                    storyboardScene.imageUrl = result.data.thumbnailUrl || result.data.url;
+                    // Use thumbnail from search results for preview (not the video URL)
+                    storyboardScene.imageUrl = thumbnailUrl;
                     storyboardScene.videoUrl = result.data.url;
                     storyboardScene.status = 'ready';
                     storyboardScene.source = 'stock-video';
@@ -2757,13 +2763,16 @@
                         source: media.source,
                         author: media.author,
                         license: media.license,
+                        thumbnailUrl: thumbnailUrl,
+                        thumbnailFallback: media.thumbnailFallback || media.preview || null,
                         trimStart: trimStart,
                         trimEnd: trimEnd,
-                        duration: trimEnd - trimStart
+                        originalDuration: media.duration || stockBrowserState.videoDuration,
+                        clipDuration: trimEnd - trimStart
                     };
 
                     closeStockBrowser();
-                    showToast(`Video added! (${formatDuration(trimEnd - trimStart)} clip)`, 'success');
+                    showToast(`Video clip added! (${formatDuration(trimEnd - trimStart)})`, 'success');
                     scheduleAutoSave();
                     render();
                 }
@@ -4480,13 +4489,38 @@
                 `;
             } else if (status === 'ready' && imageUrl) {
                 // Image ready
+                const isVideo = storyboardScene.source === 'stock-video';
                 const sourceLabel = storyboardScene.source === 'stock' ? '📷 Stock' :
-                                   storyboardScene.source === 'stock-video' ? '🎬 Video' : '🎨 AI';
+                                   isVideo ? '🎬 Video' : '🎨 AI';
                 const sourceBgColor = storyboardScene.source === 'stock' ? 'rgba(16, 185, 129, 0.9)' :
-                                     storyboardScene.source === 'stock-video' ? 'rgba(6, 182, 212, 0.9)' : 'rgba(139, 92, 246, 0.9)';
+                                     isVideo ? 'rgba(6, 182, 212, 0.9)' : 'rgba(139, 92, 246, 0.9)';
+                // Get fallback thumbnail URL if available
+                const fallbackUrl = storyboardScene.stockInfo?.thumbnailFallback || '';
+                // Get clip duration for videos
+                const clipDuration = storyboardScene.stockInfo?.clipDuration || storyboardScene.stockInfo?.duration;
+
                 cardContent = `
-                    <div style="height: 160px; border-radius: 0.5rem; overflow: hidden; position: relative;">
-                        <img src="${imageUrl}" alt="Scene ${index + 1}" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="height: 160px; border-radius: 0.5rem; overflow: hidden; position: relative; background: rgba(0,0,0,0.3);">
+                        <img src="${imageUrl}"
+                             alt="Scene ${index + 1}"
+                             style="width: 100%; height: 100%; object-fit: cover;"
+                             onerror="this.onerror=null; ${fallbackUrl ? `this.src='${fallbackUrl}';` : `this.style.display='none'; this.parentElement.querySelector('.placeholder-icon').style.display='flex';`}">
+                        <!-- Placeholder if image fails -->
+                        <div class="placeholder-icon" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);">
+                            <span style="font-size: 2rem;">${isVideo ? '🎬' : '🖼️'}</span>
+                        </div>
+                        ${isVideo ? `
+                            <!-- Video play icon overlay -->
+                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 36px; height: 36px; background: rgba(0,0,0,0.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; pointer-events: none;">
+                                <div style="width: 0; height: 0; border-left: 10px solid white; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 2px;"></div>
+                            </div>
+                            ${clipDuration ? `
+                                <!-- Duration badge -->
+                                <div style="position: absolute; bottom: 2.5rem; right: 0.4rem; background: rgba(0,0,0,0.8); color: white; padding: 0.15rem 0.35rem; border-radius: 0.2rem; font-size: 0.6rem;">
+                                    ${formatDuration(clipDuration)}
+                                </div>
+                            ` : ''}
+                        ` : ''}
                         <!-- Source badge -->
                         <div style="position: absolute; top: 0.5rem; right: 0.5rem; background: ${sourceBgColor}; color: white; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem;">
                             ${sourceLabel}
@@ -4508,11 +4542,27 @@
                     </div>
                 `;
             } else if (status === 'error') {
-                // Error state
+                // Error state - show both retry options
+                const errorMsg = storyboardScene.error || 'Generation failed';
                 cardContent = `
-                    <div style="height: 160px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;" onclick="generateSingleSceneImage(${scene.id})">
-                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚠️</div>
-                        <div style="color: #ef4444; font-size: 0.8rem;">Failed - Click to retry</div>
+                    <div style="height: 160px; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.75rem;">
+                            <span style="font-size: 1rem;">⚠️</span>
+                            <span style="color: #ef4444; font-size: 0.75rem;">${errorMsg.substring(0, 40)}${errorMsg.length > 40 ? '...' : ''}</span>
+                        </div>
+                        <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; margin-bottom: 0.5rem;">Choose to retry:</div>
+                        <div style="display: flex; gap: 0.5rem; width: 100%;">
+                            <button onclick="generateSingleSceneImage(${scene.id})"
+                                    style="flex: 1; padding: 0.5rem 0.4rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(6, 182, 212, 0.3)); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.7rem; display: flex; flex-direction: column; align-items: center; gap: 0.2rem;">
+                                <span style="font-size: 1rem;">🎨</span>
+                                <span>Retry AI</span>
+                            </button>
+                            <button onclick="openStockBrowser(${scene.id})"
+                                    style="flex: 1; padding: 0.5rem 0.4rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.7rem; display: flex; flex-direction: column; align-items: center; gap: 0.2rem;">
+                                <span style="font-size: 1rem;">📷</span>
+                                <span>Use Stock</span>
+                            </button>
+                        </div>
                     </div>
                 `;
             }
