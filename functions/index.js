@@ -24907,26 +24907,32 @@ async function simulateExportProgress(jobId, projectId, uid, manifest, totalDura
     };
 
     if (stage.status === 'completed') {
-      // Generate a placeholder output URL
-      // In production, this would be the actual rendered video URL from the video processor
-      const outputFileName = `video_${projectId}_${Date.now()}.mp4`;
-      const bucket = admin.storage().bucket();
+      // For demo/simulation: use available video content
+      // In production, the video processor would render a combined video
+      const animatedScenes = manifest.scenes.filter(s => s.videoUrl);
+      const imageScenes = manifest.scenes.filter(s => s.imageUrl);
 
-      // For demo: use first available video, or first image as preview thumbnail
-      const firstAnimatedScene = manifest.scenes.find(s => s.videoUrl);
-      const firstImageScene = manifest.scenes.find(s => s.imageUrl);
-
-      if (firstAnimatedScene && firstAnimatedScene.videoUrl) {
-        updateData.outputUrl = firstAnimatedScene.videoUrl;
-      } else if (firstImageScene && firstImageScene.imageUrl) {
-        // Image-only export - in production, video processor would create Ken Burns video
-        // For demo, we'll indicate it's ready but use placeholder
-        updateData.outputUrl = `https://storage.googleapis.com/${bucket.name}/creation-exports/${uid}/${projectId}/${outputFileName}`;
-        updateData.previewThumbnail = firstImageScene.imageUrl;
-        updateData.exportType = 'image-slideshow';
+      if (animatedScenes.length > 0) {
+        // Use first animated video as preview
+        // In production, all scenes would be combined
+        updateData.outputUrl = animatedScenes[0].videoUrl;
+        updateData.exportType = 'animated-preview';
+        updateData.exportNote = `Preview: ${animatedScenes.length} animated scene(s). Full video rendering requires video processor service.`;
+      } else if (imageScenes.length > 0) {
+        // Image-only export - can't create video without processor
+        // Mark as complete but indicate it's images-only
+        updateData.exportType = 'images-only';
+        updateData.exportNote = 'Image slideshow export. Video processor not configured - download images individually or configure video processor for Ken Burns video export.';
+        // Use first image as thumbnail preview
+        updateData.previewThumbnail = imageScenes[0].imageUrl;
+        // Set outputUrl to null to indicate no video available
+        updateData.outputUrl = null;
+        updateData.imagesReady = true;
+        updateData.imageUrls = imageScenes.map(s => s.imageUrl);
       } else {
-        // Fallback: create a placeholder URL structure
-        updateData.outputUrl = `https://storage.googleapis.com/${bucket.name}/creation-exports/${uid}/${projectId}/${outputFileName}`;
+        updateData.exportType = 'error';
+        updateData.error = 'No visual content found';
+        updateData.outputUrl = null;
       }
 
       updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
@@ -24997,6 +25003,12 @@ exports.creationWizardCheckExportStatus = functions.https.onCall(async (data, co
       error: job.error || null,
       totalDuration: job.totalDuration,
       quality: job.quality,
+      // Additional export type info
+      exportType: job.exportType || null,
+      exportNote: job.exportNote || null,
+      imageUrls: job.imageUrls || null,
+      previewThumbnail: job.previewThumbnail || null,
+      imagesReady: job.imagesReady || false,
       createdAt: job.createdAt?.toDate?.()?.toISOString() || null,
       completedAt: job.completedAt?.toDate?.()?.toISOString() || null
     };

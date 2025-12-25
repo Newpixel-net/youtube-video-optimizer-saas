@@ -8723,23 +8723,31 @@
 
             return `
                 <div class="content-card" style="text-align: center; padding: 3rem 2rem; margin-top: 1rem;">
-                    <div class="animate-float" style="font-size: 4rem; margin-bottom: 1.5rem;">🎬</div>
+                    <div style="font-size: 4rem; margin-bottom: 1.5rem;">
+                        <div class="animate-pulse" style="display: inline-block;">🎬</div>
+                    </div>
                     <div style="font-size: 1.5rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
                         Rendering Your Video
                     </div>
-                    <div style="color: rgba(255,255,255,0.6); margin-bottom: 2rem;">
+                    <div id="export-stage-text" style="color: rgba(255,255,255,0.6); margin-bottom: 2rem;">
                         ${currentStage}
                     </div>
 
                     <!-- Progress Bar -->
                     <div style="width: 100%; max-width: 400px; margin: 0 auto 1.5rem;">
-                        <div style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-                            <div style="height: 100%; width: ${progress}%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); border-radius: 4px; transition: width 0.5s ease;"></div>
+                        <div style="height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);">
+                            <div id="export-progress-bar" style="height: 100%; width: ${progress}%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); border-radius: 6px; transition: width 0.5s ease; box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);"></div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.85rem;">
+                        <div style="display: flex; justify-content: space-between; margin-top: 0.75rem; font-size: 0.9rem;">
                             <span style="color: rgba(255,255,255,0.5);">Progress</span>
-                            <span style="color: #8b5cf6; font-weight: 600;">${progress}%</span>
+                            <span id="export-progress-text" style="color: #8b5cf6; font-weight: 700;">${progress}%</span>
                         </div>
+                    </div>
+
+                    <!-- Processing indicator -->
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+                        <div class="animate-spin" style="width: 1rem; height: 1rem; border: 2px solid rgba(139, 92, 246, 0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>
+                        <span style="color: rgba(255,255,255,0.6); font-size: 0.85rem;">Processing on server...</span>
                     </div>
 
                     <!-- Cancel Button -->
@@ -8757,36 +8765,64 @@
 
         function renderExportComplete(exportState) {
             const outputUrl = exportState.outputUrl;
+            const exportType = exportState.exportType || (outputUrl ? 'video' : 'images-only');
+            const exportNote = exportState.exportNote || '';
+            const imageUrls = exportState.imageUrls || [];
+            const previewThumbnail = exportState.previewThumbnail;
+            const hasVideo = outputUrl && outputUrl.length > 0;
 
             return `
                 <div class="content-card" style="text-align: center; padding: 3rem 2rem; margin-top: 1rem;">
-                    <div style="font-size: 4rem; margin-bottom: 1.5rem;">🎉</div>
+                    <div style="font-size: 4rem; margin-bottom: 1.5rem;">${hasVideo ? '🎉' : '✅'}</div>
                     <div style="font-size: 1.5rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
-                        Export Complete!
+                        ${hasVideo ? 'Export Complete!' : 'Processing Complete'}
                     </div>
-                    <div style="color: rgba(255,255,255,0.6); margin-bottom: 2rem;">
-                        Your video is ready to download
+                    <div style="color: rgba(255,255,255,0.6); margin-bottom: 1rem;">
+                        ${hasVideo ? 'Your video is ready to download' : 'Your content is ready'}
                     </div>
 
+                    ${exportNote ? `
+                        <div style="max-width: 500px; margin: 0 auto 1.5rem; padding: 0.75rem 1rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 0.5rem;">
+                            <div style="font-size: 0.8rem; color: #f59e0b;">
+                                ℹ️ ${exportNote}
+                            </div>
+                        </div>
+                    ` : ''}
+
                     <!-- Video Preview -->
-                    ${outputUrl ? `
-                        <div style="max-width: 500px; margin: 0 auto 2rem; border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
-                            <video src="${outputUrl}" controls style="width: 100%; display: block;"></video>
+                    ${hasVideo ? `
+                        <div style="max-width: 600px; margin: 0 auto 2rem; border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+                            <video src="${outputUrl}" controls autoplay muted style="width: 100%; display: block;"></video>
+                        </div>
+                    ` : previewThumbnail ? `
+                        <div style="max-width: 400px; margin: 0 auto 2rem; border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
+                            <img src="${previewThumbnail}" alt="Preview" style="width: 100%; display: block;">
+                            <div style="padding: 0.75rem; background: rgba(255,255,255,0.05); font-size: 0.8rem; color: rgba(255,255,255,0.6);">
+                                Preview thumbnail (video processing requires backend service)
+                            </div>
                         </div>
                     ` : ''}
 
                     <!-- Action Buttons -->
                     <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
-                        <a href="${outputUrl}" download
-                           style="padding: 0.75rem 2rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>⬇️</span>
-                            <span>Download Video</span>
-                        </a>
-                        <button onclick="copyExportUrl()"
-                                style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>📋</span>
-                            <span>Copy Link</span>
-                        </button>
+                        ${hasVideo ? `
+                            <a href="${outputUrl}" download
+                               style="padding: 0.75rem 2rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
+                                <span>⬇️</span>
+                                <span>Download Video</span>
+                            </a>
+                            <button onclick="copyExportUrl()"
+                                    style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                                <span>📋</span>
+                                <span>Copy Link</span>
+                            </button>
+                        ` : `
+                            <button onclick="downloadAllImages()"
+                                    style="padding: 0.75rem 2rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                                <span>🖼️</span>
+                                <span>Download Images</span>
+                            </button>
+                        `}
                         <button onclick="exportAgain()"
                                 style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                             <span>🔄</span>
@@ -8794,21 +8830,54 @@
                         </button>
                     </div>
 
-                    <!-- Share Options -->
-                    <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin-bottom: 1rem;">Share your video</div>
-                        <div style="display: flex; justify-content: center; gap: 0.75rem;">
-                            ${['YouTube', 'TikTok', 'Instagram', 'Twitter'].map(platform => `
-                                <button onclick="shareToSocial('${platform.toLowerCase()}')"
-                                        style="width: 3rem; height: 3rem; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 1.25rem; display: flex; align-items: center; justify-content: center;"
-                                        title="Share to ${platform}">
-                                    ${platform === 'YouTube' ? '📺' : platform === 'TikTok' ? '🎵' : platform === 'Instagram' ? '📸' : '🐦'}
-                                </button>
-                            `).join('')}
+                    ${hasVideo ? `
+                        <!-- Share Options -->
+                        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin-bottom: 1rem;">Share your video</div>
+                            <div style="display: flex; justify-content: center; gap: 0.75rem;">
+                                ${['YouTube', 'TikTok', 'Instagram', 'Twitter'].map(platform => `
+                                    <button onclick="shareToSocial('${platform.toLowerCase()}')"
+                                            style="width: 3rem; height: 3rem; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 1.25rem; display: flex; align-items: center; justify-content: center;"
+                                            title="Share to ${platform}">
+                                        ${platform === 'YouTube' ? '📺' : platform === 'TikTok' ? '🎵' : platform === 'Instagram' ? '📸' : '🐦'}
+                                    </button>
+                                `).join('')}
+                            </div>
                         </div>
-                    </div>
+                    ` : `
+                        <!-- Tip for video export -->
+                        <div style="margin-top: 2rem; padding: 1rem; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.5rem; max-width: 500px; margin-left: auto; margin-right: auto;">
+                            <div style="font-size: 0.85rem; color: #a78bfa;">
+                                💡 <strong>Tip:</strong> To create a full video with Ken Burns effects and transitions,
+                                animate your scenes in the Animation step first, then export.
+                            </div>
+                        </div>
+                    `}
                 </div>
             `;
+        }
+
+        // Download all storyboard images
+        function downloadAllImages() {
+            const imageScenes = state.storyboard.scenes.filter(s => s.imageUrl);
+            if (imageScenes.length === 0) {
+                showToast('No images to download', 'warning');
+                return;
+            }
+
+            showToast('Downloading ' + imageScenes.length + ' images...', 'info');
+
+            imageScenes.forEach((scene, index) => {
+                const link = document.createElement('a');
+                link.href = scene.imageUrl;
+                link.download = 'scene_' + (index + 1) + '.png';
+                link.target = '_blank';
+                document.body.appendChild(link);
+                setTimeout(() => {
+                    link.click();
+                    document.body.removeChild(link);
+                }, index * 500); // Stagger downloads
+            });
         }
 
         function renderExportFailed(exportState) {
@@ -8967,20 +9036,34 @@
                 const checkStatus = firebase.functions().httpsCallable('creationWizardCheckExportStatus');
                 const result = await checkStatus({ jobId: state.export.jobId });
 
+                const statusChanged = state.export.status !== result.data.status;
+                const completed = result.data.status === 'completed';
+                const failed = result.data.status === 'failed' || result.data.status === 'error';
+
                 state.export.status = result.data.status;
                 state.export.progress = result.data.progress || 0;
                 state.export.currentStage = result.data.currentStage || '';
                 state.export.outputUrl = result.data.outputUrl || null;
                 state.export.error = result.data.error || null;
+                state.export.exportType = result.data.exportType || null;
+                state.export.exportNote = result.data.exportNote || null;
+                state.export.imageUrls = result.data.imageUrls || null;
+                state.export.previewThumbnail = result.data.previewThumbnail || null;
 
-                render();
+                // Only do full render on status change, otherwise just update progress bar
+                if (statusChanged || completed || failed) {
+                    render();
+                } else {
+                    // Just update progress bar without full re-render (prevents flashing)
+                    updateExportProgressBar(state.export.progress, state.export.currentStage);
+                }
 
-                if (result.data.status === 'completed') {
+                if (completed) {
                     showToast('Export complete!', 'success');
                     saveProject();
-                } else if (result.data.status === 'failed' || result.data.status === 'error') {
-                    showToast('Export failed', 'error');
-                } else if (result.data.status === 'processing' || result.data.status === 'pending') {
+                } else if (failed) {
+                    showToast('Export failed: ' + (state.export.error || 'Unknown error'), 'error');
+                } else if (result.data.status === 'processing' || result.data.status === 'pending' || result.data.status === 'exporting') {
                     // Continue polling
                     setTimeout(pollExportStatus, 2000);
                 }
@@ -8989,6 +9072,17 @@
                 // Retry polling
                 setTimeout(pollExportStatus, 5000);
             }
+        }
+
+        // Update just the progress bar elements without full re-render
+        function updateExportProgressBar(progress, currentStage) {
+            const progressBar = document.getElementById('export-progress-bar');
+            const progressText = document.getElementById('export-progress-text');
+            const stageText = document.getElementById('export-stage-text');
+
+            if (progressBar) progressBar.style.width = progress + '%';
+            if (progressText) progressText.textContent = progress + '%';
+            if (stageText) stageText.textContent = currentStage || 'Processing...';
         }
 
         async function cancelExport() {
