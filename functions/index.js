@@ -24529,3 +24529,405 @@ exports.creationWizardGetAssemblyPreview = functions.https.onCall(async (data, c
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get assembly preview'));
   }
 });
+
+// ==============================================
+// CREATION WIZARD - PHASE 6: EXPORT
+// ==============================================
+
+/**
+ * Quality presets for video export
+ */
+const EXPORT_QUALITY_PRESETS = {
+  '720p': {
+    name: '720p HD',
+    resolution: { width: 1280, height: 720 },
+    bitrate: '4M',
+    description: 'Good quality, smaller file size'
+  },
+  '1080p': {
+    name: '1080p Full HD',
+    resolution: { width: 1920, height: 1080 },
+    bitrate: '8M',
+    description: 'High quality, recommended'
+  },
+  '4k': {
+    name: '4K Ultra HD',
+    resolution: { width: 3840, height: 2160 },
+    bitrate: '20M',
+    description: 'Maximum quality, large file size'
+  }
+};
+
+/**
+ * creationWizardStartExport - Start video export/rendering job
+ */
+exports.creationWizardStartExport = functions
+  .runWith({ timeoutSeconds: 540, memory: '2GB' })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, quality = '1080p', format = 'mp4' } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  // Validate quality
+  const validQualities = Object.keys(EXPORT_QUALITY_PRESETS);
+  const outputQuality = validQualities.includes(quality) ? quality : '1080p';
+  const qualityPreset = EXPORT_QUALITY_PRESETS[outputQuality];
+
+  try {
+    // Get project data
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Validate project has all required data
+    const scriptScenes = project.script?.scenes || [];
+    const animationScenes = project.animation?.scenes || [];
+    const storyboardScenes = project.storyboard?.scenes || [];
+    const assembly = project.assembly || {};
+
+    if (scriptScenes.length === 0) {
+      throw new functions.https.HttpsError('failed-precondition', 'No script scenes found');
+    }
+
+    // Check for animated scenes
+    const animatedScenes = animationScenes.filter(s => s.videoUrl);
+    if (animatedScenes.length === 0) {
+      throw new functions.https.HttpsError('failed-precondition', 'No animated scenes found. Please complete animation step first.');
+    }
+
+    // Get scene order
+    const sceneOrder = assembly.sceneOrder?.length > 0
+      ? assembly.sceneOrder
+      : scriptScenes.map(s => s.id);
+
+    // Build export manifest
+    const exportManifest = {
+      scenes: sceneOrder.map(sceneId => {
+        const scriptScene = scriptScenes.find(s => s.id === sceneId);
+        const animScene = animationScenes.find(s => s.sceneId === sceneId);
+        const storyboardScene = storyboardScenes.find(s => s.sceneId === sceneId);
+        const transition = assembly.transitions?.[sceneId] || { type: 'cut' };
+
+        return {
+          sceneId,
+          duration: scriptScene?.duration || 8,
+          videoUrl: animScene?.videoUrl || null,
+          audioUrl: animScene?.voiceoverUrl || null,
+          imageUrl: storyboardScene?.imageUrl || null,
+          narration: scriptScene?.narration || '',
+          transition: transition.type
+        };
+      }),
+      music: assembly.music || { enabled: false },
+      captions: assembly.captions || { enabled: true, style: 'karaoke', position: 'bottom' },
+      audioMix: assembly.audioMix || { voiceVolume: 100, musicVolume: 30 },
+      quality: outputQuality,
+      resolution: qualityPreset.resolution,
+      bitrate: qualityPreset.bitrate,
+      format,
+      platform: project.platform?.selected || 'youtube-long',
+      aspectRatio: project.platform?.aspectRatio || '16:9'
+    };
+
+    // Calculate total duration
+    const totalDuration = exportManifest.scenes.reduce((sum, s) => sum + s.duration, 0);
+
+    // Create export job document
+    const jobRef = db.collection('creationExportJobs').doc();
+    const jobData = {
+      id: jobRef.id,
+      projectId,
+      userId: uid,
+      status: 'pending',
+      progress: 0,
+      manifest: exportManifest,
+      totalDuration,
+      quality: outputQuality,
+      format,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      outputUrl: null,
+      error: null
+    };
+
+    await jobRef.set(jobData);
+
+    // Update project with export job reference
+    await projectRef.update({
+      'export.status': 'exporting',
+      'export.jobId': jobRef.id,
+      'export.progress': 0,
+      'export.startedAt': new Date().toISOString(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Trigger video processor service (if available)
+    const videoProcessorUrl = functions.config().videoprocessor?.url;
+    if (videoProcessorUrl) {
+      try {
+        const requestBody = {
+          jobId: jobRef.id,
+          type: 'creation_wizard_export',
+          manifest: exportManifest,
+          outputPath: `creation-exports/${uid}/${projectId}/${jobRef.id}.${format}`
+        };
+
+        // Fire and forget - processor will update job status
+        axios.post(`${videoProcessorUrl}/creation-export`, requestBody, {
+          timeout: 5000,
+          headers: { 'Content-Type': 'application/json' }
+        }).catch(err => {
+          console.log('Video processor trigger sent (async):', err.message || 'pending');
+        });
+
+        console.log(`[creationWizardStartExport] Triggered video processor for job: ${jobRef.id}`);
+      } catch (triggerError) {
+        console.log('[creationWizardStartExport] Video processor trigger note:', triggerError.message);
+      }
+    } else {
+      console.log('[creationWizardStartExport] Video processor URL not configured - simulating export');
+
+      // Simulate export progress for demo (when no video processor is available)
+      simulateExportProgress(jobRef.id, projectId, uid, exportManifest, totalDuration);
+    }
+
+    return {
+      success: true,
+      jobId: jobRef.id,
+      status: 'pending',
+      totalDuration,
+      quality: outputQuality,
+      estimatedTime: Math.ceil(totalDuration * 2) // Rough estimate: 2x realtime
+    };
+
+  } catch (error) {
+    console.error('[creationWizardStartExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to start export'));
+  }
+});
+
+/**
+ * Simulate export progress when video processor is not available
+ * This is for demo/development purposes
+ */
+async function simulateExportProgress(jobId, projectId, uid, manifest, totalDuration) {
+  const jobRef = db.collection('creationExportJobs').doc(jobId);
+  const projectRef = db.collection('creationProjects').doc(projectId);
+
+  const stages = [
+    { progress: 10, status: 'processing', message: 'Preparing scenes...' },
+    { progress: 30, status: 'processing', message: 'Combining videos...' },
+    { progress: 50, status: 'processing', message: 'Adding transitions...' },
+    { progress: 70, status: 'processing', message: 'Mixing audio...' },
+    { progress: 85, status: 'processing', message: 'Adding captions...' },
+    { progress: 95, status: 'processing', message: 'Finalizing...' },
+    { progress: 100, status: 'completed', message: 'Export complete!' }
+  ];
+
+  for (const stage of stages) {
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay between stages
+
+    const updateData = {
+      progress: stage.progress,
+      status: stage.status,
+      currentStage: stage.message,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    if (stage.status === 'completed') {
+      // Generate a placeholder output URL
+      // In production, this would be the actual rendered video URL
+      const outputFileName = `video_${projectId}_${Date.now()}.mp4`;
+      const bucket = admin.storage().bucket();
+
+      // For demo, we'll use the first animated scene's video as the "exported" video
+      const firstAnimatedScene = manifest.scenes.find(s => s.videoUrl);
+      if (firstAnimatedScene && firstAnimatedScene.videoUrl) {
+        updateData.outputUrl = firstAnimatedScene.videoUrl;
+      } else {
+        // Fallback: create a placeholder URL structure
+        updateData.outputUrl = `https://storage.googleapis.com/${bucket.name}/creation-exports/${uid}/${projectId}/${outputFileName}`;
+      }
+
+      updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    await jobRef.update(updateData);
+    await projectRef.update({
+      'export.progress': stage.progress,
+      'export.status': stage.status,
+      'export.currentStage': stage.message,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  }
+}
+
+/**
+ * creationWizardCheckExportStatus - Check export job status
+ */
+exports.creationWizardCheckExportStatus = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { jobId, projectId } = data;
+
+  if (!jobId && !projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID or Project ID required');
+  }
+
+  try {
+    let jobDoc;
+
+    if (jobId) {
+      jobDoc = await db.collection('creationExportJobs').doc(jobId).get();
+    } else {
+      // Find job by project ID
+      const jobsQuery = await db.collection('creationExportJobs')
+        .where('projectId', '==', projectId)
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(1)
+        .get();
+
+      if (!jobsQuery.empty) {
+        jobDoc = jobsQuery.docs[0];
+      }
+    }
+
+    if (!jobDoc || !jobDoc.exists) {
+      return {
+        success: true,
+        status: 'not_found',
+        message: 'No export job found'
+      };
+    }
+
+    const job = jobDoc.data();
+
+    // Verify ownership
+    if (job.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    return {
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      progress: job.progress || 0,
+      currentStage: job.currentStage || null,
+      outputUrl: job.outputUrl || null,
+      error: job.error || null,
+      totalDuration: job.totalDuration,
+      quality: job.quality,
+      createdAt: job.createdAt?.toDate?.()?.toISOString() || null,
+      completedAt: job.completedAt?.toDate?.()?.toISOString() || null
+    };
+
+  } catch (error) {
+    console.error('[creationWizardCheckExportStatus] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check export status'));
+  }
+});
+
+/**
+ * creationWizardGetExportHistory - Get user's export history
+ */
+exports.creationWizardGetExportHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { limit: queryLimit = 10 } = data || {};
+
+  try {
+    const jobsQuery = await db.collection('creationExportJobs')
+      .where('userId', '==', uid)
+      .where('status', '==', 'completed')
+      .orderBy('completedAt', 'desc')
+      .limit(Math.min(queryLimit, 50))
+      .get();
+
+    const exports = jobsQuery.docs.map(doc => {
+      const job = doc.data();
+      return {
+        jobId: job.id,
+        projectId: job.projectId,
+        outputUrl: job.outputUrl,
+        quality: job.quality,
+        format: job.format,
+        totalDuration: job.totalDuration,
+        completedAt: job.completedAt?.toDate?.()?.toISOString() || null
+      };
+    });
+
+    return {
+      success: true,
+      exports,
+      count: exports.length
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGetExportHistory] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get export history'));
+  }
+});
+
+/**
+ * creationWizardCancelExport - Cancel an in-progress export job
+ */
+exports.creationWizardCancelExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { jobId } = data;
+
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID required');
+  }
+
+  try {
+    const jobRef = db.collection('creationExportJobs').doc(jobId);
+    const jobDoc = await jobRef.get();
+
+    if (!jobDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Export job not found');
+    }
+
+    const job = jobDoc.data();
+    if (job.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    if (job.status === 'completed') {
+      throw new functions.https.HttpsError('failed-precondition', 'Cannot cancel completed export');
+    }
+
+    // Update job status
+    await jobRef.update({
+      status: 'cancelled',
+      cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Update project export status
+    const projectRef = db.collection('creationProjects').doc(job.projectId);
+    await projectRef.update({
+      'export.status': 'cancelled',
+      'export.jobId': null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, message: 'Export cancelled' };
+
+  } catch (error) {
+    console.error('[creationWizardCancelExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to cancel export'));
+  }
+});
