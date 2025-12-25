@@ -1410,7 +1410,8 @@
                 subniche: null,           // Sub-niche ID
                 style: null,              // Style ID
                 topic: '',                // User's topic/theme
-                tone: 'engaging'          // casual, professional, humorous, serious
+                tone: 'engaging',         // casual, professional, humorous, serious
+                pacing: 'medium'          // 'fast' | 'medium' | 'slow' - controls scene timing
             },
 
             // Step 3: Script
@@ -1913,6 +1914,12 @@
             scheduleAutoSave();
         }
 
+        function setPacing(pacing) {
+            state.content.pacing = pacing;
+            render();
+            scheduleAutoSave();
+        }
+
         function applyTopicSuggestion(topic) {
             state.content.topic = topic;
             render();
@@ -1957,6 +1964,7 @@
                     style: state.content.style,
                     topic: topic,
                     tone: state.content.tone || 'engaging',
+                    pacing: state.content.pacing || 'medium',
                     additionalInstructions
                 };
 
@@ -2354,7 +2362,7 @@
             }
 
             let pollCount = 0;
-            const maxPolls = 60; // 2 minutes max (2s intervals)
+            const maxPolls = 90; // 3 minutes max (2s intervals) - handles cold starts
 
             imagePollingIntervals[sceneId] = setInterval(async () => {
                 pollCount++;
@@ -2364,6 +2372,7 @@
                     const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
                     if (storyboardScene && storyboardScene.status === 'generating') {
                         storyboardScene.status = 'error';
+                        storyboardScene.error = 'Generation timed out. Try again.';
                         render();
                     }
                     return;
@@ -2378,8 +2387,16 @@
 
                         const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
                         if (storyboardScene) {
+                            // Add cache-busting parameter to force browser to fetch fresh
+                            if (storyboardScene.imageUrl) {
+                                const separator = storyboardScene.imageUrl.includes('?') ? '&' : '?';
+                                storyboardScene.imageUrl = `${storyboardScene.imageUrl}${separator}t=${Date.now()}`;
+                            }
+
+                            // Wait a moment for Firebase Storage to fully propagate the upload
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+
                             storyboardScene.status = 'ready';
-                            // Image URL was set earlier, now it should be available
                         }
 
                         // Check if all generating scenes are done
@@ -2399,6 +2416,7 @@
                         const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
                         if (storyboardScene) {
                             storyboardScene.status = 'error';
+                            storyboardScene.error = result.data.error || 'Generation failed';
                         }
                         render();
                     }
@@ -2482,7 +2500,10 @@
             mediaType: 'image', // 'image' | 'video'
             activeTab: 'images', // 'images' | 'videos'
             query: '',
-            suggestedQuery: '', // Smart suggestion from script
+            suggestedQuery: '', // Primary AI suggestion
+            alternativeQueries: [], // Additional AI suggestions
+            suggestedCategory: '', // AI-suggested category
+            loadingAiSuggestions: false, // Loading state for AI suggestions
             results: [],
             videoResults: [], // Separate storage for video results
             loading: false,
@@ -2496,7 +2517,7 @@
             isPreviewPlaying: false
         };
 
-        function openStockBrowser(sceneId, mediaType = 'image') {
+        async function openStockBrowser(sceneId, mediaType = 'image') {
             stockBrowserState.isOpen = true;
             stockBrowserState.targetSceneId = sceneId;
             stockBrowserState.mediaType = mediaType;
@@ -2508,24 +2529,117 @@
             stockBrowserState.selectedVideo = null;
             stockBrowserState.trimStart = 0;
             stockBrowserState.trimEnd = null;
+            stockBrowserState.alternativeQueries = [];
+            stockBrowserState.suggestedCategory = '';
+            stockBrowserState.loadingAiSuggestions = true;
 
-            // Smart suggestion: Extract keywords from scene description
+            // Get scene for smart suggestions
             const scene = state.script.scenes.find(s => s.id === sceneId);
+
+            // Use basic extraction as initial placeholder
             if (scene) {
-                const smartQuery = extractSmartKeywords(scene);
-                stockBrowserState.query = smartQuery;
-                stockBrowserState.suggestedQuery = smartQuery;
+                const basicQuery = extractSmartKeywords(scene);
+                stockBrowserState.query = basicQuery;
+                stockBrowserState.suggestedQuery = basicQuery;
             } else {
-                stockBrowserState.query = 'nature background';
+                stockBrowserState.query = 'cinematic background';
                 stockBrowserState.suggestedQuery = '';
             }
 
             renderStockBrowserModal();
 
-            // Auto-search with smart suggestion
+            // Start initial search with basic query
             if (stockBrowserState.query) {
-                setTimeout(() => searchStockMedia(stockBrowserState.query), 100);
+                searchStockMedia(stockBrowserState.query);
             }
+
+            // Simultaneously fetch AI-powered smart suggestions
+            if (scene) {
+                try {
+                    const generateQueriesFn = functions.httpsCallable('generateSmartStockQueries');
+                    const result = await generateQueriesFn({
+                        sceneDescription: scene.visual || '',
+                        narration: scene.narration || '',
+                        mediaType: stockBrowserState.activeTab === 'videos' ? 'video' : 'image'
+                    });
+
+                    if (result.data.success) {
+                        stockBrowserState.suggestedQuery = result.data.primaryQuery;
+                        stockBrowserState.alternativeQueries = result.data.queries.slice(1) || [];
+                        stockBrowserState.suggestedCategory = result.data.category || '';
+                        stockBrowserState.loadingAiSuggestions = false;
+
+                        // Update the search input with AI suggestion
+                        const searchInput = document.getElementById('stock-search-input');
+                        if (searchInput && stockBrowserState.query !== result.data.primaryQuery) {
+                            searchInput.value = result.data.primaryQuery;
+                            stockBrowserState.query = result.data.primaryQuery;
+                        }
+
+                        // Re-render to show AI suggestions
+                        updateStockSuggestionsUI();
+
+                        // Re-search with AI query if different from basic
+                        if (result.data.primaryQuery && result.data.primaryQuery !== extractSmartKeywords(scene)) {
+                            searchStockMedia(result.data.primaryQuery);
+                        }
+                    }
+                } catch (error) {
+                    console.error('AI suggestions error:', error);
+                    stockBrowserState.loadingAiSuggestions = false;
+                    updateStockSuggestionsUI();
+                }
+            } else {
+                stockBrowserState.loadingAiSuggestions = false;
+            }
+        }
+
+        // Update just the suggestions UI without re-rendering entire modal
+        function updateStockSuggestionsUI() {
+            const suggestionsArea = document.getElementById('stock-ai-suggestions');
+            if (!suggestionsArea) return;
+
+            let suggestionsHtml = '';
+
+            if (stockBrowserState.loadingAiSuggestions) {
+                suggestionsHtml = `
+                    <div style="padding: 0.5rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="animate-spin" style="width: 14px; height: 14px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #a78bfa; border-radius: 50%;"></span>
+                        <span style="color: #a78bfa; font-size: 0.75rem;">AI analyzing your scene...</span>
+                    </div>
+                `;
+            } else if (stockBrowserState.suggestedQuery) {
+                suggestionsHtml = `
+                    <div style="padding: 0.6rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+                            <span style="color: #a78bfa; font-size: 0.7rem;">🧠 AI Smart Suggestions:</span>
+                            ${stockBrowserState.suggestedCategory ? `<span style="background: rgba(139,92,246,0.3); color: #c4b5fd; padding: 0.1rem 0.4rem; border-radius: 1rem; font-size: 0.6rem;">${stockBrowserState.suggestedCategory}</span>` : ''}
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                            <button onclick="applyStockSuggestion('${stockBrowserState.suggestedQuery.replace(/'/g, "\\'")}')"
+                                    style="padding: 0.3rem 0.6rem; background: linear-gradient(135deg, rgba(139,92,246,0.4), rgba(236,72,153,0.3)); border: 1px solid rgba(139,92,246,0.5); border-radius: 1rem; color: white; cursor: pointer; font-size: 0.75rem; font-weight: 500;">
+                                ✨ ${stockBrowserState.suggestedQuery}
+                            </button>
+                            ${stockBrowserState.alternativeQueries.map(q => `
+                                <button onclick="applyStockSuggestion('${q.replace(/'/g, "\\'")}')"
+                                        style="padding: 0.3rem 0.6rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 1rem; color: rgba(255,255,255,0.8); cursor: pointer; font-size: 0.7rem;">
+                                    ${q}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            suggestionsArea.innerHTML = suggestionsHtml;
+        }
+
+        // Apply a suggestion to search
+        function applyStockSuggestion(query) {
+            stockBrowserState.query = query;
+            const searchInput = document.getElementById('stock-search-input');
+            if (searchInput) searchInput.value = query;
+            searchStockMedia(query);
         }
 
         // Extract smart keywords from scene description for stock search
@@ -2667,7 +2781,7 @@
         }
 
         // Switch between Images and Videos tabs
-        function switchStockTab(tab) {
+        async function switchStockTab(tab) {
             stockBrowserState.activeTab = tab;
             stockBrowserState.selectedVideo = null;
             stockBrowserState.trimStart = 0;
@@ -2675,11 +2789,41 @@
 
             // Search with current query for new media type
             const mediaType = tab === 'videos' ? 'video' : 'image';
-            if (stockBrowserState.query && stockBrowserState.mediaType !== mediaType) {
-                stockBrowserState.mediaType = mediaType;
+            const needsNewSuggestions = stockBrowserState.mediaType !== mediaType;
+            stockBrowserState.mediaType = mediaType;
+
+            if (stockBrowserState.query) {
                 searchStockMedia(stockBrowserState.query);
             } else {
                 renderStockBrowserModal();
+            }
+
+            // Regenerate AI suggestions for new media type
+            if (needsNewSuggestions && stockBrowserState.targetSceneId) {
+                const scene = state.script.scenes.find(s => s.id === stockBrowserState.targetSceneId);
+                if (scene) {
+                    stockBrowserState.loadingAiSuggestions = true;
+                    updateStockSuggestionsUI();
+
+                    try {
+                        const generateQueriesFn = functions.httpsCallable('generateSmartStockQueries');
+                        const result = await generateQueriesFn({
+                            sceneDescription: scene.visual || '',
+                            narration: scene.narration || '',
+                            mediaType: mediaType
+                        });
+
+                        if (result.data.success) {
+                            stockBrowserState.suggestedQuery = result.data.primaryQuery;
+                            stockBrowserState.alternativeQueries = result.data.queries.slice(1) || [];
+                            stockBrowserState.suggestedCategory = result.data.category || '';
+                        }
+                    } catch (error) {
+                        console.error('AI suggestions error on tab switch:', error);
+                    }
+                    stockBrowserState.loadingAiSuggestions = false;
+                    updateStockSuggestionsUI();
+                }
             }
         }
 
@@ -2823,13 +2967,34 @@
                             </button>
                         </div>
 
-                        <!-- Smart Suggestion Banner -->
-                        ${stockBrowserState.suggestedQuery ? `
-                            <div style="padding: 0.5rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="color: #a78bfa; font-size: 0.75rem;">✨ Smart suggestion based on your script:</span>
-                                <span style="color: white; font-size: 0.8rem; font-weight: 500;">"${stockBrowserState.suggestedQuery}"</span>
-                            </div>
-                        ` : ''}
+                        <!-- AI Smart Suggestions Container -->
+                        <div id="stock-ai-suggestions">
+                            ${stockBrowserState.loadingAiSuggestions ? `
+                                <div style="padding: 0.5rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span class="animate-spin" style="width: 14px; height: 14px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #a78bfa; border-radius: 50%;"></span>
+                                    <span style="color: #a78bfa; font-size: 0.75rem;">AI analyzing your scene...</span>
+                                </div>
+                            ` : stockBrowserState.suggestedQuery ? `
+                                <div style="padding: 0.6rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+                                        <span style="color: #a78bfa; font-size: 0.7rem;">🧠 AI Smart Suggestions:</span>
+                                        ${stockBrowserState.suggestedCategory ? `<span style="background: rgba(139,92,246,0.3); color: #c4b5fd; padding: 0.1rem 0.4rem; border-radius: 1rem; font-size: 0.6rem;">${stockBrowserState.suggestedCategory}</span>` : ''}
+                                    </div>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                                        <button onclick="applyStockSuggestion('${stockBrowserState.suggestedQuery.replace(/'/g, "\\'")}')"
+                                                style="padding: 0.3rem 0.6rem; background: linear-gradient(135deg, rgba(139,92,246,0.4), rgba(236,72,153,0.3)); border: 1px solid rgba(139,92,246,0.5); border-radius: 1rem; color: white; cursor: pointer; font-size: 0.75rem; font-weight: 500;">
+                                            ✨ ${stockBrowserState.suggestedQuery}
+                                        </button>
+                                        ${(stockBrowserState.alternativeQueries || []).map(q => `
+                                            <button onclick="applyStockSuggestion('${q.replace(/'/g, "\\'")}')"
+                                                    style="padding: 0.3rem 0.6rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 1rem; color: rgba(255,255,255,0.8); cursor: pointer; font-size: 0.7rem;">
+                                                ${q}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
 
                         <!-- Search Bar -->
                         <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -4031,6 +4196,48 @@
 
             html += '</div></div>';
 
+            // Pacing Control Card (NEW - Controls video timing)
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">⏱️</div>
+                        <div>
+                            <div class="content-card-title">Video Pacing</div>
+                            <div class="content-card-subtitle">How fast should your video flow?</div>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 0.5rem;">
+                        <div onclick="setPacing('fast')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'fast' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'fast' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚡</div>
+                            <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Fast</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Quick cuts, dense narration<br>~8s per scene</div>
+                        </div>
+                        <div onclick="setPacing('medium')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'medium' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'medium' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
+                            <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Balanced</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Natural flow<br>~12s per scene</div>
+                        </div>
+                        <div onclick="setPacing('slow')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'slow' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'slow' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌊</div>
+                            <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Contemplative</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Visual breathing room<br>~18s per scene</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(139, 92, 246, 0.1); border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
+                        <div style="font-size: 0.75rem; color: #a78bfa;">
+                            📊 For your ${formatDuration(state.platform.targetDuration)} video:
+                            <strong>${Math.round(state.platform.targetDuration / (state.content.pacing === 'fast' ? 8 : state.content.pacing === 'slow' ? 18 : 12))} scenes</strong>
+                            with <strong>${state.content.pacing === 'fast' ? '85%' : state.content.pacing === 'slow' ? '50%' : '70%'}</strong> narration coverage
+                        </div>
+                    </div>
+                </div>
+            `;
+
             // Topic Input Card
             html += `
                 <div class="content-card">
@@ -4202,6 +4409,12 @@
         function renderScriptEditor() {
             const script = state.script;
 
+            // Calculate timing breakdown
+            const targetDuration = state.platform.targetDuration || 60;
+            const totalVisualDuration = script.scenes.reduce((sum, s) => sum + (s.visualDuration || s.duration || 0), 0);
+            const totalNarrationDuration = script.scenes.reduce((sum, s) => sum + (s.narrationDuration || Math.ceil((s.narration || '').split(/\s+/).length / 2.5) || 0), 0);
+            const pacing = script.timing?.pacing || state.content.pacing || 'medium';
+
             let html = `
                 <!-- Script Header -->
                 <div class="content-card">
@@ -4213,12 +4426,33 @@
                                    value="${script.title || ''}"
                                    onchange="updateScriptTitle(this.value)"
                                    style="background: none; border: none; color: white; font-size: 1.1rem; font-weight: 700; width: 100%; outline: none;">
-                            <div class="content-card-subtitle">${script.scenes.length} scenes • ${script.totalDuration || 0}s total</div>
+                            <div class="content-card-subtitle">${script.scenes.length} scenes • Target: ${formatDuration(targetDuration)}</div>
                         </div>
                         <button onclick="regenerateFullScript()"
                                 style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; padding: 0.5rem 1rem; color: white; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem;">
                             <span>🔄</span> Regenerate
                         </button>
+                    </div>
+
+                    <!-- Timing Breakdown Banner -->
+                    <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); text-transform: uppercase;">Visual Time</div>
+                                <div style="font-size: 1rem; font-weight: 700; color: #10b981;">${formatDuration(totalVisualDuration)}</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); text-transform: uppercase;">Narration</div>
+                                <div style="font-size: 1rem; font-weight: 700; color: #a78bfa;">${formatDuration(totalNarrationDuration)}</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); text-transform: uppercase;">Per Scene</div>
+                                <div style="font-size: 1rem; font-weight: 700; color: white;">~${Math.round(totalVisualDuration / script.scenes.length)}s</div>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.6); display: flex; align-items: center; gap: 0.3rem;">
+                            <span>⏱️</span> ${pacing.charAt(0).toUpperCase() + pacing.slice(1)} pacing
+                        </div>
                     </div>
 
                     <!-- Hook -->
@@ -4504,10 +4738,36 @@
                         <img src="${imageUrl}"
                              alt="Scene ${index + 1}"
                              style="width: 100%; height: 100%; object-fit: cover;"
-                             onerror="this.onerror=null; ${fallbackUrl ? `this.src='${fallbackUrl}';` : `this.style.display='none'; this.parentElement.querySelector('.placeholder-icon').style.display='flex';`}">
-                        <!-- Placeholder if image fails -->
-                        <div class="placeholder-icon" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);">
-                            <span style="font-size: 2rem;">${isVideo ? '🎬' : '🖼️'}</span>
+                             data-scene-id="${scene.id}"
+                             data-retry-count="0"
+                             onload="this.dataset.loaded='true';"
+                             onerror="
+                                this.onerror=null;
+                                ${fallbackUrl ? `this.src='${fallbackUrl}';` : `
+                                    // For AI images, retry a few times with cache-busting before showing placeholder
+                                    const retryCount = parseInt(this.dataset.retryCount || '0');
+                                    if (retryCount < 3) {
+                                        this.dataset.retryCount = retryCount + 1;
+                                        setTimeout(() => {
+                                            const url = this.src.split('&t=')[0].split('?t=')[0];
+                                            this.src = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                                            this.onerror = function() {
+                                                this.style.display='none';
+                                                this.parentElement.querySelector('.placeholder-retry').style.display='flex';
+                                            };
+                                        }, 2000);
+                                    } else {
+                                        this.style.display='none';
+                                        this.parentElement.querySelector('.placeholder-retry').style.display='flex';
+                                    }
+                                `}">
+                        <!-- Placeholder with retry option if image fails after retries -->
+                        <div class="placeholder-retry" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); gap: 0.5rem;">
+                            <span style="font-size: 1.5rem;">${isVideo ? '🎬' : '🖼️'}</span>
+                            <span style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">Image not available</span>
+                            <button onclick="regenerateSingleSceneImage(${scene.id})" style="padding: 0.3rem 0.6rem; border-radius: 0.3rem; border: 1px solid rgba(139,92,246,0.5); background: rgba(139,92,246,0.3); color: white; cursor: pointer; font-size: 0.65rem;">
+                                🔄 Regenerate
+                            </button>
                         </div>
                         ${isVideo ? `
                             <!-- Video play icon overlay -->
@@ -4705,6 +4965,20 @@
                 initializeAnimationScenes();
             }
 
+            // Calculate scene readiness stats
+            const voiceoversReady = animationScenes.filter(s => s.voiceoverUrl).length;
+            const animatedScenes = animationScenes.filter(s => s.videoUrl).length;
+            const stockVideoScenes = storyboardScenes.filter(s => s.source === 'stock-video' && s.videoUrl).length;
+            const staticImageScenes = storyboardScenes.filter(s => s.imageUrl && s.source !== 'stock-video').length;
+
+            // A scene is ready if it has voiceover AND (animated OR stock-video OR image)
+            const readyScenes = storyboardScenes.filter(sb => {
+                const anim = animationScenes.find(a => a.sceneId === sb.sceneId);
+                const hasVoiceover = anim?.voiceoverUrl;
+                const hasVisual = anim?.videoUrl || (sb.source === 'stock-video' && sb.videoUrl) || sb.imageUrl;
+                return hasVoiceover && hasVisual;
+            }).length;
+
             let html = '<div class="fade-in">';
 
             // Header with global settings
@@ -4714,8 +4988,34 @@
                         <div class="content-card-icon">🎬</div>
                         <div style="flex: 1;">
                             <div class="content-card-title">Animation Studio</div>
-                            <div class="content-card-subtitle">Generate voiceovers and animate your scenes • ${animationScenes.filter(s => s.videoUrl).length}/${storyboardScenes.length} videos ready</div>
+                            <div class="content-card-subtitle">Generate voiceovers and optionally animate scenes • ${readyScenes}/${storyboardScenes.length} ready</div>
                         </div>
+                    </div>
+
+                    <!-- Progress Stats -->
+                    <div style="display: flex; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                        <div style="background: rgba(139, 92, 246, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
+                            <span style="color: #a78bfa;">🎙️ Voiceovers:</span>
+                            <span style="color: ${voiceoversReady >= storyboardScenes.length ? '#10b981' : 'white'}; font-weight: 600;">${voiceoversReady}/${storyboardScenes.length}</span>
+                        </div>
+                        <div style="background: rgba(6, 182, 212, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
+                            <span style="color: #06b6d4;">🎬 Animated:</span>
+                            <span style="color: white; font-weight: 600;">${animatedScenes}</span>
+                            <span style="color: rgba(255,255,255,0.5);">(optional)</span>
+                        </div>
+                        <div style="background: rgba(16, 185, 129, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
+                            <span style="color: #10b981;">📹 Stock Videos:</span>
+                            <span style="color: white; font-weight: 600;">${stockVideoScenes}</span>
+                        </div>
+                        <div style="background: rgba(251, 191, 36, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
+                            <span style="color: #fbbf24;">🖼️ Static Images:</span>
+                            <span style="color: white; font-weight: 600;">${staticImageScenes - animatedScenes}</span>
+                        </div>
+                    </div>
+
+                    <!-- Info Banner -->
+                    <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 0.5rem; padding: 0.75rem; margin-top: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.7);">
+                        💡 <strong>Animation is optional!</strong> Scenes with static images will display for the correct duration. Stock videos play as-is. Only animate if you want Ken Burns zoom/pan effects.
                     </div>
 
                     <!-- Global Voice Settings -->
@@ -4744,9 +5044,9 @@
                                 <span>🎙️</span> Generate All Voiceovers
                             </button>
                             <button onclick="animateAllScenes()"
-                                    ${animationScenes.filter(s => s.voiceoverUrl).length < storyboardScenes.length ? 'disabled' : ''}
-                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: none; background: ${animationScenes.filter(s => s.voiceoverUrl).length >= storyboardScenes.length ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)'}; color: ${animationScenes.filter(s => s.voiceoverUrl).length >= storyboardScenes.length ? 'white' : 'rgba(255,255,255,0.4)'}; cursor: ${animationScenes.filter(s => s.voiceoverUrl).length >= storyboardScenes.length ? 'pointer' : 'not-allowed'}; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                                <span>🎬</span> Animate All Scenes
+                                    ${voiceoversReady < storyboardScenes.length ? 'disabled' : ''}
+                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: none; background: ${voiceoversReady >= storyboardScenes.length ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)'}; color: ${voiceoversReady >= storyboardScenes.length ? 'white' : 'rgba(255,255,255,0.4)'}; cursor: ${voiceoversReady >= storyboardScenes.length ? 'pointer' : 'not-allowed'}; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <span>🎬</span> Animate All (Optional)
                             </button>
                         </div>
                     </div>
@@ -4764,9 +5064,23 @@
 
             html += `</div>`;
 
-            // Navigation
-            const hasAllVideos = animationScenes.filter(s => s.videoUrl).length >= storyboardScenes.length;
-            html += renderNavButtons(4, hasAllVideos ? 6 : null);
+            // Navigation - Check if scenes are ready for assembly
+            // A scene is ready if it has: voiceover + visual (animated video, stock video, OR static image)
+            const allScenesReady = storyboardScenes.every(storyboardScene => {
+                const animScene = animationScenes.find(a => a.sceneId === storyboardScene.sceneId) || {};
+
+                // Must have voiceover
+                const hasVoiceover = !!animScene.voiceoverUrl;
+
+                // Must have visual: animated video, stock video, or at least a static image
+                const hasAnimatedVideo = !!animScene.videoUrl;
+                const hasStockVideo = storyboardScene.source === 'stock-video' && storyboardScene.videoUrl;
+                const hasImage = !!storyboardScene.imageUrl;
+
+                return hasVoiceover && (hasAnimatedVideo || hasStockVideo || hasImage);
+            });
+
+            html += renderNavButtons(4, allScenesReady ? 6 : null);
 
             html += '</div>';
             return html;
