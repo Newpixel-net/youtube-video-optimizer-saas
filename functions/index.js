@@ -24737,10 +24737,13 @@ exports.creationWizardStartExport = functions
       throw new functions.https.HttpsError('failed-precondition', 'No script scenes found');
     }
 
-    // Check for animated scenes
+    // Check for visual content - either animated videos OR storyboard images
     const animatedScenes = animationScenes.filter(s => s.videoUrl);
-    if (animatedScenes.length === 0) {
-      throw new functions.https.HttpsError('failed-precondition', 'No animated scenes found. Please complete animation step first.');
+    const imageScenes = storyboardScenes.filter(s => s.imageUrl);
+
+    // Allow export if we have EITHER animated videos OR storyboard images
+    if (animatedScenes.length === 0 && imageScenes.length === 0) {
+      throw new functions.https.HttpsError('failed-precondition', 'No visual content found. Please generate images in the Storyboard step or animate scenes in the Animation step.');
     }
 
     // Get scene order - prefer timeline state if available
