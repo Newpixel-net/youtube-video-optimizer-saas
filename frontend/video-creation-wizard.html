@@ -349,9 +349,12 @@
         _syncAudio() {
             const currentScene = this._getSceneAtTime(this.currentTime);
 
+            // Pause audio from other scenes
             this.audioElements.forEach((audio, sceneId) => {
                 if (!currentScene || sceneId !== currentScene.id) {
-                    audio.pause();
+                    if (!audio.paused) {
+                        audio.pause();
+                    }
                 }
             });
 
@@ -363,13 +366,22 @@
                     const audioTime = sceneLocalTime - voiceoverOffset;
 
                     if (audioTime >= 0 && audioTime < audio.duration) {
-                        audio.currentTime = audioTime;
+                        // Only sync if audio has drifted more than 0.3s to avoid stuttering
+                        const drift = Math.abs(audio.currentTime - audioTime);
+                        if (drift > 0.3) {
+                            audio.currentTime = audioTime;
+                        }
+
                         audio.volume = this.voiceVolume;
-                        if (this.isPlaying) {
+
+                        // Only call play if not already playing
+                        if (this.isPlaying && audio.paused) {
                             audio.play().catch(() => {});
                         }
                     } else {
-                        audio.pause();
+                        if (!audio.paused) {
+                            audio.pause();
+                        }
                     }
                 }
             }
@@ -727,6 +739,22 @@
         setCaptionPosition(position) {
             this.captionPosition = position;
             this._renderFrame();
+        }
+
+        /**
+         * Reattach to a new canvas element (used after DOM re-render)
+         */
+        attachToCanvas(canvas) {
+            if (!canvas) return false;
+
+            this.canvas = canvas;
+            this.ctx = canvas.getContext('2d');
+            canvas.width = this.width;
+            canvas.height = this.height;
+
+            // Render current frame to new canvas immediately
+            this._renderFrame();
+            return true;
         }
 
         getState() {
@@ -4654,6 +4682,15 @@
 
             app.innerHTML = html;
             attachEventListeners();
+
+            // CRITICAL: Reattach preview engine to new canvas after DOM re-render
+            if (previewEngine && state.preview.isReady) {
+                const canvasId = state.currentStep === 7 ? 'timeline-preview-canvas' : 'preview-canvas';
+                const newCanvas = document.getElementById(canvasId);
+                if (newCanvas) {
+                    previewEngine.attachToCanvas(newCanvas);
+                }
+            }
         }
 
         // ==========================================
@@ -6323,7 +6360,7 @@
                         </button>
 
                         <!-- Time Display -->
-                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.7); font-family: monospace; min-width: 90px;">
+                        <span id="preview-time-display" style="font-size: 0.75rem; color: rgba(255,255,255,0.7); font-family: monospace; min-width: 90px;">
                             ${formatDuration(currentTime)} / ${formatDuration(totalDuration)}
                         </span>
 
@@ -6777,6 +6814,7 @@
                 height: 720,
                 onTimeUpdate: (time) => {
                     state.preview.currentTime = time;
+
                     // Update scrubber without full re-render
                     const scrubber = document.getElementById('preview-scrubber');
                     if (scrubber) {
@@ -6784,6 +6822,13 @@
                         const percent = (time / state.preview.totalDuration) * 100;
                         scrubber.style.background = `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${percent}%, rgba(255,255,255,0.2) ${percent}%, rgba(255,255,255,0.2) 100%)`;
                     }
+
+                    // Update time display without full re-render
+                    const timeDisplay = document.getElementById('preview-time-display');
+                    if (timeDisplay) {
+                        timeDisplay.textContent = `${formatDuration(time)} / ${formatDuration(state.preview.totalDuration)}`;
+                    }
+
                     // Update scene progress bar
                     updateSceneProgress(time);
                 },
