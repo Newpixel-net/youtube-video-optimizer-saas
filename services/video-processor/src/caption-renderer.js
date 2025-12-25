@@ -197,7 +197,12 @@ async function generateASSFile(jobId, words, captionStyle, customStyle, outputFi
   const styleConfig = getStyleConfig(captionStyle, customStyle, captionPosition, captionSize);
   console.log(`[${jobId}] Style config: ${styleConfig.styleName}, alignment: ${styleConfig.alignment}, marginV: ${styleConfig.marginV}`);
 
-  // ASS file header
+  // ASS file header - include extra styles if needed (e.g., HormoziBox for keyword highlights)
+  let stylesSection = styleConfig.styleLine;
+  if (styleConfig.extraStyles) {
+    stylesSection += '\n' + styleConfig.extraStyles;
+  }
+
   let assContent = `[Script Info]
 Title: Generated Captions
 ScriptType: v4.00+
@@ -207,7 +212,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-${styleConfig.styleLine}
+${stylesSection}
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -307,14 +312,18 @@ function getStyleConfig(captionStyle, customStyle, captionPosition, captionSize)
       marginV
     },
 
-    // Hormozi style - clean with keyword highlights (green)
+    // Hormozi style - clean with keyword highlights (green background BOX)
+    // Main style: normal white text with outline
+    // Extra style "HormoziBox": uses BorderStyle 3 (opaque box) for solid green background behind keywords
     hormozi: {
       styleName: 'Hormozi',
       styleLine: `Style: Hormozi,Arial,${fontSize},&H00FFFFFF,&H0022C55E,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,${alignment},50,50,${marginV},1`,
+      // HormoziBox style: BorderStyle=3 (opaque box), OutlineColour=green (becomes box color), Outline=12 for padding
+      extraStyles: `Style: HormoziBox,Arial,${fontSize},&H00FFFFFF,&H00FFFFFF,&H0022C55E,&H00000000,1,0,0,0,100,100,0,0,3,12,0,${alignment},50,50,${marginV},1`,
       wordsPerLine: 4,
       useKaraoke: false,
       highlightKeywords: true,
-      highlightColor: '&H005EC522', // Green (#22C55E in BGR format)
+      highlightColor: '&H0022C55E', // Green (#22C55E in BGR format)
       alignment,
       marginV
     },
@@ -459,13 +468,13 @@ function formatTextWithStyle(words, captionStyle, styleConfig) {
     text = words.map(w => w.word.toUpperCase()).join(' ');
   } else if (styleConfig.highlightKeywords) {
     // Hormozi-style: green background BOX around keywords
-    // Uses thick border with green color to create highlight box effect
+    // Uses style switching to HormoziBox style which has BorderStyle=3 (opaque box)
+    // \rStyleName switches to that style, \rHormozi switches back to main style
     text = words.map(w => {
       const isKeyword = w.word.length > 5 || /^[A-Z]/.test(w.word);
       if (isKeyword) {
-        // Create green background box using border: \3c=border color, \xbord/\ybord=border size
-        // \1c=text color (white), then \r resets to default style
-        return `{\\1c&H00FFFFFF&\\3c&H0022C55E&\\xbord12\\ybord6\\shad0}${w.word}{\\r}`;
+        // Switch to HormoziBox style (has BorderStyle 3 = opaque green box), then back to Hormozi
+        return `{\\rHormoziBox}${w.word}{\\rHormozi}`;
       }
       return w.word;
     }).join(' ');
