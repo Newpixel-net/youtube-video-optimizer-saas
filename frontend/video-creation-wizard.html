@@ -3025,7 +3025,7 @@
 
         function renderScriptGenerationForm() {
             const niche = VIDEO_NICHES[state.content.niche];
-            const style = VIDEO_STYLES.find(s => s.id === state.content.style);
+            const style = VIDEO_STYLES[state.content.style];
 
             return `
                 <div class="content-card">
