@@ -222,12 +222,35 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   const phrases = groupWordsIntoPhrases(words, styleConfig.wordsPerLine || 4);
 
   // Generate dialogue lines
-  for (const phrase of phrases) {
-    const startTime = formatASSTime(phrase.start);
-    const endTime = formatASSTime(phrase.end);
-    const text = formatTextWithStyle(phrase.words, captionStyle, styleConfig);
+  if (styleConfig.highlightKeywords) {
+    // Hormozi style: word-by-word box highlighting
+    // Layer 0: Base text (all words in normal style)
+    // Layer 1: Highlighted word (current word with box style) - shown on top
+    for (const phrase of phrases) {
+      const phraseStart = formatASSTime(phrase.start);
+      const phraseEnd = formatASSTime(phrase.end);
+      const allWords = phrase.words.map(w => w.word).join(' ');
 
-    assContent += `Dialogue: 0,${startTime},${endTime},${styleConfig.styleName},,0,0,0,,${text}\n`;
+      // Layer 0: Show all words in normal style for the full phrase duration
+      assContent += `Dialogue: 0,${phraseStart},${phraseEnd},${styleConfig.styleName},,0,0,0,,${allWords}\n`;
+
+      // Layer 1: Show each word individually with box highlight at its timing
+      for (const word of phrase.words) {
+        const wordStart = formatASSTime(word.start);
+        const wordEnd = formatASSTime(word.end);
+        // Use HormoziBox style (BorderStyle 3 = solid green box)
+        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,${word.word}\n`;
+      }
+    }
+  } else {
+    // Standard styles: single layer with formatted text
+    for (const phrase of phrases) {
+      const startTime = formatASSTime(phrase.start);
+      const endTime = formatASSTime(phrase.end);
+      const text = formatTextWithStyle(phrase.words, captionStyle, styleConfig);
+
+      assContent += `Dialogue: 0,${startTime},${endTime},${styleConfig.styleName},,0,0,0,,${text}\n`;
+    }
   }
 
   fs.writeFileSync(outputFile, assContent);
@@ -466,19 +489,9 @@ function formatTextWithStyle(words, captionStyle, styleConfig) {
   } else if (styleConfig.uppercase) {
     // Uppercase all text
     text = words.map(w => w.word.toUpperCase()).join(' ');
-  } else if (styleConfig.highlightKeywords) {
-    // Hormozi-style: green background BOX around keywords
-    // Uses style switching to HormoziBox style which has BorderStyle=3 (opaque box)
-    // \rStyleName switches to that style, \rHormozi switches back to main style
-    text = words.map(w => {
-      const isKeyword = w.word.length > 5 || /^[A-Z]/.test(w.word);
-      if (isKeyword) {
-        // Switch to HormoziBox style (has BorderStyle 3 = opaque green box), then back to Hormozi
-        return `{\\rHormoziBox}${w.word}{\\rHormozi}`;
-      }
-      return w.word;
-    }).join(' ');
   } else {
+    // Note: highlightKeywords (Hormozi) is handled directly in generateASSFile
+    // using a two-layer approach for proper word-by-word highlighting
     // Simple text
     text = words.map(w => w.word).join(' ');
   }
