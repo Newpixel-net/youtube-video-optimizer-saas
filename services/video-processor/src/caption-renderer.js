@@ -307,14 +307,14 @@ function getStyleConfig(captionStyle, customStyle, captionPosition, captionSize)
       marginV
     },
 
-    // Hormozi style - clean with keyword highlights
+    // Hormozi style - clean with keyword highlights (green)
     hormozi: {
       styleName: 'Hormozi',
-      styleLine: `Style: Hormozi,Arial,${fontSize},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,${alignment},50,50,${marginV},1`,
+      styleLine: `Style: Hormozi,Arial,${fontSize},&H00FFFFFF,&H0022C55E,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,${alignment},50,50,${marginV},1`,
       wordsPerLine: 4,
       useKaraoke: false,
       highlightKeywords: true,
-      highlightColor: '&H0000FFFF', // Yellow
+      highlightColor: '&H005EC522', // Green (#22C55E in BGR format)
       alignment,
       marginV
     },
