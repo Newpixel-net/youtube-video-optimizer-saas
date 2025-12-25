@@ -2354,7 +2354,7 @@
             }
 
             let pollCount = 0;
-            const maxPolls = 60; // 2 minutes max (2s intervals)
+            const maxPolls = 90; // 3 minutes max (2s intervals) - handles cold starts
 
             imagePollingIntervals[sceneId] = setInterval(async () => {
                 pollCount++;
@@ -2364,6 +2364,7 @@
                     const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
                     if (storyboardScene && storyboardScene.status === 'generating') {
                         storyboardScene.status = 'error';
+                        storyboardScene.error = 'Generation timed out. Try again.';
                         render();
                     }
                     return;
@@ -2378,8 +2379,16 @@
 
                         const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
                         if (storyboardScene) {
+                            // Add cache-busting parameter to force browser to fetch fresh
+                            if (storyboardScene.imageUrl) {
+                                const separator = storyboardScene.imageUrl.includes('?') ? '&' : '?';
+                                storyboardScene.imageUrl = `${storyboardScene.imageUrl}${separator}t=${Date.now()}`;
+                            }
+
+                            // Wait a moment for Firebase Storage to fully propagate the upload
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+
                             storyboardScene.status = 'ready';
-                            // Image URL was set earlier, now it should be available
                         }
 
                         // Check if all generating scenes are done
@@ -2399,6 +2408,7 @@
                         const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
                         if (storyboardScene) {
                             storyboardScene.status = 'error';
+                            storyboardScene.error = result.data.error || 'Generation failed';
                         }
                         render();
                     }
@@ -4504,10 +4514,36 @@
                         <img src="${imageUrl}"
                              alt="Scene ${index + 1}"
                              style="width: 100%; height: 100%; object-fit: cover;"
-                             onerror="this.onerror=null; ${fallbackUrl ? `this.src='${fallbackUrl}';` : `this.style.display='none'; this.parentElement.querySelector('.placeholder-icon').style.display='flex';`}">
-                        <!-- Placeholder if image fails -->
-                        <div class="placeholder-icon" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);">
-                            <span style="font-size: 2rem;">${isVideo ? '🎬' : '🖼️'}</span>
+                             data-scene-id="${scene.id}"
+                             data-retry-count="0"
+                             onload="this.dataset.loaded='true';"
+                             onerror="
+                                this.onerror=null;
+                                ${fallbackUrl ? `this.src='${fallbackUrl}';` : `
+                                    // For AI images, retry a few times with cache-busting before showing placeholder
+                                    const retryCount = parseInt(this.dataset.retryCount || '0');
+                                    if (retryCount < 3) {
+                                        this.dataset.retryCount = retryCount + 1;
+                                        setTimeout(() => {
+                                            const url = this.src.split('&t=')[0].split('?t=')[0];
+                                            this.src = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                                            this.onerror = function() {
+                                                this.style.display='none';
+                                                this.parentElement.querySelector('.placeholder-retry').style.display='flex';
+                                            };
+                                        }, 2000);
+                                    } else {
+                                        this.style.display='none';
+                                        this.parentElement.querySelector('.placeholder-retry').style.display='flex';
+                                    }
+                                `}">
+                        <!-- Placeholder with retry option if image fails after retries -->
+                        <div class="placeholder-retry" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); gap: 0.5rem;">
+                            <span style="font-size: 1.5rem;">${isVideo ? '🎬' : '🖼️'}</span>
+                            <span style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">Image not available</span>
+                            <button onclick="regenerateSingleSceneImage(${scene.id})" style="padding: 0.3rem 0.6rem; border-radius: 0.3rem; border: 1px solid rgba(139,92,246,0.5); background: rgba(139,92,246,0.3); color: white; cursor: pointer; font-size: 0.65rem;">
+                                🔄 Regenerate
+                            </button>
                         </div>
                         ${isVideo ? `
                             <!-- Video play icon overlay -->
