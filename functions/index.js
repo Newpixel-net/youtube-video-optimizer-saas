@@ -23029,3 +23029,1905 @@ exports.adminManualCleanup = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
+
+// ============================================================================
+// VIDEO CREATION WIZARD FUNCTIONS
+// For the new AI Video Creation feature (separate from video-to-shorts wizard)
+// ============================================================================
+
+/**
+ * creationWizardSaveProject - Creates or updates a video creation project
+ */
+exports.creationWizardSaveProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, projectData } = data;
+
+  if (!projectData) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project data required');
+  }
+
+  try {
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    // Prepare the project document
+    const projectDoc = {
+      userId: uid,
+      type: 'creation', // Distinguish from video-to-shorts wizard
+      name: projectData.name || 'Untitled Video',
+      status: projectData.status || 'draft',
+
+      // Platform configuration
+      platform: {
+        selected: projectData.platform?.selected || null,
+        aspectRatio: projectData.platform?.aspectRatio || '16:9',
+        targetDuration: projectData.platform?.targetDuration || 60,
+        preset: projectData.platform?.preset || null
+      },
+
+      // Content configuration
+      content: {
+        niche: projectData.content?.niche || null,
+        subniche: projectData.content?.subniche || null,
+        style: projectData.content?.style || null,
+        topic: projectData.content?.topic || ''
+      },
+
+      // Script data (Phase 2)
+      script: {
+        text: projectData.script?.text || '',
+        scenes: projectData.script?.scenes || [],
+        generatedAt: projectData.script?.generatedAt || null
+      },
+
+      // Storyboard data (Phase 3)
+      storyboard: {
+        scenes: projectData.storyboard?.scenes || []
+      },
+
+      // Animation data (Phase 4)
+      animation: {
+        engine: projectData.animation?.engine || 'runpod', // 'runpod' or 'veo'
+        scenes: projectData.animation?.scenes || []
+      },
+
+      // Assembly data (Phase 5)
+      assembly: {
+        status: projectData.assembly?.status || 'pending',
+        musicUrl: projectData.assembly?.musicUrl || null,
+        musicVolume: projectData.assembly?.musicVolume || 0.3,
+        captionStyle: projectData.assembly?.captionStyle || null,
+        transitions: projectData.assembly?.transitions || 'crossfade'
+      },
+
+      // Export data (Phase 6)
+      export: {
+        status: projectData.export?.status || 'pending',
+        outputUrl: projectData.export?.outputUrl || null,
+        settings: projectData.export?.settings || {}
+      },
+
+      updatedAt: now
+    };
+
+    let docId;
+
+    if (projectId) {
+      // Update existing project
+      const existingDoc = await db.collection('creationProjects').doc(projectId).get();
+      if (!existingDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Project not found');
+      }
+      if (existingDoc.data().userId !== uid) {
+        throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+      }
+
+      await db.collection('creationProjects').doc(projectId).update(projectDoc);
+      docId = projectId;
+    } else {
+      // Create new project
+      projectDoc.createdAt = now;
+      const newDoc = await db.collection('creationProjects').add(projectDoc);
+      docId = newDoc.id;
+    }
+
+    return {
+      success: true,
+      projectId: docId,
+      message: projectId ? 'Project updated' : 'Project created'
+    };
+
+  } catch (error) {
+    console.error('[creationWizardSaveProject] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to save project'));
+  }
+});
+
+/**
+ * creationWizardLoadProject - Loads a complete creation wizard project
+ */
+exports.creationWizardLoadProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('creationProjects').doc(projectId).get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    return {
+      success: true,
+      project: {
+        id: projectDoc.id,
+        name: project.name,
+        status: project.status,
+        platform: project.platform,
+        content: project.content,
+        script: project.script,
+        storyboard: project.storyboard,
+        animation: project.animation,
+        assembly: project.assembly,
+        export: project.export,
+        createdAt: project.createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: project.updatedAt?.toDate?.()?.toISOString() || null
+      }
+    };
+
+  } catch (error) {
+    console.error('[creationWizardLoadProject] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to load project'));
+  }
+});
+
+/**
+ * creationWizardGetProjects - Gets list of user's creation wizard projects
+ */
+exports.creationWizardGetProjects = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { limit = 20, startAfter = null } = data || {};
+
+  try {
+    let query = db.collection('creationProjects')
+      .where('userId', '==', uid)
+      .orderBy('updatedAt', 'desc')
+      .limit(limit);
+
+    if (startAfter) {
+      const startDoc = await db.collection('creationProjects').doc(startAfter).get();
+      if (startDoc.exists) {
+        query = query.startAfter(startDoc);
+      }
+    }
+
+    const snapshot = await query.get();
+
+    const projects = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        status: data.status,
+        platform: data.platform?.selected || null,
+        aspectRatio: data.platform?.aspectRatio || null,
+        niche: data.content?.niche || null,
+        style: data.content?.style || null,
+        topic: data.content?.topic || '',
+        sceneCount: data.script?.scenes?.length || 0,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null
+      };
+    });
+
+    return {
+      success: true,
+      projects,
+      hasMore: projects.length === limit
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGetProjects] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get projects'));
+  }
+});
+
+/**
+ * creationWizardDeleteProject - Deletes a creation wizard project
+ */
+exports.creationWizardDeleteProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('creationProjects').doc(projectId).get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Delete any associated storage files
+    const bucket = admin.storage().bucket();
+    const prefix = `creation-projects/${projectId}/`;
+    try {
+      const [files] = await bucket.getFiles({ prefix });
+      for (const file of files) {
+        await file.delete().catch(() => {});
+      }
+    } catch (storageError) {
+      console.warn('[creationWizardDeleteProject] Storage cleanup warning:', storageError);
+    }
+
+    // Delete the project document
+    await db.collection('creationProjects').doc(projectId).delete();
+
+    return {
+      success: true,
+      message: 'Project deleted'
+    };
+
+  } catch (error) {
+    console.error('[creationWizardDeleteProject] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to delete project'));
+  }
+});
+
+/**
+ * creationWizardGenerateScript - Generates a video script using GPT-4o
+ *
+ * Takes project configuration and generates a structured script with:
+ * - Title and hook
+ * - Multiple scenes with narration and visual descriptions
+ * - Call-to-action
+ * - Timing for each scene
+ */
+exports.creationWizardGenerateScript = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, config } = data;
+
+  if (!config) {
+    throw new functions.https.HttpsError('invalid-argument', 'Script configuration required');
+  }
+
+  const {
+    platform,
+    aspectRatio,
+    targetDuration,
+    niche,
+    subniche,
+    style,
+    topic,
+    tone = 'engaging',
+    additionalInstructions = ''
+  } = config;
+
+  if (!topic || topic.trim().length < 3) {
+    throw new functions.https.HttpsError('invalid-argument', 'Topic must be at least 3 characters');
+  }
+
+  try {
+    // Calculate scene structure based on duration
+    const sceneDuration = 12; // Average 12 seconds per scene for good pacing
+    const sceneCount = Math.max(3, Math.min(12, Math.ceil(targetDuration / sceneDuration)));
+
+    // Build the prompt for GPT-4o
+    const systemPrompt = `You are an expert video scriptwriter specializing in ${niche || 'general'} content.
+You create engaging, well-structured scripts optimized for ${platform || 'social media'} in ${aspectRatio || '16:9'} format.
+Your scripts are known for strong hooks, clear storytelling, and compelling calls-to-action.
+Always return valid JSON exactly matching the requested structure.`;
+
+    const userPrompt = `Create a ${targetDuration}-second video script about: "${topic}"
+
+=== CONFIGURATION ===
+Platform: ${platform || 'YouTube'}
+Aspect Ratio: ${aspectRatio || '16:9'}
+Target Duration: ${targetDuration} seconds
+Niche: ${niche || 'general'}${subniche ? ` > ${subniche}` : ''}
+Visual Style: ${style || 'modern'}
+Tone: ${tone}
+Number of Scenes: ${sceneCount}
+
+=== REQUIREMENTS ===
+1. HOOK (first 3-5 seconds): Must grab attention immediately - use a surprising fact, question, or bold statement
+2. SCENES: Create exactly ${sceneCount} scenes that flow naturally
+3. Each scene needs:
+   - Narration text (what the voiceover says)
+   - Visual description (what appears on screen - be specific for AI image generation)
+   - Duration in seconds (scenes should total ~${targetDuration} seconds)
+4. CTA: End with a clear call-to-action appropriate for ${platform}
+5. Keep narration concise - about 2-3 words per second of video
+6. Visual descriptions should be detailed enough for AI image generation (describe scene, subjects, lighting, mood)
+
+${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
+
+=== OUTPUT FORMAT ===
+Return ONLY valid JSON with this exact structure:
+{
+  "title": "Compelling video title (50-70 chars)",
+  "hook": "The attention-grabbing opening line",
+  "scenes": [
+    {
+      "id": 1,
+      "narration": "What the voiceover says for this scene",
+      "visual": "Detailed visual description for AI image generation: describe the scene, subjects, composition, lighting, colors, mood",
+      "duration": 8,
+      "transition": "cut|fade|zoom|slide"
+    }
+  ],
+  "cta": "Call-to-action text",
+  "totalDuration": ${targetDuration},
+  "metadata": {
+    "targetAudience": "Who this video is for",
+    "keyMessage": "The main takeaway",
+    "suggestedMusic": "Type of background music"
+  }
+}`;
+
+    // Call GPT-4o for script generation
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 3000
+    });
+
+    // Parse the response
+    const responseText = completion.choices[0].message.content.trim();
+    const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    let script;
+    try {
+      script = JSON.parse(cleanJson);
+    } catch (parseError) {
+      console.error('[creationWizardGenerateScript] JSON parse error:', parseError);
+      console.error('[creationWizardGenerateScript] Raw response:', responseText);
+      throw new functions.https.HttpsError('internal', 'Failed to parse script response');
+    }
+
+    // Validate and normalize the script structure
+    if (!script.scenes || !Array.isArray(script.scenes) || script.scenes.length === 0) {
+      throw new functions.https.HttpsError('internal', 'Invalid script structure - no scenes generated');
+    }
+
+    // Ensure each scene has required fields and IDs
+    script.scenes = script.scenes.map((scene, index) => ({
+      id: scene.id || index + 1,
+      narration: scene.narration || '',
+      visual: scene.visual || '',
+      duration: scene.duration || Math.round(targetDuration / script.scenes.length),
+      transition: scene.transition || 'cut',
+      status: 'pending' // For tracking storyboard/animation progress
+    }));
+
+    // Calculate actual total duration
+    script.totalDuration = script.scenes.reduce((sum, scene) => sum + scene.duration, 0);
+
+    // Add generation metadata
+    script.generatedAt = new Date().toISOString();
+    script.generationConfig = {
+      platform,
+      aspectRatio,
+      targetDuration,
+      niche,
+      subniche,
+      style,
+      tone
+    };
+
+    // If projectId provided, update the project with the script
+    if (projectId) {
+      await db.collection('creationProjects').doc(projectId).update({
+        script: {
+          ...script,
+          status: 'generated'
+        },
+        'project.status': 'script_ready',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    // Log usage for analytics
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'script_generation',
+      model: 'gpt-4o',
+      inputTokens: completion.usage?.prompt_tokens || 0,
+      outputTokens: completion.usage?.completion_tokens || 0,
+      projectId: projectId || null,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      script,
+      usage: {
+        promptTokens: completion.usage?.prompt_tokens || 0,
+        completionTokens: completion.usage?.completion_tokens || 0,
+        totalTokens: completion.usage?.total_tokens || 0
+      }
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateScript] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate script'));
+  }
+});
+
+/**
+ * creationWizardRegenerateScene - Regenerates a single scene's script
+ */
+exports.creationWizardRegenerateScene = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sceneId, currentScript, instructions } = data;
+
+  if (!currentScript || !sceneId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scene ID and current script required');
+  }
+
+  const scene = currentScript.scenes?.find(s => s.id === sceneId);
+  if (!scene) {
+    throw new functions.https.HttpsError('not-found', 'Scene not found');
+  }
+
+  try {
+    const systemPrompt = `You are an expert video scriptwriter. You're improving a single scene in an existing script.
+Maintain consistency with the overall video topic and style.
+Return only valid JSON matching the exact structure provided.`;
+
+    const userPrompt = `Regenerate this scene with improvements:
+
+=== CURRENT SCENE ===
+Scene ${sceneId} of ${currentScript.scenes.length}
+Narration: "${scene.narration}"
+Visual: "${scene.visual}"
+Duration: ${scene.duration} seconds
+
+=== VIDEO CONTEXT ===
+Title: ${currentScript.title}
+Topic: ${currentScript.generationConfig?.topic || 'General'}
+Style: ${currentScript.generationConfig?.style || 'modern'}
+
+${instructions ? `=== SPECIFIC INSTRUCTIONS ===\n${instructions}\n` : ''}
+
+=== REQUIREMENTS ===
+- Keep similar duration (~${scene.duration} seconds)
+- Make narration more engaging/clear
+- Make visual description more detailed for AI image generation
+- Maintain consistency with surrounding scenes
+
+Return ONLY valid JSON:
+{
+  "narration": "Improved voiceover text",
+  "visual": "Detailed visual description for AI image generation",
+  "duration": ${scene.duration},
+  "transition": "${scene.transition || 'cut'}"
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 500
+    });
+
+    const responseText = completion.choices[0].message.content.trim();
+    const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const newScene = JSON.parse(cleanJson);
+
+    // Merge with existing scene data
+    const updatedScene = {
+      ...scene,
+      narration: newScene.narration || scene.narration,
+      visual: newScene.visual || scene.visual,
+      duration: newScene.duration || scene.duration,
+      transition: newScene.transition || scene.transition,
+      regeneratedAt: new Date().toISOString()
+    };
+
+    return {
+      success: true,
+      scene: updatedScene
+    };
+
+  } catch (error) {
+    console.error('[creationWizardRegenerateScene] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to regenerate scene'));
+  }
+});
+
+/**
+ * creationWizardGenerateSceneImage - Generate a single scene image using RunPod
+ *
+ * Uses existing RunPod HiDream integration to generate storyboard images
+ */
+exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sceneId, prompt, style, aspectRatio, settings } = data;
+
+  if (!prompt || prompt.trim().length < 10) {
+    throw new functions.https.HttpsError('invalid-argument', 'Image prompt is required (min 10 chars)');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    // Enhance prompt with style and quality keywords
+    const styleKeywords = {
+      modern: 'modern, sleek, clean design, contemporary',
+      cinematic: 'cinematic, dramatic lighting, film quality, movie still',
+      energetic: 'vibrant, dynamic, energetic, bold colors',
+      documentary: 'realistic, documentary style, natural lighting',
+      retro: 'retro, vintage, nostalgic, classic aesthetic',
+      futuristic: 'futuristic, sci-fi, high-tech, neon',
+      cartoon: 'cartoon style, animated, colorful illustration',
+      elegant: 'elegant, sophisticated, refined, luxury',
+      nature: 'natural, organic, earthy tones, outdoor',
+      dark: 'dark, moody, dramatic shadows, noir'
+    };
+
+    const styleEnhancement = styleKeywords[style] || styleKeywords.cinematic;
+
+    // Build enhanced prompt
+    const enhancedPrompt = `${prompt}. Style: ${styleEnhancement}. High quality, detailed, professional, 4K resolution.`;
+
+    const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur";
+
+    // Determine dimensions based on aspect ratio
+    const dimensions = {
+      '16:9': { width: 1280, height: 720 },
+      '9:16': { width: 720, height: 1280 },
+      '1:1': { width: 1024, height: 1024 },
+      '4:5': { width: 864, height: 1080 }
+    };
+    const { width, height } = dimensions[aspectRatio] || dimensions['16:9'];
+
+    // Generate unique filename
+    const seed = Math.floor(Math.random() * 999999999999);
+    const fileName = `creation-projects/${projectId || uid}/storyboard/scene_${sceneId}_${Date.now()}_${seed}.png`;
+
+    // Create signed URL for upload
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(fileName);
+    const [uploadUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 30 * 60 * 1000,
+      contentType: 'application/octet-stream',
+    });
+
+    // Build RunPod input
+    const runpodInput = {
+      positive_prompt: enhancedPrompt,
+      negative_prompt: negativePrompt,
+      width,
+      height,
+      batch_size: 1,
+      shift: 3.0,
+      seed,
+      steps: settings?.steps || 30,
+      cfg: settings?.cfg || 5,
+      sampler_name: "euler",
+      scheduler: "simple",
+      denoise: 1,
+      image_upload_url: uploadUrl
+    };
+
+    // Call RunPod API
+    const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
+    const runpodResponse = await axios.post(runpodEndpoint, {
+      input: runpodInput
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${runpodKey}`
+      },
+      timeout: 30000
+    });
+
+    const jobId = runpodResponse.data.id;
+    const status = runpodResponse.data.status;
+
+    // Generate public URL
+    const encodedFileName = encodeURIComponent(fileName);
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'storyboard_image',
+      model: 'runpod-hidream',
+      projectId: projectId || null,
+      sceneId,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      jobId,
+      status,
+      sceneId,
+      imageUrl: publicUrl,
+      fileName,
+      prompt: enhancedPrompt,
+      checkEndpoint: `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateSceneImage] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate scene image'));
+  }
+});
+
+/**
+ * creationWizardCheckImageStatus - Check the status of a RunPod image generation job
+ */
+exports.creationWizardCheckImageStatus = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { jobId } = data;
+
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    const statusResponse = await axios.get(
+      `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`,
+      {
+        headers: { 'Authorization': `Bearer ${runpodKey}` },
+        timeout: 10000
+      }
+    );
+
+    return {
+      success: true,
+      jobId,
+      status: statusResponse.data.status,
+      output: statusResponse.data.output || null,
+      error: statusResponse.data.error || null
+    };
+
+  } catch (error) {
+    console.error('[creationWizardCheckImageStatus] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check image status'));
+  }
+});
+
+/**
+ * creationWizardGenerateInitialStoryboard - Generate first N scene images in batch
+ *
+ * Called when user enters Step 4, generates first 4 scenes automatically
+ */
+exports.creationWizardGenerateInitialStoryboard = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, scenes, style, aspectRatio, maxScenes = 4 } = data;
+
+  if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scenes array is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    // Only generate for first N scenes
+    const scenesToGenerate = scenes.slice(0, maxScenes);
+    const jobs = [];
+
+    for (const scene of scenesToGenerate) {
+      // Use the visual description from script as base prompt
+      const prompt = scene.visual || scene.narration || 'A cinematic scene';
+
+      // Enhance prompt
+      const styleKeywords = {
+        modern: 'modern, sleek, clean design',
+        cinematic: 'cinematic, dramatic lighting, film quality',
+        energetic: 'vibrant, dynamic, bold colors',
+        documentary: 'realistic, natural lighting',
+        retro: 'retro, vintage, nostalgic',
+        futuristic: 'futuristic, sci-fi, high-tech',
+        cartoon: 'cartoon style, animated, colorful',
+        elegant: 'elegant, sophisticated, refined',
+        nature: 'natural, organic, outdoor',
+        dark: 'dark, moody, dramatic shadows'
+      };
+      const styleEnhancement = styleKeywords[style] || styleKeywords.cinematic;
+      const enhancedPrompt = `${prompt}. Style: ${styleEnhancement}. High quality, 4K.`;
+
+      // Dimensions
+      const dimensions = {
+        '16:9': { width: 1280, height: 720 },
+        '9:16': { width: 720, height: 1280 },
+        '1:1': { width: 1024, height: 1024 },
+        '4:5': { width: 864, height: 1080 }
+      };
+      const { width, height } = dimensions[aspectRatio] || dimensions['16:9'];
+
+      // Generate filename and signed URL
+      const seed = Math.floor(Math.random() * 999999999999);
+      const fileName = `creation-projects/${projectId || uid}/storyboard/scene_${scene.id}_${Date.now()}_${seed}.png`;
+
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(fileName);
+      const [uploadUrl] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 30 * 60 * 1000,
+        contentType: 'application/octet-stream',
+      });
+
+      // Call RunPod
+      const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
+      const runpodResponse = await axios.post(runpodEndpoint, {
+        input: {
+          positive_prompt: enhancedPrompt,
+          negative_prompt: "blurry, low quality, ugly, distorted, watermark, nsfw, text, words, logo",
+          width,
+          height,
+          batch_size: 1,
+          shift: 3.0,
+          seed,
+          steps: 30,
+          cfg: 5,
+          sampler_name: "euler",
+          scheduler: "simple",
+          denoise: 1,
+          image_upload_url: uploadUrl
+        }
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${runpodKey}`
+        },
+        timeout: 30000
+      });
+
+      const encodedFileName = encodeURIComponent(fileName);
+      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
+
+      jobs.push({
+        sceneId: scene.id,
+        jobId: runpodResponse.data.id,
+        status: runpodResponse.data.status,
+        imageUrl: publicUrl,
+        fileName,
+        prompt: enhancedPrompt
+      });
+    }
+
+    // Log batch usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'storyboard_batch',
+      model: 'runpod-hidream',
+      projectId: projectId || null,
+      sceneCount: jobs.length,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      jobs,
+      totalGenerated: jobs.length,
+      totalScenes: scenes.length
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateInitialStoryboard] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate storyboard'));
+  }
+});
+
+/**
+ * creationWizardUpdateStoryboard - Save storyboard data to project
+ */
+exports.creationWizardUpdateStoryboard = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, storyboard } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    if (projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    await projectRef.update({
+      storyboard: {
+        scenes: storyboard.scenes || [],
+        status: storyboard.status || 'in_progress',
+        updatedAt: new Date().toISOString()
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true };
+
+  } catch (error) {
+    console.error('[creationWizardUpdateStoryboard] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update storyboard'));
+  }
+});
+
+// ============================================================================
+// VIDEO CREATION WIZARD - PHASE 4: ANIMATION
+// ============================================================================
+
+/**
+ * creationWizardGenerateVoiceover - Generate TTS audio using OpenAI
+ *
+ * Uses OpenAI's TTS API to generate high-quality voiceover from narration text
+ */
+exports.creationWizardGenerateVoiceover = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sceneId, text, voice = 'alloy', speed = 1.0 } = data;
+
+  if (!text || text.trim().length < 3) {
+    throw new functions.https.HttpsError('invalid-argument', 'Narration text is required');
+  }
+
+  // Available voices: alloy, echo, fable, onyx, nova, shimmer
+  const validVoices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+  const selectedVoice = validVoices.includes(voice) ? voice : 'alloy';
+
+  try {
+    // Generate audio using OpenAI TTS
+    const mp3Response = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice: selectedVoice,
+      input: text,
+      speed: Math.max(0.25, Math.min(4.0, speed))
+    });
+
+    // Convert response to buffer
+    const audioBuffer = Buffer.from(await mp3Response.arrayBuffer());
+
+    // Upload to Firebase Storage
+    const fileName = `creation-projects/${projectId || uid}/voiceover/scene_${sceneId}_${Date.now()}.mp3`;
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(fileName);
+
+    await file.save(audioBuffer, {
+      metadata: {
+        contentType: 'audio/mpeg',
+        metadata: {
+          sceneId: String(sceneId),
+          voice: selectedVoice,
+          textLength: String(text.length)
+        }
+      }
+    });
+
+    // Make file public and get URL
+    await file.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
+    // Estimate duration based on text length and speed
+    // Average speaking rate is ~150 words per minute
+    const wordCount = text.split(/\s+/).length;
+    const estimatedDuration = Math.ceil((wordCount / 150) * 60 / speed);
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'voiceover_generation',
+      model: 'openai-tts-1',
+      projectId: projectId || null,
+      sceneId,
+      textLength: text.length,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      sceneId,
+      audioUrl: publicUrl,
+      fileName,
+      voice: selectedVoice,
+      estimatedDuration,
+      textLength: text.length
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateVoiceover] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate voiceover'));
+  }
+});
+
+/**
+ * creationWizardAnimateScene - Animate image with voiceover using RunPod Multi-talk
+ *
+ * Creates a video clip from a still image and audio using the Multi-talk API
+ */
+exports.creationWizardAnimateScene = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sceneId, imageUrl, audioUrl, animationType = 'ken_burns', settings = {} } = data;
+
+  if (!imageUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Image URL is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    // Multi-talk endpoint
+    const runpodEndpoint = 'https://api.runpod.ai/v2/mekewddvpqb0b4/run';
+
+    // Build animation input based on type
+    const animationInput = {
+      image_url: imageUrl,
+      audio_url: audioUrl || null,
+      animation_type: animationType, // 'talking_head', 'ken_burns', 'static'
+    };
+
+    // Add type-specific settings
+    if (animationType === 'talking_head') {
+      animationInput.lip_sync = settings.lipSync !== false;
+      animationInput.head_motion = settings.headMotion !== false;
+      animationInput.eye_blink = settings.eyeBlink !== false;
+    } else if (animationType === 'ken_burns') {
+      animationInput.zoom_direction = settings.zoomDirection || 'in'; // 'in', 'out', 'none'
+      animationInput.pan_direction = settings.panDirection || 'left'; // 'left', 'right', 'up', 'down', 'none'
+      animationInput.motion_intensity = settings.motionIntensity || 0.3; // 0.0 - 1.0
+    }
+
+    // Duration settings
+    animationInput.duration = settings.duration || 15; // Max 15 seconds for Multi-talk
+
+    // Generate output filename
+    const outputFileName = `creation-projects/${projectId || uid}/animation/scene_${sceneId}_${Date.now()}.mp4`;
+    const bucket = admin.storage().bucket();
+    const outputFile = bucket.file(outputFileName);
+
+    // Create signed URL for upload
+    const [uploadUrl] = await outputFile.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 60 * 60 * 1000, // 1 hour
+      contentType: 'video/mp4',
+    });
+
+    // Add upload URL to input
+    animationInput.output_url = uploadUrl;
+
+    // Call RunPod API
+    const runpodResponse = await axios.post(runpodEndpoint, {
+      input: animationInput
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${runpodKey}`
+      },
+      timeout: 30000
+    });
+
+    const jobId = runpodResponse.data.id;
+    const status = runpodResponse.data.status;
+
+    // Generate public URL for the output video
+    const encodedFileName = encodeURIComponent(outputFileName);
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'scene_animation',
+      model: 'runpod-multitalk',
+      projectId: projectId || null,
+      sceneId,
+      animationType,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      sceneId,
+      jobId,
+      status,
+      videoUrl: publicUrl,
+      fileName: outputFileName,
+      animationType,
+      checkEndpoint: `https://api.runpod.ai/v2/mekewddvpqb0b4/status/${jobId}`
+    };
+
+  } catch (error) {
+    console.error('[creationWizardAnimateScene] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to start animation'));
+  }
+});
+
+/**
+ * creationWizardCheckAnimationStatus - Check animation job status
+ */
+exports.creationWizardCheckAnimationStatus = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { jobId } = data;
+
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    const statusResponse = await axios.get(
+      `https://api.runpod.ai/v2/mekewddvpqb0b4/status/${jobId}`,
+      {
+        headers: { 'Authorization': `Bearer ${runpodKey}` },
+        timeout: 10000
+      }
+    );
+
+    return {
+      success: true,
+      jobId,
+      status: statusResponse.data.status,
+      output: statusResponse.data.output || null,
+      error: statusResponse.data.error || null
+    };
+
+  } catch (error) {
+    console.error('[creationWizardCheckAnimationStatus] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check animation status'));
+  }
+});
+
+/**
+ * creationWizardUpdateAnimation - Save animation data to project
+ */
+exports.creationWizardUpdateAnimation = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, animation } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    if (projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    await projectRef.update({
+      animation: {
+        scenes: animation.scenes || [],
+        status: animation.status || 'in_progress',
+        voiceSettings: animation.voiceSettings || { voice: 'alloy', speed: 1.0 },
+        updatedAt: new Date().toISOString()
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true };
+
+  } catch (error) {
+    console.error('[creationWizardUpdateAnimation] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update animation'));
+  }
+});
+
+// ==============================================
+// CREATION WIZARD - PHASE 5: ASSEMBLY
+// ==============================================
+
+/**
+ * Royalty-free music library for video creation
+ * These are curated tracks that can be used freely
+ */
+const MUSIC_LIBRARY = [
+  // Upbeat & Energetic
+  {
+    id: 'upbeat-corporate',
+    name: 'Corporate Success',
+    category: 'upbeat',
+    mood: 'Motivational, Professional',
+    duration: 120,
+    bpm: 120,
+    tags: ['corporate', 'business', 'success', 'motivational']
+  },
+  {
+    id: 'upbeat-tech',
+    name: 'Tech Innovation',
+    category: 'upbeat',
+    mood: 'Modern, Innovative',
+    duration: 90,
+    bpm: 128,
+    tags: ['technology', 'innovation', 'modern', 'electronic']
+  },
+  {
+    id: 'upbeat-happy',
+    name: 'Happy Days',
+    category: 'upbeat',
+    mood: 'Cheerful, Positive',
+    duration: 150,
+    bpm: 115,
+    tags: ['happy', 'cheerful', 'fun', 'positive']
+  },
+  // Calm & Ambient
+  {
+    id: 'calm-ambient',
+    name: 'Peaceful Ambient',
+    category: 'calm',
+    mood: 'Relaxing, Peaceful',
+    duration: 180,
+    bpm: 70,
+    tags: ['ambient', 'relaxing', 'meditation', 'peaceful']
+  },
+  {
+    id: 'calm-piano',
+    name: 'Gentle Piano',
+    category: 'calm',
+    mood: 'Emotional, Soft',
+    duration: 150,
+    bpm: 60,
+    tags: ['piano', 'emotional', 'soft', 'gentle']
+  },
+  {
+    id: 'calm-nature',
+    name: 'Nature Sounds',
+    category: 'calm',
+    mood: 'Natural, Organic',
+    duration: 200,
+    bpm: 0,
+    tags: ['nature', 'birds', 'water', 'forest']
+  },
+  // Dramatic & Cinematic
+  {
+    id: 'dramatic-epic',
+    name: 'Epic Cinematic',
+    category: 'dramatic',
+    mood: 'Epic, Powerful',
+    duration: 120,
+    bpm: 100,
+    tags: ['cinematic', 'epic', 'trailer', 'powerful']
+  },
+  {
+    id: 'dramatic-tension',
+    name: 'Building Tension',
+    category: 'dramatic',
+    mood: 'Suspenseful, Intense',
+    duration: 90,
+    bpm: 90,
+    tags: ['tension', 'suspense', 'thriller', 'intense']
+  },
+  {
+    id: 'dramatic-emotional',
+    name: 'Emotional Journey',
+    category: 'dramatic',
+    mood: 'Moving, Inspirational',
+    duration: 180,
+    bpm: 80,
+    tags: ['emotional', 'inspirational', 'moving', 'heartfelt']
+  },
+  // Electronic & Modern
+  {
+    id: 'electronic-edm',
+    name: 'EDM Energy',
+    category: 'electronic',
+    mood: 'High Energy, Dance',
+    duration: 120,
+    bpm: 140,
+    tags: ['edm', 'electronic', 'dance', 'energy']
+  },
+  {
+    id: 'electronic-chill',
+    name: 'Chill Beats',
+    category: 'electronic',
+    mood: 'Chill, Lofi',
+    duration: 180,
+    bpm: 85,
+    tags: ['lofi', 'chill', 'beats', 'study']
+  },
+  {
+    id: 'electronic-synthwave',
+    name: 'Retro Synthwave',
+    category: 'electronic',
+    mood: 'Retro, Nostalgic',
+    duration: 150,
+    bpm: 110,
+    tags: ['synthwave', 'retro', '80s', 'nostalgic']
+  },
+  // Hip Hop & Urban
+  {
+    id: 'hiphop-trap',
+    name: 'Trap Vibes',
+    category: 'hiphop',
+    mood: 'Urban, Cool',
+    duration: 120,
+    bpm: 140,
+    tags: ['trap', 'hiphop', 'urban', 'beats']
+  },
+  {
+    id: 'hiphop-boom',
+    name: 'Boom Bap Classic',
+    category: 'hiphop',
+    mood: 'Classic, Groovy',
+    duration: 150,
+    bpm: 90,
+    tags: ['boombap', 'classic', 'hiphop', 'groovy']
+  },
+  // No Music Option
+  {
+    id: 'none',
+    name: 'No Background Music',
+    category: 'none',
+    mood: 'Voice Only',
+    duration: 0,
+    bpm: 0,
+    tags: ['none', 'silent', 'voice-only']
+  }
+];
+
+/**
+ * Transition types available for video assembly
+ */
+const TRANSITION_TYPES = [
+  { id: 'cut', name: 'Cut', description: 'Instant switch between scenes', duration: 0 },
+  { id: 'fade', name: 'Fade', description: 'Smooth fade to black and back', duration: 500 },
+  { id: 'crossfade', name: 'Crossfade', description: 'Blend between scenes', duration: 750 },
+  { id: 'dissolve', name: 'Dissolve', description: 'Gradual dissolve transition', duration: 1000 },
+  { id: 'wipe-left', name: 'Wipe Left', description: 'Wipe from right to left', duration: 500 },
+  { id: 'wipe-right', name: 'Wipe Right', description: 'Wipe from left to right', duration: 500 },
+  { id: 'zoom-in', name: 'Zoom In', description: 'Zoom into next scene', duration: 600 },
+  { id: 'zoom-out', name: 'Zoom Out', description: 'Zoom out to next scene', duration: 600 },
+  { id: 'slide-up', name: 'Slide Up', description: 'Next scene slides up', duration: 500 },
+  { id: 'slide-down', name: 'Slide Down', description: 'Next scene slides down', duration: 500 }
+];
+
+/**
+ * Caption style presets
+ */
+const CAPTION_STYLES = [
+  { id: 'karaoke', name: 'Karaoke', description: 'Words highlight as spoken', font: 'bold', animation: 'highlight' },
+  { id: 'subtitle', name: 'Subtitle', description: 'Classic subtitle style', font: 'regular', animation: 'fade' },
+  { id: 'dynamic', name: 'Dynamic', description: 'Words pop in dynamically', font: 'bold', animation: 'pop' },
+  { id: 'minimal', name: 'Minimal', description: 'Clean minimal text', font: 'light', animation: 'slide' },
+  { id: 'bold', name: 'Bold Impact', description: 'Large bold text overlay', font: 'extra-bold', animation: 'scale' },
+  { id: 'none', name: 'No Captions', description: 'Hide captions', font: null, animation: null }
+];
+
+/**
+ * creationWizardGetMusicLibrary - Get available music tracks for video
+ */
+exports.creationWizardGetMusicLibrary = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { category, search } = data || {};
+
+  let tracks = [...MUSIC_LIBRARY];
+
+  // Filter by category if specified
+  if (category && category !== 'all') {
+    tracks = tracks.filter(t => t.category === category);
+  }
+
+  // Filter by search term if specified
+  if (search) {
+    const searchLower = search.toLowerCase();
+    tracks = tracks.filter(t =>
+      t.name.toLowerCase().includes(searchLower) ||
+      t.mood.toLowerCase().includes(searchLower) ||
+      t.tags.some(tag => tag.includes(searchLower))
+    );
+  }
+
+  return {
+    success: true,
+    tracks,
+    categories: ['all', 'upbeat', 'calm', 'dramatic', 'electronic', 'hiphop', 'none'],
+    transitionTypes: TRANSITION_TYPES,
+    captionStyles: CAPTION_STYLES
+  };
+});
+
+/**
+ * creationWizardUpdateAssembly - Save assembly settings to project
+ */
+exports.creationWizardUpdateAssembly = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, assembly } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    if (projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Validate and sanitize assembly data
+    const sanitizedAssembly = {
+      status: assembly.status || 'in_progress',
+      sceneOrder: Array.isArray(assembly.sceneOrder) ? assembly.sceneOrder : [],
+      transitions: assembly.transitions || {},
+      music: {
+        enabled: !!assembly.music?.enabled,
+        trackId: assembly.music?.trackId || null,
+        volume: Math.min(100, Math.max(0, assembly.music?.volume || 30))
+      },
+      captions: {
+        enabled: assembly.captions?.enabled !== false,
+        style: assembly.captions?.style || 'karaoke',
+        position: assembly.captions?.position || 'bottom',
+        fontSize: assembly.captions?.fontSize || 'medium'
+      },
+      audioMix: {
+        voiceVolume: Math.min(100, Math.max(0, assembly.audioMix?.voiceVolume || 100)),
+        musicVolume: Math.min(100, Math.max(0, assembly.audioMix?.musicVolume || 30))
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    await projectRef.update({
+      assembly: sanitizedAssembly,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, assembly: sanitizedAssembly };
+
+  } catch (error) {
+    console.error('[creationWizardUpdateAssembly] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update assembly'));
+  }
+});
+
+/**
+ * creationWizardGetAssemblyPreview - Generate preview data for assembly
+ * Returns timing information for video preview
+ */
+exports.creationWizardGetAssemblyPreview = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Calculate total duration and scene timings
+    const scriptScenes = project.script?.scenes || [];
+    const animationScenes = project.animation?.scenes || [];
+    const assembly = project.assembly || {};
+    const sceneOrder = assembly.sceneOrder?.length > 0
+      ? assembly.sceneOrder
+      : scriptScenes.map(s => s.id);
+
+    let currentTime = 0;
+    const timeline = [];
+
+    for (const sceneId of sceneOrder) {
+      const scriptScene = scriptScenes.find(s => s.id === sceneId);
+      const animScene = animationScenes.find(s => s.sceneId === sceneId);
+      const transition = assembly.transitions?.[sceneId] || { type: 'cut', duration: 0 };
+
+      if (scriptScene) {
+        const sceneDuration = scriptScene.duration || 8;
+        const transitionDuration = TRANSITION_TYPES.find(t => t.id === transition.type)?.duration || 0;
+
+        timeline.push({
+          sceneId,
+          startTime: currentTime,
+          duration: sceneDuration * 1000,
+          endTime: currentTime + (sceneDuration * 1000),
+          transitionType: transition.type,
+          transitionDuration,
+          hasVideo: !!animScene?.videoUrl,
+          hasAudio: !!animScene?.voiceoverUrl,
+          narration: scriptScene.narration
+        });
+
+        currentTime += (sceneDuration * 1000) + transitionDuration;
+      }
+    }
+
+    // Get selected music track info
+    const selectedTrack = assembly.music?.trackId
+      ? MUSIC_LIBRARY.find(t => t.id === assembly.music.trackId)
+      : null;
+
+    return {
+      success: true,
+      timeline,
+      totalDuration: currentTime,
+      music: selectedTrack ? {
+        ...selectedTrack,
+        enabled: assembly.music?.enabled,
+        volume: assembly.music?.volume
+      } : null,
+      captions: assembly.captions,
+      audioMix: assembly.audioMix || { voiceVolume: 100, musicVolume: 30 }
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGetAssemblyPreview] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get assembly preview'));
+  }
+});
+
+// ==============================================
+// CREATION WIZARD - PHASE 6: EXPORT
+// ==============================================
+
+/**
+ * Quality presets for video export
+ */
+const EXPORT_QUALITY_PRESETS = {
+  '720p': {
+    name: '720p HD',
+    resolution: { width: 1280, height: 720 },
+    bitrate: '4M',
+    description: 'Good quality, smaller file size'
+  },
+  '1080p': {
+    name: '1080p Full HD',
+    resolution: { width: 1920, height: 1080 },
+    bitrate: '8M',
+    description: 'High quality, recommended'
+  },
+  '4k': {
+    name: '4K Ultra HD',
+    resolution: { width: 3840, height: 2160 },
+    bitrate: '20M',
+    description: 'Maximum quality, large file size'
+  }
+};
+
+/**
+ * creationWizardStartExport - Start video export/rendering job
+ */
+exports.creationWizardStartExport = functions
+  .runWith({ timeoutSeconds: 540, memory: '2GB' })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, quality = '1080p', format = 'mp4' } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  // Validate quality
+  const validQualities = Object.keys(EXPORT_QUALITY_PRESETS);
+  const outputQuality = validQualities.includes(quality) ? quality : '1080p';
+  const qualityPreset = EXPORT_QUALITY_PRESETS[outputQuality];
+
+  try {
+    // Get project data
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Validate project has all required data
+    const scriptScenes = project.script?.scenes || [];
+    const animationScenes = project.animation?.scenes || [];
+    const storyboardScenes = project.storyboard?.scenes || [];
+    const assembly = project.assembly || {};
+
+    if (scriptScenes.length === 0) {
+      throw new functions.https.HttpsError('failed-precondition', 'No script scenes found');
+    }
+
+    // Check for animated scenes
+    const animatedScenes = animationScenes.filter(s => s.videoUrl);
+    if (animatedScenes.length === 0) {
+      throw new functions.https.HttpsError('failed-precondition', 'No animated scenes found. Please complete animation step first.');
+    }
+
+    // Get scene order
+    const sceneOrder = assembly.sceneOrder?.length > 0
+      ? assembly.sceneOrder
+      : scriptScenes.map(s => s.id);
+
+    // Build export manifest
+    const exportManifest = {
+      scenes: sceneOrder.map(sceneId => {
+        const scriptScene = scriptScenes.find(s => s.id === sceneId);
+        const animScene = animationScenes.find(s => s.sceneId === sceneId);
+        const storyboardScene = storyboardScenes.find(s => s.sceneId === sceneId);
+        const transition = assembly.transitions?.[sceneId] || { type: 'cut' };
+
+        return {
+          sceneId,
+          duration: scriptScene?.duration || 8,
+          videoUrl: animScene?.videoUrl || null,
+          audioUrl: animScene?.voiceoverUrl || null,
+          imageUrl: storyboardScene?.imageUrl || null,
+          narration: scriptScene?.narration || '',
+          transition: transition.type
+        };
+      }),
+      music: assembly.music || { enabled: false },
+      captions: assembly.captions || { enabled: true, style: 'karaoke', position: 'bottom' },
+      audioMix: assembly.audioMix || { voiceVolume: 100, musicVolume: 30 },
+      quality: outputQuality,
+      resolution: qualityPreset.resolution,
+      bitrate: qualityPreset.bitrate,
+      format,
+      platform: project.platform?.selected || 'youtube-long',
+      aspectRatio: project.platform?.aspectRatio || '16:9'
+    };
+
+    // Calculate total duration
+    const totalDuration = exportManifest.scenes.reduce((sum, s) => sum + s.duration, 0);
+
+    // Create export job document
+    const jobRef = db.collection('creationExportJobs').doc();
+    const jobData = {
+      id: jobRef.id,
+      projectId,
+      userId: uid,
+      status: 'pending',
+      progress: 0,
+      manifest: exportManifest,
+      totalDuration,
+      quality: outputQuality,
+      format,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      outputUrl: null,
+      error: null
+    };
+
+    await jobRef.set(jobData);
+
+    // Update project with export job reference
+    await projectRef.update({
+      'export.status': 'exporting',
+      'export.jobId': jobRef.id,
+      'export.progress': 0,
+      'export.startedAt': new Date().toISOString(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Trigger video processor service (if available)
+    const videoProcessorUrl = functions.config().videoprocessor?.url;
+    if (videoProcessorUrl) {
+      try {
+        const requestBody = {
+          jobId: jobRef.id,
+          type: 'creation_wizard_export',
+          manifest: exportManifest,
+          outputPath: `creation-exports/${uid}/${projectId}/${jobRef.id}.${format}`
+        };
+
+        // Fire and forget - processor will update job status
+        axios.post(`${videoProcessorUrl}/creation-export`, requestBody, {
+          timeout: 5000,
+          headers: { 'Content-Type': 'application/json' }
+        }).catch(err => {
+          console.log('Video processor trigger sent (async):', err.message || 'pending');
+        });
+
+        console.log(`[creationWizardStartExport] Triggered video processor for job: ${jobRef.id}`);
+      } catch (triggerError) {
+        console.log('[creationWizardStartExport] Video processor trigger note:', triggerError.message);
+      }
+    } else {
+      console.log('[creationWizardStartExport] Video processor URL not configured - simulating export');
+
+      // Simulate export progress for demo (when no video processor is available)
+      simulateExportProgress(jobRef.id, projectId, uid, exportManifest, totalDuration);
+    }
+
+    return {
+      success: true,
+      jobId: jobRef.id,
+      status: 'pending',
+      totalDuration,
+      quality: outputQuality,
+      estimatedTime: Math.ceil(totalDuration * 2) // Rough estimate: 2x realtime
+    };
+
+  } catch (error) {
+    console.error('[creationWizardStartExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to start export'));
+  }
+});
+
+/**
+ * Simulate export progress when video processor is not available
+ * This is for demo/development purposes
+ */
+async function simulateExportProgress(jobId, projectId, uid, manifest, totalDuration) {
+  const jobRef = db.collection('creationExportJobs').doc(jobId);
+  const projectRef = db.collection('creationProjects').doc(projectId);
+
+  const stages = [
+    { progress: 10, status: 'processing', message: 'Preparing scenes...' },
+    { progress: 30, status: 'processing', message: 'Combining videos...' },
+    { progress: 50, status: 'processing', message: 'Adding transitions...' },
+    { progress: 70, status: 'processing', message: 'Mixing audio...' },
+    { progress: 85, status: 'processing', message: 'Adding captions...' },
+    { progress: 95, status: 'processing', message: 'Finalizing...' },
+    { progress: 100, status: 'completed', message: 'Export complete!' }
+  ];
+
+  for (const stage of stages) {
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay between stages
+
+    const updateData = {
+      progress: stage.progress,
+      status: stage.status,
+      currentStage: stage.message,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    if (stage.status === 'completed') {
+      // Generate a placeholder output URL
+      // In production, this would be the actual rendered video URL
+      const outputFileName = `video_${projectId}_${Date.now()}.mp4`;
+      const bucket = admin.storage().bucket();
+
+      // For demo, we'll use the first animated scene's video as the "exported" video
+      const firstAnimatedScene = manifest.scenes.find(s => s.videoUrl);
+      if (firstAnimatedScene && firstAnimatedScene.videoUrl) {
+        updateData.outputUrl = firstAnimatedScene.videoUrl;
+      } else {
+        // Fallback: create a placeholder URL structure
+        updateData.outputUrl = `https://storage.googleapis.com/${bucket.name}/creation-exports/${uid}/${projectId}/${outputFileName}`;
+      }
+
+      updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    await jobRef.update(updateData);
+    await projectRef.update({
+      'export.progress': stage.progress,
+      'export.status': stage.status,
+      'export.currentStage': stage.message,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  }
+}
+
+/**
+ * creationWizardCheckExportStatus - Check export job status
+ */
+exports.creationWizardCheckExportStatus = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { jobId, projectId } = data;
+
+  if (!jobId && !projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID or Project ID required');
+  }
+
+  try {
+    let jobDoc;
+
+    if (jobId) {
+      jobDoc = await db.collection('creationExportJobs').doc(jobId).get();
+    } else {
+      // Find job by project ID
+      const jobsQuery = await db.collection('creationExportJobs')
+        .where('projectId', '==', projectId)
+        .where('userId', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(1)
+        .get();
+
+      if (!jobsQuery.empty) {
+        jobDoc = jobsQuery.docs[0];
+      }
+    }
+
+    if (!jobDoc || !jobDoc.exists) {
+      return {
+        success: true,
+        status: 'not_found',
+        message: 'No export job found'
+      };
+    }
+
+    const job = jobDoc.data();
+
+    // Verify ownership
+    if (job.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    return {
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      progress: job.progress || 0,
+      currentStage: job.currentStage || null,
+      outputUrl: job.outputUrl || null,
+      error: job.error || null,
+      totalDuration: job.totalDuration,
+      quality: job.quality,
+      createdAt: job.createdAt?.toDate?.()?.toISOString() || null,
+      completedAt: job.completedAt?.toDate?.()?.toISOString() || null
+    };
+
+  } catch (error) {
+    console.error('[creationWizardCheckExportStatus] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check export status'));
+  }
+});
+
+/**
+ * creationWizardGetExportHistory - Get user's export history
+ */
+exports.creationWizardGetExportHistory = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { limit: queryLimit = 10 } = data || {};
+
+  try {
+    const jobsQuery = await db.collection('creationExportJobs')
+      .where('userId', '==', uid)
+      .where('status', '==', 'completed')
+      .orderBy('completedAt', 'desc')
+      .limit(Math.min(queryLimit, 50))
+      .get();
+
+    const exports = jobsQuery.docs.map(doc => {
+      const job = doc.data();
+      return {
+        jobId: job.id,
+        projectId: job.projectId,
+        outputUrl: job.outputUrl,
+        quality: job.quality,
+        format: job.format,
+        totalDuration: job.totalDuration,
+        completedAt: job.completedAt?.toDate?.()?.toISOString() || null
+      };
+    });
+
+    return {
+      success: true,
+      exports,
+      count: exports.length
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGetExportHistory] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get export history'));
+  }
+});
+
+/**
+ * creationWizardCancelExport - Cancel an in-progress export job
+ */
+exports.creationWizardCancelExport = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { jobId } = data;
+
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID required');
+  }
+
+  try {
+    const jobRef = db.collection('creationExportJobs').doc(jobId);
+    const jobDoc = await jobRef.get();
+
+    if (!jobDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Export job not found');
+    }
+
+    const job = jobDoc.data();
+    if (job.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    if (job.status === 'completed') {
+      throw new functions.https.HttpsError('failed-precondition', 'Cannot cancel completed export');
+    }
+
+    // Update job status
+    await jobRef.update({
+      status: 'cancelled',
+      cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Update project export status
+    const projectRef = db.collection('creationProjects').doc(job.projectId);
+    await projectRef.update({
+      'export.status': 'cancelled',
+      'export.jobId': null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, message: 'Export cancelled' };
+
+  } catch (error) {
+    console.error('[creationWizardCancelExport] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to cancel export'));
+  }
+});
