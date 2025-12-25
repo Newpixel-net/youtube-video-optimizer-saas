@@ -24760,6 +24760,7 @@ exports.creationWizardStartExport = functions
     }
 
     // Build export manifest with timeline edits applied
+    // Format matches what creation-processor.js expects
     const exportManifest = {
       scenes: sceneOrder.map((sceneId, index) => {
         const scriptScene = scriptScenes.find(s => s.id === sceneId);
@@ -24772,27 +24773,48 @@ exports.creationWizardStartExport = functions
           ? { type: timelineScene.transition, duration: timelineScene.transitionDuration }
           : (assembly.transitions?.[sceneId] || { type: 'fade', duration: 0.5 });
 
+        // Generate Ken Burns parameters (randomized for visual interest)
+        // These control the zoom/pan effect on images
+        const kenBurns = storyboardScene?.kenBurns || {
+          startScale: 1.0 + Math.random() * 0.15,  // 1.0 - 1.15
+          endScale: 1.1 + Math.random() * 0.15,    // 1.1 - 1.25
+          startX: 0.4 + Math.random() * 0.2,       // 0.4 - 0.6 (center area)
+          startY: 0.4 + Math.random() * 0.2,       // 0.4 - 0.6
+          endX: 0.4 + Math.random() * 0.2,         // 0.4 - 0.6
+          endY: 0.4 + Math.random() * 0.2          // 0.4 - 0.6
+        };
+
         return {
+          id: sceneId,
           sceneId,
           index,
           duration: timelineScene?.duration || scriptScene?.duration || 8,
+          // Video sources - prefer animated video, fall back to image
           videoUrl: animScene?.videoUrl || null,
-          audioUrl: animScene?.voiceoverUrl || null,
           imageUrl: storyboardScene?.imageUrl || null,
+          // Audio - voiceover URL for creation-processor.js
+          voiceoverUrl: animScene?.voiceoverUrl || null,
+          audioUrl: animScene?.voiceoverUrl || null, // Legacy field
           narration: scriptScene?.narration || '',
+          // Ken Burns effect parameters for images
+          kenBurns,
+          // Transition settings
           transition: transition.type,
           transitionDuration: transition.duration || 0.5,
           voiceoverOffset: timelineScene?.voiceoverOffset || 0
         };
       }),
-      // Use timeline state settings if available
-      music: timelineState?.music || assembly.music || { enabled: false },
+      // Music settings for creation-processor.js
+      music: {
+        enabled: timelineState?.music?.enabled || assembly.music?.enabled || false,
+        url: assembly.music?.trackUrl || null,
+        volume: (timelineState?.audioMix?.musicVolume || assembly.audioMix?.musicVolume || 30) / 100
+      },
+      // Captions (for future use)
       captions: timelineState?.captions || assembly.captions || { enabled: true, style: 'karaoke', position: 'bottom' },
+      // Audio mix settings
       audioMix: timelineState?.audioMix || assembly.audioMix || { voiceVolume: 100, musicVolume: 30 },
-      quality: outputQuality,
-      resolution: qualityPreset.resolution,
-      bitrate: qualityPreset.bitrate,
-      format,
+      // Platform and format
       platform: project.platform?.selected || 'youtube-long',
       aspectRatio: project.platform?.aspectRatio || '16:9',
       // Include timeline metadata
@@ -24800,10 +24822,21 @@ exports.creationWizardStartExport = functions
       hasTimelineEdits: timelineState?.editHistory?.hasEdits || false
     };
 
+    // Output settings for creation-processor.js
+    const outputSettings = {
+      quality: outputQuality,
+      aspectRatio: project.platform?.aspectRatio || '16:9',
+      fps: 30,
+      format,
+      resolution: qualityPreset.resolution,
+      bitrate: qualityPreset.bitrate
+    };
+
     // Calculate total duration
     const totalDuration = exportManifest.scenes.reduce((sum, s) => sum + s.duration, 0);
 
     // Create export job document
+    // Structure matches what creation-processor.js expects
     const jobRef = db.collection('creationExportJobs').doc();
     const jobData = {
       id: jobRef.id,
@@ -24811,7 +24844,11 @@ exports.creationWizardStartExport = functions
       userId: uid,
       status: 'pending',
       progress: 0,
+      currentStage: 'Queued for processing...',
+      // Manifest contains all scene data
       manifest: exportManifest,
+      // Output settings for FFmpeg
+      output: outputSettings,
       totalDuration,
       quality: outputQuality,
       format,
@@ -24836,12 +24873,8 @@ exports.creationWizardStartExport = functions
     const videoProcessorUrl = functions.config().videoprocessor?.url;
     if (videoProcessorUrl) {
       try {
-        const requestBody = {
-          jobId: jobRef.id,
-          type: 'creation_wizard_export',
-          manifest: exportManifest,
-          outputPath: `creation-exports/${uid}/${projectId}/${jobRef.id}.${format}`
-        };
+        // Only send jobId - processor fetches full job data from Firestore
+        const requestBody = { jobId: jobRef.id };
 
         // Fire and forget - processor will update job status
         axios.post(`${videoProcessorUrl}/creation-export`, requestBody, {
@@ -24852,11 +24885,13 @@ exports.creationWizardStartExport = functions
         });
 
         console.log(`[creationWizardStartExport] Triggered video processor for job: ${jobRef.id}`);
+        console.log(`[creationWizardStartExport] Scenes: ${exportManifest.scenes.length}, Duration: ${totalDuration}s, Quality: ${outputQuality}`);
       } catch (triggerError) {
         console.log('[creationWizardStartExport] Video processor trigger note:', triggerError.message);
       }
     } else {
-      console.log('[creationWizardStartExport] Video processor URL not configured - simulating export');
+      console.log('[creationWizardStartExport] Video processor URL not configured - using fallback simulation');
+      console.log('[creationWizardStartExport] To enable server-side rendering, configure: firebase functions:config:set videoprocessor.url="YOUR_CLOUD_RUN_URL"');
 
       // Simulate export progress for demo (when no video processor is available)
       simulateExportProgress(jobRef.id, projectId, uid, exportManifest, totalDuration);
