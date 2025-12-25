@@ -9190,7 +9190,7 @@
                 const startExportFn = firebase.functions().httpsCallable('creationWizardStartExport');
                 const result = await startExportFn({
                     projectId: state.project.id,
-                    outputQuality: quality,
+                    quality: quality,
                     format: format
                 });
 
