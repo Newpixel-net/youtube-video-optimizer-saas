@@ -24170,3 +24170,362 @@ exports.creationWizardUpdateAnimation = functions.https.onCall(async (data, cont
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update animation'));
   }
 });
+
+// ==============================================
+// CREATION WIZARD - PHASE 5: ASSEMBLY
+// ==============================================
+
+/**
+ * Royalty-free music library for video creation
+ * These are curated tracks that can be used freely
+ */
+const MUSIC_LIBRARY = [
+  // Upbeat & Energetic
+  {
+    id: 'upbeat-corporate',
+    name: 'Corporate Success',
+    category: 'upbeat',
+    mood: 'Motivational, Professional',
+    duration: 120,
+    bpm: 120,
+    tags: ['corporate', 'business', 'success', 'motivational']
+  },
+  {
+    id: 'upbeat-tech',
+    name: 'Tech Innovation',
+    category: 'upbeat',
+    mood: 'Modern, Innovative',
+    duration: 90,
+    bpm: 128,
+    tags: ['technology', 'innovation', 'modern', 'electronic']
+  },
+  {
+    id: 'upbeat-happy',
+    name: 'Happy Days',
+    category: 'upbeat',
+    mood: 'Cheerful, Positive',
+    duration: 150,
+    bpm: 115,
+    tags: ['happy', 'cheerful', 'fun', 'positive']
+  },
+  // Calm & Ambient
+  {
+    id: 'calm-ambient',
+    name: 'Peaceful Ambient',
+    category: 'calm',
+    mood: 'Relaxing, Peaceful',
+    duration: 180,
+    bpm: 70,
+    tags: ['ambient', 'relaxing', 'meditation', 'peaceful']
+  },
+  {
+    id: 'calm-piano',
+    name: 'Gentle Piano',
+    category: 'calm',
+    mood: 'Emotional, Soft',
+    duration: 150,
+    bpm: 60,
+    tags: ['piano', 'emotional', 'soft', 'gentle']
+  },
+  {
+    id: 'calm-nature',
+    name: 'Nature Sounds',
+    category: 'calm',
+    mood: 'Natural, Organic',
+    duration: 200,
+    bpm: 0,
+    tags: ['nature', 'birds', 'water', 'forest']
+  },
+  // Dramatic & Cinematic
+  {
+    id: 'dramatic-epic',
+    name: 'Epic Cinematic',
+    category: 'dramatic',
+    mood: 'Epic, Powerful',
+    duration: 120,
+    bpm: 100,
+    tags: ['cinematic', 'epic', 'trailer', 'powerful']
+  },
+  {
+    id: 'dramatic-tension',
+    name: 'Building Tension',
+    category: 'dramatic',
+    mood: 'Suspenseful, Intense',
+    duration: 90,
+    bpm: 90,
+    tags: ['tension', 'suspense', 'thriller', 'intense']
+  },
+  {
+    id: 'dramatic-emotional',
+    name: 'Emotional Journey',
+    category: 'dramatic',
+    mood: 'Moving, Inspirational',
+    duration: 180,
+    bpm: 80,
+    tags: ['emotional', 'inspirational', 'moving', 'heartfelt']
+  },
+  // Electronic & Modern
+  {
+    id: 'electronic-edm',
+    name: 'EDM Energy',
+    category: 'electronic',
+    mood: 'High Energy, Dance',
+    duration: 120,
+    bpm: 140,
+    tags: ['edm', 'electronic', 'dance', 'energy']
+  },
+  {
+    id: 'electronic-chill',
+    name: 'Chill Beats',
+    category: 'electronic',
+    mood: 'Chill, Lofi',
+    duration: 180,
+    bpm: 85,
+    tags: ['lofi', 'chill', 'beats', 'study']
+  },
+  {
+    id: 'electronic-synthwave',
+    name: 'Retro Synthwave',
+    category: 'electronic',
+    mood: 'Retro, Nostalgic',
+    duration: 150,
+    bpm: 110,
+    tags: ['synthwave', 'retro', '80s', 'nostalgic']
+  },
+  // Hip Hop & Urban
+  {
+    id: 'hiphop-trap',
+    name: 'Trap Vibes',
+    category: 'hiphop',
+    mood: 'Urban, Cool',
+    duration: 120,
+    bpm: 140,
+    tags: ['trap', 'hiphop', 'urban', 'beats']
+  },
+  {
+    id: 'hiphop-boom',
+    name: 'Boom Bap Classic',
+    category: 'hiphop',
+    mood: 'Classic, Groovy',
+    duration: 150,
+    bpm: 90,
+    tags: ['boombap', 'classic', 'hiphop', 'groovy']
+  },
+  // No Music Option
+  {
+    id: 'none',
+    name: 'No Background Music',
+    category: 'none',
+    mood: 'Voice Only',
+    duration: 0,
+    bpm: 0,
+    tags: ['none', 'silent', 'voice-only']
+  }
+];
+
+/**
+ * Transition types available for video assembly
+ */
+const TRANSITION_TYPES = [
+  { id: 'cut', name: 'Cut', description: 'Instant switch between scenes', duration: 0 },
+  { id: 'fade', name: 'Fade', description: 'Smooth fade to black and back', duration: 500 },
+  { id: 'crossfade', name: 'Crossfade', description: 'Blend between scenes', duration: 750 },
+  { id: 'dissolve', name: 'Dissolve', description: 'Gradual dissolve transition', duration: 1000 },
+  { id: 'wipe-left', name: 'Wipe Left', description: 'Wipe from right to left', duration: 500 },
+  { id: 'wipe-right', name: 'Wipe Right', description: 'Wipe from left to right', duration: 500 },
+  { id: 'zoom-in', name: 'Zoom In', description: 'Zoom into next scene', duration: 600 },
+  { id: 'zoom-out', name: 'Zoom Out', description: 'Zoom out to next scene', duration: 600 },
+  { id: 'slide-up', name: 'Slide Up', description: 'Next scene slides up', duration: 500 },
+  { id: 'slide-down', name: 'Slide Down', description: 'Next scene slides down', duration: 500 }
+];
+
+/**
+ * Caption style presets
+ */
+const CAPTION_STYLES = [
+  { id: 'karaoke', name: 'Karaoke', description: 'Words highlight as spoken', font: 'bold', animation: 'highlight' },
+  { id: 'subtitle', name: 'Subtitle', description: 'Classic subtitle style', font: 'regular', animation: 'fade' },
+  { id: 'dynamic', name: 'Dynamic', description: 'Words pop in dynamically', font: 'bold', animation: 'pop' },
+  { id: 'minimal', name: 'Minimal', description: 'Clean minimal text', font: 'light', animation: 'slide' },
+  { id: 'bold', name: 'Bold Impact', description: 'Large bold text overlay', font: 'extra-bold', animation: 'scale' },
+  { id: 'none', name: 'No Captions', description: 'Hide captions', font: null, animation: null }
+];
+
+/**
+ * creationWizardGetMusicLibrary - Get available music tracks for video
+ */
+exports.creationWizardGetMusicLibrary = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { category, search } = data || {};
+
+  let tracks = [...MUSIC_LIBRARY];
+
+  // Filter by category if specified
+  if (category && category !== 'all') {
+    tracks = tracks.filter(t => t.category === category);
+  }
+
+  // Filter by search term if specified
+  if (search) {
+    const searchLower = search.toLowerCase();
+    tracks = tracks.filter(t =>
+      t.name.toLowerCase().includes(searchLower) ||
+      t.mood.toLowerCase().includes(searchLower) ||
+      t.tags.some(tag => tag.includes(searchLower))
+    );
+  }
+
+  return {
+    success: true,
+    tracks,
+    categories: ['all', 'upbeat', 'calm', 'dramatic', 'electronic', 'hiphop', 'none'],
+    transitionTypes: TRANSITION_TYPES,
+    captionStyles: CAPTION_STYLES
+  };
+});
+
+/**
+ * creationWizardUpdateAssembly - Save assembly settings to project
+ */
+exports.creationWizardUpdateAssembly = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, assembly } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    if (projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Validate and sanitize assembly data
+    const sanitizedAssembly = {
+      status: assembly.status || 'in_progress',
+      sceneOrder: Array.isArray(assembly.sceneOrder) ? assembly.sceneOrder : [],
+      transitions: assembly.transitions || {},
+      music: {
+        enabled: !!assembly.music?.enabled,
+        trackId: assembly.music?.trackId || null,
+        volume: Math.min(100, Math.max(0, assembly.music?.volume || 30))
+      },
+      captions: {
+        enabled: assembly.captions?.enabled !== false,
+        style: assembly.captions?.style || 'karaoke',
+        position: assembly.captions?.position || 'bottom',
+        fontSize: assembly.captions?.fontSize || 'medium'
+      },
+      audioMix: {
+        voiceVolume: Math.min(100, Math.max(0, assembly.audioMix?.voiceVolume || 100)),
+        musicVolume: Math.min(100, Math.max(0, assembly.audioMix?.musicVolume || 30))
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    await projectRef.update({
+      assembly: sanitizedAssembly,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, assembly: sanitizedAssembly };
+
+  } catch (error) {
+    console.error('[creationWizardUpdateAssembly] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update assembly'));
+  }
+});
+
+/**
+ * creationWizardGetAssemblyPreview - Generate preview data for assembly
+ * Returns timing information for video preview
+ */
+exports.creationWizardGetAssemblyPreview = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Calculate total duration and scene timings
+    const scriptScenes = project.script?.scenes || [];
+    const animationScenes = project.animation?.scenes || [];
+    const assembly = project.assembly || {};
+    const sceneOrder = assembly.sceneOrder?.length > 0
+      ? assembly.sceneOrder
+      : scriptScenes.map(s => s.id);
+
+    let currentTime = 0;
+    const timeline = [];
+
+    for (const sceneId of sceneOrder) {
+      const scriptScene = scriptScenes.find(s => s.id === sceneId);
+      const animScene = animationScenes.find(s => s.sceneId === sceneId);
+      const transition = assembly.transitions?.[sceneId] || { type: 'cut', duration: 0 };
+
+      if (scriptScene) {
+        const sceneDuration = scriptScene.duration || 8;
+        const transitionDuration = TRANSITION_TYPES.find(t => t.id === transition.type)?.duration || 0;
+
+        timeline.push({
+          sceneId,
+          startTime: currentTime,
+          duration: sceneDuration * 1000,
+          endTime: currentTime + (sceneDuration * 1000),
+          transitionType: transition.type,
+          transitionDuration,
+          hasVideo: !!animScene?.videoUrl,
+          hasAudio: !!animScene?.voiceoverUrl,
+          narration: scriptScene.narration
+        });
+
+        currentTime += (sceneDuration * 1000) + transitionDuration;
+      }
+    }
+
+    // Get selected music track info
+    const selectedTrack = assembly.music?.trackId
+      ? MUSIC_LIBRARY.find(t => t.id === assembly.music.trackId)
+      : null;
+
+    return {
+      success: true,
+      timeline,
+      totalDuration: currentTime,
+      music: selectedTrack ? {
+        ...selectedTrack,
+        enabled: assembly.music?.enabled,
+        volume: assembly.music?.volume
+      } : null,
+      captions: assembly.captions,
+      audioMix: assembly.audioMix || { voiceVolume: 100, musicVolume: 30 }
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGetAssemblyPreview] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get assembly preview'));
+  }
+});

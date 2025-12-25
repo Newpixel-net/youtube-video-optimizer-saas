@@ -1449,13 +1449,17 @@
                 }
             },
 
-            // Step 6: Assembly (to be implemented)
+            // Step 6: Assembly
             assembly: {
                 status: 'idle',
                 sceneOrder: [],
                 transitions: {},
                 music: { enabled: false, trackId: null, volume: 30 },
-                captions: { enabled: true, style: 'karaoke', position: 'bottom' }
+                captions: { enabled: true, style: 'karaoke', position: 'bottom', fontSize: 'medium' },
+                audioMix: { voiceVolume: 100, musicVolume: 30 },
+                musicLibrary: [],
+                transitionTypes: [],
+                captionStyles: []
             },
 
             // Step 7: Export (to be implemented)
@@ -3856,12 +3860,451 @@
         }
 
         // ==========================================
-        // 7.10 STEP 6-7: PLACEHOLDER RENDERS
+        // 7.10 STEP 6: ASSEMBLY
         // ==========================================
 
-        function renderStep6Assembly() {
-            return renderComingSoonStep(6, 'Assembly', 'Combine scenes, add music, captions, and transitions.');
+        async function initializeAssembly() {
+            // Load music library and options if not already loaded
+            if (state.assembly.musicLibrary.length === 0) {
+                try {
+                    const getMusicLibrary = firebase.functions().httpsCallable('creationWizardGetMusicLibrary');
+                    const result = await getMusicLibrary({});
+                    state.assembly.musicLibrary = result.data.tracks || [];
+                    state.assembly.transitionTypes = result.data.transitionTypes || [];
+                    state.assembly.captionStyles = result.data.captionStyles || [];
+                } catch (error) {
+                    console.error('Failed to load music library:', error);
+                    // Use defaults
+                    state.assembly.transitionTypes = [
+                        { id: 'cut', name: 'Cut' },
+                        { id: 'fade', name: 'Fade' },
+                        { id: 'crossfade', name: 'Crossfade' },
+                        { id: 'dissolve', name: 'Dissolve' }
+                    ];
+                    state.assembly.captionStyles = [
+                        { id: 'karaoke', name: 'Karaoke' },
+                        { id: 'subtitle', name: 'Subtitle' },
+                        { id: 'dynamic', name: 'Dynamic' },
+                        { id: 'none', name: 'No Captions' }
+                    ];
+                }
+            }
+
+            // Initialize scene order if empty
+            if (state.assembly.sceneOrder.length === 0 && state.script.scenes.length > 0) {
+                state.assembly.sceneOrder = state.script.scenes.map(s => s.id);
+            }
+
+            // Initialize transitions for each scene if empty
+            if (Object.keys(state.assembly.transitions).length === 0) {
+                state.script.scenes.forEach(scene => {
+                    state.assembly.transitions[scene.id] = { type: 'cut' };
+                });
+            }
         }
+
+        function renderStep6Assembly() {
+            // Initialize on first render
+            if (state.assembly.musicLibrary.length === 0) {
+                setTimeout(() => initializeAssembly().then(() => render()), 100);
+            }
+
+            const scriptScenes = state.script.scenes || [];
+            const animationScenes = state.animation.scenes || [];
+            const sceneOrder = state.assembly.sceneOrder.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+
+            // Calculate total duration
+            let totalDuration = 0;
+            sceneOrder.forEach(sceneId => {
+                const scene = scriptScenes.find(s => s.id === sceneId);
+                if (scene) totalDuration += scene.duration || 8;
+            });
+
+            let html = '<div class="fade-in">';
+
+            // Header
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎞️</div>
+                        <div style="flex: 1;">
+                            <div class="content-card-title">Video Assembly</div>
+                            <div class="content-card-subtitle">Arrange scenes, add music & captions • Total: ${formatDuration(totalDuration)}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Main Assembly Layout - Two columns
+            html += `<div style="display: grid; grid-template-columns: 1fr 350px; gap: 1rem; margin-top: 1rem;">`;
+
+            // Left Column - Timeline
+            html += `
+                <div>
+                    <div class="content-card" style="padding: 1rem;">
+                        <div style="font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>📋</span> Scene Timeline
+                            <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5); font-weight: 400; margin-left: auto;">Drag to reorder</span>
+                        </div>
+                        <div id="timeline-container" style="display: flex; flex-direction: column; gap: 0.5rem;">
+            `;
+
+            sceneOrder.forEach((sceneId, index) => {
+                const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                const animScene = animationScenes.find(s => s.sceneId === sceneId);
+                const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+                const transition = state.assembly.transitions[sceneId] || { type: 'cut' };
+
+                if (scriptScene) {
+                    html += renderTimelineSceneCard(scriptScene, animScene, storyboardScene, transition, index, sceneOrder.length);
+                }
+            });
+
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Right Column - Settings
+            html += `
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    ${renderMusicSettings()}
+                    ${renderCaptionSettings()}
+                    ${renderAudioMixSettings()}
+                </div>
+            `;
+
+            html += `</div>`;
+
+            // Navigation
+            const isAssemblyReady = sceneOrder.length > 0;
+            html += renderNavButtons(5, isAssemblyReady ? 7 : null);
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderTimelineSceneCard(scriptScene, animScene, storyboardScene, transition, index, totalScenes) {
+            const imageUrl = storyboardScene?.imageUrl;
+            const hasVideo = animScene?.videoUrl;
+            const transitionTypes = state.assembly.transitionTypes || [];
+
+            let html = `
+                <div class="timeline-scene" data-scene-id="${scriptScene.id}"
+                     style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; overflow: hidden;">
+                    <div style="display: flex; gap: 0.75rem; padding: 0.75rem;">
+                        <!-- Drag Handle & Number -->
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                            <div style="cursor: grab; color: rgba(255,255,255,0.3); font-size: 1rem;">⋮⋮</div>
+                            <div style="width: 1.5rem; height: 1.5rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;">
+                                ${index + 1}
+                            </div>
+                        </div>
+
+                        <!-- Thumbnail -->
+                        <div style="width: 80px; height: 50px; border-radius: 0.25rem; overflow: hidden; background: rgba(0,0,0,0.3); flex-shrink: 0;">
+                            ${imageUrl ? `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` :
+                              `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-size: 0.7rem;">No image</div>`}
+                        </div>
+
+                        <!-- Scene Info -->
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 0.8rem; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.25rem;">
+                                ${scriptScene.narration?.substring(0, 40) || 'No narration'}...
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; font-size: 0.7rem; color: rgba(255,255,255,0.5);">
+                                <span>⏱️ ${scriptScene.duration || 8}s</span>
+                                ${hasVideo ? '<span style="color: #10b981;">✓ Video</span>' : '<span style="color: #f59e0b;">⚠️ No video</span>'}
+                            </div>
+                        </div>
+
+                        <!-- Reorder Buttons -->
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <button onclick="moveSceneInOrder(${scriptScene.id}, -1)" ${index === 0 ? 'disabled' : ''}
+                                    style="padding: 0.25rem 0.4rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: ${index === 0 ? 'rgba(255,255,255,0.2)' : 'white'}; cursor: ${index === 0 ? 'not-allowed' : 'pointer'}; font-size: 0.65rem;">
+                                ↑
+                            </button>
+                            <button onclick="moveSceneInOrder(${scriptScene.id}, 1)" ${index === totalScenes - 1 ? 'disabled' : ''}
+                                    style="padding: 0.25rem 0.4rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: ${index === totalScenes - 1 ? 'rgba(255,255,255,0.2)' : 'white'}; cursor: ${index === totalScenes - 1 ? 'not-allowed' : 'pointer'}; font-size: 0.65rem;">
+                                ↓
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Transition Selector (between scenes) -->
+                    ${index < totalScenes - 1 ? `
+                        <div style="padding: 0.5rem 0.75rem; background: rgba(139, 92, 246, 0.1); border-top: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">Transition:</span>
+                            <select onchange="setSceneTransition(${scriptScene.id}, this.value)"
+                                    style="flex: 1; padding: 0.3rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(30,30,50,1); color: white; font-size: 0.7rem;">
+                                ${transitionTypes.map(t => `
+                                    <option value="${t.id}" ${transition.type === t.id ? 'selected' : ''}>${t.name}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            return html;
+        }
+
+        function renderMusicSettings() {
+            const musicLibrary = state.assembly.musicLibrary || [];
+            const selectedTrackId = state.assembly.music.trackId;
+            const musicEnabled = state.assembly.music.enabled;
+            const musicVolume = state.assembly.music.volume;
+
+            // Group by category
+            const categories = ['upbeat', 'calm', 'dramatic', 'electronic', 'hiphop', 'none'];
+            const categoryNames = {
+                upbeat: '🎉 Upbeat',
+                calm: '🌊 Calm',
+                dramatic: '🎬 Dramatic',
+                electronic: '🎧 Electronic',
+                hiphop: '🎤 Hip Hop',
+                none: '🔇 None'
+            };
+
+            return `
+                <div class="content-card" style="padding: 1rem;">
+                    <div style="font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>🎵</span> Background Music
+                        <label style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" ${musicEnabled ? 'checked' : ''} onchange="toggleMusic(this.checked)"
+                                   style="width: 1rem; height: 1rem; cursor: pointer;">
+                            <span style="font-size: 0.75rem; font-weight: 400; color: rgba(255,255,255,0.6);">Enable</span>
+                        </label>
+                    </div>
+
+                    <div style="opacity: ${musicEnabled ? '1' : '0.5'}; pointer-events: ${musicEnabled ? 'auto' : 'none'};">
+                        <select id="music-select" onchange="selectMusicTrack(this.value)"
+                                style="width: 100%; padding: 0.6rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(30,30,50,1); color: white; font-size: 0.85rem; margin-bottom: 0.75rem;">
+                            <option value="">Select a track...</option>
+                            ${categories.map(cat => `
+                                <optgroup label="${categoryNames[cat] || cat}">
+                                    ${musicLibrary.filter(t => t.category === cat).map(track => `
+                                        <option value="${track.id}" ${selectedTrackId === track.id ? 'selected' : ''}>
+                                            ${track.name} ${track.duration ? `(${Math.floor(track.duration / 60)}:${(track.duration % 60).toString().padStart(2, '0')})` : ''}
+                                        </option>
+                                    `).join('')}
+                                </optgroup>
+                            `).join('')}
+                        </select>
+
+                        ${selectedTrackId && selectedTrackId !== 'none' ? `
+                            <div style="background: rgba(139, 92, 246, 0.1); border-radius: 0.4rem; padding: 0.5rem; margin-bottom: 0.75rem;">
+                                <div style="font-size: 0.75rem; color: rgba(255,255,255,0.7);">
+                                    ${musicLibrary.find(t => t.id === selectedTrackId)?.mood || ''}
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        <div>
+                            <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">
+                                Volume: ${musicVolume}%
+                            </label>
+                            <input type="range" min="0" max="100" value="${musicVolume}"
+                                   onchange="setMusicVolume(this.value)"
+                                   style="width: 100%; height: 6px; cursor: pointer;">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCaptionSettings() {
+            const captionStyles = state.assembly.captionStyles || [];
+            const captionsEnabled = state.assembly.captions.enabled;
+            const selectedStyle = state.assembly.captions.style;
+            const position = state.assembly.captions.position;
+
+            return `
+                <div class="content-card" style="padding: 1rem;">
+                    <div style="font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>💬</span> Captions
+                        <label style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" ${captionsEnabled ? 'checked' : ''} onchange="toggleCaptions(this.checked)"
+                                   style="width: 1rem; height: 1rem; cursor: pointer;">
+                            <span style="font-size: 0.75rem; font-weight: 400; color: rgba(255,255,255,0.6);">Enable</span>
+                        </label>
+                    </div>
+
+                    <div style="opacity: ${captionsEnabled ? '1' : '0.5'}; pointer-events: ${captionsEnabled ? 'auto' : 'none'};">
+                        <!-- Style Selection -->
+                        <div style="margin-bottom: 0.75rem;">
+                            <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Style</label>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;">
+                                ${captionStyles.filter(s => s.id !== 'none').map(style => `
+                                    <button onclick="setCaptionStyle('${style.id}')"
+                                            style="padding: 0.4rem; border-radius: 0.4rem; border: 1px solid ${selectedStyle === style.id ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.2)'}; background: ${selectedStyle === style.id ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 0.7rem;">
+                                        ${style.name}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Position -->
+                        <div>
+                            <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Position</label>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;">
+                                ${['top', 'center', 'bottom'].map(pos => `
+                                    <button onclick="setCaptionPosition('${pos}')"
+                                            style="padding: 0.4rem; border-radius: 0.4rem; border: 1px solid ${position === pos ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.2)'}; background: ${position === pos ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 0.7rem; text-transform: capitalize;">
+                                        ${pos}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAudioMixSettings() {
+            const voiceVolume = state.assembly.audioMix?.voiceVolume || 100;
+            const musicVolume = state.assembly.audioMix?.musicVolume || 30;
+
+            return `
+                <div class="content-card" style="padding: 1rem;">
+                    <div style="font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>🎚️</span> Audio Mix
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <div>
+                            <label style="display: flex; justify-content: space-between; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">
+                                <span>🎙️ Voiceover</span>
+                                <span>${voiceVolume}%</span>
+                            </label>
+                            <input type="range" min="0" max="100" value="${voiceVolume}"
+                                   onchange="setVoiceVolume(this.value)"
+                                   style="width: 100%; height: 6px; cursor: pointer;">
+                        </div>
+
+                        <div>
+                            <label style="display: flex; justify-content: space-between; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">
+                                <span>🎵 Music</span>
+                                <span>${musicVolume}%</span>
+                            </label>
+                            <input type="range" min="0" max="100" value="${musicVolume}"
+                                   onchange="setAudioMixMusicVolume(this.value)"
+                                   style="width: 100%; height: 6px; cursor: pointer;">
+                        </div>
+                    </div>
+
+                    <!-- Save Assembly Button -->
+                    <button onclick="saveAssemblySettings()"
+                            style="width: 100%; margin-top: 1rem; padding: 0.75rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
+                        💾 Save Assembly Settings
+                    </button>
+                </div>
+            `;
+        }
+
+        // Assembly Functions
+        function moveSceneInOrder(sceneId, direction) {
+            const order = state.assembly.sceneOrder.length > 0
+                ? [...state.assembly.sceneOrder]
+                : state.script.scenes.map(s => s.id);
+
+            const currentIndex = order.indexOf(sceneId);
+            const newIndex = currentIndex + direction;
+
+            if (newIndex >= 0 && newIndex < order.length) {
+                [order[currentIndex], order[newIndex]] = [order[newIndex], order[currentIndex]];
+                state.assembly.sceneOrder = order;
+                saveProject();
+                render();
+            }
+        }
+
+        function setSceneTransition(sceneId, transitionType) {
+            state.assembly.transitions[sceneId] = { type: transitionType };
+            saveProject();
+        }
+
+        function toggleMusic(enabled) {
+            state.assembly.music.enabled = enabled;
+            saveProject();
+            render();
+        }
+
+        function selectMusicTrack(trackId) {
+            state.assembly.music.trackId = trackId;
+            if (trackId && trackId !== 'none') {
+                state.assembly.music.enabled = true;
+            }
+            saveProject();
+            render();
+        }
+
+        function setMusicVolume(volume) {
+            state.assembly.music.volume = parseInt(volume);
+            saveProject();
+        }
+
+        function toggleCaptions(enabled) {
+            state.assembly.captions.enabled = enabled;
+            saveProject();
+            render();
+        }
+
+        function setCaptionStyle(style) {
+            state.assembly.captions.style = style;
+            saveProject();
+            render();
+        }
+
+        function setCaptionPosition(position) {
+            state.assembly.captions.position = position;
+            saveProject();
+            render();
+        }
+
+        function setVoiceVolume(volume) {
+            if (!state.assembly.audioMix) state.assembly.audioMix = {};
+            state.assembly.audioMix.voiceVolume = parseInt(volume);
+            saveProject();
+            render();
+        }
+
+        function setAudioMixMusicVolume(volume) {
+            if (!state.assembly.audioMix) state.assembly.audioMix = {};
+            state.assembly.audioMix.musicVolume = parseInt(volume);
+            saveProject();
+            render();
+        }
+
+        async function saveAssemblySettings() {
+            try {
+                const updateAssembly = firebase.functions().httpsCallable('creationWizardUpdateAssembly');
+                await updateAssembly({
+                    projectId: state.projectId,
+                    assembly: {
+                        status: 'ready',
+                        sceneOrder: state.assembly.sceneOrder,
+                        transitions: state.assembly.transitions,
+                        music: state.assembly.music,
+                        captions: state.assembly.captions,
+                        audioMix: state.assembly.audioMix
+                    }
+                });
+                state.assembly.status = 'ready';
+                showToast('Assembly settings saved!', 'success');
+                saveProject();
+                render();
+            } catch (error) {
+                console.error('Failed to save assembly:', error);
+                showToast('Failed to save assembly settings', 'error');
+            }
+        }
+
+        // ==========================================
+        // 7.11 STEP 7: EXPORT (PLACEHOLDER)
+        // ==========================================
 
         function renderStep7Export() {
             return renderComingSoonStep(7, 'Export', 'Render and download your final video.');
