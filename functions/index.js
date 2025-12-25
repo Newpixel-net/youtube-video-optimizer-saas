@@ -19663,15 +19663,22 @@ exports.wizardRemoveFillers = functions.https.onCall(async (data, context) => {
         const wordsBefore = transcript.substring(0, match.index).split(/\s+/).length;
         const estimatedTime = clip.startTime + (wordsBefore * 0.4); // ~0.4s per word
 
+        const fillerDuration = match[0].split(/\s+/).length * 0.3; // ~0.3s per filler word
+        const fillerStart = Math.min(estimatedTime, clip.endTime - fillerDuration);
+        const fillerEnd = Math.min(fillerStart + fillerDuration, clip.endTime);
+
         fillers.push({
           word: match[0],
           type,
           position: match.index,
-          estimatedTimestamp: Math.min(estimatedTime, clip.endTime),
-          duration: match[0].split(/\s+/).length * 0.3 // ~0.3s per filler word
+          estimatedTimestamp: fillerStart,  // Legacy field for compatibility
+          duration: fillerDuration,         // Legacy field for compatibility
+          // New fields for audio silencing during export
+          start: Math.max(0, fillerStart - clip.startTime),  // Relative to clip start (0-based)
+          end: Math.max(0, fillerEnd - clip.startTime)       // Relative to clip start (0-based)
         });
 
-        totalFillerDuration += match[0].split(/\s+/).length * 0.3;
+        totalFillerDuration += fillerDuration;
       }
     });
 
@@ -20589,6 +20596,23 @@ exports.wizardProcessClip = functions
     // Get clip settings (from project or from request)
     const clipSettings = settings || project.clipSettings?.[clipId] || {};
 
+    // Get filler word data if available (from wizardRemoveFillers analysis)
+    // Note: For filler removal to work during export, the filler data must include
+    // word-level timestamps. The current analysis stores character positions,
+    // which would need to be enhanced to include timestamps from Whisper transcription.
+    const clipFillerData = project.clipFillers?.[clipId];
+    let fillerTimestamps = null;
+    if (clipFillerData && clipFillerData.fillers && clipFillerData.fillers.length > 0) {
+      // Extract timestamps from filler data if available
+      // Format: [{start: seconds, end: seconds}, ...]
+      fillerTimestamps = clipFillerData.fillers
+        .filter(f => f.start !== undefined && f.end !== undefined)
+        .map(f => ({ start: f.start, end: f.end }));
+
+      console.log(`[wizardProcessClip] Found ${clipFillerData.fillers.length} filler words for clip ${clipId}`);
+      console.log(`[wizardProcessClip] Filler timestamps available: ${fillerTimestamps.length > 0 ? fillerTimestamps.length : 'none (timestamps not in data)'}`);
+    }
+
     // Log cropPosition for debugging export issues
     console.log(`[wizardProcessClip] ========== CROP POSITION DEBUG ==========`);
     console.log(`[wizardProcessClip] Clip ID: ${clipId}`);
@@ -20729,6 +20753,8 @@ exports.wizardProcessClip = functions
         colorGrade: clipSettings.colorGrade || false,
         enhanceAudio: clipSettings.enhanceAudio !== false,
         removeFiller: clipSettings.removeFiller || false,
+        audioDucking: clipSettings.audioDucking || false,  // Smart audio ducking - auto-lower music during speech
+        fillerTimestamps: fillerTimestamps && fillerTimestamps.length > 0 ? fillerTimestamps : null,  // Timestamps of filler words to silence
         voiceVolume: clipSettings.voiceVolume || 100,
         addMusic: clipSettings.addMusic || false,
         musicVolume: clipSettings.musicVolume || 30,
