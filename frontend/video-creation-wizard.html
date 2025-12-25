@@ -9161,6 +9161,16 @@
                 return;
             }
 
+            // Ensure project is saved before exporting
+            if (!state.project.id) {
+                showToast('Saving project before export...', 'info');
+                await saveProject();
+                if (!state.project.id) {
+                    showToast('Please save your project first', 'error');
+                    return;
+                }
+            }
+
             state.export.status = 'exporting';
             state.export.progress = 0;
             state.export.currentStage = 'Starting server-side export...';
@@ -9179,7 +9189,7 @@
 
                 const startExportFn = firebase.functions().httpsCallable('creationWizardStartExport');
                 const result = await startExportFn({
-                    projectId,
+                    projectId: state.project.id,
                     outputQuality: quality,
                     format: format
                 });
