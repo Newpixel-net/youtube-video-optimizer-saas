@@ -8801,10 +8801,19 @@
         }
 
         async function startExport() {
+            // Check for exportable content: either AI videos OR storyboard images
             const animatedCount = (state.animation.scenes || []).filter(s => s.videoUrl).length;
-            if (animatedCount === 0) {
-                showToast('Please complete animation step first', 'error');
+            const imageCount = (state.storyboard.scenes || []).filter(s => s.imageUrl).length;
+            const hasVoiceovers = (state.animation.scenes || []).some(s => s.voiceoverUrl);
+
+            if (animatedCount === 0 && imageCount === 0) {
+                showToast('Please add images or videos to your scenes first', 'error');
                 return;
+            }
+
+            // Warn if no voiceovers but allow export
+            if (!hasVoiceovers) {
+                console.log('[Export] No voiceovers found - video will be silent or music-only');
             }
 
             state.export.status = 'exporting';

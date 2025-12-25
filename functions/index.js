@@ -24832,14 +24832,22 @@ async function simulateExportProgress(jobId, projectId, uid, manifest, totalDura
 
     if (stage.status === 'completed') {
       // Generate a placeholder output URL
-      // In production, this would be the actual rendered video URL
+      // In production, this would be the actual rendered video URL from the video processor
       const outputFileName = `video_${projectId}_${Date.now()}.mp4`;
       const bucket = admin.storage().bucket();
 
-      // For demo, we'll use the first animated scene's video as the "exported" video
+      // For demo: use first available video, or first image as preview thumbnail
       const firstAnimatedScene = manifest.scenes.find(s => s.videoUrl);
+      const firstImageScene = manifest.scenes.find(s => s.imageUrl);
+
       if (firstAnimatedScene && firstAnimatedScene.videoUrl) {
         updateData.outputUrl = firstAnimatedScene.videoUrl;
+      } else if (firstImageScene && firstImageScene.imageUrl) {
+        // Image-only export - in production, video processor would create Ken Burns video
+        // For demo, we'll indicate it's ready but use placeholder
+        updateData.outputUrl = `https://storage.googleapis.com/${bucket.name}/creation-exports/${uid}/${projectId}/${outputFileName}`;
+        updateData.previewThumbnail = firstImageScene.imageUrl;
+        updateData.exportType = 'image-slideshow';
       } else {
         // Fallback: create a placeholder URL structure
         updateData.outputUrl = `https://storage.googleapis.com/${bucket.name}/creation-exports/${uid}/${projectId}/${outputFileName}`;
