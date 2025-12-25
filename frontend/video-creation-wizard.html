@@ -1430,12 +1430,22 @@
             // Step 4: Storyboard
             storyboard: {
                 status: 'idle', // idle, generating, ready, error
-                scenes: [],     // Array of { sceneId, status, imageUrl, prompt, jobId }
+                scenes: [],     // Array of { sceneId, status, imageUrl, prompt, jobId, source }
                 characterReference: null,
                 styleReference: null,
                 modifyingScene: null,  // Scene ID being modified in modal
                 modifyPrompt: null,    // Current prompt in modify modal
-                modifyStyle: null      // Current style in modify modal
+                modifyStyle: null,     // Current style in modify modal
+                // Image generation settings
+                imageModel: 'hidream',  // 'hidream' | 'nanobanana-pro' | 'nanobanana'
+                // Edit with AI state
+                editingScene: null,     // Scene ID being edited
+                editMaskCanvas: null,   // Canvas element for mask
+                editMaskCtx: null,      // Canvas 2D context
+                editBrushSize: 30,      // Brush size in pixels
+                editPrompt: '',         // Edit instruction prompt
+                editLoading: false,     // Is edit in progress
+                editHistory: []         // Mask history for undo
             },
 
             // Step 5: Animation (to be implemented)
@@ -2192,9 +2202,47 @@
             }
         }
 
-        async function generateSingleSceneImage(sceneId) {
+        // Model configuration with token costs
+        const IMAGE_MODELS = {
+            'hidream': {
+                name: 'HiDream',
+                description: 'Artistic & cinematic style',
+                tokenCost: 2,
+                cloudFunction: 'creationWizardGenerateSceneImage'
+            },
+            'nanobanana-pro': {
+                name: 'NanoBanana Pro',
+                description: 'High quality, fast generation',
+                tokenCost: 3,
+                cloudFunction: 'generateCreativeImage'
+            },
+            'nanobanana': {
+                name: 'NanoBanana',
+                description: 'Quick drafts, lower cost',
+                tokenCost: 1,
+                cloudFunction: 'generateCreativeImage'
+            }
+        };
+
+        // Get current model configuration
+        function getCurrentModelConfig() {
+            return IMAGE_MODELS[state.storyboard.imageModel] || IMAGE_MODELS['hidream'];
+        }
+
+        // Set image generation model
+        function setImageModel(modelId) {
+            if (IMAGE_MODELS[modelId]) {
+                state.storyboard.imageModel = modelId;
+                render();
+            }
+        }
+
+        async function generateSingleSceneImage(sceneId, customModel = null) {
             const scene = state.script.scenes.find(s => s.id === sceneId);
             if (!scene) return;
+
+            const modelId = customModel || state.storyboard.imageModel || 'hidream';
+            const modelConfig = IMAGE_MODELS[modelId] || IMAGE_MODELS['hidream'];
 
             // Find or create storyboard entry
             let storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
@@ -2204,36 +2252,92 @@
                     status: 'pending',
                     imageUrl: null,
                     prompt: scene.visual || '',
-                    jobId: null
+                    jobId: null,
+                    source: 'ai',
+                    model: modelId
                 };
                 state.storyboard.scenes.push(storyboardScene);
             }
 
             storyboardScene.status = 'generating';
+            storyboardScene.model = modelId;
+            storyboardScene.error = null;
             render();
 
+            const prompt = scene.visual || scene.narration || 'A cinematic scene';
+
             try {
-                const generateFn = functions.httpsCallable('creationWizardGenerateSceneImage');
-                const result = await generateFn({
-                    projectId: state.project.id,
-                    sceneId: sceneId,
-                    prompt: scene.visual || scene.narration || 'A cinematic scene',
-                    style: state.content.style,
-                    aspectRatio: state.platform.aspectRatio
-                });
+                // Check if using HiDream (RunPod) or NanoBanana (Gemini)
+                if (modelId === 'hidream') {
+                    // Use RunPod HiDream endpoint
+                    const generateFn = functions.httpsCallable('creationWizardGenerateSceneImage');
+                    const result = await generateFn({
+                        projectId: state.project.id,
+                        sceneId: sceneId,
+                        prompt: prompt,
+                        style: state.content.style,
+                        aspectRatio: state.platform.aspectRatio
+                    });
 
-                if (result.data.success) {
-                    storyboardScene.jobId = result.data.jobId;
-                    storyboardScene.imageUrl = result.data.imageUrl;
-                    storyboardScene.prompt = result.data.prompt;
+                    if (result.data.success) {
+                        storyboardScene.jobId = result.data.jobId;
+                        storyboardScene.imageUrl = result.data.imageUrl;
+                        storyboardScene.prompt = result.data.prompt;
+                        storyboardScene.source = 'ai';
 
-                    // Start polling for completion
-                    startImagePolling(sceneId, result.data.jobId);
+                        // Start polling for completion
+                        startImagePolling(sceneId, result.data.jobId);
+                    } else {
+                        throw new Error(result.data.message || 'Generation failed');
+                    }
+                } else {
+                    // Use NanoBanana (Gemini) - synchronous result
+                    const generateFn = functions.httpsCallable('generateCreativeImage');
+
+                    // Map aspect ratio
+                    const aspectRatioMap = {
+                        '16:9': '16:9',
+                        '9:16': '9:16',
+                        '1:1': '1:1',
+                        '4:3': '4:3'
+                    };
+
+                    const result = await generateFn({
+                        prompt: prompt,
+                        model: modelId,
+                        quantity: 1,
+                        aspectRatio: aspectRatioMap[state.platform.aspectRatio] || '16:9',
+                        quality: modelId === 'nanobanana-pro' ? 'hd' : 'basic'
+                    });
+
+                    if (result.data.success && result.data.images && result.data.images.length > 0) {
+                        storyboardScene.status = 'ready';
+                        storyboardScene.imageUrl = result.data.images[0].url;
+                        storyboardScene.prompt = prompt;
+                        storyboardScene.source = 'ai';
+                        showToast(`Image generated! (${modelConfig.name})`, 'success');
+                        scheduleAutoSave();
+                    } else {
+                        throw new Error(result.data.message || 'No images returned');
+                    }
                 }
+
+                render();
+
             } catch (error) {
-                console.error('Single scene generation error:', error);
+                console.error('Scene generation error:', error);
                 storyboardScene.status = 'error';
-                showToast('Failed to generate image', 'error');
+                storyboardScene.error = error.message || 'Failed to generate image';
+
+                // Show detailed error message
+                const errorMsg = error.message || 'Unknown error';
+                if (errorMsg.includes('token') || errorMsg.includes('balance')) {
+                    showToast('Insufficient tokens. Visit Creative Studio to get more.', 'error');
+                } else if (errorMsg.includes('API key') || errorMsg.includes('configured')) {
+                    showToast('Service not configured. Contact support.', 'error');
+                } else {
+                    showToast(`Failed: ${errorMsg.substring(0, 50)}`, 'error');
+                }
                 render();
             }
         }
@@ -2369,41 +2473,100 @@
         }
 
         // ==========================================
-        // 6.8.5 STOCK MEDIA BROWSER
+        // 6.8.5 STOCK MEDIA BROWSER (Enhanced with VIDEO + Trim)
         // ==========================================
         let stockBrowserState = {
             isOpen: false,
             targetSceneId: null,
             mediaType: 'image', // 'image' | 'video'
+            activeTab: 'images', // 'images' | 'videos'
             query: '',
+            suggestedQuery: '', // Smart suggestion from script
             results: [],
+            videoResults: [], // Separate storage for video results
             loading: false,
             page: 1,
-            total: 0
+            total: 0,
+            // Video trim state
+            selectedVideo: null,  // Selected video for preview/trim
+            trimStart: 0,         // Trim start time in seconds
+            trimEnd: null,        // Trim end time (null = full duration)
+            videoDuration: 0,     // Total video duration
+            isPreviewPlaying: false
         };
 
         function openStockBrowser(sceneId, mediaType = 'image') {
             stockBrowserState.isOpen = true;
             stockBrowserState.targetSceneId = sceneId;
             stockBrowserState.mediaType = mediaType;
+            stockBrowserState.activeTab = mediaType === 'video' ? 'videos' : 'images';
             stockBrowserState.results = [];
+            stockBrowserState.videoResults = [];
             stockBrowserState.query = '';
             stockBrowserState.page = 1;
+            stockBrowserState.selectedVideo = null;
+            stockBrowserState.trimStart = 0;
+            stockBrowserState.trimEnd = null;
 
-            // Get scene description as default search query
+            // Smart suggestion: Extract keywords from scene description
             const scene = state.script.scenes.find(s => s.id === sceneId);
             if (scene) {
-                // Extract keywords from visual description
-                const keywords = (scene.visual || scene.narration || '')
-                    .split(/[,.\n]/)
-                    .slice(0, 3)
-                    .join(' ')
-                    .substring(0, 50)
-                    .trim();
-                stockBrowserState.query = keywords || 'nature background';
+                const smartQuery = extractSmartKeywords(scene);
+                stockBrowserState.query = smartQuery;
+                stockBrowserState.suggestedQuery = smartQuery;
+            } else {
+                stockBrowserState.query = 'nature background';
+                stockBrowserState.suggestedQuery = '';
             }
 
             renderStockBrowserModal();
+
+            // Auto-search with smart suggestion
+            if (stockBrowserState.query) {
+                setTimeout(() => searchStockMedia(stockBrowserState.query), 100);
+            }
+        }
+
+        // Extract smart keywords from scene description for stock search
+        function extractSmartKeywords(scene) {
+            const visual = scene.visual || '';
+            const narration = scene.narration || '';
+            const combined = `${visual} ${narration}`.toLowerCase();
+
+            // Remove common words and extract key nouns/adjectives
+            const stopWords = ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+                              'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+                              'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
+                              'ought', 'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
+                              'from', 'up', 'about', 'into', 'over', 'after', 'beneath', 'under',
+                              'above', 'show', 'showing', 'shows', 'scene', 'image', 'video', 'clip'];
+
+            // Extract words
+            const words = combined
+                .replace(/[^a-z\s]/g, '') // Remove non-letters
+                .split(/\s+/)
+                .filter(word => word.length > 2 && !stopWords.includes(word));
+
+            // Prioritize descriptive words (colors, emotions, objects)
+            const priorityWords = [];
+            const visualKeywords = ['sunset', 'sunrise', 'ocean', 'mountain', 'forest', 'city',
+                                   'beach', 'sky', 'cloud', 'rain', 'snow', 'fire', 'water',
+                                   'office', 'business', 'technology', 'nature', 'people', 'team',
+                                   'happy', 'sad', 'excited', 'calm', 'peaceful', 'dramatic',
+                                   'bright', 'dark', 'colorful', 'minimal', 'modern', 'vintage',
+                                   'aerial', 'closeup', 'portrait', 'landscape', 'abstract'];
+
+            words.forEach(word => {
+                if (visualKeywords.includes(word)) {
+                    priorityWords.unshift(word);
+                } else if (priorityWords.length < 3) {
+                    priorityWords.push(word);
+                }
+            });
+
+            // Return top 2-3 keywords
+            const result = [...new Set(priorityWords)].slice(0, 3).join(' ');
+            return result || 'cinematic background';
         }
 
         function closeStockBrowser() {
@@ -2502,6 +2665,113 @@
             }
         }
 
+        // Switch between Images and Videos tabs
+        function switchStockTab(tab) {
+            stockBrowserState.activeTab = tab;
+            stockBrowserState.selectedVideo = null;
+            stockBrowserState.trimStart = 0;
+            stockBrowserState.trimEnd = null;
+
+            // Search with current query for new media type
+            const mediaType = tab === 'videos' ? 'video' : 'image';
+            if (stockBrowserState.query && stockBrowserState.mediaType !== mediaType) {
+                stockBrowserState.mediaType = mediaType;
+                searchStockMedia(stockBrowserState.query);
+            } else {
+                renderStockBrowserModal();
+            }
+        }
+
+        // Preview a stock video for trimming
+        function previewStockVideo(media) {
+            stockBrowserState.selectedVideo = media;
+            stockBrowserState.trimStart = 0;
+            stockBrowserState.trimEnd = null;
+            stockBrowserState.videoDuration = media.duration || 30;
+            renderStockBrowserModal();
+        }
+
+        // Update trim values from timeline
+        function updateStockVideoTrim(handle, percent) {
+            const duration = stockBrowserState.videoDuration || 30;
+            const time = (percent / 100) * duration;
+
+            if (handle === 'start') {
+                stockBrowserState.trimStart = Math.max(0, Math.min(time, (stockBrowserState.trimEnd || duration) - 3));
+            } else {
+                stockBrowserState.trimEnd = Math.min(duration, Math.max(time, stockBrowserState.trimStart + 3));
+            }
+            renderStockBrowserModal();
+        }
+
+        // Format duration for display
+        function formatDuration(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Select stock video with trim settings
+        async function selectStockVideoWithTrim() {
+            if (!stockBrowserState.selectedVideo || !stockBrowserState.targetSceneId) return;
+
+            const media = stockBrowserState.selectedVideo;
+            const sceneId = stockBrowserState.targetSceneId;
+            const trimStart = stockBrowserState.trimStart || 0;
+            const trimEnd = stockBrowserState.trimEnd || stockBrowserState.videoDuration;
+
+            showToast('Importing video...', 'info');
+
+            try {
+                const importFn = firebase.functions().httpsCallable('importStockMedia');
+                const result = await importFn({
+                    mediaId: media.id,
+                    url: media.videoUrl || media.url,
+                    type: 'video',
+                    projectId: state.project.id,
+                    trimStart: trimStart,
+                    trimEnd: trimEnd
+                });
+
+                if (result.data.success) {
+                    let storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+                    if (!storyboardScene) {
+                        storyboardScene = {
+                            sceneId: sceneId,
+                            status: 'pending',
+                            imageUrl: null,
+                            prompt: '',
+                            jobId: null,
+                            source: 'stock'
+                        };
+                        state.storyboard.scenes.push(storyboardScene);
+                    }
+
+                    storyboardScene.imageUrl = result.data.thumbnailUrl || result.data.url;
+                    storyboardScene.videoUrl = result.data.url;
+                    storyboardScene.status = 'ready';
+                    storyboardScene.source = 'stock-video';
+                    storyboardScene.stockInfo = {
+                        id: media.id,
+                        source: media.source,
+                        author: media.author,
+                        license: media.license,
+                        trimStart: trimStart,
+                        trimEnd: trimEnd,
+                        duration: trimEnd - trimStart
+                    };
+
+                    closeStockBrowser();
+                    showToast(`Video added! (${formatDuration(trimEnd - trimStart)} clip)`, 'success');
+                    scheduleAutoSave();
+                    render();
+                }
+            } catch (error) {
+                console.error('Video import error:', error);
+                showToast('Failed to import video', 'error');
+            }
+        }
+
         function renderStockBrowserModal() {
             // Remove existing modal
             const existing = document.getElementById('stock-browser-modal');
@@ -2509,19 +2779,47 @@
 
             if (!stockBrowserState.isOpen) return;
 
+            const isVideoTab = stockBrowserState.activeTab === 'videos';
+            const hasVideoSelected = stockBrowserState.selectedVideo !== null;
+            const trimStart = stockBrowserState.trimStart || 0;
+            const trimEnd = stockBrowserState.trimEnd || stockBrowserState.videoDuration || 30;
+            const duration = stockBrowserState.videoDuration || 30;
+            const startPercent = (trimStart / duration) * 100;
+            const endPercent = (trimEnd / duration) * 100;
+
             const modal = document.createElement('div');
             modal.id = 'stock-browser-modal';
             modal.innerHTML = `
                 <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1001; padding: 1rem;" onclick="if(event.target === this) closeStockBrowser()">
-                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 900px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 950px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
                         <!-- Header -->
                         <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <h3 style="margin: 0; color: white; font-size: 1.1rem; font-weight: 600;">📷 Stock Media Browser</h3>
-                                <p style="margin: 0.25rem 0 0 0; color: rgba(255,255,255,0.6); font-size: 0.8rem;">Free royalty-free images from Pexels & Pixabay</p>
+                                <p style="margin: 0.25rem 0 0 0; color: rgba(255,255,255,0.6); font-size: 0.8rem;">Free royalty-free media from Pexels & Pixabay</p>
                             </div>
                             <button onclick="closeStockBrowser()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">×</button>
                         </div>
+
+                        <!-- Tab Switcher -->
+                        <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <button onclick="switchStockTab('images')"
+                                    style="flex: 1; padding: 0.75rem; background: ${!isVideoTab ? 'rgba(139, 92, 246, 0.2)' : 'transparent'}; border: none; border-bottom: ${!isVideoTab ? '2px solid #8b5cf6' : '2px solid transparent'}; color: ${!isVideoTab ? 'white' : 'rgba(255,255,255,0.6)'}; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                🖼️ Images
+                            </button>
+                            <button onclick="switchStockTab('videos')"
+                                    style="flex: 1; padding: 0.75rem; background: ${isVideoTab ? 'rgba(16, 185, 129, 0.2)' : 'transparent'}; border: none; border-bottom: ${isVideoTab ? '2px solid #10b981' : '2px solid transparent'}; color: ${isVideoTab ? 'white' : 'rgba(255,255,255,0.6)'}; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                🎬 Videos
+                            </button>
+                        </div>
+
+                        <!-- Smart Suggestion Banner -->
+                        ${stockBrowserState.suggestedQuery ? `
+                            <div style="padding: 0.5rem 1.25rem; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="color: #a78bfa; font-size: 0.75rem;">✨ Smart suggestion based on your script:</span>
+                                <span style="color: white; font-size: 0.8rem; font-weight: 500;">"${stockBrowserState.suggestedQuery}"</span>
+                            </div>
+                        ` : ''}
 
                         <!-- Search Bar -->
                         <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -2529,82 +2827,166 @@
                                 <input type="text"
                                        id="stock-search-input"
                                        value="${stockBrowserState.query}"
-                                       placeholder="Search for images..."
+                                       placeholder="Search for ${isVideoTab ? 'videos' : 'images'}..."
                                        style="flex: 1; padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem;"
                                        onkeydown="if(event.key === 'Enter') searchStockMedia(this.value)">
                                 <button onclick="searchStockMedia(document.getElementById('stock-search-input').value)"
-                                        style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border: none; border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer;">
+                                        style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, ${isVideoTab ? '#10b981, #059669' : '#8b5cf6, #06b6d4'}); border: none; border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer;">
                                     🔍 Search
                                 </button>
                             </div>
                             <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
-                                ${['nature', 'business', 'technology', 'people', 'city', 'abstract', 'food', 'travel'].map(tag => `
+                                ${['nature', 'business', 'technology', 'people', 'city', 'abstract', 'motion', 'aerial'].map(tag => `
                                     <button onclick="searchStockMedia('${tag}')"
-                                            style="padding: 0.4rem 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 1rem; color: rgba(255,255,255,0.8); font-size: 0.75rem; cursor: pointer;">
+                                            style="padding: 0.4rem 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 1rem; color: rgba(255,255,255,0.8); font-size: 0.75rem; cursor: pointer; transition: all 0.2s;"
+                                            onmouseover="this.style.background='rgba(139,92,246,0.3)'"
+                                            onmouseout="this.style.background='rgba(255,255,255,0.1)'">
                                         ${tag}
                                     </button>
                                 `).join('')}
                             </div>
                         </div>
 
-                        <!-- Results Grid -->
-                        <div style="flex: 1; overflow-y: auto; padding: 1rem;">
-                            ${stockBrowserState.loading ? `
-                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem;">
-                                    <div style="width: 40px; height: 40px; border: 3px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                                    <p style="color: rgba(255,255,255,0.6); margin-top: 1rem;">Searching...</p>
+                        ${isVideoTab && hasVideoSelected ? `
+                            <!-- Video Preview & Trim Panel -->
+                            <div style="padding: 1rem; background: rgba(0,0,0,0.3);">
+                                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                                    <!-- Video Preview -->
+                                    <div style="flex: 1; min-width: 300px;">
+                                        <video id="stock-video-preview"
+                                               src="${stockBrowserState.selectedVideo.videoUrl || stockBrowserState.selectedVideo.url}"
+                                               style="width: 100%; max-height: 200px; border-radius: 0.5rem; background: black;"
+                                               controls
+                                               muted></video>
+                                    </div>
+
+                                    <!-- Trim Controls -->
+                                    <div style="flex: 1; min-width: 250px;">
+                                        <div style="color: white; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem;">✂️ Trim Video Clip</div>
+
+                                        <!-- Timeline -->
+                                        <div style="position: relative; height: 40px; background: rgba(255,255,255,0.1); border-radius: 0.5rem; margin-bottom: 0.75rem; cursor: pointer;"
+                                             id="video-trim-timeline">
+                                            <!-- Selected region -->
+                                            <div style="position: absolute; top: 0; bottom: 0; left: ${startPercent}%; width: ${endPercent - startPercent}%; background: linear-gradient(135deg, rgba(16, 185, 129, 0.4), rgba(6, 182, 212, 0.4)); border-radius: 0.25rem;"></div>
+
+                                            <!-- Start handle -->
+                                            <div style="position: absolute; top: 0; bottom: 0; left: ${startPercent}%; width: 12px; background: #10b981; border-radius: 0.25rem; cursor: ew-resize; transform: translateX(-50%); display: flex; align-items: center; justify-content: center;"
+                                                 class="trim-handle" data-handle="start">
+                                                <div style="width: 2px; height: 60%; background: white; border-radius: 1px;"></div>
+                                            </div>
+
+                                            <!-- End handle -->
+                                            <div style="position: absolute; top: 0; bottom: 0; left: ${endPercent}%; width: 12px; background: #10b981; border-radius: 0.25rem; cursor: ew-resize; transform: translateX(-50%); display: flex; align-items: center; justify-content: center;"
+                                                 class="trim-handle" data-handle="end">
+                                                <div style="width: 2px; height: 60%; background: white; border-radius: 1px;"></div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Time Display -->
+                                        <div style="display: flex; justify-content: space-between; color: rgba(255,255,255,0.7); font-size: 0.75rem; margin-bottom: 0.75rem;">
+                                            <span>Start: ${formatDuration(trimStart)}</span>
+                                            <span style="color: #10b981; font-weight: 600;">Duration: ${formatDuration(trimEnd - trimStart)}</span>
+                                            <span>End: ${formatDuration(trimEnd)}</span>
+                                        </div>
+
+                                        <!-- Action Buttons -->
+                                        <div style="display: flex; gap: 0.5rem;">
+                                            <button onclick="stockBrowserState.selectedVideo = null; renderStockBrowserModal();"
+                                                    style="flex: 1; padding: 0.6rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; cursor: pointer;">
+                                                ← Back
+                                            </button>
+                                            <button onclick="selectStockVideoWithTrim()"
+                                                    style="flex: 2; padding: 0.6rem; background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer;">
+                                                ✓ Use This Clip
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            ` : stockBrowserState.results.length === 0 ? `
-                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; text-align: center;">
-                                    <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
-                                    <p style="color: rgba(255,255,255,0.6);">Search for stock images above</p>
-                                    <p style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">Try keywords like "nature", "business", or "technology"</p>
-                                </div>
-                            ` : `
-                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem;">
-                                    ${stockBrowserState.results.map(media => `
-                                        <div onclick="selectStockMedia(${JSON.stringify(media).replace(/"/g, '&quot;')})"
-                                             style="position: relative; aspect-ratio: ${state.platform.aspectRatio === '9:16' ? '9/16' : '16/9'}; border-radius: 0.5rem; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;"
-                                             onmouseover="this.style.borderColor='#8b5cf6'; this.style.transform='scale(1.02)'"
-                                             onmouseout="this.style.borderColor='transparent'; this.style.transform='scale(1)'">
-                                            <img src="${media.thumbnail || media.preview}"
-                                                 alt=""
-                                                 style="width: 100%; height: 100%; object-fit: cover;">
-                                            <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 0.5rem; background: linear-gradient(transparent, rgba(0,0,0,0.8));">
-                                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.8);">
+                            </div>
+                        ` : `
+                            <!-- Results Grid -->
+                            <div style="flex: 1; overflow-y: auto; padding: 1rem;">
+                                ${stockBrowserState.loading ? `
+                                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem;">
+                                        <div style="width: 40px; height: 40px; border: 3px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                        <p style="color: rgba(255,255,255,0.6); margin-top: 1rem;">Searching ${isVideoTab ? 'videos' : 'images'}...</p>
+                                    </div>
+                                ` : stockBrowserState.results.length === 0 ? `
+                                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; text-align: center;">
+                                        <div style="font-size: 3rem; margin-bottom: 1rem;">${isVideoTab ? '🎬' : '🔍'}</div>
+                                        <p style="color: rgba(255,255,255,0.6);">Search for stock ${isVideoTab ? 'videos' : 'images'} above</p>
+                                        <p style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">Try keywords like "nature", "business", or "technology"</p>
+                                    </div>
+                                ` : `
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(${isVideoTab ? '200px' : '180px'}, 1fr)); gap: 0.75rem;">
+                                        ${stockBrowserState.results.map(media => isVideoTab ? `
+                                            <!-- Video Card -->
+                                            <div onclick="previewStockVideo(${JSON.stringify(media).replace(/"/g, '&quot;')})"
+                                                 style="position: relative; aspect-ratio: 16/9; border-radius: 0.5rem; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;"
+                                                 onmouseover="this.style.borderColor='#10b981'; this.style.transform='scale(1.02)'"
+                                                 onmouseout="this.style.borderColor='transparent'; this.style.transform='scale(1)'">
+                                                <img src="${media.thumbnail || media.preview}"
+                                                     alt=""
+                                                     style="width: 100%; height: 100%; object-fit: cover;">
+                                                <!-- Play icon overlay -->
+                                                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                                    <div style="width: 0; height: 0; border-left: 12px solid white; border-top: 8px solid transparent; border-bottom: 8px solid transparent; margin-left: 3px;"></div>
+                                                </div>
+                                                <!-- Duration badge -->
+                                                <div style="position: absolute; bottom: 0.5rem; right: 0.5rem; background: rgba(0,0,0,0.8); color: white; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.7rem;">
+                                                    ${formatDuration(media.duration || 30)}
+                                                </div>
+                                                <!-- Source badge -->
+                                                <div style="position: absolute; bottom: 0.5rem; left: 0.5rem; background: rgba(0,0,0,0.8); color: rgba(255,255,255,0.8); padding: 0.15rem 0.35rem; border-radius: 0.25rem; font-size: 0.6rem;">
                                                     ${media.source === 'pexels' ? '📷 Pexels' : '🖼️ Pixabay'}
                                                 </div>
                                             </div>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                                ${stockBrowserState.total > 20 ? `
-                                    <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
-                                        ${stockBrowserState.page > 1 ? `
-                                            <button onclick="searchStockMedia(stockBrowserState.query, ${stockBrowserState.page - 1})"
-                                                    style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; cursor: pointer;">
-                                                ← Previous
-                                            </button>
-                                        ` : ''}
-                                        <span style="padding: 0.5rem 1rem; color: rgba(255,255,255,0.6);">
-                                            Page ${stockBrowserState.page}
-                                        </span>
-                                        <button onclick="searchStockMedia(stockBrowserState.query, ${stockBrowserState.page + 1})"
-                                                style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; cursor: pointer;">
-                                            Next →
-                                        </button>
+                                        ` : `
+                                            <!-- Image Card -->
+                                            <div onclick="selectStockMedia(${JSON.stringify(media).replace(/"/g, '&quot;')})"
+                                                 style="position: relative; aspect-ratio: ${state.platform.aspectRatio === '9:16' ? '9/16' : '16/9'}; border-radius: 0.5rem; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;"
+                                                 onmouseover="this.style.borderColor='#8b5cf6'; this.style.transform='scale(1.02)'"
+                                                 onmouseout="this.style.borderColor='transparent'; this.style.transform='scale(1)'">
+                                                <img src="${media.thumbnail || media.preview}"
+                                                     alt=""
+                                                     style="width: 100%; height: 100%; object-fit: cover;">
+                                                <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 0.5rem; background: linear-gradient(transparent, rgba(0,0,0,0.8));">
+                                                    <div style="font-size: 0.65rem; color: rgba(255,255,255,0.8);">
+                                                        ${media.source === 'pexels' ? '📷 Pexels' : '🖼️ Pixabay'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
                                     </div>
-                                ` : ''}
-                            `}
-                        </div>
+                                    ${stockBrowserState.total > 20 ? `
+                                        <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
+                                            ${stockBrowserState.page > 1 ? `
+                                                <button onclick="searchStockMedia(stockBrowserState.query, ${stockBrowserState.page - 1})"
+                                                        style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; cursor: pointer;">
+                                                    ← Previous
+                                                </button>
+                                            ` : ''}
+                                            <span style="padding: 0.5rem 1rem; color: rgba(255,255,255,0.6);">
+                                                Page ${stockBrowserState.page}
+                                            </span>
+                                            <button onclick="searchStockMedia(stockBrowserState.query, ${stockBrowserState.page + 1})"
+                                                    style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; cursor: pointer;">
+                                                Next →
+                                            </button>
+                                        </div>
+                                    ` : ''}
+                                `}
+                            </div>
+                        `}
 
                         <!-- Footer -->
                         <div style="padding: 0.75rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
                             <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">
-                                ${stockBrowserState.total > 0 ? `${stockBrowserState.total.toLocaleString()} results found` : ''}
+                                ${stockBrowserState.total > 0 ? `${stockBrowserState.total.toLocaleString()} ${isVideoTab ? 'videos' : 'images'} found` : ''}
                             </div>
                             <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">
-                                💡 Stock images are free and don't use tokens
+                                💡 Stock media is free and doesn't use tokens
                             </div>
                         </div>
                     </div>
@@ -2613,11 +2995,48 @@
 
             document.body.appendChild(modal);
 
+            // Setup trim handle dragging for videos
+            if (isVideoTab && hasVideoSelected) {
+                setupTrimHandles();
+            }
+
             // Focus search input
             setTimeout(() => {
                 const input = document.getElementById('stock-search-input');
-                if (input) input.focus();
+                if (input && !hasVideoSelected) input.focus();
             }, 100);
+        }
+
+        // Setup drag handlers for video trim timeline
+        function setupTrimHandles() {
+            const timeline = document.getElementById('video-trim-timeline');
+            if (!timeline) return;
+
+            let isDragging = null;
+
+            timeline.addEventListener('mousedown', (e) => {
+                const handle = e.target.closest('.trim-handle');
+                if (handle) {
+                    isDragging = handle.dataset.handle;
+                    e.preventDefault();
+                }
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+
+                const timeline = document.getElementById('video-trim-timeline');
+                if (!timeline) return;
+
+                const rect = timeline.getBoundingClientRect();
+                const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+
+                updateStockVideoTrim(isDragging, percent);
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = null;
+            });
         }
 
         // ==========================================
