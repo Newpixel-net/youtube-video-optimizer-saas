@@ -786,6 +786,148 @@
             this._renderFrame();
         }
 
+        // Export video using MediaRecorder (client-side rendering)
+        async exportToVideo(onProgress = () => {}) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    // Pause any current playback
+                    this.pause();
+                    this.seek(0);
+
+                    // Wait a bit for seek to complete
+                    await new Promise(r => setTimeout(r, 100));
+
+                    // Get canvas stream
+                    const canvasStream = this.canvas.captureStream(30); // 30 FPS
+
+                    // Create audio context for mixing audio
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const destination = audioContext.createMediaStreamDestination();
+
+                    // Load and connect all audio sources
+                    const audioPromises = [];
+                    for (const scene of this.scenes) {
+                        if (scene.voiceoverUrl) {
+                            audioPromises.push(
+                                fetch(scene.voiceoverUrl)
+                                    .then(r => r.arrayBuffer())
+                                    .then(buffer => audioContext.decodeAudioData(buffer))
+                                    .then(audioBuffer => ({
+                                        buffer: audioBuffer,
+                                        startTime: scene.startTime,
+                                        sceneId: scene.id
+                                    }))
+                                    .catch(err => {
+                                        console.warn('Failed to load audio for scene:', scene.id, err);
+                                        return null;
+                                    })
+                            );
+                        }
+                    }
+
+                    const audioBuffers = (await Promise.all(audioPromises)).filter(Boolean);
+
+                    // Combine video and audio streams
+                    const combinedStream = new MediaStream([
+                        ...canvasStream.getVideoTracks(),
+                        ...destination.stream.getAudioTracks()
+                    ]);
+
+                    // Setup MediaRecorder
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+                        ? 'video/webm;codecs=vp9,opus'
+                        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+                            ? 'video/webm;codecs=vp8,opus'
+                            : 'video/webm';
+
+                    const recorder = new MediaRecorder(combinedStream, {
+                        mimeType,
+                        videoBitsPerSecond: 5000000 // 5 Mbps
+                    });
+
+                    const chunks = [];
+                    recorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) chunks.push(e.data);
+                    };
+
+                    recorder.onstop = () => {
+                        audioContext.close();
+                        const blob = new Blob(chunks, { type: mimeType });
+                        resolve(blob);
+                    };
+
+                    recorder.onerror = (e) => {
+                        audioContext.close();
+                        reject(new Error('Recording failed: ' + e.error));
+                    };
+
+                    // Schedule all audio to play at correct times
+                    const scheduledSources = [];
+                    for (const audio of audioBuffers) {
+                        const source = audioContext.createBufferSource();
+                        source.buffer = audio.buffer;
+                        source.connect(destination);
+                        scheduledSources.push({ source, startTime: audio.startTime });
+                    }
+
+                    // Start recording
+                    recorder.start(100); // Collect data every 100ms
+
+                    // Start audio context time reference
+                    const audioStartTime = audioContext.currentTime;
+
+                    // Schedule audio playback
+                    for (const { source, startTime } of scheduledSources) {
+                        source.start(audioStartTime + startTime);
+                    }
+
+                    // Play through the video
+                    this.isPlaying = true;
+                    this.currentTime = 0;
+                    this.lastFrameTime = performance.now();
+
+                    const exportRenderLoop = () => {
+                        if (!this.isPlaying) return;
+
+                        const now = performance.now();
+                        const delta = (now - this.lastFrameTime) / 1000;
+                        this.lastFrameTime = now;
+
+                        this.currentTime += delta;
+
+                        // Update progress
+                        const progress = Math.min(this.currentTime / this.totalDuration, 1);
+                        onProgress(Math.round(progress * 100));
+
+                        // Render current frame
+                        this._renderFrame();
+
+                        if (this.currentTime >= this.totalDuration) {
+                            // Export complete
+                            this.isPlaying = false;
+                            this.currentTime = this.totalDuration;
+
+                            // Stop recording after a small delay to capture final frame
+                            setTimeout(() => {
+                                recorder.stop();
+                                // Stop all audio sources
+                                for (const { source } of scheduledSources) {
+                                    try { source.stop(); } catch(e) {}
+                                }
+                            }, 200);
+                        } else {
+                            requestAnimationFrame(exportRenderLoop);
+                        }
+                    };
+
+                    requestAnimationFrame(exportRenderLoop);
+
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+
         destroy() {
             this.pause();
 
@@ -8723,23 +8865,31 @@
 
             return `
                 <div class="content-card" style="text-align: center; padding: 3rem 2rem; margin-top: 1rem;">
-                    <div class="animate-float" style="font-size: 4rem; margin-bottom: 1.5rem;">🎬</div>
+                    <div style="font-size: 4rem; margin-bottom: 1.5rem;">
+                        <div class="animate-pulse" style="display: inline-block;">🎬</div>
+                    </div>
                     <div style="font-size: 1.5rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
                         Rendering Your Video
                     </div>
-                    <div style="color: rgba(255,255,255,0.6); margin-bottom: 2rem;">
+                    <div id="export-stage-text" style="color: rgba(255,255,255,0.6); margin-bottom: 2rem;">
                         ${currentStage}
                     </div>
 
                     <!-- Progress Bar -->
                     <div style="width: 100%; max-width: 400px; margin: 0 auto 1.5rem;">
-                        <div style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-                            <div style="height: 100%; width: ${progress}%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); border-radius: 4px; transition: width 0.5s ease;"></div>
+                        <div style="height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);">
+                            <div id="export-progress-bar" style="height: 100%; width: ${progress}%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); border-radius: 6px; transition: width 0.5s ease; box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);"></div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.85rem;">
+                        <div style="display: flex; justify-content: space-between; margin-top: 0.75rem; font-size: 0.9rem;">
                             <span style="color: rgba(255,255,255,0.5);">Progress</span>
-                            <span style="color: #8b5cf6; font-weight: 600;">${progress}%</span>
+                            <span id="export-progress-text" style="color: #8b5cf6; font-weight: 700;">${progress}%</span>
                         </div>
+                    </div>
+
+                    <!-- Processing indicator -->
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+                        <div class="animate-spin" style="width: 1rem; height: 1rem; border: 2px solid rgba(139, 92, 246, 0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>
+                        <span style="color: rgba(255,255,255,0.6); font-size: 0.85rem;">Processing on server...</span>
                     </div>
 
                     <!-- Cancel Button -->
@@ -8757,58 +8907,147 @@
 
         function renderExportComplete(exportState) {
             const outputUrl = exportState.outputUrl;
+            const fileName = exportState.fileName || 'video.webm';
+            const hasVideo = outputUrl && outputUrl.length > 0;
+
+            // Calculate video stats
+            const totalScenes = state.script.scenes?.length || 0;
+            const totalDuration = state.script.scenes?.reduce((sum, s) => sum + (s.duration || 8), 0) || 0;
 
             return `
                 <div class="content-card" style="text-align: center; padding: 3rem 2rem; margin-top: 1rem;">
                     <div style="font-size: 4rem; margin-bottom: 1.5rem;">🎉</div>
                     <div style="font-size: 1.5rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
-                        Export Complete!
+                        Video Export Complete!
                     </div>
-                    <div style="color: rgba(255,255,255,0.6); margin-bottom: 2rem;">
-                        Your video is ready to download
+                    <div style="color: rgba(255,255,255,0.6); margin-bottom: 1.5rem;">
+                        Your video is ready to download and share
                     </div>
 
                     <!-- Video Preview -->
-                    ${outputUrl ? `
-                        <div style="max-width: 500px; margin: 0 auto 2rem; border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
-                            <video src="${outputUrl}" controls style="width: 100%; display: block;"></video>
+                    ${hasVideo ? `
+                        <div style="max-width: 700px; margin: 0 auto 2rem; border-radius: 1rem; overflow: hidden; border: 2px solid rgba(139, 92, 246, 0.3); box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+                            <video id="export-preview-video" src="${outputUrl}" controls style="width: 100%; display: block; background: black;"></video>
                         </div>
-                    ` : ''}
+
+                        <!-- Video Info -->
+                        <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem; color: rgba(255,255,255,0.6); font-size: 0.85rem;">
+                            <span>📹 ${totalScenes} scenes</span>
+                            <span>⏱️ ${formatDuration(totalDuration)}</span>
+                            <span>🎬 ${state.export.exportType === 'server-render' ? 'MP4 format' : 'WebM format'}</span>
+                        </div>
+                    ` : `
+                        <div style="padding: 2rem; color: rgba(255,255,255,0.5);">
+                            No video available
+                        </div>
+                    `}
 
                     <!-- Action Buttons -->
-                    <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
-                        <a href="${outputUrl}" download
-                           style="padding: 0.75rem 2rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>⬇️</span>
-                            <span>Download Video</span>
-                        </a>
-                        <button onclick="copyExportUrl()"
-                                style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>📋</span>
-                            <span>Copy Link</span>
-                        </button>
+                    <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem;">
+                        ${hasVideo ? `
+                            <button onclick="downloadExportedVideo()"
+                                    style="padding: 1rem 2.5rem; border-radius: 0.75rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 700; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);">
+                                <span style="font-size: 1.25rem;">⬇️</span>
+                                <span>Download Video</span>
+                            </button>
+                        ` : ''}
                         <button onclick="exportAgain()"
-                                style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                                style="padding: 1rem 1.5rem; border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
                             <span>🔄</span>
                             <span>Export Again</span>
                         </button>
                     </div>
 
-                    <!-- Share Options -->
-                    <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); margin-bottom: 1rem;">Share your video</div>
-                        <div style="display: flex; justify-content: center; gap: 0.75rem;">
-                            ${['YouTube', 'TikTok', 'Instagram', 'Twitter'].map(platform => `
-                                <button onclick="shareToSocial('${platform.toLowerCase()}')"
-                                        style="width: 3rem; height: 3rem; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 1.25rem; display: flex; align-items: center; justify-content: center;"
-                                        title="Share to ${platform}">
-                                    ${platform === 'YouTube' ? '📺' : platform === 'TikTok' ? '🎵' : platform === 'Instagram' ? '📸' : '🐦'}
-                                </button>
-                            `).join('')}
+                    ${hasVideo ? `
+                        <!-- Share Info -->
+                        <div style="padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.75rem; max-width: 500px; margin: 0 auto;">
+                            <div style="font-size: 0.9rem; color: #10b981; margin-bottom: 0.5rem; font-weight: 600;">
+                                ✅ Ready to upload!
+                            </div>
+                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6);">
+                                Download your video and upload it directly to YouTube, TikTok, Instagram, or any other platform.
+                            </div>
                         </div>
-                    </div>
+                    ` : ''}
                 </div>
             `;
+        }
+
+        // Download the exported video
+        async function downloadExportedVideo() {
+            const outputUrl = state.export.outputUrl;
+            const isServerRender = state.export.exportType === 'server-render';
+
+            // Generate filename based on export type
+            const baseFileName = (state.script.title || 'video').replace(/[^a-z0-9]/gi, '_');
+            const extension = isServerRender ? 'mp4' : 'webm';
+            const fileName = state.export.fileName || `${baseFileName}_${Date.now()}.${extension}`;
+
+            if (!outputUrl) {
+                showToast('No video to download', 'error');
+                return;
+            }
+
+            try {
+                if (isServerRender && outputUrl.includes('firebase') || outputUrl.includes('googleapis')) {
+                    // For Firebase Storage URLs, fetch and download as blob
+                    showToast('Preparing download...', 'info');
+
+                    const response = await fetch(outputUrl);
+                    if (!response.ok) throw new Error('Failed to fetch video');
+
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    // Clean up blob URL after a delay
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                } else {
+                    // Direct download for blob URLs or simple URLs
+                    const link = document.createElement('a');
+                    link.href = outputUrl;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+
+                showToast('Download started!', 'success');
+            } catch (error) {
+                console.error('Download error:', error);
+                // Fallback: open in new tab
+                window.open(outputUrl, '_blank');
+                showToast('Opening video in new tab...', 'info');
+            }
+        }
+
+        // Download all storyboard images
+        function downloadAllImages() {
+            const imageScenes = state.storyboard.scenes.filter(s => s.imageUrl);
+            if (imageScenes.length === 0) {
+                showToast('No images to download', 'warning');
+                return;
+            }
+
+            showToast('Downloading ' + imageScenes.length + ' images...', 'info');
+
+            imageScenes.forEach((scene, index) => {
+                const link = document.createElement('a');
+                link.href = scene.imageUrl;
+                link.download = 'scene_' + (index + 1) + '.png';
+                link.target = '_blank';
+                document.body.appendChild(link);
+                setTimeout(() => {
+                    link.click();
+                    document.body.removeChild(link);
+                }, index * 500); // Stagger downloads
+            });
         }
 
         function renderExportFailed(exportState) {
@@ -8922,42 +9161,91 @@
                 return;
             }
 
-            // Warn if no voiceovers but allow export
-            if (!hasVoiceovers) {
-                console.log('[Export] No voiceovers found - video will be silent or music-only');
-            }
-
             state.export.status = 'exporting';
             state.export.progress = 0;
-            state.export.currentStage = 'Starting export...';
+            state.export.currentStage = 'Starting server-side export...';
+            state.export.exportType = 'server-render';
+            state.export.jobId = null;
+            state.export.outputUrl = null;
+            state.export.error = null;
             render();
 
             try {
-                // Capture timeline state before export
-                const timelineState = saveTimelineState();
-                console.log('[Export] Timeline state:', timelineState);
+                // Call Cloud Function to start server-side video export
+                console.log('[Export] Starting server-side video rendering');
 
-                const startExport = firebase.functions().httpsCallable('creationWizardStartExport');
-                const result = await startExport({
-                    projectId: state.project.id,
-                    quality: state.export.selectedQuality || '1080p',
-                    format: 'mp4',
-                    timelineState // Include timeline edits
+                const quality = state.export.selectedQuality || '1080p';
+                const format = 'mp4'; // Server-side always produces MP4
+
+                const startExportFn = firebase.functions().httpsCallable('creationWizardStartExport');
+                const result = await startExportFn({
+                    projectId,
+                    outputQuality: quality,
+                    format: format
                 });
 
-                state.export.jobId = result.data.jobId;
-                showToast('Export started!', 'success');
+                if (!result.data.success) {
+                    throw new Error(result.data.error || 'Failed to start export');
+                }
 
-                // Start polling for progress
-                pollExportStatus();
+                // Store job ID and start polling
+                state.export.jobId = result.data.jobId;
+                state.export.progress = 5;
+                state.export.currentStage = 'Export job created, waiting for processing...';
+                updateExportProgressBar(state.export.progress, state.export.currentStage);
+
+                console.log('[Export] Job created:', result.data.jobId);
+                console.log('[Export] Total duration:', result.data.totalDuration, 'seconds');
+                console.log('[Export] Scenes:', result.data.sceneCount);
+
+                // Start polling for status
+                setTimeout(pollExportStatus, 2000);
 
             } catch (error) {
                 console.error('Export error:', error);
                 state.export.status = 'failed';
-                state.export.error = error.message;
-                showToast('Failed to start export: ' + error.message, 'error');
+                state.export.error = error.message || 'Export failed';
+                showToast('Export failed: ' + error.message, 'error');
                 render();
             }
+        }
+
+        // Build scenes array for export engine
+        function buildExportScenes() {
+            const scriptScenes = state.script.scenes || [];
+            const animationScenes = state.animation.scenes || [];
+            const storyboardScenes = state.storyboard.scenes || [];
+            const sceneOrder = state.assembly.sceneOrder?.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+
+            return sceneOrder.map((sceneId, index) => {
+                const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                const animScene = animationScenes.find(s => s.sceneId === sceneId);
+                const storyboardScene = storyboardScenes.find(s => s.sceneId === sceneId);
+
+                return {
+                    id: sceneId,
+                    index,
+                    narration: scriptScene?.narration || '',
+                    visualDuration: scriptScene?.visualDuration || scriptScene?.duration || 8,
+                    duration: scriptScene?.duration || 8,
+                    // Prefer video if available, otherwise image
+                    videoUrl: animScene?.videoUrl || null,
+                    imageUrl: storyboardScene?.imageUrl || null,
+                    voiceoverUrl: animScene?.voiceoverUrl || null,
+                    // Ken Burns parameters for images
+                    kenBurns: {
+                        startScale: 1.0 + Math.random() * 0.2,
+                        endScale: 1.1 + Math.random() * 0.2,
+                        startX: 0.4 + Math.random() * 0.2,
+                        startY: 0.4 + Math.random() * 0.2,
+                        endX: 0.4 + Math.random() * 0.2,
+                        endY: 0.4 + Math.random() * 0.2
+                    },
+                    transition: state.assembly.transitions?.[sceneId]?.type || 'fade'
+                };
+            });
         }
 
         async function pollExportStatus() {
@@ -8967,20 +9255,34 @@
                 const checkStatus = firebase.functions().httpsCallable('creationWizardCheckExportStatus');
                 const result = await checkStatus({ jobId: state.export.jobId });
 
+                const statusChanged = state.export.status !== result.data.status;
+                const completed = result.data.status === 'completed';
+                const failed = result.data.status === 'failed' || result.data.status === 'error';
+
                 state.export.status = result.data.status;
                 state.export.progress = result.data.progress || 0;
                 state.export.currentStage = result.data.currentStage || '';
                 state.export.outputUrl = result.data.outputUrl || null;
                 state.export.error = result.data.error || null;
+                state.export.exportType = result.data.exportType || null;
+                state.export.exportNote = result.data.exportNote || null;
+                state.export.imageUrls = result.data.imageUrls || null;
+                state.export.previewThumbnail = result.data.previewThumbnail || null;
 
-                render();
+                // Only do full render on status change, otherwise just update progress bar
+                if (statusChanged || completed || failed) {
+                    render();
+                } else {
+                    // Just update progress bar without full re-render (prevents flashing)
+                    updateExportProgressBar(state.export.progress, state.export.currentStage);
+                }
 
-                if (result.data.status === 'completed') {
+                if (completed) {
                     showToast('Export complete!', 'success');
                     saveProject();
-                } else if (result.data.status === 'failed' || result.data.status === 'error') {
-                    showToast('Export failed', 'error');
-                } else if (result.data.status === 'processing' || result.data.status === 'pending') {
+                } else if (failed) {
+                    showToast('Export failed: ' + (state.export.error || 'Unknown error'), 'error');
+                } else if (result.data.status === 'processing' || result.data.status === 'pending' || result.data.status === 'exporting') {
                     // Continue polling
                     setTimeout(pollExportStatus, 2000);
                 }
@@ -8989,6 +9291,17 @@
                 // Retry polling
                 setTimeout(pollExportStatus, 5000);
             }
+        }
+
+        // Update just the progress bar elements without full re-render
+        function updateExportProgressBar(progress, currentStage) {
+            const progressBar = document.getElementById('export-progress-bar');
+            const progressText = document.getElementById('export-progress-text');
+            const stageText = document.getElementById('export-stage-text');
+
+            if (progressBar) progressBar.style.width = progress + '%';
+            if (progressText) progressText.textContent = progress + '%';
+            if (stageText) stageText.textContent = currentStage || 'Processing...';
         }
 
         async function cancelExport() {
