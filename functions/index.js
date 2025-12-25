@@ -23029,3 +23029,265 @@ exports.adminManualCleanup = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
+
+// ============================================================================
+// VIDEO CREATION WIZARD FUNCTIONS
+// For the new AI Video Creation feature (separate from video-to-shorts wizard)
+// ============================================================================
+
+/**
+ * creationWizardSaveProject - Creates or updates a video creation project
+ */
+exports.creationWizardSaveProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, projectData } = data;
+
+  if (!projectData) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project data required');
+  }
+
+  try {
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    // Prepare the project document
+    const projectDoc = {
+      userId: uid,
+      type: 'creation', // Distinguish from video-to-shorts wizard
+      name: projectData.name || 'Untitled Video',
+      status: projectData.status || 'draft',
+
+      // Platform configuration
+      platform: {
+        selected: projectData.platform?.selected || null,
+        aspectRatio: projectData.platform?.aspectRatio || '16:9',
+        targetDuration: projectData.platform?.targetDuration || 60,
+        preset: projectData.platform?.preset || null
+      },
+
+      // Content configuration
+      content: {
+        niche: projectData.content?.niche || null,
+        subniche: projectData.content?.subniche || null,
+        style: projectData.content?.style || null,
+        topic: projectData.content?.topic || ''
+      },
+
+      // Script data (Phase 2)
+      script: {
+        text: projectData.script?.text || '',
+        scenes: projectData.script?.scenes || [],
+        generatedAt: projectData.script?.generatedAt || null
+      },
+
+      // Storyboard data (Phase 3)
+      storyboard: {
+        scenes: projectData.storyboard?.scenes || []
+      },
+
+      // Animation data (Phase 4)
+      animation: {
+        engine: projectData.animation?.engine || 'runpod', // 'runpod' or 'veo'
+        scenes: projectData.animation?.scenes || []
+      },
+
+      // Assembly data (Phase 5)
+      assembly: {
+        status: projectData.assembly?.status || 'pending',
+        musicUrl: projectData.assembly?.musicUrl || null,
+        musicVolume: projectData.assembly?.musicVolume || 0.3,
+        captionStyle: projectData.assembly?.captionStyle || null,
+        transitions: projectData.assembly?.transitions || 'crossfade'
+      },
+
+      // Export data (Phase 6)
+      export: {
+        status: projectData.export?.status || 'pending',
+        outputUrl: projectData.export?.outputUrl || null,
+        settings: projectData.export?.settings || {}
+      },
+
+      updatedAt: now
+    };
+
+    let docId;
+
+    if (projectId) {
+      // Update existing project
+      const existingDoc = await db.collection('creationProjects').doc(projectId).get();
+      if (!existingDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Project not found');
+      }
+      if (existingDoc.data().userId !== uid) {
+        throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+      }
+
+      await db.collection('creationProjects').doc(projectId).update(projectDoc);
+      docId = projectId;
+    } else {
+      // Create new project
+      projectDoc.createdAt = now;
+      const newDoc = await db.collection('creationProjects').add(projectDoc);
+      docId = newDoc.id;
+    }
+
+    return {
+      success: true,
+      projectId: docId,
+      message: projectId ? 'Project updated' : 'Project created'
+    };
+
+  } catch (error) {
+    console.error('[creationWizardSaveProject] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to save project'));
+  }
+});
+
+/**
+ * creationWizardLoadProject - Loads a complete creation wizard project
+ */
+exports.creationWizardLoadProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('creationProjects').doc(projectId).get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    return {
+      success: true,
+      project: {
+        id: projectDoc.id,
+        name: project.name,
+        status: project.status,
+        platform: project.platform,
+        content: project.content,
+        script: project.script,
+        storyboard: project.storyboard,
+        animation: project.animation,
+        assembly: project.assembly,
+        export: project.export,
+        createdAt: project.createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: project.updatedAt?.toDate?.()?.toISOString() || null
+      }
+    };
+
+  } catch (error) {
+    console.error('[creationWizardLoadProject] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to load project'));
+  }
+});
+
+/**
+ * creationWizardGetProjects - Gets list of user's creation wizard projects
+ */
+exports.creationWizardGetProjects = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { limit = 20, startAfter = null } = data || {};
+
+  try {
+    let query = db.collection('creationProjects')
+      .where('userId', '==', uid)
+      .orderBy('updatedAt', 'desc')
+      .limit(limit);
+
+    if (startAfter) {
+      const startDoc = await db.collection('creationProjects').doc(startAfter).get();
+      if (startDoc.exists) {
+        query = query.startAfter(startDoc);
+      }
+    }
+
+    const snapshot = await query.get();
+
+    const projects = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        status: data.status,
+        platform: data.platform?.selected || null,
+        aspectRatio: data.platform?.aspectRatio || null,
+        niche: data.content?.niche || null,
+        style: data.content?.style || null,
+        topic: data.content?.topic || '',
+        sceneCount: data.script?.scenes?.length || 0,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null
+      };
+    });
+
+    return {
+      success: true,
+      projects,
+      hasMore: projects.length === limit
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGetProjects] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get projects'));
+  }
+});
+
+/**
+ * creationWizardDeleteProject - Deletes a creation wizard project
+ */
+exports.creationWizardDeleteProject = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectDoc = await db.collection('creationProjects').doc(projectId).get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const project = projectDoc.data();
+    if (project.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    // Delete any associated storage files
+    const bucket = admin.storage().bucket();
+    const prefix = `creation-projects/${projectId}/`;
+    try {
+      const [files] = await bucket.getFiles({ prefix });
+      for (const file of files) {
+        await file.delete().catch(() => {});
+      }
+    } catch (storageError) {
+      console.warn('[creationWizardDeleteProject] Storage cleanup warning:', storageError);
+    }
+
+    // Delete the project document
+    await db.collection('creationProjects').doc(projectId).delete();
+
+    return {
+      success: true,
+      message: 'Project deleted'
+    };
+
+  } catch (error) {
+    console.error('[creationWizardDeleteProject] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to delete project'));
+  }
+});
