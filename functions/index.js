@@ -23562,3 +23562,338 @@ Return ONLY valid JSON:
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to regenerate scene'));
   }
 });
+
+/**
+ * creationWizardGenerateSceneImage - Generate a single scene image using RunPod
+ *
+ * Uses existing RunPod HiDream integration to generate storyboard images
+ */
+exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sceneId, prompt, style, aspectRatio, settings } = data;
+
+  if (!prompt || prompt.trim().length < 10) {
+    throw new functions.https.HttpsError('invalid-argument', 'Image prompt is required (min 10 chars)');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    // Enhance prompt with style and quality keywords
+    const styleKeywords = {
+      modern: 'modern, sleek, clean design, contemporary',
+      cinematic: 'cinematic, dramatic lighting, film quality, movie still',
+      energetic: 'vibrant, dynamic, energetic, bold colors',
+      documentary: 'realistic, documentary style, natural lighting',
+      retro: 'retro, vintage, nostalgic, classic aesthetic',
+      futuristic: 'futuristic, sci-fi, high-tech, neon',
+      cartoon: 'cartoon style, animated, colorful illustration',
+      elegant: 'elegant, sophisticated, refined, luxury',
+      nature: 'natural, organic, earthy tones, outdoor',
+      dark: 'dark, moody, dramatic shadows, noir'
+    };
+
+    const styleEnhancement = styleKeywords[style] || styleKeywords.cinematic;
+
+    // Build enhanced prompt
+    const enhancedPrompt = `${prompt}. Style: ${styleEnhancement}. High quality, detailed, professional, 4K resolution.`;
+
+    const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur";
+
+    // Determine dimensions based on aspect ratio
+    const dimensions = {
+      '16:9': { width: 1280, height: 720 },
+      '9:16': { width: 720, height: 1280 },
+      '1:1': { width: 1024, height: 1024 },
+      '4:5': { width: 864, height: 1080 }
+    };
+    const { width, height } = dimensions[aspectRatio] || dimensions['16:9'];
+
+    // Generate unique filename
+    const seed = Math.floor(Math.random() * 999999999999);
+    const fileName = `creation-projects/${projectId || uid}/storyboard/scene_${sceneId}_${Date.now()}_${seed}.png`;
+
+    // Create signed URL for upload
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(fileName);
+    const [uploadUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 30 * 60 * 1000,
+      contentType: 'application/octet-stream',
+    });
+
+    // Build RunPod input
+    const runpodInput = {
+      positive_prompt: enhancedPrompt,
+      negative_prompt: negativePrompt,
+      width,
+      height,
+      batch_size: 1,
+      shift: 3.0,
+      seed,
+      steps: settings?.steps || 30,
+      cfg: settings?.cfg || 5,
+      sampler_name: "euler",
+      scheduler: "simple",
+      denoise: 1,
+      image_upload_url: uploadUrl
+    };
+
+    // Call RunPod API
+    const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
+    const runpodResponse = await axios.post(runpodEndpoint, {
+      input: runpodInput
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${runpodKey}`
+      },
+      timeout: 30000
+    });
+
+    const jobId = runpodResponse.data.id;
+    const status = runpodResponse.data.status;
+
+    // Generate public URL
+    const encodedFileName = encodeURIComponent(fileName);
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'storyboard_image',
+      model: 'runpod-hidream',
+      projectId: projectId || null,
+      sceneId,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      jobId,
+      status,
+      sceneId,
+      imageUrl: publicUrl,
+      fileName,
+      prompt: enhancedPrompt,
+      checkEndpoint: `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateSceneImage] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate scene image'));
+  }
+});
+
+/**
+ * creationWizardCheckImageStatus - Check the status of a RunPod image generation job
+ */
+exports.creationWizardCheckImageStatus = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { jobId } = data;
+
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    const statusResponse = await axios.get(
+      `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`,
+      {
+        headers: { 'Authorization': `Bearer ${runpodKey}` },
+        timeout: 10000
+      }
+    );
+
+    return {
+      success: true,
+      jobId,
+      status: statusResponse.data.status,
+      output: statusResponse.data.output || null,
+      error: statusResponse.data.error || null
+    };
+
+  } catch (error) {
+    console.error('[creationWizardCheckImageStatus] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check image status'));
+  }
+});
+
+/**
+ * creationWizardGenerateInitialStoryboard - Generate first N scene images in batch
+ *
+ * Called when user enters Step 4, generates first 4 scenes automatically
+ */
+exports.creationWizardGenerateInitialStoryboard = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, scenes, style, aspectRatio, maxScenes = 4 } = data;
+
+  if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scenes array is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    // Only generate for first N scenes
+    const scenesToGenerate = scenes.slice(0, maxScenes);
+    const jobs = [];
+
+    for (const scene of scenesToGenerate) {
+      // Use the visual description from script as base prompt
+      const prompt = scene.visual || scene.narration || 'A cinematic scene';
+
+      // Enhance prompt
+      const styleKeywords = {
+        modern: 'modern, sleek, clean design',
+        cinematic: 'cinematic, dramatic lighting, film quality',
+        energetic: 'vibrant, dynamic, bold colors',
+        documentary: 'realistic, natural lighting',
+        retro: 'retro, vintage, nostalgic',
+        futuristic: 'futuristic, sci-fi, high-tech',
+        cartoon: 'cartoon style, animated, colorful',
+        elegant: 'elegant, sophisticated, refined',
+        nature: 'natural, organic, outdoor',
+        dark: 'dark, moody, dramatic shadows'
+      };
+      const styleEnhancement = styleKeywords[style] || styleKeywords.cinematic;
+      const enhancedPrompt = `${prompt}. Style: ${styleEnhancement}. High quality, 4K.`;
+
+      // Dimensions
+      const dimensions = {
+        '16:9': { width: 1280, height: 720 },
+        '9:16': { width: 720, height: 1280 },
+        '1:1': { width: 1024, height: 1024 },
+        '4:5': { width: 864, height: 1080 }
+      };
+      const { width, height } = dimensions[aspectRatio] || dimensions['16:9'];
+
+      // Generate filename and signed URL
+      const seed = Math.floor(Math.random() * 999999999999);
+      const fileName = `creation-projects/${projectId || uid}/storyboard/scene_${scene.id}_${Date.now()}_${seed}.png`;
+
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(fileName);
+      const [uploadUrl] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 30 * 60 * 1000,
+        contentType: 'application/octet-stream',
+      });
+
+      // Call RunPod
+      const runpodEndpoint = 'https://api.runpod.ai/v2/rgq0go2nkcfx4h/run';
+      const runpodResponse = await axios.post(runpodEndpoint, {
+        input: {
+          positive_prompt: enhancedPrompt,
+          negative_prompt: "blurry, low quality, ugly, distorted, watermark, nsfw, text, words, logo",
+          width,
+          height,
+          batch_size: 1,
+          shift: 3.0,
+          seed,
+          steps: 30,
+          cfg: 5,
+          sampler_name: "euler",
+          scheduler: "simple",
+          denoise: 1,
+          image_upload_url: uploadUrl
+        }
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${runpodKey}`
+        },
+        timeout: 30000
+      });
+
+      const encodedFileName = encodeURIComponent(fileName);
+      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
+
+      jobs.push({
+        sceneId: scene.id,
+        jobId: runpodResponse.data.id,
+        status: runpodResponse.data.status,
+        imageUrl: publicUrl,
+        fileName,
+        prompt: enhancedPrompt
+      });
+    }
+
+    // Log batch usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'storyboard_batch',
+      model: 'runpod-hidream',
+      projectId: projectId || null,
+      sceneCount: jobs.length,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      jobs,
+      totalGenerated: jobs.length,
+      totalScenes: scenes.length
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateInitialStoryboard] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate storyboard'));
+  }
+});
+
+/**
+ * creationWizardUpdateStoryboard - Save storyboard data to project
+ */
+exports.creationWizardUpdateStoryboard = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, storyboard } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    if (projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    await projectRef.update({
+      storyboard: {
+        scenes: storyboard.scenes || [],
+        status: storyboard.status || 'in_progress',
+        updatedAt: new Date().toISOString()
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true };
+
+  } catch (error) {
+    console.error('[creationWizardUpdateStoryboard] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update storyboard'));
+  }
+});

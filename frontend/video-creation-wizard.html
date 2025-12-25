@@ -1427,12 +1427,15 @@
                 generationConfig: null
             },
 
-            // Step 4: Storyboard (to be implemented)
+            // Step 4: Storyboard
             storyboard: {
-                status: 'idle',
-                scenes: [],
+                status: 'idle', // idle, generating, ready, error
+                scenes: [],     // Array of { sceneId, status, imageUrl, prompt, jobId }
                 characterReference: null,
-                styleReference: null
+                styleReference: null,
+                modifyingScene: null,  // Scene ID being modified in modal
+                modifyPrompt: null,    // Current prompt in modify modal
+                modifyStyle: null      // Current style in modify modal
             },
 
             // Step 5: Animation (to be implemented)
@@ -2109,7 +2112,246 @@
         }
 
         // ==========================================
-        // 6.8 COST ESTIMATION
+        // 6.8 STORYBOARD GENERATION
+        // ==========================================
+        let imagePollingIntervals = {};
+
+        async function generateInitialStoryboard() {
+            const scenes = state.script.scenes || [];
+            if (scenes.length === 0) return;
+
+            // Only generate first 4 scenes automatically
+            const maxInitialScenes = 4;
+            const scenesToGenerate = scenes.slice(0, maxInitialScenes);
+
+            state.storyboard.status = 'generating';
+
+            // Initialize storyboard scenes with generating status
+            state.storyboard.scenes = scenes.map((scene, index) => ({
+                sceneId: scene.id,
+                status: index < maxInitialScenes ? 'generating' : 'pending',
+                imageUrl: null,
+                prompt: scene.visual || '',
+                jobId: null
+            }));
+
+            render();
+
+            try {
+                const generateFn = functions.httpsCallable('creationWizardGenerateInitialStoryboard');
+                const result = await generateFn({
+                    projectId: state.project.id,
+                    scenes: scenesToGenerate,
+                    style: state.content.style,
+                    aspectRatio: state.platform.aspectRatio
+                });
+
+                if (result.data.success) {
+                    // Update state with job IDs and start polling
+                    result.data.jobs.forEach(job => {
+                        const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === job.sceneId);
+                        if (storyboardScene) {
+                            storyboardScene.jobId = job.jobId;
+                            storyboardScene.imageUrl = job.imageUrl;
+                            storyboardScene.prompt = job.prompt;
+                            // Start polling for this job
+                            startImagePolling(job.sceneId, job.jobId);
+                        }
+                    });
+
+                    render();
+                }
+            } catch (error) {
+                console.error('Initial storyboard generation error:', error);
+                showToast('Failed to start image generation', 'error');
+
+                // Mark all as error
+                state.storyboard.scenes.forEach(s => {
+                    if (s.status === 'generating') s.status = 'error';
+                });
+                state.storyboard.status = 'error';
+                render();
+            }
+        }
+
+        async function generateSingleSceneImage(sceneId) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (!scene) return;
+
+            // Find or create storyboard entry
+            let storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+            if (!storyboardScene) {
+                storyboardScene = {
+                    sceneId: sceneId,
+                    status: 'pending',
+                    imageUrl: null,
+                    prompt: scene.visual || '',
+                    jobId: null
+                };
+                state.storyboard.scenes.push(storyboardScene);
+            }
+
+            storyboardScene.status = 'generating';
+            render();
+
+            try {
+                const generateFn = functions.httpsCallable('creationWizardGenerateSceneImage');
+                const result = await generateFn({
+                    projectId: state.project.id,
+                    sceneId: sceneId,
+                    prompt: scene.visual || scene.narration || 'A cinematic scene',
+                    style: state.content.style,
+                    aspectRatio: state.platform.aspectRatio
+                });
+
+                if (result.data.success) {
+                    storyboardScene.jobId = result.data.jobId;
+                    storyboardScene.imageUrl = result.data.imageUrl;
+                    storyboardScene.prompt = result.data.prompt;
+
+                    // Start polling for completion
+                    startImagePolling(sceneId, result.data.jobId);
+                }
+            } catch (error) {
+                console.error('Single scene generation error:', error);
+                storyboardScene.status = 'error';
+                showToast('Failed to generate image', 'error');
+                render();
+            }
+        }
+
+        async function regenerateSingleSceneImage(sceneId) {
+            await generateSingleSceneImage(sceneId);
+        }
+
+        function startImagePolling(sceneId, jobId) {
+            // Clear any existing polling for this scene
+            if (imagePollingIntervals[sceneId]) {
+                clearInterval(imagePollingIntervals[sceneId]);
+            }
+
+            let pollCount = 0;
+            const maxPolls = 60; // 2 minutes max (2s intervals)
+
+            imagePollingIntervals[sceneId] = setInterval(async () => {
+                pollCount++;
+
+                if (pollCount > maxPolls) {
+                    clearInterval(imagePollingIntervals[sceneId]);
+                    const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+                    if (storyboardScene && storyboardScene.status === 'generating') {
+                        storyboardScene.status = 'error';
+                        render();
+                    }
+                    return;
+                }
+
+                try {
+                    const checkStatusFn = functions.httpsCallable('creationWizardCheckImageStatus');
+                    const result = await checkStatusFn({ jobId });
+
+                    if (result.data.status === 'COMPLETED') {
+                        clearInterval(imagePollingIntervals[sceneId]);
+
+                        const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+                        if (storyboardScene) {
+                            storyboardScene.status = 'ready';
+                            // Image URL was set earlier, now it should be available
+                        }
+
+                        // Check if all generating scenes are done
+                        const allDone = state.storyboard.scenes.every(s =>
+                            s.status === 'ready' || s.status === 'pending' || s.status === 'error'
+                        );
+                        if (allDone) {
+                            state.storyboard.status = 'ready';
+                        }
+
+                        render();
+                        scheduleAutoSave();
+
+                    } else if (result.data.status === 'FAILED') {
+                        clearInterval(imagePollingIntervals[sceneId]);
+
+                        const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+                        if (storyboardScene) {
+                            storyboardScene.status = 'error';
+                        }
+                        render();
+                    }
+                    // If IN_PROGRESS or IN_QUEUE, keep polling
+
+                } catch (error) {
+                    console.error('Polling error:', error);
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+
+        // Modify Modal Functions
+        function openModifyModal(sceneId) {
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+
+            state.storyboard.modifyingScene = sceneId;
+            state.storyboard.modifyPrompt = storyboardScene?.prompt || scene?.visual || '';
+            state.storyboard.modifyStyle = state.content.style || 'cinematic';
+
+            render();
+        }
+
+        function closeModifyModal() {
+            state.storyboard.modifyingScene = null;
+            state.storyboard.modifyPrompt = null;
+            state.storyboard.modifyStyle = null;
+            render();
+        }
+
+        function setModifyStyle(style) {
+            state.storyboard.modifyStyle = style;
+            render();
+        }
+
+        function appendToModifyPrompt(text) {
+            const input = document.getElementById('modify-prompt-input');
+            if (input) {
+                const currentPrompt = input.value.trim();
+                input.value = currentPrompt ? `${currentPrompt}, ${text}` : text;
+                state.storyboard.modifyPrompt = input.value;
+            }
+        }
+
+        async function applyModifyAndGenerate() {
+            const sceneId = state.storyboard.modifyingScene;
+            if (!sceneId) return;
+
+            const input = document.getElementById('modify-prompt-input');
+            const newPrompt = input?.value?.trim();
+
+            if (!newPrompt || newPrompt.length < 10) {
+                showToast('Please enter a more detailed prompt', 'warning');
+                return;
+            }
+
+            // Update the scene's visual description
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                scene.visual = newPrompt;
+            }
+
+            // Update storyboard scene
+            let storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+            if (storyboardScene) {
+                storyboardScene.prompt = newPrompt;
+            }
+
+            closeModifyModal();
+
+            // Generate with new prompt
+            await generateSingleSceneImage(sceneId);
+        }
+
+        // ==========================================
+        // 6.9 COST ESTIMATION
         // ==========================================
         function estimateCost() {
             const duration = state.platform.targetDuration || 60;
@@ -3017,12 +3259,233 @@
         }
 
         // ==========================================
-        // 7.8 STEP 4-7: PLACEHOLDER RENDERS
+        // 7.8 STEP 4: STORYBOARD
         // ==========================================
         function renderStep4Storyboard() {
-            return renderComingSoonStep(4, 'Storyboard', 'Generate images for each scene using Nanobananapro.');
+            const scenes = state.script.scenes || [];
+            const storyboardScenes = state.storyboard.scenes || [];
+
+            // Check if we need to auto-generate
+            if (scenes.length > 0 && storyboardScenes.length === 0 && state.storyboard.status !== 'generating') {
+                // Trigger auto-generation on first visit
+                setTimeout(() => generateInitialStoryboard(), 100);
+            }
+
+            let html = '<div class="fade-in">';
+
+            // Header
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎨</div>
+                        <div>
+                            <div class="content-card-title">Storyboard</div>
+                            <div class="content-card-subtitle">Visual preview of each scene • ${storyboardScenes.filter(s => s.imageUrl && s.status === 'ready').length}/${scenes.length} images ready</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Storyboard Grid
+            html += `<div class="storyboard-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem;">`;
+
+            scenes.forEach((scene, index) => {
+                const storyboardScene = storyboardScenes.find(s => s.sceneId === scene.id) || {};
+                html += renderStoryboardCard(scene, storyboardScene, index);
+            });
+
+            html += `</div>`;
+
+            // Navigation
+            const hasAllImages = storyboardScenes.filter(s => s.status === 'ready').length >= scenes.length;
+            html += renderNavButtons(3, hasAllImages ? 5 : null);
+
+            html += '</div>';
+
+            // Modify Modal (rendered outside main flow)
+            if (state.storyboard.modifyingScene) {
+                html += renderModifyModal();
+            }
+
+            return html;
         }
 
+        function renderStoryboardCard(scene, storyboardScene, index) {
+            const status = storyboardScene.status || 'pending';
+            const imageUrl = storyboardScene.imageUrl;
+            const prompt = storyboardScene.prompt || scene.visual || '';
+
+            let cardContent = '';
+
+            if (status === 'pending') {
+                // Empty state - needs generation
+                cardContent = `
+                    <div style="height: 160px; background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.2); border-radius: 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;" onclick="generateSingleSceneImage(${scene.id})">
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">+</div>
+                        <div style="color: rgba(255,255,255,0.5); font-size: 0.8rem;">Click to Generate</div>
+                    </div>
+                `;
+            } else if (status === 'generating') {
+                // Loading state
+                cardContent = `
+                    <div style="height: 160px; background: rgba(139, 92, 246, 0.1); border-radius: 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div class="animate-spin" style="width: 2rem; height: 2rem; border: 3px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%; margin-bottom: 0.75rem;"></div>
+                        <div style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">Generating...</div>
+                    </div>
+                `;
+            } else if (status === 'ready' && imageUrl) {
+                // Image ready
+                cardContent = `
+                    <div style="height: 160px; border-radius: 0.5rem; overflow: hidden; position: relative;">
+                        <img src="${imageUrl}" alt="Scene ${index + 1}" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 0.5rem; display: flex; gap: 0.5rem;">
+                            <button onclick="openModifyModal(${scene.id})" style="flex: 1; padding: 0.4rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.75rem;">
+                                ✏️ Modify
+                            </button>
+                            <button onclick="regenerateSingleSceneImage(${scene.id})" style="padding: 0.4rem 0.6rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.75rem;">
+                                🔄
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (status === 'error') {
+                // Error state
+                cardContent = `
+                    <div style="height: 160px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;" onclick="generateSingleSceneImage(${scene.id})">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚠️</div>
+                        <div style="color: #ef4444; font-size: 0.8rem;">Failed - Click to retry</div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="storyboard-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; overflow: hidden;">
+                    <!-- Scene number badge -->
+                    <div style="position: relative;">
+                        <div style="position: absolute; top: 0.5rem; left: 0.5rem; background: rgba(0,0,0,0.7); color: white; padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 600; z-index: 1;">
+                            Scene ${index + 1}
+                        </div>
+                        ${cardContent}
+                    </div>
+
+                    <!-- Prompt -->
+                    <div style="padding: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">PROMPT</div>
+                        <div style="font-size: 0.8rem; color: rgba(255,255,255,0.8); line-height: 1.4; max-height: 3.6em; overflow: hidden; text-overflow: ellipsis;">
+                            ${prompt.substring(0, 120)}${prompt.length > 120 ? '...' : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderModifyModal() {
+            const sceneId = state.storyboard.modifyingScene;
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId) || {};
+
+            if (!scene) return '';
+
+            const currentPrompt = state.storyboard.modifyPrompt || storyboardScene.prompt || scene.visual || '';
+
+            return `
+                <div id="modify-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;" onclick="if(event.target.id === 'modify-modal') closeModifyModal()">
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 700px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+                        <!-- Header -->
+                        <div style="padding: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 1.1rem; font-weight: 700; color: white;">✏️ Modify Scene ${scene.id}</div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Customize the image generation</div>
+                            </div>
+                            <button onclick="closeModifyModal()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">×</button>
+                        </div>
+
+                        <!-- Content -->
+                        <div style="padding: 1.25rem; overflow-y: auto; flex: 1;">
+                            <!-- Current Image Preview -->
+                            ${storyboardScene.imageUrl ? `
+                                <div style="margin-bottom: 1.25rem;">
+                                    <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Current Image</div>
+                                    <img src="${storyboardScene.imageUrl}" alt="Current" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 0.5rem;">
+                                </div>
+                            ` : ''}
+
+                            <!-- Prompt Editor -->
+                            <div style="margin-bottom: 1.25rem;">
+                                <label style="display: block; font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
+                                    Image Prompt
+                                </label>
+                                <textarea id="modify-prompt-input"
+                                          style="width: 100%; min-height: 100px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem; resize: vertical;"
+                                          placeholder="Describe what you want to see...">${currentPrompt}</textarea>
+                            </div>
+
+                            <!-- Style Selector -->
+                            <div style="margin-bottom: 1.25rem;">
+                                <label style="display: block; font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
+                                    Style
+                                </label>
+                                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem;">
+                                    ${['cinematic', 'modern', 'retro', 'cartoon', 'dark'].map(styleOpt => `
+                                        <button onclick="setModifyStyle('${styleOpt}')"
+                                                style="padding: 0.5rem; border-radius: 0.4rem; border: 1px solid ${state.storyboard.modifyStyle === styleOpt ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.2)'}; background: ${state.storyboard.modifyStyle === styleOpt ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 0.75rem; text-transform: capitalize;">
+                                            ${styleOpt}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Camera/Composition -->
+                            <div style="margin-bottom: 1.25rem;">
+                                <label style="display: block; font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
+                                    Camera Shot
+                                </label>
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                                    ${['wide shot', 'medium shot', 'close-up', 'aerial'].map(shot => `
+                                        <button onclick="appendToModifyPrompt('${shot}')"
+                                                style="padding: 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 0.75rem; text-transform: capitalize;">
+                                            ${shot}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Lighting -->
+                            <div style="margin-bottom: 1.25rem;">
+                                <label style="display: block; font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
+                                    Lighting
+                                </label>
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                                    ${['golden hour', 'dramatic', 'soft light', 'neon'].map(light => `
+                                        <button onclick="appendToModifyPrompt('${light} lighting')"
+                                                style="padding: 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 0.75rem; text-transform: capitalize;">
+                                            ${light}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div style="padding: 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.75rem;">
+                            <button onclick="closeModifyModal()"
+                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-weight: 600;">
+                                Cancel
+                            </button>
+                            <button onclick="applyModifyAndGenerate()"
+                                    style="flex: 2; padding: 0.75rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; cursor: pointer; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <span>✨</span>
+                                <span>Generate New Image</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==========================================
+        // 7.9 STEP 5-7: PLACEHOLDER RENDERS
+        // ==========================================
         function renderStep5Animation() {
             return renderComingSoonStep(5, 'Animation', 'Animate your images to video using Runpod Multi-talk or Veo 3.1.');
         }
