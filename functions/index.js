@@ -23318,6 +23318,7 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     style,
     topic,
     tone = 'engaging',
+    pacing = 'medium', // 'fast' | 'medium' | 'slow' - controls visual breathing room
     additionalInstructions = ''
   } = config;
 
@@ -23326,14 +23327,35 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
   }
 
   try {
-    // Calculate scene structure based on duration
-    const sceneDuration = 12; // Average 12 seconds per scene for good pacing
-    const sceneCount = Math.max(3, Math.min(12, Math.ceil(targetDuration / sceneDuration)));
+    // === SMART TIMING CALCULATION ===
+    // Pacing determines how much of each scene is narration vs visual-only breathing room
+    const pacingConfig = {
+      fast: { narrationRatio: 0.85, avgSceneDuration: 8, wordsPerSecond: 2.8 },
+      medium: { narrationRatio: 0.70, avgSceneDuration: 12, wordsPerSecond: 2.5 },
+      slow: { narrationRatio: 0.50, avgSceneDuration: 18, wordsPerSecond: 2.2 }
+    };
+
+    const pacingSettings = pacingConfig[pacing] || pacingConfig.medium;
+
+    // Calculate optimal number of scenes based on target duration
+    const sceneCount = Math.max(4, Math.min(15, Math.round(targetDuration / pacingSettings.avgSceneDuration)));
+
+    // Calculate per-scene target duration (how long each scene shows visually)
+    const visualDuration = Math.round(targetDuration / sceneCount);
+
+    // Calculate narration duration per scene (voiceover portion)
+    const narrationDuration = Math.round(visualDuration * pacingSettings.narrationRatio);
+
+    // Calculate approximate word count per scene for proper timing
+    const wordsPerScene = Math.round(narrationDuration * pacingSettings.wordsPerSecond);
 
     // Build the prompt for GPT-4o
     const systemPrompt = `You are an expert video scriptwriter specializing in ${niche || 'general'} content.
 You create engaging, well-structured scripts optimized for ${platform || 'social media'} in ${aspectRatio || '16:9'} format.
 Your scripts are known for strong hooks, clear storytelling, and compelling calls-to-action.
+
+CRITICAL TIMING RULE: You MUST write narrations with the EXACT word count specified. This determines video pacing.
+Count your words carefully. Too few words = awkward pauses. Too many words = rushed audio.
 Always return valid JSON exactly matching the requested structure.`;
 
     const userPrompt = `Create a ${targetDuration}-second video script about: "${topic}"
@@ -23341,41 +23363,59 @@ Always return valid JSON exactly matching the requested structure.`;
 === CONFIGURATION ===
 Platform: ${platform || 'YouTube'}
 Aspect Ratio: ${aspectRatio || '16:9'}
-Target Duration: ${targetDuration} seconds
+TOTAL VIDEO DURATION: ${targetDuration} seconds (THIS IS THE TARGET LENGTH)
 Niche: ${niche || 'general'}${subniche ? ` > ${subniche}` : ''}
 Visual Style: ${style || 'modern'}
 Tone: ${tone}
+Pacing: ${pacing} (${pacing === 'fast' ? 'energetic, quick cuts' : pacing === 'slow' ? 'contemplative, visual breathing room' : 'balanced pacing'})
+
+=== CRITICAL TIMING BREAKDOWN ===
+Total Duration: ${targetDuration} seconds
 Number of Scenes: ${sceneCount}
+Each Scene Visual Duration: ${visualDuration} seconds (how long the scene appears)
+Each Scene Narration Duration: ${narrationDuration} seconds (voiceover length)
+Visual-Only Time per Scene: ${visualDuration - narrationDuration} seconds (no voiceover, just visuals)
+Words per Scene: ~${wordsPerScene} words (to fill ${narrationDuration}s at ${pacingSettings.wordsPerSecond} words/sec)
 
 === REQUIREMENTS ===
-1. HOOK (first 3-5 seconds): Must grab attention immediately - use a surprising fact, question, or bold statement
-2. SCENES: Create exactly ${sceneCount} scenes that flow naturally
-3. Each scene needs:
-   - Narration text (what the voiceover says)
-   - Visual description (what appears on screen - be specific for AI image generation)
-   - Duration in seconds (scenes should total ~${targetDuration} seconds)
-4. CTA: End with a clear call-to-action appropriate for ${platform}
-5. Keep narration concise - about 2-3 words per second of video
-6. Visual descriptions should be detailed enough for AI image generation (describe scene, subjects, lighting, mood)
+1. HOOK (Scene 1): Grab attention immediately - surprising fact, question, or bold statement
+2. Create EXACTLY ${sceneCount} scenes that build a narrative
+3. EACH SCENE NARRATION MUST BE ~${wordsPerScene} WORDS (±3 words) - COUNT CAREFULLY!
+4. Each scene needs:
+   - narration: ~${wordsPerScene} words of voiceover text (COUNT YOUR WORDS!)
+   - visual: Detailed description for AI image generation (composition, subjects, lighting, mood)
+   - visualDuration: ${visualDuration} (total seconds this scene appears)
+   - narrationDuration: ${narrationDuration} (seconds of voiceover)
+5. CTA should be woven into the final scene naturally
+6. Visual descriptions should be specific: composition, subjects, lighting, colors, camera angle
 
 ${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
 
 === OUTPUT FORMAT ===
-Return ONLY valid JSON with this exact structure:
+Return ONLY valid JSON:
 {
   "title": "Compelling video title (50-70 chars)",
-  "hook": "The attention-grabbing opening line",
+  "hook": "The attention-grabbing first line (this IS scene 1's narration start)",
   "scenes": [
     {
       "id": 1,
-      "narration": "What the voiceover says for this scene",
-      "visual": "Detailed visual description for AI image generation: describe the scene, subjects, composition, lighting, colors, mood",
-      "duration": 8,
+      "narration": "EXACTLY ~${wordsPerScene} words. Count them! This determines timing.",
+      "visual": "Detailed: scene composition, subjects, lighting, colors, mood, camera angle",
+      "visualDuration": ${visualDuration},
+      "narrationDuration": ${narrationDuration},
+      "wordCount": ${wordsPerScene},
       "transition": "cut|fade|zoom|slide"
     }
   ],
-  "cta": "Call-to-action text",
+  "cta": "Call-to-action (integrated into final scene)",
   "totalDuration": ${targetDuration},
+  "timing": {
+    "sceneCount": ${sceneCount},
+    "visualDurationPerScene": ${visualDuration},
+    "narrationDurationPerScene": ${narrationDuration},
+    "pacing": "${pacing}",
+    "wordsPerScene": ${wordsPerScene}
+  },
   "metadata": {
     "targetAudience": "Who this video is for",
     "keyMessage": "The main takeaway",
@@ -23412,20 +23452,37 @@ Return ONLY valid JSON with this exact structure:
       throw new functions.https.HttpsError('internal', 'Invalid script structure - no scenes generated');
     }
 
-    // Ensure each scene has required fields and IDs
-    script.scenes = script.scenes.map((scene, index) => ({
-      id: scene.id || index + 1,
-      narration: scene.narration || '',
-      visual: scene.visual || '',
-      duration: scene.duration || Math.round(targetDuration / script.scenes.length),
-      transition: scene.transition || 'cut',
-      status: 'pending' // For tracking storyboard/animation progress
-    }));
+    // Calculate default durations if not provided
+    const defaultVisualDuration = Math.round(targetDuration / script.scenes.length);
+    const defaultNarrationDuration = Math.round(defaultVisualDuration * 0.7);
 
-    // Calculate actual total duration
-    script.totalDuration = script.scenes.reduce((sum, scene) => sum + scene.duration, 0);
+    // Ensure each scene has required fields including timing
+    script.scenes = script.scenes.map((scene, index) => {
+      // Count words in narration to estimate actual duration
+      const wordCount = (scene.narration || '').split(/\s+/).filter(w => w.length > 0).length;
+      const estimatedNarrationDuration = Math.ceil(wordCount / 2.5); // ~2.5 words per second
 
-    // Add generation metadata
+      return {
+        id: scene.id || index + 1,
+        narration: scene.narration || '',
+        visual: scene.visual || '',
+        // Visual duration is how long the scene appears on screen
+        visualDuration: scene.visualDuration || defaultVisualDuration,
+        // Narration duration is how long the voiceover is (estimated from word count)
+        narrationDuration: scene.narrationDuration || estimatedNarrationDuration || defaultNarrationDuration,
+        // Keep legacy duration field for backwards compatibility
+        duration: scene.visualDuration || scene.duration || defaultVisualDuration,
+        wordCount: wordCount,
+        transition: scene.transition || 'cut',
+        status: 'pending' // For tracking storyboard/animation progress
+      };
+    });
+
+    // Calculate actual total duration (visual duration, not narration)
+    script.totalDuration = script.scenes.reduce((sum, scene) => sum + scene.visualDuration, 0);
+    script.totalNarrationDuration = script.scenes.reduce((sum, scene) => sum + scene.narrationDuration, 0);
+
+    // Add generation metadata including timing info
     script.generatedAt = new Date().toISOString();
     script.generationConfig = {
       platform,
@@ -23434,7 +23491,14 @@ Return ONLY valid JSON with this exact structure:
       niche,
       subniche,
       style,
-      tone
+      tone,
+      pacing
+    };
+    script.timing = script.timing || {
+      sceneCount: script.scenes.length,
+      visualDurationPerScene: defaultVisualDuration,
+      narrationDurationPerScene: defaultNarrationDuration,
+      pacing: pacing
     };
 
     // If projectId provided, update the project with the script

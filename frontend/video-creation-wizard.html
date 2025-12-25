@@ -1410,7 +1410,8 @@
                 subniche: null,           // Sub-niche ID
                 style: null,              // Style ID
                 topic: '',                // User's topic/theme
-                tone: 'engaging'          // casual, professional, humorous, serious
+                tone: 'engaging',         // casual, professional, humorous, serious
+                pacing: 'medium'          // 'fast' | 'medium' | 'slow' - controls scene timing
             },
 
             // Step 3: Script
@@ -1913,6 +1914,12 @@
             scheduleAutoSave();
         }
 
+        function setPacing(pacing) {
+            state.content.pacing = pacing;
+            render();
+            scheduleAutoSave();
+        }
+
         function applyTopicSuggestion(topic) {
             state.content.topic = topic;
             render();
@@ -1957,6 +1964,7 @@
                     style: state.content.style,
                     topic: topic,
                     tone: state.content.tone || 'engaging',
+                    pacing: state.content.pacing || 'medium',
                     additionalInstructions
                 };
 
@@ -4188,6 +4196,48 @@
 
             html += '</div></div>';
 
+            // Pacing Control Card (NEW - Controls video timing)
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">⏱️</div>
+                        <div>
+                            <div class="content-card-title">Video Pacing</div>
+                            <div class="content-card-subtitle">How fast should your video flow?</div>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 0.5rem;">
+                        <div onclick="setPacing('fast')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'fast' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'fast' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚡</div>
+                            <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Fast</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Quick cuts, dense narration<br>~8s per scene</div>
+                        </div>
+                        <div onclick="setPacing('medium')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'medium' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'medium' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
+                            <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Balanced</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Natural flow<br>~12s per scene</div>
+                        </div>
+                        <div onclick="setPacing('slow')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'slow' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'slow' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌊</div>
+                            <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Contemplative</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Visual breathing room<br>~18s per scene</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(139, 92, 246, 0.1); border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
+                        <div style="font-size: 0.75rem; color: #a78bfa;">
+                            📊 For your ${formatDuration(state.platform.targetDuration)} video:
+                            <strong>${Math.round(state.platform.targetDuration / (state.content.pacing === 'fast' ? 8 : state.content.pacing === 'slow' ? 18 : 12))} scenes</strong>
+                            with <strong>${state.content.pacing === 'fast' ? '85%' : state.content.pacing === 'slow' ? '50%' : '70%'}</strong> narration coverage
+                        </div>
+                    </div>
+                </div>
+            `;
+
             // Topic Input Card
             html += `
                 <div class="content-card">
@@ -4359,6 +4409,12 @@
         function renderScriptEditor() {
             const script = state.script;
 
+            // Calculate timing breakdown
+            const targetDuration = state.platform.targetDuration || 60;
+            const totalVisualDuration = script.scenes.reduce((sum, s) => sum + (s.visualDuration || s.duration || 0), 0);
+            const totalNarrationDuration = script.scenes.reduce((sum, s) => sum + (s.narrationDuration || Math.ceil((s.narration || '').split(/\s+/).length / 2.5) || 0), 0);
+            const pacing = script.timing?.pacing || state.content.pacing || 'medium';
+
             let html = `
                 <!-- Script Header -->
                 <div class="content-card">
@@ -4370,12 +4426,33 @@
                                    value="${script.title || ''}"
                                    onchange="updateScriptTitle(this.value)"
                                    style="background: none; border: none; color: white; font-size: 1.1rem; font-weight: 700; width: 100%; outline: none;">
-                            <div class="content-card-subtitle">${script.scenes.length} scenes • ${script.totalDuration || 0}s total</div>
+                            <div class="content-card-subtitle">${script.scenes.length} scenes • Target: ${formatDuration(targetDuration)}</div>
                         </div>
                         <button onclick="regenerateFullScript()"
                                 style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; padding: 0.5rem 1rem; color: white; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem;">
                             <span>🔄</span> Regenerate
                         </button>
+                    </div>
+
+                    <!-- Timing Breakdown Banner -->
+                    <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); text-transform: uppercase;">Visual Time</div>
+                                <div style="font-size: 1rem; font-weight: 700; color: #10b981;">${formatDuration(totalVisualDuration)}</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); text-transform: uppercase;">Narration</div>
+                                <div style="font-size: 1rem; font-weight: 700; color: #a78bfa;">${formatDuration(totalNarrationDuration)}</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); text-transform: uppercase;">Per Scene</div>
+                                <div style="font-size: 1rem; font-weight: 700; color: white;">~${Math.round(totalVisualDuration / script.scenes.length)}s</div>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.6); display: flex; align-items: center; gap: 0.3rem;">
+                            <span>⏱️</span> ${pacing.charAt(0).toUpperCase() + pacing.slice(1)} pacing
+                        </div>
                     </div>
 
                     <!-- Hook -->
