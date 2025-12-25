@@ -2521,16 +2521,73 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   const outputFile = path.join(workDir, 'processed.mp4');
 
   // Get input video info
-  const videoInfo = await getVideoInfo(inputFile);
+  let videoInfo = await getVideoInfo(inputFile);
   console.log(`[${jobId}] Input video: ${videoInfo.width}x${videoInfo.height}, ${videoInfo.duration}s`);
+
+  // Ensure settings has defaults to prevent crashes (early init for trim check)
+  const safeSettings = settings || {};
+
+  // ========== TRIM CLIP PROCESSING ==========
+  // Apply user's custom trim points if specified
+  // trimStart/trimEnd are relative to the clip (0 = start of clip, duration = end of clip)
+  const trimStart = safeSettings.trimStart || 0;
+  const trimEnd = safeSettings.trimEnd || videoInfo.duration;
+  const needsTrim = trimStart > 0.5 || (videoInfo.duration - trimEnd) > 0.5; // Allow 0.5s tolerance
+
+  let trimmedInputFile = inputFile;
+  if (needsTrim) {
+    console.log(`[${jobId}] ========== TRIM CLIP ==========`);
+    console.log(`[${jobId}] User requested trim: ${trimStart}s to ${trimEnd}s (original: 0 to ${videoInfo.duration}s)`);
+
+    const trimmedFile = path.join(workDir, 'trimmed.mp4');
+    await new Promise((resolve, reject) => {
+      const ffmpegArgs = [
+        '-i', inputFile,
+        '-ss', String(trimStart),
+        '-to', String(trimEnd),
+        '-c', 'copy',  // Fast copy without re-encoding
+        '-avoid_negative_ts', 'make_zero',
+        '-y',
+        trimmedFile
+      ];
+
+      console.log(`[${jobId}] FFmpeg trim command: ffmpeg ${ffmpegArgs.join(' ')}`);
+
+      const ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
+      let stderr = '';
+
+      ffmpegProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      ffmpegProcess.on('close', (code) => {
+        if (code === 0 && fs.existsSync(trimmedFile)) {
+          console.log(`[${jobId}] Trim successful: ${trimmedFile}`);
+          resolve();
+        } else {
+          console.error(`[${jobId}] Trim failed with code ${code}: ${stderr.slice(-500)}`);
+          reject(new Error(`Trim failed with code ${code}`));
+        }
+      });
+
+      ffmpegProcess.on('error', (error) => {
+        reject(new Error(`Failed to start trim process: ${error.message}`));
+      });
+    });
+
+    trimmedInputFile = trimmedFile;
+    // Update video info for the trimmed file
+    videoInfo = await getVideoInfo(trimmedInputFile);
+    console.log(`[${jobId}] Trimmed video: ${videoInfo.width}x${videoInfo.height}, ${videoInfo.duration}s`);
+    console.log(`[${jobId}] ================================`);
+  } else {
+    console.log(`[${jobId}] No trim needed (using full clip duration)`);
+  }
 
   // Calculate crop for 9:16 aspect ratio (with safe defaults)
   const targetWidth = output?.resolution?.width || 1080;   // Default to 1080
   const targetHeight = output?.resolution?.height || 1920; // Default to 1920
   const targetAspect = 9 / 16;
-
-  // Ensure settings has defaults to prevent crashes
-  const safeSettings = settings || {};
 
   // Log incoming settings for debugging
   console.log(`[${jobId}] ========== PROCESSING SETTINGS ==========`);
@@ -2549,7 +2606,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
     try {
       captionFile = await generateCaptions({
         jobId,
-        videoFile: inputFile,
+        videoFile: trimmedInputFile,  // Use trimmed file for caption timing
         workDir,
         captionStyle: safeSettings.captionStyle,
         customStyle: safeSettings.customCaptionStyle,
@@ -2617,10 +2674,23 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
   }
 
   // Build audio filters
+  // Note: fillerTimestamps would come from the filler analysis stored in the project
+  // For full filler removal, the filler data needs to be passed through the job settings
   const audioFilters = buildAudioFilters({
     enhanceAudio: safeSettings.enhanceAudio,
-    removeFiller: safeSettings.removeFiller
+    removeFiller: safeSettings.removeFiller,
+    audioDucking: safeSettings.audioDucking,
+    fillerTimestamps: safeSettings.fillerTimestamps || null  // Array of {start, end} for filler word segments
   });
+
+  // Log audio enhancement settings
+  console.log(`[${jobId}] ========== AUDIO ENHANCEMENTS ==========`);
+  console.log(`[${jobId}] enhanceAudio: ${safeSettings.enhanceAudio || false}`);
+  console.log(`[${jobId}] removeFiller: ${safeSettings.removeFiller || false}`);
+  console.log(`[${jobId}] audioDucking: ${safeSettings.audioDucking || false}`);
+  console.log(`[${jobId}] fillerTimestamps: ${safeSettings.fillerTimestamps ? safeSettings.fillerTimestamps.length + ' segments' : 'none'}`);
+  console.log(`[${jobId}] Audio filters: ${audioFilters}`);
+  console.log(`[${jobId}] =========================================`);
 
   // Get FPS with safe default
   const targetFps = output?.fps || 30;
@@ -2721,7 +2791,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       // when FFmpeg misinterprets timestamps
       const audioEncoding = getAudioEncodingArgs();
       const args = [
-        '-i', inputFile,
+        '-i', trimmedInputFile,  // Use trimmed file (after user's custom trim applied)
         filterFlag, filters,
         '-af', audioFilters,
         '-c:v', 'libx264',
@@ -2813,7 +2883,7 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
       console.log(`[${jobId}] [PASS 1] Applying filters with libx264...`);
 
       const pass1Args = [
-        '-i', inputFile,
+        '-i', trimmedInputFile,  // Use trimmed file (after user's custom trim applied)
         filterFlag, filters,
         '-af', audioFilters,
         '-c:v', 'libx264',
@@ -3356,8 +3426,13 @@ function buildFilterChain({ inputWidth, inputHeight, targetWidth, targetHeight, 
 
 /**
  * Build FFmpeg audio filter chain
+ * @param {Object} options - Audio processing options
+ * @param {boolean} options.enhanceAudio - Apply noise reduction and normalization
+ * @param {boolean} options.removeFiller - Remove filler words (requires filler timestamps from analysis)
+ * @param {boolean} options.audioDucking - Apply smart audio ducking (auto-lower music during speech)
+ * @param {Array} options.fillerTimestamps - Array of {start, end} timestamps for filler words to remove
  */
-function buildAudioFilters({ enhanceAudio, removeFiller }) {
+function buildAudioFilters({ enhanceAudio, removeFiller, audioDucking, fillerTimestamps }) {
   const filters = [];
 
   if (enhanceAudio) {
@@ -3365,12 +3440,54 @@ function buildAudioFilters({ enhanceAudio, removeFiller }) {
     // and can cause timing issues with video encoding.
     // Using simpler filters that don't require full-stream buffering:
 
-    // High-pass filter to remove rumble
+    // High-pass filter to remove rumble/background noise
     filters.push('highpass=f=80');
+    // Low-pass filter to remove high-frequency hiss
+    filters.push('lowpass=f=12000');
     // Slight compression for more consistent levels
     filters.push('acompressor=threshold=-20dB:ratio=4:attack=5:release=50');
     // Simple volume boost instead of loudnorm
     filters.push('volume=1.5');
+  }
+
+  if (audioDucking) {
+    // Smart audio ducking: Use compressor with speech-optimized settings
+    // This creates a "ducking" effect by compressing audio more aggressively
+    // when speech levels are detected, making the overall audio more balanced
+    //
+    // For full sidechain ducking (lowering music track when speech is detected),
+    // a separate music track would need to be mixed in with sidechaincompress.
+    // This implementation uses a speech-aware dynamics processor instead.
+    //
+    // compand: multi-band compressor/expander for speech clarity
+    // - attack/decay times optimized for speech transients
+    // - soft-knee compression to avoid harsh pumping
+    filters.push('compand=attacks=0.05:decays=0.5:points=-80/-80|-45/-35|-27/-25|0/-10:soft-knee=6:gain=3');
+  }
+
+  if (removeFiller && fillerTimestamps && fillerTimestamps.length > 0) {
+    // Remove filler words by silencing their audio segments
+    // This uses the volume filter with enable expressions based on timestamps
+    //
+    // Build expression: volume=0 during filler word times, volume=1 otherwise
+    // Format: volume=enable='between(t,start1,end1)+between(t,start2,end2)...':volume=0
+    //
+    // Note: For cleaner results, actual segment removal (using concat demuxer) would be better
+    // but that requires re-encoding video segments which is much more complex.
+    // Silencing is a simpler approach that maintains video timing.
+    const silenceExpressions = fillerTimestamps
+      .map(f => `between(t,${f.start},${f.end})`)
+      .join('+');
+
+    if (silenceExpressions) {
+      // Apply silence during filler word segments
+      filters.push(`volume=enable='${silenceExpressions}':volume=0`);
+      console.log(`[buildAudioFilters] Silencing ${fillerTimestamps.length} filler word segments`);
+    }
+  } else if (removeFiller) {
+    // removeFiller is enabled but no timestamps provided
+    // This happens when the user enabled the option but didn't run the filler analysis
+    console.log(`[buildAudioFilters] removeFiller enabled but no filler timestamps provided - skipping filler removal`);
   }
 
   // Default passthrough if no filters
