@@ -3025,7 +3025,7 @@
 
         function renderScriptGenerationForm() {
             const niche = VIDEO_NICHES[state.content.niche];
-            const style = VIDEO_STYLES.find(s => s.id === state.content.style);
+            const style = VIDEO_STYLES[state.content.style];
 
             return `
                 <div class="content-card">
@@ -3767,7 +3767,7 @@
             try {
                 const generateVoiceover = firebase.functions().httpsCallable('creationWizardGenerateVoiceover');
                 const result = await generateVoiceover({
-                    projectId: state.projectId,
+                    projectId: state.project.id,
                     sceneId: sceneId,
                     text: scriptScene.narration,
                     voice: animScene.voice || state.animation.voiceover.voice,
@@ -3827,7 +3827,7 @@
             try {
                 const animate = firebase.functions().httpsCallable('creationWizardAnimateScene');
                 const result = await animate({
-                    projectId: state.projectId,
+                    projectId: state.project.id,
                     sceneId: sceneId,
                     imageUrl: storyboardScene.imageUrl,
                     audioUrl: animScene.voiceoverUrl,
@@ -4320,7 +4320,7 @@
             try {
                 const updateAssembly = firebase.functions().httpsCallable('creationWizardUpdateAssembly');
                 await updateAssembly({
-                    projectId: state.projectId,
+                    projectId: state.project.id,
                     assembly: {
                         status: 'ready',
                         sceneOrder: state.assembly.sceneOrder,
@@ -4646,7 +4646,7 @@
             try {
                 const startExport = firebase.functions().httpsCallable('creationWizardStartExport');
                 const result = await startExport({
-                    projectId: state.projectId,
+                    projectId: state.project.id,
                     quality: state.export.selectedQuality || '1080p',
                     format: 'mp4'
                 });
