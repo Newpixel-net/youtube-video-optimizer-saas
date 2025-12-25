@@ -1495,6 +1495,18 @@
                 outputUrl: null,
                 error: null,
                 selectedQuality: '1080p'
+            },
+
+            // Timeline Editor State
+            timeline: {
+                zoom: 50, // pixels per second
+                scrollLeft: 0,
+                selectedClipId: null,
+                selectedTrack: null,
+                snapToGrid: true,
+                showWaveforms: true,
+                waveformCache: {}, // sceneId -> waveform data
+                isInitialized: false
             }
         };
 
@@ -6288,18 +6300,21 @@
             state.preview.loadProgress = 0;
         }
 
-        // Keyboard shortcuts for preview playback
+        // Keyboard shortcuts for preview playback (works on Assembly and Export steps)
         document.addEventListener('keydown', function(e) {
-            // Only handle when on Assembly step and preview is ready
-            if (state.currentStep !== 6 || !state.preview.isReady) return;
+            // Only handle when on Assembly or Export step and preview is ready
+            if ((state.currentStep !== 6 && state.currentStep !== 7) || !state.preview.isReady) return;
 
             // Don't handle if user is typing in an input
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
+            // Use timeline functions on Export step, preview functions on Assembly
+            const isTimeline = state.currentStep === 7;
+
             switch(e.code) {
                 case 'Space':
                     e.preventDefault();
-                    togglePreviewPlayback();
+                    isTimeline ? toggleTimelinePlayback() : togglePreviewPlayback();
                     break;
                 case 'ArrowLeft':
                     e.preventDefault();
@@ -6308,7 +6323,14 @@
                         prevPreviewScene();
                     } else {
                         // Left: Seek back 5 seconds
-                        seekPreview(Math.max(0, state.preview.currentTime - 5));
+                        const newTime = Math.max(0, state.preview.currentTime - 5);
+                        if (isTimeline) {
+                            previewEngine?.seek(newTime);
+                            state.preview.currentTime = newTime;
+                            updateTimelinePlayhead(newTime);
+                        } else {
+                            seekPreview(newTime);
+                        }
                     }
                     break;
                 case 'ArrowRight':
@@ -6318,16 +6340,31 @@
                         nextPreviewScene();
                     } else {
                         // Right: Seek forward 5 seconds
-                        seekPreview(Math.min(state.preview.totalDuration, state.preview.currentTime + 5));
+                        const newTime = Math.min(state.preview.totalDuration, state.preview.currentTime + 5);
+                        if (isTimeline) {
+                            previewEngine?.seek(newTime);
+                            state.preview.currentTime = newTime;
+                            updateTimelinePlayhead(newTime);
+                        } else {
+                            seekPreview(newTime);
+                        }
                     }
                     break;
                 case 'Home':
                     e.preventDefault();
-                    seekPreview(0);
+                    if (isTimeline) {
+                        seekTimelineStart();
+                    } else {
+                        seekPreview(0);
+                    }
                     break;
                 case 'End':
                     e.preventDefault();
-                    seekPreview(state.preview.totalDuration - 0.1);
+                    if (isTimeline) {
+                        seekTimelineEnd();
+                    } else {
+                        seekPreview(state.preview.totalDuration - 0.1);
+                    }
                     break;
                 case 'KeyM':
                     e.preventDefault();
@@ -6375,8 +6412,8 @@
                     <div class="content-card-header">
                         <div class="content-card-icon">🎬</div>
                         <div style="flex: 1;">
-                            <div class="content-card-title">Export Video</div>
-                            <div class="content-card-subtitle">Render your final video and download</div>
+                            <div class="content-card-title">Timeline Editor & Export</div>
+                            <div class="content-card-subtitle">Fine-tune your video and export • ${formatDuration(totalDuration)}</div>
                         </div>
                     </div>
                 </div>
@@ -6390,7 +6427,9 @@
             } else if (isFailed) {
                 html += renderExportFailed(exportState);
             } else {
-                html += renderExportSettings(scriptScenes, animatedCount, totalDuration, platform);
+                // Show Timeline Editor + Export Settings
+                html += renderTimelineEditor(scriptScenes, animationScenes, totalDuration);
+                html += renderExportPanel(scriptScenes, animatedCount, totalDuration, platform);
             }
 
             // Navigation (only back button on export step)
@@ -6406,6 +6445,683 @@
 
             html += '</div>';
             return html;
+        }
+
+        // ==========================================
+        // TIMELINE EDITOR
+        // ==========================================
+
+        function renderTimelineEditor(scriptScenes, animationScenes, totalDuration) {
+            const { zoom, scrollLeft, selectedClipId, snapToGrid } = state.timeline;
+            const timelineWidth = totalDuration * zoom;
+            const { isReady, isPlaying, currentTime } = state.preview;
+
+            return `
+                <div class="content-card" style="padding: 0; margin-top: 1rem; overflow: hidden;">
+                    <!-- Preview + Controls Row -->
+                    <div style="display: grid; grid-template-columns: 1fr 300px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <!-- Main Preview -->
+                        <div style="padding: 1rem; background: #000;">
+                            <div style="position: relative; width: 100%; aspect-ratio: 16/9; background: #111; border-radius: 0.5rem; overflow: hidden;">
+                                <canvas id="timeline-preview-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+
+                                <!-- Play overlay -->
+                                ${!isReady ? `
+                                    <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.7);">
+                                        <button onclick="initializeTimelinePreview()" style="padding: 1rem 2rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 1rem;">
+                                            <span style="font-size: 1.5rem;">▶</span> Load Preview
+                                        </button>
+                                    </div>
+                                ` : (!isPlaying ? `
+                                    <div onclick="toggleTimelinePlayback()" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'">
+                                        <div style="width: 70px; height: 70px; background: rgba(139, 92, 246, 0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
+                                            <span style="font-size: 2rem; margin-left: 5px;">▶</span>
+                                        </div>
+                                    </div>
+                                ` : '')}
+                            </div>
+
+                            <!-- Transport Controls -->
+                            <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; padding: 0 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <button onclick="seekTimelineStart()" ${!isReady ? 'disabled' : ''} style="width: 32px; height: 32px; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${isReady ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${isReady ? 'pointer' : 'not-allowed'}; font-size: 0.8rem;">⏮</button>
+                                    <button onclick="toggleTimelinePlayback()" ${!isReady ? 'disabled' : ''} style="width: 40px; height: 40px; border-radius: 50%; border: none; background: ${isReady ? 'linear-gradient(135deg, #8b5cf6, #06b6d4)' : 'rgba(255,255,255,0.1)'}; color: white; cursor: ${isReady ? 'pointer' : 'not-allowed'}; font-size: 1rem;">${isPlaying ? '❚❚' : '▶'}</button>
+                                    <button onclick="seekTimelineEnd()" ${!isReady ? 'disabled' : ''} style="width: 32px; height: 32px; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${isReady ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${isReady ? 'pointer' : 'not-allowed'}; font-size: 0.8rem;">⏭</button>
+                                </div>
+
+                                <!-- Time Display -->
+                                <div style="font-family: monospace; font-size: 1.1rem; color: white; background: rgba(0,0,0,0.5); padding: 0.4rem 0.75rem; border-radius: 0.25rem;">
+                                    ${formatTimecode(currentTime)} <span style="color: rgba(255,255,255,0.4);">/</span> ${formatTimecode(totalDuration)}
+                                </div>
+
+                                <div style="flex: 1;"></div>
+
+                                <!-- Volume -->
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.9rem;">${state.preview.volume > 0 ? '🔊' : '🔇'}</span>
+                                    <input type="range" min="0" max="100" value="${state.preview.volume || 100}" onchange="setTimelineVolume(this.value)" style="width: 80px; height: 4px; cursor: pointer;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Clip Inspector -->
+                        ${renderClipInspector(selectedClipId, scriptScenes, animationScenes)}
+                    </div>
+
+                    <!-- Timeline Container -->
+                    <div style="background: rgba(0,0,0,0.3);">
+                        <!-- Timeline Header with Zoom Controls -->
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <div style="font-size: 0.85rem; font-weight: 600; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                                <span>🎞️</span> Timeline
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <!-- Snap Toggle -->
+                                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.75rem; color: rgba(255,255,255,0.7);">
+                                    <input type="checkbox" ${snapToGrid ? 'checked' : ''} onchange="toggleTimelineSnap(this.checked)" style="cursor: pointer;">
+                                    Snap
+                                </label>
+
+                                <!-- Zoom Controls -->
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <button onclick="zoomTimeline(-10)" style="width: 24px; height: 24px; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 0.9rem;">−</button>
+                                    <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6); min-width: 50px; text-align: center;">${zoom}px/s</span>
+                                    <button onclick="zoomTimeline(10)" style="width: 24px; height: 24px; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 0.9rem;">+</button>
+                                </div>
+
+                                <!-- Fit Button -->
+                                <button onclick="fitTimelineToView()" style="padding: 0.25rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 0.7rem;">Fit</button>
+                            </div>
+                        </div>
+
+                        <!-- Timeline Tracks -->
+                        <div id="timeline-scroll-container" style="overflow-x: auto; overflow-y: hidden;" onscroll="handleTimelineScroll(this)">
+                            <div style="position: relative; min-width: ${Math.max(timelineWidth + 100, 800)}px;">
+                                <!-- Time Ruler -->
+                                ${renderTimeRuler(totalDuration, zoom)}
+
+                                <!-- Playhead -->
+                                <div id="timeline-playhead" style="position: absolute; top: 30px; left: ${80 + (currentTime * zoom)}px; width: 2px; height: calc(100% - 30px); background: #ef4444; z-index: 100; pointer-events: none;">
+                                    <div style="position: absolute; top: -8px; left: -6px; width: 14px; height: 14px; background: #ef4444; border-radius: 2px; transform: rotate(45deg);"></div>
+                                </div>
+
+                                <!-- Track Labels + Tracks -->
+                                <div style="display: flex;">
+                                    <!-- Track Labels -->
+                                    <div style="width: 80px; flex-shrink: 0; background: rgba(0,0,0,0.3); border-right: 1px solid rgba(255,255,255,0.1);">
+                                        <div style="height: 60px; display: flex; align-items: center; padding-left: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.7); border-bottom: 1px solid rgba(255,255,255,0.05);">🎬 Video</div>
+                                        <div style="height: 40px; display: flex; align-items: center; padding-left: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.7); border-bottom: 1px solid rgba(255,255,255,0.05);">🎙️ Voice</div>
+                                        <div style="height: 30px; display: flex; align-items: center; padding-left: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.7); border-bottom: 1px solid rgba(255,255,255,0.05);">🎵 Music</div>
+                                        <div style="height: 30px; display: flex; align-items: center; padding-left: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.7);">💬 Captions</div>
+                                    </div>
+
+                                    <!-- Tracks Content -->
+                                    <div style="flex: 1; position: relative;">
+                                        ${renderVideoTrack(scriptScenes, animationScenes, zoom, selectedClipId)}
+                                        ${renderVoiceTrack(scriptScenes, animationScenes, zoom)}
+                                        ${renderMusicTrack(totalDuration, zoom)}
+                                        ${renderCaptionTrack(scriptScenes, zoom)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTimeRuler(totalDuration, zoom) {
+            // Calculate tick interval based on zoom level
+            let tickInterval = 1; // seconds
+            if (zoom < 20) tickInterval = 10;
+            else if (zoom < 40) tickInterval = 5;
+            else if (zoom < 80) tickInterval = 2;
+            else tickInterval = 1;
+
+            let rulerHtml = `<div style="height: 30px; margin-left: 80px; background: rgba(0,0,0,0.4); border-bottom: 1px solid rgba(255,255,255,0.2); position: relative; cursor: pointer;" onclick="seekTimelineFromRuler(event)">`;
+
+            for (let t = 0; t <= totalDuration; t += tickInterval) {
+                const x = t * zoom;
+                const isMajor = t % (tickInterval * 5) === 0 || tickInterval >= 5;
+                rulerHtml += `
+                    <div style="position: absolute; left: ${x}px; top: 0; height: ${isMajor ? '100%' : '50%'}; width: 1px; background: rgba(255,255,255,${isMajor ? '0.4' : '0.15'});"></div>
+                    ${isMajor ? `<span style="position: absolute; left: ${x + 4}px; top: 4px; font-size: 0.65rem; color: rgba(255,255,255,0.6);">${formatTimecode(t)}</span>` : ''}
+                `;
+            }
+
+            rulerHtml += `</div>`;
+            return rulerHtml;
+        }
+
+        function renderVideoTrack(scriptScenes, animationScenes, zoom, selectedClipId) {
+            const sceneOrder = state.assembly.sceneOrder.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+
+            let currentTime = 0;
+            let trackHtml = `<div style="height: 60px; position: relative; background: rgba(139, 92, 246, 0.05); border-bottom: 1px solid rgba(255,255,255,0.05);">`;
+
+            sceneOrder.forEach((sceneId, index) => {
+                const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                const animScene = animationScenes.find(s => s.sceneId === sceneId);
+                const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+
+                if (!scriptScene) return;
+
+                const duration = scriptScene.duration || 8;
+                const width = duration * zoom;
+                const x = currentTime * zoom;
+                const isSelected = selectedClipId === sceneId;
+                const hasVideo = animScene?.videoUrl || (storyboardScene?.source === 'stock-video' && storyboardScene?.videoUrl);
+                const imageUrl = storyboardScene?.imageUrl;
+
+                trackHtml += `
+                    <div class="timeline-clip" data-clip-id="${sceneId}" onclick="selectTimelineClip(${sceneId}, 'video')"
+                         style="position: absolute; left: ${x}px; top: 4px; width: ${width - 2}px; height: 52px; background: ${isSelected ? 'rgba(139, 92, 246, 0.4)' : 'rgba(139, 92, 246, 0.2)'}; border: 2px solid ${isSelected ? '#8b5cf6' : 'rgba(139, 92, 246, 0.5)'}; border-radius: 4px; overflow: hidden; cursor: pointer; display: flex; transition: all 0.15s;">
+                        <!-- Thumbnail -->
+                        <div style="width: 50px; height: 100%; flex-shrink: 0; background: rgba(0,0,0,0.3);">
+                            ${imageUrl ? `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` : ''}
+                        </div>
+                        <!-- Info -->
+                        <div style="flex: 1; padding: 0.25rem 0.4rem; min-width: 0;">
+                            <div style="font-size: 0.65rem; color: white; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                Scene ${index + 1}
+                            </div>
+                            <div style="font-size: 0.55rem; color: rgba(255,255,255,0.6); display: flex; gap: 0.3rem; margin-top: 2px;">
+                                <span>${duration}s</span>
+                                ${hasVideo ? '<span style="color: #10b981;">✓</span>' : '<span style="color: #f59e0b;">img</span>'}
+                            </div>
+                        </div>
+                        <!-- Resize Handles -->
+                        ${isSelected ? `
+                            <div class="clip-handle clip-handle-left" style="position: absolute; left: 0; top: 0; width: 6px; height: 100%; background: #8b5cf6; cursor: ew-resize;"></div>
+                            <div class="clip-handle clip-handle-right" style="position: absolute; right: 0; top: 0; width: 6px; height: 100%; background: #8b5cf6; cursor: ew-resize;"></div>
+                        ` : ''}
+                    </div>
+                `;
+
+                currentTime += duration;
+            });
+
+            trackHtml += `</div>`;
+            return trackHtml;
+        }
+
+        function renderVoiceTrack(scriptScenes, animationScenes, zoom) {
+            const sceneOrder = state.assembly.sceneOrder.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+
+            let currentTime = 0;
+            let trackHtml = `<div style="height: 40px; position: relative; background: rgba(6, 182, 212, 0.05); border-bottom: 1px solid rgba(255,255,255,0.05);">`;
+
+            sceneOrder.forEach(sceneId => {
+                const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                const animScene = animationScenes.find(s => s.sceneId === sceneId);
+
+                if (!scriptScene) return;
+
+                const sceneDuration = scriptScene.duration || 8;
+                const hasVoiceover = animScene?.voiceoverUrl;
+                const voiceoverDuration = animScene?.voiceoverDuration || sceneDuration * 0.8;
+                const width = voiceoverDuration * zoom;
+                const x = currentTime * zoom;
+
+                if (hasVoiceover) {
+                    trackHtml += `
+                        <div style="position: absolute; left: ${x}px; top: 6px; width: ${width}px; height: 28px; background: rgba(6, 182, 212, 0.3); border: 1px solid rgba(6, 182, 212, 0.5); border-radius: 3px; overflow: hidden;">
+                            <!-- Waveform placeholder -->
+                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                                <svg width="100%" height="20" viewBox="0 0 100 20" preserveAspectRatio="none" style="opacity: 0.6;">
+                                    ${generateSimpleWaveformPath()}
+                                </svg>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                currentTime += sceneDuration;
+            });
+
+            trackHtml += `</div>`;
+            return trackHtml;
+        }
+
+        function renderMusicTrack(totalDuration, zoom) {
+            const musicEnabled = state.assembly.music?.enabled;
+            const musicTrack = state.assembly.musicLibrary?.find(t => t.id === state.assembly.music?.trackId);
+            const width = totalDuration * zoom;
+
+            let trackHtml = `<div style="height: 30px; position: relative; background: rgba(16, 185, 129, 0.05); border-bottom: 1px solid rgba(255,255,255,0.05);">`;
+
+            if (musicEnabled && musicTrack) {
+                trackHtml += `
+                    <div style="position: absolute; left: 0; top: 4px; width: ${width}px; height: 22px; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 3px; display: flex; align-items: center; padding: 0 0.5rem;">
+                        <span style="font-size: 0.65rem; color: #10b981; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            🎵 ${musicTrack.name || 'Background Music'}
+                        </span>
+                    </div>
+                `;
+            }
+
+            trackHtml += `</div>`;
+            return trackHtml;
+        }
+
+        function renderCaptionTrack(scriptScenes, zoom) {
+            const sceneOrder = state.assembly.sceneOrder.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+            const captionsEnabled = state.assembly.captions?.enabled;
+
+            let currentTime = 0;
+            let trackHtml = `<div style="height: 30px; position: relative; background: rgba(245, 158, 11, 0.05);">`;
+
+            if (captionsEnabled) {
+                sceneOrder.forEach(sceneId => {
+                    const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                    if (!scriptScene) return;
+
+                    const duration = scriptScene.duration || 8;
+                    const width = duration * zoom;
+                    const x = currentTime * zoom;
+                    const caption = scriptScene.narration?.substring(0, 20) || '';
+
+                    trackHtml += `
+                        <div style="position: absolute; left: ${x}px; top: 4px; width: ${width - 4}px; height: 22px; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 3px; display: flex; align-items: center; padding: 0 0.3rem; overflow: hidden;">
+                            <span style="font-size: 0.55rem; color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${caption}${caption.length >= 20 ? '...' : ''}
+                            </span>
+                        </div>
+                    `;
+
+                    currentTime += duration;
+                });
+            }
+
+            trackHtml += `</div>`;
+            return trackHtml;
+        }
+
+        function renderClipInspector(selectedClipId, scriptScenes, animationScenes) {
+            if (!selectedClipId) {
+                return `
+                    <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-left: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>📋</span> Clip Inspector
+                        </div>
+                        <div style="text-align: center; padding: 2rem 1rem; color: rgba(255,255,255,0.4); font-size: 0.8rem;">
+                            Select a clip to view details
+                        </div>
+                    </div>
+                `;
+            }
+
+            const scriptScene = scriptScenes.find(s => s.id === selectedClipId);
+            const animScene = animationScenes.find(s => s.sceneId === selectedClipId);
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === selectedClipId);
+            const transition = state.assembly.transitions[selectedClipId] || { type: 'cut' };
+
+            if (!scriptScene) return '';
+
+            const sceneIndex = scriptScenes.findIndex(s => s.id === selectedClipId) + 1;
+
+            return `
+                <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-left: 1px solid rgba(255,255,255,0.1); overflow-y: auto;">
+                    <div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>📋</span> Scene ${sceneIndex}
+                    </div>
+
+                    <!-- Thumbnail -->
+                    <div style="width: 100%; aspect-ratio: 16/9; background: rgba(0,0,0,0.3); border-radius: 0.4rem; overflow: hidden; margin-bottom: 0.75rem;">
+                        ${storyboardScene?.imageUrl ? `<img src="${storyboardScene.imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-size: 0.8rem;">No image</div>'}
+                    </div>
+
+                    <!-- Properties -->
+                    <div style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.75rem;">
+                        <div>
+                            <label style="color: rgba(255,255,255,0.5); display: block; margin-bottom: 0.2rem;">Duration</label>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="number" value="${scriptScene.duration || 8}" min="1" max="60" step="0.5"
+                                       onchange="updateClipDuration(${selectedClipId}, this.value)"
+                                       style="flex: 1; padding: 0.4rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-size: 0.8rem;">
+                                <span style="color: rgba(255,255,255,0.5);">sec</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="color: rgba(255,255,255,0.5); display: block; margin-bottom: 0.2rem;">Transition</label>
+                            <select onchange="updateClipTransition(${selectedClipId}, this.value)"
+                                    style="width: 100%; padding: 0.4rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-size: 0.8rem;">
+                                ${(state.assembly.transitionTypes || []).map(t => `
+                                    <option value="${t.id}" ${transition.type === t.id ? 'selected' : ''}>${t.name}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="flex: 1;">
+                                <span style="color: rgba(255,255,255,0.5);">Voiceover</span>
+                                <div style="color: ${animScene?.voiceoverUrl ? '#10b981' : 'rgba(255,255,255,0.4)'}; margin-top: 0.2rem;">
+                                    ${animScene?.voiceoverUrl ? '✓ Ready' : '✗ None'}
+                                </div>
+                            </div>
+                            <div style="flex: 1;">
+                                <span style="color: rgba(255,255,255,0.5);">Video</span>
+                                <div style="color: ${animScene?.videoUrl ? '#10b981' : (storyboardScene?.source === 'stock-video' ? '#06b6d4' : '#f59e0b')}; margin-top: 0.2rem;">
+                                    ${animScene?.videoUrl ? '✓ Animated' : (storyboardScene?.source === 'stock-video' ? '✓ Stock' : '⚠️ Image')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function generateSimpleWaveformPath() {
+            // Generate a simple random waveform pattern
+            let path = 'M0,10 ';
+            for (let x = 0; x <= 100; x += 2) {
+                const y = 10 + (Math.random() - 0.5) * 14;
+                path += `L${x},${y} `;
+            }
+            return `<path d="${path}" fill="none" stroke="#06b6d4" stroke-width="1"/>`;
+        }
+
+        function formatTimecode(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            const frames = Math.floor((seconds % 1) * 30);
+            return `${mins}:${secs.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
+        }
+
+        function renderExportPanel(scriptScenes, animatedCount, totalDuration, platform) {
+            const selectedQuality = state.export.selectedQuality || '1080p';
+
+            return `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                    <!-- Left: Video Summary -->
+                    <div class="content-card" style="padding: 1rem;">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>📋</span> Video Summary
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.8rem;">
+                            <div style="padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 0.25rem;">
+                                <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">Platform</div>
+                                <div style="color: white;">${platform.icon || '📺'} ${platform.name || 'YouTube'}</div>
+                            </div>
+                            <div style="padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 0.25rem;">
+                                <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">Duration</div>
+                                <div style="color: white;">${formatDuration(totalDuration)}</div>
+                            </div>
+                            <div style="padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 0.25rem;">
+                                <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">Scenes</div>
+                                <div style="color: white;">${scriptScenes.length} scenes</div>
+                            </div>
+                            <div style="padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 0.25rem;">
+                                <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">Animated</div>
+                                <div style="color: ${animatedCount === scriptScenes.length ? '#10b981' : '#f59e0b'};">${animatedCount}/${scriptScenes.length}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Export Button -->
+                    <div class="content-card" style="padding: 1rem;">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>⚙️</span> Export Settings
+                        </div>
+
+                        <!-- Quality Selection (compact) -->
+                        <div style="display: flex; gap: 0.4rem; margin-bottom: 0.75rem;">
+                            ${Object.entries(EXPORT_QUALITIES).map(([id, q]) => `
+                                <button onclick="setExportQuality('${id}')"
+                                        style="flex: 1; padding: 0.5rem; border-radius: 0.4rem; border: 1px solid ${selectedQuality === id ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.15)'}; background: ${selectedQuality === id ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.03)'}; color: white; cursor: pointer; font-size: 0.75rem;">
+                                    ${q.icon} ${id}
+                                </button>
+                            `).join('')}
+                        </div>
+
+                        <!-- Export Button -->
+                        <button onclick="startExport()"
+                                style="width: 100%; padding: 0.9rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-size: 0.95rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            <span>🚀</span> Export Video
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==========================================
+        // TIMELINE CONTROL FUNCTIONS
+        // ==========================================
+
+        async function initializeTimelinePreview() {
+            const canvas = document.getElementById('timeline-preview-canvas');
+            if (!canvas) {
+                console.error('Timeline preview canvas not found');
+                return;
+            }
+
+            // Reuse the preview engine from Assembly step or create new one
+            state.preview.loadProgress = 1;
+            render();
+
+            // Create the engine if it doesn't exist
+            if (!previewEngine) {
+                previewEngine = new VideoPreviewEngine(canvas, {
+                    width: 1280,
+                    height: 720,
+                    onTimeUpdate: (time) => {
+                        state.preview.currentTime = time;
+                        updateTimelinePlayhead(time);
+                    },
+                    onSceneChange: (sceneIndex) => {
+                        state.preview.currentSceneIndex = sceneIndex;
+                    },
+                    onEnded: () => {
+                        state.preview.isPlaying = false;
+                        state.preview.currentTime = 0;
+                        render();
+                    },
+                    onLoadProgress: (progress) => {
+                        state.preview.loadProgress = progress;
+                        render();
+                    },
+                    onReady: () => {
+                        state.preview.isReady = true;
+                        state.preview.loadProgress = 100;
+                        state.timeline.isInitialized = true;
+                        render();
+                    }
+                });
+
+                const scenes = buildPreviewScenes();
+                state.preview.totalDuration = scenes.reduce((sum, s) => sum + (s.duration || 8), 0);
+
+                try {
+                    await previewEngine.loadScenes(scenes);
+                    previewEngine.captionsEnabled = state.assembly.captions?.enabled;
+                    previewEngine.captionStyle = state.assembly.captions?.style;
+                    previewEngine.captionPosition = state.assembly.captions?.position;
+
+                    if (state.assembly.music?.enabled && state.assembly.music?.trackId) {
+                        const track = state.assembly.musicLibrary?.find(t => t.id === state.assembly.music?.trackId);
+                        if (track?.url) {
+                            await previewEngine.setBackgroundMusic(track.url, state.assembly.music.volume / 100);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to initialize timeline preview:', error);
+                    showToast('Failed to load preview', 'error');
+                    state.preview.loadProgress = 0;
+                    render();
+                }
+            } else {
+                // Engine already exists, just update canvas reference
+                previewEngine.canvas = canvas;
+                previewEngine.ctx = canvas.getContext('2d');
+                previewEngine._renderFrame();
+                state.preview.isReady = true;
+                state.timeline.isInitialized = true;
+                render();
+            }
+        }
+
+        function toggleTimelinePlayback() {
+            if (!previewEngine || !state.preview.isReady) return;
+
+            if (state.preview.isPlaying) {
+                previewEngine.pause();
+                state.preview.isPlaying = false;
+            } else {
+                previewEngine.play();
+                state.preview.isPlaying = true;
+            }
+            render();
+        }
+
+        function seekTimelineStart() {
+            if (!previewEngine || !state.preview.isReady) return;
+            previewEngine.seek(0);
+            state.preview.currentTime = 0;
+            updateTimelinePlayhead(0);
+        }
+
+        function seekTimelineEnd() {
+            if (!previewEngine || !state.preview.isReady) return;
+            const endTime = state.preview.totalDuration - 0.1;
+            previewEngine.seek(endTime);
+            state.preview.currentTime = endTime;
+            updateTimelinePlayhead(endTime);
+        }
+
+        function seekTimelineFromRuler(event) {
+            if (!previewEngine || !state.preview.isReady) return;
+
+            const ruler = event.currentTarget;
+            const rect = ruler.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const time = x / state.timeline.zoom;
+            const clampedTime = Math.max(0, Math.min(time, state.preview.totalDuration));
+
+            previewEngine.seek(clampedTime);
+            state.preview.currentTime = clampedTime;
+            updateTimelinePlayhead(clampedTime);
+        }
+
+        function setTimelineVolume(volume) {
+            state.preview.volume = parseInt(volume);
+            if (previewEngine) {
+                previewEngine.voiceVolume = volume / 100;
+            }
+        }
+
+        function zoomTimeline(delta) {
+            const newZoom = Math.max(10, Math.min(200, state.timeline.zoom + delta));
+            state.timeline.zoom = newZoom;
+            render();
+        }
+
+        function fitTimelineToView() {
+            const container = document.getElementById('timeline-scroll-container');
+            if (!container) return;
+
+            const containerWidth = container.clientWidth - 100; // Account for labels
+            const totalDuration = state.preview.totalDuration || state.script.scenes.reduce((sum, s) => sum + (s.duration || 8), 0);
+
+            if (totalDuration > 0) {
+                state.timeline.zoom = Math.max(10, Math.floor(containerWidth / totalDuration));
+                render();
+            }
+        }
+
+        function toggleTimelineSnap(enabled) {
+            state.timeline.snapToGrid = enabled;
+        }
+
+        function handleTimelineScroll(container) {
+            state.timeline.scrollLeft = container.scrollLeft;
+        }
+
+        function selectTimelineClip(clipId, track) {
+            state.timeline.selectedClipId = clipId;
+            state.timeline.selectedTrack = track;
+
+            // Also seek to the clip's start time
+            if (previewEngine && state.preview.isReady) {
+                const scene = previewEngine.scenes.find(s => s.id === clipId);
+                if (scene) {
+                    previewEngine.seek(scene.startTime);
+                    state.preview.currentTime = scene.startTime;
+                    updateTimelinePlayhead(scene.startTime);
+                }
+            }
+
+            render();
+        }
+
+        function updateClipDuration(clipId, newDuration) {
+            const duration = parseFloat(newDuration);
+            if (isNaN(duration) || duration < 1 || duration > 60) return;
+
+            const scene = state.script.scenes.find(s => s.id === clipId);
+            if (scene) {
+                scene.duration = duration;
+                saveProject();
+
+                // Update preview engine if initialized
+                if (previewEngine && state.preview.isReady) {
+                    const previewScene = previewEngine.scenes.find(s => s.id === clipId);
+                    if (previewScene) {
+                        previewScene.duration = duration;
+                        previewEngine._calculateTiming();
+                    }
+                    state.preview.totalDuration = previewEngine.totalDuration;
+                }
+
+                render();
+            }
+        }
+
+        function updateClipTransition(clipId, transitionType) {
+            state.assembly.transitions[clipId] = { type: transitionType };
+            saveProject();
+
+            // Update preview engine
+            if (previewEngine && state.preview.isReady) {
+                const scene = previewEngine.scenes.find(s => s.id === clipId);
+                if (scene) {
+                    scene.transition = transitionType;
+                }
+            }
+
+            render();
+        }
+
+        function updateTimelinePlayhead(time) {
+            const playhead = document.getElementById('timeline-playhead');
+            if (playhead) {
+                const x = 80 + (time * state.timeline.zoom);
+                playhead.style.left = `${x}px`;
+            }
+
+            // Auto-scroll timeline to keep playhead visible
+            const container = document.getElementById('timeline-scroll-container');
+            if (container && state.preview.isPlaying) {
+                const playheadX = time * state.timeline.zoom;
+                const scrollLeft = container.scrollLeft;
+                const containerWidth = container.clientWidth - 80;
+
+                if (playheadX < scrollLeft || playheadX > scrollLeft + containerWidth - 50) {
+                    container.scrollLeft = Math.max(0, playheadX - 100);
+                }
+            }
+        }
+
+        // Update keyboard shortcuts to work on both steps
+        function updateKeyboardShortcuts() {
+            // Remove old listener and add updated one
         }
 
         function renderExportSettings(scriptScenes, animatedCount, totalDuration, platform) {
