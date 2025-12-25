@@ -224,14 +224,21 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   // Generate dialogue lines
   if (styleConfig.highlightKeywords) {
     // Hormozi style: word-by-word box highlighting with precise positioning
-    // Layer 0: Base text (all words in normal style)
-    // Layer 1: Highlighted word with green box, positioned exactly over the word in Layer 0
+    // Uses three layers:
+    // Layer 0: Base text (all words in white)
+    // Layer 1: Rounded rectangle background (drawn shape)
+    // Layer 2: Highlighted word text (on top of the rectangle)
 
     // Video dimensions (from PlayRes)
     const videoWidth = 1080;
     const videoHeight = 1920;
 
     const fontSize = styleConfig.fontSize || 68;
+
+    // Box padding around the highlighted word
+    const boxPaddingX = 12;
+    const boxPaddingY = 6;
+    const cornerRadius = 8;
 
     // Calculate Y position based on alignment and marginV
     let posY;
@@ -260,25 +267,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       // Layer 0: Show all words in normal style for the full phrase duration
       assContent += `Dialogue: 0,${phraseStart},${phraseEnd},${styleConfig.styleName},,0,0,0,,${allWords}\n`;
 
-      // Layer 1: Show each word with box, positioned exactly over the word in the phrase
+      // Layer 1 & 2: Rounded box + highlighted word for each word
       let currentX = phraseStartX;
       for (let i = 0; i < phrase.words.length; i++) {
         const word = phrase.words[i];
         const wordWidth = calculateTextWidth(word.word, fontSize);
 
-        // Position at center of the word
-        const wordCenterX = Math.round(currentX + wordWidth / 2);
-
         const wordStart = formatASSTime(word.start);
         const wordEnd = formatASSTime(word.end);
 
-        // Use \pos(x,y) with alignment 5 (center) to position the highlighted word exactly
-        // \an5 sets anchor to center, then \pos places it at word center
-        // \be2 adds blur to edges for rounded corner effect (higher = more rounded)
-        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an5\\pos(${wordCenterX},${Math.round(posY)})\\be2}${word.word}\n`;
+        // Calculate box dimensions
+        const boxLeft = Math.round(currentX - boxPaddingX);
+        const boxRight = Math.round(currentX + wordWidth + boxPaddingX);
+        const boxTop = Math.round(posY - fontSize / 2 - boxPaddingY);
+        const boxBottom = Math.round(posY + fontSize / 2 + boxPaddingY);
+        const boxWidth = boxRight - boxLeft;
+        const boxHeight = boxBottom - boxTop;
+
+        // Generate rounded rectangle using ASS drawing mode
+        // m = move, l = line, b = bezier curve for rounded corners
+        const r = Math.min(cornerRadius, boxWidth / 4, boxHeight / 4); // Ensure radius isn't too large
+        const drawingCommands = generateRoundedRectDrawing(boxWidth, boxHeight, r);
+
+        // Layer 1: Draw rounded rectangle (green background with shadow)
+        // Using \p1 for drawing mode, position at box top-left
+        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an7\\pos(${boxLeft},${boxTop})\\p1\\bord0\\shad0\\1c&H0022C55E&\\3c&H00166534&}${drawingCommands}{\\p0}\n`;
+
+        // Layer 2: Draw shadow rectangle slightly offset
+        assContent += `Dialogue: 0,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an7\\pos(${boxLeft + 3},${boxTop + 3})\\p1\\bord0\\shad0\\1c&H00166534&}${drawingCommands}{\\p0}\n`;
+
+        // Layer 3: Highlighted word text on top
+        const wordCenterX = Math.round(currentX + wordWidth / 2);
+        assContent += `Dialogue: 2,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an5\\pos(${wordCenterX},${Math.round(posY)})\\bord0\\shad0}${word.word}\n`;
 
         // Move X position to next word (word width + space)
-        // Space width from ARIAL_BOLD_CHAR_WIDTHS[' '] = 0.36
         const spaceWidth = fontSize * 0.36;
         currentX += wordWidth + spaceWidth;
       }
@@ -472,6 +494,38 @@ function hexToASS(hex) {
   const g = clean.substring(2, 4);
   const b = clean.substring(4, 6);
   return `&H00${b}${g}${r}`.toUpperCase();
+}
+
+/**
+ * Generate ASS drawing commands for a rounded rectangle
+ * Uses bezier curves for smooth rounded corners
+ * @param {number} width - Rectangle width
+ * @param {number} height - Rectangle height
+ * @param {number} radius - Corner radius
+ * @returns {string} ASS drawing commands
+ */
+function generateRoundedRectDrawing(width, height, radius) {
+  const r = radius;
+  const w = width;
+  const h = height;
+
+  // Control point offset for bezier curves (approximates circular arc)
+  // Using 0.55 factor for good circular approximation
+  const c = r * 0.55;
+
+  // Drawing commands: m=move, l=line, b=bezier curve
+  // Start at top-left after the corner radius, go clockwise
+  return [
+    `m ${r} 0`,                                    // Move to start (after top-left corner)
+    `l ${w - r} 0`,                                // Top edge
+    `b ${w - r + c} 0 ${w} ${c} ${w} ${r}`,        // Top-right corner (bezier)
+    `l ${w} ${h - r}`,                             // Right edge
+    `b ${w} ${h - r + c} ${w - c} ${h} ${w - r} ${h}`, // Bottom-right corner
+    `l ${r} ${h}`,                                 // Bottom edge
+    `b ${c} ${h} 0 ${h - c} 0 ${h - r}`,           // Bottom-left corner
+    `l 0 ${r}`,                                    // Left edge
+    `b 0 ${c} ${c} 0 ${r} 0`                       // Top-left corner (back to start)
+  ].join(' ');
 }
 
 /**
