@@ -223,11 +223,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
   // Generate dialogue lines
   if (styleConfig.highlightKeywords) {
-    // Hormozi style: word-by-word box highlighting with precise positioning
-    // Uses three layers:
-    // Layer 0: Base text (all words in white)
-    // Layer 1: Rounded rectangle background (drawn shape)
-    // Layer 2: Highlighted word text (on top of the rectangle)
+    // Hormozi style: word-by-word box highlighting
+    // KEY INSIGHT: Position ALL elements (base text + box) using the SAME calculations
+    // This ensures perfect alignment regardless of libass rendering differences
+    //
+    // Layers:
+    // Layer 0: Shadow rectangle (for depth effect)
+    // Layer 1: Green rounded rectangle background
+    // Layer 2: Base text words (white, positioned with \pos)
+    // Layer 3: Highlighted word text (white, on top of box)
 
     // Video dimensions (from PlayRes)
     const videoWidth = 1080;
@@ -236,20 +240,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     const fontSize = styleConfig.fontSize || 68;
 
     // Box padding around the highlighted word
-    const boxPaddingX = 12;
-    const boxPaddingY = 6;
-    const cornerRadius = 8;
+    const boxPaddingX = 14;
+    const boxPaddingY = 8;
+    const cornerRadius = 10;
 
     // Calculate Y position based on alignment and marginV
     let posY;
     if (styleConfig.alignment >= 7) {
-      // Top alignment
       posY = styleConfig.marginV + fontSize;
     } else if (styleConfig.alignment >= 4) {
-      // Middle alignment
       posY = videoHeight / 2;
     } else {
-      // Bottom alignment
       posY = videoHeight - styleConfig.marginV - fontSize / 2;
     }
 
@@ -258,51 +259,55 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const phraseEnd = formatASSTime(phrase.end);
       const allWords = phrase.words.map(w => w.word).join(' ');
 
-      // Calculate total phrase width using character-specific widths
+      // Calculate total phrase width
       const phraseWidth = calculateTextWidth(allWords, fontSize);
-
-      // Phrase starts from center minus half width (for center alignment)
       const phraseStartX = (videoWidth - phraseWidth) / 2;
 
-      // Layer 0: Show all words in normal style for the full phrase duration
-      assContent += `Dialogue: 0,${phraseStart},${phraseEnd},${styleConfig.styleName},,0,0,0,,${allWords}\n`;
-
-      // Layer 1 & 2: Rounded box + highlighted word for each word
+      // Pre-calculate ALL word positions
+      const wordPositions = [];
       let currentX = phraseStartX;
-      for (let i = 0; i < phrase.words.length; i++) {
-        const word = phrase.words[i];
+      for (const word of phrase.words) {
         const wordWidth = calculateTextWidth(word.word, fontSize);
+        wordPositions.push({
+          word: word.word,
+          start: word.start,
+          end: word.end,
+          x: currentX,
+          width: wordWidth,
+          centerX: Math.round(currentX + wordWidth / 2)
+        });
+        currentX += wordWidth + (fontSize * 0.36); // word width + space
+      }
 
-        const wordStart = formatASSTime(word.start);
-        const wordEnd = formatASSTime(word.end);
+      // Layer 2: Position EACH base word using \pos (same calculation as box)
+      // This ensures base text and box use identical positioning
+      for (const wp of wordPositions) {
+        assContent += `Dialogue: 2,${phraseStart},${phraseEnd},${styleConfig.styleName},,0,0,0,,{\\an5\\pos(${wp.centerX},${Math.round(posY)})}${wp.word}\n`;
+      }
+
+      // Layers 0, 1, 3: Box shadow, box, and highlighted text for each word
+      for (const wp of wordPositions) {
+        const wordStart = formatASSTime(wp.start);
+        const wordEnd = formatASSTime(wp.end);
 
         // Calculate box dimensions
-        const boxLeft = Math.round(currentX - boxPaddingX);
-        const boxRight = Math.round(currentX + wordWidth + boxPaddingX);
+        const boxLeft = Math.round(wp.x - boxPaddingX);
         const boxTop = Math.round(posY - fontSize / 2 - boxPaddingY);
-        const boxBottom = Math.round(posY + fontSize / 2 + boxPaddingY);
-        const boxWidth = boxRight - boxLeft;
-        const boxHeight = boxBottom - boxTop;
+        const boxWidth = Math.round(wp.width + boxPaddingX * 2);
+        const boxHeight = Math.round(fontSize + boxPaddingY * 2);
 
-        // Generate rounded rectangle using ASS drawing mode
-        // m = move, l = line, b = bezier curve for rounded corners
-        const r = Math.min(cornerRadius, boxWidth / 4, boxHeight / 4); // Ensure radius isn't too large
+        // Generate rounded rectangle
+        const r = Math.min(cornerRadius, boxWidth / 4, boxHeight / 4);
         const drawingCommands = generateRoundedRectDrawing(boxWidth, boxHeight, r);
 
-        // Layer 1: Draw rounded rectangle (green background with shadow)
-        // Using \p1 for drawing mode, position at box top-left
-        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an7\\pos(${boxLeft},${boxTop})\\p1\\bord0\\shad0\\1c&H0022C55E&\\3c&H00166534&}${drawingCommands}{\\p0}\n`;
+        // Layer 0: Shadow rectangle (dark green, offset for depth)
+        assContent += `Dialogue: 0,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an7\\pos(${boxLeft + 4},${boxTop + 4})\\p1\\bord0\\shad0\\1c&H00166534&}${drawingCommands}{\\p0}\n`;
 
-        // Layer 2: Draw shadow rectangle slightly offset
-        assContent += `Dialogue: 0,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an7\\pos(${boxLeft + 3},${boxTop + 3})\\p1\\bord0\\shad0\\1c&H00166534&}${drawingCommands}{\\p0}\n`;
+        // Layer 1: Green rounded rectangle
+        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an7\\pos(${boxLeft},${boxTop})\\p1\\bord0\\shad0\\1c&H0022C55E&}${drawingCommands}{\\p0}\n`;
 
-        // Layer 3: Highlighted word text on top
-        const wordCenterX = Math.round(currentX + wordWidth / 2);
-        assContent += `Dialogue: 2,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an5\\pos(${wordCenterX},${Math.round(posY)})\\bord0\\shad0}${word.word}\n`;
-
-        // Move X position to next word (word width + space)
-        const spaceWidth = fontSize * 0.36;
-        currentX += wordWidth + spaceWidth;
+        // Layer 3: Highlighted word text (on top of box)
+        assContent += `Dialogue: 3,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an5\\pos(${wp.centerX},${Math.round(posY)})\\bord0\\shad0\\1c&H00FFFFFF&}${wp.word}\n`;
       }
     }
   } else {
