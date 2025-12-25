@@ -20,6 +20,15 @@ function getOpenAIClient() {
   return openai;
 }
 
+// Map frontend style IDs to backend style IDs
+// Frontend uses different IDs than backend for some styles
+const STYLE_ALIASES = {
+  beasty: 'bold',       // Frontend 'beasty' (MrBeast) -> backend 'bold'
+  deepdiver: 'minimal', // Frontend 'deepdiver' (Minimal) -> backend 'minimal'
+  podp: 'podcast',      // Frontend 'podp' (Podcast) -> backend 'podcast'
+  glow: 'ali'           // In case 'glow' is ever sent, map to 'ali'
+};
+
 /**
  * Main function to generate captions for a video
  * @param {Object} params
@@ -28,14 +37,24 @@ function getOpenAIClient() {
  * @param {string} params.workDir - Working directory
  * @param {string} params.captionStyle - Caption style (karaoke, bold, hormozi, etc.)
  * @param {Object} params.customStyle - Custom style options
+ * @param {string} params.captionPosition - Position: 'bottom', 'middle', 'top' (default: 'bottom')
+ * @param {number} params.captionSize - Size multiplier: 0.5 to 2.0 (default: 1.0)
  * @returns {Promise<string|null>} Path to ASS subtitle file, or null if captions disabled
  */
-export async function generateCaptions({ jobId, videoFile, workDir, captionStyle, customStyle }) {
+export async function generateCaptions({ jobId, videoFile, workDir, captionStyle, customStyle, captionPosition, captionSize }) {
   console.log(`[${jobId}] ========== CAPTION GENERATION ==========`);
   console.log(`[${jobId}] Caption style requested: "${captionStyle}"`);
+  console.log(`[${jobId}] Caption position: "${captionPosition || 'bottom'}"`);
+  console.log(`[${jobId}] Caption size multiplier: ${captionSize || 1.0}`);
   console.log(`[${jobId}] Video file: ${videoFile}`);
   console.log(`[${jobId}] Work directory: ${workDir}`);
   console.log(`[${jobId}] Custom style: ${customStyle ? JSON.stringify(customStyle) : 'none'}`);
+
+  // Normalize style ID using aliases
+  const normalizedStyle = STYLE_ALIASES[captionStyle] || captionStyle;
+  if (normalizedStyle !== captionStyle) {
+    console.log(`[${jobId}] Style ID mapped: "${captionStyle}" -> "${normalizedStyle}"`);
+  }
 
   // Skip if no captions requested
   if (!captionStyle || captionStyle === 'none') {
@@ -44,7 +63,7 @@ export async function generateCaptions({ jobId, videoFile, workDir, captionStyle
     return null;
   }
 
-  console.log(`[${jobId}] Generating captions with style: ${captionStyle}`);
+  console.log(`[${jobId}] Generating captions with normalized style: ${normalizedStyle}`);
 
   try {
     // Step 1: Extract audio from video
@@ -61,7 +80,7 @@ export async function generateCaptions({ jobId, videoFile, workDir, captionStyle
 
     // Step 3: Generate ASS subtitle file with selected style
     const assFile = path.join(workDir, 'captions.ass');
-    await generateASSFile(jobId, transcription.words, captionStyle, customStyle, assFile);
+    await generateASSFile(jobId, transcription.words, normalizedStyle, customStyle, assFile, captionPosition, captionSize);
 
     // Verify the ASS file was created
     if (fs.existsSync(assFile)) {
@@ -162,12 +181,21 @@ async function transcribeWithWhisper(jobId, audioFile) {
 
 /**
  * Generate ASS subtitle file with styled captions
+ * @param {string} jobId - Job ID for logging
+ * @param {Array} words - Array of word objects with timestamps
+ * @param {string} captionStyle - Normalized caption style
+ * @param {Object} customStyle - Custom style options
+ * @param {string} outputFile - Output ASS file path
+ * @param {string} captionPosition - Position: 'bottom', 'middle', 'top'
+ * @param {number} captionSize - Size multiplier: 0.5 to 2.0
  */
-async function generateASSFile(jobId, words, captionStyle, customStyle, outputFile) {
+async function generateASSFile(jobId, words, captionStyle, customStyle, outputFile, captionPosition, captionSize) {
   console.log(`[${jobId}] Generating ASS file with style: ${captionStyle}`);
+  console.log(`[${jobId}] Position: ${captionPosition || 'bottom'}, Size: ${captionSize || 1.0}`);
 
-  // Get style configuration
-  const styleConfig = getStyleConfig(captionStyle, customStyle);
+  // Get style configuration with position and size adjustments
+  const styleConfig = getStyleConfig(captionStyle, customStyle, captionPosition, captionSize);
+  console.log(`[${jobId}] Style config: ${styleConfig.styleName}, alignment: ${styleConfig.alignment}, marginV: ${styleConfig.marginV}`);
 
   // ASS file header
   let assContent = `[Script Info]
@@ -211,96 +239,150 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 /**
  * Get style configuration for caption style
+ * @param {string} captionStyle - Already normalized caption style
+ * @param {Object} customStyle - Custom style options
+ * @param {string} captionPosition - Position: 'bottom', 'middle', 'top'
+ * @param {number} captionSize - Size multiplier: 0.5 to 2.0
  */
-function getStyleConfig(captionStyle, customStyle) {
-  // Map frontend style IDs to backend style IDs
-  // Frontend uses different IDs than backend for some styles
-  const styleAliases = {
-    beasty: 'bold',       // Frontend 'beasty' (MrBeast) -> backend 'bold'
-    deepdiver: 'minimal', // Frontend 'deepdiver' (Minimal) -> backend 'minimal'
-    podp: 'podcast'       // Frontend 'podp' (Podcast) -> backend 'podcast'
+function getStyleConfig(captionStyle, customStyle, captionPosition, captionSize) {
+  // Calculate position-based values for ASS
+  // ASS Alignment: 1-3 = bottom, 4-6 = middle, 7-9 = top (center is 2, 5, 8)
+  // MarginV: distance from edge (higher = further from edge for bottom/top)
+  const position = captionPosition || customStyle?.position || 'bottom';
+  const size = captionSize || customStyle?.fontSize || 1.0;
+
+  let alignment, marginV;
+  switch (position) {
+    case 'top':
+      alignment = 8;    // Top center
+      marginV = 80;     // Distance from top
+      break;
+    case 'middle':
+      alignment = 5;    // Middle center
+      marginV = 0;      // Centered vertically
+      break;
+    case 'bottom':
+    default:
+      alignment = 2;    // Bottom center
+      marginV = 120;    // Distance from bottom
+      break;
+  }
+
+  // Base font sizes for each style (will be multiplied by size)
+  const baseSizes = {
+    karaoke: 72,
+    bold: 80,
+    hormozi: 68,
+    ali: 64,
+    podcast: 60,
+    minimal: 48,
+    custom: 64
   };
 
-  // Normalize the style ID using alias mapping
-  const normalizedStyle = styleAliases[captionStyle] || captionStyle;
+  const baseSize = baseSizes[captionStyle] || 64;
+  const fontSize = Math.round(baseSize * size);
 
   const styles = {
     // Karaoke style - word-by-word highlight
     karaoke: {
       styleName: 'Karaoke',
-      styleLine: 'Style: Karaoke,Arial,72,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,2,50,50,120,1',
+      styleLine: `Style: Karaoke,Arial,${fontSize},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,${alignment},50,50,${marginV},1`,
       wordsPerLine: 4,
       useKaraoke: true,
-      highlightColor: '&H00FFFF00' // Yellow
+      highlightColor: '&H00FFFF00', // Yellow
+      alignment,
+      marginV
     },
 
     // MrBeast/Bold style - big bold text with background
     bold: {
       styleName: 'Bold',
-      styleLine: 'Style: Bold,Impact,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,6,3,2,50,50,120,1',
+      styleLine: `Style: Bold,Impact,${fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,6,3,${alignment},50,50,${marginV},1`,
       wordsPerLine: 3,
       useKaraoke: false,
-      uppercase: true
+      uppercase: true,
+      alignment,
+      marginV
     },
 
     // Hormozi style - clean with keyword highlights
     hormozi: {
       styleName: 'Hormozi',
-      styleLine: 'Style: Hormozi,Arial,68,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,2,50,50,120,1',
+      styleLine: `Style: Hormozi,Arial,${fontSize},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,${alignment},50,50,${marginV},1`,
       wordsPerLine: 4,
       useKaraoke: false,
       highlightKeywords: true,
-      highlightColor: '&H0000FFFF' // Yellow
+      highlightColor: '&H0000FFFF', // Yellow
+      alignment,
+      marginV
     },
 
     // Ali Abdaal style - soft glow
     ali: {
       styleName: 'Ali',
-      styleLine: 'Style: Ali,Arial,64,&H00FFFFFF,&H00FFFFFF,&H00FFCCAA,&H40000000,0,0,0,0,100,100,0,0,1,5,4,2,50,50,120,1',
+      styleLine: `Style: Ali,Arial,${fontSize},&H00FFFFFF,&H00FFFFFF,&H00FFCCAA,&H40000000,0,0,0,0,100,100,0,0,1,5,4,${alignment},50,50,${marginV},1`,
       wordsPerLine: 5,
-      useKaraoke: false
+      useKaraoke: false,
+      alignment,
+      marginV
     },
 
     // Podcast style - simple clean
     podcast: {
       styleName: 'Podcast',
-      styleLine: 'Style: Podcast,Arial,60,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,2,2,50,50,120,1',
+      styleLine: `Style: Podcast,Arial,${fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,2,${alignment},50,50,${marginV},1`,
       wordsPerLine: 5,
-      useKaraoke: false
+      useKaraoke: false,
+      alignment,
+      marginV
     },
 
     // Minimal style - small and subtle
     minimal: {
       styleName: 'Minimal',
-      styleLine: 'Style: Minimal,Arial,48,&H00FFFFFF,&H00FFFFFF,&H00000000,&H60000000,0,0,0,0,100,100,0,0,1,2,1,2,50,50,100,1',
+      styleLine: `Style: Minimal,Arial,${fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H60000000,0,0,0,0,100,100,0,0,1,2,1,${alignment},50,50,${marginV},1`,
       wordsPerLine: 6,
-      useKaraoke: false
+      useKaraoke: false,
+      alignment,
+      marginV
     },
 
     // Custom style
     custom: {
       styleName: 'Custom',
-      styleLine: buildCustomStyleLine(customStyle),
+      styleLine: buildCustomStyleLine(customStyle, fontSize, alignment, marginV),
       wordsPerLine: 4,
-      useKaraoke: customStyle?.karaoke || false
+      useKaraoke: customStyle?.karaoke || false,
+      alignment,
+      marginV
     }
   };
 
-  // Use normalized style, default to karaoke if not found
-  return styles[normalizedStyle] || styles.karaoke;
+  // Default to karaoke if style not found
+  const selectedStyle = styles[captionStyle] || styles.karaoke;
+
+  // Log which style was selected for debugging
+  console.log(`[getStyleConfig] Selected style: ${captionStyle} -> ${selectedStyle.styleName}`);
+
+  return selectedStyle;
 }
 
 /**
  * Build custom style line from user options
+ * @param {Object} customStyle - Custom style options
+ * @param {number} fontSize - Calculated font size
+ * @param {number} alignment - ASS alignment value
+ * @param {number} marginV - Vertical margin
  */
-function buildCustomStyleLine(customStyle) {
+function buildCustomStyleLine(customStyle, fontSize, alignment, marginV) {
   const fontName = customStyle?.fontFamily || 'Arial';
-  const fontSize = Math.round((customStyle?.fontSize || 1) * 64);
   const color = hexToASS(customStyle?.color || '#ffffff');
   const bgColor = customStyle?.background ? '&H80000000' : '&H00000000';
   const bold = customStyle?.bold ? 1 : 0;
+  const outline = customStyle?.outline ? 3 : 0;
+  const shadow = customStyle?.shadow ? 2 : 0;
 
-  return `Style: Custom,${fontName},${fontSize},${color},${color},&H00000000,${bgColor},${bold},0,0,0,100,100,0,0,1,3,2,2,50,50,120,1`;
+  return `Style: Custom,${fontName},${fontSize},${color},${color},&H00000000,${bgColor},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},50,50,${marginV},1`;
 }
 
 /**

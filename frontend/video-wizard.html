@@ -2697,6 +2697,15 @@
             transform: translateY(-50%);
         }
 
+        /* Caption size variants */
+        .phone-caption-preview.caption-size-small .caption-text {
+            font-size: 0.85em;
+        }
+
+        .phone-caption-preview.caption-size-large .caption-text {
+            font-size: 1.2em;
+        }
+
         /* Caption style preview hint */
         .caption-style-hint {
             position: absolute;
@@ -9567,12 +9576,13 @@
 
             // Caption preview with actual transcript or styled fallback
             if (settings.captionStyle !== 'none') {
-                // Add position class for custom captions
-                var captionPosition = '';
-                if (settings.captionStyle === 'custom' && settings.customCaptionStyle?.position) {
-                    captionPosition = ' position-' + settings.customCaptionStyle.position;
+                // Add position class for captions (works with all styles)
+                var captionPosition = settings.captionPosition || 'bottom';
+                var captionSizeClass = '';
+                if (settings.captionSize && settings.captionSize !== 1) {
+                    captionSizeClass = ' caption-size-' + (settings.captionSize > 1 ? 'large' : 'small');
                 }
-                html += '<div class="phone-caption-preview caption-' + settings.captionStyle + captionPosition + '">';
+                html += '<div class="phone-caption-preview caption-' + settings.captionStyle + ' position-' + captionPosition + captionSizeClass + '">';
                 html += '<p class="caption-text caption-animated">';
 
                 // Get actual transcript words for preview (first 5-6 words)
@@ -9729,6 +9739,37 @@
             });
             html += '</div>';
 
+            // Caption position and size controls (shown for all styles except 'none')
+            if (settings.captionStyle && settings.captionStyle !== 'none') {
+                html += '<div class="caption-controls-panel" style="margin-top:0.75rem;padding:0.75rem;background:rgba(255,255,255,0.05);border-radius:8px;">';
+                html += '<div class="custom-caption-row" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">';
+
+                // Position control
+                html += '<div style="display:flex;align-items:center;gap:0.5rem;">';
+                html += '<span class="custom-caption-label" style="color:rgba(255,255,255,0.7);font-size:0.85rem;">Position</span>';
+                html += '<select class="custom-caption-input" style="padding:0.4rem 0.6rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:white;font-size:0.85rem;" onchange="app.setCaptionPosition(this.value)">';
+                [['bottom', '⬇ Bottom'], ['middle', '⬌ Middle'], ['top', '⬆ Top']].forEach(function(pos) {
+                    var selected = (settings.captionPosition || 'bottom') === pos[0] ? ' selected' : '';
+                    html += '<option value="' + pos[0] + '"' + selected + '>' + pos[1] + '</option>';
+                });
+                html += '</select>';
+                html += '</div>';
+
+                // Size control
+                html += '<div style="display:flex;align-items:center;gap:0.5rem;">';
+                html += '<span class="custom-caption-label" style="color:rgba(255,255,255,0.7);font-size:0.85rem;">Size</span>';
+                html += '<select class="custom-caption-input" style="padding:0.4rem 0.6rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:white;font-size:0.85rem;" onchange="app.setCaptionSize(this.value)">';
+                [['0.7', '70%'], ['0.85', '85%'], ['1', '100%'], ['1.15', '115%'], ['1.3', '130%'], ['1.5', '150%']].forEach(function(size) {
+                    var selected = String(settings.captionSize || '1') === size[0] ? ' selected' : '';
+                    html += '<option value="' + size[0] + '"' + selected + '>' + size[1] + '</option>';
+                });
+                html += '</select>';
+                html += '</div>';
+
+                html += '</div>';
+                html += '</div>';
+            }
+
             // Custom caption configuration panel (shown when custom style is selected)
             if (settings.captionStyle === 'custom') {
                 var customStyle = settings.customCaptionStyle || {};
@@ -9738,22 +9779,6 @@
                 html += '<input type="color" class="custom-color-picker" value="' + (customStyle.color || '#ffffff') + '" onchange="app.setCustomCaptionStyle(\'color\', this.value)">';
                 html += '<span class="custom-caption-label">Highlight</span>';
                 html += '<input type="color" class="custom-color-picker" value="' + (customStyle.highlightColor || '#fbbf24') + '" onchange="app.setCustomCaptionStyle(\'highlightColor\', this.value)">';
-                html += '</div>';
-                html += '<div class="custom-caption-row">';
-                html += '<span class="custom-caption-label">Size</span>';
-                html += '<select class="custom-caption-input" style="flex:0.5" onchange="app.setCustomCaptionStyle(\'fontSize\', this.value)">';
-                ['0.8', '0.9', '1', '1.1', '1.2', '1.3'].forEach(function(size) {
-                    var selected = String(customStyle.fontSize || '1') === size ? ' selected' : '';
-                    html += '<option value="' + size + '"' + selected + '>' + (parseFloat(size) * 100) + '%</option>';
-                });
-                html += '</select>';
-                html += '<span class="custom-caption-label">Position</span>';
-                html += '<select class="custom-caption-input" style="flex:0.5" onchange="app.setCustomCaptionStyle(\'position\', this.value)">';
-                [['bottom', 'Bottom'], ['middle', 'Middle'], ['top', 'Top']].forEach(function(pos) {
-                    var selected = (customStyle.position || 'bottom') === pos[0] ? ' selected' : '';
-                    html += '<option value="' + pos[0] + '"' + selected + '>' + pos[1] + '</option>';
-                });
-                html += '</select>';
                 html += '</div>';
                 html += '<div class="custom-caption-row">';
                 html += '<span class="custom-caption-label">Font</span>';
@@ -10976,7 +11001,9 @@
             return {
                 // Caption settings
                 captionStyle: 'karaoke',
-                captionSource: 'primary',  // Which video's audio to use for captions: 'primary' or 'secondary'
+                captionPosition: 'bottom',  // Caption position: 'bottom', 'middle', 'top'
+                captionSize: 1,             // Caption size multiplier: 0.7-1.5
+                captionSource: 'primary',   // Which video's audio to use for captions: 'primary' or 'secondary'
 
                 // Reframe settings
                 reframeMode: 'auto_center',
@@ -12547,6 +12574,30 @@
                     state.clipSettings[activeClip.id] = getDefaultSettings();
                 }
                 state.clipSettings[activeClip.id].captionStyle = style;
+                render();
+            },
+
+            setCaptionPosition: function(position) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].captionPosition = position;
+                render();
+            },
+
+            setCaptionSize: function(size) {
+                var selectedClips = state.clips.filter(function(c) {
+                    return state.selectedClipIds.indexOf(c.id) !== -1;
+                });
+                var activeClip = selectedClips[state.customization.activeClipIndex];
+                if (!state.clipSettings[activeClip.id]) {
+                    state.clipSettings[activeClip.id] = getDefaultSettings();
+                }
+                state.clipSettings[activeClip.id].captionSize = parseFloat(size);
                 render();
             },
 
