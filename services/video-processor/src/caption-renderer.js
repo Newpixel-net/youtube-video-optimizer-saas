@@ -231,10 +231,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     const videoWidth = 1080;
     const videoHeight = 1920;
 
-    // Font metrics estimation for Arial (proportional font)
-    // Average character width is roughly 55% of font size for Arial
-    const charWidthRatio = 0.55;
-    const spaceWidthRatio = 0.3;
     const fontSize = styleConfig.fontSize || 68;
 
     // Calculate Y position based on alignment and marginV
@@ -255,9 +251,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const phraseEnd = formatASSTime(phrase.end);
       const allWords = phrase.words.map(w => w.word).join(' ');
 
-      // Calculate total phrase width
-      const phraseText = allWords;
-      const phraseWidth = calculateTextWidth(phraseText, fontSize, charWidthRatio, spaceWidthRatio);
+      // Calculate total phrase width using character-specific widths
+      const phraseWidth = calculateTextWidth(allWords, fontSize);
 
       // Phrase starts from center minus half width (for center alignment)
       const phraseStartX = (videoWidth - phraseWidth) / 2;
@@ -269,7 +264,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       let currentX = phraseStartX;
       for (let i = 0; i < phrase.words.length; i++) {
         const word = phrase.words[i];
-        const wordWidth = calculateTextWidth(word.word, fontSize, charWidthRatio, spaceWidthRatio);
+        const wordWidth = calculateTextWidth(word.word, fontSize);
 
         // Position at center of the word
         const wordCenterX = Math.round(currentX + wordWidth / 2);
@@ -279,10 +274,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
         // Use \pos(x,y) with alignment 5 (center) to position the highlighted word exactly
         // \an5 sets anchor to center, then \pos places it at word center
-        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an5\\pos(${wordCenterX},${Math.round(posY)})}${word.word}\n`;
+        // \be1 adds slight blur to edges for rounded corner effect
+        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an5\\pos(${wordCenterX},${Math.round(posY)})\\be1}${word.word}\n`;
 
         // Move X position to next word (word width + space)
-        const spaceWidth = fontSize * spaceWidthRatio;
+        // Space width from ARIAL_BOLD_CHAR_WIDTHS[' '] = 0.28
+        const spaceWidth = fontSize * 0.28;
         currentX += wordWidth + spaceWidth;
       }
     }
@@ -478,22 +475,68 @@ function hexToASS(hex) {
 }
 
 /**
- * Calculate estimated text width for positioning
- * Uses character-based estimation for Arial font
+ * Arial Bold character width ratios (relative to fontSize)
+ * Based on actual Arial Bold font metrics
+ * Values are approximate width as fraction of em-square
+ */
+const ARIAL_BOLD_CHAR_WIDTHS = {
+  // Very narrow characters
+  'i': 0.28, 'l': 0.28, 'I': 0.28, '1': 0.56, '!': 0.33, '|': 0.28,
+  "'": 0.24, '.': 0.28, ',': 0.28, ':': 0.33, ';': 0.33,
+
+  // Narrow characters
+  'j': 0.28, 'f': 0.33, 't': 0.39, 'r': 0.39, 'J': 0.56,
+
+  // Medium-narrow characters
+  'a': 0.56, 'c': 0.56, 'e': 0.56, 's': 0.56, 'z': 0.50,
+
+  // Medium characters (most lowercase)
+  'b': 0.61, 'd': 0.61, 'g': 0.61, 'h': 0.61, 'k': 0.56,
+  'n': 0.61, 'o': 0.61, 'p': 0.61, 'q': 0.61, 'u': 0.61,
+  'v': 0.56, 'x': 0.56, 'y': 0.56,
+
+  // Wide characters
+  'm': 0.89, 'w': 0.78,
+
+  // Capital letters - narrow
+  'E': 0.67, 'F': 0.61, 'L': 0.56, 'P': 0.67, 'S': 0.67,
+
+  // Capital letters - medium
+  'A': 0.72, 'B': 0.72, 'C': 0.72, 'D': 0.78, 'G': 0.78,
+  'H': 0.78, 'K': 0.72, 'N': 0.78, 'O': 0.78, 'Q': 0.78,
+  'R': 0.72, 'T': 0.61, 'U': 0.78, 'V': 0.72, 'X': 0.72,
+  'Y': 0.67, 'Z': 0.61,
+
+  // Capital letters - wide
+  'M': 0.89, 'W': 1.00,
+
+  // Numbers
+  '0': 0.56, '2': 0.56, '3': 0.56, '4': 0.56, '5': 0.56,
+  '6': 0.56, '7': 0.56, '8': 0.56, '9': 0.56,
+
+  // Space
+  ' ': 0.28,
+
+  // Common punctuation
+  '-': 0.33, '–': 0.56, '—': 1.00, '"': 0.50, '"': 0.50,
+  "'": 0.28, "'": 0.28, '?': 0.61, '/': 0.28, '(': 0.39,
+  ')': 0.39, '[': 0.33, ']': 0.33
+};
+
+// Default width for unknown characters
+const DEFAULT_CHAR_WIDTH = 0.58;
+
+/**
+ * Calculate text width using character-specific widths for Arial Bold
  * @param {string} text - The text to measure
  * @param {number} fontSize - Font size in pixels
- * @param {number} charWidthRatio - Average character width as ratio of fontSize
- * @param {number} spaceWidthRatio - Space width as ratio of fontSize
  * @returns {number} Estimated width in pixels
  */
-function calculateTextWidth(text, fontSize, charWidthRatio, spaceWidthRatio) {
+function calculateTextWidth(text, fontSize) {
   let width = 0;
   for (const char of text) {
-    if (char === ' ') {
-      width += fontSize * spaceWidthRatio;
-    } else {
-      width += fontSize * charWidthRatio;
-    }
+    const charWidth = ARIAL_BOLD_CHAR_WIDTHS[char] || DEFAULT_CHAR_WIDTH;
+    width += fontSize * charWidth;
   }
   return width;
 }
