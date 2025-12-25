@@ -246,8 +246,8 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     const endY = kb.endY !== undefined ? kb.endY : 0.5;
 
     // Build zoompan filter for Ken Burns effect
-    // Scale image large enough for zoom/pan, then use zoompan filter
-    const scaleSize = Math.max(width, height) * 4; // 4x for smooth zoom
+    // Scale image 2x output resolution for smooth zoom (reduced from 4x to save memory)
+    const scaleSize = Math.max(width, height) * 2;
 
     // Zoom expression: interpolate from startScale to endScale
     const zoomExpr = `${startScale}+(${endScale}-${startScale})*on/${frames}`;
@@ -271,17 +271,20 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     throw new Error('No valid scenes with images to process');
   }
 
-  // Add fade transitions between scenes
+  // Add fade transitions between scenes with cumulative offset calculation
   let currentStream = 'v0';
+  let cumulativeOffset = 0;
+
   for (let i = 1; i < validScenes.length; i++) {
     const fadeDuration = 0.5; // 0.5 second crossfade
-    const fadeFrames = Math.round(fadeDuration * fps);
     const prevDuration = validScenes[i - 1].duration;
-    const fadeStart = prevDuration - fadeDuration;
+
+    // Offset is cumulative duration minus overlap from previous fades
+    cumulativeOffset += prevDuration - fadeDuration;
 
     // Crossfade between current stream and next scene
     filterParts.push(
-      `[${currentStream}][v${i}]xfade=transition=fade:duration=${fadeDuration}:offset=${fadeStart}[xf${i}]`
+      `[${currentStream}][v${i}]xfade=transition=fade:duration=${fadeDuration}:offset=${cumulativeOffset.toFixed(2)}[xf${i}]`
     );
     currentStream = `xf${i}`;
   }
@@ -304,8 +307,15 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
 
   console.log(`[${jobId}] Running FFmpeg for Ken Burns video...`);
   console.log(`[${jobId}] Filter complexity: ${validScenes.length} scenes`);
+  console.log(`[${jobId}] FFmpeg command: ffmpeg ${ffmpegArgs.slice(0, 20).join(' ')}...`);
 
-  await runFFmpeg({ jobId, args: ffmpegArgs, jobRef, progressStart: 25, progressEnd: 65 });
+  try {
+    await runFFmpeg({ jobId, args: ffmpegArgs, jobRef, progressStart: 25, progressEnd: 65 });
+    console.log(`[${jobId}] FFmpeg Ken Burns completed successfully`);
+  } catch (ffmpegError) {
+    console.error(`[${jobId}] FFmpeg Ken Burns FAILED: ${ffmpegError.message}`);
+    throw ffmpegError;
+  }
 
   // Verify output
   if (!fs.existsSync(outputFile)) {
@@ -506,9 +516,27 @@ function runFFmpeg({ jobId, args, jobRef, progressStart = 0, progressEnd = 100 }
     const ffmpeg = spawn('ffmpeg', args);
     let stderr = '';
     let duration = 0;
+    let lastLogTime = Date.now();
 
     ffmpeg.stderr.on('data', (data) => {
-      stderr += data.toString();
+      const chunk = data.toString();
+      stderr += chunk;
+
+      // Log FFmpeg output periodically (every 5 seconds)
+      const now = Date.now();
+      if (now - lastLogTime > 5000) {
+        // Check for errors in recent output
+        if (chunk.toLowerCase().includes('error') || chunk.toLowerCase().includes('invalid')) {
+          console.error(`[${jobId}] FFmpeg error detected: ${chunk.slice(0, 500)}`);
+        } else {
+          // Log progress indication
+          const frameMatch = chunk.match(/frame=\s*(\d+)/);
+          if (frameMatch) {
+            console.log(`[${jobId}] FFmpeg progress: frame ${frameMatch[1]}`);
+          }
+        }
+        lastLogTime = now;
+      }
 
       // Parse progress from FFmpeg output
       const durationMatch = stderr.match(/Duration: (\d{2}):(\d{2}):(\d{2})/);
@@ -518,7 +546,7 @@ function runFFmpeg({ jobId, args, jobRef, progressStart = 0, progressEnd = 100 }
                    parseInt(durationMatch[3]);
       }
 
-      const timeMatch = data.toString().match(/time=(\d{2}):(\d{2}):(\d{2})/);
+      const timeMatch = chunk.match(/time=(\d{2}):(\d{2}):(\d{2})/);
       if (timeMatch && duration > 0) {
         const currentTime = parseInt(timeMatch[1]) * 3600 +
                            parseInt(timeMatch[2]) * 60 +
