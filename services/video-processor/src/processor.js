@@ -501,7 +501,9 @@ async function processMultiSourceVideo({ jobId, primaryFile, secondaryFile, sett
         videoFile: primaryFile,
         workDir,
         captionStyle: safeSettings.captionStyle,
-        customStyle: safeSettings.customCaptionStyle
+        customStyle: safeSettings.customCaptionStyle,
+        captionPosition: safeSettings.captionPosition,
+        captionSize: safeSettings.captionSize
       });
 
       if (captionFile) {
@@ -817,7 +819,9 @@ async function processThreeSourceVideo({ jobId, primaryFile, secondaryFile, tert
         videoFile: primaryFile,
         workDir,
         captionStyle: safeSettings.captionStyle,
-        customStyle: safeSettings.customCaptionStyle
+        customStyle: safeSettings.customCaptionStyle,
+        captionPosition: safeSettings.captionPosition,
+        captionSize: safeSettings.captionSize
       });
 
       if (captionFile) {
@@ -1015,7 +1019,9 @@ async function processGameplayVideo({ jobId, primaryFile, secondaryFile, setting
         videoFile: primaryFile,
         workDir,
         captionStyle: safeSettings.captionStyle,
-        customStyle: safeSettings.customCaptionStyle
+        customStyle: safeSettings.customCaptionStyle,
+        captionPosition: safeSettings.captionPosition,
+        captionSize: safeSettings.captionSize
       });
 
       if (captionFile) {
@@ -2546,7 +2552,9 @@ async function processVideoFile({ jobId, inputFile, settings, output, workDir })
         videoFile: inputFile,
         workDir,
         captionStyle: safeSettings.captionStyle,
-        customStyle: safeSettings.customCaptionStyle
+        customStyle: safeSettings.customCaptionStyle,
+        captionPosition: safeSettings.captionPosition,
+        captionSize: safeSettings.captionSize
       });
 
       if (captionFile) {
