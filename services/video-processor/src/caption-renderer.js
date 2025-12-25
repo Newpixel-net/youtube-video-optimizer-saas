@@ -223,23 +223,67 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
   // Generate dialogue lines
   if (styleConfig.highlightKeywords) {
-    // Hormozi style: word-by-word box highlighting
+    // Hormozi style: word-by-word box highlighting with precise positioning
     // Layer 0: Base text (all words in normal style)
-    // Layer 1: Highlighted word (current word with box style) - shown on top
+    // Layer 1: Highlighted word with green box, positioned exactly over the word in Layer 0
+
+    // Video dimensions (from PlayRes)
+    const videoWidth = 1080;
+    const videoHeight = 1920;
+
+    // Font metrics estimation for Arial (proportional font)
+    // Average character width is roughly 55% of font size for Arial
+    const charWidthRatio = 0.55;
+    const spaceWidthRatio = 0.3;
+    const fontSize = styleConfig.fontSize || 68;
+
+    // Calculate Y position based on alignment and marginV
+    let posY;
+    if (styleConfig.alignment >= 7) {
+      // Top alignment
+      posY = styleConfig.marginV + fontSize;
+    } else if (styleConfig.alignment >= 4) {
+      // Middle alignment
+      posY = videoHeight / 2;
+    } else {
+      // Bottom alignment
+      posY = videoHeight - styleConfig.marginV - fontSize / 2;
+    }
+
     for (const phrase of phrases) {
       const phraseStart = formatASSTime(phrase.start);
       const phraseEnd = formatASSTime(phrase.end);
       const allWords = phrase.words.map(w => w.word).join(' ');
 
+      // Calculate total phrase width
+      const phraseText = allWords;
+      const phraseWidth = calculateTextWidth(phraseText, fontSize, charWidthRatio, spaceWidthRatio);
+
+      // Phrase starts from center minus half width (for center alignment)
+      const phraseStartX = (videoWidth - phraseWidth) / 2;
+
       // Layer 0: Show all words in normal style for the full phrase duration
       assContent += `Dialogue: 0,${phraseStart},${phraseEnd},${styleConfig.styleName},,0,0,0,,${allWords}\n`;
 
-      // Layer 1: Show each word individually with box highlight at its timing
-      for (const word of phrase.words) {
+      // Layer 1: Show each word with box, positioned exactly over the word in the phrase
+      let currentX = phraseStartX;
+      for (let i = 0; i < phrase.words.length; i++) {
+        const word = phrase.words[i];
+        const wordWidth = calculateTextWidth(word.word, fontSize, charWidthRatio, spaceWidthRatio);
+
+        // Position at center of the word
+        const wordCenterX = Math.round(currentX + wordWidth / 2);
+
         const wordStart = formatASSTime(word.start);
         const wordEnd = formatASSTime(word.end);
-        // Use HormoziBox style (BorderStyle 3 = solid green box)
-        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,${word.word}\n`;
+
+        // Use \pos(x,y) with alignment 5 (center) to position the highlighted word exactly
+        // \an5 sets anchor to center, then \pos places it at word center
+        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an5\\pos(${wordCenterX},${Math.round(posY)})}${word.word}\n`;
+
+        // Move X position to next word (word width + space)
+        const spaceWidth = fontSize * spaceWidthRatio;
+        currentX += wordWidth + spaceWidth;
       }
     }
   } else {
@@ -349,6 +393,7 @@ function getStyleConfig(captionStyle, customStyle, captionPosition, captionSize)
       useKaraoke: false,
       highlightKeywords: true,
       highlightColor: '&H0022C55E', // Green (#22C55E in BGR format)
+      fontSize,  // Include fontSize for position calculations
       alignment,
       marginV
     },
@@ -430,6 +475,27 @@ function hexToASS(hex) {
   const g = clean.substring(2, 4);
   const b = clean.substring(4, 6);
   return `&H00${b}${g}${r}`.toUpperCase();
+}
+
+/**
+ * Calculate estimated text width for positioning
+ * Uses character-based estimation for Arial font
+ * @param {string} text - The text to measure
+ * @param {number} fontSize - Font size in pixels
+ * @param {number} charWidthRatio - Average character width as ratio of fontSize
+ * @param {number} spaceWidthRatio - Space width as ratio of fontSize
+ * @returns {number} Estimated width in pixels
+ */
+function calculateTextWidth(text, fontSize, charWidthRatio, spaceWidthRatio) {
+  let width = 0;
+  for (const char of text) {
+    if (char === ' ') {
+      width += fontSize * spaceWidthRatio;
+    } else {
+      width += fontSize * charWidthRatio;
+    }
+  }
+  return width;
 }
 
 /**
