@@ -71,6 +71,26 @@
       {
         "source": "/api/**",
         "function": "api"
+      },
+      {
+        "source": "/video-creation",
+        "destination": "/video-creation-wizard.html"
+      },
+      {
+        "source": "/video-creation-wizard",
+        "destination": "/video-creation-wizard.html"
+      },
+      {
+        "source": "/video-optimizer",
+        "destination": "/main-dashboard.html"
+      },
+      {
+        "source": "/creative-studio",
+        "destination": "/creative-studio.html"
+      },
+      {
+        "source": "/video-wizard",
+        "destination": "/video-wizard.html"
       }
     ]
   }
