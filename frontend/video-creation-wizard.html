@@ -1521,17 +1521,44 @@
         // ==========================================
         // 6.2 AUTHENTICATION
         // ==========================================
+        let authInitialized = false;
+
         async function initAuth() {
             return new Promise((resolve, reject) => {
-                auth.onAuthStateChanged(async (user) => {
-                    if (user) {
+                // Give Firebase a moment to restore auth state from storage
+                const unsubscribe = auth.onAuthStateChanged(async (user) => {
+                    // Only process once auth is truly initialized
+                    // Firebase may fire this immediately with null, then again with the real user
+                    if (!authInitialized) {
+                        authInitialized = true;
+
+                        // If user is immediately available, proceed
+                        if (user) {
+                            state.user = user;
+                            await loadUserTokens();
+                            resolve(user);
+                            return;
+                        }
+
+                        // Wait a brief moment for auth state to fully load
+                        // This handles the race condition where auth hasn't loaded yet
+                        setTimeout(async () => {
+                            const currentUser = auth.currentUser;
+                            if (currentUser) {
+                                state.user = currentUser;
+                                await loadUserTokens();
+                                resolve(currentUser);
+                            } else {
+                                // Truly not authenticated - redirect to login
+                                window.location.href = '/video-optimizer';
+                                reject('Not authenticated');
+                            }
+                        }, 500);
+                    } else if (user && !state.user) {
+                        // Auth state changed after initialization (user logged in)
                         state.user = user;
                         await loadUserTokens();
                         resolve(user);
-                    } else {
-                        // Redirect to login
-                        window.location.href = '/video-optimizer';
-                        reject('Not authenticated');
                     }
                 });
             });
