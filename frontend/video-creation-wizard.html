@@ -2162,7 +2162,8 @@
                 style: null,              // Style ID
                 topic: '',                // User's topic/theme
                 tone: 'engaging',         // casual, professional, humorous, serious
-                pacing: 'medium'          // 'fast' | 'medium' | 'slow' - controls scene timing
+                pacing: 'medium',         // 'fast' | 'medium' | 'slow' - controls scene timing
+                contentDepth: 'detailed'  // 'minimal' | 'standard' | 'detailed' | 'comprehensive' - content richness
             },
 
             // Step 3: Script
@@ -2713,6 +2714,11 @@
             render();
         }
 
+        function setContentDepth(depth) {
+            state.content.contentDepth = depth;
+            render();
+        }
+
         async function generateScript() {
             // Get topic from input
             const topicInput = document.getElementById('script-topic');
@@ -2744,6 +2750,7 @@
                     topic: topic,
                     tone: state.content.tone || 'engaging',
                     pacing: state.content.pacing || 'medium',
+                    contentDepth: state.content.contentDepth || 'detailed',
                     additionalInstructions
                 };
 
@@ -5147,6 +5154,29 @@
                                         class="tone-btn ${state.content.tone === tone ? 'selected' : ''}"
                                         style="padding: 0.6rem; border-radius: 0.5rem; border: 1px solid ${state.content.tone === tone ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.2)'}; background: ${state.content.tone === tone ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 0.8rem; text-transform: capitalize;">
                                     ${tone}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Content depth selector -->
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: block; font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
+                            Content Depth
+                            <span style="color: rgba(255,255,255,0.5); font-weight: 400; font-size: 0.8rem;"> — How much detail in the narration</span>
+                        </label>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                            ${[
+                                { id: 'minimal', label: '⚡ Quick', desc: 'Key points only' },
+                                { id: 'standard', label: '📋 Standard', desc: 'Balanced content' },
+                                { id: 'detailed', label: '📚 Detailed', desc: 'Examples & stats' },
+                                { id: 'comprehensive', label: '🎓 Deep Dive', desc: 'Full analysis' }
+                            ].map(depth => `
+                                <button onclick="setContentDepth('${depth.id}')"
+                                        title="${depth.desc}"
+                                        style="padding: 0.6rem 0.4rem; border-radius: 0.5rem; border: 1px solid ${state.content.contentDepth === depth.id ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.2)'}; background: ${state.content.contentDepth === depth.id ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 0.75rem; display: flex; flex-direction: column; align-items: center; gap: 0.2rem;">
+                                    <span style="font-size: 0.85rem;">${depth.label}</span>
+                                    <span style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">${depth.desc}</span>
                                 </button>
                             `).join('')}
                         </div>

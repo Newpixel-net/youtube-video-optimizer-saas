@@ -23319,6 +23319,7 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     topic,
     tone = 'engaging',
     pacing = 'medium', // 'fast' | 'medium' | 'slow' - controls visual breathing room
+    contentDepth = 'standard', // 'minimal' | 'standard' | 'detailed' | 'comprehensive' - content richness
     additionalInstructions = ''
   } = config;
 
@@ -23327,12 +23328,51 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
   }
 
   try {
+    // === CONTENT DEPTH CONFIGURATION ===
+    // Controls how rich and detailed the narration content is
+    const contentDepthConfig = {
+      minimal: {
+        description: 'Quick overview, key points only',
+        wordsMultiplier: 0.7,
+        requirements: 'brief points, no elaboration',
+        includeStats: false,
+        includeExamples: false,
+        includeStory: false
+      },
+      standard: {
+        description: 'Balanced content with good explanation',
+        wordsMultiplier: 1.0,
+        requirements: 'clear explanations with context',
+        includeStats: true,
+        includeExamples: false,
+        includeStory: false
+      },
+      detailed: {
+        description: 'Rich content with examples and data',
+        wordsMultiplier: 1.4,
+        requirements: 'thorough explanations, statistics, and examples',
+        includeStats: true,
+        includeExamples: true,
+        includeStory: true
+      },
+      comprehensive: {
+        description: 'Maximum depth - educational/documentary style',
+        wordsMultiplier: 1.8,
+        requirements: 'in-depth analysis, multiple examples, storytelling, expert-level detail',
+        includeStats: true,
+        includeExamples: true,
+        includeStory: true
+      }
+    };
+
+    const depthSettings = contentDepthConfig[contentDepth] || contentDepthConfig.standard;
+
     // === SMART TIMING CALCULATION ===
     // Pacing determines how much of each scene is narration vs visual-only breathing room
     const pacingConfig = {
-      fast: { narrationRatio: 0.85, avgSceneDuration: 8, wordsPerSecond: 2.8 },
-      medium: { narrationRatio: 0.70, avgSceneDuration: 12, wordsPerSecond: 2.5 },
-      slow: { narrationRatio: 0.50, avgSceneDuration: 18, wordsPerSecond: 2.2 }
+      fast: { narrationRatio: 0.90, avgSceneDuration: 8, wordsPerSecond: 2.8 },
+      medium: { narrationRatio: 0.85, avgSceneDuration: 12, wordsPerSecond: 2.5 },
+      slow: { narrationRatio: 0.75, avgSceneDuration: 18, wordsPerSecond: 2.2 }
     };
 
     const pacingSettings = pacingConfig[pacing] || pacingConfig.medium;
@@ -23346,13 +23386,33 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     // Calculate narration duration per scene (voiceover portion)
     const narrationDuration = Math.round(visualDuration * pacingSettings.narrationRatio);
 
-    // Calculate approximate word count per scene for proper timing
-    const wordsPerScene = Math.round(narrationDuration * pacingSettings.wordsPerSecond);
+    // Calculate approximate word count per scene - ENHANCED with content depth multiplier
+    const baseWordsPerScene = Math.round(narrationDuration * pacingSettings.wordsPerSecond);
+    const wordsPerScene = Math.round(baseWordsPerScene * depthSettings.wordsMultiplier);
+
+    // Build content depth requirements for the prompt
+    const contentRequirements = [];
+    if (depthSettings.includeStats) {
+      contentRequirements.push('Include relevant statistics, numbers, or data points');
+    }
+    if (depthSettings.includeExamples) {
+      contentRequirements.push('Include real-world examples or case studies');
+    }
+    if (depthSettings.includeStory) {
+      contentRequirements.push('Weave in storytelling elements - problems, solutions, transformations');
+    }
 
     // Build the prompt for GPT-4o
-    const systemPrompt = `You are an expert video scriptwriter specializing in ${niche || 'general'} content.
+    const systemPrompt = `You are an expert video scriptwriter and content creator specializing in ${niche || 'general'} content.
 You create engaging, well-structured scripts optimized for ${platform || 'social media'} in ${aspectRatio || '16:9'} format.
-Your scripts are known for strong hooks, clear storytelling, and compelling calls-to-action.
+Your scripts are known for:
+- Strong hooks that grab attention in the first 3 seconds
+- Clear storytelling with emotional resonance
+- Educational value with practical takeaways
+- Compelling calls-to-action that feel natural
+
+CONTENT DEPTH LEVEL: ${contentDepth.toUpperCase()} - ${depthSettings.description}
+You must provide ${depthSettings.requirements}.
 
 CRITICAL TIMING RULE: You MUST write narrations with the EXACT word count specified. This determines video pacing.
 Count your words carefully. Too few words = awkward pauses. Too many words = rushed audio.
@@ -23368,6 +23428,7 @@ Niche: ${niche || 'general'}${subniche ? ` > ${subniche}` : ''}
 Visual Style: ${style || 'modern'}
 Tone: ${tone}
 Pacing: ${pacing} (${pacing === 'fast' ? 'energetic, quick cuts' : pacing === 'slow' ? 'contemplative, visual breathing room' : 'balanced pacing'})
+Content Depth: ${contentDepth.toUpperCase()} - ${depthSettings.description}
 
 === CRITICAL TIMING BREAKDOWN ===
 Total Duration: ${targetDuration} seconds
@@ -23377,17 +23438,29 @@ Each Scene Narration Duration: ${narrationDuration} seconds (voiceover length)
 Visual-Only Time per Scene: ${visualDuration - narrationDuration} seconds (no voiceover, just visuals)
 Words per Scene: ~${wordsPerScene} words (to fill ${narrationDuration}s at ${pacingSettings.wordsPerSecond} words/sec)
 
+=== CONTENT REQUIREMENTS ===
+${contentRequirements.length > 0 ? contentRequirements.map((req, i) => `${i + 1}. ${req}`).join('\n') : '- Standard content depth'}
+
+=== NARRATIVE STRUCTURE ===
+Your script MUST follow this story arc:
+- Scene 1 (HOOK): Surprising fact, provocative question, or bold statement that demands attention
+- Scenes 2-3 (SETUP): Establish the problem, context, or "why this matters"
+- Scenes 4-${sceneCount - 2} (BODY): Main content with ${depthSettings.includeStats ? 'statistics, ' : ''}${depthSettings.includeExamples ? 'examples, ' : ''}clear explanations
+- Scene ${sceneCount - 1} (CLIMAX): Key insight, transformation, or "aha moment"
+- Scene ${sceneCount} (CTA): Natural conclusion with clear call-to-action
+
 === REQUIREMENTS ===
 1. HOOK (Scene 1): Grab attention immediately - surprising fact, question, or bold statement
-2. Create EXACTLY ${sceneCount} scenes that build a narrative
-3. EACH SCENE NARRATION MUST BE ~${wordsPerScene} WORDS (±3 words) - COUNT CAREFULLY!
+2. Create EXACTLY ${sceneCount} scenes that build a compelling narrative
+3. EACH SCENE NARRATION MUST BE ~${wordsPerScene} WORDS (±5 words) - COUNT CAREFULLY!
 4. Each scene needs:
    - narration: ~${wordsPerScene} words of voiceover text (COUNT YOUR WORDS!)
    - visual: Detailed description for AI image generation (composition, subjects, lighting, mood)
    - visualDuration: ${visualDuration} (total seconds this scene appears)
    - narrationDuration: ${narrationDuration} (seconds of voiceover)
-5. CTA should be woven into the final scene naturally
-6. Visual descriptions should be specific: composition, subjects, lighting, colors, camera angle
+5. Make every sentence count - no filler words or vague statements
+6. CTA should be woven into the final scene naturally
+7. Visual descriptions should be specific: composition, subjects, lighting, colors, camera angle
 
 ${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
 
