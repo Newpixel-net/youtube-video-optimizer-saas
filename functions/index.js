@@ -24629,7 +24629,7 @@ exports.creationWizardStartExport = functions
   .runWith({ timeoutSeconds: 540, memory: '2GB' })
   .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { projectId, quality = '1080p', format = 'mp4' } = data;
+  const { projectId, quality = '1080p', format = 'mp4', timelineState = null } = data;
 
   if (!projectId) {
     throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
@@ -24670,38 +24670,58 @@ exports.creationWizardStartExport = functions
       throw new functions.https.HttpsError('failed-precondition', 'No animated scenes found. Please complete animation step first.');
     }
 
-    // Get scene order
-    const sceneOrder = assembly.sceneOrder?.length > 0
-      ? assembly.sceneOrder
-      : scriptScenes.map(s => s.id);
+    // Get scene order - prefer timeline state if available
+    const sceneOrder = timelineState?.sceneOrder?.length > 0
+      ? timelineState.sceneOrder
+      : (assembly.sceneOrder?.length > 0 ? assembly.sceneOrder : scriptScenes.map(s => s.id));
 
-    // Build export manifest
+    // Build a map of timeline scene data for quick lookup
+    const timelineSceneMap = {};
+    if (timelineState?.scenes) {
+      timelineState.scenes.forEach(s => {
+        timelineSceneMap[s.id] = s;
+      });
+    }
+
+    // Build export manifest with timeline edits applied
     const exportManifest = {
-      scenes: sceneOrder.map(sceneId => {
+      scenes: sceneOrder.map((sceneId, index) => {
         const scriptScene = scriptScenes.find(s => s.id === sceneId);
         const animScene = animationScenes.find(s => s.sceneId === sceneId);
         const storyboardScene = storyboardScenes.find(s => s.sceneId === sceneId);
-        const transition = assembly.transitions?.[sceneId] || { type: 'cut' };
+        const timelineScene = timelineSceneMap[sceneId];
+
+        // Use timeline edits if available, otherwise fall back to assembly/default
+        const transition = timelineScene
+          ? { type: timelineScene.transition, duration: timelineScene.transitionDuration }
+          : (assembly.transitions?.[sceneId] || { type: 'fade', duration: 0.5 });
 
         return {
           sceneId,
-          duration: scriptScene?.duration || 8,
+          index,
+          duration: timelineScene?.duration || scriptScene?.duration || 8,
           videoUrl: animScene?.videoUrl || null,
           audioUrl: animScene?.voiceoverUrl || null,
           imageUrl: storyboardScene?.imageUrl || null,
           narration: scriptScene?.narration || '',
-          transition: transition.type
+          transition: transition.type,
+          transitionDuration: transition.duration || 0.5,
+          voiceoverOffset: timelineScene?.voiceoverOffset || 0
         };
       }),
-      music: assembly.music || { enabled: false },
-      captions: assembly.captions || { enabled: true, style: 'karaoke', position: 'bottom' },
-      audioMix: assembly.audioMix || { voiceVolume: 100, musicVolume: 30 },
+      // Use timeline state settings if available
+      music: timelineState?.music || assembly.music || { enabled: false },
+      captions: timelineState?.captions || assembly.captions || { enabled: true, style: 'karaoke', position: 'bottom' },
+      audioMix: timelineState?.audioMix || assembly.audioMix || { voiceVolume: 100, musicVolume: 30 },
       quality: outputQuality,
       resolution: qualityPreset.resolution,
       bitrate: qualityPreset.bitrate,
       format,
       platform: project.platform?.selected || 'youtube-long',
-      aspectRatio: project.platform?.aspectRatio || '16:9'
+      aspectRatio: project.platform?.aspectRatio || '16:9',
+      // Include timeline metadata
+      timelineVersion: timelineState?.version || 0,
+      hasTimelineEdits: timelineState?.editHistory?.hasEdits || false
     };
 
     // Calculate total duration

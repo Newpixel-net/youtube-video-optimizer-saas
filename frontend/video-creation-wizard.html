@@ -7961,6 +7961,71 @@
         }
 
         // Export Functions
+
+        /**
+         * Save timeline state for export
+         * Captures all timeline edits including scene order, durations, and transitions
+         */
+        function saveTimelineState() {
+            const scriptScenes = state.script.scenes || [];
+            const animationScenes = state.animation.scenes || [];
+            const storyboardScenes = state.storyboard.scenes || [];
+
+            // Get scene order (from timeline or default)
+            const sceneOrder = state.assembly.sceneOrder?.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+
+            // Build scene data with timeline edits
+            const scenes = sceneOrder.map((sceneId, index) => {
+                const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                const animScene = animationScenes.find(s => s.sceneId === sceneId);
+                const storyboardScene = storyboardScenes.find(s => s.sceneId === sceneId);
+                const transition = state.assembly.transitions?.[sceneId] || { type: 'fade', duration: 0.5 };
+
+                return {
+                    id: sceneId,
+                    index,
+                    duration: scriptScene?.duration || 8,
+                    voiceoverDuration: animScene?.voiceoverDuration || null,
+                    voiceoverOffset: 0, // Future: allow voiceover timing adjustment
+                    transition: transition.type || 'fade',
+                    transitionDuration: transition.duration || 0.5,
+                    hasVideo: !!(animScene?.videoUrl),
+                    hasImage: !!(storyboardScene?.imageUrl),
+                    hasVoiceover: !!(animScene?.voiceoverUrl)
+                };
+            });
+
+            // Calculate total duration
+            const totalDuration = scenes.reduce((sum, s) => sum + s.duration, 0);
+
+            return {
+                version: 1,
+                scenes,
+                sceneOrder,
+                totalDuration,
+                music: {
+                    enabled: state.assembly.music?.enabled || false,
+                    trackId: state.assembly.music?.trackId || null,
+                    volume: state.assembly.audioMix?.musicVolume || 30
+                },
+                captions: {
+                    enabled: state.assembly.captions?.enabled !== false,
+                    style: state.assembly.captions?.style || 'karaoke',
+                    position: state.assembly.captions?.position || 'bottom'
+                },
+                audioMix: {
+                    voiceVolume: state.assembly.audioMix?.voiceVolume || 100,
+                    musicVolume: state.assembly.audioMix?.musicVolume || 30
+                },
+                editHistory: {
+                    hasEdits: editHistory.position > 0,
+                    editCount: editHistory.position
+                }
+            };
+        }
+
         function setExportQuality(quality) {
             if (!state.export) state.export = {};
             state.export.selectedQuality = quality;
@@ -7980,11 +8045,16 @@
             render();
 
             try {
+                // Capture timeline state before export
+                const timelineState = saveTimelineState();
+                console.log('[Export] Timeline state:', timelineState);
+
                 const startExport = firebase.functions().httpsCallable('creationWizardStartExport');
                 const result = await startExport({
                     projectId: state.project.id,
                     quality: state.export.selectedQuality || '1080p',
-                    format: 'mp4'
+                    format: 'mp4',
+                    timelineState // Include timeline edits
                 });
 
                 state.export.jobId = result.data.jobId;
