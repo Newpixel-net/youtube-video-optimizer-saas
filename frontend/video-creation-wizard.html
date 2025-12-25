@@ -1445,7 +1445,8 @@
                 editBrushSize: 30,      // Brush size in pixels
                 editPrompt: '',         // Edit instruction prompt
                 editLoading: false,     // Is edit in progress
-                editHistory: []         // Mask history for undo
+                editHistory: [],        // Mask history for undo
+                editOriginalData: null  // Original image data for canvas
             },
 
             // Step 5: Animation (to be implemented)
@@ -3040,6 +3041,428 @@
         }
 
         // ==========================================
+        // 6.8.6 EDIT WITH AI MODAL
+        // ==========================================
+
+        // Open the AI edit modal for a scene image
+        function openEditModal(sceneId) {
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+            if (!storyboardScene || !storyboardScene.imageUrl) {
+                showToast('No image to edit', 'warning');
+                return;
+            }
+
+            state.storyboard.editingScene = sceneId;
+            state.storyboard.editPrompt = '';
+            state.storyboard.editLoading = false;
+            state.storyboard.editHistory = [];
+            state.storyboard.editMaskCanvas = null;
+            state.storyboard.editMaskCtx = null;
+
+            renderEditModal();
+        }
+
+        // Close the edit modal
+        function closeEditModal() {
+            state.storyboard.editingScene = null;
+            state.storyboard.editPrompt = '';
+            state.storyboard.editLoading = false;
+            const modal = document.getElementById('edit-ai-modal');
+            if (modal) modal.remove();
+        }
+
+        // Initialize the canvas for mask painting
+        function initEditCanvas() {
+            const sceneId = state.storyboard.editingScene;
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+            if (!storyboardScene || !storyboardScene.imageUrl) return;
+
+            const canvas = document.getElementById('edit-canvas');
+            if (!canvas) {
+                setTimeout(initEditCanvas, 100);
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+
+            img.onload = function() {
+                // Set canvas size - maintain aspect ratio, max width 600px
+                const maxWidth = 600;
+                const scale = Math.min(1, maxWidth / img.width);
+                canvas.width = Math.floor(img.width * scale);
+                canvas.height = Math.floor(img.height * scale);
+
+                // Store original dimensions
+                canvas.dataset.originalWidth = img.width;
+                canvas.dataset.originalHeight = img.height;
+
+                // Draw the image
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                // Store original image data
+                state.storyboard.editOriginalData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                // Create mask canvas
+                const maskCanvas = document.createElement('canvas');
+                maskCanvas.width = canvas.width;
+                maskCanvas.height = canvas.height;
+                state.storyboard.editMaskCanvas = maskCanvas;
+                state.storyboard.editMaskCtx = maskCanvas.getContext('2d');
+
+                // Fill with black (unmasked)
+                state.storyboard.editMaskCtx.fillStyle = 'black';
+                state.storyboard.editMaskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+                canvas.style.cursor = 'crosshair';
+                setupEditCanvasEvents(canvas);
+            };
+
+            img.onerror = function() {
+                console.error('Failed to load image for editing');
+                showToast('Failed to load image', 'error');
+            };
+
+            img.src = storyboardScene.imageUrl;
+        }
+
+        // Setup mouse/touch events for canvas painting
+        function setupEditCanvasEvents(canvas) {
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+
+            const getCoords = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return {
+                    x: (clientX - rect.left) * scaleX,
+                    y: (clientY - rect.top) * scaleY
+                };
+            };
+
+            const startDraw = (e) => {
+                isDrawing = true;
+                const coords = getCoords(e);
+                lastX = coords.x;
+                lastY = coords.y;
+                paintEditMask(lastX, lastY);
+            };
+
+            const draw = (e) => {
+                if (!isDrawing) return;
+                const coords = getCoords(e);
+                paintEditMaskLine(lastX, lastY, coords.x, coords.y);
+                lastX = coords.x;
+                lastY = coords.y;
+            };
+
+            const endDraw = () => {
+                isDrawing = false;
+            };
+
+            canvas.addEventListener('mousedown', startDraw);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', endDraw);
+            canvas.addEventListener('mouseleave', endDraw);
+
+            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e); });
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); });
+            canvas.addEventListener('touchend', endDraw);
+        }
+
+        // Paint a single point on the mask
+        function paintEditMask(x, y) {
+            if (!state.storyboard.editMaskCtx) return;
+
+            const brushSize = state.storyboard.editBrushSize || 30;
+            state.storyboard.editMaskCtx.fillStyle = 'white';
+            state.storyboard.editMaskCtx.beginPath();
+            state.storyboard.editMaskCtx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+            state.storyboard.editMaskCtx.fill();
+
+            redrawEditCanvas();
+        }
+
+        // Paint a line on the mask
+        function paintEditMaskLine(x1, y1, x2, y2) {
+            if (!state.storyboard.editMaskCtx) return;
+
+            const brushSize = state.storyboard.editBrushSize || 30;
+            state.storyboard.editMaskCtx.strokeStyle = 'white';
+            state.storyboard.editMaskCtx.lineWidth = brushSize;
+            state.storyboard.editMaskCtx.lineCap = 'round';
+            state.storyboard.editMaskCtx.lineJoin = 'round';
+            state.storyboard.editMaskCtx.beginPath();
+            state.storyboard.editMaskCtx.moveTo(x1, y1);
+            state.storyboard.editMaskCtx.lineTo(x2, y2);
+            state.storyboard.editMaskCtx.stroke();
+
+            redrawEditCanvas();
+        }
+
+        // Redraw the canvas with mask overlay
+        function redrawEditCanvas() {
+            const canvas = document.getElementById('edit-canvas');
+            if (!canvas || !state.storyboard.editOriginalData) return;
+
+            const ctx = canvas.getContext('2d');
+
+            // Draw original image
+            const imgCanvas = document.createElement('canvas');
+            imgCanvas.width = canvas.width;
+            imgCanvas.height = canvas.height;
+            imgCanvas.getContext('2d').putImageData(state.storyboard.editOriginalData, 0, 0);
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(imgCanvas, 0, 0);
+
+            // Draw pink overlay where mask is white
+            if (state.storyboard.editMaskCanvas) {
+                const maskCtx = state.storyboard.editMaskCtx;
+                const maskData = maskCtx.getImageData(0, 0, state.storyboard.editMaskCanvas.width, state.storyboard.editMaskCanvas.height);
+
+                const overlayCanvas = document.createElement('canvas');
+                overlayCanvas.width = canvas.width;
+                overlayCanvas.height = canvas.height;
+                const overlayCtx = overlayCanvas.getContext('2d');
+                overlayCtx.drawImage(state.storyboard.editMaskCanvas, 0, 0);
+
+                const overlayData = overlayCtx.getImageData(0, 0, overlayCanvas.width, overlayCanvas.height);
+                for (let i = 0; i < overlayData.data.length; i += 4) {
+                    if (overlayData.data[i] > 128) {
+                        overlayData.data[i] = 236;     // R - pink
+                        overlayData.data[i + 1] = 72;  // G
+                        overlayData.data[i + 2] = 153; // B
+                        overlayData.data[i + 3] = 150; // A - semi-transparent
+                    } else {
+                        overlayData.data[i + 3] = 0;   // Transparent
+                    }
+                }
+                overlayCtx.putImageData(overlayData, 0, 0);
+                ctx.drawImage(overlayCanvas, 0, 0);
+            }
+        }
+
+        // Get mask as base64 PNG
+        function getEditMaskBase64() {
+            if (!state.storyboard.editMaskCanvas) return null;
+
+            const canvas = document.getElementById('edit-canvas');
+            const originalWidth = parseInt(canvas.dataset.originalWidth) || 1280;
+            const originalHeight = parseInt(canvas.dataset.originalHeight) || 720;
+
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = originalWidth;
+            exportCanvas.height = originalHeight;
+            const ctx = exportCanvas.getContext('2d');
+
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+            ctx.drawImage(state.storyboard.editMaskCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+
+            // Check if mask has any white pixels
+            const imageData = ctx.getImageData(0, 0, exportCanvas.width, exportCanvas.height);
+            let hasWhite = false;
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                if (imageData.data[i] > 200) {
+                    hasWhite = true;
+                    break;
+                }
+            }
+
+            if (!hasWhite) return null;
+            return exportCanvas.toDataURL('image/png').split(',')[1];
+        }
+
+        // Set brush size
+        function setEditBrushSize(size) {
+            state.storyboard.editBrushSize = parseInt(size) || 30;
+        }
+
+        // Clear the mask
+        function clearEditMask() {
+            if (!state.storyboard.editMaskCtx) return;
+
+            state.storyboard.editMaskCtx.fillStyle = 'black';
+            state.storyboard.editMaskCtx.fillRect(0, 0, state.storyboard.editMaskCanvas.width, state.storyboard.editMaskCanvas.height);
+            redrawEditCanvas();
+        }
+
+        // Set edit prompt
+        function setEditPrompt(value) {
+            state.storyboard.editPrompt = value;
+        }
+
+        // Apply the AI edit
+        async function applyAIEdit() {
+            const sceneId = state.storyboard.editingScene;
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+            if (!storyboardScene || !storyboardScene.imageUrl) return;
+
+            const maskBase64 = getEditMaskBase64();
+            let editPrompt = state.storyboard.editPrompt.trim();
+
+            if (!editPrompt && !maskBase64) {
+                showToast('Please enter what you want to change, or paint an area', 'warning');
+                return;
+            }
+
+            if (!editPrompt && maskBase64) {
+                editPrompt = 'Remove the marked area seamlessly';
+            }
+
+            state.storyboard.editLoading = true;
+            renderEditModal();
+
+            try {
+                const editFn = firebase.functions().httpsCallable('editThumbnailWithAI');
+                const requestData = {
+                    imageUrl: storyboardScene.imageUrl,
+                    editPrompt: editPrompt
+                };
+
+                if (maskBase64) {
+                    requestData.maskBase64 = maskBase64;
+                }
+
+                const result = await editFn(requestData);
+
+                if (result.data.success && result.data.editedUrl) {
+                    // Update scene with edited image
+                    storyboardScene.imageUrl = result.data.editedUrl;
+                    storyboardScene.editHistory = storyboardScene.editHistory || [];
+                    storyboardScene.editHistory.push({
+                        prompt: editPrompt,
+                        timestamp: Date.now()
+                    });
+
+                    closeEditModal();
+                    showToast('Image edited successfully!', 'success');
+                    scheduleAutoSave();
+                    render();
+                } else {
+                    throw new Error(result.data.message || 'Edit failed');
+                }
+            } catch (error) {
+                console.error('AI edit error:', error);
+                state.storyboard.editLoading = false;
+                showToast(`Edit failed: ${error.message}`, 'error');
+                renderEditModal();
+            }
+        }
+
+        // Render the Edit with AI modal
+        function renderEditModal() {
+            const existing = document.getElementById('edit-ai-modal');
+            if (existing) existing.remove();
+
+            if (!state.storyboard.editingScene) return;
+
+            const sceneId = state.storyboard.editingScene;
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            const sceneIndex = state.script.scenes.findIndex(s => s.id === sceneId);
+
+            if (!storyboardScene || !storyboardScene.imageUrl) return;
+
+            const modal = document.createElement('div');
+            modal.id = 'edit-ai-modal';
+            modal.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1002; padding: 1rem;" onclick="if(event.target === this) closeEditModal()">
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 700px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
+                        <!-- Header -->
+                        <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h3 style="margin: 0; color: white; font-size: 1.1rem; font-weight: 600;">✨ Edit Scene ${sceneIndex + 1} with AI</h3>
+                                <p style="margin: 0.25rem 0 0 0; color: rgba(255,255,255,0.6); font-size: 0.8rem;">Paint to select areas, describe your edit</p>
+                            </div>
+                            <button onclick="closeEditModal()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">×</button>
+                        </div>
+
+                        <!-- Canvas Area -->
+                        <div style="flex: 1; overflow-y: auto; padding: 1rem;">
+                            ${state.storyboard.editLoading ? `
+                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem;">
+                                    <div style="width: 50px; height: 50px; border: 3px solid rgba(236, 72, 153, 0.2); border-top-color: #ec4899; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                    <p style="color: rgba(255,255,255,0.8); margin-top: 1rem; font-weight: 500;">AI is editing your image...</p>
+                                    <p style="color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-top: 0.5rem;">This may take 10-30 seconds</p>
+                                </div>
+                            ` : `
+                                <!-- Canvas -->
+                                <div style="display: flex; justify-content: center; margin-bottom: 1rem;">
+                                    <canvas id="edit-canvas" style="max-width: 100%; border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);"></canvas>
+                                </div>
+
+                                <!-- Brush Controls -->
+                                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(255,255,255,0.05); border-radius: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">🖌️ Brush:</span>
+                                        <input type="range" min="10" max="100" value="${state.storyboard.editBrushSize || 30}"
+                                               oninput="setEditBrushSize(this.value); document.getElementById('brush-size-display').textContent = this.value + 'px'"
+                                               style="width: 100px; accent-color: #ec4899;">
+                                        <span id="brush-size-display" style="color: white; font-size: 0.75rem; width: 40px;">${state.storyboard.editBrushSize || 30}px</span>
+                                    </div>
+                                    <button onclick="clearEditMask()" style="padding: 0.4rem 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">
+                                        🗑️ Clear
+                                    </button>
+                                </div>
+
+                                <p style="color: rgba(255,255,255,0.5); font-size: 0.75rem; text-align: center; margin-bottom: 1rem;">
+                                    💡 <strong>Optional:</strong> Paint to select specific areas, or skip to edit the entire image
+                                </p>
+
+                                <!-- Prompt Input -->
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="color: rgba(255,255,255,0.7); font-size: 0.85rem; display: block; margin-bottom: 0.5rem;">What do you want to change?</label>
+                                    <input type="text" id="edit-prompt-input" value="${state.storyboard.editPrompt || ''}"
+                                           placeholder="e.g., Make the sky more dramatic, remove the person, add lens flare..."
+                                           oninput="setEditPrompt(this.value)"
+                                           style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem;">
+                                </div>
+
+                                <!-- Quick Suggestions -->
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem;">
+                                    ${['Remove marked area', 'Make it brighter', 'Add dramatic lighting', 'Make colors more vibrant', 'Add film grain effect'].map(suggestion => `
+                                        <button onclick="setEditPrompt('${suggestion}'); document.getElementById('edit-prompt-input').value = '${suggestion}';"
+                                                style="padding: 0.35rem 0.6rem; background: rgba(236, 72, 153, 0.1); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 1rem; color: #f9a8d4; font-size: 0.7rem; cursor: pointer; transition: all 0.2s;"
+                                                onmouseover="this.style.background='rgba(236, 72, 153, 0.2)'"
+                                                onmouseout="this.style.background='rgba(236, 72, 153, 0.1)'">
+                                            ${suggestion}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            `}
+                        </div>
+
+                        <!-- Footer -->
+                        <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <button onclick="closeEditModal()"
+                                    style="padding: 0.6rem 1rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; cursor: pointer;">
+                                Cancel
+                            </button>
+                            <button onclick="applyAIEdit()" ${state.storyboard.editLoading ? 'disabled' : ''}
+                                    style="padding: 0.6rem 1.5rem; background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none; border-radius: 0.5rem; color: white; font-weight: 600; font-size: 0.85rem; cursor: pointer; opacity: ${state.storyboard.editLoading ? '0.5' : '1'};">
+                                ${state.storyboard.editLoading ? 'Editing...' : '✨ Apply Edit (2 tokens)'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Initialize canvas after render
+            if (!state.storyboard.editLoading) {
+                setTimeout(initEditCanvas, 100);
+            }
+        }
+
+        // ==========================================
         // 6.9 COST ESTIMATION
         // ==========================================
         function estimateCost() {
@@ -3962,14 +4385,34 @@
 
             let html = '<div class="fade-in">';
 
-            // Header
+            // Header with Model Selector
+            const currentModel = state.storyboard.imageModel || 'hidream';
+            const modelConfig = IMAGE_MODELS[currentModel] || IMAGE_MODELS['hidream'];
+
             html += `
                 <div class="content-card">
                     <div class="content-card-header">
                         <div class="content-card-icon">🎨</div>
-                        <div>
+                        <div style="flex: 1;">
                             <div class="content-card-title">Storyboard</div>
                             <div class="content-card-subtitle">Visual preview of each scene • ${storyboardScenes.filter(s => s.imageUrl && s.status === 'ready').length}/${scenes.length} images ready</div>
+                        </div>
+                    </div>
+
+                    <!-- AI Model Selector -->
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="color: rgba(255,255,255,0.7); font-size: 0.75rem; margin-bottom: 0.5rem;">🤖 AI Model for Image Generation:</div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            ${Object.entries(IMAGE_MODELS).map(([id, model]) => `
+                                <button onclick="setImageModel('${id}')"
+                                        style="padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid ${currentModel === id ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; background: ${currentModel === id ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; color: ${currentModel === id ? 'white' : 'rgba(255,255,255,0.7)'}; cursor: pointer; font-size: 0.75rem; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; transition: all 0.2s;">
+                                    <span style="font-weight: 600;">${model.name}</span>
+                                    <span style="font-size: 0.65rem; color: ${currentModel === id ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.5)'};">${model.tokenCost} token${model.tokenCost > 1 ? 's' : ''}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                        <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem; margin-top: 0.5rem;">
+                            ${modelConfig.description}
                         </div>
                     </div>
                 </div>
@@ -4037,22 +4480,28 @@
                 `;
             } else if (status === 'ready' && imageUrl) {
                 // Image ready
-                const sourceLabel = storyboardScene.source === 'stock' ? '📷 Stock' : '🎨 AI';
+                const sourceLabel = storyboardScene.source === 'stock' ? '📷 Stock' :
+                                   storyboardScene.source === 'stock-video' ? '🎬 Video' : '🎨 AI';
+                const sourceBgColor = storyboardScene.source === 'stock' ? 'rgba(16, 185, 129, 0.9)' :
+                                     storyboardScene.source === 'stock-video' ? 'rgba(6, 182, 212, 0.9)' : 'rgba(139, 92, 246, 0.9)';
                 cardContent = `
                     <div style="height: 160px; border-radius: 0.5rem; overflow: hidden; position: relative;">
                         <img src="${imageUrl}" alt="Scene ${index + 1}" style="width: 100%; height: 100%; object-fit: cover;">
                         <!-- Source badge -->
-                        <div style="position: absolute; top: 0.5rem; right: 0.5rem; background: ${storyboardScene.source === 'stock' ? 'rgba(16, 185, 129, 0.9)' : 'rgba(139, 92, 246, 0.9)'}; color: white; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem;">
+                        <div style="position: absolute; top: 0.5rem; right: 0.5rem; background: ${sourceBgColor}; color: white; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem;">
                             ${sourceLabel}
                         </div>
-                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 0.5rem; display: flex; gap: 0.4rem;">
-                            <button onclick="openModifyModal(${scene.id})" style="flex: 1; padding: 0.35rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.7rem;">
-                                ✏️ Modify
+                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 0.5rem; display: flex; gap: 0.3rem;">
+                            <button onclick="openEditModal(${scene.id})" style="flex: 1; padding: 0.35rem; border-radius: 0.4rem; border: 1px solid rgba(236, 72, 153, 0.5); background: linear-gradient(135deg, rgba(236, 72, 153, 0.3), rgba(139, 92, 246, 0.3)); color: white; cursor: pointer; font-size: 0.65rem;" title="Edit with AI">
+                                ✨ Edit
                             </button>
-                            <button onclick="openStockBrowser(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.2); color: white; cursor: pointer; font-size: 0.7rem;" title="Browse stock media">
+                            <button onclick="openModifyModal(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.65rem;" title="Modify prompt">
+                                ✏️
+                            </button>
+                            <button onclick="openStockBrowser(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.2); color: white; cursor: pointer; font-size: 0.65rem;" title="Browse stock media">
                                 📷
                             </button>
-                            <button onclick="regenerateSingleSceneImage(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.7rem;" title="Regenerate with AI">
+                            <button onclick="regenerateSingleSceneImage(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.65rem;" title="Regenerate with AI">
                                 🔄
                             </button>
                         </div>
