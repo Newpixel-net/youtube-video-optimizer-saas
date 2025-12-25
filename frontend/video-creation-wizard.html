@@ -2162,55 +2162,31 @@
             const scenes = state.script.scenes || [];
             if (scenes.length === 0) return;
 
-            // Only generate first 4 scenes automatically
-            const maxInitialScenes = 4;
-            const scenesToGenerate = scenes.slice(0, maxInitialScenes);
+            // Only generate FIRST scene automatically - others on demand
+            const firstScene = scenes[0];
 
             state.storyboard.status = 'generating';
 
-            // Initialize storyboard scenes with generating status
+            // Initialize all storyboard scenes - first is generating, others pending
             state.storyboard.scenes = scenes.map((scene, index) => ({
                 sceneId: scene.id,
-                status: index < maxInitialScenes ? 'generating' : 'pending',
+                status: index === 0 ? 'generating' : 'pending',
                 imageUrl: null,
                 prompt: scene.visual || '',
-                jobId: null
+                jobId: null,
+                source: 'ai' // 'ai' | 'stock' | 'upload'
             }));
 
             render();
 
+            // Generate only first scene
             try {
-                const generateFn = functions.httpsCallable('creationWizardGenerateInitialStoryboard');
-                const result = await generateFn({
-                    projectId: state.project.id,
-                    scenes: scenesToGenerate,
-                    style: state.content.style,
-                    aspectRatio: state.platform.aspectRatio
-                });
-
-                if (result.data.success) {
-                    // Update state with job IDs and start polling
-                    result.data.jobs.forEach(job => {
-                        const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === job.sceneId);
-                        if (storyboardScene) {
-                            storyboardScene.jobId = job.jobId;
-                            storyboardScene.imageUrl = job.imageUrl;
-                            storyboardScene.prompt = job.prompt;
-                            // Start polling for this job
-                            startImagePolling(job.sceneId, job.jobId);
-                        }
-                    });
-
-                    render();
-                }
+                await generateSingleSceneImage(firstScene.id);
+                state.storyboard.status = 'partial';
+                render();
             } catch (error) {
                 console.error('Initial storyboard generation error:', error);
-                showToast('Failed to start image generation', 'error');
-
-                // Mark all as error
-                state.storyboard.scenes.forEach(s => {
-                    if (s.status === 'generating') s.status = 'error';
-                });
+                showToast('Failed to generate first image. Click to retry.', 'error');
                 state.storyboard.status = 'error';
                 render();
             }
@@ -2390,6 +2366,258 @@
 
             // Generate with new prompt
             await generateSingleSceneImage(sceneId);
+        }
+
+        // ==========================================
+        // 6.8.5 STOCK MEDIA BROWSER
+        // ==========================================
+        let stockBrowserState = {
+            isOpen: false,
+            targetSceneId: null,
+            mediaType: 'image', // 'image' | 'video'
+            query: '',
+            results: [],
+            loading: false,
+            page: 1,
+            total: 0
+        };
+
+        function openStockBrowser(sceneId, mediaType = 'image') {
+            stockBrowserState.isOpen = true;
+            stockBrowserState.targetSceneId = sceneId;
+            stockBrowserState.mediaType = mediaType;
+            stockBrowserState.results = [];
+            stockBrowserState.query = '';
+            stockBrowserState.page = 1;
+
+            // Get scene description as default search query
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                // Extract keywords from visual description
+                const keywords = (scene.visual || scene.narration || '')
+                    .split(/[,.\n]/)
+                    .slice(0, 3)
+                    .join(' ')
+                    .substring(0, 50)
+                    .trim();
+                stockBrowserState.query = keywords || 'nature background';
+            }
+
+            renderStockBrowserModal();
+        }
+
+        function closeStockBrowser() {
+            stockBrowserState.isOpen = false;
+            stockBrowserState.targetSceneId = null;
+            const modal = document.getElementById('stock-browser-modal');
+            if (modal) modal.remove();
+        }
+
+        async function searchStockMedia(query = stockBrowserState.query, page = 1) {
+            if (!query || query.length < 2) {
+                showToast('Please enter a search term', 'warning');
+                return;
+            }
+
+            stockBrowserState.loading = true;
+            stockBrowserState.query = query;
+            stockBrowserState.page = page;
+            renderStockBrowserModal();
+
+            try {
+                const searchFn = firebase.functions().httpsCallable('searchStockMedia');
+                const result = await searchFn({
+                    query: query,
+                    type: stockBrowserState.mediaType,
+                    source: 'all',
+                    filters: {
+                        orientation: state.platform.aspectRatio === '9:16' ? 'portrait' : 'landscape',
+                        page: page,
+                        perPage: 20
+                    }
+                });
+
+                stockBrowserState.results = result.data.results || [];
+                stockBrowserState.total = result.data.total || 0;
+                stockBrowserState.loading = false;
+
+            } catch (error) {
+                console.error('Stock search error:', error);
+                showToast('Failed to search stock media', 'error');
+                stockBrowserState.loading = false;
+            }
+
+            renderStockBrowserModal();
+        }
+
+        async function selectStockMedia(media) {
+            if (!stockBrowserState.targetSceneId) return;
+
+            const sceneId = stockBrowserState.targetSceneId;
+            showToast('Importing media...', 'info');
+
+            try {
+                // Import to Firebase Storage
+                const importFn = firebase.functions().httpsCallable('importStockMedia');
+                const result = await importFn({
+                    mediaId: media.id,
+                    url: media.url,
+                    type: media.type,
+                    projectId: state.project.id
+                });
+
+                if (result.data.success) {
+                    // Update storyboard scene
+                    let storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+                    if (!storyboardScene) {
+                        storyboardScene = {
+                            sceneId: sceneId,
+                            status: 'pending',
+                            imageUrl: null,
+                            prompt: '',
+                            jobId: null,
+                            source: 'stock'
+                        };
+                        state.storyboard.scenes.push(storyboardScene);
+                    }
+
+                    storyboardScene.imageUrl = result.data.url;
+                    storyboardScene.status = 'ready';
+                    storyboardScene.source = 'stock';
+                    storyboardScene.stockInfo = {
+                        id: media.id,
+                        source: media.source,
+                        author: media.author,
+                        license: media.license
+                    };
+
+                    closeStockBrowser();
+                    showToast('Stock image added!', 'success');
+                    scheduleAutoSave();
+                    render();
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                showToast('Failed to import media', 'error');
+            }
+        }
+
+        function renderStockBrowserModal() {
+            // Remove existing modal
+            const existing = document.getElementById('stock-browser-modal');
+            if (existing) existing.remove();
+
+            if (!stockBrowserState.isOpen) return;
+
+            const modal = document.createElement('div');
+            modal.id = 'stock-browser-modal';
+            modal.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1001; padding: 1rem;" onclick="if(event.target === this) closeStockBrowser()">
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 900px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
+                        <!-- Header -->
+                        <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h3 style="margin: 0; color: white; font-size: 1.1rem; font-weight: 600;">📷 Stock Media Browser</h3>
+                                <p style="margin: 0.25rem 0 0 0; color: rgba(255,255,255,0.6); font-size: 0.8rem;">Free royalty-free images from Pexels & Pixabay</p>
+                            </div>
+                            <button onclick="closeStockBrowser()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">×</button>
+                        </div>
+
+                        <!-- Search Bar -->
+                        <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text"
+                                       id="stock-search-input"
+                                       value="${stockBrowserState.query}"
+                                       placeholder="Search for images..."
+                                       style="flex: 1; padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem;"
+                                       onkeydown="if(event.key === 'Enter') searchStockMedia(this.value)">
+                                <button onclick="searchStockMedia(document.getElementById('stock-search-input').value)"
+                                        style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border: none; border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer;">
+                                    🔍 Search
+                                </button>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                                ${['nature', 'business', 'technology', 'people', 'city', 'abstract', 'food', 'travel'].map(tag => `
+                                    <button onclick="searchStockMedia('${tag}')"
+                                            style="padding: 0.4rem 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 1rem; color: rgba(255,255,255,0.8); font-size: 0.75rem; cursor: pointer;">
+                                        ${tag}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Results Grid -->
+                        <div style="flex: 1; overflow-y: auto; padding: 1rem;">
+                            ${stockBrowserState.loading ? `
+                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem;">
+                                    <div style="width: 40px; height: 40px; border: 3px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                    <p style="color: rgba(255,255,255,0.6); margin-top: 1rem;">Searching...</p>
+                                </div>
+                            ` : stockBrowserState.results.length === 0 ? `
+                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; text-align: center;">
+                                    <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                                    <p style="color: rgba(255,255,255,0.6);">Search for stock images above</p>
+                                    <p style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">Try keywords like "nature", "business", or "technology"</p>
+                                </div>
+                            ` : `
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem;">
+                                    ${stockBrowserState.results.map(media => `
+                                        <div onclick="selectStockMedia(${JSON.stringify(media).replace(/"/g, '&quot;')})"
+                                             style="position: relative; aspect-ratio: ${state.platform.aspectRatio === '9:16' ? '9/16' : '16/9'}; border-radius: 0.5rem; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;"
+                                             onmouseover="this.style.borderColor='#8b5cf6'; this.style.transform='scale(1.02)'"
+                                             onmouseout="this.style.borderColor='transparent'; this.style.transform='scale(1)'">
+                                            <img src="${media.thumbnail || media.preview}"
+                                                 alt=""
+                                                 style="width: 100%; height: 100%; object-fit: cover;">
+                                            <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 0.5rem; background: linear-gradient(transparent, rgba(0,0,0,0.8));">
+                                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.8);">
+                                                    ${media.source === 'pexels' ? '📷 Pexels' : '🖼️ Pixabay'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                ${stockBrowserState.total > 20 ? `
+                                    <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
+                                        ${stockBrowserState.page > 1 ? `
+                                            <button onclick="searchStockMedia(stockBrowserState.query, ${stockBrowserState.page - 1})"
+                                                    style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; cursor: pointer;">
+                                                ← Previous
+                                            </button>
+                                        ` : ''}
+                                        <span style="padding: 0.5rem 1rem; color: rgba(255,255,255,0.6);">
+                                            Page ${stockBrowserState.page}
+                                        </span>
+                                        <button onclick="searchStockMedia(stockBrowserState.query, ${stockBrowserState.page + 1})"
+                                                style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; cursor: pointer;">
+                                            Next →
+                                        </button>
+                                    </div>
+                                ` : ''}
+                            `}
+                        </div>
+
+                        <!-- Footer -->
+                        <div style="padding: 0.75rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">
+                                ${stockBrowserState.total > 0 ? `${stockBrowserState.total.toLocaleString()} results found` : ''}
+                            </div>
+                            <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">
+                                💡 Stock images are free and don't use tokens
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Focus search input
+            setTimeout(() => {
+                const input = document.getElementById('stock-search-input');
+                if (input) input.focus();
+            }, 100);
         }
 
         // ==========================================
@@ -3360,11 +3588,24 @@
             let cardContent = '';
 
             if (status === 'pending') {
-                // Empty state - needs generation
+                // Empty state - needs generation (show both AI and Stock options)
                 cardContent = `
-                    <div style="height: 160px; background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.2); border-radius: 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;" onclick="generateSingleSceneImage(${scene.id})">
-                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">+</div>
-                        <div style="color: rgba(255,255,255,0.5); font-size: 0.8rem;">Click to Generate</div>
+                    <div style="height: 160px; background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.2); border-radius: 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem;">
+                        <div style="color: rgba(255,255,255,0.6); font-size: 0.75rem; margin-bottom: 0.75rem;">Choose image source:</div>
+                        <div style="display: flex; gap: 0.5rem; width: 100%;">
+                            <button onclick="generateSingleSceneImage(${scene.id})"
+                                    style="flex: 1; padding: 0.6rem 0.5rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(6, 182, 212, 0.3)); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.7rem; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                                <span style="font-size: 1.1rem;">🎨</span>
+                                <span>AI Generate</span>
+                                <span style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">2 tokens</span>
+                            </button>
+                            <button onclick="openStockBrowser(${scene.id})"
+                                    style="flex: 1; padding: 0.6rem 0.5rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.7rem; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                                <span style="font-size: 1.1rem;">📷</span>
+                                <span>Stock Media</span>
+                                <span style="font-size: 0.6rem; color: rgba(16, 185, 129, 0.8);">FREE</span>
+                            </button>
+                        </div>
                     </div>
                 `;
             } else if (status === 'generating') {
@@ -3377,14 +3618,22 @@
                 `;
             } else if (status === 'ready' && imageUrl) {
                 // Image ready
+                const sourceLabel = storyboardScene.source === 'stock' ? '📷 Stock' : '🎨 AI';
                 cardContent = `
                     <div style="height: 160px; border-radius: 0.5rem; overflow: hidden; position: relative;">
                         <img src="${imageUrl}" alt="Scene ${index + 1}" style="width: 100%; height: 100%; object-fit: cover;">
-                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 0.5rem; display: flex; gap: 0.5rem;">
-                            <button onclick="openModifyModal(${scene.id})" style="flex: 1; padding: 0.4rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.75rem;">
+                        <!-- Source badge -->
+                        <div style="position: absolute; top: 0.5rem; right: 0.5rem; background: ${storyboardScene.source === 'stock' ? 'rgba(16, 185, 129, 0.9)' : 'rgba(139, 92, 246, 0.9)'}; color: white; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem;">
+                            ${sourceLabel}
+                        </div>
+                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 0.5rem; display: flex; gap: 0.4rem;">
+                            <button onclick="openModifyModal(${scene.id})" style="flex: 1; padding: 0.35rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.7rem;">
                                 ✏️ Modify
                             </button>
-                            <button onclick="regenerateSingleSceneImage(${scene.id})" style="padding: 0.4rem 0.6rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.75rem;">
+                            <button onclick="openStockBrowser(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.2); color: white; cursor: pointer; font-size: 0.7rem;" title="Browse stock media">
+                                📷
+                            </button>
+                            <button onclick="regenerateSingleSceneImage(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.7rem;" title="Regenerate with AI">
                                 🔄
                             </button>
                         </div>

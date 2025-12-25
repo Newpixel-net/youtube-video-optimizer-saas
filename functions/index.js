@@ -24931,3 +24931,329 @@ exports.creationWizardCancelExport = functions.https.onCall(async (data, context
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to cancel export'));
   }
 });
+
+// ==============================================
+// STOCK MEDIA API INTEGRATION
+// Free royalty-free media from Pexels, Pixabay
+// ==============================================
+
+/**
+ * searchStockMedia - Search for royalty-free images and videos
+ * Sources: Pexels, Pixabay
+ *
+ * @param {string} query - Search query
+ * @param {string} type - 'image' | 'video'
+ * @param {string} source - 'pexels' | 'pixabay' | 'all'
+ * @param {object} filters - { orientation, size, color, page, perPage }
+ */
+exports.searchStockMedia = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const {
+    query,
+    type = 'image',
+    source = 'all',
+    filters = {}
+  } = data;
+
+  if (!query || query.trim().length < 2) {
+    throw new functions.https.HttpsError('invalid-argument', 'Search query required (min 2 chars)');
+  }
+
+  const results = {
+    pexels: [],
+    pixabay: [],
+    total: 0
+  };
+
+  const { orientation = 'landscape', page = 1, perPage = 20 } = filters;
+
+  // Pexels API
+  const pexelsKey = functions.config().pexels?.key;
+  if (pexelsKey && (source === 'pexels' || source === 'all')) {
+    try {
+      const pexelsEndpoint = type === 'video'
+        ? 'https://api.pexels.com/videos/search'
+        : 'https://api.pexels.com/v1/search';
+
+      const pexelsResponse = await axios.get(pexelsEndpoint, {
+        params: {
+          query: query,
+          orientation: orientation,
+          page: page,
+          per_page: Math.min(perPage, 40)
+        },
+        headers: {
+          'Authorization': pexelsKey
+        },
+        timeout: 10000
+      });
+
+      if (type === 'video') {
+        results.pexels = (pexelsResponse.data.videos || []).map(v => ({
+          id: `pexels-${v.id}`,
+          source: 'pexels',
+          type: 'video',
+          thumbnail: v.image,
+          preview: v.video_files?.find(f => f.quality === 'sd')?.link || v.video_files?.[0]?.link,
+          url: v.video_files?.find(f => f.quality === 'hd')?.link || v.video_files?.[0]?.link,
+          width: v.width,
+          height: v.height,
+          duration: v.duration,
+          author: v.user?.name || 'Pexels',
+          authorUrl: v.user?.url,
+          license: 'Pexels License (Free)',
+          originalUrl: v.url
+        }));
+      } else {
+        results.pexels = (pexelsResponse.data.photos || []).map(p => ({
+          id: `pexels-${p.id}`,
+          source: 'pexels',
+          type: 'image',
+          thumbnail: p.src?.small || p.src?.medium,
+          preview: p.src?.medium || p.src?.large,
+          url: p.src?.large2x || p.src?.original,
+          width: p.width,
+          height: p.height,
+          author: p.photographer,
+          authorUrl: p.photographer_url,
+          license: 'Pexels License (Free)',
+          originalUrl: p.url,
+          avgColor: p.avg_color
+        }));
+      }
+
+      results.total += pexelsResponse.data.total_results || results.pexels.length;
+    } catch (pexelsError) {
+      console.error('[searchStockMedia] Pexels error:', pexelsError.message);
+    }
+  }
+
+  // Pixabay API
+  const pixabayKey = functions.config().pixabay?.key;
+  if (pixabayKey && (source === 'pixabay' || source === 'all')) {
+    try {
+      const pixabayEndpoint = type === 'video'
+        ? 'https://pixabay.com/api/videos/'
+        : 'https://pixabay.com/api/';
+
+      const pixabayParams = {
+        key: pixabayKey,
+        q: query,
+        orientation: orientation === 'landscape' ? 'horizontal' : orientation === 'portrait' ? 'vertical' : 'all',
+        page: page,
+        per_page: Math.min(perPage, 40),
+        safesearch: true
+      };
+
+      const pixabayResponse = await axios.get(pixabayEndpoint, {
+        params: pixabayParams,
+        timeout: 10000
+      });
+
+      if (type === 'video') {
+        results.pixabay = (pixabayResponse.data.hits || []).map(v => ({
+          id: `pixabay-${v.id}`,
+          source: 'pixabay',
+          type: 'video',
+          thumbnail: `https://i.vimeocdn.com/video/${v.picture_id}_295x166.jpg`,
+          preview: v.videos?.small?.url || v.videos?.tiny?.url,
+          url: v.videos?.large?.url || v.videos?.medium?.url || v.videos?.small?.url,
+          width: v.videos?.large?.width || v.videos?.medium?.width || 1920,
+          height: v.videos?.large?.height || v.videos?.medium?.height || 1080,
+          duration: v.duration,
+          author: v.user,
+          authorUrl: `https://pixabay.com/users/${v.user}-${v.user_id}/`,
+          license: 'Pixabay License (Free)',
+          originalUrl: v.pageURL,
+          tags: v.tags
+        }));
+      } else {
+        results.pixabay = (pixabayResponse.data.hits || []).map(p => ({
+          id: `pixabay-${p.id}`,
+          source: 'pixabay',
+          type: 'image',
+          thumbnail: p.previewURL,
+          preview: p.webformatURL,
+          url: p.largeImageURL,
+          width: p.imageWidth,
+          height: p.imageHeight,
+          author: p.user,
+          authorUrl: `https://pixabay.com/users/${p.user}-${p.user_id}/`,
+          license: 'Pixabay License (Free)',
+          originalUrl: p.pageURL,
+          tags: p.tags
+        }));
+      }
+
+      results.total += pixabayResponse.data.totalHits || results.pixabay.length;
+    } catch (pixabayError) {
+      console.error('[searchStockMedia] Pixabay error:', pixabayError.message);
+    }
+  }
+
+  // Combine and interleave results
+  const combined = [];
+  const maxLen = Math.max(results.pexels.length, results.pixabay.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (results.pexels[i]) combined.push(results.pexels[i]);
+    if (results.pixabay[i]) combined.push(results.pixabay[i]);
+  }
+
+  return {
+    success: true,
+    results: combined,
+    total: results.total,
+    page,
+    perPage,
+    sources: {
+      pexels: results.pexels.length,
+      pixabay: results.pixabay.length
+    }
+  };
+});
+
+/**
+ * searchStockMusic - Search for royalty-free music
+ * Source: Pixabay Music
+ *
+ * @param {string} query - Search query
+ * @param {object} filters - { genre, mood, duration, page, perPage }
+ */
+exports.searchStockMusic = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { query = '', filters = {} } = data;
+  const { genre, mood, minDuration, maxDuration, page = 1, perPage = 20 } = filters;
+
+  const pixabayKey = functions.config().pixabay?.key;
+  if (!pixabayKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'Pixabay API key not configured');
+  }
+
+  try {
+    // Build search query
+    let searchQuery = query || 'background music';
+    if (genre) searchQuery += ` ${genre}`;
+    if (mood) searchQuery += ` ${mood}`;
+
+    const response = await axios.get('https://pixabay.com/api/', {
+      params: {
+        key: pixabayKey,
+        q: searchQuery,
+        // Pixabay doesn't have a dedicated music endpoint in free API
+        // Using image search as placeholder - in production use Pixabay Music or Freesound
+        page: page,
+        per_page: Math.min(perPage, 40),
+        safesearch: true
+      },
+      timeout: 10000
+    });
+
+    // For now, return curated music library since Pixabay free API doesn't include music
+    // In production, integrate with Pixabay Music API or Freesound
+    const curatedTracks = MUSIC_LIBRARY.filter(track => {
+      const matchesQuery = !query ||
+        track.name.toLowerCase().includes(query.toLowerCase()) ||
+        track.tags.some(t => t.toLowerCase().includes(query.toLowerCase()));
+      const matchesMood = !mood || track.mood.toLowerCase().includes(mood.toLowerCase());
+      const matchesDuration = (!minDuration || track.duration >= minDuration) &&
+                              (!maxDuration || track.duration <= maxDuration);
+      return matchesQuery && matchesMood && matchesDuration;
+    });
+
+    return {
+      success: true,
+      results: curatedTracks.slice((page - 1) * perPage, page * perPage),
+      total: curatedTracks.length,
+      page,
+      perPage,
+      note: 'Using curated library. For full music search, configure Pixabay Music API.'
+    };
+
+  } catch (error) {
+    console.error('[searchStockMusic] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to search music'));
+  }
+});
+
+/**
+ * importStockMedia - Download and cache stock media to Firebase Storage
+ * Needed because some APIs don't allow hotlinking
+ *
+ * @param {string} mediaId - Stock media ID (e.g., 'pexels-12345')
+ * @param {string} url - Original media URL
+ * @param {string} type - 'image' | 'video'
+ * @param {string} projectId - Project to associate with
+ */
+exports.importStockMedia = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  const { mediaId, url, type = 'image', projectId } = data;
+
+  if (!url) {
+    throw new functions.https.HttpsError('invalid-argument', 'Media URL required');
+  }
+
+  try {
+    // Download the media
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 60000, // 60s for large videos
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; VideoWizard/1.0)'
+      }
+    });
+
+    const buffer = Buffer.from(response.data);
+    const contentType = response.headers['content-type'] || (type === 'video' ? 'video/mp4' : 'image/jpeg');
+    const extension = type === 'video' ? 'mp4' : 'jpg';
+
+    // Generate filename
+    const timestamp = Date.now();
+    const fileName = `creation-projects/${projectId || uid}/stock/${mediaId}_${timestamp}.${extension}`;
+
+    // Upload to Firebase Storage
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(fileName);
+
+    await file.save(buffer, {
+      metadata: {
+        contentType: contentType,
+        metadata: {
+          originalUrl: url,
+          mediaId: mediaId,
+          importedAt: new Date().toISOString(),
+          source: mediaId.split('-')[0] // 'pexels' or 'pixabay'
+        }
+      }
+    });
+
+    // Make file public and get URL
+    await file.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'stock_media_import',
+      source: mediaId.split('-')[0],
+      mediaType: type,
+      originalUrl: url,
+      cachedUrl: publicUrl,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      url: publicUrl,
+      mediaId,
+      type,
+      cached: true
+    };
+
+  } catch (error) {
+    console.error('[importStockMedia] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to import media'));
+  }
+});
