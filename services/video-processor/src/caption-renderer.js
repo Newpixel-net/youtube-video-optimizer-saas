@@ -274,12 +274,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
         // Use \pos(x,y) with alignment 5 (center) to position the highlighted word exactly
         // \an5 sets anchor to center, then \pos places it at word center
-        // \be1 adds slight blur to edges for rounded corner effect
-        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an5\\pos(${wordCenterX},${Math.round(posY)})\\be1}${word.word}\n`;
+        // \be2 adds blur to edges for rounded corner effect (higher = more rounded)
+        assContent += `Dialogue: 1,${wordStart},${wordEnd},HormoziBox,,0,0,0,,{\\an5\\pos(${wordCenterX},${Math.round(posY)})\\be2}${word.word}\n`;
 
         // Move X position to next word (word width + space)
-        // Space width from ARIAL_BOLD_CHAR_WIDTHS[' '] = 0.28
-        const spaceWidth = fontSize * 0.28;
+        // Space width from ARIAL_BOLD_CHAR_WIDTHS[' '] = 0.36
+        const spaceWidth = fontSize * 0.36;
         currentX += wordWidth + spaceWidth;
       }
     }
@@ -476,55 +476,55 @@ function hexToASS(hex) {
 
 /**
  * Arial Bold character width ratios (relative to fontSize)
- * Based on actual Arial Bold font metrics
+ * Calibrated for libass rendering - values are slightly larger to match actual rendering
  * Values are approximate width as fraction of em-square
  */
 const ARIAL_BOLD_CHAR_WIDTHS = {
   // Very narrow characters
-  'i': 0.28, 'l': 0.28, 'I': 0.28, '1': 0.56, '!': 0.33, '|': 0.28,
-  "'": 0.24, '.': 0.28, ',': 0.28, ':': 0.33, ';': 0.33,
+  'i': 0.33, 'l': 0.33, 'I': 0.33, '1': 0.56, '!': 0.39, '|': 0.33,
+  "'": 0.28, '.': 0.33, ',': 0.33, ':': 0.39, ';': 0.39,
 
   // Narrow characters
-  'j': 0.28, 'f': 0.33, 't': 0.39, 'r': 0.39, 'J': 0.56,
+  'j': 0.33, 'f': 0.39, 't': 0.44, 'r': 0.44, 'J': 0.61,
 
   // Medium-narrow characters
-  'a': 0.56, 'c': 0.56, 'e': 0.56, 's': 0.56, 'z': 0.50,
+  'a': 0.61, 'c': 0.61, 'e': 0.61, 's': 0.61, 'z': 0.56,
 
   // Medium characters (most lowercase)
-  'b': 0.61, 'd': 0.61, 'g': 0.61, 'h': 0.61, 'k': 0.56,
-  'n': 0.61, 'o': 0.61, 'p': 0.61, 'q': 0.61, 'u': 0.61,
-  'v': 0.56, 'x': 0.56, 'y': 0.56,
+  'b': 0.67, 'd': 0.67, 'g': 0.67, 'h': 0.67, 'k': 0.61,
+  'n': 0.67, 'o': 0.67, 'p': 0.67, 'q': 0.67, 'u': 0.67,
+  'v': 0.61, 'x': 0.61, 'y': 0.61,
 
   // Wide characters
-  'm': 0.89, 'w': 0.78,
+  'm': 0.94, 'w': 0.83,
 
   // Capital letters - narrow
-  'E': 0.67, 'F': 0.61, 'L': 0.56, 'P': 0.67, 'S': 0.67,
+  'E': 0.72, 'F': 0.67, 'L': 0.61, 'P': 0.72, 'S': 0.72,
 
   // Capital letters - medium
-  'A': 0.72, 'B': 0.72, 'C': 0.72, 'D': 0.78, 'G': 0.78,
-  'H': 0.78, 'K': 0.72, 'N': 0.78, 'O': 0.78, 'Q': 0.78,
-  'R': 0.72, 'T': 0.61, 'U': 0.78, 'V': 0.72, 'X': 0.72,
-  'Y': 0.67, 'Z': 0.61,
+  'A': 0.78, 'B': 0.78, 'C': 0.78, 'D': 0.83, 'G': 0.83,
+  'H': 0.83, 'K': 0.78, 'N': 0.83, 'O': 0.83, 'Q': 0.83,
+  'R': 0.78, 'T': 0.67, 'U': 0.83, 'V': 0.78, 'X': 0.78,
+  'Y': 0.72, 'Z': 0.67,
 
   // Capital letters - wide
-  'M': 0.89, 'W': 1.00,
+  'M': 0.94, 'W': 1.06,
 
   // Numbers
-  '0': 0.56, '2': 0.56, '3': 0.56, '4': 0.56, '5': 0.56,
-  '6': 0.56, '7': 0.56, '8': 0.56, '9': 0.56,
+  '0': 0.61, '2': 0.61, '3': 0.61, '4': 0.61, '5': 0.61,
+  '6': 0.61, '7': 0.61, '8': 0.61, '9': 0.61,
 
-  // Space
-  ' ': 0.28,
+  // Space - critical for word positioning (increased for accuracy)
+  ' ': 0.36,
 
   // Common punctuation
-  '-': 0.33, '–': 0.56, '—': 1.00, '"': 0.50, '"': 0.50,
-  "'": 0.28, "'": 0.28, '?': 0.61, '/': 0.28, '(': 0.39,
-  ')': 0.39, '[': 0.33, ']': 0.33
+  '-': 0.39, '–': 0.61, '—': 1.06, '"': 0.56, '"': 0.56,
+  "'": 0.33, "'": 0.33, '?': 0.67, '/': 0.33, '(': 0.44,
+  ')': 0.44, '[': 0.39, ']': 0.39
 };
 
 // Default width for unknown characters
-const DEFAULT_CHAR_WIDTH = 0.58;
+const DEFAULT_CHAR_WIDTH = 0.64;
 
 /**
  * Calculate text width using character-specific widths for Arial Bold
