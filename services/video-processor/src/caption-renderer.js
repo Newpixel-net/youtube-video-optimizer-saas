@@ -335,14 +335,16 @@ function getStyleConfig(captionStyle, customStyle, captionPosition, captionSize)
       marginV
     },
 
-    // Hormozi style - clean with keyword highlights (green background BOX)
+    // Hormozi style - clean with keyword highlights (green background BOX with depth)
     // Main style: normal white text with outline
-    // Extra style "HormoziBox": uses BorderStyle 3 (opaque box) for solid green background behind keywords
+    // Extra style "HormoziBox": uses BorderStyle 3 (opaque box) for solid green background
+    // Shadow adds depth effect to match preview appearance
     hormozi: {
       styleName: 'Hormozi',
       styleLine: `Style: Hormozi,Arial,${fontSize},&H00FFFFFF,&H0022C55E,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,${alignment},50,50,${marginV},1`,
-      // HormoziBox style: BorderStyle=3 (opaque box), OutlineColour=green (becomes box color), Outline=12 for padding
-      extraStyles: `Style: HormoziBox,Arial,${fontSize},&H00FFFFFF,&H00FFFFFF,&H0022C55E,&H00000000,1,0,0,0,100,100,0,0,3,12,0,${alignment},50,50,${marginV},1`,
+      // HormoziBox style: BorderStyle=3 (opaque box), OutlineColour=green (box color)
+      // BackColour=dark green for shadow, Shadow=4 for depth offset
+      extraStyles: `Style: HormoziBox,Arial,${fontSize},&H00FFFFFF,&H00FFFFFF,&H0022C55E,&H00166534,1,0,0,0,100,100,0,0,3,12,4,${alignment},50,50,${marginV},1`,
       wordsPerLine: 4,
       useKaraoke: false,
       highlightKeywords: true,
