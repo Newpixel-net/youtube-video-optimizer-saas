@@ -3484,11 +3484,380 @@
         }
 
         // ==========================================
-        // 7.9 STEP 5-7: PLACEHOLDER RENDERS
+        // 7.9 STEP 5: ANIMATION
         // ==========================================
         function renderStep5Animation() {
-            return renderComingSoonStep(5, 'Animation', 'Animate your images to video using Runpod Multi-talk or Veo 3.1.');
+            const storyboardScenes = state.storyboard.scenes || [];
+            const animationScenes = state.animation.scenes || [];
+            const scriptScenes = state.script.scenes || [];
+
+            // Initialize animation scenes if needed
+            if (animationScenes.length === 0 && storyboardScenes.length > 0) {
+                initializeAnimationScenes();
+            }
+
+            let html = '<div class="fade-in">';
+
+            // Header with global settings
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎬</div>
+                        <div style="flex: 1;">
+                            <div class="content-card-title">Animation Studio</div>
+                            <div class="content-card-subtitle">Generate voiceovers and animate your scenes • ${animationScenes.filter(s => s.videoUrl).length}/${storyboardScenes.length} videos ready</div>
+                        </div>
+                    </div>
+
+                    <!-- Global Voice Settings -->
+                    <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem; margin-top: 1rem;">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.75rem;">🎙️ Global Voice Settings</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Voice</label>
+                                <select id="global-voice-select" onchange="setGlobalVoice(this.value)"
+                                        style="width: 100%; padding: 0.6rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(30,30,50,1); color: white; font-size: 0.85rem;">
+                                    ${['alloy', 'nova', 'shimmer', 'echo', 'onyx', 'fable'].map(v => `
+                                        <option value="${v}" ${state.animation.voiceover.voice === v ? 'selected' : ''}>${v.charAt(0).toUpperCase() + v.slice(1)}</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Speed: ${state.animation.voiceover.speed.toFixed(1)}x</label>
+                                <input type="range" min="0.5" max="2.0" step="0.1" value="${state.animation.voiceover.speed}"
+                                       onchange="setGlobalSpeed(this.value)"
+                                       style="width: 100%; height: 6px; cursor: pointer;">
+                            </div>
+                        </div>
+                        <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+                            <button onclick="generateAllVoiceovers()"
+                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; cursor: pointer; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <span>🎙️</span> Generate All Voiceovers
+                            </button>
+                            <button onclick="animateAllScenes()"
+                                    ${animationScenes.filter(s => s.voiceoverUrl).length < storyboardScenes.length ? 'disabled' : ''}
+                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: none; background: ${animationScenes.filter(s => s.voiceoverUrl).length >= storyboardScenes.length ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)'}; color: ${animationScenes.filter(s => s.voiceoverUrl).length >= storyboardScenes.length ? 'white' : 'rgba(255,255,255,0.4)'}; cursor: ${animationScenes.filter(s => s.voiceoverUrl).length >= storyboardScenes.length ? 'pointer' : 'not-allowed'}; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <span>🎬</span> Animate All Scenes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Animation Scene Cards
+            html += `<div style="display: grid; gap: 1rem; margin-top: 1rem;">`;
+
+            scriptScenes.forEach((scriptScene, index) => {
+                const storyboardScene = storyboardScenes.find(s => s.sceneId === scriptScene.id) || {};
+                const animScene = animationScenes.find(s => s.sceneId === scriptScene.id) || {};
+                html += renderAnimationSceneCard(scriptScene, storyboardScene, animScene, index);
+            });
+
+            html += `</div>`;
+
+            // Navigation
+            const hasAllVideos = animationScenes.filter(s => s.videoUrl).length >= storyboardScenes.length;
+            html += renderNavButtons(4, hasAllVideos ? 6 : null);
+
+            html += '</div>';
+            return html;
         }
+
+        function initializeAnimationScenes() {
+            const storyboardScenes = state.storyboard.scenes || [];
+            const scriptScenes = state.script.scenes || [];
+
+            state.animation.scenes = scriptScenes.map(scene => ({
+                sceneId: scene.id,
+                voiceoverStatus: 'idle',
+                voiceoverUrl: null,
+                animationStatus: 'idle',
+                videoUrl: null,
+                voice: state.animation.voiceover.voice,
+                speed: state.animation.voiceover.speed,
+                animationType: 'ken_burns',
+                jobId: null
+            }));
+            saveProject();
+        }
+
+        function renderAnimationSceneCard(scriptScene, storyboardScene, animScene, index) {
+            const imageUrl = storyboardScene.imageUrl;
+            const voiceoverStatus = animScene.voiceoverStatus || 'idle';
+            const voiceoverUrl = animScene.voiceoverUrl;
+            const animationStatus = animScene.animationStatus || 'idle';
+            const videoUrl = animScene.videoUrl;
+            const animationType = animScene.animationType || 'ken_burns';
+
+            return `
+                <div class="content-card" style="padding: 0; overflow: hidden;">
+                    <div style="display: grid; grid-template-columns: 200px 1fr; gap: 0;">
+                        <!-- Left: Image/Video Preview -->
+                        <div style="position: relative; background: rgba(0,0,0,0.3);">
+                            ${videoUrl ? `
+                                <video src="${videoUrl}" controls style="width: 100%; height: 180px; object-fit: cover;"></video>
+                                <div style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(16, 185, 129, 0.9); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.65rem; font-weight: 600;">
+                                    ✓ ANIMATED
+                                </div>
+                            ` : imageUrl ? `
+                                <img src="${imageUrl}" alt="Scene ${index + 1}" style="width: 100%; height: 180px; object-fit: cover;">
+                                ${animationStatus === 'generating' ? `
+                                    <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                        <div class="animate-spin" style="width: 2rem; height: 2rem; border: 3px solid rgba(6,182,212,0.3); border-top-color: #06b6d4; border-radius: 50%; margin-bottom: 0.5rem;"></div>
+                                        <div style="color: white; font-size: 0.75rem;">Animating...</div>
+                                    </div>
+                                ` : ''}
+                            ` : `
+                                <div style="width: 100%; height: 180px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.4);">
+                                    No Image
+                                </div>
+                            `}
+                            <div style="position: absolute; top: 0.5rem; left: 0.5rem; width: 1.75rem; height: 1.75rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem;">
+                                ${index + 1}
+                            </div>
+                        </div>
+
+                        <!-- Right: Controls -->
+                        <div style="padding: 1rem;">
+                            <!-- Narration Preview -->
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin-bottom: 0.75rem; line-height: 1.4; max-height: 2.8em; overflow: hidden; text-overflow: ellipsis;">
+                                "${scriptScene.narration?.substring(0, 100) || 'No narration'}${scriptScene.narration?.length > 100 ? '...' : ''}"
+                            </div>
+
+                            <!-- Voiceover Section -->
+                            <div style="margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">🎙️ Voiceover:</span>
+                                    ${voiceoverStatus === 'idle' ? `
+                                        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Not generated</span>
+                                    ` : voiceoverStatus === 'generating' ? `
+                                        <span style="font-size: 0.7rem; color: #a855f7;" class="animate-pulse">Generating...</span>
+                                    ` : voiceoverStatus === 'ready' ? `
+                                        <span style="font-size: 0.7rem; color: #10b981;">✓ Ready</span>
+                                    ` : `
+                                        <span style="font-size: 0.7rem; color: #ef4444;">Error</span>
+                                    `}
+                                </div>
+                                ${voiceoverUrl ? `
+                                    <audio src="${voiceoverUrl}" controls style="width: 100%; height: 28px; margin-bottom: 0.5rem;"></audio>
+                                ` : ''}
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button onclick="generateSceneVoiceover(${scriptScene.id})"
+                                            ${voiceoverStatus === 'generating' ? 'disabled' : ''}
+                                            style="flex: 1; padding: 0.4rem 0.6rem; border-radius: 0.4rem; border: 1px solid rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.15); color: ${voiceoverStatus === 'generating' ? 'rgba(255,255,255,0.4)' : 'white'}; cursor: ${voiceoverStatus === 'generating' ? 'wait' : 'pointer'}; font-size: 0.75rem;">
+                                        ${voiceoverUrl ? '🔄 Regenerate' : '🎙️ Generate'} Voice
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Animation Section -->
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                                    <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">🎬 Animation Type:</span>
+                                    <select onchange="setSceneAnimationType(${scriptScene.id}, this.value)"
+                                            style="padding: 0.3rem 0.5rem; border-radius: 0.3rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(30,30,50,1); color: white; font-size: 0.7rem;">
+                                        ${[
+                                            { id: 'ken_burns', name: 'Ken Burns (Zoom/Pan)' },
+                                            { id: 'talking_head', name: 'Talking Head' },
+                                            { id: 'static', name: 'Static (No Animation)' }
+                                        ].map(type => `
+                                            <option value="${type.id}" ${animationType === type.id ? 'selected' : ''}>${type.name}</option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                                <button onclick="animateScene(${scriptScene.id})"
+                                        ${!voiceoverUrl || animationStatus === 'generating' ? 'disabled' : ''}
+                                        style="width: 100%; padding: 0.5rem; border-radius: 0.4rem; border: none; background: ${voiceoverUrl && animationStatus !== 'generating' ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)'}; color: ${voiceoverUrl && animationStatus !== 'generating' ? 'white' : 'rgba(255,255,255,0.4)'}; cursor: ${voiceoverUrl && animationStatus !== 'generating' ? 'pointer' : 'not-allowed'}; font-size: 0.8rem; font-weight: 600;">
+                                    ${animationStatus === 'generating' ? '⏳ Animating...' : videoUrl ? '🔄 Re-Animate' : '🎬 Animate Scene'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Animation Functions
+        function setGlobalVoice(voice) {
+            state.animation.voiceover.voice = voice;
+            // Update all scenes that haven't generated voiceover yet
+            state.animation.scenes.forEach(scene => {
+                if (!scene.voiceoverUrl) {
+                    scene.voice = voice;
+                }
+            });
+            saveProject();
+            render();
+        }
+
+        function setGlobalSpeed(speed) {
+            state.animation.voiceover.speed = parseFloat(speed);
+            // Update all scenes that haven't generated voiceover yet
+            state.animation.scenes.forEach(scene => {
+                if (!scene.voiceoverUrl) {
+                    scene.speed = parseFloat(speed);
+                }
+            });
+            saveProject();
+            render();
+        }
+
+        function setSceneAnimationType(sceneId, type) {
+            const scene = state.animation.scenes.find(s => s.sceneId === sceneId);
+            if (scene) {
+                scene.animationType = type;
+                saveProject();
+            }
+        }
+
+        async function generateSceneVoiceover(sceneId) {
+            const animScene = state.animation.scenes.find(s => s.sceneId === sceneId);
+            const scriptScene = state.script.scenes.find(s => s.id === sceneId);
+
+            if (!animScene || !scriptScene || !scriptScene.narration) {
+                showToast('No narration available for this scene', 'error');
+                return;
+            }
+
+            animScene.voiceoverStatus = 'generating';
+            render();
+
+            try {
+                const generateVoiceover = firebase.functions().httpsCallable('creationWizardGenerateVoiceover');
+                const result = await generateVoiceover({
+                    projectId: state.projectId,
+                    sceneId: sceneId,
+                    text: scriptScene.narration,
+                    voice: animScene.voice || state.animation.voiceover.voice,
+                    speed: animScene.speed || state.animation.voiceover.speed
+                });
+
+                animScene.voiceoverStatus = 'ready';
+                animScene.voiceoverUrl = result.data.audioUrl;
+                showToast('Voiceover generated successfully!', 'success');
+            } catch (error) {
+                console.error('Voiceover generation error:', error);
+                animScene.voiceoverStatus = 'error';
+                showToast('Failed to generate voiceover: ' + error.message, 'error');
+            }
+
+            saveProject();
+            render();
+        }
+
+        async function generateAllVoiceovers() {
+            const scenesToGenerate = state.animation.scenes.filter(s => !s.voiceoverUrl && s.voiceoverStatus !== 'generating');
+
+            if (scenesToGenerate.length === 0) {
+                showToast('All voiceovers are already generated', 'info');
+                return;
+            }
+
+            showToast(`Generating ${scenesToGenerate.length} voiceovers...`, 'info');
+
+            // Generate sequentially to avoid rate limits
+            for (const scene of scenesToGenerate) {
+                await generateSceneVoiceover(scene.sceneId);
+                // Small delay between generations
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            showToast('All voiceovers generated!', 'success');
+        }
+
+        async function animateScene(sceneId) {
+            const animScene = state.animation.scenes.find(s => s.sceneId === sceneId);
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+
+            if (!animScene || !storyboardScene || !storyboardScene.imageUrl) {
+                showToast('No image available for animation', 'error');
+                return;
+            }
+
+            if (!animScene.voiceoverUrl) {
+                showToast('Please generate voiceover first', 'error');
+                return;
+            }
+
+            animScene.animationStatus = 'generating';
+            render();
+
+            try {
+                const animate = firebase.functions().httpsCallable('creationWizardAnimateScene');
+                const result = await animate({
+                    projectId: state.projectId,
+                    sceneId: sceneId,
+                    imageUrl: storyboardScene.imageUrl,
+                    audioUrl: animScene.voiceoverUrl,
+                    animationType: animScene.animationType || 'ken_burns'
+                });
+
+                // Start polling for completion
+                animScene.jobId = result.data.jobId;
+                pollAnimationStatus(sceneId, result.data.jobId);
+
+            } catch (error) {
+                console.error('Animation error:', error);
+                animScene.animationStatus = 'error';
+                showToast('Failed to start animation: ' + error.message, 'error');
+                saveProject();
+                render();
+            }
+        }
+
+        async function pollAnimationStatus(sceneId, jobId) {
+            const animScene = state.animation.scenes.find(s => s.sceneId === sceneId);
+            if (!animScene) return;
+
+            try {
+                const checkStatus = firebase.functions().httpsCallable('creationWizardCheckAnimationStatus');
+                const result = await checkStatus({ jobId });
+
+                if (result.data.status === 'COMPLETED') {
+                    animScene.animationStatus = 'ready';
+                    animScene.videoUrl = result.data.videoUrl;
+                    animScene.jobId = null;
+                    showToast(`Scene ${state.script.scenes.findIndex(s => s.id === sceneId) + 1} animated!`, 'success');
+                    saveProject();
+                    render();
+                } else if (result.data.status === 'FAILED') {
+                    animScene.animationStatus = 'error';
+                    animScene.jobId = null;
+                    showToast('Animation failed. Please try again.', 'error');
+                    saveProject();
+                    render();
+                } else {
+                    // Still processing, poll again
+                    setTimeout(() => pollAnimationStatus(sceneId, jobId), 5000);
+                }
+            } catch (error) {
+                console.error('Animation status check error:', error);
+                // Retry polling
+                setTimeout(() => pollAnimationStatus(sceneId, jobId), 8000);
+            }
+        }
+
+        async function animateAllScenes() {
+            const scenesToAnimate = state.animation.scenes.filter(s => s.voiceoverUrl && !s.videoUrl && s.animationStatus !== 'generating');
+
+            if (scenesToAnimate.length === 0) {
+                showToast('No scenes ready to animate', 'info');
+                return;
+            }
+
+            showToast(`Starting animation for ${scenesToAnimate.length} scenes...`, 'info');
+
+            // Start all animations (they will poll independently)
+            for (const scene of scenesToAnimate) {
+                await animateScene(scene.sceneId);
+                // Small delay between starting jobs
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+
+        // ==========================================
+        // 7.10 STEP 6-7: PLACEHOLDER RENDERS
+        // ==========================================
 
         function renderStep6Assembly() {
             return renderComingSoonStep(6, 'Assembly', 'Combine scenes, add music, captions, and transitions.');

@@ -23897,3 +23897,276 @@ exports.creationWizardUpdateStoryboard = functions.https.onCall(async (data, con
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update storyboard'));
   }
 });
+
+// ============================================================================
+// VIDEO CREATION WIZARD - PHASE 4: ANIMATION
+// ============================================================================
+
+/**
+ * creationWizardGenerateVoiceover - Generate TTS audio using OpenAI
+ *
+ * Uses OpenAI's TTS API to generate high-quality voiceover from narration text
+ */
+exports.creationWizardGenerateVoiceover = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sceneId, text, voice = 'alloy', speed = 1.0 } = data;
+
+  if (!text || text.trim().length < 3) {
+    throw new functions.https.HttpsError('invalid-argument', 'Narration text is required');
+  }
+
+  // Available voices: alloy, echo, fable, onyx, nova, shimmer
+  const validVoices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+  const selectedVoice = validVoices.includes(voice) ? voice : 'alloy';
+
+  try {
+    // Generate audio using OpenAI TTS
+    const mp3Response = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice: selectedVoice,
+      input: text,
+      speed: Math.max(0.25, Math.min(4.0, speed))
+    });
+
+    // Convert response to buffer
+    const audioBuffer = Buffer.from(await mp3Response.arrayBuffer());
+
+    // Upload to Firebase Storage
+    const fileName = `creation-projects/${projectId || uid}/voiceover/scene_${sceneId}_${Date.now()}.mp3`;
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(fileName);
+
+    await file.save(audioBuffer, {
+      metadata: {
+        contentType: 'audio/mpeg',
+        metadata: {
+          sceneId: String(sceneId),
+          voice: selectedVoice,
+          textLength: String(text.length)
+        }
+      }
+    });
+
+    // Make file public and get URL
+    await file.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
+    // Estimate duration based on text length and speed
+    // Average speaking rate is ~150 words per minute
+    const wordCount = text.split(/\s+/).length;
+    const estimatedDuration = Math.ceil((wordCount / 150) * 60 / speed);
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'voiceover_generation',
+      model: 'openai-tts-1',
+      projectId: projectId || null,
+      sceneId,
+      textLength: text.length,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      sceneId,
+      audioUrl: publicUrl,
+      fileName,
+      voice: selectedVoice,
+      estimatedDuration,
+      textLength: text.length
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateVoiceover] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate voiceover'));
+  }
+});
+
+/**
+ * creationWizardAnimateScene - Animate image with voiceover using RunPod Multi-talk
+ *
+ * Creates a video clip from a still image and audio using the Multi-talk API
+ */
+exports.creationWizardAnimateScene = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sceneId, imageUrl, audioUrl, animationType = 'ken_burns', settings = {} } = data;
+
+  if (!imageUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Image URL is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    // Multi-talk endpoint
+    const runpodEndpoint = 'https://api.runpod.ai/v2/mekewddvpqb0b4/run';
+
+    // Build animation input based on type
+    const animationInput = {
+      image_url: imageUrl,
+      audio_url: audioUrl || null,
+      animation_type: animationType, // 'talking_head', 'ken_burns', 'static'
+    };
+
+    // Add type-specific settings
+    if (animationType === 'talking_head') {
+      animationInput.lip_sync = settings.lipSync !== false;
+      animationInput.head_motion = settings.headMotion !== false;
+      animationInput.eye_blink = settings.eyeBlink !== false;
+    } else if (animationType === 'ken_burns') {
+      animationInput.zoom_direction = settings.zoomDirection || 'in'; // 'in', 'out', 'none'
+      animationInput.pan_direction = settings.panDirection || 'left'; // 'left', 'right', 'up', 'down', 'none'
+      animationInput.motion_intensity = settings.motionIntensity || 0.3; // 0.0 - 1.0
+    }
+
+    // Duration settings
+    animationInput.duration = settings.duration || 15; // Max 15 seconds for Multi-talk
+
+    // Generate output filename
+    const outputFileName = `creation-projects/${projectId || uid}/animation/scene_${sceneId}_${Date.now()}.mp4`;
+    const bucket = admin.storage().bucket();
+    const outputFile = bucket.file(outputFileName);
+
+    // Create signed URL for upload
+    const [uploadUrl] = await outputFile.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 60 * 60 * 1000, // 1 hour
+      contentType: 'video/mp4',
+    });
+
+    // Add upload URL to input
+    animationInput.output_url = uploadUrl;
+
+    // Call RunPod API
+    const runpodResponse = await axios.post(runpodEndpoint, {
+      input: animationInput
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${runpodKey}`
+      },
+      timeout: 30000
+    });
+
+    const jobId = runpodResponse.data.id;
+    const status = runpodResponse.data.status;
+
+    // Generate public URL for the output video
+    const encodedFileName = encodeURIComponent(outputFileName);
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'scene_animation',
+      model: 'runpod-multitalk',
+      projectId: projectId || null,
+      sceneId,
+      animationType,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      sceneId,
+      jobId,
+      status,
+      videoUrl: publicUrl,
+      fileName: outputFileName,
+      animationType,
+      checkEndpoint: `https://api.runpod.ai/v2/mekewddvpqb0b4/status/${jobId}`
+    };
+
+  } catch (error) {
+    console.error('[creationWizardAnimateScene] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to start animation'));
+  }
+});
+
+/**
+ * creationWizardCheckAnimationStatus - Check animation job status
+ */
+exports.creationWizardCheckAnimationStatus = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { jobId } = data;
+
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    const statusResponse = await axios.get(
+      `https://api.runpod.ai/v2/mekewddvpqb0b4/status/${jobId}`,
+      {
+        headers: { 'Authorization': `Bearer ${runpodKey}` },
+        timeout: 10000
+      }
+    );
+
+    return {
+      success: true,
+      jobId,
+      status: statusResponse.data.status,
+      output: statusResponse.data.output || null,
+      error: statusResponse.data.error || null
+    };
+
+  } catch (error) {
+    console.error('[creationWizardCheckAnimationStatus] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check animation status'));
+  }
+});
+
+/**
+ * creationWizardUpdateAnimation - Save animation data to project
+ */
+exports.creationWizardUpdateAnimation = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, animation } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  try {
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    if (projectDoc.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not authorized');
+    }
+
+    await projectRef.update({
+      animation: {
+        scenes: animation.scenes || [],
+        status: animation.status || 'in_progress',
+        voiceSettings: animation.voiceSettings || { voice: 'alloy', speed: 1.0 },
+        updatedAt: new Date().toISOString()
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true };
+
+  } catch (error) {
+    console.error('[creationWizardUpdateAnimation] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update animation'));
+  }
+});
