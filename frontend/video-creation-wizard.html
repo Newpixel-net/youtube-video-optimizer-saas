@@ -5622,6 +5622,15 @@
                             </button>
                         </div>
                     </div>
+
+                    <!-- Keyboard Shortcuts Hint -->
+                    ${isReady ? `
+                        <div style="margin-top: 0.5rem; font-size: 0.65rem; color: rgba(255,255,255,0.4); text-align: center;">
+                            <span title="Space: Play/Pause, ←/→: Seek 5s, Shift+←/→: Prev/Next Scene, M: Mute">
+                                ⌨️ Space: Play/Pause • ←→: Seek • M: Mute
+                            </span>
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -5629,13 +5638,23 @@
         function renderTimelineSceneCard(scriptScene, animScene, storyboardScene, transition, index, totalScenes) {
             const imageUrl = storyboardScene?.imageUrl;
             const hasVideo = animScene?.videoUrl;
+            const hasStockVideo = storyboardScene?.source === 'stock-video' && storyboardScene?.videoUrl;
             const transitionTypes = state.assembly.transitionTypes || [];
+            const isCurrentScene = state.preview.isReady && state.preview.currentSceneIndex === index;
 
             let html = `
-                <div class="timeline-scene" data-scene-id="${scriptScene.id}"
+                <div class="timeline-scene" data-scene-id="${scriptScene.id}" data-scene-index="${index}"
                      onclick="seekToScene(${scriptScene.id})"
-                     style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; overflow: hidden; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;"
-                     onmouseover="this.style.borderColor='rgba(139, 92, 246, 0.5)'" onmouseout="if(!this.classList.contains('active')) this.style.borderColor='rgba(255,255,255,0.1)'">
+                     style="background: ${isCurrentScene ? 'rgba(139, 92, 246, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 2px solid ${isCurrentScene ? 'rgba(139, 92, 246, 0.8)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; overflow: hidden; cursor: pointer; transition: all 0.2s; ${isCurrentScene ? 'box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);' : ''}"
+                     onmouseover="if(!this.dataset.playing) this.style.borderColor='rgba(139, 92, 246, 0.5)'"
+                     onmouseout="if(!this.dataset.playing) this.style.borderColor='${isCurrentScene ? 'rgba(139, 92, 246, 0.8)' : 'rgba(255,255,255,0.1)'}'"
+                     ${isCurrentScene ? 'data-playing="true"' : ''}>
+
+                    <!-- Scene Progress Bar -->
+                    <div class="scene-progress-bar" style="height: 3px; background: rgba(255,255,255,0.1);">
+                        <div class="scene-progress-fill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); transition: width 0.1s linear;"></div>
+                    </div>
+
                     <div style="display: flex; gap: 0.75rem; padding: 0.75rem;">
                         <!-- Drag Handle & Number -->
                         <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;" onclick="event.stopPropagation()">
@@ -5865,11 +5884,15 @@
         function setSceneTransition(sceneId, transitionType) {
             state.assembly.transitions[sceneId] = { type: transitionType };
             saveProject();
+            // Update preview engine transitions
+            updatePreviewTransitions();
         }
 
         function toggleMusic(enabled) {
             state.assembly.music.enabled = enabled;
             saveProject();
+            // Update preview music
+            updatePreviewMusic();
             render();
         }
 
@@ -5879,29 +5902,47 @@
                 state.assembly.music.enabled = true;
             }
             saveProject();
+            // Update preview music
+            updatePreviewMusic();
             render();
         }
 
         function setMusicVolume(volume) {
             state.assembly.music.volume = parseInt(volume);
             saveProject();
+            // Update preview music volume
+            if (previewEngine) {
+                previewEngine.musicVolume = volume / 100;
+            }
         }
 
         function toggleCaptions(enabled) {
             state.assembly.captions.enabled = enabled;
             saveProject();
+            // Update preview captions
+            if (previewEngine) {
+                previewEngine.captionsEnabled = enabled;
+            }
             render();
         }
 
         function setCaptionStyle(style) {
             state.assembly.captions.style = style;
             saveProject();
+            // Update preview caption style
+            if (previewEngine) {
+                previewEngine.captionStyle = style;
+            }
             render();
         }
 
         function setCaptionPosition(position) {
             state.assembly.captions.position = position;
             saveProject();
+            // Update preview caption position
+            if (previewEngine) {
+                previewEngine.captionPosition = position;
+            }
             render();
         }
 
@@ -5909,6 +5950,10 @@
             if (!state.assembly.audioMix) state.assembly.audioMix = {};
             state.assembly.audioMix.voiceVolume = parseInt(volume);
             saveProject();
+            // Update preview voice volume
+            if (previewEngine) {
+                previewEngine.voiceVolume = volume / 100;
+            }
             render();
         }
 
@@ -5916,7 +5961,40 @@
             if (!state.assembly.audioMix) state.assembly.audioMix = {};
             state.assembly.audioMix.musicVolume = parseInt(volume);
             saveProject();
+            // Update preview music volume
+            if (previewEngine) {
+                previewEngine.musicVolume = volume / 100;
+            }
             render();
+        }
+
+        // Helper functions to update preview settings
+        function updatePreviewTransitions() {
+            if (!previewEngine || !state.preview.isReady) return;
+            // Update transition settings in preview engine scenes
+            previewEngine.scenes.forEach(scene => {
+                const transition = state.assembly.transitions[scene.id] || { type: 'cut' };
+                scene.transition = transition.type;
+                scene.transitionDuration = transition.duration || 0.5;
+            });
+        }
+
+        async function updatePreviewMusic() {
+            if (!previewEngine || !state.preview.isReady) return;
+
+            if (state.assembly.music.enabled && state.assembly.music.trackId) {
+                const track = state.assembly.musicLibrary.find(t => t.id === state.assembly.music.trackId);
+                if (track?.url) {
+                    try {
+                        await previewEngine.setBackgroundMusic(track.url, state.assembly.music.volume / 100);
+                    } catch (e) {
+                        console.error('Failed to update music:', e);
+                    }
+                }
+            } else {
+                // Disable music
+                previewEngine.stopBackgroundMusic();
+            }
         }
 
         async function saveAssemblySettings() {
@@ -5973,6 +6051,8 @@
                         const percent = (time / state.preview.totalDuration) * 100;
                         scrubber.style.background = `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${percent}%, rgba(255,255,255,0.2) ${percent}%, rgba(255,255,255,0.2) 100%)`;
                     }
+                    // Update scene progress bar
+                    updateSceneProgress(time);
                 },
                 onSceneChange: (sceneIndex) => {
                     state.preview.currentSceneIndex = sceneIndex;
@@ -6154,14 +6234,46 @@
             // Highlight the currently playing scene in the timeline
             const timelineScenes = document.querySelectorAll('.timeline-scene');
             timelineScenes.forEach((el, idx) => {
+                const progressFill = el.querySelector('.scene-progress-fill');
                 if (idx === sceneIndex) {
                     el.style.borderColor = 'rgba(139, 92, 246, 0.8)';
-                    el.style.boxShadow = '0 0 10px rgba(139, 92, 246, 0.3)';
+                    el.style.boxShadow = '0 0 20px rgba(139, 92, 246, 0.4)';
+                    el.style.background = 'rgba(139, 92, 246, 0.1)';
+                    el.dataset.playing = 'true';
                 } else {
                     el.style.borderColor = 'rgba(255,255,255,0.1)';
                     el.style.boxShadow = 'none';
+                    el.style.background = 'rgba(255,255,255,0.03)';
+                    delete el.dataset.playing;
+                    // Reset progress bar for non-current scenes
+                    if (progressFill) progressFill.style.width = '0%';
                 }
             });
+        }
+
+        function updateSceneProgress(currentTime) {
+            if (!previewEngine || !state.preview.isReady) return;
+
+            const scenes = previewEngine.scenes;
+            const currentSceneIndex = state.preview.currentSceneIndex;
+            const currentScene = scenes[currentSceneIndex];
+
+            if (!currentScene) return;
+
+            // Calculate progress within the current scene
+            const sceneStartTime = currentScene.startTime;
+            const sceneDuration = currentScene.duration || 8;
+            const timeInScene = currentTime - sceneStartTime;
+            const progress = Math.min(100, Math.max(0, (timeInScene / sceneDuration) * 100));
+
+            // Update the progress bar for the current scene
+            const currentSceneEl = document.querySelector(`.timeline-scene[data-scene-index="${currentSceneIndex}"]`);
+            if (currentSceneEl) {
+                const progressFill = currentSceneEl.querySelector('.scene-progress-fill');
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+            }
         }
 
         // Cleanup preview when leaving Assembly step
@@ -6175,6 +6287,61 @@
             state.preview.isPlaying = false;
             state.preview.loadProgress = 0;
         }
+
+        // Keyboard shortcuts for preview playback
+        document.addEventListener('keydown', function(e) {
+            // Only handle when on Assembly step and preview is ready
+            if (state.currentStep !== 6 || !state.preview.isReady) return;
+
+            // Don't handle if user is typing in an input
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+            switch(e.code) {
+                case 'Space':
+                    e.preventDefault();
+                    togglePreviewPlayback();
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        // Shift+Left: Previous scene
+                        prevPreviewScene();
+                    } else {
+                        // Left: Seek back 5 seconds
+                        seekPreview(Math.max(0, state.preview.currentTime - 5));
+                    }
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        // Shift+Right: Next scene
+                        nextPreviewScene();
+                    } else {
+                        // Right: Seek forward 5 seconds
+                        seekPreview(Math.min(state.preview.totalDuration, state.preview.currentTime + 5));
+                    }
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    seekPreview(0);
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    seekPreview(state.preview.totalDuration - 0.1);
+                    break;
+                case 'KeyM':
+                    e.preventDefault();
+                    // Toggle mute
+                    if (state.preview.volume > 0) {
+                        state.preview.previousVolume = state.preview.volume;
+                        setPreviewVolume(0);
+                    } else {
+                        setPreviewVolume(state.preview.previousVolume || 100);
+                    }
+                    render();
+                    break;
+            }
+        });
 
         // ==========================================
         // 7.11 STEP 7: EXPORT

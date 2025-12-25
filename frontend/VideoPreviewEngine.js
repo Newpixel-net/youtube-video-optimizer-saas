@@ -242,6 +242,22 @@ class VideoPreviewEngine {
             this.musicElement.loop = true;
             this.musicElement.volume = volume;
             this.musicVolume = volume;
+
+            // If already playing, start music immediately
+            if (this.isPlaying) {
+                this.musicElement.currentTime = this.currentTime;
+                this.musicElement.play().catch(() => {});
+            }
+        }
+    }
+
+    /**
+     * Stop and remove background music
+     */
+    stopBackgroundMusic() {
+        if (this.musicElement) {
+            this.musicElement.pause();
+            this.musicElement = null;
         }
     }
 
