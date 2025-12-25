@@ -722,7 +722,23 @@
         }
 
         /* ------------------------------------------
-           2.12 NAVIGATION BUTTONS
+           2.12 CONFIG TAGS
+           ------------------------------------------ */
+        .config-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.35rem 0.65rem;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+        }
+
+        /* ------------------------------------------
+           2.13 NAVIGATION BUTTONS
            ------------------------------------------ */
         .nav-buttons {
             display: flex;
@@ -1397,14 +1413,18 @@
                 tone: 'engaging'          // casual, professional, humorous, serious
             },
 
-            // Step 3: Script (to be implemented)
+            // Step 3: Script
             script: {
                 status: 'idle',
                 title: '',
                 hook: '',
                 scenes: [],
                 cta: '',
-                totalDuration: 0
+                totalDuration: 0,
+                expandedScene: null,  // Track which scene is expanded in editor
+                metadata: null,       // AI-generated metadata
+                generatedAt: null,
+                generationConfig: null
             },
 
             // Step 4: Storyboard (to be implemented)
@@ -1844,7 +1864,252 @@
         }
 
         // ==========================================
-        // 6.6 COST ESTIMATION
+        // 6.7 SCRIPT GENERATION & EDITING
+        // ==========================================
+        function setScriptTone(tone) {
+            state.content.tone = tone;
+            render();
+        }
+
+        async function generateScript() {
+            // Get topic from input
+            const topicInput = document.getElementById('script-topic');
+            const instructionsInput = document.getElementById('script-instructions');
+
+            const topic = topicInput?.value?.trim() || state.content.topic;
+            const additionalInstructions = instructionsInput?.value?.trim() || '';
+
+            if (!topic || topic.length < 3) {
+                showToast('Please enter a topic for your video', 'warning');
+                return;
+            }
+
+            // Update state
+            state.content.topic = topic;
+            state.script.status = 'generating';
+            render();
+
+            try {
+                const generateScriptFn = functions.httpsCallable('creationWizardGenerateScript');
+
+                const config = {
+                    platform: state.platform.selected,
+                    aspectRatio: state.platform.aspectRatio,
+                    targetDuration: state.platform.targetDuration,
+                    niche: state.content.niche,
+                    subniche: state.content.subniche,
+                    style: state.content.style,
+                    topic: topic,
+                    tone: state.content.tone || 'engaging',
+                    additionalInstructions
+                };
+
+                const result = await generateScriptFn({
+                    projectId: state.project.id || null,
+                    config
+                });
+
+                if (result.data.success) {
+                    const script = result.data.script;
+
+                    // Update state with generated script
+                    state.script = {
+                        ...state.script,
+                        ...script,
+                        status: 'generated',
+                        expandedScene: null
+                    };
+
+                    // Update project ID if new project was created
+                    if (result.data.projectId && !state.project.id) {
+                        state.project.id = result.data.projectId;
+                    }
+
+                    showToast('Script generated successfully!', 'success');
+                    scheduleAutoSave();
+                } else {
+                    throw new Error('Script generation failed');
+                }
+            } catch (error) {
+                console.error('Script generation error:', error);
+                state.script.status = 'idle';
+                showToast('Failed to generate script. Please try again.', 'error');
+            }
+
+            render();
+        }
+
+        async function regenerateFullScript() {
+            if (!confirm('This will replace your current script. Continue?')) return;
+
+            state.script.status = 'idle';
+            state.script.scenes = [];
+            state.script.title = '';
+            state.script.hook = '';
+            state.script.cta = '';
+            render();
+        }
+
+        function updateScriptTitle(title) {
+            state.script.title = title;
+            scheduleAutoSave();
+        }
+
+        function updateScriptHook(hook) {
+            state.script.hook = hook;
+            scheduleAutoSave();
+        }
+
+        function updateScriptCTA(cta) {
+            state.script.cta = cta;
+            scheduleAutoSave();
+        }
+
+        function toggleSceneExpand(sceneId) {
+            if (state.script.expandedScene === sceneId) {
+                state.script.expandedScene = null;
+            } else {
+                state.script.expandedScene = sceneId;
+            }
+            render();
+        }
+
+        function updateSceneNarration(sceneId, value) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                scene.narration = value;
+                scheduleAutoSave();
+            }
+        }
+
+        function updateSceneVisual(sceneId, value) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                scene.visual = value;
+                scheduleAutoSave();
+            }
+        }
+
+        function updateSceneDuration(sceneId, value) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                scene.duration = parseInt(value) || 8;
+                // Recalculate total duration
+                state.script.totalDuration = state.script.scenes.reduce((sum, s) => sum + s.duration, 0);
+                scheduleAutoSave();
+                render();
+            }
+        }
+
+        function updateSceneTransition(sceneId, value) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                scene.transition = value;
+                scheduleAutoSave();
+            }
+        }
+
+        async function regenerateScene(sceneId) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (!scene) return;
+
+            const instructions = prompt('Any specific instructions for regenerating this scene? (or leave empty)');
+
+            try {
+                showToast('Regenerating scene...', 'info');
+
+                const regenerateSceneFn = functions.httpsCallable('creationWizardRegenerateScene');
+                const result = await regenerateSceneFn({
+                    projectId: state.project.id,
+                    sceneId: sceneId,
+                    currentScript: state.script,
+                    instructions: instructions || ''
+                });
+
+                if (result.data.success) {
+                    // Update the scene in state
+                    const index = state.script.scenes.findIndex(s => s.id === sceneId);
+                    if (index !== -1) {
+                        state.script.scenes[index] = {
+                            ...state.script.scenes[index],
+                            ...result.data.scene
+                        };
+                    }
+
+                    showToast('Scene regenerated!', 'success');
+                    scheduleAutoSave();
+                    render();
+                }
+            } catch (error) {
+                console.error('Regenerate scene error:', error);
+                showToast('Failed to regenerate scene', 'error');
+            }
+        }
+
+        function moveSceneUp(sceneId) {
+            const index = state.script.scenes.findIndex(s => s.id === sceneId);
+            if (index > 0) {
+                const temp = state.script.scenes[index];
+                state.script.scenes[index] = state.script.scenes[index - 1];
+                state.script.scenes[index - 1] = temp;
+                scheduleAutoSave();
+                render();
+            }
+        }
+
+        function moveSceneDown(sceneId) {
+            const index = state.script.scenes.findIndex(s => s.id === sceneId);
+            if (index < state.script.scenes.length - 1) {
+                const temp = state.script.scenes[index];
+                state.script.scenes[index] = state.script.scenes[index + 1];
+                state.script.scenes[index + 1] = temp;
+                scheduleAutoSave();
+                render();
+            }
+        }
+
+        function deleteScene(sceneId) {
+            if (state.script.scenes.length <= 1) {
+                showToast('You need at least one scene', 'warning');
+                return;
+            }
+
+            if (!confirm('Delete this scene?')) return;
+
+            state.script.scenes = state.script.scenes.filter(s => s.id !== sceneId);
+            state.script.totalDuration = state.script.scenes.reduce((sum, s) => sum + s.duration, 0);
+            scheduleAutoSave();
+            render();
+        }
+
+        function addNewScene() {
+            const maxId = Math.max(...state.script.scenes.map(s => s.id), 0);
+            const newScene = {
+                id: maxId + 1,
+                narration: '',
+                visual: '',
+                duration: 10,
+                transition: 'cut',
+                status: 'pending'
+            };
+
+            state.script.scenes.push(newScene);
+            state.script.expandedScene = newScene.id;
+            state.script.totalDuration = state.script.scenes.reduce((sum, s) => sum + s.duration, 0);
+            scheduleAutoSave();
+            render();
+
+            // Scroll to new scene
+            setTimeout(() => {
+                const sceneCards = document.querySelectorAll('.scene-card');
+                if (sceneCards.length > 0) {
+                    sceneCards[sceneCards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+
+        // ==========================================
+        // 6.8 COST ESTIMATION
         // ==========================================
         function estimateCost() {
             const duration = state.platform.targetDuration || 60;
@@ -2446,12 +2711,314 @@
         }
 
         // ==========================================
-        // 7.7 STEP 3-7: PLACEHOLDER RENDERS
+        // 7.7 STEP 3: SCRIPT GENERATION
         // ==========================================
         function renderStep3Script() {
-            return renderComingSoonStep(3, 'Script Generation', 'AI will generate your video script with scenes here.');
+            const hasScript = state.script.scenes && state.script.scenes.length > 0;
+            const isGenerating = state.script.status === 'generating';
+
+            let html = '<div class="fade-in">';
+
+            // If no script yet, show generation form
+            if (!hasScript && !isGenerating) {
+                html += renderScriptGenerationForm();
+            }
+            // If generating, show progress
+            else if (isGenerating) {
+                html += renderScriptGeneratingState();
+            }
+            // If script exists, show editor
+            else {
+                html += renderScriptEditor();
+            }
+
+            // Navigation
+            html += renderNavButtons(2, hasScript ? 4 : null);
+
+            html += '</div>';
+            return html;
         }
 
+        function renderScriptGenerationForm() {
+            const niche = VIDEO_NICHES[state.content.niche];
+            const style = VIDEO_STYLES.find(s => s.id === state.content.style);
+
+            return `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">✨</div>
+                        <div>
+                            <div class="content-card-title">Generate Your Script</div>
+                            <div class="content-card-subtitle">AI will create a professional video script based on your settings</div>
+                        </div>
+                    </div>
+
+                    <!-- Summary of selections -->
+                    <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">
+                        <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Your video configuration:</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <span class="config-tag">${state.platform.selected || 'Platform'}</span>
+                            <span class="config-tag">${state.platform.aspectRatio || '16:9'}</span>
+                            <span class="config-tag">${formatDuration(state.platform.targetDuration)}</span>
+                            <span class="config-tag">${niche?.icon || ''} ${niche?.name || 'Niche'}</span>
+                            <span class="config-tag">${style?.icon || ''} ${style?.name || 'Style'}</span>
+                        </div>
+                    </div>
+
+                    <!-- Topic (editable) -->
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: block; font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
+                            Video Topic
+                        </label>
+                        <input type="text"
+                               id="script-topic"
+                               class="topic-input"
+                               value="${state.content.topic || ''}"
+                               placeholder="e.g., 5 Morning Habits That Changed My Life"
+                               style="width: 100%;">
+                    </div>
+
+                    <!-- Tone selector -->
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: block; font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
+                            Script Tone
+                        </label>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                            ${['engaging', 'professional', 'casual', 'inspirational'].map(tone => `
+                                <button onclick="setScriptTone('${tone}')"
+                                        class="tone-btn ${state.content.tone === tone ? 'selected' : ''}"
+                                        style="padding: 0.6rem; border-radius: 0.5rem; border: 1px solid ${state.content.tone === tone ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.2)'}; background: ${state.content.tone === tone ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 0.8rem; text-transform: capitalize;">
+                                    ${tone}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Additional instructions -->
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: block; font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
+                            Additional Instructions <span style="color: rgba(255,255,255,0.5); font-weight: 400;">(optional)</span>
+                        </label>
+                        <textarea id="script-instructions"
+                                  placeholder="Any specific requirements? e.g., Include a personal story, mention specific products, focus on beginners..."
+                                  style="width: 100%; min-height: 80px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem; resize: vertical;"></textarea>
+                    </div>
+
+                    <!-- Generate button -->
+                    <button onclick="generateScript()"
+                            class="generate-btn"
+                            style="width: 100%; padding: 1rem; border-radius: 0.75rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-size: 1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                        <span>🪄</span>
+                        <span>Generate Script with AI</span>
+                    </button>
+
+                    <div style="text-align: center; margin-top: 1rem; color: rgba(255,255,255,0.5); font-size: 0.8rem;">
+                        Estimated cost: ~5 tokens • Powered by GPT-4o
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderScriptGeneratingState() {
+            return `
+                <div class="content-card" style="text-align: center; padding: 4rem 2rem;">
+                    <div class="animate-float" style="font-size: 4rem; margin-bottom: 1.5rem;">✨</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
+                        Generating Your Script...
+                    </div>
+                    <div style="color: rgba(255,255,255,0.6); margin-bottom: 2rem;">
+                        AI is crafting an engaging script for your video
+                    </div>
+                    <div class="loading-bar" style="width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin: 0 auto; overflow: hidden;">
+                        <div style="width: 30%; height: 100%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); border-radius: 2px; animation: shimmer 1.5s infinite;"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderScriptEditor() {
+            const script = state.script;
+
+            let html = `
+                <!-- Script Header -->
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">📝</div>
+                        <div style="flex: 1;">
+                            <input type="text"
+                                   id="script-title-input"
+                                   value="${script.title || ''}"
+                                   onchange="updateScriptTitle(this.value)"
+                                   style="background: none; border: none; color: white; font-size: 1.1rem; font-weight: 700; width: 100%; outline: none;">
+                            <div class="content-card-subtitle">${script.scenes.length} scenes • ${script.totalDuration || 0}s total</div>
+                        </div>
+                        <button onclick="regenerateFullScript()"
+                                style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; padding: 0.5rem 1rem; color: white; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem;">
+                            <span>🔄</span> Regenerate
+                        </button>
+                    </div>
+
+                    <!-- Hook -->
+                    <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1rem;">
+                        <div style="font-size: 0.75rem; color: #10b981; font-weight: 600; margin-bottom: 0.5rem;">🎣 HOOK</div>
+                        <input type="text"
+                               value="${script.hook || ''}"
+                               onchange="updateScriptHook(this.value)"
+                               style="width: 100%; background: none; border: none; color: white; font-size: 0.95rem; outline: none;">
+                    </div>
+
+                    <!-- Metadata -->
+                    ${script.metadata ? `
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
+                            <div style="background: rgba(255,255,255,0.05); border-radius: 0.5rem; padding: 0.75rem;">
+                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Target Audience</div>
+                                <div style="font-size: 0.85rem; color: white;">${script.metadata.targetAudience || '-'}</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.05); border-radius: 0.5rem; padding: 0.75rem;">
+                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Key Message</div>
+                                <div style="font-size: 0.85rem; color: white;">${script.metadata.keyMessage || '-'}</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.05); border-radius: 0.5rem; padding: 0.75rem;">
+                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Suggested Music</div>
+                                <div style="font-size: 0.85rem; color: white;">${script.metadata.suggestedMusic || '-'}</div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <!-- Scenes -->
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎬</div>
+                        <div>
+                            <div class="content-card-title">Scenes</div>
+                            <div class="content-card-subtitle">Edit narration and visuals for each scene</div>
+                        </div>
+                        <button onclick="addNewScene()"
+                                style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.5rem; padding: 0.5rem 1rem; color: white; cursor: pointer; font-size: 0.8rem;">
+                            + Add Scene
+                        </button>
+                    </div>
+
+                    <div class="scenes-list" style="display: flex; flex-direction: column; gap: 1rem;">
+            `;
+
+            // Render each scene
+            script.scenes.forEach((scene, index) => {
+                html += renderSceneCard(scene, index);
+            });
+
+            html += `
+                    </div>
+                </div>
+
+                <!-- CTA -->
+                <div class="content-card">
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.75rem; padding: 1rem;">
+                        <div style="font-size: 0.75rem; color: #ef4444; font-weight: 600; margin-bottom: 0.5rem;">📢 CALL TO ACTION</div>
+                        <input type="text"
+                               value="${script.cta || ''}"
+                               onchange="updateScriptCTA(this.value)"
+                               style="width: 100%; background: none; border: none; color: white; font-size: 0.95rem; outline: none;">
+                    </div>
+                </div>
+            `;
+
+            return html;
+        }
+
+        function renderSceneCard(scene, index) {
+            const isExpanded = state.script.expandedScene === scene.id;
+
+            return `
+                <div class="scene-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; overflow: hidden;">
+                    <!-- Scene Header -->
+                    <div onclick="toggleSceneExpand(${scene.id})"
+                         style="padding: 1rem; cursor: pointer; display: flex; align-items: center; gap: 1rem; border-bottom: ${isExpanded ? '1px solid rgba(255,255,255,0.1)' : 'none'};">
+                        <div style="width: 2rem; height: 2rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;">
+                            ${index + 1}
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="color: white; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${scene.narration?.substring(0, 60) || 'No narration'}${scene.narration?.length > 60 ? '...' : ''}
+                            </div>
+                            <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">
+                                ${scene.duration}s • ${scene.transition || 'cut'}
+                            </div>
+                        </div>
+                        <div style="color: rgba(255,255,255,0.5); transform: rotate(${isExpanded ? '180deg' : '0deg'}); transition: transform 0.2s;">▼</div>
+                    </div>
+
+                    ${isExpanded ? `
+                        <!-- Expanded Content -->
+                        <div style="padding: 1rem;">
+                            <!-- Narration -->
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">🎙️ Narration</label>
+                                <textarea id="scene-narration-${scene.id}"
+                                          onchange="updateSceneNarration(${scene.id}, this.value)"
+                                          style="width: 100%; min-height: 60px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem; resize: vertical;">${scene.narration || ''}</textarea>
+                            </div>
+
+                            <!-- Visual Description -->
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">🎨 Visual Description (for AI image generation)</label>
+                                <textarea id="scene-visual-${scene.id}"
+                                          onchange="updateSceneVisual(${scene.id}, this.value)"
+                                          style="width: 100%; min-height: 80px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem; resize: vertical;">${scene.visual || ''}</textarea>
+                            </div>
+
+                            <!-- Duration & Transition -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                <div>
+                                    <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">⏱️ Duration (seconds)</label>
+                                    <input type="number"
+                                           value="${scene.duration || 8}"
+                                           min="3" max="30"
+                                           onchange="updateSceneDuration(${scene.id}, this.value)"
+                                           style="width: 100%; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">🔀 Transition</label>
+                                    <select onchange="updateSceneTransition(${scene.id}, this.value)"
+                                            style="width: 100%; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(30,30,50,1); color: white;">
+                                        ${['cut', 'fade', 'zoom', 'slide'].map(t => `
+                                            <option value="${t}" ${scene.transition === t ? 'selected' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Scene Actions -->
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                <button onclick="regenerateScene(${scene.id})"
+                                        style="flex: 1; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.1); color: white; cursor: pointer; font-size: 0.8rem;">
+                                    🔄 Regenerate
+                                </button>
+                                <button onclick="moveSceneUp(${scene.id})"
+                                        ${index === 0 ? 'disabled' : ''}
+                                        style="padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; opacity: ${index === 0 ? '0.5' : '1'};">
+                                    ↑
+                                </button>
+                                <button onclick="moveSceneDown(${scene.id})"
+                                        ${index === state.script.scenes.length - 1 ? 'disabled' : ''}
+                                        style="padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; opacity: ${index === state.script.scenes.length - 1 ? '0.5' : '1'};">
+                                    ↓
+                                </button>
+                                <button onclick="deleteScene(${scene.id})"
+                                        style="padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1); color: #ef4444; cursor: pointer;">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // ==========================================
+        // 7.8 STEP 4-7: PLACEHOLDER RENDERS
+        // ==========================================
         function renderStep4Storyboard() {
             return renderComingSoonStep(4, 'Storyboard', 'Generate images for each scene using Nanobananapro.');
         }

@@ -23291,3 +23291,274 @@ exports.creationWizardDeleteProject = functions.https.onCall(async (data, contex
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to delete project'));
   }
 });
+
+/**
+ * creationWizardGenerateScript - Generates a video script using GPT-4o
+ *
+ * Takes project configuration and generates a structured script with:
+ * - Title and hook
+ * - Multiple scenes with narration and visual descriptions
+ * - Call-to-action
+ * - Timing for each scene
+ */
+exports.creationWizardGenerateScript = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, config } = data;
+
+  if (!config) {
+    throw new functions.https.HttpsError('invalid-argument', 'Script configuration required');
+  }
+
+  const {
+    platform,
+    aspectRatio,
+    targetDuration,
+    niche,
+    subniche,
+    style,
+    topic,
+    tone = 'engaging',
+    additionalInstructions = ''
+  } = config;
+
+  if (!topic || topic.trim().length < 3) {
+    throw new functions.https.HttpsError('invalid-argument', 'Topic must be at least 3 characters');
+  }
+
+  try {
+    // Calculate scene structure based on duration
+    const sceneDuration = 12; // Average 12 seconds per scene for good pacing
+    const sceneCount = Math.max(3, Math.min(12, Math.ceil(targetDuration / sceneDuration)));
+
+    // Build the prompt for GPT-4o
+    const systemPrompt = `You are an expert video scriptwriter specializing in ${niche || 'general'} content.
+You create engaging, well-structured scripts optimized for ${platform || 'social media'} in ${aspectRatio || '16:9'} format.
+Your scripts are known for strong hooks, clear storytelling, and compelling calls-to-action.
+Always return valid JSON exactly matching the requested structure.`;
+
+    const userPrompt = `Create a ${targetDuration}-second video script about: "${topic}"
+
+=== CONFIGURATION ===
+Platform: ${platform || 'YouTube'}
+Aspect Ratio: ${aspectRatio || '16:9'}
+Target Duration: ${targetDuration} seconds
+Niche: ${niche || 'general'}${subniche ? ` > ${subniche}` : ''}
+Visual Style: ${style || 'modern'}
+Tone: ${tone}
+Number of Scenes: ${sceneCount}
+
+=== REQUIREMENTS ===
+1. HOOK (first 3-5 seconds): Must grab attention immediately - use a surprising fact, question, or bold statement
+2. SCENES: Create exactly ${sceneCount} scenes that flow naturally
+3. Each scene needs:
+   - Narration text (what the voiceover says)
+   - Visual description (what appears on screen - be specific for AI image generation)
+   - Duration in seconds (scenes should total ~${targetDuration} seconds)
+4. CTA: End with a clear call-to-action appropriate for ${platform}
+5. Keep narration concise - about 2-3 words per second of video
+6. Visual descriptions should be detailed enough for AI image generation (describe scene, subjects, lighting, mood)
+
+${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
+
+=== OUTPUT FORMAT ===
+Return ONLY valid JSON with this exact structure:
+{
+  "title": "Compelling video title (50-70 chars)",
+  "hook": "The attention-grabbing opening line",
+  "scenes": [
+    {
+      "id": 1,
+      "narration": "What the voiceover says for this scene",
+      "visual": "Detailed visual description for AI image generation: describe the scene, subjects, composition, lighting, colors, mood",
+      "duration": 8,
+      "transition": "cut|fade|zoom|slide"
+    }
+  ],
+  "cta": "Call-to-action text",
+  "totalDuration": ${targetDuration},
+  "metadata": {
+    "targetAudience": "Who this video is for",
+    "keyMessage": "The main takeaway",
+    "suggestedMusic": "Type of background music"
+  }
+}`;
+
+    // Call GPT-4o for script generation
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 3000
+    });
+
+    // Parse the response
+    const responseText = completion.choices[0].message.content.trim();
+    const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    let script;
+    try {
+      script = JSON.parse(cleanJson);
+    } catch (parseError) {
+      console.error('[creationWizardGenerateScript] JSON parse error:', parseError);
+      console.error('[creationWizardGenerateScript] Raw response:', responseText);
+      throw new functions.https.HttpsError('internal', 'Failed to parse script response');
+    }
+
+    // Validate and normalize the script structure
+    if (!script.scenes || !Array.isArray(script.scenes) || script.scenes.length === 0) {
+      throw new functions.https.HttpsError('internal', 'Invalid script structure - no scenes generated');
+    }
+
+    // Ensure each scene has required fields and IDs
+    script.scenes = script.scenes.map((scene, index) => ({
+      id: scene.id || index + 1,
+      narration: scene.narration || '',
+      visual: scene.visual || '',
+      duration: scene.duration || Math.round(targetDuration / script.scenes.length),
+      transition: scene.transition || 'cut',
+      status: 'pending' // For tracking storyboard/animation progress
+    }));
+
+    // Calculate actual total duration
+    script.totalDuration = script.scenes.reduce((sum, scene) => sum + scene.duration, 0);
+
+    // Add generation metadata
+    script.generatedAt = new Date().toISOString();
+    script.generationConfig = {
+      platform,
+      aspectRatio,
+      targetDuration,
+      niche,
+      subniche,
+      style,
+      tone
+    };
+
+    // If projectId provided, update the project with the script
+    if (projectId) {
+      await db.collection('creationProjects').doc(projectId).update({
+        script: {
+          ...script,
+          status: 'generated'
+        },
+        'project.status': 'script_ready',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    // Log usage for analytics
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'script_generation',
+      model: 'gpt-4o',
+      inputTokens: completion.usage?.prompt_tokens || 0,
+      outputTokens: completion.usage?.completion_tokens || 0,
+      projectId: projectId || null,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      script,
+      usage: {
+        promptTokens: completion.usage?.prompt_tokens || 0,
+        completionTokens: completion.usage?.completion_tokens || 0,
+        totalTokens: completion.usage?.total_tokens || 0
+      }
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateScript] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate script'));
+  }
+});
+
+/**
+ * creationWizardRegenerateScene - Regenerates a single scene's script
+ */
+exports.creationWizardRegenerateScene = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sceneId, currentScript, instructions } = data;
+
+  if (!currentScript || !sceneId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scene ID and current script required');
+  }
+
+  const scene = currentScript.scenes?.find(s => s.id === sceneId);
+  if (!scene) {
+    throw new functions.https.HttpsError('not-found', 'Scene not found');
+  }
+
+  try {
+    const systemPrompt = `You are an expert video scriptwriter. You're improving a single scene in an existing script.
+Maintain consistency with the overall video topic and style.
+Return only valid JSON matching the exact structure provided.`;
+
+    const userPrompt = `Regenerate this scene with improvements:
+
+=== CURRENT SCENE ===
+Scene ${sceneId} of ${currentScript.scenes.length}
+Narration: "${scene.narration}"
+Visual: "${scene.visual}"
+Duration: ${scene.duration} seconds
+
+=== VIDEO CONTEXT ===
+Title: ${currentScript.title}
+Topic: ${currentScript.generationConfig?.topic || 'General'}
+Style: ${currentScript.generationConfig?.style || 'modern'}
+
+${instructions ? `=== SPECIFIC INSTRUCTIONS ===\n${instructions}\n` : ''}
+
+=== REQUIREMENTS ===
+- Keep similar duration (~${scene.duration} seconds)
+- Make narration more engaging/clear
+- Make visual description more detailed for AI image generation
+- Maintain consistency with surrounding scenes
+
+Return ONLY valid JSON:
+{
+  "narration": "Improved voiceover text",
+  "visual": "Detailed visual description for AI image generation",
+  "duration": ${scene.duration},
+  "transition": "${scene.transition || 'cut'}"
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 500
+    });
+
+    const responseText = completion.choices[0].message.content.trim();
+    const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const newScene = JSON.parse(cleanJson);
+
+    // Merge with existing scene data
+    const updatedScene = {
+      ...scene,
+      narration: newScene.narration || scene.narration,
+      visual: newScene.visual || scene.visual,
+      duration: newScene.duration || scene.duration,
+      transition: newScene.transition || scene.transition,
+      regeneratedAt: new Date().toISOString()
+    };
+
+    return {
+      success: true,
+      scene: updatedScene
+    };
+
+  } catch (error) {
+    console.error('[creationWizardRegenerateScene] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to regenerate scene'));
+  }
+});
