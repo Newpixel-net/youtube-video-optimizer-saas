@@ -20713,6 +20713,8 @@ exports.wizardProcessClip = functions
       quality: outputQuality,
       settings: {
         captionStyle: clipSettings.captionStyle || 'karaoke',
+        captionPosition: clipSettings.captionPosition || 'bottom',  // Caption position: 'bottom', 'middle', 'top'
+        captionSize: clipSettings.captionSize || 1,                 // Caption size multiplier: 0.7-1.5
         captionSource: clipSettings.captionSource || 'primary',  // Which video's audio to use for captions
         customCaptionStyle: clipSettings.customCaptionStyle || null,
         reframeMode: clipSettings.reframeMode || 'auto_center',
