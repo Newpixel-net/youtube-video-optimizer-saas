@@ -6377,6 +6377,43 @@
                     }
                     render();
                     break;
+
+                // Edit shortcuts (only on Export step timeline)
+                case 'KeyZ':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            redoEdit();
+                        } else {
+                            undoEdit();
+                        }
+                    }
+                    break;
+                case 'KeyY':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        redoEdit();
+                    }
+                    break;
+                case 'KeyS':
+                    if (!e.ctrlKey && !e.metaKey && isTimeline) {
+                        e.preventDefault();
+                        splitClipAtPlayhead();
+                    }
+                    break;
+                case 'KeyD':
+                    if ((e.ctrlKey || e.metaKey) && isTimeline) {
+                        e.preventDefault();
+                        duplicateSelectedClip();
+                    }
+                    break;
+                case 'Delete':
+                case 'Backspace':
+                    if (isTimeline && state.timeline.selectedClipId !== null) {
+                        e.preventDefault();
+                        deleteSelectedClip();
+                    }
+                    break;
             }
         });
 
@@ -6534,6 +6571,9 @@
                             </div>
                         </div>
 
+                        <!-- Edit Toolbar -->
+                        ${renderEditToolbar()}
+
                         <!-- Timeline Tracks -->
                         <div id="timeline-scroll-container" style="overflow-x: auto; overflow-y: hidden;" onscroll="handleTimelineScroll(this)">
                             <div style="position: relative; min-width: ${Math.max(timelineWidth + 100, 800)}px;">
@@ -6616,14 +6656,16 @@
                 const imageUrl = storyboardScene?.imageUrl;
 
                 trackHtml += `
-                    <div class="timeline-clip" data-clip-id="${sceneId}" onclick="selectTimelineClip(${sceneId}, 'video')"
-                         style="position: absolute; left: ${x}px; top: 4px; width: ${width - 2}px; height: 52px; background: ${isSelected ? 'rgba(139, 92, 246, 0.4)' : 'rgba(139, 92, 246, 0.2)'}; border: 2px solid ${isSelected ? '#8b5cf6' : 'rgba(139, 92, 246, 0.5)'}; border-radius: 4px; overflow: hidden; cursor: pointer; display: flex; transition: all 0.15s;">
+                    <div class="timeline-clip" data-clip-id="${sceneId}"
+                         onclick="selectTimelineClip(${sceneId}, 'video')"
+                         onmousedown="startDragClip(${sceneId}, event)"
+                         style="position: absolute; left: ${x}px; top: 4px; width: ${width - 2}px; height: 52px; background: ${isSelected ? 'rgba(139, 92, 246, 0.4)' : 'rgba(139, 92, 246, 0.2)'}; border: 2px solid ${isSelected ? '#8b5cf6' : 'rgba(139, 92, 246, 0.5)'}; border-radius: 4px; overflow: hidden; cursor: grab; display: flex; transition: all 0.15s;">
                         <!-- Thumbnail -->
-                        <div style="width: 50px; height: 100%; flex-shrink: 0; background: rgba(0,0,0,0.3);">
-                            ${imageUrl ? `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` : ''}
+                        <div style="width: 50px; height: 100%; flex-shrink: 0; background: rgba(0,0,0,0.3); pointer-events: none;">
+                            ${imageUrl ? `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;" draggable="false">` : ''}
                         </div>
                         <!-- Info -->
-                        <div style="flex: 1; padding: 0.25rem 0.4rem; min-width: 0;">
+                        <div style="flex: 1; padding: 0.25rem 0.4rem; min-width: 0; pointer-events: none;">
                             <div style="font-size: 0.65rem; color: white; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                 Scene ${index + 1}
                             </div>
@@ -6634,8 +6676,8 @@
                         </div>
                         <!-- Resize Handles -->
                         ${isSelected ? `
-                            <div class="clip-handle clip-handle-left" style="position: absolute; left: 0; top: 0; width: 6px; height: 100%; background: #8b5cf6; cursor: ew-resize;"></div>
-                            <div class="clip-handle clip-handle-right" style="position: absolute; right: 0; top: 0; width: 6px; height: 100%; background: #8b5cf6; cursor: ew-resize;"></div>
+                            <div class="clip-handle clip-handle-left" onmousedown="startTrimClip(${sceneId}, 'left', event)" style="position: absolute; left: 0; top: 0; width: 6px; height: 100%; background: #8b5cf6; cursor: ew-resize;"></div>
+                            <div class="clip-handle clip-handle-right" onmousedown="startTrimClip(${sceneId}, 'right', event)" style="position: absolute; right: 0; top: 0; width: 6px; height: 100%; background: #8b5cf6; cursor: ew-resize;"></div>
                         ` : ''}
                     </div>
                 `;
@@ -7119,9 +7161,584 @@
             }
         }
 
-        // Update keyboard shortcuts to work on both steps
-        function updateKeyboardShortcuts() {
-            // Remove old listener and add updated one
+        // ==========================================
+        // TIMELINE EDITING OPERATIONS
+        // ==========================================
+
+        // Edit History for Undo/Redo
+        class EditHistory {
+            constructor(maxHistory = 50) {
+                this.history = [];
+                this.position = -1;
+                this.maxHistory = maxHistory;
+            }
+
+            push(state) {
+                // Remove any redo history
+                this.history = this.history.slice(0, this.position + 1);
+                this.history.push(JSON.parse(JSON.stringify(state)));
+                this.position++;
+
+                // Limit history size
+                if (this.history.length > this.maxHistory) {
+                    this.history.shift();
+                    this.position--;
+                }
+            }
+
+            undo() {
+                if (this.position > 0) {
+                    this.position--;
+                    return JSON.parse(JSON.stringify(this.history[this.position]));
+                }
+                return null;
+            }
+
+            redo() {
+                if (this.position < this.history.length - 1) {
+                    this.position++;
+                    return JSON.parse(JSON.stringify(this.history[this.position]));
+                }
+                return null;
+            }
+
+            canUndo() {
+                return this.position > 0;
+            }
+
+            canRedo() {
+                return this.position < this.history.length - 1;
+            }
+        }
+
+        const editHistory = new EditHistory();
+
+        function saveEditState() {
+            editHistory.push({
+                scenes: state.script.scenes,
+                sceneOrder: state.assembly.sceneOrder,
+                transitions: state.assembly.transitions
+            });
+        }
+
+        function undoEdit() {
+            const previousState = editHistory.undo();
+            if (previousState) {
+                state.script.scenes = previousState.scenes;
+                state.assembly.sceneOrder = previousState.sceneOrder;
+                state.assembly.transitions = previousState.transitions;
+                saveProject();
+                rebuildPreviewScenes();
+                render();
+                showToast('Undo', 'info');
+            }
+        }
+
+        function redoEdit() {
+            const nextState = editHistory.redo();
+            if (nextState) {
+                state.script.scenes = nextState.scenes;
+                state.assembly.sceneOrder = nextState.sceneOrder;
+                state.assembly.transitions = nextState.transitions;
+                saveProject();
+                rebuildPreviewScenes();
+                render();
+                showToast('Redo', 'info');
+            }
+        }
+
+        function rebuildPreviewScenes() {
+            if (previewEngine && state.preview.isReady) {
+                const scenes = buildPreviewScenes();
+                state.preview.totalDuration = scenes.reduce((sum, s) => sum + (s.duration || 8), 0);
+                previewEngine.scenes = scenes.map((scene, index) => ({
+                    ...scene,
+                    index,
+                    startTime: 0,
+                    endTime: 0
+                }));
+                previewEngine._calculateTiming();
+            }
+        }
+
+        // Split clip at playhead
+        function splitClipAtPlayhead() {
+            if (!state.preview.isReady) return;
+
+            const currentTime = state.preview.currentTime;
+            const scenes = previewEngine?.scenes || [];
+
+            // Find which scene contains the current time
+            const sceneIndex = scenes.findIndex(s =>
+                currentTime >= s.startTime && currentTime < s.startTime + s.duration
+            );
+
+            if (sceneIndex === -1) return;
+
+            const scene = scenes[sceneIndex];
+            const splitPoint = currentTime - scene.startTime;
+
+            // Don't split if too close to edges
+            if (splitPoint < 1 || splitPoint > scene.duration - 1) {
+                showToast('Cannot split here - too close to edge', 'warning');
+                return;
+            }
+
+            saveEditState();
+
+            // Find the original scene
+            const originalScene = state.script.scenes.find(s => s.id === scene.id);
+            if (!originalScene) return;
+
+            // Create new scene ID
+            const newSceneId = Math.max(...state.script.scenes.map(s => s.id)) + 1;
+
+            // Create the new scene (second half)
+            const newScene = {
+                ...JSON.parse(JSON.stringify(originalScene)),
+                id: newSceneId,
+                duration: originalScene.duration - splitPoint
+            };
+
+            // Update original scene duration (first half)
+            originalScene.duration = splitPoint;
+
+            // Add new scene to script
+            const originalIndex = state.script.scenes.findIndex(s => s.id === scene.id);
+            state.script.scenes.splice(originalIndex + 1, 0, newScene);
+
+            // Update scene order
+            const orderIndex = state.assembly.sceneOrder.indexOf(scene.id);
+            if (orderIndex !== -1) {
+                state.assembly.sceneOrder.splice(orderIndex + 1, 0, newSceneId);
+            } else {
+                state.assembly.sceneOrder = state.script.scenes.map(s => s.id);
+            }
+
+            // Copy storyboard data for new scene
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === scene.id);
+            if (storyboardScene) {
+                state.storyboard.scenes.push({
+                    ...JSON.parse(JSON.stringify(storyboardScene)),
+                    sceneId: newSceneId
+                });
+            }
+
+            // Copy animation data for new scene
+            const animScene = state.animation.scenes.find(s => s.sceneId === scene.id);
+            if (animScene) {
+                state.animation.scenes.push({
+                    ...JSON.parse(JSON.stringify(animScene)),
+                    sceneId: newSceneId
+                });
+            }
+
+            saveProject();
+            rebuildPreviewScenes();
+            render();
+            showToast('Clip split at playhead', 'success');
+        }
+
+        // Delete selected clip
+        function deleteSelectedClip() {
+            const clipId = state.timeline.selectedClipId;
+            if (!clipId) {
+                showToast('No clip selected', 'warning');
+                return;
+            }
+
+            // Prevent deleting if only one scene
+            if (state.script.scenes.length <= 1) {
+                showToast('Cannot delete the only scene', 'warning');
+                return;
+            }
+
+            saveEditState();
+
+            // Remove from script scenes
+            state.script.scenes = state.script.scenes.filter(s => s.id !== clipId);
+
+            // Remove from scene order
+            state.assembly.sceneOrder = state.assembly.sceneOrder.filter(id => id !== clipId);
+            if (state.assembly.sceneOrder.length === 0) {
+                state.assembly.sceneOrder = state.script.scenes.map(s => s.id);
+            }
+
+            // Remove from storyboard
+            state.storyboard.scenes = state.storyboard.scenes.filter(s => s.sceneId !== clipId);
+
+            // Remove from animation
+            state.animation.scenes = state.animation.scenes.filter(s => s.sceneId !== clipId);
+
+            // Remove transition
+            delete state.assembly.transitions[clipId];
+
+            // Clear selection
+            state.timeline.selectedClipId = null;
+
+            saveProject();
+            rebuildPreviewScenes();
+            render();
+            showToast('Clip deleted', 'success');
+        }
+
+        // Duplicate selected clip
+        function duplicateSelectedClip() {
+            const clipId = state.timeline.selectedClipId;
+            if (!clipId) {
+                showToast('No clip selected', 'warning');
+                return;
+            }
+
+            saveEditState();
+
+            const originalScene = state.script.scenes.find(s => s.id === clipId);
+            if (!originalScene) return;
+
+            // Create new scene ID
+            const newSceneId = Math.max(...state.script.scenes.map(s => s.id)) + 1;
+
+            // Create duplicate scene
+            const newScene = {
+                ...JSON.parse(JSON.stringify(originalScene)),
+                id: newSceneId
+            };
+
+            // Add after original in script
+            const originalIndex = state.script.scenes.findIndex(s => s.id === clipId);
+            state.script.scenes.splice(originalIndex + 1, 0, newScene);
+
+            // Add after original in order
+            const orderIndex = state.assembly.sceneOrder.indexOf(clipId);
+            if (orderIndex !== -1) {
+                state.assembly.sceneOrder.splice(orderIndex + 1, 0, newSceneId);
+            } else {
+                state.assembly.sceneOrder = state.script.scenes.map(s => s.id);
+            }
+
+            // Copy storyboard data
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === clipId);
+            if (storyboardScene) {
+                state.storyboard.scenes.push({
+                    ...JSON.parse(JSON.stringify(storyboardScene)),
+                    sceneId: newSceneId
+                });
+            }
+
+            // Copy animation data
+            const animScene = state.animation.scenes.find(s => s.sceneId === clipId);
+            if (animScene) {
+                state.animation.scenes.push({
+                    ...JSON.parse(JSON.stringify(animScene)),
+                    sceneId: newSceneId
+                });
+            }
+
+            // Copy transition
+            const transition = state.assembly.transitions[clipId];
+            if (transition) {
+                state.assembly.transitions[newSceneId] = { ...transition };
+            }
+
+            // Select the new clip
+            state.timeline.selectedClipId = newSceneId;
+
+            saveProject();
+            rebuildPreviewScenes();
+            render();
+            showToast('Clip duplicated', 'success');
+        }
+
+        // Move clip in order (reorder)
+        function moveClipInTimeline(clipId, direction) {
+            const order = state.assembly.sceneOrder.length > 0
+                ? [...state.assembly.sceneOrder]
+                : state.script.scenes.map(s => s.id);
+
+            const currentIndex = order.indexOf(clipId);
+            const newIndex = currentIndex + direction;
+
+            if (newIndex < 0 || newIndex >= order.length) return;
+
+            saveEditState();
+
+            // Swap positions
+            [order[currentIndex], order[newIndex]] = [order[newIndex], order[currentIndex]];
+            state.assembly.sceneOrder = order;
+
+            saveProject();
+            rebuildPreviewScenes();
+            render();
+        }
+
+        // Trim clip (adjust duration)
+        let trimState = null;
+
+        function startTrimClip(clipId, handle, event) {
+            event.stopPropagation();
+            event.preventDefault();
+
+            const scene = state.script.scenes.find(s => s.id === clipId);
+            if (!scene) return;
+
+            saveEditState();
+
+            trimState = {
+                clipId,
+                handle, // 'left' or 'right'
+                startX: event.clientX,
+                originalDuration: scene.duration || 8,
+                minDuration: 1,
+                maxDuration: 60
+            };
+
+            document.addEventListener('mousemove', handleTrimMove);
+            document.addEventListener('mouseup', handleTrimEnd);
+        }
+
+        function handleTrimMove(event) {
+            if (!trimState) return;
+
+            const deltaX = event.clientX - trimState.startX;
+            const deltaTime = deltaX / state.timeline.zoom;
+
+            let newDuration;
+            if (trimState.handle === 'right') {
+                newDuration = trimState.originalDuration + deltaTime;
+            } else {
+                // Left handle - trimming from start would need more complex logic
+                // For now, just adjust duration
+                newDuration = trimState.originalDuration - deltaTime;
+            }
+
+            // Clamp duration
+            newDuration = Math.max(trimState.minDuration, Math.min(trimState.maxDuration, newDuration));
+
+            // Update scene duration
+            const scene = state.script.scenes.find(s => s.id === trimState.clipId);
+            if (scene) {
+                scene.duration = Math.round(newDuration * 10) / 10; // Round to 0.1s
+                rebuildPreviewScenes();
+                render();
+            }
+        }
+
+        function handleTrimEnd() {
+            if (trimState) {
+                saveProject();
+                showToast('Clip trimmed', 'success');
+            }
+            trimState = null;
+            document.removeEventListener('mousemove', handleTrimMove);
+            document.removeEventListener('mouseup', handleTrimEnd);
+        }
+
+        // Drag to reorder clips
+        let dragState = null;
+
+        function startDragClip(clipId, event) {
+            // Don't start drag if clicking on handles
+            if (event.target.classList.contains('clip-handle')) return;
+
+            event.preventDefault();
+
+            dragState = {
+                clipId,
+                startX: event.clientX,
+                startY: event.clientY,
+                isDragging: false
+            };
+
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('mouseup', handleDragEnd);
+        }
+
+        function handleDragMove(event) {
+            if (!dragState) return;
+
+            const deltaX = Math.abs(event.clientX - dragState.startX);
+            const deltaY = Math.abs(event.clientY - dragState.startY);
+
+            // Start dragging after moving 5px
+            if (!dragState.isDragging && (deltaX > 5 || deltaY > 5)) {
+                dragState.isDragging = true;
+                document.body.style.cursor = 'grabbing';
+            }
+
+            if (dragState.isDragging) {
+                // Show drop indicator
+                updateDropIndicator(event);
+            }
+        }
+
+        function handleDragEnd(event) {
+            if (dragState && dragState.isDragging) {
+                // Calculate drop position
+                const dropIndex = calculateDropIndex(event);
+                if (dropIndex !== -1) {
+                    reorderClip(dragState.clipId, dropIndex);
+                }
+            }
+
+            // Cleanup
+            document.body.style.cursor = '';
+            removeDropIndicator();
+            dragState = null;
+            document.removeEventListener('mousemove', handleDragMove);
+            document.removeEventListener('mouseup', handleDragEnd);
+        }
+
+        function updateDropIndicator(event) {
+            // Get timeline container
+            const container = document.querySelector('#timeline-scroll-container');
+            if (!container) return;
+
+            const rect = container.getBoundingClientRect();
+            const x = event.clientX - rect.left + container.scrollLeft - 80;
+
+            // Calculate which position this corresponds to
+            let indicator = document.getElementById('drop-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'drop-indicator';
+                indicator.style.cssText = 'position: absolute; top: 34px; width: 3px; height: 56px; background: #8b5cf6; z-index: 200; pointer-events: none; border-radius: 2px;';
+                container.querySelector('div').appendChild(indicator);
+            }
+
+            // Find the x position to show indicator
+            const order = state.assembly.sceneOrder.length > 0
+                ? state.assembly.sceneOrder
+                : state.script.scenes.map(s => s.id);
+
+            let accumulatedX = 0;
+            let indicatorX = 0;
+
+            for (let i = 0; i <= order.length; i++) {
+                if (i < order.length) {
+                    const scene = state.script.scenes.find(s => s.id === order[i]);
+                    const width = (scene?.duration || 8) * state.timeline.zoom;
+
+                    if (x < accumulatedX + width / 2) {
+                        indicatorX = accumulatedX;
+                        break;
+                    }
+                    accumulatedX += width;
+                } else {
+                    indicatorX = accumulatedX;
+                }
+            }
+
+            indicator.style.left = `${80 + indicatorX}px`;
+        }
+
+        function removeDropIndicator() {
+            const indicator = document.getElementById('drop-indicator');
+            if (indicator) indicator.remove();
+        }
+
+        function calculateDropIndex(event) {
+            const container = document.querySelector('#timeline-scroll-container');
+            if (!container) return -1;
+
+            const rect = container.getBoundingClientRect();
+            const x = event.clientX - rect.left + container.scrollLeft - 80;
+
+            const order = state.assembly.sceneOrder.length > 0
+                ? state.assembly.sceneOrder
+                : state.script.scenes.map(s => s.id);
+
+            let accumulatedX = 0;
+
+            for (let i = 0; i <= order.length; i++) {
+                if (i < order.length) {
+                    const scene = state.script.scenes.find(s => s.id === order[i]);
+                    const width = (scene?.duration || 8) * state.timeline.zoom;
+
+                    if (x < accumulatedX + width / 2) {
+                        return i;
+                    }
+                    accumulatedX += width;
+                } else {
+                    return order.length;
+                }
+            }
+
+            return order.length;
+        }
+
+        function reorderClip(clipId, newIndex) {
+            const order = state.assembly.sceneOrder.length > 0
+                ? [...state.assembly.sceneOrder]
+                : state.script.scenes.map(s => s.id);
+
+            const currentIndex = order.indexOf(clipId);
+            if (currentIndex === -1 || currentIndex === newIndex || currentIndex === newIndex - 1) return;
+
+            saveEditState();
+
+            // Remove from current position
+            order.splice(currentIndex, 1);
+
+            // Adjust new index if we removed from before it
+            const adjustedIndex = currentIndex < newIndex ? newIndex - 1 : newIndex;
+
+            // Insert at new position
+            order.splice(adjustedIndex, 0, clipId);
+
+            state.assembly.sceneOrder = order;
+            saveProject();
+            rebuildPreviewScenes();
+            render();
+            showToast('Clip reordered', 'success');
+        }
+
+        // Add edit toolbar to timeline header
+        function renderEditToolbar() {
+            const hasSelection = state.timeline.selectedClipId !== null;
+            const canUndo = editHistory.canUndo();
+            const canRedo = editHistory.canRedo();
+
+            return `
+                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <!-- Undo/Redo -->
+                    <button onclick="undoEdit()" ${!canUndo ? 'disabled' : ''} title="Undo (Ctrl+Z)"
+                            style="padding: 0.3rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${canUndo ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${canUndo ? 'pointer' : 'not-allowed'}; font-size: 0.75rem;">
+                        ↶ Undo
+                    </button>
+                    <button onclick="redoEdit()" ${!canRedo ? 'disabled' : ''} title="Redo (Ctrl+Y)"
+                            style="padding: 0.3rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${canRedo ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${canRedo ? 'pointer' : 'not-allowed'}; font-size: 0.75rem;">
+                        ↷ Redo
+                    </button>
+
+                    <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 0.25rem;"></div>
+
+                    <!-- Clip Operations -->
+                    <button onclick="splitClipAtPlayhead()" ${!state.preview.isReady ? 'disabled' : ''} title="Split at Playhead (S)"
+                            style="padding: 0.3rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${state.preview.isReady ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${state.preview.isReady ? 'pointer' : 'not-allowed'}; font-size: 0.75rem;">
+                        ✂️ Split
+                    </button>
+                    <button onclick="duplicateSelectedClip()" ${!hasSelection ? 'disabled' : ''} title="Duplicate (Ctrl+D)"
+                            style="padding: 0.3rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${hasSelection ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${hasSelection ? 'pointer' : 'not-allowed'}; font-size: 0.75rem;">
+                        📋 Duplicate
+                    </button>
+                    <button onclick="deleteSelectedClip()" ${!hasSelection ? 'disabled' : ''} title="Delete (Del)"
+                            style="padding: 0.3rem 0.5rem; border-radius: 0.25rem; border: 1px solid ${hasSelection ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255,255,255,0.2)'}; background: ${hasSelection ? 'rgba(239, 68, 68, 0.1)' : 'transparent'}; color: ${hasSelection ? '#ef4444' : 'rgba(255,255,255,0.3)'}; cursor: ${hasSelection ? 'pointer' : 'not-allowed'}; font-size: 0.75rem;">
+                        🗑️ Delete
+                    </button>
+
+                    <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 0.25rem;"></div>
+
+                    <!-- Move -->
+                    <button onclick="moveClipInTimeline(state.timeline.selectedClipId, -1)" ${!hasSelection ? 'disabled' : ''} title="Move Left"
+                            style="padding: 0.3rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${hasSelection ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${hasSelection ? 'pointer' : 'not-allowed'}; font-size: 0.75rem;">
+                        ← Move
+                    </button>
+                    <button onclick="moveClipInTimeline(state.timeline.selectedClipId, 1)" ${!hasSelection ? 'disabled' : ''} title="Move Right"
+                            style="padding: 0.3rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${hasSelection ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${hasSelection ? 'pointer' : 'not-allowed'}; font-size: 0.75rem;">
+                        Move →
+                    </button>
+                </div>
+            `;
         }
 
         function renderExportSettings(scriptScenes, animatedCount, totalDuration, platform) {
