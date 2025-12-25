@@ -284,12 +284,14 @@ function getStyleConfig(captionStyle, customStyle, captionPosition, captionSize)
 
   const styles = {
     // Karaoke style - word-by-word highlight
+    // Colors: Primary=Yellow (highlighted/spoken), Secondary=White (before speaking)
+    // This creates the effect where words turn yellow as they're spoken
     karaoke: {
       styleName: 'Karaoke',
-      styleLine: `Style: Karaoke,Arial,${fontSize},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,${alignment},50,50,${marginV},1`,
+      styleLine: `Style: Karaoke,Arial,${fontSize},&H0000FFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,${alignment},50,50,${marginV},1`,
       wordsPerLine: 4,
       useKaraoke: true,
-      highlightColor: '&H00FFFF00', // Yellow
+      highlightColor: '&H0000FFFF', // Yellow (BGR format)
       alignment,
       marginV
     },
