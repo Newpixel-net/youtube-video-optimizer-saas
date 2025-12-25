@@ -458,11 +458,14 @@ function formatTextWithStyle(words, captionStyle, styleConfig) {
     // Uppercase all text
     text = words.map(w => w.word.toUpperCase()).join(' ');
   } else if (styleConfig.highlightKeywords) {
-    // Highlight important words (simple heuristic: longer words, starts with capital)
+    // Hormozi-style: green background BOX around keywords
+    // Uses thick border with green color to create highlight box effect
     text = words.map(w => {
       const isKeyword = w.word.length > 5 || /^[A-Z]/.test(w.word);
       if (isKeyword) {
-        return `{\\c${styleConfig.highlightColor}}${w.word}{\\c&H00FFFFFF}`;
+        // Create green background box using border: \3c=border color, \xbord/\ybord=border size
+        // \1c=text color (white), then \r resets to default style
+        return `{\\1c&H00FFFFFF&\\3c&H0022C55E&\\xbord12\\ybord6\\shad0}${w.word}{\\r}`;
       }
       return w.word;
     }).join(' ');
