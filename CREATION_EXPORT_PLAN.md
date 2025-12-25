@@ -224,17 +224,38 @@ const mixFilter = `${audioFilter};[a0][a1]...[music]amix=inputs=${scenes.length 
 
 ## Deployment
 
-1. Update video-processor service code
-2. Deploy to Cloud Run: `gcloud run deploy video-processor --source .`
-3. Deploy Cloud Functions: `firebase deploy --only functions`
-4. Test end-to-end flow
+### Step 1: Deploy Video Processor to Cloud Run
 
-## Estimated Implementation Time
+```bash
+cd services/video-processor
+gcloud run deploy video-processor --source . --region us-central1 --allow-unauthenticated --memory 2Gi --timeout 600
+```
 
-- Phase 1 (Video Processor): 2-3 hours
-- Phase 2 (FFmpeg commands): 1-2 hours
-- Phase 3 (Cloud Function): 1 hour
-- Phase 4 (Frontend): 1 hour
-- Testing: 1-2 hours
+Note the URL from the deployment output (e.g., `https://video-processor-xxxxx.run.app`)
 
-**Total: ~6-9 hours**
+### Step 2: Configure Cloud Functions with Processor URL
+
+```bash
+firebase functions:config:set videoprocessor.url="https://video-processor-xxxxx.run.app"
+```
+
+### Step 3: Deploy Cloud Functions
+
+```bash
+firebase deploy --only functions
+```
+
+### Step 4: Test End-to-End
+
+1. Open video-creation-wizard.html
+2. Create a project with images and voiceovers
+3. Go to Export step and click Export
+4. Verify progress updates appear
+5. Verify MP4 video downloads correctly
+
+## Implementation Status
+
+✅ **Phase 1**: Video Processor Service (`services/video-processor/src/creation-processor.js`)
+✅ **Phase 2**: Cloud Function (`creationWizardStartExport` in `functions/index.js`)
+✅ **Phase 3**: Frontend (`startExport()` in `frontend/video-creation-wizard.html`)
+✅ **Phase 4**: Ready for deployment
