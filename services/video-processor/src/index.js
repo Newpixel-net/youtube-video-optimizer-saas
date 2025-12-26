@@ -971,6 +971,27 @@ app.listen(PORT, () => {
   console.log(`Parallel Processing:`);
   console.log(`  PARALLEL_SCENES: ${process.env.PARALLEL_SCENES || 'false'}`);
   console.log(`  VIDEO_PROCESSOR_URL: ${process.env.VIDEO_PROCESSOR_URL || 'NOT SET'}`);
+
+  // Validate parallel processing configuration
+  const parallelEnabled = process.env.PARALLEL_SCENES === 'true';
+  const videoProcessorUrl = process.env.VIDEO_PROCESSOR_URL;
+  if (parallelEnabled) {
+    if (!videoProcessorUrl) {
+      console.error(`  ⚠️  WARNING: PARALLEL_SCENES=true but VIDEO_PROCESSOR_URL not set!`);
+      console.error(`  ⚠️  Parallel processing will be DISABLED until VIDEO_PROCESSOR_URL is configured.`);
+    } else {
+      try {
+        const url = new URL(videoProcessorUrl);
+        if (!url.protocol.startsWith('http')) {
+          console.error(`  ⚠️  WARNING: VIDEO_PROCESSOR_URL must use HTTP(S)!`);
+        } else {
+          console.log(`  ✓ Parallel processing ENABLED`);
+        }
+      } catch (e) {
+        console.error(`  ⚠️  WARNING: VIDEO_PROCESSOR_URL is invalid: ${e.message}`);
+      }
+    }
+  }
   console.log(`----------------------------------------`);
   console.log(`Cloud Run Environment:`);
   console.log(`  K_SERVICE: ${process.env.K_SERVICE || 'not set'}`);
