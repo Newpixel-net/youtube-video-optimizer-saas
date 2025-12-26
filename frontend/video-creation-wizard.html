@@ -2361,7 +2361,7 @@
                 sceneOrder: [],
                 transitions: {},
                 music: { enabled: false, trackId: null, volume: 30 },
-                captions: { enabled: true, style: 'karaoke', position: 'bottom', fontSize: 'medium' },
+                captions: { enabled: true, style: 'karaoke', position: 'bottom', size: 1 },
                 audioMix: { voiceVolume: 100, musicVolume: 30 },
                 musicLibrary: [],
                 transitionTypes: [],
@@ -6791,47 +6791,68 @@
         }
 
         function renderCaptionSettings() {
-            const captionStyles = state.assembly.captionStyles || [];
-            const captionsEnabled = state.assembly.captions.enabled;
-            const selectedStyle = state.assembly.captions.style;
-            const position = state.assembly.captions.position;
+            const selectedStyle = state.assembly.captions.style || 'karaoke';
+            const position = state.assembly.captions.position || 'bottom';
+            const size = state.assembly.captions.size || 1;
+
+            // Same styles as video-wizard.html for consistency and correct export
+            const captionStyles = [
+                { id: 'none', name: 'None', preview: '—' },
+                { id: 'karaoke', name: 'Karaoke', preview: '<span style="color:#fff">The</span> <span style="color:#fbbf24;font-weight:700">biggest</span>' },
+                { id: 'beasty', name: 'MrBeast', preview: '<span style="color:#fbbf24;font-weight:900;text-transform:uppercase;font-size:0.8rem">BOLD</span>' },
+                { id: 'deepdiver', name: 'Minimal', preview: '<span style="font-weight:400;font-size:0.7rem;opacity:0.8">minimal style</span>' },
+                { id: 'podp', name: 'Podcast', preview: '<span style="font-weight:500;letter-spacing:0.3px">Clean Text</span>' },
+                { id: 'hormozi', name: 'Hormozi', preview: '<span style="background:linear-gradient(180deg,#22c55e,#16a34a);padding:2px 6px;border-radius:3px;font-weight:600;color:#fff">KEY</span>' },
+                { id: 'ali', name: 'Ali', preview: '<span style="text-shadow:0 0 8px rgba(236,72,153,0.8);color:#ec4899">Glow</span>' },
+                { id: 'custom', name: 'Custom', preview: '✨' }
+            ];
 
             return `
                 <div class="content-card" style="padding: 1rem;">
                     <div style="font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
                         <span>💬</span> Captions
-                        <label style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input type="checkbox" ${captionsEnabled ? 'checked' : ''} onchange="toggleCaptions(this.checked)"
-                                   style="width: 1rem; height: 1rem; cursor: pointer;">
-                            <span style="font-size: 0.75rem; font-weight: 400; color: rgba(255,255,255,0.6);">Enable</span>
-                        </label>
+                        <span style="margin-left: auto; font-size: 0.7rem; color: rgba(255,255,255,0.5); padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.05); border-radius: 0.25rem;">8 Styles</span>
                     </div>
 
-                    <div style="opacity: ${captionsEnabled ? '1' : '0.5'}; pointer-events: ${captionsEnabled ? 'auto' : 'none'};">
-                        <!-- Style Selection -->
-                        <div style="margin-bottom: 0.75rem;">
-                            <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Style</label>
-                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;">
-                                ${captionStyles.filter(s => s.id !== 'none').map(style => `
-                                    <button onclick="setCaptionStyle('${style.id}')"
-                                            style="padding: 0.4rem; border-radius: 0.4rem; border: 1px solid ${selectedStyle === style.id ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.2)'}; background: ${selectedStyle === style.id ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 0.7rem;">
-                                        ${style.name}
-                                    </button>
-                                `).join('')}
-                            </div>
+                    <!-- Style Selection Grid - 4 columns like video-wizard -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 0.75rem;">
+                        ${captionStyles.map(style => `
+                            <button onclick="setCaptionStyle('${style.id}')"
+                                    style="padding: 0.5rem 0.25rem; border-radius: 0.5rem; border: 2px solid ${selectedStyle === style.id ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.1)'}; background: ${selectedStyle === style.id ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)'}; color: white; cursor: pointer; text-align: center; transition: all 0.2s; position: relative;">
+                                <div style="height: 24px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; margin-bottom: 0.25rem;">
+                                    ${style.preview}
+                                </div>
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.7);">${style.name}</div>
+                                ${selectedStyle === style.id ? '<div style="position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; background: #8b5cf6; border-radius: 50%;"></div>' : ''}
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    <!-- Position and Size Controls -->
+                    <div style="display: flex; gap: 0.75rem; opacity: ${selectedStyle === 'none' ? '0.4' : '1'}; pointer-events: ${selectedStyle === 'none' ? 'none' : 'auto'};">
+                        <!-- Position -->
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Position</label>
+                            <select onchange="setCaptionPosition(this.value)"
+                                    style="width: 100%; padding: 0.4rem; background: rgba(30,30,30,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">
+                                <option value="bottom" ${position === 'bottom' ? 'selected' : ''}>⬇ Bottom</option>
+                                <option value="middle" ${position === 'middle' || position === 'center' ? 'selected' : ''}>⬌ Middle</option>
+                                <option value="top" ${position === 'top' ? 'selected' : ''}>⬆ Top</option>
+                            </select>
                         </div>
 
-                        <!-- Position -->
-                        <div>
-                            <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Position</label>
-                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;">
-                                ${['top', 'center', 'bottom'].map(pos => `
-                                    <button onclick="setCaptionPosition('${pos}')"
-                                            style="padding: 0.4rem; border-radius: 0.4rem; border: 1px solid ${position === pos ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.2)'}; background: ${position === pos ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 0.7rem; text-transform: capitalize;">
-                                        ${pos}
-                                    </button>
-                                `).join('')}
-                            </div>
+                        <!-- Size (numeric like video-wizard) -->
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Size</label>
+                            <select onchange="setCaptionSize(this.value)"
+                                    style="width: 100%; padding: 0.4rem; background: rgba(30,30,30,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">
+                                <option value="0.7" ${size == 0.7 ? 'selected' : ''}>70%</option>
+                                <option value="0.85" ${size == 0.85 ? 'selected' : ''}>85%</option>
+                                <option value="1" ${size == 1 ? 'selected' : ''}>100%</option>
+                                <option value="1.15" ${size == 1.15 ? 'selected' : ''}>115%</option>
+                                <option value="1.3" ${size == 1.3 ? 'selected' : ''}>130%</option>
+                                <option value="1.5" ${size == 1.5 ? 'selected' : ''}>150%</option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -6952,6 +6973,12 @@
             if (previewEngine) {
                 previewEngine.captionPosition = position;
             }
+            render();
+        }
+
+        function setCaptionSize(size) {
+            state.assembly.captions.size = parseFloat(size);
+            saveProject();
             render();
         }
 
@@ -9082,13 +9109,18 @@
                 return;
             }
 
+            // Check if it's a cloud storage URL (Firebase or Google Cloud Storage)
+            const isCloudUrl = outputUrl.includes('firebasestorage.googleapis.com') ||
+                              outputUrl.includes('storage.googleapis.com') ||
+                              outputUrl.includes('storage.cloud.google.com');
+
             try {
-                if (isServerRender && outputUrl.includes('firebase') || outputUrl.includes('googleapis')) {
-                    // For Firebase Storage URLs, fetch and download as blob
+                if (isCloudUrl) {
+                    // For Cloud Storage URLs, fetch and download as blob
                     showToast('Preparing download...', 'info');
 
-                    const response = await fetch(outputUrl);
-                    if (!response.ok) throw new Error('Failed to fetch video');
+                    const response = await fetch(outputUrl, { mode: 'cors' });
+                    if (!response.ok) throw new Error(`Failed to fetch video: ${response.status}`);
 
                     const blob = await response.blob();
                     const blobUrl = URL.createObjectURL(blob);
@@ -9096,23 +9128,25 @@
                     const link = document.createElement('a');
                     link.href = blobUrl;
                     link.download = fileName;
+                    link.style.display = 'none';
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
 
                     // Clean up blob URL after a delay
-                    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+                    showToast('Download started!', 'success');
                 } else {
                     // Direct download for blob URLs or simple URLs
                     const link = document.createElement('a');
                     link.href = outputUrl;
                     link.download = fileName;
+                    link.style.display = 'none';
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
+                    showToast('Download started!', 'success');
                 }
-
-                showToast('Download started!', 'success');
             } catch (error) {
                 console.error('Download error:', error);
                 // Fallback: open in new tab

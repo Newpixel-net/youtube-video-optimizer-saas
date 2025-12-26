@@ -272,7 +272,7 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
           captionStyle: captionStyle,
           customStyle: captionsConfig.customStyle,
           captionPosition: captionsConfig.position || 'bottom',
-          captionSize: captionsConfig.fontSize === 'large' ? 1.3 : captionsConfig.fontSize === 'small' ? 0.8 : 1.0
+          captionSize: captionsConfig.size || 1  // Numeric 0.7-1.5, same as video-wizard
         });
 
         if (captionFile && fs.existsSync(captionFile)) {
