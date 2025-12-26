@@ -11,6 +11,42 @@ import fs from 'fs';
 import path from 'path';
 import { Firestore } from '@google-cloud/firestore';
 
+// Track active FFmpeg processes for cancellation
+const activeProcesses = new Map();
+
+/**
+ * Check if job has been cancelled
+ */
+async function checkCancelled(jobRef, jobId) {
+  try {
+    const jobDoc = await jobRef.get();
+    if (jobDoc.exists) {
+      const status = jobDoc.data().status;
+      if (status === 'cancelled') {
+        console.log(`[${jobId}] Job was cancelled by user`);
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn(`[${jobId}] Could not check cancellation status:`, err.message);
+  }
+  return false;
+}
+
+/**
+ * Kill active FFmpeg process for a job
+ */
+export function cancelJob(jobId) {
+  const proc = activeProcesses.get(jobId);
+  if (proc) {
+    console.log(`[${jobId}] Killing FFmpeg process`);
+    proc.kill('SIGTERM');
+    activeProcesses.delete(jobId);
+    return true;
+  }
+  return false;
+}
+
 /**
  * Process a creation wizard export job
  * Creates a video from images with Ken Burns effect and voiceovers
@@ -33,15 +69,30 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
     console.log(`[${jobId}] Processing ${scenes.length} scenes`);
     console.log(`[${jobId}] Output settings: ${output.quality}, ${output.aspectRatio}, ${output.fps}fps`);
 
+    // Check cancellation before starting
+    if (await checkCancelled(jobRef, jobId)) {
+      throw new Error('Job cancelled by user');
+    }
+
     // Step 1: Download all images
     await updateProgress(jobRef, 5, 'Downloading images...');
     const imageFiles = await downloadAllImages({ jobId, scenes, workDir });
     console.log(`[${jobId}] Downloaded ${imageFiles.length} images`);
 
+    // Check cancellation after downloading images
+    if (await checkCancelled(jobRef, jobId)) {
+      throw new Error('Job cancelled by user');
+    }
+
     // Step 2: Download all voiceovers
     await updateProgress(jobRef, 15, 'Downloading voiceovers...');
     const voiceoverFiles = await downloadAllVoiceovers({ jobId, scenes, workDir });
     console.log(`[${jobId}] Downloaded ${voiceoverFiles.length} voiceovers`);
+
+    // Check cancellation after downloading voiceovers
+    if (await checkCancelled(jobRef, jobId)) {
+      throw new Error('Job cancelled by user');
+    }
 
     // Step 3: Download background music (if any)
     let musicFile = null;
@@ -52,6 +103,11 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
         outputPath: path.join(workDir, 'music.mp3'),
         jobId
       });
+    }
+
+    // Check cancellation before video generation (the longest step)
+    if (await checkCancelled(jobRef, jobId)) {
+      throw new Error('Job cancelled by user');
     }
 
     // Step 4: Generate Ken Burns video from images
@@ -65,6 +121,11 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
       output
     });
     console.log(`[${jobId}] Generated Ken Burns video: ${videoOnlyFile}`);
+
+    // Check cancellation after video generation
+    if (await checkCancelled(jobRef, jobId)) {
+      throw new Error('Job cancelled by user');
+    }
 
     // Step 5: Combine video with audio (voiceovers + music)
     await updateProgress(jobRef, 70, 'Adding audio...');
@@ -507,7 +568,7 @@ async function getAudioDuration(filePath) {
 }
 
 /**
- * Run FFmpeg with progress tracking
+ * Run FFmpeg with progress tracking and cancellation support
  */
 function runFFmpeg({ jobId, args, jobRef, progressStart = 0, progressEnd = 100 }) {
   return new Promise((resolve, reject) => {
@@ -517,6 +578,21 @@ function runFFmpeg({ jobId, args, jobRef, progressStart = 0, progressEnd = 100 }
     let stderr = '';
     let duration = 0;
     let lastLogTime = Date.now();
+    let lastCancelCheck = Date.now();
+    let cancelled = false;
+
+    // Track this process for potential cancellation
+    activeProcesses.set(jobId, ffmpeg);
+
+    // Check for cancellation every 10 seconds during FFmpeg execution
+    const cancelCheckInterval = setInterval(async () => {
+      if (await checkCancelled(jobRef, jobId)) {
+        cancelled = true;
+        console.log(`[${jobId}] Cancellation detected, killing FFmpeg process`);
+        ffmpeg.kill('SIGTERM');
+        clearInterval(cancelCheckInterval);
+      }
+    }, 10000);
 
     ffmpeg.stderr.on('data', (data) => {
       const chunk = data.toString();
@@ -562,7 +638,12 @@ function runFFmpeg({ jobId, args, jobRef, progressStart = 0, progressEnd = 100 }
     });
 
     ffmpeg.on('close', (code) => {
-      if (code === 0) {
+      clearInterval(cancelCheckInterval);
+      activeProcesses.delete(jobId);
+
+      if (cancelled) {
+        reject(new Error('Job cancelled by user'));
+      } else if (code === 0) {
         resolve();
       } else {
         console.error(`[${jobId}] FFmpeg failed with code ${code}`);
@@ -572,6 +653,8 @@ function runFFmpeg({ jobId, args, jobRef, progressStart = 0, progressEnd = 100 }
     });
 
     ffmpeg.on('error', (err) => {
+      clearInterval(cancelCheckInterval);
+      activeProcesses.delete(jobId);
       reject(new Error(`FFmpeg spawn error: ${err.message}`));
     });
   });
