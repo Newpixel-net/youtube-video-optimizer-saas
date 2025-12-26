@@ -2387,7 +2387,8 @@
                 currentStage: null,
                 outputUrl: null,
                 error: null,
-                selectedQuality: '1080p'
+                selectedQuality: '1080p',
+                selectedRenderQuality: 'balanced'  // fast, balanced, or best
             },
 
             // Timeline Editor State
@@ -8764,6 +8765,29 @@
 
         function renderExportSettings(scriptScenes, animatedCount, totalDuration, platform) {
             const selectedQuality = state.export.selectedQuality || '1080p';
+            const selectedRenderQuality = state.export.selectedRenderQuality || 'balanced';
+
+            // Render quality options for speed vs quality tradeoff
+            const RENDER_QUALITY_OPTIONS = {
+                fast: {
+                    name: 'Fast',
+                    icon: '⚡',
+                    description: 'Quick export (~50% faster)',
+                    time: Math.ceil(totalDuration * 0.8 / 60)
+                },
+                balanced: {
+                    name: 'Balanced',
+                    icon: '⚖️',
+                    description: 'Good speed & quality (recommended)',
+                    time: Math.ceil(totalDuration * 1.5 / 60)
+                },
+                best: {
+                    name: 'Best Quality',
+                    icon: '✨',
+                    description: 'Highest quality, slower',
+                    time: Math.ceil(totalDuration * 3 / 60)
+                }
+            };
 
             return `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
@@ -8832,6 +8856,24 @@
                                         ${selectedQuality === id ? '<span style="margin-left: auto; color: #8b5cf6;">✓</span>' : ''}
                                     </button>
                                 `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Render Speed Selection -->
+                        <div style="margin-bottom: 1.25rem;">
+                            <label style="display: block; font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Render Speed</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                ${Object.entries(RENDER_QUALITY_OPTIONS).map(([id, rq]) => `
+                                    <button onclick="setRenderQuality('${id}')"
+                                            style="flex: 1; padding: 0.6rem 0.5rem; border-radius: 0.5rem; border: 1px solid ${selectedRenderQuality === id ? 'rgba(139, 92, 246, 0.6)' : 'rgba(255,255,255,0.15)'}; background: ${selectedRenderQuality === id ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.03)'}; color: white; cursor: pointer; text-align: center;">
+                                        <div style="font-size: 1.1rem;">${rq.icon}</div>
+                                        <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.25rem;">${rq.name}</div>
+                                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-top: 0.15rem;">~${rq.time} min</div>
+                                    </button>
+                                `).join('')}
+                            </div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.5rem; text-align: center;">
+                                ${RENDER_QUALITY_OPTIONS[selectedRenderQuality].description}
                             </div>
                         </div>
 
@@ -9150,6 +9192,12 @@
             render();
         }
 
+        function setRenderQuality(quality) {
+            if (!state.export) state.export = {};
+            state.export.selectedRenderQuality = quality;
+            render();
+        }
+
         async function startExport() {
             // Check for exportable content: either AI videos OR storyboard images
             const animatedCount = (state.animation.scenes || []).filter(s => s.videoUrl).length;
@@ -9185,12 +9233,14 @@
                 console.log('[Export] Starting server-side video rendering');
 
                 const quality = state.export.selectedQuality || '1080p';
+                const renderQuality = state.export.selectedRenderQuality || 'balanced';
                 const format = 'mp4'; // Server-side always produces MP4
 
                 const startExportFn = firebase.functions().httpsCallable('creationWizardStartExport');
                 const result = await startExportFn({
                     projectId: state.project.id,
                     quality: quality,
+                    renderQuality: renderQuality,  // fast, balanced, or best
                     format: format
                 });
 

@@ -24702,7 +24702,7 @@ exports.creationWizardStartExport = functions
   .runWith({ timeoutSeconds: 540, memory: '2GB' })
   .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { projectId, quality = '1080p', format = 'mp4', timelineState = null } = data;
+  const { projectId, quality = '1080p', format = 'mp4', timelineState = null, renderQuality = 'balanced' } = data;
 
   if (!projectId) {
     throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
@@ -24823,13 +24823,18 @@ exports.creationWizardStartExport = functions
     };
 
     // Output settings for creation-processor.js
+    // Validate renderQuality option
+    const validRenderQualities = ['fast', 'balanced', 'best'];
+    const outputRenderQuality = validRenderQualities.includes(renderQuality) ? renderQuality : 'balanced';
+
     const outputSettings = {
       quality: outputQuality,
       aspectRatio: project.platform?.aspectRatio || '16:9',
       fps: 30,
       format,
       resolution: qualityPreset.resolution,
-      bitrate: qualityPreset.bitrate
+      bitrate: qualityPreset.bitrate,
+      renderQuality: outputRenderQuality  // fast, balanced, or best - affects Ken Burns processing speed
     };
 
     // Calculate total duration

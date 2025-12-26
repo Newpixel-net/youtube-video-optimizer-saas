@@ -272,6 +272,7 @@ async function downloadFile({ url, outputPath, jobId }) {
 
 /**
  * Generate Ken Burns video from images using FFmpeg
+ * Supports different render quality modes for speed vs quality tradeoff
  */
 async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDir, output }) {
   const outputFile = path.join(workDir, 'video_only.mp4');
@@ -293,9 +294,44 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     width = height = Math.min(width, height);
   }
 
-  const fps = output.fps || 30;
+  // RENDER QUALITY MODES - User can choose speed vs quality tradeoff
+  // 'fast' = Quick export (~50% faster), good quality
+  // 'balanced' = Default, good balance of speed and quality
+  // 'best' = Highest quality, slower processing
+  const renderQuality = output.renderQuality || 'balanced';
 
-  console.log(`[${jobId}] Output resolution: ${width}x${height} @ ${fps}fps`);
+  const qualitySettings = {
+    fast: {
+      scaleMultiplier: 1.3,  // Less upscaling = faster
+      preset: 'ultrafast',   // Fastest encoding
+      fps: 24,               // Fewer frames
+      crf: '26'              // Slightly lower quality
+    },
+    balanced: {
+      scaleMultiplier: 1.5,  // Moderate upscaling
+      preset: 'fast',        // Good speed
+      fps: 30,               // Standard
+      crf: '23'              // Good quality
+    },
+    best: {
+      scaleMultiplier: 2.0,  // Full upscaling for smoothest zoom
+      preset: 'medium',      // Better compression
+      fps: 30,               // Standard
+      crf: '20'              // High quality
+    }
+  };
+
+  const settings = qualitySettings[renderQuality] || qualitySettings.balanced;
+  const fps = output.fps || settings.fps;
+
+  console.log(`[${jobId}] ========================================`);
+  console.log(`[${jobId}] Render Quality: ${renderQuality.toUpperCase()}`);
+  console.log(`[${jobId}]   Scale: ${settings.scaleMultiplier}x`);
+  console.log(`[${jobId}]   Preset: ${settings.preset}`);
+  console.log(`[${jobId}]   FPS: ${fps}`);
+  console.log(`[${jobId}]   CRF: ${settings.crf}`);
+  console.log(`[${jobId}] Output: ${width}x${height}`);
+  console.log(`[${jobId}] ========================================`);
 
   // Build FFmpeg command for Ken Burns effect
   // SIMPLIFIED APPROACH: Process scenes one at a time, then concatenate
@@ -329,8 +365,10 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     const xExpr = `(iw-iw/zoom)/2`;
     const yExpr = `(ih-ih/zoom)/2`;
 
-    // Simple Ken Burns: just zoom, minimal pan for stability
-    const filterComplex = `scale=2*${width}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
+    // Ken Burns filter with quality-dependent scaling
+    // Higher scaleMultiplier = smoother zoom but slower processing
+    const scaleWidth = Math.round(width * settings.scaleMultiplier);
+    const filterComplex = `scale=${scaleWidth}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
 
     const sceneArgs = [
       '-loop', '1',
@@ -338,8 +376,8 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
       '-i', imageFile,
       '-vf', filterComplex,
       '-c:v', 'libx264',
-      '-preset', 'fast',
-      '-crf', '23',
+      '-preset', settings.preset,
+      '-crf', settings.crf,
       '-pix_fmt', 'yuv420p',
       '-y',
       sceneOutput
