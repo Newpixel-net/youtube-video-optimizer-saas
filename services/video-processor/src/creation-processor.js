@@ -11,6 +11,16 @@ import fs from 'fs';
 import path from 'path';
 import { Firestore } from '@google-cloud/firestore';
 import { isGpuAvailable, getEncodingParams } from './gpu-encoder.js';
+import { Agent, fetch as undiciFetch } from 'undici';
+
+// Create a custom agent with longer timeouts for Cloud Run cold starts (especially GPU instances)
+// GPU instances can take 60-90 seconds to cold start
+const coldStartAgent = new Agent({
+  headersTimeout: 180000,  // 3 minutes for headers (handles cold start)
+  bodyTimeout: 900000,     // 15 minutes for body (handles long scene processing)
+  keepAliveTimeout: 30000,
+  keepAliveMaxTimeout: 180000
+});
 
 // GPU availability - lazy initialization
 let gpuEnabled = null;
@@ -1275,11 +1285,13 @@ export async function processSceneParallel({
   console.log(`[${jobId}] ========================================`);
 
   // Verify service URL is reachable before starting parallel processing
+  // Use longer timeout to handle cold starts
   try {
     console.log(`[${jobId}] Verifying service connectivity...`);
-    const healthCheck = await fetch(`${serviceUrl}/health`, {
+    const healthCheck = await undiciFetch(`${serviceUrl}/health`, {
       method: 'GET',
-      signal: AbortSignal.timeout(10000) // 10 second timeout for health check
+      dispatcher: coldStartAgent,
+      signal: AbortSignal.timeout(60000) // 60 second timeout for health check (handles cold start)
     });
     if (healthCheck.ok) {
       const healthData = await healthCheck.json();
@@ -1301,12 +1313,17 @@ export async function processSceneParallel({
   const SCENE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 
   // Helper function for fetch with retries (handles Cloud Run cold starts and transient failures)
+  // Uses undici with custom agent that has longer timeouts for GPU cold starts
   const fetchWithRetry = async (url, options, sceneIndex, maxRetries = 3) => {
     let lastError;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`[${jobId}] Scene ${sceneIndex} - fetch attempt ${attempt}/${maxRetries}`);
-        const response = await fetch(url, options);
+        // Use undici fetch with custom agent for longer timeouts
+        const response = await undiciFetch(url, {
+          ...options,
+          dispatcher: coldStartAgent
+        });
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`HTTP ${response.status}: ${errorText}`);
@@ -1323,9 +1340,11 @@ export async function processSceneParallel({
         console.error(`[${jobId}] Scene ${sceneIndex} fetch attempt ${attempt} failed: ${error.message} (cause: ${causeMsg})`);
 
         if (attempt < maxRetries) {
-          // Exponential backoff: 2s, 4s, 8s
-          const delay = Math.pow(2, attempt) * 1000;
-          console.log(`[${jobId}] Scene ${sceneIndex} - retrying in ${delay/1000}s...`);
+          // Longer backoff for cold start errors: 5s, 10s, 20s
+          const isColdStartError = causeMsg.includes('Timeout') || causeMsg.includes('timeout');
+          const baseDelay = isColdStartError ? 5000 : 2000;
+          const delay = Math.pow(2, attempt) * baseDelay;
+          console.log(`[${jobId}] Scene ${sceneIndex} - retrying in ${delay/1000}s...${isColdStartError ? ' (cold start detected)' : ''}`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
@@ -1333,6 +1352,66 @@ export async function processSceneParallel({
     throw lastError;
   };
 
+  // Track scene statuses for UI feedback - start as 'queued'
+  const sceneStatuses = scenes.map((_, i) => ({
+    index: i,
+    status: 'queued',
+    startedAt: null,
+    completedAt: null,
+    error: null
+  }));
+
+  // Helper to generate status message showing which scenes are complete vs rendering
+  const generateStatusMessage = () => {
+    const complete = sceneStatuses.filter(s => s.status === 'complete').map(s => s.index + 1);
+    const rendering = sceneStatuses.filter(s => s.status === 'rendering').map(s => s.index + 1);
+    const failed = sceneStatuses.filter(s => s.status === 'failed').map(s => s.index + 1);
+
+    let msg = '';
+    if (complete.length > 0) {
+      msg += `✓ Scene${complete.length > 1 ? 's' : ''} ${complete.join(', ')} complete`;
+    }
+    if (rendering.length > 0) {
+      if (msg) msg += ' | ';
+      msg += `Rendering scene${rendering.length > 1 ? 's' : ''} ${rendering.join(', ')}...`;
+    }
+    if (failed.length > 0) {
+      if (msg) msg += ' | ';
+      msg += `✗ Scene${failed.length > 1 ? 's' : ''} ${failed.join(', ')} failed`;
+    }
+    if (!msg) {
+      msg = `Starting ${scenes.length} scenes...`;
+    }
+    return msg;
+  };
+
+  // Helper to update Firestore with current scene statuses
+  const updateSceneProgress = async () => {
+    const completedScenes = sceneStatuses.filter(s => s.status === 'complete' || s.status === 'failed').length;
+    const progress = 26 + Math.round((completedScenes / scenes.length) * 30);
+    const statusMsg = generateStatusMessage();
+
+    await jobRef.update({
+      sceneStatuses: sceneStatuses,
+      progress,
+      currentStage: statusMsg,
+      statusMessage: statusMsg,
+      scenesCompleted: sceneStatuses.filter(s => s.status === 'complete').length,
+      scenesTotal: scenes.length
+    });
+  };
+
+  // Update Firestore with initial scene statuses
+  await jobRef.update({
+    sceneStatuses: sceneStatuses,
+    progress: 26,
+    currentStage: `Starting ${scenes.length} scenes in parallel...`,
+    statusMessage: `Starting ${scenes.length} scenes in parallel...`,
+    scenesCompleted: 0,
+    scenesTotal: scenes.length
+  });
+
+  // Create scene promises with status tracking
   const scenePromises = scenes.map((scene, index) => {
     const requestBody = {
       sceneIndex: index,
@@ -1351,6 +1430,10 @@ export async function processSceneParallel({
     // Create abort controller for timeout (15 min total including retries)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), SCENE_TIMEOUT_MS);
+
+    // Mark scene as rendering when fetch starts
+    sceneStatuses[index].status = 'rendering';
+    sceneStatuses[index].startedAt = new Date().toISOString();
 
     return fetchWithRetry(
       `${serviceUrl}/process-scene`,
@@ -1392,56 +1475,44 @@ export async function processSceneParallel({
       });
   });
 
-  // Track scene statuses for UI feedback
-  const sceneStatuses = scenes.map((_, i) => ({ index: i, status: 'processing', completedAt: null }));
+  // Update UI immediately to show all scenes are now rendering
+  await updateSceneProgress();
 
-  // Update Firestore with initial scene statuses
-  await jobRef.update({
-    sceneStatuses: sceneStatuses,
-    progress: 26,
-    currentStage: `Rendering ${scenes.length} scenes in parallel...`,
-    statusMessage: `Rendering ${scenes.length} scenes in parallel...`
-  });
+  // Start a periodic progress updater (every 15 seconds) to keep UI fresh
+  const progressInterval = setInterval(async () => {
+    const renderingCount = sceneStatuses.filter(s => s.status === 'rendering').length;
+    if (renderingCount > 0) {
+      const elapsedSec = Math.round((Date.now() - new Date(sceneStatuses[0].startedAt).getTime()) / 1000);
+      console.log(`[${jobId}] Progress update: ${renderingCount} scenes still rendering (${elapsedSec}s elapsed)`);
+      await updateSceneProgress();
+    }
+  }, 15000); // Update every 15 seconds
 
   // Track progress as scenes complete - with detailed status updates
-  let completedScenes = 0;
+  let completedCount = 0;
   const results = await Promise.all(
     scenePromises.map(async (promise, index) => {
       const result = await promise;
-      completedScenes++;
+      completedCount++;
 
-      // Update scene status
-      sceneStatuses[result.sceneIndex] = {
-        index: result.sceneIndex,
-        status: result.success ? 'complete' : 'failed',
-        completedAt: new Date().toISOString(),
-        error: result.error || null
-      };
+      // Update scene status (preserve startedAt)
+      sceneStatuses[result.sceneIndex].status = result.success ? 'complete' : 'failed';
+      sceneStatuses[result.sceneIndex].completedAt = new Date().toISOString();
+      sceneStatuses[result.sceneIndex].error = result.error || null;
 
-      // Calculate progress (25-55% for scene rendering)
-      const progress = 25 + Math.round((completedScenes / scenes.length) * 30);
-
-      // Create detailed status message
-      const statusMsg = result.success
-        ? `✓ Scene ${result.sceneIndex + 1} complete! (${completedScenes}/${scenes.length} rendered)`
-        : `✗ Scene ${result.sceneIndex + 1} failed (${completedScenes}/${scenes.length} processed)`;
-
-      console.log(`[${jobId}] ${statusMsg}`);
+      // Generate dynamic status message
+      const statusMsg = generateStatusMessage();
+      console.log(`[${jobId}] Scene ${result.sceneIndex + 1} ${result.success ? 'complete' : 'failed'} (${completedCount}/${scenes.length})`);
 
       // Update Firestore with progress and scene statuses
-      await jobRef.update({
-        progress,
-        currentStage: statusMsg,
-        statusMessage: statusMsg,
-        sceneStatuses: sceneStatuses,
-        lastSceneCompleted: result.sceneIndex + 1,
-        scenesCompleted: completedScenes,
-        scenesTotal: scenes.length
-      });
+      await updateSceneProgress();
 
       return result;
     })
   );
+
+  // Stop the periodic progress updater
+  clearInterval(progressInterval);
 
   // Log all results for debugging
   console.log(`[${jobId}] ========================================`);
