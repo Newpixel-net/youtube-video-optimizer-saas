@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import { Firestore } from '@google-cloud/firestore';
 import { isGpuAvailable, getEncodingParams } from './gpu-encoder.js';
+import { generateCaptions } from './caption-renderer.js';
 import { Agent, fetch as undiciFetch } from 'undici';
 
 // Create a custom agent with longer timeouts for Cloud Run cold starts (especially GPU instances)
@@ -238,7 +239,7 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
 
     // Step 5: Combine video with audio (voiceovers + music)
     await updateProgress(jobRef, 70, 'Adding voiceovers and music...');
-    const finalVideoFile = await combineVideoWithAudio({
+    let finalVideoFile = await combineVideoWithAudio({
       jobId,
       jobRef,
       videoFile: videoOnlyFile,
@@ -250,6 +251,72 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
       output
     });
     console.log(`[${jobId}] Created final video with audio: ${finalVideoFile}`);
+
+    // Step 5.5: Generate and burn captions if enabled
+    const captionsConfig = manifest.captions || {};
+    const captionsEnabled = captionsConfig.enabled !== false;
+    const captionStyle = captionsConfig.style || 'karaoke';
+
+    console.log(`[${jobId}] ========== CAPTION GENERATION ==========`);
+    console.log(`[${jobId}] Captions enabled: ${captionsEnabled}`);
+    console.log(`[${jobId}] Caption style: ${captionStyle}`);
+
+    if (captionsEnabled && captionStyle && captionStyle !== 'none') {
+      await updateProgress(jobRef, 82, 'Generating captions...');
+
+      try {
+        const captionFile = await generateCaptions({
+          jobId,
+          videoFile: finalVideoFile,
+          workDir,
+          captionStyle: captionStyle,
+          customStyle: captionsConfig.customStyle,
+          captionPosition: captionsConfig.position || 'bottom',
+          captionSize: captionsConfig.fontSize === 'large' ? 1.3 : captionsConfig.fontSize === 'small' ? 0.8 : 1.0
+        });
+
+        if (captionFile && fs.existsSync(captionFile)) {
+          console.log(`[${jobId}] ✓ CAPTIONS GENERATED: ${captionFile}`);
+
+          // Burn captions into video
+          await updateProgress(jobRef, 86, 'Adding captions to video...');
+          const captionedVideoFile = path.join(workDir, 'final_with_captions.mp4');
+
+          // Escape path for FFmpeg ass filter
+          const escapedCaptionPath = captionFile.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\''");
+
+          const captionArgs = [
+            '-i', finalVideoFile,
+            '-vf', `ass='${escapedCaptionPath}'`,
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '23',
+            '-c:a', 'copy',
+            '-movflags', '+faststart',
+            '-y',
+            captionedVideoFile
+          ];
+
+          console.log(`[${jobId}] Burning captions into video...`);
+          await runFFmpegSimple({ args: captionArgs, logPrefix: `[${jobId}] [Captions] ` });
+
+          if (fs.existsSync(captionedVideoFile)) {
+            const captionedSize = fs.statSync(captionedVideoFile).size;
+            console.log(`[${jobId}] ✓ Captioned video created: ${(captionedSize / 1024 / 1024).toFixed(2)} MB`);
+            finalVideoFile = captionedVideoFile;
+          } else {
+            console.error(`[${jobId}] ✗ Caption burning failed - using video without captions`);
+          }
+        } else {
+          console.log(`[${jobId}] ✗ CAPTION GENERATION RETURNED NULL - video will be exported without captions`);
+        }
+      } catch (captionError) {
+        console.error(`[${jobId}] ✗ CAPTION GENERATION FAILED (continuing without captions):`, captionError.message);
+      }
+    } else {
+      console.log(`[${jobId}] ✗ CAPTIONS SKIPPED - enabled: ${captionsEnabled}, style: "${captionStyle}"`);
+    }
+    console.log(`[${jobId}] =========================================`);
 
     // Step 6: Upload to storage
     await updateProgress(jobRef, 90, 'Uploading your video...');
@@ -460,15 +527,15 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     const scaleWidth = Math.round(width * settings.scaleMultiplier);
     const filterComplex = `scale=${scaleWidth}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
 
-    // CRITICAL: Use -framerate 1 to ensure only 1 input frame is created from the image
-    // Without this, FFmpeg creates 25fps input (default), causing zoompan to process
-    // each input frame separately, resulting in 300x more frames than intended
+    // Ken Burns from static image: zoompan generates all frames from single image
+    // -loop 1: Makes image available as continuous stream (required for zoompan)
+    // zoompan d=frames: Outputs exactly 'frames' number of frames (e.g., 360 frames at 30fps = 12 seconds)
+    // No -framerate or -t before input - zoompan controls the output duration
     const sceneArgs = [
       '-loop', '1',
-      '-framerate', '1',
-      '-t', String(duration),
       '-i', imageFile,
       '-vf', filterComplex,
+      '-t', String(duration),  // Limit OUTPUT duration (safety, should match zoompan d/fps)
       '-c:v', 'libx264',
       '-preset', settings.preset,
       '-crf', settings.crf,
@@ -1197,15 +1264,15 @@ export async function processSceneKenBurns({
 
     const sceneOutput = path.join(workDir, 'scene_output.mp4');
 
-    // CRITICAL: Use -framerate 1 to ensure only 1 input frame is created from the image
-    // Without this, FFmpeg creates 25fps input (default), causing zoompan to process
-    // each input frame separately, resulting in 300x more frames than intended
+    // Ken Burns from static image: zoompan generates all frames from single image
+    // -loop 1: Makes image available as continuous stream (required for zoompan)
+    // zoompan d=frames: Outputs exactly 'frames' number of frames (e.g., 360 frames at 30fps = 12 seconds)
+    // No -framerate or -t before input - zoompan controls the output duration
     const sceneArgs = [
       '-loop', '1',
-      '-framerate', '1',
-      '-t', String(duration),
       '-i', imageFile,
       '-vf', filterComplex,
+      '-t', String(duration),  // Limit OUTPUT duration (safety, should match zoompan d/fps)
       '-c:v', 'libx264',
       '-preset', settings.preset,
       '-crf', settings.crf,
