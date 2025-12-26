@@ -279,9 +279,10 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
   console.log(`[${jobId}] Output resolution: ${width}x${height} @ ${fps}fps`);
 
   // Build FFmpeg command for Ken Burns effect
-  const inputArgs = [];
-  const filterParts = [];
-  const validScenes = [];
+  // SIMPLIFIED APPROACH: Process scenes one at a time, then concatenate
+  // This is more reliable than one massive filter_complex
+
+  const sceneVideos = [];
 
   for (let i = 0; i < scenes.length; i++) {
     const imageFile = imageFiles[i];
@@ -293,9 +294,7 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     const scene = scenes[i];
     const duration = scene.duration || 8;
     const frames = Math.round(duration * fps);
-
-    // Add input with loop for duration
-    inputArgs.push('-loop', '1', '-t', String(duration), '-i', imageFile);
+    const sceneOutput = path.join(workDir, `scene_video_${i}.mp4`);
 
     // Get Ken Burns parameters (with defaults)
     const kb = scene.kenBurns || {};
@@ -306,76 +305,74 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     const endX = kb.endX !== undefined ? kb.endX : 0.5;
     const endY = kb.endY !== undefined ? kb.endY : 0.5;
 
-    // Build zoompan filter for Ken Burns effect
-    // Scale image 2x output resolution for smooth zoom (reduced from 4x to save memory)
-    const scaleSize = Math.max(width, height) * 2;
-
-    // Zoom expression: interpolate from startScale to endScale
+    // Zoom expression
     const zoomExpr = `${startScale}+(${endScale}-${startScale})*on/${frames}`;
+    const xExpr = `(iw-iw/zoom)/2`;
+    const yExpr = `(ih-ih/zoom)/2`;
 
-    // Pan expressions: interpolate position while keeping frame centered
-    // x and y are pixel positions of top-left corner of output frame
-    const xExpr = `(iw-iw/zoom)/2+(iw*${startX}-iw/2+(iw*${endX}-iw*${startX})*on/${frames})/zoom`;
-    const yExpr = `(ih-ih/zoom)/2+(ih*${startY}-ih/2+(ih*${endY}-ih*${startY})*on/${frames})/zoom`;
+    // Simple Ken Burns: just zoom, minimal pan for stability
+    const filterComplex = `scale=2*${width}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
 
-    const inputIdx = validScenes.length;
-    filterParts.push(
-      `[${inputIdx}:v]scale=${scaleSize}:-1:flags=lanczos,` +
-      `zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},` +
-      `setsar=1[v${inputIdx}]`
-    );
+    const sceneArgs = [
+      '-loop', '1',
+      '-t', String(duration),
+      '-i', imageFile,
+      '-vf', filterComplex,
+      '-c:v', 'libx264',
+      '-preset', 'fast',
+      '-crf', '23',
+      '-pix_fmt', 'yuv420p',
+      '-y',
+      sceneOutput
+    ];
 
-    validScenes.push({ ...scene, inputIdx, duration });
+    console.log(`[${jobId}] Processing scene ${i + 1}/${scenes.length}...`);
+
+    // Update progress for each scene
+    const sceneProgress = 25 + Math.round((i / scenes.length) * 35);
+    await updateProgress(jobRef, sceneProgress, `Rendering scene ${i + 1} of ${scenes.length}...`);
+
+    try {
+      await runFFmpegSimple({ args: sceneArgs });
+      sceneVideos.push(sceneOutput);
+      console.log(`[${jobId}] Scene ${i + 1} complete`);
+    } catch (err) {
+      console.error(`[${jobId}] Scene ${i + 1} failed:`, err.message);
+      // Continue with other scenes
+    }
   }
 
-  if (validScenes.length === 0) {
-    throw new Error('No valid scenes with images to process');
+  if (sceneVideos.length === 0) {
+    throw new Error('No scenes were successfully rendered');
   }
 
-  // Add fade transitions between scenes with cumulative offset calculation
-  let currentStream = 'v0';
-  let cumulativeOffset = 0;
+  console.log(`[${jobId}] Rendered ${sceneVideos.length} scene videos, concatenating...`);
+  await updateProgress(jobRef, 60, 'Combining scenes...');
 
-  for (let i = 1; i < validScenes.length; i++) {
-    const fadeDuration = 0.5; // 0.5 second crossfade
-    const prevDuration = validScenes[i - 1].duration;
+  // Create concat file
+  const concatFile = path.join(workDir, 'concat.txt');
+  const concatContent = sceneVideos.map(f => `file '${f}'`).join('\n');
+  fs.writeFileSync(concatFile, concatContent);
 
-    // Offset is cumulative duration minus overlap from previous fades
-    cumulativeOffset += prevDuration - fadeDuration;
-
-    // Crossfade between current stream and next scene
-    filterParts.push(
-      `[${currentStream}][v${i}]xfade=transition=fade:duration=${fadeDuration}:offset=${cumulativeOffset.toFixed(2)}[xf${i}]`
-    );
-    currentStream = `xf${i}`;
-  }
-
-  // Final output mapping
-  const filterComplex = filterParts.join(';');
-
-  const ffmpegArgs = [
-    ...inputArgs,
-    '-filter_complex', filterComplex,
-    '-map', `[${currentStream}]`,
-    '-c:v', 'libx264',
-    '-preset', 'medium',
-    '-crf', '23',
-    '-pix_fmt', 'yuv420p',
+  // Concatenate all scene videos
+  const concatArgs = [
+    '-f', 'concat',
+    '-safe', '0',
+    '-i', concatFile,
+    '-c', 'copy',
     '-movflags', '+faststart',
     '-y',
     outputFile
   ];
 
-  console.log(`[${jobId}] Running FFmpeg for Ken Burns video...`);
-  console.log(`[${jobId}] Filter complexity: ${validScenes.length} scenes`);
-  console.log(`[${jobId}] FFmpeg command: ffmpeg ${ffmpegArgs.slice(0, 20).join(' ')}...`);
+  console.log(`[${jobId}] Concatenating ${sceneVideos.length} scene videos...`);
 
   try {
-    await runFFmpeg({ jobId, args: ffmpegArgs, jobRef, progressStart: 25, progressEnd: 65 });
-    console.log(`[${jobId}] FFmpeg Ken Burns completed successfully`);
-  } catch (ffmpegError) {
-    console.error(`[${jobId}] FFmpeg Ken Burns FAILED: ${ffmpegError.message}`);
-    throw ffmpegError;
+    await runFFmpegSimple({ args: concatArgs });
+    console.log(`[${jobId}] Concatenation completed successfully`);
+  } catch (concatError) {
+    console.error(`[${jobId}] Concatenation FAILED: ${concatError.message}`);
+    throw concatError;
   }
 
   // Verify output
