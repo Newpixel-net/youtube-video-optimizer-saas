@@ -968,6 +968,10 @@ app.listen(PORT, () => {
   }
 
   console.log(`----------------------------------------`);
+  console.log(`Parallel Processing:`);
+  console.log(`  PARALLEL_SCENES: ${process.env.PARALLEL_SCENES || 'false'}`);
+  console.log(`  VIDEO_PROCESSOR_URL: ${process.env.VIDEO_PROCESSOR_URL || 'NOT SET'}`);
+  console.log(`----------------------------------------`);
   console.log(`Cloud Run Environment:`);
   console.log(`  K_SERVICE: ${process.env.K_SERVICE || 'not set'}`);
   console.log(`  K_REVISION: ${process.env.K_REVISION || 'not set'}`);

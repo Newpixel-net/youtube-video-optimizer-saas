@@ -1274,11 +1274,64 @@ export async function processSceneParallel({
   console.log(`[${jobId}] Service URL: ${serviceUrl}`);
   console.log(`[${jobId}] ========================================`);
 
+  // Verify service URL is reachable before starting parallel processing
+  try {
+    console.log(`[${jobId}] Verifying service connectivity...`);
+    const healthCheck = await fetch(`${serviceUrl}/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(10000) // 10 second timeout for health check
+    });
+    if (healthCheck.ok) {
+      const healthData = await healthCheck.json();
+      console.log(`[${jobId}] Service health check passed:`, healthData.status || 'ok');
+    } else {
+      console.warn(`[${jobId}] Health check returned ${healthCheck.status} - proceeding anyway`);
+    }
+  } catch (healthError) {
+    console.error(`[${jobId}] Health check failed: ${healthError.message}`);
+    console.error(`[${jobId}] Cause: ${healthError.cause?.message || healthError.cause?.code || 'unknown'}`);
+    console.error(`[${jobId}] This may indicate VIDEO_PROCESSOR_URL is misconfigured`);
+    // Continue anyway - individual scene requests will fail with more details
+  }
+
   await updateProgress(jobRef, 25, `Processing ${scenes.length} scenes in parallel...`);
 
   // Create all scene processing promises with proper timeout
   // Each scene can take up to 10 minutes, so we set a 15-minute timeout per scene
   const SCENE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+  // Helper function for fetch with retries (handles Cloud Run cold starts and transient failures)
+  const fetchWithRetry = async (url, options, sceneIndex, maxRetries = 3) => {
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[${jobId}] Scene ${sceneIndex} - fetch attempt ${attempt}/${maxRetries}`);
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        return await response.json();
+      } catch (error) {
+        lastError = error;
+        // Don't retry on abort (timeout)
+        if (error.name === 'AbortError') {
+          throw error;
+        }
+        // Log retry info
+        const causeMsg = error.cause?.message || error.cause?.code || 'unknown';
+        console.error(`[${jobId}] Scene ${sceneIndex} fetch attempt ${attempt} failed: ${error.message} (cause: ${causeMsg})`);
+
+        if (attempt < maxRetries) {
+          // Exponential backoff: 2s, 4s, 8s
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`[${jobId}] Scene ${sceneIndex} - retrying in ${delay/1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    throw lastError;
+  };
 
   const scenePromises = scenes.map((scene, index) => {
     const requestBody = {
@@ -1295,30 +1348,42 @@ export async function processSceneParallel({
       parentJobId: jobId
     };
 
-    // Create abort controller for timeout
+    // Create abort controller for timeout (15 min total including retries)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), SCENE_TIMEOUT_MS);
 
-    return fetch(`${serviceUrl}/process-scene`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal
-    })
-      .then(async (response) => {
+    return fetchWithRetry(
+      `${serviceUrl}/process-scene`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      },
+      index
+    )
+      .then(result => {
         clearTimeout(timeoutId);
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-        return response.json();
+        return result;
       })
       .catch(error => {
         clearTimeout(timeoutId);
-        const errorMsg = error.name === 'AbortError'
-          ? `Scene ${index} timed out after ${SCENE_TIMEOUT_MS/1000}s`
-          : error.message;
-        console.error(`[${jobId}] Scene ${index} fetch error: ${errorMsg}`);
+        // Get detailed error info
+        let errorMsg;
+        if (error.name === 'AbortError') {
+          errorMsg = `Scene ${index} timed out after ${SCENE_TIMEOUT_MS/1000}s`;
+        } else if (error.cause) {
+          errorMsg = `${error.message}: ${error.cause.message || error.cause.code || error.cause}`;
+        } else {
+          errorMsg = error.message;
+        }
+        console.error(`[${jobId}] Scene ${index} FINAL fetch error after retries: ${errorMsg}`);
+        console.error(`[${jobId}] Scene ${index} error details:`, {
+          name: error.name,
+          message: error.message,
+          cause: error.cause?.message || error.cause?.code || 'none',
+          serviceUrl: serviceUrl
+        });
         return {
           success: false,
           sceneIndex: index,
@@ -1327,14 +1392,53 @@ export async function processSceneParallel({
       });
   });
 
-  // Track progress as scenes complete
+  // Track scene statuses for UI feedback
+  const sceneStatuses = scenes.map((_, i) => ({ index: i, status: 'processing', completedAt: null }));
+
+  // Update Firestore with initial scene statuses
+  await jobRef.update({
+    sceneStatuses: sceneStatuses,
+    progress: 26,
+    currentStage: `Rendering ${scenes.length} scenes in parallel...`,
+    statusMessage: `Rendering ${scenes.length} scenes in parallel...`
+  });
+
+  // Track progress as scenes complete - with detailed status updates
   let completedScenes = 0;
   const results = await Promise.all(
-    scenePromises.map(async (promise) => {
+    scenePromises.map(async (promise, index) => {
       const result = await promise;
       completedScenes++;
+
+      // Update scene status
+      sceneStatuses[result.sceneIndex] = {
+        index: result.sceneIndex,
+        status: result.success ? 'complete' : 'failed',
+        completedAt: new Date().toISOString(),
+        error: result.error || null
+      };
+
+      // Calculate progress (25-55% for scene rendering)
       const progress = 25 + Math.round((completedScenes / scenes.length) * 30);
-      await updateProgress(jobRef, progress, `Completed ${completedScenes}/${scenes.length} scenes...`);
+
+      // Create detailed status message
+      const statusMsg = result.success
+        ? `✓ Scene ${result.sceneIndex + 1} complete! (${completedScenes}/${scenes.length} rendered)`
+        : `✗ Scene ${result.sceneIndex + 1} failed (${completedScenes}/${scenes.length} processed)`;
+
+      console.log(`[${jobId}] ${statusMsg}`);
+
+      // Update Firestore with progress and scene statuses
+      await jobRef.update({
+        progress,
+        currentStage: statusMsg,
+        statusMessage: statusMsg,
+        sceneStatuses: sceneStatuses,
+        lastSceneCompleted: result.sceneIndex + 1,
+        scenesCompleted: completedScenes,
+        scenesTotal: scenes.length
+      });
+
       return result;
     })
   );

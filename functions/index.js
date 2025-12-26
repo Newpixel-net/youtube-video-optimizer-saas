@@ -25056,6 +25056,11 @@ exports.creationWizardCheckExportStatus = functions.https.onCall(async (data, co
       imageUrls: job.imageUrls || null,
       previewThumbnail: job.previewThumbnail || null,
       imagesReady: job.imagesReady || false,
+      // Scene progress tracking for parallel processing UI
+      scenesCompleted: job.scenesCompleted || 0,
+      scenesTotal: job.scenesTotal || 0,
+      sceneStatuses: job.sceneStatuses || [],
+      lastSceneCompleted: job.lastSceneCompleted || 0,
       createdAt: job.createdAt?.toDate?.()?.toISOString() || null,
       completedAt: job.completedAt?.toDate?.()?.toISOString() || null
     };
