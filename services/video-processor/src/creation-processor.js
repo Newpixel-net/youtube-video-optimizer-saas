@@ -144,10 +144,26 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
     // VIDEO_PROCESSOR_URL must be set explicitly during deployment (e.g., https://video-processor-xxx.us-central1.run.app)
     const serviceUrl = process.env.VIDEO_PROCESSOR_URL || null;
     const parallelEnabled = process.env.PARALLEL_SCENES === 'true';
-    const useParallel = parallelEnabled && serviceUrl && scenes.length >= 3;
 
-    if (!serviceUrl && parallelEnabled) {
-      console.log(`[${jobId}] WARNING: PARALLEL_SCENES=true but VIDEO_PROCESSOR_URL not set - using sequential mode`);
+    // Validate URL format if provided
+    let validServiceUrl = false;
+    if (serviceUrl) {
+      try {
+        const url = new URL(serviceUrl);
+        if (!url.protocol.startsWith('http')) {
+          console.error(`[${jobId}] VIDEO_PROCESSOR_URL must use HTTP(S): ${serviceUrl}`);
+        } else {
+          validServiceUrl = true;
+        }
+      } catch (e) {
+        console.error(`[${jobId}] VIDEO_PROCESSOR_URL is invalid: ${serviceUrl} - ${e.message}`);
+      }
+    }
+
+    const useParallel = parallelEnabled && validServiceUrl && scenes.length >= 3;
+
+    if (parallelEnabled && !validServiceUrl) {
+      console.log(`[${jobId}] WARNING: PARALLEL_SCENES=true but VIDEO_PROCESSOR_URL not set or invalid - using sequential mode`);
     }
 
     let videoOnlyFile;
@@ -1488,39 +1504,49 @@ export async function processSceneParallel({
 
   // Start a periodic progress updater (every 15 seconds) to keep UI fresh
   const progressInterval = setInterval(async () => {
-    const renderingCount = sceneStatuses.filter(s => s.status === 'rendering').length;
-    if (renderingCount > 0) {
-      const elapsedSec = Math.round((Date.now() - new Date(sceneStatuses[0].startedAt).getTime()) / 1000);
-      console.log(`[${jobId}] Progress update: ${renderingCount} scenes still rendering (${elapsedSec}s elapsed)`);
-      await updateSceneProgress();
+    try {
+      const renderingCount = sceneStatuses.filter(s => s.status === 'rendering').length;
+      if (renderingCount > 0) {
+        const elapsedSec = Math.round((Date.now() - new Date(sceneStatuses[0].startedAt).getTime()) / 1000);
+        console.log(`[${jobId}] Progress update: ${renderingCount} scenes still rendering (${elapsedSec}s elapsed)`);
+        await updateSceneProgress();
+      }
+    } catch (err) {
+      console.error(`[${jobId}] Progress update failed: ${err.message}`);
     }
   }, 15000); // Update every 15 seconds
 
   // Track progress as scenes complete - with detailed status updates
   let completedCount = 0;
-  const results = await Promise.all(
-    scenePromises.map(async (promise, index) => {
-      const result = await promise;
-      completedCount++;
+  let results;
+  try {
+    results = await Promise.all(
+      scenePromises.map(async (promise, index) => {
+        const result = await promise;
+        completedCount++;
 
-      // Update scene status (preserve startedAt)
-      sceneStatuses[result.sceneIndex].status = result.success ? 'complete' : 'failed';
-      sceneStatuses[result.sceneIndex].completedAt = new Date().toISOString();
-      sceneStatuses[result.sceneIndex].error = result.error || null;
+        // Update scene status (preserve startedAt)
+        sceneStatuses[result.sceneIndex].status = result.success ? 'complete' : 'failed';
+        sceneStatuses[result.sceneIndex].completedAt = new Date().toISOString();
+        sceneStatuses[result.sceneIndex].error = result.error || null;
 
-      // Generate dynamic status message
-      const statusMsg = generateStatusMessage();
-      console.log(`[${jobId}] Scene ${result.sceneIndex + 1} ${result.success ? 'complete' : 'failed'} (${completedCount}/${scenes.length})`);
+        // Generate dynamic status message
+        console.log(`[${jobId}] Scene ${result.sceneIndex + 1} ${result.success ? 'complete' : 'failed'} (${completedCount}/${scenes.length})`);
 
-      // Update Firestore with progress and scene statuses
-      await updateSceneProgress();
+        // Update Firestore with progress and scene statuses (with error handling)
+        try {
+          await updateSceneProgress();
+        } catch (err) {
+          console.error(`[${jobId}] Failed to update scene progress: ${err.message}`);
+        }
 
-      return result;
-    })
-  );
-
-  // Stop the periodic progress updater
-  clearInterval(progressInterval);
+        return result;
+      })
+    );
+  } finally {
+    // Always stop the periodic progress updater, even if Promise.all fails
+    clearInterval(progressInterval);
+  }
 
   // Log all results for debugging
   console.log(`[${jobId}] ========================================`);
