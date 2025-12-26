@@ -24817,12 +24817,12 @@ exports.creationWizardStartExport = functions
         url: assembly.music?.trackUrl || null,
         volume: (timelineState?.audioMix?.musicVolume || assembly.audioMix?.musicVolume || 30) / 100
       },
-      // Captions settings for subtitle generation
+      // Captions settings for subtitle generation (matching video-wizard format)
       captions: {
         enabled: timelineState?.captions?.enabled ?? assembly.captions?.enabled ?? true,
         style: timelineState?.captions?.style || assembly.captions?.style || 'karaoke',
         position: timelineState?.captions?.position || assembly.captions?.position || 'bottom',
-        fontSize: timelineState?.captions?.fontSize || assembly.captions?.fontSize || 'medium'
+        size: parseFloat(timelineState?.captions?.size || assembly.captions?.size) || 1  // Numeric 0.7-1.5, matching video-wizard
       },
       // Audio mix settings
       audioMix: timelineState?.audioMix || assembly.audioMix || { voiceVolume: 100, musicVolume: 30 },
