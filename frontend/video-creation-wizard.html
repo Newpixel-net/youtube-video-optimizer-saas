@@ -9315,20 +9315,27 @@
         }
 
         async function cancelExport() {
-            if (!state.export.jobId) return;
-
-            try {
-                const cancelExport = firebase.functions().httpsCallable('creationWizardCancelExport');
-                await cancelExport({ jobId: state.export.jobId });
-
-                state.export.status = 'cancelled';
-                state.export.jobId = null;
-                showToast('Export cancelled', 'info');
-                render();
-            } catch (error) {
-                console.error('Cancel error:', error);
-                showToast('Failed to cancel export', 'error');
+            // If we have a jobId, try to cancel on server
+            if (state.export.jobId) {
+                try {
+                    const cancelExportFn = firebase.functions().httpsCallable('creationWizardCancelExport');
+                    await cancelExportFn({ jobId: state.export.jobId });
+                    showToast('Export cancelled', 'info');
+                } catch (error) {
+                    console.error('Cancel error:', error);
+                    // Still reset UI even if server cancel fails
+                }
+            } else {
+                showToast('Export stopped', 'info');
             }
+
+            // ALWAYS reset UI state so user can exit
+            state.export.status = 'idle';
+            state.export.jobId = null;
+            state.export.progress = 0;
+            state.export.currentStage = '';
+            state.export.error = null;
+            render();
         }
 
         function copyExportUrl() {
