@@ -443,87 +443,84 @@ app.post('/creation-export', async (req, res) => {
     await jobRef.update({
       status: 'processing',
       progress: 5,
+      currentStage: 'Initializing video processing...',
       startedAt: Firestore.FieldValue.serverTimestamp(),
       updatedAt: Firestore.FieldValue.serverTimestamp()
     });
 
-    // Process the creation export
-    const result = await processCreationExport({
+    // RESPOND IMMEDIATELY - process in background
+    res.status(200).json({
+      success: true,
+      message: 'Processing started',
+      jobId
+    });
+
+    // Process the creation export in background (don't await)
+    processCreationExport({
       jobId,
       jobRef,
       job,
       storage,
       bucketName: BUCKET_NAME,
       tempDir: TEMP_DIR
-    });
-
-    // Update job with result
-    await jobRef.update({
-      status: 'completed',
-      progress: 100,
-      outputUrl: result.outputUrl,
-      outputPath: result.outputPath,
-      outputSize: result.outputSize,
-      processingTime: Date.now() - startTime,
-      completedAt: Firestore.FieldValue.serverTimestamp(),
-      updatedAt: Firestore.FieldValue.serverTimestamp()
-    });
-
-    // Also update the creation project
-    if (job.projectId) {
-      await firestore.collection('creationProjects').doc(job.projectId).update({
-        'export.status': 'completed',
-        'export.outputUrl': result.outputUrl,
-        'export.completedAt': Firestore.FieldValue.serverTimestamp(),
+    }).then(async (result) => {
+      // Update job with result
+      await jobRef.update({
+        status: 'completed',
+        progress: 100,
+        currentStage: 'Export complete!',
+        outputUrl: result.outputUrl,
+        outputPath: result.outputPath,
+        outputSize: result.outputSize,
+        processingTime: Date.now() - startTime,
+        completedAt: Firestore.FieldValue.serverTimestamp(),
         updatedAt: Firestore.FieldValue.serverTimestamp()
       });
-    }
 
-    // Update tracking stats
-    activeJobs--;
-    totalJobsProcessed++;
-    lastJobCompletedAt = new Date().toISOString();
+      // Also update the creation project
+      if (job.projectId) {
+        await firestore.collection('creationProjects').doc(job.projectId).update({
+          'export.status': 'completed',
+          'export.outputUrl': result.outputUrl,
+          'export.completedAt': Firestore.FieldValue.serverTimestamp(),
+          updatedAt: Firestore.FieldValue.serverTimestamp()
+        }).catch(err => console.warn(`[${jobId}] Failed to update project:`, err.message));
+      }
 
-    const processingTime = Date.now() - startTime;
-    console.log(`[${jobId}] ========================================`);
-    console.log(`[${jobId}] Creation export COMPLETED successfully`);
-    console.log(`[${jobId}] Processing time: ${(processingTime / 1000).toFixed(1)}s`);
-    console.log(`[${jobId}] Output size: ${(result.outputSize / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`[${jobId}] Active jobs after: ${activeJobs}`);
-    console.log(`[${jobId}] ========================================`);
+      // Update tracking stats
+      activeJobs--;
+      totalJobsProcessed++;
 
-    res.status(200).json({
-      success: true,
-      jobId,
-      outputUrl: result.outputUrl,
-      processingTime
+      console.log(`[${jobId}] ========================================`);
+      console.log(`[${jobId}] Creation export COMPLETED`);
+      console.log(`[${jobId}] Output URL: ${result.outputUrl}`);
+      console.log(`[${jobId}] Processing time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+      console.log(`[${jobId}] ========================================`);
+
+    }).catch(async (error) => {
+      console.error(`[${jobId}] Creation export FAILED:`, error.message);
+      console.error(`[${jobId}] Stack:`, error.stack);
+
+      activeJobs--;
+
+      // Update job with error
+      await jobRef.update({
+        status: 'failed',
+        error: error.message,
+        currentStage: 'Export failed',
+        failedAt: Firestore.FieldValue.serverTimestamp(),
+        updatedAt: Firestore.FieldValue.serverTimestamp()
+      }).catch(err => console.error(`[${jobId}] Failed to update job status:`, err.message));
     });
 
   } catch (error) {
-    // Decrement active job counter on error
+    console.error(`[${jobId}] Creation export setup error:`, error.message);
     activeJobs--;
 
-    console.error(`[${jobId}] ========================================`);
-    console.error(`[${jobId}] Creation export FAILED`);
-    console.error(`[${jobId}] Error: ${error.message}`);
-    console.error(`[${jobId}] Stack: ${error.stack?.split('\n').slice(0, 3).join('\n')}`);
-    console.error(`[${jobId}] ========================================`);
-
-    // Update job with error
-    try {
-      await firestore.collection('creationExportJobs').doc(jobId).update({
-        status: 'failed',
-        error: error.message || 'Unknown error',
-        updatedAt: Firestore.FieldValue.serverTimestamp()
-      });
-    } catch (updateError) {
-      console.error(`[${jobId}] Failed to update job status:`, updateError);
+    // Only send error response if we haven't already responded
+    if (!res.headersSent) {
+      return res.status(500).json({ error: error.message });
     }
-
-    res.status(500).json({
-      error: error.message || 'Processing failed',
-      jobId
-    });
   }
 });
 
