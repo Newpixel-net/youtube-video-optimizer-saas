@@ -11,6 +11,16 @@ import fs from 'fs';
 import path from 'path';
 import { Firestore } from '@google-cloud/firestore';
 import { isGpuAvailable, getEncodingParams } from './gpu-encoder.js';
+import { Agent, fetch as undiciFetch } from 'undici';
+
+// Create a custom agent with longer timeouts for Cloud Run cold starts (especially GPU instances)
+// GPU instances can take 60-90 seconds to cold start
+const coldStartAgent = new Agent({
+  headersTimeout: 180000,  // 3 minutes for headers (handles cold start)
+  bodyTimeout: 900000,     // 15 minutes for body (handles long scene processing)
+  keepAliveTimeout: 30000,
+  keepAliveMaxTimeout: 180000
+});
 
 // GPU availability - lazy initialization
 let gpuEnabled = null;
@@ -1275,11 +1285,13 @@ export async function processSceneParallel({
   console.log(`[${jobId}] ========================================`);
 
   // Verify service URL is reachable before starting parallel processing
+  // Use longer timeout to handle cold starts
   try {
     console.log(`[${jobId}] Verifying service connectivity...`);
-    const healthCheck = await fetch(`${serviceUrl}/health`, {
+    const healthCheck = await undiciFetch(`${serviceUrl}/health`, {
       method: 'GET',
-      signal: AbortSignal.timeout(10000) // 10 second timeout for health check
+      dispatcher: coldStartAgent,
+      signal: AbortSignal.timeout(60000) // 60 second timeout for health check (handles cold start)
     });
     if (healthCheck.ok) {
       const healthData = await healthCheck.json();
@@ -1301,12 +1313,17 @@ export async function processSceneParallel({
   const SCENE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 
   // Helper function for fetch with retries (handles Cloud Run cold starts and transient failures)
+  // Uses undici with custom agent that has longer timeouts for GPU cold starts
   const fetchWithRetry = async (url, options, sceneIndex, maxRetries = 3) => {
     let lastError;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`[${jobId}] Scene ${sceneIndex} - fetch attempt ${attempt}/${maxRetries}`);
-        const response = await fetch(url, options);
+        // Use undici fetch with custom agent for longer timeouts
+        const response = await undiciFetch(url, {
+          ...options,
+          dispatcher: coldStartAgent
+        });
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`HTTP ${response.status}: ${errorText}`);
@@ -1323,9 +1340,11 @@ export async function processSceneParallel({
         console.error(`[${jobId}] Scene ${sceneIndex} fetch attempt ${attempt} failed: ${error.message} (cause: ${causeMsg})`);
 
         if (attempt < maxRetries) {
-          // Exponential backoff: 2s, 4s, 8s
-          const delay = Math.pow(2, attempt) * 1000;
-          console.log(`[${jobId}] Scene ${sceneIndex} - retrying in ${delay/1000}s...`);
+          // Longer backoff for cold start errors: 5s, 10s, 20s
+          const isColdStartError = causeMsg.includes('Timeout') || causeMsg.includes('timeout');
+          const baseDelay = isColdStartError ? 5000 : 2000;
+          const delay = Math.pow(2, attempt) * baseDelay;
+          console.log(`[${jobId}] Scene ${sceneIndex} - retrying in ${delay/1000}s...${isColdStartError ? ' (cold start detected)' : ''}`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
