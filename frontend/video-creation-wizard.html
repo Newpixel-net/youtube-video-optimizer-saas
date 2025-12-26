@@ -8915,36 +8915,41 @@
                     <div style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
                         ${Array.from({ length: scenesTotal }, (_, i) => {
                             const sceneStatus = sceneStatuses[i];
-                            const isComplete = sceneStatus?.status === 'complete';
-                            const isFailed = sceneStatus?.status === 'failed';
-                            const isProcessing = !isComplete && !isFailed && scenesCompleted < scenesTotal;
+                            const status = sceneStatus?.status || 'queued';
+                            const isComplete = status === 'complete';
+                            const isFailed = status === 'failed';
+                            const isRendering = status === 'rendering';
+                            const isQueued = status === 'queued' || status === 'processing';
 
-                            let bgColor = 'rgba(255,255,255,0.1)'; // pending
+                            let bgColor = 'rgba(255,255,255,0.1)'; // queued (dimmed)
                             let icon = (i + 1);
+                            let extraStyle = '';
 
                             if (isComplete) {
-                                bgColor = 'rgba(34, 197, 94, 0.3)';
+                                bgColor = 'rgba(34, 197, 94, 0.4)';
                                 icon = '✓';
+                                extraStyle = 'border: 2px solid rgba(34, 197, 94, 0.6);';
                             } else if (isFailed) {
-                                bgColor = 'rgba(239, 68, 68, 0.3)';
+                                bgColor = 'rgba(239, 68, 68, 0.4)';
                                 icon = '✗';
-                            } else if (isProcessing) {
-                                bgColor = 'rgba(139, 92, 246, 0.3)';
+                                extraStyle = 'border: 2px solid rgba(239, 68, 68, 0.6);';
+                            } else if (isRendering) {
+                                bgColor = 'rgba(139, 92, 246, 0.4)';
+                                extraStyle = 'animation: pulse 2s infinite; border: 2px solid rgba(139, 92, 246, 0.6);';
                             }
 
                             return `
                                 <div style="width: 2.5rem; height: 2.5rem; border-radius: 50%; background: ${bgColor};
                                             display: flex; align-items: center; justify-content: center;
                                             font-size: 0.85rem; font-weight: 600; color: white;
-                                            ${isProcessing ? 'animation: pulse 2s infinite;' : ''}
-                                            transition: all 0.3s ease;">
+                                            transition: all 0.3s ease; ${extraStyle}">
                                     ${icon}
                                 </div>
                             `;
                         }).join('')}
                     </div>
-                    <div style="color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-bottom: 1rem;">
-                        Scenes: ${scenesCompleted} of ${scenesTotal} complete
+                    <div style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 1rem;">
+                        ${scenesCompleted} of ${scenesTotal} scenes complete
                     </div>
                 `;
             }
