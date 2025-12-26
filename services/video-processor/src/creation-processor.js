@@ -1327,14 +1327,53 @@ export async function processSceneParallel({
       });
   });
 
-  // Track progress as scenes complete
+  // Track scene statuses for UI feedback
+  const sceneStatuses = scenes.map((_, i) => ({ index: i, status: 'processing', completedAt: null }));
+
+  // Update Firestore with initial scene statuses
+  await jobRef.update({
+    sceneStatuses: sceneStatuses,
+    progress: 26,
+    currentStage: `Rendering ${scenes.length} scenes in parallel...`,
+    statusMessage: `Rendering ${scenes.length} scenes in parallel...`
+  });
+
+  // Track progress as scenes complete - with detailed status updates
   let completedScenes = 0;
   const results = await Promise.all(
-    scenePromises.map(async (promise) => {
+    scenePromises.map(async (promise, index) => {
       const result = await promise;
       completedScenes++;
+
+      // Update scene status
+      sceneStatuses[result.sceneIndex] = {
+        index: result.sceneIndex,
+        status: result.success ? 'complete' : 'failed',
+        completedAt: new Date().toISOString(),
+        error: result.error || null
+      };
+
+      // Calculate progress (25-55% for scene rendering)
       const progress = 25 + Math.round((completedScenes / scenes.length) * 30);
-      await updateProgress(jobRef, progress, `Completed ${completedScenes}/${scenes.length} scenes...`);
+
+      // Create detailed status message
+      const statusMsg = result.success
+        ? `✓ Scene ${result.sceneIndex + 1} complete! (${completedScenes}/${scenes.length} rendered)`
+        : `✗ Scene ${result.sceneIndex + 1} failed (${completedScenes}/${scenes.length} processed)`;
+
+      console.log(`[${jobId}] ${statusMsg}`);
+
+      // Update Firestore with progress and scene statuses
+      await jobRef.update({
+        progress,
+        currentStage: statusMsg,
+        statusMessage: statusMsg,
+        sceneStatuses: sceneStatuses,
+        lastSceneCompleted: result.sceneIndex + 1,
+        scenesCompleted: completedScenes,
+        scenesTotal: scenes.length
+      });
+
       return result;
     })
   );

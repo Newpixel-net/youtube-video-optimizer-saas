@@ -8904,6 +8904,50 @@
         function renderExportProgress(exportState) {
             const progress = exportState.progress || 0;
             const currentStage = exportState.currentStage || 'Starting export...';
+            const scenesCompleted = exportState.scenesCompleted || 0;
+            const scenesTotal = exportState.scenesTotal || 0;
+            const sceneStatuses = exportState.sceneStatuses || [];
+
+            // Render scene indicators if we have scene data
+            let sceneIndicatorsHtml = '';
+            if (scenesTotal > 0) {
+                sceneIndicatorsHtml = `
+                    <div style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                        ${Array.from({ length: scenesTotal }, (_, i) => {
+                            const sceneStatus = sceneStatuses[i];
+                            const isComplete = sceneStatus?.status === 'complete';
+                            const isFailed = sceneStatus?.status === 'failed';
+                            const isProcessing = !isComplete && !isFailed && scenesCompleted < scenesTotal;
+
+                            let bgColor = 'rgba(255,255,255,0.1)'; // pending
+                            let icon = (i + 1);
+
+                            if (isComplete) {
+                                bgColor = 'rgba(34, 197, 94, 0.3)';
+                                icon = '✓';
+                            } else if (isFailed) {
+                                bgColor = 'rgba(239, 68, 68, 0.3)';
+                                icon = '✗';
+                            } else if (isProcessing) {
+                                bgColor = 'rgba(139, 92, 246, 0.3)';
+                            }
+
+                            return `
+                                <div style="width: 2.5rem; height: 2.5rem; border-radius: 50%; background: ${bgColor};
+                                            display: flex; align-items: center; justify-content: center;
+                                            font-size: 0.85rem; font-weight: 600; color: white;
+                                            ${isProcessing ? 'animation: pulse 2s infinite;' : ''}
+                                            transition: all 0.3s ease;">
+                                    ${icon}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div style="color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-bottom: 1rem;">
+                        Scenes: ${scenesCompleted} of ${scenesTotal} complete
+                    </div>
+                `;
+            }
 
             return `
                 <div class="content-card" style="text-align: center; padding: 3rem 2rem; margin-top: 1rem;">
@@ -8913,9 +8957,12 @@
                     <div style="font-size: 1.5rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
                         Rendering Your Video
                     </div>
-                    <div id="export-stage-text" style="color: rgba(255,255,255,0.6); margin-bottom: 2rem;">
+                    <div id="export-stage-text" style="color: rgba(255,255,255,0.7); margin-bottom: 1.5rem; font-size: 1rem;">
                         ${currentStage}
                     </div>
+
+                    <!-- Scene Indicators -->
+                    ${sceneIndicatorsHtml}
 
                     <!-- Progress Bar -->
                     <div style="width: 100%; max-width: 400px; margin: 0 auto 1.5rem;">
@@ -9319,6 +9366,11 @@
                 const completed = result.data.status === 'completed';
                 const failed = result.data.status === 'failed' || result.data.status === 'error';
 
+                // Track if scene progress changed (for UI updates)
+                const prevScenesCompleted = state.export.scenesCompleted || 0;
+                const newScenesCompleted = result.data.scenesCompleted || 0;
+                const sceneProgressChanged = newScenesCompleted !== prevScenesCompleted;
+
                 state.export.status = result.data.status;
                 state.export.progress = result.data.progress || 0;
                 state.export.currentStage = result.data.currentStage || '';
@@ -9329,8 +9381,13 @@
                 state.export.imageUrls = result.data.imageUrls || null;
                 state.export.previewThumbnail = result.data.previewThumbnail || null;
 
-                // Only do full render on status change, otherwise just update progress bar
-                if (statusChanged || completed || failed) {
+                // Scene progress tracking for parallel processing UI
+                state.export.scenesCompleted = result.data.scenesCompleted || 0;
+                state.export.scenesTotal = result.data.scenesTotal || 0;
+                state.export.sceneStatuses = result.data.sceneStatuses || [];
+
+                // Re-render when status changes OR when scene progress changes
+                if (statusChanged || completed || failed || sceneProgressChanged) {
                     render();
                 } else {
                     // Just update progress bar without full re-render (prevents flashing)
