@@ -94,7 +94,7 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
     }
 
     // Step 1: Download all images
-    await updateProgress(jobRef, 5, 'Downloading images...');
+    await updateProgress(jobRef, 5, 'Preparing your images...');
     const imageFiles = await downloadAllImages({ jobId, scenes, workDir });
     console.log(`[${jobId}] Downloaded ${imageFiles.length} images`);
 
@@ -104,7 +104,7 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
     }
 
     // Step 2: Download all voiceovers
-    await updateProgress(jobRef, 15, 'Downloading voiceovers...');
+    await updateProgress(jobRef, 15, 'Loading voiceovers...');
     const voiceoverFiles = await downloadAllVoiceovers({ jobId, scenes, workDir });
     console.log(`[${jobId}] Downloaded ${voiceoverFiles.length} voiceovers`);
 
@@ -116,7 +116,7 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
     // Step 3: Download background music (if any)
     let musicFile = null;
     if (manifest.music && manifest.music.url) {
-      await updateProgress(jobRef, 20, 'Downloading background music...');
+      await updateProgress(jobRef, 20, 'Loading background music...');
       musicFile = await downloadFile({
         url: manifest.music.url,
         outputPath: path.join(workDir, 'music.mp3'),
@@ -130,7 +130,7 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
     }
 
     // Step 4: Generate Ken Burns video from images
-    await updateProgress(jobRef, 25, 'Generating video from images...');
+    await updateProgress(jobRef, 25, 'Creating video scenes...');
     const videoOnlyFile = await generateKenBurnsVideo({
       jobId,
       jobRef,
@@ -147,7 +147,7 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
     }
 
     // Step 5: Combine video with audio (voiceovers + music)
-    await updateProgress(jobRef, 70, 'Adding audio...');
+    await updateProgress(jobRef, 70, 'Adding voiceovers and music...');
     const finalVideoFile = await combineVideoWithAudio({
       jobId,
       jobRef,
@@ -162,7 +162,7 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
     console.log(`[${jobId}] Created final video with audio: ${finalVideoFile}`);
 
     // Step 6: Upload to storage
-    await updateProgress(jobRef, 90, 'Uploading final video...');
+    await updateProgress(jobRef, 90, 'Uploading your video...');
     const result = await uploadToStorage({
       jobId,
       filePath: finalVideoFile,
@@ -347,12 +347,12 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
 
     console.log(`[${jobId}] Processing scene ${i + 1}/${scenes.length}...`);
 
-    // Update progress for each scene
+    // Update progress for each scene with user-friendly message
     const sceneProgress = 25 + Math.round((i / scenes.length) * 35);
-    await updateProgress(jobRef, sceneProgress, `Rendering scene ${i + 1} of ${scenes.length}...`);
+    await updateProgress(jobRef, sceneProgress, `Creating scene ${i + 1} of ${scenes.length} with Ken Burns effect...`);
 
     try {
-      await runFFmpegSimple({ args: sceneArgs });
+      await runFFmpegSimple({ args: sceneArgs, logPrefix: `[${jobId}] [Scene ${i + 1}] ` });
       sceneVideos.push(sceneOutput);
       console.log(`[${jobId}] Scene ${i + 1} complete`);
     } catch (err) {
@@ -366,7 +366,7 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
   }
 
   console.log(`[${jobId}] Rendered ${sceneVideos.length} scene videos, concatenating...`);
-  await updateProgress(jobRef, 60, 'Combining scenes...');
+  await updateProgress(jobRef, 60, 'Assembling your video...');
 
   // Create concat file
   const concatFile = path.join(workDir, 'concat.txt');
@@ -388,7 +388,7 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
   ];
 
   try {
-    await runFFmpegSimple({ args: concatArgs });
+    await runFFmpegSimple({ args: concatArgs, logPrefix: `[${jobId}] [Concat] ` });
     console.log(`[${jobId}] Concatenation completed successfully`);
   } catch (concatError) {
     console.error(`[${jobId}] Concatenation FAILED: ${concatError.message}`);
@@ -406,7 +406,7 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
   // GPU RE-ENCODING PASS
   // Use NVENC for fast final encoding (like processor.js does)
   const useGpu = checkGpuIfNeeded();
-  await updateProgress(jobRef, 62, useGpu ? 'GPU re-encoding...' : 'Finalizing video...');
+  await updateProgress(jobRef, 62, useGpu ? 'Optimizing video with GPU...' : 'Finalizing video...');
 
   if (useGpu) {
     console.log(`[${jobId}] [GPU PASS] Re-encoding with NVENC...`);
@@ -428,7 +428,7 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     console.log(`[${jobId}] [GPU PASS] FFmpeg: ffmpeg ${gpuArgs.slice(0, 8).join(' ')}...`);
 
     try {
-      await runFFmpegSimple({ args: gpuArgs });
+      await runFFmpegSimple({ args: gpuArgs, logPrefix: `[${jobId}] [GPU] ` });
       console.log(`[${jobId}] [GPU PASS] NVENC encoding completed`);
 
       // Validate GPU output
@@ -441,6 +441,7 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
         console.log(`[${jobId}] [FALLBACK] Falling back to CPU encoding...`);
 
         // CPU fallback
+        await updateProgress(jobRef, 64, 'Finalizing video (CPU)...');
         const cpuArgs = [
           '-i', intermediateFile,
           '-c:v', 'libx264',
@@ -452,7 +453,7 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
           '-y',
           outputFile
         ];
-        await runFFmpegSimple({ args: cpuArgs });
+        await runFFmpegSimple({ args: cpuArgs, logPrefix: `[${jobId}] [CPU Fallback] ` });
         console.log(`[${jobId}] [FALLBACK] CPU encoding completed`);
       } else {
         console.log(`[${jobId}] [GPU PASS] ✅ GPU output valid: ${(gpuFileSize / 1024 / 1024).toFixed(2)} MB (${(gpuBitrateRatio * 100).toFixed(1)}% of input)`);
@@ -462,6 +463,7 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
       console.log(`[${jobId}] [FALLBACK] Falling back to CPU encoding...`);
 
       // CPU fallback on GPU failure
+      await updateProgress(jobRef, 64, 'Finalizing video (CPU)...');
       const cpuArgs = [
         '-i', intermediateFile,
         '-c:v', 'libx264',
@@ -473,7 +475,7 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
         '-y',
         outputFile
       ];
-      await runFFmpegSimple({ args: cpuArgs });
+      await runFFmpegSimple({ args: cpuArgs, logPrefix: `[${jobId}] [CPU Fallback] ` });
       console.log(`[${jobId}] [FALLBACK] CPU encoding completed`);
     }
   } else {
@@ -607,7 +609,8 @@ async function concatenateVoiceovers({ jobId, scenes, voiceoverFiles, workDir, t
 
   // Generate 1 second of silence
   await runFFmpegSimple({
-    args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', '1', '-q:a', '9', '-y', silenceFile]
+    args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', '1', '-q:a', '9', '-y', silenceFile],
+    logPrefix: `[${jobId}] [Audio] `
   });
 
   let currentTime = 0;
@@ -631,7 +634,8 @@ async function concatenateVoiceovers({ jobId, scenes, voiceoverFiles, workDir, t
         // Generate exact silence duration
         const sceneSilence = path.join(workDir, `silence_${i}.mp3`);
         await runFFmpegSimple({
-          args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', String(remainingTime), '-q:a', '9', '-y', sceneSilence]
+          args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', String(remainingTime), '-q:a', '9', '-y', sceneSilence],
+          logPrefix: `[${jobId}] [Audio] `
         });
         listContent.push(`file '${sceneSilence}'`);
       }
@@ -639,7 +643,8 @@ async function concatenateVoiceovers({ jobId, scenes, voiceoverFiles, workDir, t
       // No voiceover - add silence for entire scene duration
       const sceneSilence = path.join(workDir, `silence_full_${i}.mp3`);
       await runFFmpegSimple({
-        args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', String(sceneDuration), '-q:a', '9', '-y', sceneSilence]
+        args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', String(sceneDuration), '-q:a', '9', '-y', sceneSilence],
+        logPrefix: `[${jobId}] [Audio] `
       });
       listContent.push(`file '${sceneSilence}'`);
     }
@@ -651,8 +656,10 @@ async function concatenateVoiceovers({ jobId, scenes, voiceoverFiles, workDir, t
   fs.writeFileSync(listFile, listContent.join('\n'));
 
   // Concatenate all audio
+  console.log(`[${jobId}] [Audio] Concatenating voiceovers...`);
   await runFFmpegSimple({
-    args: ['-f', 'concat', '-safe', '0', '-i', listFile, '-c:a', 'libmp3lame', '-q:a', '2', '-y', outputFile]
+    args: ['-f', 'concat', '-safe', '0', '-i', listFile, '-c:a', 'libmp3lame', '-q:a', '2', '-y', outputFile],
+    logPrefix: `[${jobId}] [Audio] `
   });
 
   if (!fs.existsSync(outputFile)) {
@@ -775,20 +782,37 @@ function runFFmpeg({ jobId, args, jobRef, progressStart = 0, progressEnd = 100 }
 
 /**
  * Run FFmpeg without progress tracking (for simple operations)
+ * Added logging to prevent Cloud Run from thinking container is idle
  */
-function runFFmpegSimple({ args }) {
+function runFFmpegSimple({ args, logPrefix = '' }) {
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn('ffmpeg', args);
     let stderr = '';
+    let lastLogTime = Date.now();
 
     ffmpeg.stderr.on('data', (data) => {
       stderr += data.toString();
+
+      // Log progress every 10 seconds to keep Cloud Run alive
+      const now = Date.now();
+      if (now - lastLogTime > 10000) {
+        const frameMatch = stderr.match(/frame=\s*(\d+)/g);
+        if (frameMatch) {
+          const lastFrame = frameMatch[frameMatch.length - 1];
+          console.log(`${logPrefix}FFmpeg progress: ${lastFrame}`);
+        } else {
+          console.log(`${logPrefix}FFmpeg processing...`);
+        }
+        lastLogTime = now;
+      }
     });
 
     ffmpeg.on('close', (code) => {
       if (code === 0) {
         resolve();
       } else {
+        console.error(`${logPrefix}FFmpeg failed with code ${code}`);
+        console.error(`${logPrefix}FFmpeg stderr: ${stderr.slice(-500)}`);
         reject(new Error(`FFmpeg exited with code ${code}: ${stderr.slice(-500)}`));
       }
     });
