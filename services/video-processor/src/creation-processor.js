@@ -10,6 +10,25 @@ import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { Firestore } from '@google-cloud/firestore';
+import { isGpuAvailable, getEncodingParams } from './gpu-encoder.js';
+
+// GPU availability - lazy initialization
+let gpuEnabled = null;
+let gpuChecked = false;
+
+function checkGpuIfNeeded() {
+  if (gpuChecked) return gpuEnabled;
+
+  gpuChecked = true;
+  try {
+    gpuEnabled = isGpuAvailable();
+    console.log(`[Creation Processor] GPU enabled: ${gpuEnabled}`);
+  } catch (e) {
+    console.log(`[Creation Processor] GPU detection failed: ${e.message}, using CPU encoding`);
+    gpuEnabled = false;
+  }
+  return gpuEnabled;
+}
 
 // Track active FFmpeg processes for cancellation
 const activeProcesses = new Map();
@@ -354,7 +373,10 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
   const concatContent = sceneVideos.map(f => `file '${f}'`).join('\n');
   fs.writeFileSync(concatFile, concatContent);
 
-  // Concatenate all scene videos
+  console.log(`[${jobId}] Concatenating ${sceneVideos.length} scene videos...`);
+
+  // First concatenate to intermediate file (CPU encoded)
+  const intermediateFile = path.join(workDir, 'video_intermediate.mp4');
   const concatArgs = [
     '-f', 'concat',
     '-safe', '0',
@@ -362,10 +384,8 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     '-c', 'copy',
     '-movflags', '+faststart',
     '-y',
-    outputFile
+    intermediateFile
   ];
-
-  console.log(`[${jobId}] Concatenating ${sceneVideos.length} scene videos...`);
 
   try {
     await runFFmpegSimple({ args: concatArgs });
@@ -375,7 +395,103 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     throw concatError;
   }
 
-  // Verify output
+  // Verify intermediate file
+  if (!fs.existsSync(intermediateFile)) {
+    throw new Error('FFmpeg did not produce intermediate file');
+  }
+
+  const intermediateSize = fs.statSync(intermediateFile).size;
+  console.log(`[${jobId}] Intermediate video: ${(intermediateSize / 1024 / 1024).toFixed(2)} MB`);
+
+  // GPU RE-ENCODING PASS
+  // Use NVENC for fast final encoding (like processor.js does)
+  const useGpu = checkGpuIfNeeded();
+  await updateProgress(jobRef, 62, useGpu ? 'GPU re-encoding...' : 'Finalizing video...');
+
+  if (useGpu) {
+    console.log(`[${jobId}] [GPU PASS] Re-encoding with NVENC...`);
+
+    // NVENC re-encoding (no filters, just fast re-encode)
+    const gpuArgs = [
+      '-i', intermediateFile,
+      '-c:v', 'h264_nvenc',
+      '-preset', 'p4',
+      '-b:v', '4M',
+      '-maxrate', '6M',
+      '-bufsize', '8M',
+      '-c:a', 'copy',
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    ];
+
+    console.log(`[${jobId}] [GPU PASS] FFmpeg: ffmpeg ${gpuArgs.slice(0, 8).join(' ')}...`);
+
+    try {
+      await runFFmpegSimple({ args: gpuArgs });
+      console.log(`[${jobId}] [GPU PASS] NVENC encoding completed`);
+
+      // Validate GPU output
+      const gpuFileSize = fs.statSync(outputFile).size;
+      const gpuBitrateRatio = gpuFileSize / intermediateSize;
+
+      // If GPU output is suspiciously small (< 25% of input), it might be frozen
+      if (gpuBitrateRatio < 0.25) {
+        console.error(`[${jobId}] [GPU PASS] ⚠️ SUSPICIOUS: GPU output only ${(gpuBitrateRatio * 100).toFixed(1)}% of input - possible frozen video!`);
+        console.log(`[${jobId}] [FALLBACK] Falling back to CPU encoding...`);
+
+        // CPU fallback
+        const cpuArgs = [
+          '-i', intermediateFile,
+          '-c:v', 'libx264',
+          '-preset', 'fast',
+          '-crf', '23',
+          '-pix_fmt', 'yuv420p',
+          '-c:a', 'copy',
+          '-movflags', '+faststart',
+          '-y',
+          outputFile
+        ];
+        await runFFmpegSimple({ args: cpuArgs });
+        console.log(`[${jobId}] [FALLBACK] CPU encoding completed`);
+      } else {
+        console.log(`[${jobId}] [GPU PASS] ✅ GPU output valid: ${(gpuFileSize / 1024 / 1024).toFixed(2)} MB (${(gpuBitrateRatio * 100).toFixed(1)}% of input)`);
+      }
+    } catch (gpuError) {
+      console.error(`[${jobId}] [GPU PASS] NVENC failed: ${gpuError.message}`);
+      console.log(`[${jobId}] [FALLBACK] Falling back to CPU encoding...`);
+
+      // CPU fallback on GPU failure
+      const cpuArgs = [
+        '-i', intermediateFile,
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '23',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'copy',
+        '-movflags', '+faststart',
+        '-y',
+        outputFile
+      ];
+      await runFFmpegSimple({ args: cpuArgs });
+      console.log(`[${jobId}] [FALLBACK] CPU encoding completed`);
+    }
+  } else {
+    // No GPU - just use the intermediate file
+    console.log(`[${jobId}] No GPU available, using CPU-encoded intermediate as final`);
+    fs.renameSync(intermediateFile, outputFile);
+  }
+
+  // Cleanup intermediate file if it still exists
+  if (fs.existsSync(intermediateFile)) {
+    try {
+      fs.unlinkSync(intermediateFile);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
+
+  // Verify final output
   if (!fs.existsSync(outputFile)) {
     throw new Error('FFmpeg did not produce output file');
   }
