@@ -130,15 +130,76 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
     }
 
     // Step 4: Generate Ken Burns video from images
-    await updateProgress(jobRef, 25, 'Creating video scenes...');
-    const videoOnlyFile = await generateKenBurnsVideo({
-      jobId,
-      jobRef,
-      scenes,
-      imageFiles,
-      workDir,
-      output
-    });
+    // Determine if we should use parallel processing
+    const serviceUrl = process.env.VIDEO_PROCESSOR_URL || process.env.K_SERVICE
+      ? `https://${process.env.K_SERVICE}-${process.env.GOOGLE_CLOUD_PROJECT}.run.app`
+      : null;
+    const parallelEnabled = process.env.PARALLEL_SCENES === 'true';
+    const useParallel = parallelEnabled && serviceUrl && scenes.length >= 3;
+
+    let videoOnlyFile;
+
+    if (useParallel) {
+      // PARALLEL MODE: Process scenes across multiple Cloud Run instances
+      console.log(`[${jobId}] ========================================`);
+      console.log(`[${jobId}] PARALLEL PROCESSING MODE`);
+      console.log(`[${jobId}] Service URL: ${serviceUrl}`);
+      console.log(`[${jobId}] Scenes: ${scenes.length}`);
+      console.log(`[${jobId}] ========================================`);
+
+      await updateProgress(jobRef, 25, `Processing ${scenes.length} scenes in parallel...`);
+
+      // Get image URLs directly from scenes (they're already in storage)
+      const imageUrls = scenes.map(scene => scene.imageUrl);
+
+      // Process all scenes in parallel
+      const sceneVideoUrls = await processSceneParallel({
+        jobId,
+        jobRef,
+        scenes,
+        imageUrls,
+        output,
+        serviceUrl
+      });
+
+      console.log(`[${jobId}] Parallel processing complete: ${sceneVideoUrls.length} scenes`);
+
+      // Download scene videos for concatenation
+      await updateProgress(jobRef, 56, 'Downloading rendered scenes...');
+      const sceneVideos = [];
+      for (let i = 0; i < sceneVideoUrls.length; i++) {
+        const sceneVideoPath = path.join(workDir, `scene_parallel_${i}.mp4`);
+        await downloadFile({
+          url: sceneVideoUrls[i],
+          outputPath: sceneVideoPath,
+          jobId
+        });
+        sceneVideos.push(sceneVideoPath);
+        console.log(`[${jobId}] Downloaded scene ${i + 1}/${sceneVideoUrls.length}`);
+      }
+
+      // Concatenate scene videos
+      await updateProgress(jobRef, 60, 'Assembling your video...');
+      videoOnlyFile = await concatenateSceneVideos({
+        jobId,
+        sceneVideos,
+        workDir,
+        output
+      });
+
+    } else {
+      // SEQUENTIAL MODE: Process scenes one at a time (original behavior)
+      await updateProgress(jobRef, 25, 'Creating video scenes...');
+      videoOnlyFile = await generateKenBurnsVideo({
+        jobId,
+        jobRef,
+        scenes,
+        imageFiles,
+        workDir,
+        output
+      });
+    }
+
     console.log(`[${jobId}] Generated Ken Burns video: ${videoOnlyFile}`);
 
     // Check cancellation after video generation
@@ -543,6 +604,89 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
 }
 
 /**
+ * Concatenate pre-rendered scene videos (used in parallel processing mode)
+ * Downloads and concatenates scene videos that were processed by separate workers
+ */
+async function concatenateSceneVideos({ jobId, sceneVideos, workDir, output }) {
+  const outputFile = path.join(workDir, 'video_only.mp4');
+
+  console.log(`[${jobId}] Concatenating ${sceneVideos.length} scene videos...`);
+
+  // Create concat file
+  const concatFile = path.join(workDir, 'concat.txt');
+  const concatContent = sceneVideos.map(f => `file '${f}'`).join('\n');
+  fs.writeFileSync(concatFile, concatContent);
+
+  // First concatenate with stream copy (fast)
+  const intermediateFile = path.join(workDir, 'video_intermediate.mp4');
+  const concatArgs = [
+    '-f', 'concat',
+    '-safe', '0',
+    '-i', concatFile,
+    '-c', 'copy',
+    '-movflags', '+faststart',
+    '-y',
+    intermediateFile
+  ];
+
+  await runFFmpegSimple({ args: concatArgs, logPrefix: `[${jobId}] [Concat] ` });
+  console.log(`[${jobId}] Concatenation completed`);
+
+  if (!fs.existsSync(intermediateFile)) {
+    throw new Error('Concatenation failed - no output file');
+  }
+
+  const intermediateSize = fs.statSync(intermediateFile).size;
+  console.log(`[${jobId}] Intermediate video: ${(intermediateSize / 1024 / 1024).toFixed(2)} MB`);
+
+  // GPU RE-ENCODING PASS (if available)
+  const useGpu = checkGpuIfNeeded();
+
+  if (useGpu) {
+    console.log(`[${jobId}] [GPU PASS] Re-encoding with NVENC...`);
+
+    const gpuArgs = [
+      '-i', intermediateFile,
+      '-c:v', 'h264_nvenc',
+      '-preset', 'p4',
+      '-b:v', '4M',
+      '-maxrate', '6M',
+      '-bufsize', '8M',
+      '-c:a', 'copy',
+      '-movflags', '+faststart',
+      '-y',
+      outputFile
+    ];
+
+    try {
+      await runFFmpegSimple({ args: gpuArgs, logPrefix: `[${jobId}] [GPU] ` });
+      console.log(`[${jobId}] [GPU PASS] NVENC encoding completed`);
+    } catch (gpuError) {
+      console.error(`[${jobId}] [GPU PASS] Failed: ${gpuError.message}, using CPU`);
+      fs.renameSync(intermediateFile, outputFile);
+    }
+  } else {
+    // No GPU - use intermediate file
+    console.log(`[${jobId}] No GPU available, using concatenated output`);
+    fs.renameSync(intermediateFile, outputFile);
+  }
+
+  // Cleanup intermediate file if it still exists
+  if (fs.existsSync(intermediateFile)) {
+    try { fs.unlinkSync(intermediateFile); } catch (e) { }
+  }
+
+  if (!fs.existsSync(outputFile)) {
+    throw new Error('Concatenation produced no output file');
+  }
+
+  const fileSize = fs.statSync(outputFile).size;
+  console.log(`[${jobId}] Final concatenated video: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
+
+  return outputFile;
+}
+
+/**
  * Combine video with voiceovers and background music
  */
 async function combineVideoWithAudio({ jobId, jobRef, videoFile, scenes, voiceoverFiles, musicFile, musicVolume, workDir, output }) {
@@ -924,4 +1068,267 @@ function cleanupWorkDir(workDir) {
   } catch (error) {
     console.error(`Cleanup error: ${error.message}`);
   }
+}
+
+/**
+ * Process a single scene with Ken Burns effect
+ * Used for parallel scene processing - each scene runs in its own Cloud Run instance
+ *
+ * @param {Object} params Scene processing parameters
+ * @param {number} params.sceneIndex - Index of the scene (0-based)
+ * @param {string} params.imageUrl - URL of the source image
+ * @param {number} params.duration - Scene duration in seconds
+ * @param {Object} params.kenBurns - Ken Burns effect parameters
+ * @param {Object} params.output - Output settings (width, height, fps, renderQuality)
+ * @param {string} params.parentJobId - Parent job ID for logging
+ * @param {Object} params.storage - Google Cloud Storage instance
+ * @param {string} params.bucketName - Storage bucket name
+ * @param {string} params.tempDir - Temporary directory path
+ * @returns {Object} Result with sceneVideoUrl
+ */
+export async function processSceneKenBurns({
+  sceneIndex,
+  imageUrl,
+  duration = 8,
+  kenBurns = {},
+  output = {},
+  parentJobId,
+  storage,
+  bucketName,
+  tempDir
+}) {
+  const startTime = Date.now();
+  const sceneId = `scene_${sceneIndex}_${Date.now()}`;
+  const logPrefix = `[${parentJobId}:S${sceneIndex}]`;
+
+  console.log(`${logPrefix} ========================================`);
+  console.log(`${logPrefix} Processing scene ${sceneIndex}`);
+  console.log(`${logPrefix} Image: ${imageUrl?.substring(0, 80)}...`);
+  console.log(`${logPrefix} Duration: ${duration}s`);
+
+  // Create work directory for this scene
+  const workDir = path.join(tempDir, `scene_${parentJobId}_${sceneIndex}`);
+  fs.mkdirSync(workDir, { recursive: true });
+
+  try {
+    // Step 1: Download the image
+    const imageFile = path.join(workDir, 'source.jpg');
+    console.log(`${logPrefix} Downloading image...`);
+    await downloadFile({ url: imageUrl, outputPath: imageFile, jobId: logPrefix });
+
+    if (!fs.existsSync(imageFile)) {
+      throw new Error('Failed to download image');
+    }
+
+    // Step 2: Determine output resolution
+    const resolutions = {
+      '720p': { width: 1280, height: 720 },
+      '1080p': { width: 1920, height: 1080 },
+      '4k': { width: 3840, height: 2160 }
+    };
+
+    let { width, height } = resolutions[output.quality] || resolutions['1080p'];
+
+    // Adjust for aspect ratio
+    if (output.aspectRatio === '9:16') {
+      [width, height] = [height * 9 / 16, height];
+      width = Math.round(width);
+    } else if (output.aspectRatio === '1:1') {
+      width = height = Math.min(width, height);
+    }
+
+    // Step 3: Get quality settings
+    const renderQuality = output.renderQuality || 'balanced';
+    const qualitySettings = {
+      fast: { scaleMultiplier: 1.3, preset: 'ultrafast', fps: 24, crf: '26' },
+      balanced: { scaleMultiplier: 1.5, preset: 'fast', fps: 30, crf: '23' },
+      best: { scaleMultiplier: 2.0, preset: 'medium', fps: 30, crf: '20' }
+    };
+    const settings = qualitySettings[renderQuality] || qualitySettings.balanced;
+    const fps = output.fps || settings.fps;
+
+    console.log(`${logPrefix} Quality: ${renderQuality}, Scale: ${settings.scaleMultiplier}x, FPS: ${fps}`);
+
+    // Step 4: Build Ken Burns FFmpeg command
+    const frames = Math.round(duration * fps);
+    const kb = kenBurns;
+    const startScale = kb.startScale || 1.0;
+    const endScale = kb.endScale || 1.2;
+
+    const zoomExpr = `${startScale}+(${endScale}-${startScale})*on/${frames}`;
+    const xExpr = `(iw-iw/zoom)/2`;
+    const yExpr = `(ih-ih/zoom)/2`;
+
+    const scaleWidth = Math.round(width * settings.scaleMultiplier);
+    const filterComplex = `scale=${scaleWidth}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
+
+    const sceneOutput = path.join(workDir, 'scene_output.mp4');
+
+    const sceneArgs = [
+      '-loop', '1',
+      '-t', String(duration),
+      '-i', imageFile,
+      '-vf', filterComplex,
+      '-c:v', 'libx264',
+      '-preset', settings.preset,
+      '-crf', settings.crf,
+      '-pix_fmt', 'yuv420p',
+      '-y',
+      sceneOutput
+    ];
+
+    console.log(`${logPrefix} Rendering Ken Burns effect...`);
+    await runFFmpegSimple({ args: sceneArgs, logPrefix: `${logPrefix} ` });
+
+    if (!fs.existsSync(sceneOutput)) {
+      throw new Error('FFmpeg did not produce output file');
+    }
+
+    const outputSize = fs.statSync(sceneOutput).size;
+    console.log(`${logPrefix} Scene rendered: ${(outputSize / 1024 / 1024).toFixed(2)} MB`);
+
+    // Step 5: Upload to temporary storage
+    const bucket = storage.bucket(bucketName);
+    const tempFileName = `temp-scenes/${parentJobId}/scene_${sceneIndex}.mp4`;
+    const file = bucket.file(tempFileName);
+
+    console.log(`${logPrefix} Uploading to: ${tempFileName}`);
+
+    await bucket.upload(sceneOutput, {
+      destination: tempFileName,
+      metadata: {
+        contentType: 'video/mp4',
+        metadata: {
+          parentJobId,
+          sceneIndex: String(sceneIndex),
+          processedAt: new Date().toISOString(),
+          type: 'scene_video'
+        }
+      }
+    });
+
+    // Make publicly accessible for concatenation
+    await file.makePublic();
+
+    const sceneVideoUrl = `https://storage.googleapis.com/${bucketName}/${tempFileName}`;
+    const processingTime = Date.now() - startTime;
+
+    console.log(`${logPrefix} ========================================`);
+    console.log(`${logPrefix} Scene ${sceneIndex} COMPLETE`);
+    console.log(`${logPrefix} URL: ${sceneVideoUrl}`);
+    console.log(`${logPrefix} Time: ${(processingTime / 1000).toFixed(1)}s`);
+    console.log(`${logPrefix} ========================================`);
+
+    // Cleanup work directory
+    cleanupWorkDir(workDir);
+
+    return {
+      success: true,
+      sceneIndex,
+      sceneVideoUrl,
+      duration,
+      outputSize,
+      processingTime
+    };
+
+  } catch (error) {
+    console.error(`${logPrefix} Scene processing FAILED:`, error.message);
+    cleanupWorkDir(workDir);
+
+    return {
+      success: false,
+      sceneIndex,
+      error: error.message,
+      processingTime: Date.now() - startTime
+    };
+  }
+}
+
+/**
+ * Process multiple scenes in parallel by calling this service's /process-scene endpoint
+ * This distributes work across multiple Cloud Run instances
+ *
+ * @param {Object} params Parallel processing parameters
+ * @param {string} params.jobId - Parent job ID
+ * @param {Object} params.jobRef - Firestore job reference for progress updates
+ * @param {Array} params.scenes - Array of scene objects
+ * @param {Array} params.imageUrls - Array of image URLs (already uploaded to storage)
+ * @param {Object} params.output - Output settings
+ * @param {string} params.serviceUrl - URL of this video processor service
+ * @returns {Array} Array of scene video URLs
+ */
+export async function processSceneParallel({
+  jobId,
+  jobRef,
+  scenes,
+  imageUrls,
+  output,
+  serviceUrl
+}) {
+  console.log(`[${jobId}] ========================================`);
+  console.log(`[${jobId}] PARALLEL SCENE PROCESSING`);
+  console.log(`[${jobId}] Scenes: ${scenes.length}`);
+  console.log(`[${jobId}] Service URL: ${serviceUrl}`);
+  console.log(`[${jobId}] ========================================`);
+
+  await updateProgress(jobRef, 25, `Processing ${scenes.length} scenes in parallel...`);
+
+  // Create all scene processing promises
+  const scenePromises = scenes.map((scene, index) => {
+    const requestBody = {
+      sceneIndex: index,
+      imageUrl: imageUrls[index],
+      duration: scene.duration || 8,
+      kenBurns: scene.kenBurns || {},
+      output: {
+        quality: output.quality,
+        aspectRatio: output.aspectRatio,
+        fps: output.fps,
+        renderQuality: output.renderQuality
+      },
+      parentJobId: jobId
+    };
+
+    return fetch(`${serviceUrl}/process-scene`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+        return response.json();
+      })
+      .catch(error => ({
+        success: false,
+        sceneIndex: index,
+        error: error.message
+      }));
+  });
+
+  // Track progress as scenes complete
+  let completedScenes = 0;
+  const results = await Promise.all(
+    scenePromises.map(async (promise) => {
+      const result = await promise;
+      completedScenes++;
+      const progress = 25 + Math.round((completedScenes / scenes.length) * 30);
+      await updateProgress(jobRef, progress, `Completed ${completedScenes}/${scenes.length} scenes...`);
+      return result;
+    })
+  );
+
+  // Collect successful scene videos
+  const successfulScenes = results
+    .filter(r => r.success)
+    .sort((a, b) => a.sceneIndex - b.sceneIndex);
+
+  console.log(`[${jobId}] Parallel processing complete: ${successfulScenes.length}/${scenes.length} scenes succeeded`);
+
+  if (successfulScenes.length === 0) {
+    throw new Error('All scene processing failed');
+  }
+
+  return successfulScenes.map(r => r.sceneVideoUrl);
 }

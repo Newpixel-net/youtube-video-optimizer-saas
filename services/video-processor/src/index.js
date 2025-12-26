@@ -7,7 +7,7 @@ import express from 'express';
 import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
 import { processVideo } from './processor.js';
-import { processCreationExport } from './creation-processor.js';
+import { processCreationExport, processSceneKenBurns } from './creation-processor.js';
 import { extractYouTubeFrames } from './youtube-downloader.js';
 import { getGpuStatus } from './gpu-encoder.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -550,6 +550,97 @@ app.get('/creation-status/:jobId', async (req, res) => {
   } catch (error) {
     console.error('Status check error:', error);
     res.status(500).json({ error: 'Failed to get status' });
+  }
+});
+
+/**
+ * Process a single scene with Ken Burns effect
+ * Used for parallel scene processing - multiple Cloud Run instances process scenes simultaneously
+ *
+ * This endpoint is designed for:
+ * - Parallel processing: Multiple instances handle different scenes at once
+ * - Scalability: Cloud Run auto-scales based on concurrent requests
+ * - Speed: 15 scenes in parallel = ~3-5 min total instead of 45+ min sequential
+ *
+ * Expected request body:
+ * {
+ *   sceneIndex: number,
+ *   imageUrl: string,
+ *   duration: number,
+ *   kenBurns: { startScale, endScale, startX, startY, endX, endY },
+ *   output: { quality, aspectRatio, fps, renderQuality },
+ *   parentJobId: string
+ * }
+ */
+app.post('/process-scene', async (req, res) => {
+  const startTime = Date.now();
+  const { sceneIndex, imageUrl, duration, kenBurns, output, parentJobId } = req.body;
+
+  // Validate required fields
+  if (sceneIndex === undefined || !imageUrl) {
+    return res.status(400).json({ error: 'sceneIndex and imageUrl are required' });
+  }
+
+  const logPrefix = `[${parentJobId || 'scene'}:S${sceneIndex}]`;
+  console.log(`${logPrefix} ========================================`);
+  console.log(`${logPrefix} PROCESS-SCENE endpoint called`);
+  console.log(`${logPrefix} Timestamp: ${new Date().toISOString()}`);
+  console.log(`${logPrefix} Duration: ${duration || 8}s`);
+  console.log(`${logPrefix} ========================================`);
+
+  // Track as active job
+  activeJobs++;
+
+  try {
+    // Process the scene with Ken Burns effect
+    const result = await processSceneKenBurns({
+      sceneIndex,
+      imageUrl,
+      duration: duration || 8,
+      kenBurns: kenBurns || {},
+      output: output || {},
+      parentJobId: parentJobId || `scene_${Date.now()}`,
+      storage,
+      bucketName: BUCKET_NAME,
+      tempDir: TEMP_DIR
+    });
+
+    activeJobs--;
+    const processingTime = Date.now() - startTime;
+
+    if (result.success) {
+      console.log(`${logPrefix} Scene processing COMPLETE in ${(processingTime / 1000).toFixed(1)}s`);
+
+      res.status(200).json({
+        success: true,
+        sceneIndex: result.sceneIndex,
+        sceneVideoUrl: result.sceneVideoUrl,
+        duration: result.duration,
+        outputSize: result.outputSize,
+        processingTime
+      });
+    } else {
+      console.error(`${logPrefix} Scene processing FAILED: ${result.error}`);
+
+      res.status(500).json({
+        success: false,
+        sceneIndex: result.sceneIndex,
+        error: result.error,
+        processingTime
+      });
+    }
+
+  } catch (error) {
+    activeJobs--;
+    console.error(`${logPrefix} Scene processing ERROR:`, error.message);
+    console.error(`${logPrefix} Stack:`, error.stack?.split('\n').slice(0, 3).join('\n'));
+
+    res.status(500).json({
+      success: false,
+      sceneIndex,
+      error: error.message,
+      processingTime: Date.now() - startTime
+    });
   }
 });
 
