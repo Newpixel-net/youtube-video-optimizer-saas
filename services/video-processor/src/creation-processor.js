@@ -844,7 +844,8 @@ async function uploadToStorage({ jobId, filePath, storage, bucketName, userId, p
 async function updateProgress(jobRef, progress, message) {
   await jobRef.update({
     progress,
-    statusMessage: message,
+    currentStage: message,  // Frontend expects currentStage
+    statusMessage: message, // Keep for backwards compatibility
     updatedAt: Firestore.FieldValue.serverTimestamp()
   });
 }
