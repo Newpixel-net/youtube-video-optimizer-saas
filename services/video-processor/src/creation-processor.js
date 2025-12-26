@@ -444,8 +444,12 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     const scaleWidth = Math.round(width * settings.scaleMultiplier);
     const filterComplex = `scale=${scaleWidth}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
 
+    // CRITICAL: Use -framerate 1 to ensure only 1 input frame is created from the image
+    // Without this, FFmpeg creates 25fps input (default), causing zoompan to process
+    // each input frame separately, resulting in 300x more frames than intended
     const sceneArgs = [
       '-loop', '1',
+      '-framerate', '1',
       '-t', String(duration),
       '-i', imageFile,
       '-vf', filterComplex,
@@ -1177,8 +1181,12 @@ export async function processSceneKenBurns({
 
     const sceneOutput = path.join(workDir, 'scene_output.mp4');
 
+    // CRITICAL: Use -framerate 1 to ensure only 1 input frame is created from the image
+    // Without this, FFmpeg creates 25fps input (default), causing zoompan to process
+    // each input frame separately, resulting in 300x more frames than intended
     const sceneArgs = [
       '-loop', '1',
+      '-framerate', '1',
       '-t', String(duration),
       '-i', imageFile,
       '-vf', filterComplex,
