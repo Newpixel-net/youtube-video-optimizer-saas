@@ -457,24 +457,26 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
   // 'best' = Highest quality, slower processing
   const renderQuality = output.renderQuality || 'balanced';
 
+  // SMOOTH KEN BURNS: Higher scale multipliers reduce zoompan rounding errors
+  // At 8000px width, a 1px rounding error becomes 0.24px at 1920px output (invisible)
   const qualitySettings = {
     fast: {
-      scaleMultiplier: 1.3,  // Less upscaling = faster
-      preset: 'ultrafast',   // Fastest encoding
-      fps: 24,               // Fewer frames
-      crf: '26'              // Slightly lower quality
+      scaleMultiplier: 3.0,   // 3x scale for sub-pixel precision
+      preset: 'ultrafast',    // Fastest encoding
+      fps: 24,                // Fewer frames
+      crf: '26'               // Slightly lower quality
     },
     balanced: {
-      scaleMultiplier: 1.5,  // Moderate upscaling
-      preset: 'fast',        // Good speed
-      fps: 30,               // Standard
-      crf: '23'              // Good quality
+      scaleMultiplier: 4.0,   // 4x scale for excellent smoothness
+      preset: 'fast',         // Good speed
+      fps: 30,                // Standard
+      crf: '23'               // Good quality
     },
     best: {
-      scaleMultiplier: 2.0,  // Full upscaling for smoothest zoom
-      preset: 'medium',      // Better compression
-      fps: 30,               // Standard
-      crf: '20'              // High quality
+      scaleMultiplier: 5.0,   // 5x scale for maximum smoothness
+      preset: 'medium',       // Better compression
+      fps: 30,                // Standard
+      crf: '20'               // High quality
     }
   };
 
@@ -517,18 +519,22 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     const endX = kb.endX !== undefined ? kb.endX : 0.5;
     const endY = kb.endY !== undefined ? kb.endY : 0.5;
 
-    // Zoom expression - smooth interpolation from startScale to endScale
-    const zoomExpr = `${startScale}+(${endScale}-${startScale})*on/${frames}`;
+    // SMOOTH KEN BURNS EXPRESSIONS:
+    // 1. Use time-based interpolation (in_time) instead of frame-based (on) for smooth motion
+    // 2. Use trunc() for consistent rounding to eliminate jitter from rounding inconsistencies
+    // 3. High scaleMultiplier (4-5x) makes rounding errors sub-pixel at final resolution
 
-    // Position expressions - smoothly interpolate from start to end position
-    // x,y are relative to available movement space (iw - iw/zoom for x, ih - ih/zoom for y)
-    // Position values (0.0-1.0) map to where the center of the viewport should be
-    const xExpr = `(${startX}+(${endX}-${startX})*on/${frames})*(iw-iw/zoom)`;
-    const yExpr = `(${startY}+(${endY}-${startY})*on/${frames})*(ih-ih/zoom)`;
+    // Zoom: smoothly interpolate from startScale to endScale over duration
+    // in_time goes from 0 to duration, so in_time/duration is 0 to 1
+    const zoomExpr = `${startScale}+(${endScale}-${startScale})*(in_time/${duration})`;
 
-    // Ken Burns filter with quality-dependent scaling
-    // Higher scaleMultiplier = smoother zoom but slower processing
-    // interp=bilinear provides smooth interpolation to reduce jitter
+    // Position: smoothly interpolate from start to end position
+    // trunc() ensures consistent rounding direction (towards zero) eliminating jitter
+    const xExpr = `trunc((${startX}+(${endX}-${startX})*(in_time/${duration}))*(iw-iw/zoom))`;
+    const yExpr = `trunc((${startY}+(${endY}-${startY})*(in_time/${duration}))*(ih-ih/zoom))`;
+
+    // Ken Burns filter with aggressive scaling for sub-pixel precision
+    // At 4x scale (7680px for 1080p), 1px rounding error = 0.25px at output = invisible
     const scaleWidth = Math.round(width * settings.scaleMultiplier);
     const filterComplex = `scale=${scaleWidth}:-1:flags=lanczos,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
 
@@ -1242,12 +1248,12 @@ export async function processSceneKenBurns({
       width = height = Math.min(width, height);
     }
 
-    // Step 3: Get quality settings
+    // Step 3: Get quality settings - Higher scale multipliers for smooth Ken Burns
     const renderQuality = output.renderQuality || 'balanced';
     const qualitySettings = {
-      fast: { scaleMultiplier: 1.3, preset: 'ultrafast', fps: 24, crf: '26' },
-      balanced: { scaleMultiplier: 1.5, preset: 'fast', fps: 30, crf: '23' },
-      best: { scaleMultiplier: 2.0, preset: 'medium', fps: 30, crf: '20' }
+      fast: { scaleMultiplier: 3.0, preset: 'ultrafast', fps: 24, crf: '26' },
+      balanced: { scaleMultiplier: 4.0, preset: 'fast', fps: 30, crf: '23' },
+      best: { scaleMultiplier: 5.0, preset: 'medium', fps: 30, crf: '20' }
     };
     const settings = qualitySettings[renderQuality] || qualitySettings.balanced;
     const fps = output.fps || settings.fps;
@@ -1264,15 +1270,19 @@ export async function processSceneKenBurns({
     const endX = kb.endX !== undefined ? kb.endX : 0.5;
     const endY = kb.endY !== undefined ? kb.endY : 0.5;
 
-    // Zoom expression - smooth interpolation from startScale to endScale
-    const zoomExpr = `${startScale}+(${endScale}-${startScale})*on/${frames}`;
+    // SMOOTH KEN BURNS EXPRESSIONS:
+    // 1. Use time-based interpolation (in_time) instead of frame-based (on) for smooth motion
+    // 2. Use trunc() for consistent rounding to eliminate jitter
+    // 3. High scaleMultiplier (4-5x) makes rounding errors sub-pixel at final resolution
 
-    // Position expressions - smoothly interpolate from start to end position
-    // x,y are relative to available movement space (iw - iw/zoom for x, ih - ih/zoom for y)
-    const xExpr = `(${startX}+(${endX}-${startX})*on/${frames})*(iw-iw/zoom)`;
-    const yExpr = `(${startY}+(${endY}-${startY})*on/${frames})*(ih-ih/zoom)`;
+    // Zoom: smoothly interpolate from startScale to endScale over duration
+    const zoomExpr = `${startScale}+(${endScale}-${startScale})*(in_time/${duration})`;
 
-    // Ken Burns filter with lanczos scaling for high quality
+    // Position: smoothly interpolate with trunc() for consistent rounding
+    const xExpr = `trunc((${startX}+(${endX}-${startX})*(in_time/${duration}))*(iw-iw/zoom))`;
+    const yExpr = `trunc((${startY}+(${endY}-${startY})*(in_time/${duration}))*(ih-ih/zoom))`;
+
+    // Ken Burns filter with aggressive scaling for sub-pixel precision
     const scaleWidth = Math.round(width * settings.scaleMultiplier);
     const filterComplex = `scale=${scaleWidth}:-1:flags=lanczos,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
 
