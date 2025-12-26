@@ -131,11 +131,14 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
 
     // Step 4: Generate Ken Burns video from images
     // Determine if we should use parallel processing
-    const serviceUrl = process.env.VIDEO_PROCESSOR_URL || process.env.K_SERVICE
-      ? `https://${process.env.K_SERVICE}-${process.env.GOOGLE_CLOUD_PROJECT}.run.app`
-      : null;
+    // VIDEO_PROCESSOR_URL must be set explicitly during deployment (e.g., https://video-processor-xxx.us-central1.run.app)
+    const serviceUrl = process.env.VIDEO_PROCESSOR_URL || null;
     const parallelEnabled = process.env.PARALLEL_SCENES === 'true';
     const useParallel = parallelEnabled && serviceUrl && scenes.length >= 3;
+
+    if (!serviceUrl && parallelEnabled) {
+      console.log(`[${jobId}] WARNING: PARALLEL_SCENES=true but VIDEO_PROCESSOR_URL not set - using sequential mode`);
+    }
 
     let videoOnlyFile;
 
