@@ -24817,8 +24817,13 @@ exports.creationWizardStartExport = functions
         url: assembly.music?.trackUrl || null,
         volume: (timelineState?.audioMix?.musicVolume || assembly.audioMix?.musicVolume || 30) / 100
       },
-      // Captions (for future use)
-      captions: timelineState?.captions || assembly.captions || { enabled: true, style: 'karaoke', position: 'bottom' },
+      // Captions settings for subtitle generation
+      captions: {
+        enabled: timelineState?.captions?.enabled ?? assembly.captions?.enabled ?? true,
+        style: timelineState?.captions?.style || assembly.captions?.style || 'karaoke',
+        position: timelineState?.captions?.position || assembly.captions?.position || 'bottom',
+        fontSize: timelineState?.captions?.fontSize || assembly.captions?.fontSize || 'medium'
+      },
       // Audio mix settings
       audioMix: timelineState?.audioMix || assembly.audioMix || { voiceVolume: 100, musicVolume: 30 },
       // Platform and format

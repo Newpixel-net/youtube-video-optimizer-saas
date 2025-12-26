@@ -517,15 +517,20 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     const endX = kb.endX !== undefined ? kb.endX : 0.5;
     const endY = kb.endY !== undefined ? kb.endY : 0.5;
 
-    // Zoom expression
+    // Zoom expression - smooth interpolation from startScale to endScale
     const zoomExpr = `${startScale}+(${endScale}-${startScale})*on/${frames}`;
-    const xExpr = `(iw-iw/zoom)/2`;
-    const yExpr = `(ih-ih/zoom)/2`;
+
+    // Position expressions - smoothly interpolate from start to end position
+    // x,y are relative to available movement space (iw - iw/zoom for x, ih - ih/zoom for y)
+    // Position values (0.0-1.0) map to where the center of the viewport should be
+    const xExpr = `(${startX}+(${endX}-${startX})*on/${frames})*(iw-iw/zoom)`;
+    const yExpr = `(${startY}+(${endY}-${startY})*on/${frames})*(ih-ih/zoom)`;
 
     // Ken Burns filter with quality-dependent scaling
     // Higher scaleMultiplier = smoother zoom but slower processing
+    // interp=bilinear provides smooth interpolation to reduce jitter
     const scaleWidth = Math.round(width * settings.scaleMultiplier);
-    const filterComplex = `scale=${scaleWidth}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
+    const filterComplex = `scale=${scaleWidth}:-1:flags=lanczos,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
 
     // Ken Burns from static image: zoompan generates all frames from single image
     // -loop 1: Makes image available as continuous stream (required for zoompan)
@@ -1254,13 +1259,22 @@ export async function processSceneKenBurns({
     const kb = kenBurns;
     const startScale = kb.startScale || 1.0;
     const endScale = kb.endScale || 1.2;
+    const startX = kb.startX !== undefined ? kb.startX : 0.5;
+    const startY = kb.startY !== undefined ? kb.startY : 0.5;
+    const endX = kb.endX !== undefined ? kb.endX : 0.5;
+    const endY = kb.endY !== undefined ? kb.endY : 0.5;
 
+    // Zoom expression - smooth interpolation from startScale to endScale
     const zoomExpr = `${startScale}+(${endScale}-${startScale})*on/${frames}`;
-    const xExpr = `(iw-iw/zoom)/2`;
-    const yExpr = `(ih-ih/zoom)/2`;
 
+    // Position expressions - smoothly interpolate from start to end position
+    // x,y are relative to available movement space (iw - iw/zoom for x, ih - ih/zoom for y)
+    const xExpr = `(${startX}+(${endX}-${startX})*on/${frames})*(iw-iw/zoom)`;
+    const yExpr = `(${startY}+(${endY}-${startY})*on/${frames})*(ih-ih/zoom)`;
+
+    // Ken Burns filter with lanczos scaling for high quality
     const scaleWidth = Math.round(width * settings.scaleMultiplier);
-    const filterComplex = `scale=${scaleWidth}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
+    const filterComplex = `scale=${scaleWidth}:-1:flags=lanczos,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
 
     const sceneOutput = path.join(workDir, 'scene_output.mp4');
 
