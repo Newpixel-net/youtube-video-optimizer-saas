@@ -110,10 +110,11 @@
             this.onLoadProgress = options.onLoadProgress || (() => {});
             this.onReady = options.onReady || (() => {});
 
-            // Captions
+            // Captions - unified system matching export styles
             this.captionsEnabled = true;
-            this.captionStyle = 'subtitle';
+            this.captionStyle = 'karaoke';  // Default style
             this.captionPosition = 'bottom';
+            this.captionSize = 1.0;  // Size multiplier (0.7 - 1.5)
 
             this._renderLoop = this._renderLoop.bind(this);
         }
@@ -649,43 +650,338 @@
             return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         }
 
+        /**
+         * Style-aware caption rendering - matches export ASS styles
+         * Supports: karaoke, beasty, hormozi, ali, podcast, minimal, none
+         */
         _renderCaption(scene) {
+            // Skip if style is 'none'
+            if (this.captionStyle === 'none') return;
+
             const caption = scene.caption || scene.narration || '';
             if (!caption) return;
 
-            const padding = 20;
-            const fontSize = Math.round(this.height * 0.04);
+            // Get timing info for word-by-word effects
+            const sceneLocalTime = this.currentTime - scene.startTime;
+            const sceneDuration = scene.visualDuration || scene.duration || 5;
+            const wordTimings = this._generateWordTimings(caption, sceneDuration);
+
+            // Find current words to display (show a window of words around current time)
+            const wordsPerLine = this._getWordsPerLine();
+            const currentWordIndex = this._getCurrentWordIndex(wordTimings, sceneLocalTime);
+            const displayWords = this._getDisplayWords(wordTimings, currentWordIndex, wordsPerLine);
+
+            if (displayWords.length === 0) return;
 
             this.ctx.save();
-            this.ctx.font = `bold ${fontSize}px system-ui, -apple-system, sans-serif`;
+
+            // Calculate position
+            let y;
+            switch (this.captionPosition) {
+                case 'top': y = this.height * 0.12; break;
+                case 'middle': case 'center': y = this.height * 0.5; break;
+                case 'bottom': default: y = this.height * 0.88; break;
+            }
+
+            // Render based on style
+            switch (this.captionStyle) {
+                case 'karaoke':
+                    this._renderKaraokeStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+                    break;
+                case 'beasty':
+                    this._renderBeastyStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+                    break;
+                case 'hormozi':
+                    this._renderHormoziStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+                    break;
+                case 'ali':
+                    this._renderAliStyle(displayWords, y, sceneLocalTime);
+                    break;
+                case 'podp':
+                case 'podcast':
+                    this._renderPodcastStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+                    break;
+                case 'deepdiver':
+                case 'minimal':
+                    this._renderMinimalStyle(displayWords, y);
+                    break;
+                default:
+                    this._renderDefaultStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+            }
+
+            this.ctx.restore();
+        }
+
+        _generateWordTimings(text, duration) {
+            const words = text.split(/\s+/).filter(w => w.length > 0);
+            if (words.length === 0) return [];
+
+            const avgWordDuration = duration / words.length;
+            return words.map((word, i) => ({
+                text: word,
+                start: i * avgWordDuration,
+                end: (i + 1) * avgWordDuration,
+                index: i
+            }));
+        }
+
+        _getWordsPerLine() {
+            const styleWordCounts = {
+                karaoke: 4, beasty: 3, hormozi: 4, ali: 5,
+                podp: 5, podcast: 5, deepdiver: 6, minimal: 6
+            };
+            return styleWordCounts[this.captionStyle] || 4;
+        }
+
+        _getCurrentWordIndex(wordTimings, localTime) {
+            for (let i = 0; i < wordTimings.length; i++) {
+                if (localTime >= wordTimings[i].start && localTime < wordTimings[i].end) {
+                    return i;
+                }
+            }
+            // Return last word if past all timings
+            return wordTimings.length > 0 ? wordTimings.length - 1 : 0;
+        }
+
+        _getDisplayWords(wordTimings, currentIndex, wordsPerLine) {
+            // Get a window of words centered around current word
+            const halfWindow = Math.floor(wordsPerLine / 2);
+            let startIndex = Math.max(0, currentIndex - halfWindow);
+            let endIndex = Math.min(wordTimings.length, startIndex + wordsPerLine);
+
+            // Adjust start if we're near the end
+            if (endIndex - startIndex < wordsPerLine) {
+                startIndex = Math.max(0, endIndex - wordsPerLine);
+            }
+
+            return wordTimings.slice(startIndex, endIndex);
+        }
+
+        _renderKaraokeStyle(words, y, localTime, currentWordIndex) {
+            const fontSize = Math.round(this.height * 0.045 * this.captionSize);
+            this.ctx.font = `bold ${fontSize}px Arial, sans-serif`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
 
-            let y;
-            switch (this.captionPosition) {
-                case 'top': y = this.height * 0.1; break;
-                case 'center': y = this.height * 0.5; break;
-                case 'bottom': default: y = this.height * 0.85; break;
+            const text = words.map(w => w.text).join(' ');
+            const x = this.width / 2;
+
+            // Draw text shadow/outline
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            this.ctx.lineWidth = 4;
+            this.ctx.strokeText(text, x, y);
+
+            // Draw each word with appropriate color
+            let xOffset = x - this.ctx.measureText(text).width / 2;
+            words.forEach((word, i) => {
+                const isCurrentWord = word.index === currentWordIndex;
+                const isPastWord = word.index < currentWordIndex;
+
+                // Karaoke: current word is yellow/gold, past words are white, future are dimmed
+                if (isCurrentWord) {
+                    this.ctx.fillStyle = '#FBBF24';  // Gold/yellow highlight
+                    // Scale effect for current word
+                    this.ctx.save();
+                    const wordWidth = this.ctx.measureText(word.text + ' ').width;
+                    const wordCenterX = xOffset + wordWidth / 2;
+                    this.ctx.translate(wordCenterX, y);
+                    this.ctx.scale(1.1, 1.1);
+                    this.ctx.translate(-wordCenterX, -y);
+                } else if (isPastWord) {
+                    this.ctx.fillStyle = '#FFFFFF';  // White for spoken words
+                } else {
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';  // Dimmed for future words
+                }
+
+                this.ctx.fillText(word.text, xOffset + this.ctx.measureText(word.text).width / 2, y);
+
+                if (isCurrentWord) this.ctx.restore();
+                xOffset += this.ctx.measureText(word.text + ' ').width;
+            });
+        }
+
+        _renderBeastyStyle(words, y, localTime, currentWordIndex) {
+            const fontSize = Math.round(this.height * 0.055 * this.captionSize);
+            this.ctx.font = `900 ${fontSize}px Impact, Arial Black, sans-serif`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+
+            const text = words.map(w => w.text.toUpperCase()).join(' ');
+            const x = this.width / 2;
+
+            // Black stroke for MrBeast style
+            this.ctx.strokeStyle = '#000000';
+            this.ctx.lineWidth = 6;
+            this.ctx.strokeText(text, x, y);
+
+            // Yellow/gold fill
+            this.ctx.fillStyle = '#FBBF24';
+            this.ctx.fillText(text, x, y);
+
+            // Bounce effect on current word
+            const currentWord = words.find(w => w.index === currentWordIndex);
+            if (currentWord) {
+                const bouncePhase = (localTime * 4) % 1;
+                const bounceOffset = Math.sin(bouncePhase * Math.PI) * 3;
+
+                // Redraw current word slightly higher for bounce effect
+                let xOffset = x - this.ctx.measureText(text).width / 2;
+                words.forEach((word) => {
+                    const wordText = word.text.toUpperCase();
+                    const wordWidth = this.ctx.measureText(wordText + ' ').width;
+                    if (word.index === currentWordIndex) {
+                        this.ctx.strokeText(wordText, xOffset + this.ctx.measureText(wordText).width / 2, y - bounceOffset);
+                        this.ctx.fillText(wordText, xOffset + this.ctx.measureText(wordText).width / 2, y - bounceOffset);
+                    }
+                    xOffset += wordWidth;
+                });
             }
+        }
 
-            const maxWidth = this.width - padding * 4;
-            const lines = this._wrapText(caption, maxWidth);
+        _renderHormoziStyle(words, y, localTime, currentWordIndex) {
+            const fontSize = Math.round(this.height * 0.042 * this.captionSize);
+            this.ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
 
-            const lineHeight = fontSize * 1.4;
-            const totalHeight = lines.length * lineHeight;
-            const bgY = y - totalHeight / 2 - padding / 2;
+            const x = this.width / 2;
+            const padding = 8;
 
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            this.ctx.beginPath();
-            this.ctx.roundRect(padding * 2, bgY, this.width - padding * 4, totalHeight + padding, 8);
-            this.ctx.fill();
-
-            this.ctx.fillStyle = '#ffffff';
-            lines.forEach((line, index) => {
-                this.ctx.fillText(line, this.width / 2, y - ((lines.length - 1) / 2 - index) * lineHeight);
+            // Calculate total width
+            let totalWidth = 0;
+            words.forEach((word, i) => {
+                totalWidth += this.ctx.measureText(word.text).width;
+                if (i < words.length - 1) totalWidth += this.ctx.measureText(' ').width;
             });
 
-            this.ctx.restore();
+            // Draw each word
+            let xOffset = x - totalWidth / 2;
+            words.forEach((word, i) => {
+                const wordWidth = this.ctx.measureText(word.text).width;
+                const isHighlighted = word.index === currentWordIndex ||
+                                     (word.index === currentWordIndex + 1 && words.length > 2);
+
+                if (isHighlighted) {
+                    // Green box background for highlighted words
+                    const boxX = xOffset - padding / 2;
+                    const boxY = y - fontSize / 2 - padding / 2;
+                    const boxW = wordWidth + padding;
+                    const boxH = fontSize + padding;
+
+                    // Draw green box with rounded corners
+                    this.ctx.fillStyle = '#22C55E';
+                    this.ctx.beginPath();
+                    this.ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+                    this.ctx.fill();
+
+                    // White text on green
+                    this.ctx.fillStyle = '#FFFFFF';
+                    this.ctx.fillText(word.text, xOffset + wordWidth / 2, y);
+                } else {
+                    // Regular white text with shadow
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.strokeText(word.text, xOffset + wordWidth / 2, y);
+                    this.ctx.fillStyle = '#FFFFFF';
+                    this.ctx.fillText(word.text, xOffset + wordWidth / 2, y);
+                }
+
+                xOffset += wordWidth + this.ctx.measureText(' ').width;
+            });
+        }
+
+        _renderAliStyle(words, y, localTime) {
+            const fontSize = Math.round(this.height * 0.04 * this.captionSize);
+            this.ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+
+            const text = words.map(w => w.text).join(' ');
+            const x = this.width / 2;
+
+            // Animated glow effect
+            const glowIntensity = 0.5 + 0.5 * Math.sin(localTime * 3);
+            const glowRadius = 10 + 10 * glowIntensity;
+
+            // Draw glow layers
+            this.ctx.shadowColor = 'rgba(236, 72, 153, 0.8)';  // Pink glow
+            this.ctx.shadowBlur = glowRadius;
+            this.ctx.fillStyle = '#EC4899';  // Pink text
+
+            // Multiple passes for stronger glow
+            for (let i = 0; i < 3; i++) {
+                this.ctx.fillText(text, x, y);
+            }
+
+            // Clear shadow for final crisp text
+            this.ctx.shadowBlur = 0;
+            this.ctx.fillText(text, x, y);
+        }
+
+        _renderPodcastStyle(words, y, localTime, currentWordIndex) {
+            const fontSize = Math.round(this.height * 0.038 * this.captionSize);
+            this.ctx.font = `500 ${fontSize}px Arial, sans-serif`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+
+            const x = this.width / 2;
+
+            // Draw each word with fade effect
+            let totalWidth = 0;
+            words.forEach((word, i) => {
+                totalWidth += this.ctx.measureText(word.text).width;
+                if (i < words.length - 1) totalWidth += this.ctx.measureText(' ').width;
+            });
+
+            let xOffset = x - totalWidth / 2;
+            words.forEach((word, i) => {
+                const wordWidth = this.ctx.measureText(word.text).width;
+
+                // Fade animation: current word is full opacity, others fade
+                let opacity;
+                if (word.index === currentWordIndex) {
+                    opacity = 1;
+                } else if (word.index < currentWordIndex) {
+                    opacity = 0.7;
+                } else {
+                    opacity = 0.4;
+                }
+
+                // Shadow
+                this.ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.6})`;
+                this.ctx.lineWidth = 3;
+                this.ctx.strokeText(word.text, xOffset + wordWidth / 2, y);
+
+                // Text
+                this.ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                this.ctx.fillText(word.text, xOffset + wordWidth / 2, y);
+
+                xOffset += wordWidth + this.ctx.measureText(' ').width;
+            });
+        }
+
+        _renderMinimalStyle(words, y) {
+            const fontSize = Math.round(this.height * 0.032 * this.captionSize);
+            this.ctx.font = `400 ${fontSize}px Arial, sans-serif`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+
+            const text = words.map(w => w.text.toLowerCase()).join(' ');
+            const x = this.width / 2;
+
+            // Subtle shadow
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeText(text, x, y);
+
+            // Light text
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            this.ctx.fillText(text, x, y);
+        }
+
+        _renderDefaultStyle(words, y, localTime, currentWordIndex) {
+            // Fallback to karaoke-like style
+            this._renderKaraokeStyle(words, y, localTime, currentWordIndex);
         }
 
         _wrapText(text, maxWidth) {
@@ -738,6 +1034,11 @@
 
         setCaptionPosition(position) {
             this.captionPosition = position;
+            this._renderFrame();
+        }
+
+        setCaptionSize(size) {
+            this.captionSize = Math.max(0.5, Math.min(2, parseFloat(size) || 1));
             this._renderFrame();
         }
 
@@ -1871,115 +2172,9 @@
             }
         }
 
-        /* ==========================================
-           CAPTION PREVIEW STYLES (matching video-wizard)
-           ========================================== */
-        .caption-preview-overlay {
-            position: absolute;
-            left: 0;
-            right: 0;
-            text-align: center;
-            padding: 0 0.75rem;
-            z-index: 15;
-            pointer-events: none;
-            transition: all 0.3s ease;
-        }
-        .caption-preview-overlay.position-bottom { bottom: 8%; }
-        .caption-preview-overlay.position-middle { top: 50%; transform: translateY(-50%); }
-        .caption-preview-overlay.position-top { top: 8%; }
-
-        .caption-preview-text {
-            display: inline-block;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            font-weight: 700;
-            line-height: 1.4;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-        }
-
-        /* Karaoke Style - word highlighting */
-        .caption-karaoke .caption-preview-text { color: rgba(255,255,255,0.6); font-size: 0.9rem; }
-        .caption-karaoke .word { display: inline-block; margin: 0 0.1rem; transition: all 0.3s ease; }
-        .caption-karaoke .word.highlight { color: #fbbf24; transform: scale(1.1); text-shadow: 0 0 10px rgba(251,191,36,0.5); }
-        .caption-karaoke .word.w1 { animation: karaokeAnim 3s ease-in-out infinite; }
-        .caption-karaoke .word.w2 { animation: karaokeAnim 3s ease-in-out infinite 0.5s; }
-        .caption-karaoke .word.w3 { animation: karaokeAnim 3s ease-in-out infinite 1s; }
-        .caption-karaoke .word.w4 { animation: karaokeAnim 3s ease-in-out infinite 1.5s; }
-        @keyframes karaokeAnim {
-            0%, 20% { color: rgba(255,255,255,0.6); transform: scale(1); }
-            25%, 35% { color: #fbbf24; transform: scale(1.15); text-shadow: 0 0 10px rgba(251,191,36,0.5); }
-            40%, 100% { color: rgba(255,255,255,0.6); transform: scale(1); }
-        }
-
-        /* MrBeast (Beasty) Style - bold uppercase bounce */
-        .caption-beasty .caption-preview-text {
-            color: #fbbf24;
-            font-size: 1rem;
-            font-family: Impact, 'Arial Black', sans-serif;
-            text-transform: uppercase;
-            -webkit-text-stroke: 1px #000;
-            letter-spacing: 1px;
-        }
-        .caption-beasty .beasty-word { display: inline-block; margin: 0 0.15rem; animation: beastyBounce 0.8s ease-out infinite; }
-        .caption-beasty .beasty-word:nth-child(2) { animation-delay: 0.1s; }
-        .caption-beasty .beasty-word:nth-child(3) { animation-delay: 0.2s; }
-        @keyframes beastyBounce {
-            0%, 100% { transform: scale(1) translateY(0); }
-            25% { transform: scale(1.08) translateY(-2px); }
-            50% { transform: scale(0.98) translateY(0); }
-        }
-
-        /* Minimal (DeepDiver) Style */
-        .caption-deepdiver .caption-preview-text {
-            color: rgba(255,255,255,0.85);
-            font-size: 0.75rem;
-            font-weight: 400;
-            text-transform: lowercase;
-            letter-spacing: 0.5px;
-        }
-
-        /* Podcast Style - fade sequence */
-        .caption-podp .caption-preview-text { color: white; font-size: 0.85rem; font-weight: 500; letter-spacing: 0.3px; }
-        .caption-podp .fade-word { display: inline-block; margin: 0 0.1rem; animation: podcastFade 2.5s ease-in-out infinite; }
-        .caption-podp .fade-word:nth-child(2) { animation-delay: 0.4s; }
-        .caption-podp .fade-word:nth-child(3) { animation-delay: 0.8s; }
-        @keyframes podcastFade {
-            0%, 20% { opacity: 0.4; }
-            40%, 60% { opacity: 1; }
-            80%, 100% { opacity: 0.4; }
-        }
-
-        /* Hormozi Style - green highlight box */
-        .caption-hormozi .caption-preview-text { color: white; font-size: 0.85rem; }
-        .caption-hormozi .hormozi-highlight {
-            background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
-            color: white;
-            padding: 0.1rem 0.4rem;
-            border-radius: 0.2rem;
-            font-weight: 700;
-            display: inline-block;
-            animation: hormoziPop 1.2s ease infinite;
-        }
-        @keyframes hormoziPop {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.06); }
-        }
-
-        /* Ali Style - neon glow */
-        .caption-ali .caption-preview-text { color: #ec4899; font-size: 0.85rem; }
-        .caption-ali .glow-word {
-            text-shadow: 0 0 10px rgba(236, 72, 153, 0.8), 0 0 20px rgba(236, 72, 153, 0.6), 0 0 30px rgba(236, 72, 153, 0.4);
-            animation: aliGlow 2s ease-in-out infinite;
-        }
-        @keyframes aliGlow {
-            0%, 100% { text-shadow: 0 0 10px rgba(236,72,153,0.8), 0 0 20px rgba(236,72,153,0.4); }
-            50% { text-shadow: 0 0 15px rgba(236,72,153,1), 0 0 30px rgba(236,72,153,0.8), 0 0 40px rgba(236,72,153,0.4); }
-        }
-
-        /* Custom Style - uses inline styles */
-        .caption-custom .caption-preview-text { color: white; font-size: 0.85rem; }
-
-        /* None - hidden */
-        .caption-none .caption-preview-text { display: none; }
+        /* NOTE: Caption styles are now rendered directly on canvas by VideoPreviewEngine
+           See _renderKaraokeStyle, _renderBeastyStyle, _renderHormoziStyle, etc.
+           This provides synchronized word-by-word captions matching the export ASS styles */
     </style>
 </head>
 <body>
@@ -6669,8 +6864,7 @@
                     <div style="position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 0.5rem; overflow: hidden; margin-bottom: 0.75rem;">
                         <canvas id="preview-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
 
-                        <!-- Caption Preview Overlay (matching video-wizard) -->
-                        ${renderCaptionPreviewOverlay(currentScene)}
+                        <!-- Captions are rendered directly on canvas by PreviewEngine -->
 
                         <!-- Loading Overlay -->
                         ${!isReady ? `
@@ -6903,80 +7097,8 @@
             `;
         }
 
-        // ==========================================
-        // CAPTION PREVIEW OVERLAY - Renders styled captions on the preview
-        // ==========================================
-        function renderCaptionPreviewOverlay(currentScene) {
-            const captionStyle = state.assembly.captions.style || 'karaoke';
-            const captionPosition = state.assembly.captions.position || 'bottom';
-            const captionSize = state.assembly.captions.size || 1;
-
-            // Get sample text from current scene or use placeholder
-            const narration = currentScene?.narration || 'Preview caption text will appear here';
-            const words = narration.split(' ').slice(0, 6); // Use first 6 words for preview
-
-            // Don't show if captions disabled
-            if (captionStyle === 'none') {
-                return '';
-            }
-
-            // Generate styled text based on style
-            let styledText = '';
-            const sizeStyle = `font-size: ${captionSize * 0.85}rem;`;
-
-            switch(captionStyle) {
-                case 'karaoke':
-                    // Animated word-by-word highlighting
-                    styledText = words.map((word, i) =>
-                        `<span class="word w${(i % 4) + 1}">${word}</span>`
-                    ).join(' ');
-                    break;
-
-                case 'beasty':
-                    // MrBeast style - bold uppercase with bounce
-                    styledText = words.map((word, i) =>
-                        `<span class="beasty-word">${word.toUpperCase()}</span>`
-                    ).join(' ');
-                    break;
-
-                case 'deepdiver':
-                    // Minimal - simple clean text
-                    styledText = words.join(' ').toLowerCase();
-                    break;
-
-                case 'podp':
-                    // Podcast - fade effect per word
-                    styledText = words.map((word, i) =>
-                        `<span class="fade-word">${word}</span>`
-                    ).join(' ');
-                    break;
-
-                case 'hormozi':
-                    // Green highlight box on key words
-                    styledText = words.map((word, i) =>
-                        i === 1 || i === 4 ? `<span class="hormozi-highlight">${word}</span>` : word
-                    ).join(' ');
-                    break;
-
-                case 'ali':
-                    // Neon glow effect
-                    styledText = `<span class="glow-word">${words.join(' ')}</span>`;
-                    break;
-
-                case 'custom':
-                    styledText = words.join(' ');
-                    break;
-
-                default:
-                    styledText = words.join(' ');
-            }
-
-            return `
-                <div class="caption-preview-overlay caption-${captionStyle} position-${captionPosition}" style="${sizeStyle}">
-                    <span class="caption-preview-text">${styledText}</span>
-                </div>
-            `;
-        }
+        // NOTE: Caption rendering is now handled by VideoPreviewEngine._renderCaption()
+        // which provides style-aware, word-by-word synchronized captions on the canvas
 
         function renderCaptionSettings() {
             const selectedStyle = state.assembly.captions.style || 'karaoke';
@@ -7167,6 +7289,10 @@
         function setCaptionSize(size) {
             state.assembly.captions.size = parseFloat(size);
             saveProject();
+            // Update preview caption size
+            if (previewEngine) {
+                previewEngine.captionSize = parseFloat(size);
+            }
             render();
         }
 
@@ -7314,10 +7440,11 @@
             try {
                 await previewEngine.loadScenes(scenes);
 
-                // Set caption settings
+                // Set caption settings - unified style-aware system
                 previewEngine.captionsEnabled = state.assembly.captions.enabled;
                 previewEngine.captionStyle = state.assembly.captions.style;
                 previewEngine.captionPosition = state.assembly.captions.position;
+                previewEngine.captionSize = state.assembly.captions.size || 1;
 
                 // Set music if enabled
                 if (state.assembly.music.enabled && state.assembly.music.trackId) {
@@ -8223,6 +8350,7 @@
                     previewEngine.captionsEnabled = state.assembly.captions?.enabled;
                     previewEngine.captionStyle = state.assembly.captions?.style;
                     previewEngine.captionPosition = state.assembly.captions?.position;
+                    previewEngine.captionSize = state.assembly.captions?.size || 1;
 
                     if (state.assembly.music?.enabled && state.assembly.music?.trackId) {
                         const track = state.assembly.musicLibrary?.find(t => t.id === state.assembly.music?.trackId);

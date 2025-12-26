@@ -457,25 +457,28 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
   // 'best' = Highest quality, slower processing
   const renderQuality = output.renderQuality || 'balanced';
 
-  // SMOOTH KEN BURNS: Higher scale multipliers reduce zoompan rounding errors
-  // At 8000px width, a 1px rounding error becomes 0.24px at 1920px output (invisible)
+  // SMOOTH KEN BURNS: Pre-scale to 8000px as recommended by FFmpeg experts
+  // "scale=8000:-1 - without this you may find that your zoom effect is very jerky"
+  // Source: https://www.bannerbear.com/blog/how-to-do-a-ken-burns-style-effect-with-ffmpeg/
+  const ZOOMPAN_SCALE_WIDTH = 8000;  // Fixed 8000px for maximum smoothness
+
   const qualitySettings = {
     fast: {
-      scaleMultiplier: 3.0,   // 3x scale for sub-pixel precision
       preset: 'ultrafast',    // Fastest encoding
-      fps: 24,                // Fewer frames
+      fps: 30,                // Standard fps
+      zoompanFps: 60,         // Higher fps in zoompan for smoother motion
       crf: '26'               // Slightly lower quality
     },
     balanced: {
-      scaleMultiplier: 4.0,   // 4x scale for excellent smoothness
       preset: 'fast',         // Good speed
       fps: 30,                // Standard
+      zoompanFps: 60,         // Higher fps in zoompan for smoother motion
       crf: '23'               // Good quality
     },
     best: {
-      scaleMultiplier: 5.0,   // 5x scale for maximum smoothness
       preset: 'medium',       // Better compression
       fps: 30,                // Standard
+      zoompanFps: 60,         // Higher fps in zoompan for smoother motion
       crf: '20'               // High quality
     }
   };
@@ -485,9 +488,10 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
 
   console.log(`[${jobId}] ========================================`);
   console.log(`[${jobId}] Render Quality: ${renderQuality.toUpperCase()}`);
-  console.log(`[${jobId}]   Scale: ${settings.scaleMultiplier}x`);
+  console.log(`[${jobId}]   Pre-scale: ${ZOOMPAN_SCALE_WIDTH}px (8K for smooth zoompan)`);
+  console.log(`[${jobId}]   Zoompan FPS: ${settings.zoompanFps} (internal smoothness)`);
+  console.log(`[${jobId}]   Output FPS: ${fps}`);
   console.log(`[${jobId}]   Preset: ${settings.preset}`);
-  console.log(`[${jobId}]   FPS: ${fps}`);
   console.log(`[${jobId}]   CRF: ${settings.crf}`);
   console.log(`[${jobId}] Output: ${width}x${height}`);
   console.log(`[${jobId}] ========================================`);
@@ -519,24 +523,34 @@ async function generateKenBurnsVideo({ jobId, jobRef, scenes, imageFiles, workDi
     const endX = kb.endX !== undefined ? kb.endX : 0.5;
     const endY = kb.endY !== undefined ? kb.endY : 0.5;
 
-    // SMOOTH KEN BURNS EXPRESSIONS:
-    // 1. Use time-based interpolation (in_time) instead of frame-based (on) for smooth motion
-    // 2. Use trunc() for consistent rounding to eliminate jitter from rounding inconsistencies
-    // 3. High scaleMultiplier (4-5x) makes rounding errors sub-pixel at final resolution
+    // Calculate frames at zoompan's internal fps (higher for smoothness)
+    const zoompanFps = settings.zoompanFps || 60;
+    const zoompanFrames = Math.round(duration * zoompanFps);
 
-    // Zoom: smoothly interpolate from startScale to endScale over duration
-    // in_time goes from 0 to duration, so in_time/duration is 0 to 1
-    const zoomExpr = `${startScale}+(${endScale}-${startScale})*(in_time/${duration})`;
+    // SMOOTH KEN BURNS EXPRESSIONS - FIXED:
+    // CRITICAL: Use 'on' (output frame count) NOT 'in_time' for looped static images!
+    // With -loop 1, in_time is always 0/NaN because there's no input timestamp progression.
+    // 'on' counts from 0 to d-1, so on/(d-1) gives us 0 to 1 progression.
+    //
+    // Reference: https://patchwork.ffmpeg.org/project/ffmpeg/patch/...
+    // "in_time represents the timestamp of each input frame" - for looped image, this never changes!
+
+    // Progress variable: 0 at start, 1 at end
+    // Using (on/${zoompanFrames-1}) ensures we reach exactly endScale at the last frame
+    const progressExpr = `(on/${zoompanFrames - 1})`;
+
+    // Zoom: smoothly interpolate from startScale to endScale
+    const zoomExpr = `${startScale}+(${endScale}-${startScale})*${progressExpr}`;
 
     // Position: smoothly interpolate from start to end position
-    // trunc() ensures consistent rounding direction (towards zero) eliminating jitter
-    const xExpr = `trunc((${startX}+(${endX}-${startX})*(in_time/${duration}))*(iw-iw/zoom))`;
-    const yExpr = `trunc((${startY}+(${endY}-${startY})*(in_time/${duration}))*(ih-ih/zoom))`;
+    // The position formula: pos * (imageWidth - viewportWidth) = pos * (iw - iw/zoom)
+    const xExpr = `(${startX}+(${endX}-${startX})*${progressExpr})*(iw-iw/zoom)`;
+    const yExpr = `(${startY}+(${endY}-${startY})*${progressExpr})*(ih-ih/zoom)`;
 
-    // Ken Burns filter with aggressive scaling for sub-pixel precision
-    // At 4x scale (7680px for 1080p), 1px rounding error = 0.25px at output = invisible
-    const scaleWidth = Math.round(width * settings.scaleMultiplier);
-    const filterComplex = `scale=${scaleWidth}:-1:flags=lanczos,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
+    // Ken Burns filter with 8000px pre-scaling for sub-pixel precision
+    // "scale=8000:-1 - without this you may find that your zoom effect is very jerky"
+    // Source: https://www.bannerbear.com/blog/how-to-do-a-ken-burns-style-effect-with-ffmpeg/
+    const filterComplex = `scale=${ZOOMPAN_SCALE_WIDTH}:-1:flags=lanczos,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${zoompanFrames}:s=${width}x${height}:fps=${zoompanFps},fps=${fps},setsar=1`;
 
     // Ken Burns from static image: zoompan generates all frames from single image
     // -loop 1: Makes image available as continuous stream (required for zoompan)
@@ -1248,20 +1262,22 @@ export async function processSceneKenBurns({
       width = height = Math.min(width, height);
     }
 
-    // Step 3: Get quality settings - Higher scale multipliers for smooth Ken Burns
+    // Step 3: Get quality settings - 8000px pre-scaling for smooth Ken Burns
     const renderQuality = output.renderQuality || 'balanced';
+    const ZOOMPAN_SCALE_WIDTH = 8000;  // Fixed 8000px for maximum smoothness
     const qualitySettings = {
-      fast: { scaleMultiplier: 3.0, preset: 'ultrafast', fps: 24, crf: '26' },
-      balanced: { scaleMultiplier: 4.0, preset: 'fast', fps: 30, crf: '23' },
-      best: { scaleMultiplier: 5.0, preset: 'medium', fps: 30, crf: '20' }
+      fast: { preset: 'ultrafast', fps: 30, zoompanFps: 60, crf: '26' },
+      balanced: { preset: 'fast', fps: 30, zoompanFps: 60, crf: '23' },
+      best: { preset: 'medium', fps: 30, zoompanFps: 60, crf: '20' }
     };
     const settings = qualitySettings[renderQuality] || qualitySettings.balanced;
     const fps = output.fps || settings.fps;
+    const zoompanFps = settings.zoompanFps || 60;
 
-    console.log(`${logPrefix} Quality: ${renderQuality}, Scale: ${settings.scaleMultiplier}x, FPS: ${fps}`);
+    console.log(`${logPrefix} Quality: ${renderQuality}, Pre-scale: ${ZOOMPAN_SCALE_WIDTH}px, Zoompan FPS: ${zoompanFps}, Output FPS: ${fps}`);
 
     // Step 4: Build Ken Burns FFmpeg command
-    const frames = Math.round(duration * fps);
+    const zoompanFrames = Math.round(duration * zoompanFps);
     const kb = kenBurns;
     const startScale = kb.startScale || 1.0;
     const endScale = kb.endScale || 1.2;
@@ -1270,21 +1286,23 @@ export async function processSceneKenBurns({
     const endX = kb.endX !== undefined ? kb.endX : 0.5;
     const endY = kb.endY !== undefined ? kb.endY : 0.5;
 
-    // SMOOTH KEN BURNS EXPRESSIONS:
-    // 1. Use time-based interpolation (in_time) instead of frame-based (on) for smooth motion
-    // 2. Use trunc() for consistent rounding to eliminate jitter
-    // 3. High scaleMultiplier (4-5x) makes rounding errors sub-pixel at final resolution
+    // SMOOTH KEN BURNS EXPRESSIONS - FIXED:
+    // CRITICAL: Use 'on' (output frame count) NOT 'in_time' for looped static images!
+    // With -loop 1, in_time is always 0/NaN because there's no input timestamp progression.
+    // 'on' counts from 0 to d-1, so on/(d-1) gives us 0 to 1 progression.
 
-    // Zoom: smoothly interpolate from startScale to endScale over duration
-    const zoomExpr = `${startScale}+(${endScale}-${startScale})*(in_time/${duration})`;
+    // Progress variable: 0 at start, 1 at end
+    const progressExpr = `(on/${zoompanFrames - 1})`;
 
-    // Position: smoothly interpolate with trunc() for consistent rounding
-    const xExpr = `trunc((${startX}+(${endX}-${startX})*(in_time/${duration}))*(iw-iw/zoom))`;
-    const yExpr = `trunc((${startY}+(${endY}-${startY})*(in_time/${duration}))*(ih-ih/zoom))`;
+    // Zoom: smoothly interpolate from startScale to endScale
+    const zoomExpr = `${startScale}+(${endScale}-${startScale})*${progressExpr}`;
 
-    // Ken Burns filter with aggressive scaling for sub-pixel precision
-    const scaleWidth = Math.round(width * settings.scaleMultiplier);
-    const filterComplex = `scale=${scaleWidth}:-1:flags=lanczos,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${width}x${height}:fps=${fps},setsar=1`;
+    // Position: smoothly interpolate from start to end position
+    const xExpr = `(${startX}+(${endX}-${startX})*${progressExpr})*(iw-iw/zoom)`;
+    const yExpr = `(${startY}+(${endY}-${startY})*${progressExpr})*(ih-ih/zoom)`;
+
+    // Ken Burns filter with 8000px pre-scaling for sub-pixel precision
+    const filterComplex = `scale=${ZOOMPAN_SCALE_WIDTH}:-1:flags=lanczos,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${zoompanFrames}:s=${width}x${height}:fps=${zoompanFps},fps=${fps},setsar=1`;
 
     const sceneOutput = path.join(workDir, 'scene_output.mp4');
 
