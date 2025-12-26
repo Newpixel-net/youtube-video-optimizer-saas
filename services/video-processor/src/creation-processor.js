@@ -1276,7 +1276,10 @@ export async function processSceneParallel({
 
   await updateProgress(jobRef, 25, `Processing ${scenes.length} scenes in parallel...`);
 
-  // Create all scene processing promises
+  // Create all scene processing promises with proper timeout
+  // Each scene can take up to 10 minutes, so we set a 15-minute timeout per scene
+  const SCENE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
   const scenePromises = scenes.map((scene, index) => {
     const requestBody = {
       sceneIndex: index,
@@ -1292,22 +1295,36 @@ export async function processSceneParallel({
       parentJobId: jobId
     };
 
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SCENE_TIMEOUT_MS);
+
     return fetch(`${serviceUrl}/process-scene`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
     })
       .then(async (response) => {
+        clearTimeout(timeoutId);
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         return response.json();
       })
-      .catch(error => ({
-        success: false,
-        sceneIndex: index,
-        error: error.message
-      }));
+      .catch(error => {
+        clearTimeout(timeoutId);
+        const errorMsg = error.name === 'AbortError'
+          ? `Scene ${index} timed out after ${SCENE_TIMEOUT_MS/1000}s`
+          : error.message;
+        console.error(`[${jobId}] Scene ${index} fetch error: ${errorMsg}`);
+        return {
+          success: false,
+          sceneIndex: index,
+          error: errorMsg
+        };
+      });
   });
 
   // Track progress as scenes complete
@@ -1322,6 +1339,18 @@ export async function processSceneParallel({
     })
   );
 
+  // Log all results for debugging
+  console.log(`[${jobId}] ========================================`);
+  console.log(`[${jobId}] PARALLEL PROCESSING RESULTS`);
+  results.forEach((r, i) => {
+    if (r.success) {
+      console.log(`[${jobId}] Scene ${i}: SUCCESS - ${r.sceneVideoUrl}`);
+    } else {
+      console.log(`[${jobId}] Scene ${i}: FAILED - ${r.error}`);
+    }
+  });
+  console.log(`[${jobId}] ========================================`);
+
   // Collect successful scene videos
   const successfulScenes = results
     .filter(r => r.success)
@@ -1330,7 +1359,10 @@ export async function processSceneParallel({
   console.log(`[${jobId}] Parallel processing complete: ${successfulScenes.length}/${scenes.length} scenes succeeded`);
 
   if (successfulScenes.length === 0) {
-    throw new Error('All scene processing failed');
+    // Log detailed failure info
+    const failedScenes = results.filter(r => !r.success);
+    const errorSummary = failedScenes.map(f => `S${f.sceneIndex}: ${f.error}`).join('; ');
+    throw new Error(`All scene processing failed. Errors: ${errorSummary}`);
   }
 
   return successfulScenes.map(r => r.sceneVideoUrl);

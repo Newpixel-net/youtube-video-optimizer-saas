@@ -24784,11 +24784,18 @@ exports.creationWizardStartExport = functions
           endY: 0.4 + Math.random() * 0.2          // 0.4 - 0.6
         };
 
+        // Get scene duration - timeline stores in milliseconds, we need seconds
+        // If duration > 300 (5 min), assume it's in milliseconds and convert
+        let sceneDuration = timelineScene?.duration || scriptScene?.duration || 8;
+        if (sceneDuration > 300) {
+          sceneDuration = sceneDuration / 1000; // Convert ms to seconds
+        }
+
         return {
           id: sceneId,
           sceneId,
           index,
-          duration: timelineScene?.duration || scriptScene?.duration || 8,
+          duration: sceneDuration,
           // Video sources - prefer animated video, fall back to image
           videoUrl: animScene?.videoUrl || null,
           imageUrl: storyboardScene?.imageUrl || null,
