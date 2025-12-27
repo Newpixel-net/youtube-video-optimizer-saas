@@ -3143,8 +3143,9 @@
         }
 
         function calculateMaxReachedStep() {
-            if (state.export.status === 'complete') return 7;
-            if (state.assembly.status === 'ready') return 7;
+            // Step 6 is now the final step (Edit and Export)
+            if (state.export.status === 'complete') return 6;
+            if (state.assembly.status === 'ready') return 6;
             if (state.animation.scenes.length > 0) return 6;
             if (state.storyboard.scenes.length > 0) return 5;
             if (state.script.scenes.length > 0) return 4;
@@ -8529,16 +8530,16 @@
             state.preview.loadProgress = 0;
         }
 
-        // Keyboard shortcuts for preview playback (works on Assembly and Export steps)
+        // Keyboard shortcuts for preview playback (works on Edit and Export step)
         document.addEventListener('keydown', function(e) {
-            // Only handle when on Assembly or Export step and preview is ready
-            if ((state.currentStep !== 6 && state.currentStep !== 7) || !state.preview.isReady) return;
+            // Only handle when on Edit and Export step (step 6) and preview is ready
+            if (state.currentStep !== 6 || !state.preview.isReady) return;
 
             // Don't handle if user is typing in an input
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
-            // Use timeline functions on Export step, preview functions on Assembly
-            const isTimeline = state.currentStep === 7;
+            // Use preview functions on the editor step
+            const isTimeline = false; // Timeline mode removed
 
             switch(e.code) {
                 case 'Space':
@@ -12167,7 +12168,7 @@
                             Coming soon in Phase ${stepNum > 2 ? Math.ceil((stepNum - 2) / 2) + 1 : 1}...
                         </div>
                     </div>
-                    ${renderNavButtons(stepNum - 1, stepNum < 7 ? stepNum + 1 : null)}
+                    ${renderNavButtons(stepNum - 1, stepNum < 6 ? stepNum + 1 : null)}
                 </div>
             `;
         }
@@ -12196,7 +12197,7 @@
                         <span>→</span>
                     </button>
                 `;
-            } else if (state.currentStep < 7) {
+            } else if (state.currentStep < 6) {
                 html += `
                     <button class="nav-button nav-button-next" disabled>
                         <span>Continue</span>
