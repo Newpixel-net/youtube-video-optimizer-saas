@@ -153,13 +153,15 @@ function generateCaptionsFromNarration(jobId, scenes) {
   const words = [];
   let currentTime = 0;
 
-  console.log(`[${jobId}] Generating fallback captions with voiceoverOffset support`);
+  console.log(`[${jobId}] Generating captions with voiceover timing synchronization`);
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
     const narration = scene.narration || '';
     const duration = scene.duration || 8;
     const voiceoverOffset = scene.voiceoverOffset || 0;
+    // Use actual voiceoverDuration if available, otherwise estimate from scene duration
+    const voiceoverDuration = scene.voiceoverDuration || (duration - voiceoverOffset) * 0.9;
 
     if (!narration.trim()) {
       // No narration for this scene, just advance time
@@ -174,8 +176,8 @@ function generateCaptionsFromNarration(jobId, scenes) {
       continue;
     }
 
-    // Calculate effective duration for voiceover (scene duration minus offset)
-    const effectiveVoiceDuration = duration - voiceoverOffset;
+    // Use actual voiceover duration for word timing (more accurate than estimation)
+    const effectiveVoiceDuration = voiceoverDuration;
 
     // Apply padding at start and end of voiceover
     const padding = 0.15; // 150ms padding
@@ -185,9 +187,7 @@ function generateCaptionsFromNarration(jobId, scenes) {
     // Start words AFTER the voiceoverOffset + padding
     let wordTime = currentTime + voiceoverOffset + padding;
 
-    if (voiceoverOffset > 0) {
-      console.log(`[${jobId}]   Scene ${i + 1}: offset=${voiceoverOffset.toFixed(2)}s, words start at ${wordTime.toFixed(2)}s`);
-    }
+    console.log(`[${jobId}]   Scene ${i + 1}: voiceover=${voiceoverDuration.toFixed(2)}s, offset=${voiceoverOffset.toFixed(2)}s, words start at ${wordTime.toFixed(2)}s`);
 
     for (const word of sceneWords) {
       words.push({
