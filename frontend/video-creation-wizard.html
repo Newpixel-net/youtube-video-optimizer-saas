@@ -6973,35 +6973,38 @@
             let totalDuration = 0;
             sceneOrder.forEach(sceneId => {
                 const scene = scriptScenes.find(s => s.id === sceneId);
-                if (scene) totalDuration += scene.duration || 8;
+                if (scene) totalDuration += scene.visualDuration || scene.duration || 8;
             });
 
             const activeTab = state.assembly.activeTab || 'text';
+            const projectName = state.project.name || 'Untitled Video';
+            const sceneCountText = sceneOrder.length + ' scenes';
+            const durationText = formatDuration(totalDuration);
 
-            let html = '<div class="fade-in">';
+            // FULL-SCREEN FIXED LAYOUT - Like professional video editors
+            let html = '';
+            html += '<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%); z-index: 100; display: flex; flex-direction: column; overflow: hidden;">';
 
-            // Compact Header
-            html += `
-                <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background: rgba(30,30,50,0.95); border-radius: 0.75rem; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.1);">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span style="font-size: 1.2rem;">🎬</span>
-                        <span style="font-weight: 600; color: white;">Content Client</span>
-                    </div>
-                    <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2);"></div>
-                    <span style="color: rgba(255,255,255,0.7); font-size: 0.85rem;">Rapid Dominate</span>
-                    <div style="margin-left: auto; display: flex; align-items: center; gap: 0.75rem;">
-                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${sceneOrder.length} scenes • ${formatDuration(totalDuration)}</span>
-                        <button onclick="saveAssemblySettings()" style="padding: 0.4rem 0.75rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer;">
-                            💾 Save
-                        </button>
-                    </div>
-                </div>
-            `;
+            // TOP HEADER BAR
+            html += '<div style="flex-shrink: 0; display: flex; align-items: center; gap: 1rem; padding: 0.5rem 1rem; background: rgba(20,20,35,0.98); border-bottom: 1px solid rgba(255,255,255,0.1);">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span style="font-size: 1.1rem;">🎬</span>';
+            html += '<span style="font-weight: 600; color: white; font-size: 0.9rem;">Video Creation Wizard</span>';
+            html += '</div>';
+            html += '<div style="width: 1px; height: 20px; background: rgba(255,255,255,0.2);"></div>';
+            html += '<span style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">' + projectName + '</span>';
+            html += '<div style="margin-left: auto; display: flex; align-items: center; gap: 1rem;">';
+            html += '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">' + sceneCountText + ' • ' + durationText + '</span>';
+            html += '<button onclick="saveAssemblySettings()" style="padding: 0.4rem 0.75rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer;">💾 Save</button>';
+            html += '<button onclick="goToStep(5)" style="padding: 0.4rem 0.75rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; font-size: 0.75rem; cursor: pointer;">← Back</button>';
+            html += '<button onclick="goToStep(7)" style="padding: 0.4rem 0.75rem; border-radius: 0.4rem; border: none; background: #10b981; color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer;">Export →</button>';
+            html += '</div>';
+            html += '</div>';
 
-            // Main Professional Layout - Three columns
-            html += `<div style="display: grid; grid-template-columns: 200px 320px 1fr; gap: 1rem; height: calc(100vh - 280px); min-height: 500px;">`;
+            // MAIN CONTENT AREA - Three columns
+            html += '<div style="flex: 1; display: grid; grid-template-columns: 220px 340px 1fr; gap: 0; overflow: hidden;">';
 
-            // LEFT SIDEBAR - Navigation
+            // LEFT SIDEBAR
             html += renderAssemblySidebar(sceneOrder.length, totalDuration);
 
             // MIDDLE PANEL - Tabbed Controls
@@ -7010,27 +7013,28 @@
             // RIGHT PANEL - Preview
             html += renderCompactPreviewPanel();
 
-            html += `</div>`;
-
-            // BOTTOM - Professional Timeline
-            html += `
-                <div style="margin-top: 1rem;">
-                    ${renderProfessionalTimeline(scriptScenes, animationScenes, totalDuration)}
-                </div>
-            `;
-
-            // Navigation
-            const isAssemblyReady = sceneOrder.length > 0;
-            html += renderNavButtons(5, isAssemblyReady ? 7 : null);
-
             html += '</div>';
+
+            // BOTTOM TIMELINE - pass all required parameters
+            const timelineZoom = state.timeline.zoom || 50;
+            const snapToGrid = state.timeline.snapToGrid !== false;
+            const selectedClipId = state.timeline.selectedClipId || null;
+            const currentTime = state.preview.currentTime || 0;
+            const isReady = state.preview.isReady || false;
+
+            html += '<div style="flex-shrink: 0;">';
+            html += renderProfessionalTimeline(scriptScenes, animationScenes, totalDuration, timelineZoom, snapToGrid, selectedClipId, currentTime, isReady);
+            html += '</div>';
+
+            html += '</div>'; // Close fixed container
+
             return html;
         }
 
         // LEFT SIDEBAR for Assembly
         function renderAssemblySidebar(sceneCount, totalDuration) {
             return `
-                <div style="background: rgba(20,20,35,0.95); border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.1); padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                <div style="background: rgba(20,20,35,0.98); border-right: 1px solid rgba(255,255,255,0.1); padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto;">
                     <!-- Project Info -->
                     <div style="padding: 0.5rem; background: rgba(139,92,246,0.1); border-radius: 0.5rem; margin-bottom: 0.5rem;">
                         <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Project</div>
@@ -7088,7 +7092,7 @@
         // TABBED CONTROL PANEL
         function renderTabbedControlPanel(activeTab) {
             return `
-                <div style="background: rgba(20,20,35,0.95); border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow: hidden;">
+                <div style="background: rgba(20,20,35,0.98); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow: hidden;">
                     <!-- Tab Headers -->
                     <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
                         <button onclick="setAssemblyTab('text')" style="flex: 1; padding: 0.75rem 0.5rem; background: ${activeTab === 'text' ? 'rgba(139,92,246,0.15)' : 'transparent'}; border: none; border-bottom: 2px solid ${activeTab === 'text' ? '#8b5cf6' : 'transparent'}; color: ${activeTab === 'text' ? 'white' : 'rgba(255,255,255,0.5)'}; cursor: pointer; font-size: 0.75rem; font-weight: ${activeTab === 'text' ? '600' : '400'}; transition: all 0.2s;">
@@ -7373,9 +7377,10 @@
             const currentScene = scriptScenes[currentSceneIndex] || {};
 
             return `
-                <div style="background: rgba(20,20,35,0.95); border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow: hidden;">
-                    <!-- Preview Canvas -->
-                    <div style="position: relative; width: 100%; aspect-ratio: 16/9; background: #000; flex-shrink: 0;">
+                <div style="background: rgba(15,15,25,0.98); display: flex; flex-direction: column; overflow: hidden; padding: 1rem;">
+                    <!-- Preview Canvas Container -->
+                    <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0;">
+                        <div style="position: relative; width: 100%; max-width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 0.5rem; overflow: hidden;">
                         <canvas id="preview-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
 
                         ${!isReady ? `
@@ -7398,29 +7403,25 @@
                                 </div>
                             </div>
                         `}
+                        </div>
                     </div>
 
                     <!-- Playback Controls -->
-                    <div style="padding: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="flex-shrink: 0; padding: 0.75rem 0; margin-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                            <button onclick="togglePreviewPlayback()" ${!isReady ? 'disabled' : ''} style="width: 32px; height: 32px; border-radius: 50%; border: none; background: ${isReady ? 'linear-gradient(135deg, #8b5cf6, #06b6d4)' : 'rgba(255,255,255,0.1)'}; color: white; cursor: ${isReady ? 'pointer' : 'not-allowed'}; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;">
+                            <button onclick="togglePreviewPlayback()" ${!isReady ? 'disabled' : ''} style="width: 36px; height: 36px; border-radius: 50%; border: none; background: ${isReady ? 'linear-gradient(135deg, #8b5cf6, #06b6d4)' : 'rgba(255,255,255,0.1)'}; color: white; cursor: ${isReady ? 'pointer' : 'not-allowed'}; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">
                                 ${isPlaying ? '❚❚' : '▶'}
                             </button>
-                            <span style="font-size: 0.7rem; color: rgba(255,255,255,0.6); font-family: monospace;">
+                            <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6); font-family: monospace;">
                                 ${formatDuration(currentTime)} / ${formatDuration(totalDuration)}
                             </span>
-                            <div style="margin-left: auto; display: flex; align-items: center; gap: 0.25rem;">
-                                <span style="font-size: 0.7rem;">🔊</span>
-                                <input type="range" min="0" max="100" value="${state.preview.volume || 100}" onchange="setPreviewVolume(this.value)" style="width: 50px; height: 3px; cursor: pointer;">
+                            <div style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Scene ${currentSceneIndex + 1}</span>
+                                <span style="font-size: 0.75rem;">🔊</span>
+                                <input type="range" min="0" max="100" value="${state.preview.volume || 100}" onchange="setPreviewVolume(this.value)" style="width: 60px; height: 4px; cursor: pointer; accent-color: #8b5cf6;">
                             </div>
                         </div>
-                        <input type="range" id="preview-scrubber" min="0" max="${totalDuration || 100}" step="0.1" value="${currentTime}" onchange="seekPreview(this.value)" ${!isReady ? 'disabled' : ''} style="width: 100%; height: 4px; cursor: ${isReady ? 'pointer' : 'not-allowed'}; accent-color: #8b5cf6;">
-                    </div>
-
-                    <!-- Scene Info -->
-                    <div style="padding: 0.5rem 0.75rem; background: rgba(139,92,246,0.1); font-size: 0.7rem;">
-                        <span style="color: rgba(255,255,255,0.5);">Scene ${currentSceneIndex + 1}:</span>
-                        <span style="color: white; margin-left: 0.25rem;">${currentScene.narration?.substring(0, 30) || 'No scene'}${currentScene.narration?.length > 30 ? '...' : ''}</span>
+                        <input type="range" id="preview-scrubber" min="0" max="${totalDuration || 100}" step="0.1" value="${currentTime}" onchange="seekPreview(this.value)" ${!isReady ? 'disabled' : ''} style="width: 100%; height: 6px; cursor: ${isReady ? 'pointer' : 'not-allowed'}; accent-color: #8b5cf6; border-radius: 3px;">
                     </div>
                 </div>
             `;
