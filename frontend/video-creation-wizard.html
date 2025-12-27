@@ -4914,11 +4914,13 @@
         // 6.7 UTILITY FUNCTIONS
         // ==========================================
         function formatDuration(seconds) {
-            if (seconds < 60) {
-                return `${seconds}s`;
+            // Round to avoid floating point precision issues
+            const roundedSeconds = Math.round(seconds);
+            if (roundedSeconds < 60) {
+                return `${roundedSeconds}s`;
             }
-            const minutes = Math.floor(seconds / 60);
-            const secs = seconds % 60;
+            const minutes = Math.floor(roundedSeconds / 60);
+            const secs = roundedSeconds % 60;
             return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
         }
 
@@ -5109,8 +5111,12 @@
                         if (!state.preview.isPlaying) {
                             previewEngine.attachToCanvas(newCanvas);
                         } else {
+                            // If playing, update canvas reference AND set dimensions
+                            // CRITICAL: Must set canvas.width/height to match engine dimensions
                             previewEngine.canvas = newCanvas;
                             previewEngine.ctx = newCanvas.getContext('2d');
+                            newCanvas.width = previewEngine.width;
+                            newCanvas.height = previewEngine.height;
                         }
                     }
                 }
@@ -5167,9 +5173,13 @@
                     if (!state.preview.isPlaying) {
                         previewEngine.attachToCanvas(newCanvas);
                     } else {
-                        // If playing, just update the canvas reference without full reattach
+                        // If playing, update canvas reference AND set dimensions
+                        // CRITICAL: Must set canvas.width/height to match engine dimensions
+                        // otherwise canvas defaults to 300x150 and rendering is distorted
                         previewEngine.canvas = newCanvas;
                         previewEngine.ctx = newCanvas.getContext('2d');
+                        newCanvas.width = previewEngine.width;
+                        newCanvas.height = previewEngine.height;
                     }
                 }
             }
