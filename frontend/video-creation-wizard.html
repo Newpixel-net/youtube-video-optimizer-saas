@@ -7465,8 +7465,9 @@
                         const duration = scene.visualDuration || scene.duration || 5;
                         const isActive = i === currentSceneIndex;
 
+                        const borderColor = isActive ? '#8b5cf6' : 'rgba(255,255,255,0.1)';
                         return `
-                            <div onclick="jumpToScene(${i})" style="background: rgba(255,255,255,0.03); border: 2px solid ${isActive ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; overflow: hidden; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='rgba(139,92,246,0.5)'" onmouseout="this.style.borderColor='${isActive ? '#8b5cf6' : 'rgba(255,255,255,0.1)}'">
+                            <div onclick="jumpToScene(${i})" style="background: rgba(255,255,255,0.03); border: 2px solid ${borderColor}; border-radius: 0.5rem; overflow: hidden; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='rgba(139,92,246,0.5)'" onmouseout="this.style.borderColor='${borderColor}'">
                                 <div style="aspect-ratio: 16/9; background: rgba(0,0,0,0.3); position: relative;">
                                     ${imageUrl ? `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` :
                                       `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">📷</div>`}
