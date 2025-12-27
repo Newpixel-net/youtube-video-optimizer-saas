@@ -1463,6 +1463,11 @@
             to { opacity: 1; transform: scale(1); }
         }
 
+        @keyframes kenBurnsPreview {
+            0% { transform: scale(1) translate(0%, 0%); }
+            100% { transform: scale(1.15) translate(-3%, -2%); }
+        }
+
         .fade-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
@@ -2775,7 +2780,13 @@
                     voice: 'default',
                     speed: 1.0,
                     status: 'idle'
-                }
+                },
+                // Animation Studio Pro state
+                selectedSceneId: null,
+                batchQueue: [],
+                batchStatus: 'idle',  // 'idle', 'processing', 'complete'
+                isPreviewPlaying: false,
+                previewMode: 'animation'  // 'animation', 'voiceover', 'combined'
             },
 
             // Step 6: Assembly
@@ -6387,125 +6398,509 @@
                 initializeAnimationScenes();
             }
 
+            // Set default selected scene if none selected
+            if (!state.animation.selectedSceneId && scriptScenes.length > 0) {
+                state.animation.selectedSceneId = scriptScenes[0].id;
+            }
+
             // Calculate scene readiness stats
             const voiceoversReady = animationScenes.filter(s => s.voiceoverUrl).length;
             const animatedScenes = animationScenes.filter(s => s.videoUrl).length;
             const stockVideoScenes = storyboardScenes.filter(s => s.source === 'stock-video' && s.videoUrl).length;
-            const staticImageScenes = storyboardScenes.filter(s => s.imageUrl && s.source !== 'stock-video').length;
 
             // A scene is ready if it has voiceover AND (animated OR stock-video OR image)
             const readyScenes = storyboardScenes.filter(sb => {
                 const anim = animationScenes.find(a => a.sceneId === sb.sceneId);
-                const hasVoiceover = anim?.voiceoverUrl;
-                const hasVisual = anim?.videoUrl || (sb.source === 'stock-video' && sb.videoUrl) || sb.imageUrl;
+                const hasVoiceover = anim && anim.voiceoverUrl;
+                const hasVisual = (anim && anim.videoUrl) || (sb.source === 'stock-video' && sb.videoUrl) || sb.imageUrl;
                 return hasVoiceover && hasVisual;
             }).length;
 
-            let html = '<div class="fade-in">';
-
-            // Header with global settings
-            html += `
-                <div class="content-card">
-                    <div class="content-card-header">
-                        <div class="content-card-icon">🎬</div>
-                        <div style="flex: 1;">
-                            <div class="content-card-title">Animation Studio</div>
-                            <div class="content-card-subtitle">Generate voiceovers and optionally animate scenes • ${readyScenes}/${storyboardScenes.length} ready</div>
-                        </div>
-                    </div>
-
-                    <!-- Progress Stats -->
-                    <div style="display: flex; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;">
-                        <div style="background: rgba(139, 92, 246, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
-                            <span style="color: #a78bfa;">🎙️ Voiceovers:</span>
-                            <span style="color: ${voiceoversReady >= storyboardScenes.length ? '#10b981' : 'white'}; font-weight: 600;">${voiceoversReady}/${storyboardScenes.length}</span>
-                        </div>
-                        <div style="background: rgba(6, 182, 212, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
-                            <span style="color: #06b6d4;">🎬 Animated:</span>
-                            <span style="color: white; font-weight: 600;">${animatedScenes}</span>
-                            <span style="color: rgba(255,255,255,0.5);">(optional)</span>
-                        </div>
-                        <div style="background: rgba(16, 185, 129, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
-                            <span style="color: #10b981;">📹 Stock Videos:</span>
-                            <span style="color: white; font-weight: 600;">${stockVideoScenes}</span>
-                        </div>
-                        <div style="background: rgba(251, 191, 36, 0.15); padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem;">
-                            <span style="color: #fbbf24;">🖼️ Static Images:</span>
-                            <span style="color: white; font-weight: 600;">${staticImageScenes - animatedScenes}</span>
-                        </div>
-                    </div>
-
-                    <!-- Info Banner -->
-                    <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 0.5rem; padding: 0.75rem; margin-top: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.7);">
-                        💡 <strong>Animation is optional!</strong> Scenes with static images will display for the correct duration. Stock videos play as-is. Only animate if you want Ken Burns zoom/pan effects.
-                    </div>
-
-                    <!-- Global Voice Settings -->
-                    <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem; margin-top: 1rem;">
-                        <div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.75rem;">🎙️ Global Voice Settings</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                            <div>
-                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Voice</label>
-                                <select id="global-voice-select" onchange="setGlobalVoice(this.value)"
-                                        style="width: 100%; padding: 0.6rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(30,30,50,1); color: white; font-size: 0.85rem;">
-                                    ${['alloy', 'nova', 'shimmer', 'echo', 'onyx', 'fable'].map(v => `
-                                        <option value="${v}" ${state.animation.voiceover.voice === v ? 'selected' : ''}>${v.charAt(0).toUpperCase() + v.slice(1)}</option>
-                                    `).join('')}
-                                </select>
-                            </div>
-                            <div>
-                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Speed: ${state.animation.voiceover.speed.toFixed(1)}x</label>
-                                <input type="range" min="0.5" max="2.0" step="0.1" value="${state.animation.voiceover.speed}"
-                                       onchange="setGlobalSpeed(this.value)"
-                                       style="width: 100%; height: 6px; cursor: pointer;">
-                            </div>
-                        </div>
-                        <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
-                            <button onclick="generateAllVoiceovers()"
-                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; cursor: pointer; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                                <span>🎙️</span> Generate All Voiceovers
-                            </button>
-                            <button onclick="animateAllScenes()"
-                                    ${voiceoversReady < storyboardScenes.length ? 'disabled' : ''}
-                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: none; background: ${voiceoversReady >= storyboardScenes.length ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)'}; color: ${voiceoversReady >= storyboardScenes.length ? 'white' : 'rgba(255,255,255,0.4)'}; cursor: ${voiceoversReady >= storyboardScenes.length ? 'pointer' : 'not-allowed'}; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                                <span>🎬</span> Animate All (Optional)
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Animation Scene Cards
-            html += `<div style="display: grid; gap: 1rem; margin-top: 1rem;">`;
-
-            scriptScenes.forEach((scriptScene, index) => {
-                const storyboardScene = storyboardScenes.find(s => s.sceneId === scriptScene.id) || {};
-                const animScene = animationScenes.find(s => s.sceneId === scriptScene.id) || {};
-                html += renderAnimationSceneCard(scriptScene, storyboardScene, animScene, index);
-            });
-
-            html += `</div>`;
-
-            // Navigation - Check if scenes are ready for assembly
-            // A scene is ready if it has: voiceover + visual (animated video, stock video, OR static image)
+            // Check if all scenes are ready for assembly
             const allScenesReady = storyboardScenes.every(storyboardScene => {
                 const animScene = animationScenes.find(a => a.sceneId === storyboardScene.sceneId) || {};
-
-                // Must have voiceover
                 const hasVoiceover = !!animScene.voiceoverUrl;
-
-                // Must have visual: animated video, stock video, or at least a static image
                 const hasAnimatedVideo = !!animScene.videoUrl;
                 const hasStockVideo = storyboardScene.source === 'stock-video' && storyboardScene.videoUrl;
                 const hasImage = !!storyboardScene.imageUrl;
-
                 return hasVoiceover && (hasAnimatedVideo || hasStockVideo || hasImage);
             });
 
-            html += renderNavButtons(4, allScenesReady ? 6 : null);
+            // FULL-SCREEN SPLIT-PANEL LAYOUT
+            let html = '';
+            html += '<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #0a0a14 0%, #141428 100%); z-index: 100; display: flex; flex-direction: column; overflow: hidden;">';
+
+            // TOP HEADER BAR
+            html += '<div style="flex-shrink: 0; display: flex; align-items: center; gap: 1rem; padding: 0.6rem 1.25rem; background: rgba(15,15,28,0.98); border-bottom: 1px solid rgba(139,92,246,0.2); backdrop-filter: blur(10px);">';
+            html += '<div style="display: flex; align-items: center; gap: 0.75rem;">';
+            html += '<div style="width: 36px; height: 36px; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center;">';
+            html += '<span style="font-size: 1.1rem;">🎬</span>';
+            html += '</div>';
+            html += '<div>';
+            html += '<div style="font-weight: 700; color: white; font-size: 1rem; letter-spacing: -0.02em;">Animation Studio Pro</div>';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Generate voiceovers • Create animations</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Progress Pills
+            html += '<div style="display: flex; gap: 0.5rem; margin-left: 1.5rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.7rem; background: ' + (voiceoversReady >= storyboardScenes.length ? 'rgba(16,185,129,0.15)' : 'rgba(139,92,246,0.15)') + '; border: 1px solid ' + (voiceoversReady >= storyboardScenes.length ? 'rgba(16,185,129,0.3)' : 'rgba(139,92,246,0.3)') + '; border-radius: 2rem; font-size: 0.7rem;">';
+            html += '<span>🎙️</span>';
+            html += '<span style="color: ' + (voiceoversReady >= storyboardScenes.length ? '#10b981' : '#a78bfa') + '; font-weight: 600;">' + voiceoversReady + '/' + storyboardScenes.length + '</span>';
+            html += '</div>';
+            html += '<div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.7rem; background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.3); border-radius: 2rem; font-size: 0.7rem;">';
+            html += '<span>🎬</span>';
+            html += '<span style="color: #06b6d4; font-weight: 600;">' + animatedScenes + ' animated</span>';
+            html += '</div>';
+            html += '<div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.7rem; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); border-radius: 2rem; font-size: 0.7rem;">';
+            html += '<span>✓</span>';
+            html += '<span style="color: #10b981; font-weight: 600;">' + readyScenes + ' ready</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Right side buttons
+            html += '<div style="margin-left: auto; display: flex; align-items: center; gap: 0.75rem;">';
+            html += '<button onclick="goToStep(4)" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.85rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: rgba(255,255,255,0.7); font-size: 0.75rem; cursor: pointer; transition: all 0.2s;">';
+            html += '<span>←</span> Back';
+            html += '</button>';
+            var continueDisabled = !allScenesReady;
+            html += '<button onclick="' + (allScenesReady ? 'goToStep(6)' : '') + '" ' + (continueDisabled ? 'disabled' : '') + ' style="display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem; border-radius: 0.5rem; border: none; background: ' + (allScenesReady ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.1)') + '; color: ' + (allScenesReady ? 'white' : 'rgba(255,255,255,0.4)') + '; font-size: 0.75rem; font-weight: 600; cursor: ' + (allScenesReady ? 'pointer' : 'not-allowed') + '; transition: all 0.2s;">';
+            html += 'Continue <span>→</span>';
+            html += '</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // MAIN SPLIT-PANEL CONTENT
+            html += '<div style="flex: 1; display: grid; grid-template-columns: 280px 1fr; gap: 0; overflow: hidden;">';
+
+            // LEFT PANEL - Scene Grid
+            html += renderAnimationSceneGrid(scriptScenes, storyboardScenes, animationScenes);
+
+            // RIGHT PANEL - Detail View
+            html += renderAnimationDetailPanel(scriptScenes, storyboardScenes, animationScenes);
+
+            html += '</div>';
+
+            // BOTTOM BATCH QUEUE
+            html += renderAnimationBatchQueue(animationScenes, storyboardScenes);
 
             html += '</div>';
             return html;
+        }
+
+        // LEFT PANEL - Compact Scene Grid
+        function renderAnimationSceneGrid(scriptScenes, storyboardScenes, animationScenes) {
+            var html = '';
+            html += '<div style="background: rgba(15,15,28,0.98); border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; overflow: hidden;">';
+
+            // Scene Grid Header
+            html += '<div style="padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">';
+            html += '<span style="font-size: 0.75rem; font-weight: 600; color: white; text-transform: uppercase; letter-spacing: 0.5px;">Scenes</span>';
+            html += '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">' + scriptScenes.length + ' total</span>';
+            html += '</div>';
+
+            // Quick Actions
+            html += '<div style="display: flex; gap: 0.4rem;">';
+            html += '<button onclick="generateAllVoiceovers()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.3rem; padding: 0.45rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; font-size: 0.65rem; font-weight: 600; cursor: pointer;">';
+            html += '<span>🎙️</span> All Voices';
+            html += '</button>';
+            html += '<button onclick="animateAllScenes()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.3rem; padding: 0.45rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #06b6d4, #10b981); color: white; font-size: 0.65rem; font-weight: 600; cursor: pointer;">';
+            html += '<span>🎬</span> All Anim';
+            html += '</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Scrollable Scene List
+            html += '<div style="flex: 1; overflow-y: auto; padding: 0.5rem;">';
+
+            scriptScenes.forEach(function(scriptScene, index) {
+                var storyboardScene = storyboardScenes.find(function(s) { return s.sceneId === scriptScene.id; }) || {};
+                var animScene = animationScenes.find(function(s) { return s.sceneId === scriptScene.id; }) || {};
+                var isSelected = state.animation.selectedSceneId === scriptScene.id;
+                var hasVoiceover = !!animScene.voiceoverUrl;
+                var hasAnimation = !!animScene.videoUrl;
+                var isProcessing = animScene.voiceoverStatus === 'generating' || animScene.animationStatus === 'generating';
+                var imageUrl = storyboardScene.imageUrl || '';
+
+                // Scene status
+                var statusColor = '#ef4444'; // red - not ready
+                var statusIcon = '○';
+                if (hasVoiceover && hasAnimation) {
+                    statusColor = '#10b981'; // green - complete
+                    statusIcon = '●';
+                } else if (hasVoiceover) {
+                    statusColor = '#fbbf24'; // yellow - partial
+                    statusIcon = '◐';
+                } else if (isProcessing) {
+                    statusColor = '#8b5cf6'; // purple - processing
+                    statusIcon = '◌';
+                }
+
+                html += '<div onclick="selectAnimationScene(' + scriptScene.id + ')" style="display: flex; gap: 0.6rem; padding: 0.5rem; margin-bottom: 0.4rem; background: ' + (isSelected ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)') + '; border: 1px solid ' + (isSelected ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.06)') + '; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s;">';
+
+                // Thumbnail
+                html += '<div style="position: relative; width: 56px; height: 56px; flex-shrink: 0; border-radius: 0.35rem; overflow: hidden; background: rgba(0,0,0,0.3);">';
+                if (imageUrl) {
+                    html += '<img src="' + imageUrl + '" style="width: 100%; height: 100%; object-fit: cover;">';
+                } else {
+                    html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-size: 1.2rem;">🖼️</div>';
+                }
+                // Status indicator overlay
+                html += '<div style="position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center;">';
+                html += '<span style="color: ' + statusColor + '; font-size: 8px;">' + statusIcon + '</span>';
+                html += '</div>';
+                // Scene number
+                html += '<div style="position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: rgba(0,0,0,0.7); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 0.55rem; font-weight: 700; color: white;">' + (index + 1) + '</div>';
+                html += '</div>';
+
+                // Scene Info
+                html += '<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center;">';
+                html += '<div style="font-size: 0.7rem; color: white; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.25rem;">Scene ' + (index + 1) + '</div>';
+
+                // Status badges
+                html += '<div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">';
+                if (hasVoiceover) {
+                    html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(139,92,246,0.3); color: #a78bfa; border-radius: 0.2rem;">🎙️</span>';
+                }
+                if (hasAnimation) {
+                    html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(6,182,212,0.3); color: #06b6d4; border-radius: 0.2rem;">🎬</span>';
+                }
+                if (isProcessing) {
+                    html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(251,191,36,0.3); color: #fbbf24; border-radius: 0.2rem;" class="animate-pulse">⏳</span>';
+                }
+                html += '</div>';
+                html += '</div>';
+
+                html += '</div>';
+            });
+
+            html += '</div>';
+            html += '</div>';
+            return html;
+        }
+
+        // RIGHT PANEL - Detail View with Preview
+        function renderAnimationDetailPanel(scriptScenes, storyboardScenes, animationScenes) {
+            var selectedId = state.animation.selectedSceneId;
+            var scriptScene = scriptScenes.find(function(s) { return s.id === selectedId; });
+            var storyboardScene = storyboardScenes.find(function(s) { return s.sceneId === selectedId; }) || {};
+            var animScene = animationScenes.find(function(s) { return s.sceneId === selectedId; }) || {};
+
+            if (!scriptScene) {
+                return '<div style="flex: 1; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.4);">Select a scene</div>';
+            }
+
+            var sceneIndex = scriptScenes.findIndex(function(s) { return s.id === selectedId; });
+            var imageUrl = storyboardScene.imageUrl || '';
+            var videoUrl = animScene.videoUrl || '';
+            var voiceoverUrl = animScene.voiceoverUrl || '';
+            var voiceoverStatus = animScene.voiceoverStatus || 'idle';
+            var animationStatus = animScene.animationStatus || 'idle';
+            var animationType = animScene.animationType || 'ken_burns';
+            var narration = scriptScene.narration || 'No narration available';
+
+            var html = '';
+            html += '<div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: rgba(10,10,20,0.5);">';
+
+            // Preview Section
+            html += '<div style="flex: 1; display: flex; flex-direction: column; padding: 1.25rem; overflow-y: auto;">';
+
+            // Preview Container
+            html += '<div style="position: relative; width: 100%; max-width: 640px; margin: 0 auto; aspect-ratio: 16/9; background: rgba(0,0,0,0.5); border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">';
+
+            if (videoUrl) {
+                // Animated video preview
+                html += '<video id="detail-preview-video" src="' + videoUrl + '" style="width: 100%; height: 100%; object-fit: cover;"></video>';
+                html += '<div onclick="playDetailPreview()" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); cursor: pointer; transition: background 0.2s;" onmouseenter="this.style.background=\'rgba(0,0,0,0.1)\'" onmouseleave="this.style.background=\'rgba(0,0,0,0.3)\'">';
+                html += '<div style="width: 60px; height: 60px; background: rgba(16,185,129,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(16,185,129,0.4);">';
+                html += '<span style="font-size: 1.5rem; margin-left: 4px;">▶</span>';
+                html += '</div>';
+                html += '</div>';
+                html += '<div style="position: absolute; top: 0.75rem; right: 0.75rem; background: rgba(16,185,129,0.9); padding: 0.3rem 0.6rem; border-radius: 0.3rem; font-size: 0.65rem; font-weight: 700; color: white;">✓ ANIMATED</div>';
+            } else if (imageUrl) {
+                // Static image with Ken Burns preview
+                html += '<div id="ken-burns-preview" style="width: 100%; height: 100%; overflow: hidden;">';
+                html += '<img src="' + imageUrl + '" style="width: 110%; height: 110%; object-fit: cover; animation: kenBurnsPreview 8s ease-in-out infinite alternate;">';
+                html += '</div>';
+                if (animationStatus === 'generating') {
+                    html += '<div style="position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; justify-content: center;">';
+                    html += '<div class="animate-spin" style="width: 40px; height: 40px; border: 3px solid rgba(6,182,212,0.3); border-top-color: #06b6d4; border-radius: 50%; margin-bottom: 0.75rem;"></div>';
+                    html += '<div style="color: white; font-size: 0.85rem; font-weight: 600;">Generating Animation...</div>';
+                    html += '</div>';
+                }
+            } else {
+                html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">';
+                html += '<div style="text-align: center;">';
+                html += '<div style="font-size: 3rem; margin-bottom: 0.5rem;">🖼️</div>';
+                html += '<div style="font-size: 0.85rem;">No image available</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Scene info overlay
+            html += '<div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 1.5rem 1rem 0.75rem;">';
+            html += '<div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.25rem;">Scene ' + (sceneIndex + 1) + '</div>';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">' + (scriptScene.duration || 8) + 's duration</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Audio Waveform / Voiceover Section
+            html += '<div style="margin-top: 1rem; max-width: 640px; margin-left: auto; margin-right: auto; width: 100%;">';
+            html += renderVoiceoverSection(scriptScene, animScene, voiceoverUrl, voiceoverStatus, narration);
+            html += '</div>';
+
+            // Animation Style Gallery
+            html += '<div style="margin-top: 1rem; max-width: 640px; margin-left: auto; margin-right: auto; width: 100%;">';
+            html += renderAnimationStyleGallery(scriptScene.id, animationType, !!voiceoverUrl, animationStatus);
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
+        // Voiceover Section with Waveform
+        function renderVoiceoverSection(scriptScene, animScene, voiceoverUrl, voiceoverStatus, narration) {
+            var voice = animScene.voice || state.animation.voiceover.voice || 'alloy';
+            var speed = animScene.speed || state.animation.voiceover.speed || 1.0;
+
+            var html = '';
+            html += '<div style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); border-radius: 0.75rem; padding: 1rem;">';
+
+            // Header
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span style="font-size: 1rem;">🎙️</span>';
+            html += '<span style="font-size: 0.85rem; font-weight: 600; color: white;">Voiceover</span>';
+            if (voiceoverStatus === 'ready') {
+                html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(16,185,129,0.2); color: #10b981; border-radius: 1rem; font-weight: 600;">Ready</span>';
+            } else if (voiceoverStatus === 'generating') {
+                html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(251,191,36,0.2); color: #fbbf24; border-radius: 1rem; font-weight: 600;" class="animate-pulse">Generating...</span>';
+            }
+            html += '</div>';
+            html += '</div>';
+
+            // Narration text
+            html += '<div style="background: rgba(0,0,0,0.2); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">NARRATION</div>';
+            html += '<div style="font-size: 0.8rem; color: rgba(255,255,255,0.85); line-height: 1.5; font-style: italic;">"' + narration.substring(0, 200) + (narration.length > 200 ? '...' : '') + '"</div>';
+            html += '</div>';
+
+            // Audio Player / Waveform
+            if (voiceoverUrl) {
+                html += '<div style="margin-bottom: 0.75rem;">';
+                // Waveform visualization (simplified bars)
+                html += '<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">';
+                html += '<button onclick="toggleVoiceoverPlayback(' + scriptScene.id + ')" style="width: 36px; height: 36px; border-radius: 50%; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">▶</button>';
+                html += '<div id="waveform-' + scriptScene.id + '" style="flex: 1; height: 32px; background: rgba(139,92,246,0.15); border-radius: 0.25rem; display: flex; align-items: center; gap: 2px; padding: 0 0.5rem; overflow: hidden;">';
+                // Generate waveform bars
+                for (var i = 0; i < 40; i++) {
+                    var barHeight = 20 + Math.random() * 60;
+                    html += '<div style="flex: 1; height: ' + barHeight + '%; background: linear-gradient(to top, #8b5cf6, #a855f7); border-radius: 1px; min-width: 2px;"></div>';
+                }
+                html += '</div>';
+                html += '</div>';
+                html += '<audio id="voiceover-audio-' + scriptScene.id + '" src="' + voiceoverUrl + '" style="display: none;"></audio>';
+                html += '</div>';
+            }
+
+            // Voice Controls
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">';
+
+            // Voice Selection with Preview
+            html += '<div>';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">Voice</label>';
+            html += '<div style="display: flex; gap: 0.35rem;">';
+            html += '<select onchange="setSceneVoice(' + scriptScene.id + ', this.value)" style="flex: 1; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">';
+            var voices = ['alloy', 'nova', 'shimmer', 'echo', 'onyx', 'fable'];
+            voices.forEach(function(v) {
+                html += '<option value="' + v + '" ' + (voice === v ? 'selected' : '') + '>' + v.charAt(0).toUpperCase() + v.slice(1) + '</option>';
+            });
+            html += '</select>';
+            html += '<button onclick="previewVoice(\'' + voice + '\')" style="width: 36px; padding: 0.5rem; background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.4rem; color: #a78bfa; cursor: pointer; font-size: 0.8rem;" title="Preview voice">🔊</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Speed Control
+            html += '<div>';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">Speed: ' + speed.toFixed(1) + 'x</label>';
+            html += '<input type="range" min="0.5" max="2.0" step="0.1" value="' + speed + '" onchange="setSceneSpeed(' + scriptScene.id + ', this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #8b5cf6;">';
+            html += '</div>';
+            html += '</div>';
+
+            // Generate Button
+            var isGenerating = voiceoverStatus === 'generating';
+            html += '<button onclick="generateSceneVoiceover(' + scriptScene.id + ')" ' + (isGenerating ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (isGenerating ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #a855f7)') + '; color: ' + (isGenerating ? 'rgba(255,255,255,0.4)' : 'white') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (isGenerating ? 'wait' : 'pointer') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
+            if (isGenerating) {
+                html += '<span class="animate-spin">⏳</span> Generating...';
+            } else if (voiceoverUrl) {
+                html += '<span>🔄</span> Regenerate Voiceover';
+            } else {
+                html += '<span>🎙️</span> Generate Voiceover';
+            }
+            html += '</button>';
+
+            html += '</div>';
+            return html;
+        }
+
+        // Animation Style Gallery
+        function renderAnimationStyleGallery(sceneId, currentType, hasVoiceover, animationStatus) {
+            var styles = [
+                { id: 'ken_burns', name: 'Ken Burns', desc: 'Smooth zoom & pan', icon: '🎬', color: '#06b6d4' },
+                { id: 'talking_head', name: 'Talking Head', desc: 'Subtle movement', icon: '🗣️', color: '#8b5cf6' },
+                { id: 'static', name: 'Static', desc: 'No animation', icon: '🖼️', color: '#6b7280' }
+            ];
+
+            var html = '';
+            html += '<div style="background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.2); border-radius: 0.75rem; padding: 1rem;">';
+
+            // Header
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">';
+            html += '<span style="font-size: 1rem;">🎬</span>';
+            html += '<span style="font-size: 0.85rem; font-weight: 600; color: white;">Animation Style</span>';
+            html += '</div>';
+
+            // Style Cards Grid
+            html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.75rem;">';
+
+            styles.forEach(function(style) {
+                var isSelected = currentType === style.id;
+                html += '<div onclick="setSceneAnimationType(' + sceneId + ', \'' + style.id + '\')" style="padding: 0.6rem; background: ' + (isSelected ? 'rgba(6,182,212,0.2)' : 'rgba(255,255,255,0.03)') + '; border: 1px solid ' + (isSelected ? style.color : 'rgba(255,255,255,0.08)') + '; border-radius: 0.5rem; cursor: pointer; text-align: center; transition: all 0.15s;">';
+                html += '<div style="font-size: 1.25rem; margin-bottom: 0.25rem;">' + style.icon + '</div>';
+                html += '<div style="font-size: 0.7rem; font-weight: 600; color: ' + (isSelected ? style.color : 'white') + ';">' + style.name + '</div>';
+                html += '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">' + style.desc + '</div>';
+                html += '</div>';
+            });
+
+            html += '</div>';
+
+            // Animate Button
+            var isAnimating = animationStatus === 'generating';
+            var canAnimate = hasVoiceover && !isAnimating;
+            html += '<button onclick="animateScene(' + sceneId + ')" ' + (!canAnimate ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (canAnimate ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)') + '; color: ' + (canAnimate ? 'white' : 'rgba(255,255,255,0.4)') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (canAnimate ? 'pointer' : 'not-allowed') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
+            if (isAnimating) {
+                html += '<span class="animate-spin">⏳</span> Animating...';
+            } else if (!hasVoiceover) {
+                html += '<span>🔒</span> Generate voiceover first';
+            } else {
+                html += '<span>🎬</span> Create Animation';
+            }
+            html += '</button>';
+
+            html += '</div>';
+            return html;
+        }
+
+        // Bottom Batch Queue
+        function renderAnimationBatchQueue(animationScenes, storyboardScenes) {
+            var processing = animationScenes.filter(function(s) {
+                return s.voiceoverStatus === 'generating' || s.animationStatus === 'generating';
+            });
+
+            var html = '';
+            html += '<div style="flex-shrink: 0; background: rgba(15,15,28,0.98); border-top: 1px solid rgba(255,255,255,0.08); padding: 0.6rem 1.25rem;">';
+
+            if (processing.length > 0) {
+                html += '<div style="display: flex; align-items: center; gap: 1rem;">';
+                html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+                html += '<div class="animate-spin" style="width: 16px; height: 16px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>';
+                html += '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.7);">Processing ' + processing.length + ' scene(s)...</span>';
+                html += '</div>';
+
+                // Progress items
+                html += '<div style="display: flex; gap: 0.5rem; margin-left: auto;">';
+                processing.forEach(function(scene, idx) {
+                    var sceneNum = storyboardScenes.findIndex(function(s) { return s.sceneId === scene.sceneId; }) + 1;
+                    var type = scene.voiceoverStatus === 'generating' ? '🎙️' : '🎬';
+                    html += '<div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.25rem 0.5rem; background: rgba(139,92,246,0.15); border-radius: 0.3rem; font-size: 0.65rem; color: #a78bfa;">';
+                    html += '<span>' + type + '</span>';
+                    html += '<span>Scene ' + sceneNum + '</span>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                html += '</div>';
+            } else {
+                // Stats bar when not processing
+                var voiceoversDone = animationScenes.filter(function(s) { return s.voiceoverUrl; }).length;
+                var animationsDone = animationScenes.filter(function(s) { return s.videoUrl; }).length;
+                var total = storyboardScenes.length;
+
+                html += '<div style="display: flex; align-items: center; justify-content: space-between;">';
+                html += '<div style="display: flex; align-items: center; gap: 1.5rem;">';
+                html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">';
+                html += '<span style="color: #a78bfa;">🎙️ ' + voiceoversDone + '/' + total + '</span> voiceovers';
+                html += '</div>';
+                html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">';
+                html += '<span style="color: #06b6d4;">🎬 ' + animationsDone + '/' + total + '</span> animations';
+                html += '</div>';
+                html += '</div>';
+
+                // Overall progress bar
+                var progress = total > 0 ? Math.round((voiceoversDone / total) * 100) : 0;
+                html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+                html += '<div style="width: 120px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">';
+                html += '<div style="width: ' + progress + '%; height: 100%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); transition: width 0.3s;"></div>';
+                html += '</div>';
+                html += '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">' + progress + '%</span>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Helper functions for the new Animation Studio
+        function selectAnimationScene(sceneId) {
+            state.animation.selectedSceneId = sceneId;
+            render();
+        }
+
+        function playDetailPreview() {
+            var video = document.getElementById('detail-preview-video');
+            if (video) {
+                if (video.paused) {
+                    video.play();
+                } else {
+                    video.pause();
+                }
+            }
+        }
+
+        function toggleVoiceoverPlayback(sceneId) {
+            var audio = document.getElementById('voiceover-audio-' + sceneId);
+            if (audio) {
+                if (audio.paused) {
+                    audio.play();
+                } else {
+                    audio.pause();
+                }
+            }
+        }
+
+        function setSceneVoice(sceneId, voice) {
+            var scene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+            if (scene) {
+                scene.voice = voice;
+                saveProject();
+            }
+        }
+
+        function setSceneSpeed(sceneId, speed) {
+            var scene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+            if (scene) {
+                scene.speed = parseFloat(speed);
+                saveProject();
+                render();
+            }
+        }
+
+        function previewVoice(voiceName) {
+            // Create a quick sample preview of the selected voice
+            showToast('Voice preview: ' + voiceName.charAt(0).toUpperCase() + voiceName.slice(1), 'info');
         }
 
         function initializeAnimationScenes() {
