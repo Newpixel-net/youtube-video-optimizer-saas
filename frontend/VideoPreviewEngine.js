@@ -434,9 +434,19 @@ class VideoPreviewEngine {
             this._renderScene(currentScene);
         }
 
-        // Render captions
+        // Only render captions during the voiceover timing window
         if (this.captionsEnabled && currentScene.caption) {
-            this._renderCaption(currentScene);
+            const sceneLocalTime = this.currentTime - currentScene.startTime;
+            const voiceoverOffset = currentScene.voiceoverOffset || 0;
+            const voiceoverDuration = currentScene.voiceoverDuration || (currentScene.duration * 0.85);
+
+            // Check if we're within the voiceover window
+            const captionStart = voiceoverOffset;
+            const captionEnd = voiceoverOffset + voiceoverDuration;
+
+            if (sceneLocalTime >= captionStart && sceneLocalTime < captionEnd) {
+                this._renderCaption(currentScene);
+            }
         }
 
         // Update current scene index
