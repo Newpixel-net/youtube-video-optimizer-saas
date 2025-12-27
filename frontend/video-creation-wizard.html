@@ -2663,8 +2663,7 @@
             { num: 3, label: 'Script', icon: '📝' },
             { num: 4, label: 'Storyboard', icon: '🖼️' },
             { num: 5, label: 'Animation', icon: '🎬' },
-            { num: 6, label: 'Assembly', icon: '🔧' },
-            { num: 7, label: 'Export', icon: '📤' }
+            { num: 6, label: 'Edit and Export', icon: '🎬' }
         ];
 
         // ==========================================
@@ -2822,8 +2821,9 @@
                 volume: 100
             },
 
-            // Step 7: Export
+            // Export (modal in Step 6)
             export: {
+                showModal: false,
                 status: 'idle',
                 jobId: null,
                 progress: 0,
@@ -5241,31 +5241,6 @@
 
             let html = '';
 
-            // Step 7 (Export) uses a full-screen fixed editor layout
-            if (state.currentStep === 7) {
-                html = renderFullScreenEditor();
-                app.innerHTML = html;
-                attachEventListeners();
-
-                // Reattach preview engine to canvas if needed
-                if (previewEngine && state.preview.isReady) {
-                    const newCanvas = document.getElementById('timeline-preview-canvas');
-                    if (newCanvas && previewEngine.canvas !== newCanvas) {
-                        if (!state.preview.isPlaying) {
-                            previewEngine.attachToCanvas(newCanvas);
-                        } else {
-                            // If playing, update canvas reference AND set dimensions
-                            // CRITICAL: Must set canvas.width/height to match engine dimensions
-                            previewEngine.canvas = newCanvas;
-                            previewEngine.ctx = newCanvas.getContext('2d');
-                            newCanvas.width = previewEngine.width;
-                            newCanvas.height = previewEngine.height;
-                        }
-                    }
-                }
-                return;
-            }
-
             // Normal wizard layout for steps 1-6
             // Header bar
             html += renderHeaderBar();
@@ -6997,7 +6972,7 @@
             html += '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">' + sceneCountText + ' • ' + durationText + '</span>';
             html += '<button onclick="saveAssemblySettings()" style="padding: 0.4rem 0.75rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer;">💾 Save</button>';
             html += '<button onclick="goToStep(5)" style="padding: 0.4rem 0.75rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; font-size: 0.75rem; cursor: pointer;">← Back</button>';
-            html += '<button onclick="goToStep(7)" style="padding: 0.4rem 0.75rem; border-radius: 0.4rem; border: none; background: #10b981; color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer;">Export →</button>';
+            html += '<button onclick="openExportModal()" style="padding: 0.4rem 0.75rem; border-radius: 0.4rem; border: none; background: #10b981; color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer;">🚀 Export</button>';
             html += '</div>';
             html += '</div>';
 
@@ -7027,6 +7002,11 @@
             html += '</div>';
 
             html += '</div>'; // Close fixed container
+
+            // Add export modal if open
+            if (state.export.showModal) {
+                html += renderExportModal();
+            }
 
             return html;
         }
@@ -7074,7 +7054,7 @@
                             <button onclick="initializePreviewEngine()" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 0.4rem; color: #10b981; cursor: pointer; font-size: 0.7rem;">
                                 <span>▶</span> Preview
                             </button>
-                            <button onclick="goToStep(7)" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.4rem; color: #a78bfa; cursor: pointer; font-size: 0.7rem;">
+                            <button onclick="openExportModal()" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.4rem; color: #a78bfa; cursor: pointer; font-size: 0.7rem;">
                                 <span>🚀</span> Export
                             </button>
                         </div>
@@ -11563,6 +11543,356 @@
                     editCount: editHistory.position
                 }
             };
+        }
+
+        // ==========================================
+        // EXPORT MODAL FUNCTIONS
+        // ==========================================
+
+        function openExportModal() {
+            state.export.showModal = true;
+            render();
+        }
+
+        function closeExportModal() {
+            // Only allow closing if not actively exporting
+            if (state.export.status === 'exporting' || state.export.status === 'processing') {
+                showToast('Please wait for export to complete or cancel it first', 'warning');
+                return;
+            }
+            state.export.showModal = false;
+            render();
+        }
+
+        function exportAgain() {
+            state.export.status = 'idle';
+            state.export.progress = 0;
+            state.export.outputUrl = null;
+            state.export.error = null;
+            render();
+        }
+
+        function retryExport() {
+            state.export.status = 'idle';
+            state.export.progress = 0;
+            state.export.error = null;
+            render();
+        }
+
+        function cancelExport() {
+            // Reset export state
+            state.export.status = 'idle';
+            state.export.progress = 0;
+            state.export.jobId = null;
+            state.export.currentStage = null;
+            showToast('Export cancelled', 'info');
+            render();
+        }
+
+        function renderExportModal() {
+            var exportState = state.export || {};
+            var isExporting = exportState.status === 'exporting' || exportState.status === 'processing';
+            var isCompleted = exportState.status === 'completed';
+            var isFailed = exportState.status === 'failed' || exportState.status === 'error';
+
+            // Build modal content based on state
+            var modalContent = '';
+
+            if (isExporting) {
+                modalContent = renderExportProgressContent(exportState);
+            } else if (isCompleted && exportState.outputUrl) {
+                modalContent = renderExportCompleteContent(exportState);
+            } else if (isFailed) {
+                modalContent = renderExportFailedContent(exportState);
+            } else {
+                modalContent = renderExportConfigContent();
+            }
+
+            // Modal wrapper
+            var html = '';
+            html += '<div id="export-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 2000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">';
+            html += '<div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">';
+
+            // Modal header (only show close button if not exporting)
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">';
+            html += '<div style="display: flex; align-items: center; gap: 0.75rem;">';
+            html += '<span style="font-size: 1.5rem;">🚀</span>';
+            html += '<span style="font-size: 1.1rem; font-weight: 600; color: white;">Export Video</span>';
+            html += '</div>';
+
+            if (!isExporting) {
+                html += '<button onclick="closeExportModal()" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center;">×</button>';
+            }
+
+            html += '</div>';
+
+            // Modal content
+            html += '<div style="padding: 1.5rem;">';
+            html += modalContent;
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+
+            return html;
+        }
+
+        function renderExportConfigContent() {
+            var scriptScenes = state.script.scenes || [];
+            var animationScenes = state.animation.scenes || [];
+            var storyboardScenes = state.storyboard.scenes || [];
+            var animatedCount = animationScenes.filter(function(s) { return s.videoUrl; }).length;
+            var imageCount = storyboardScenes.filter(function(s) { return s.imageUrl; }).length;
+            var totalDuration = scriptScenes.reduce(function(sum, s) { return sum + (s.duration || 8); }, 0);
+            var platform = PLATFORM_PRESETS[state.platform.selected] || {};
+
+            var selectedQuality = state.export.selectedQuality || '1080p';
+            var canExport = animatedCount > 0 || imageCount > 0;
+
+            var html = '';
+
+            // Video Summary
+            html += '<div style="margin-bottom: 1.5rem;">';
+            html += '<div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.75rem;">📋 Video Summary</div>';
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">';
+
+            html += '<div style="padding: 0.6rem; background: rgba(255,255,255,0.05); border-radius: 0.4rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Platform</div>';
+            html += '<div style="font-size: 0.85rem; color: white;">' + (platform.icon || '📺') + ' ' + (platform.name || 'YouTube') + '</div>';
+            html += '</div>';
+
+            html += '<div style="padding: 0.6rem; background: rgba(255,255,255,0.05); border-radius: 0.4rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Duration</div>';
+            html += '<div style="font-size: 0.85rem; color: white;">' + formatDuration(totalDuration) + '</div>';
+            html += '</div>';
+
+            var imageColor = imageCount === scriptScenes.length ? '#10b981' : (imageCount > 0 ? '#06b6d4' : '#f59e0b');
+            html += '<div style="padding: 0.6rem; background: rgba(255,255,255,0.05); border-radius: 0.4rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Images</div>';
+            html += '<div style="font-size: 0.85rem; color: ' + imageColor + ';">' + imageCount + '/' + scriptScenes.length + '</div>';
+            html += '</div>';
+
+            var animColor = animatedCount === scriptScenes.length ? '#10b981' : (animatedCount > 0 ? '#06b6d4' : 'rgba(255,255,255,0.4)');
+            html += '<div style="padding: 0.6rem; background: rgba(255,255,255,0.05); border-radius: 0.4rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Animated</div>';
+            html += '<div style="font-size: 0.85rem; color: ' + animColor + ';">' + animatedCount + '/' + scriptScenes.length + '</div>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+
+            // Info message about Ken Burns
+            if (canExport && animatedCount < scriptScenes.length) {
+                html += '<div style="margin-bottom: 1.25rem; padding: 0.75rem; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.3); border-radius: 0.5rem;">';
+                html += '<div style="font-size: 0.8rem; color: #06b6d4;">';
+                if (animatedCount === 0) {
+                    html += 'Using Ken Burns effect on images (animation optional)';
+                } else {
+                    html += (scriptScenes.length - animatedCount) + ' scene(s) will use Ken Burns effect';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Quality Selection
+            html += '<div style="margin-bottom: 1.25rem;">';
+            html += '<div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.75rem;">⚙️ Export Quality</div>';
+            html += '<div style="display: flex; gap: 0.5rem;">';
+
+            var qualities = Object.entries(EXPORT_QUALITIES);
+            for (var i = 0; i < qualities.length; i++) {
+                var id = qualities[i][0];
+                var q = qualities[i][1];
+                var isSelected = selectedQuality === id;
+                var borderColor = isSelected ? 'rgba(139,92,246,0.6)' : 'rgba(255,255,255,0.15)';
+                var bgColor = isSelected ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)';
+
+                html += '<button onclick="setExportQuality(\'' + id + '\')" style="flex: 1; padding: 0.75rem 0.5rem; border-radius: 0.5rem; border: 1px solid ' + borderColor + '; background: ' + bgColor + '; color: white; cursor: pointer; text-align: center;">';
+                html += '<div style="font-size: 1rem;">' + q.icon + '</div>';
+                html += '<div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.25rem;">' + id + '</div>';
+                html += '</button>';
+            }
+
+            html += '</div>';
+            html += '</div>';
+
+            // Export Button
+            if (!canExport) {
+                html += '<div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 0.5rem;">';
+                html += '<div style="font-size: 0.8rem; color: #ef4444;">Generate images in Storyboard step first</div>';
+                html += '</div>';
+            }
+
+            var exportBtnBg = canExport ? 'linear-gradient(135deg, #8b5cf6, #06b6d4)' : 'rgba(255,255,255,0.1)';
+            var exportBtnColor = canExport ? 'white' : 'rgba(255,255,255,0.4)';
+            var exportBtnCursor = canExport ? 'pointer' : 'not-allowed';
+
+            html += '<button onclick="startExport()" ' + (canExport ? '' : 'disabled') + ' style="width: 100%; padding: 1rem; border-radius: 0.75rem; border: none; background: ' + exportBtnBg + '; color: ' + exportBtnColor + '; font-size: 1rem; font-weight: 700; cursor: ' + exportBtnCursor + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
+            html += '<span>🚀</span>';
+            html += '<span>Start Export</span>';
+            html += '</button>';
+
+            return html;
+        }
+
+        function renderExportProgressContent(exportState) {
+            var progress = exportState.progress || 0;
+            var currentStage = exportState.currentStage || 'Starting export...';
+            var scenesCompleted = exportState.scenesCompleted || 0;
+            var scenesTotal = exportState.scenesTotal || 0;
+            var sceneStatuses = exportState.sceneStatuses || [];
+
+            var html = '';
+            html += '<div style="text-align: center;">';
+
+            // Animated icon
+            html += '<div style="font-size: 3rem; margin-bottom: 1rem;">';
+            html += '<div class="animate-pulse" style="display: inline-block;">🎬</div>';
+            html += '</div>';
+
+            html += '<div style="font-size: 1.25rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">Rendering Your Video</div>';
+            html += '<div id="export-stage-text" style="color: rgba(255,255,255,0.7); margin-bottom: 1.25rem; font-size: 0.9rem;">' + currentStage + '</div>';
+
+            // Scene progress indicators
+            if (scenesTotal > 0) {
+                html += '<div style="display: flex; justify-content: center; gap: 0.4rem; margin-bottom: 1rem; flex-wrap: wrap;">';
+                for (var i = 0; i < scenesTotal; i++) {
+                    var sceneStatus = sceneStatuses[i];
+                    var status = sceneStatus ? sceneStatus.status : 'queued';
+                    var isComplete = status === 'complete';
+                    var isFailed = status === 'failed';
+                    var isRendering = status === 'rendering';
+
+                    var bgColor = 'rgba(255,255,255,0.1)';
+                    var icon = (i + 1);
+                    var extraStyle = '';
+
+                    if (isComplete) {
+                        bgColor = 'rgba(34,197,94,0.4)';
+                        icon = '✓';
+                        extraStyle = 'border: 2px solid rgba(34,197,94,0.6);';
+                    } else if (isFailed) {
+                        bgColor = 'rgba(239,68,68,0.4)';
+                        icon = '✗';
+                        extraStyle = 'border: 2px solid rgba(239,68,68,0.6);';
+                    } else if (isRendering) {
+                        bgColor = 'rgba(139,92,246,0.4)';
+                        extraStyle = 'animation: pulse 2s infinite; border: 2px solid rgba(139,92,246,0.6);';
+                    }
+
+                    html += '<div style="width: 2rem; height: 2rem; border-radius: 50%; background: ' + bgColor + '; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; color: white; ' + extraStyle + '">' + icon + '</div>';
+                }
+                html += '</div>';
+                html += '<div style="color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-bottom: 1rem;">' + scenesCompleted + ' of ' + scenesTotal + ' scenes complete</div>';
+            }
+
+            // Progress bar
+            html += '<div style="margin-bottom: 1.25rem;">';
+            html += '<div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden;">';
+            html += '<div id="export-progress-bar" style="height: 100%; width: ' + progress + '%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); border-radius: 5px; transition: width 0.5s ease;"></div>';
+            html += '</div>';
+            html += '<div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.8rem;">';
+            html += '<span style="color: rgba(255,255,255,0.5);">Progress</span>';
+            html += '<span id="export-progress-text" style="color: #8b5cf6; font-weight: 700;">' + progress + '%</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Processing indicator
+            html += '<div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 1.25rem;">';
+            html += '<div class="animate-spin" style="width: 1rem; height: 1rem; border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>';
+            html += '<span style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">Processing on server...</span>';
+            html += '</div>';
+
+            // Cancel button
+            html += '<button onclick="cancelExport()" style="padding: 0.5rem 1.25rem; border-radius: 0.5rem; border: 1px solid rgba(239,68,68,0.4); background: rgba(239,68,68,0.1); color: #ef4444; cursor: pointer; font-size: 0.8rem;">Cancel Export</button>';
+
+            html += '<div style="margin-top: 1rem; color: rgba(255,255,255,0.4); font-size: 0.7rem;">Please don\'t close this page while exporting</div>';
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderExportCompleteContent(exportState) {
+            var outputUrl = exportState.outputUrl;
+            var totalScenes = (state.script.scenes || []).length;
+            var totalDuration = (state.script.scenes || []).reduce(function(sum, s) { return sum + (s.duration || 8); }, 0);
+
+            var html = '';
+            html += '<div style="text-align: center;">';
+
+            html += '<div style="font-size: 3rem; margin-bottom: 1rem;">🎉</div>';
+            html += '<div style="font-size: 1.25rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">Video Export Complete!</div>';
+            html += '<div style="color: rgba(255,255,255,0.6); margin-bottom: 1.25rem;">Your video is ready to download and share</div>';
+
+            // Video preview
+            if (outputUrl) {
+                html += '<div style="margin-bottom: 1.25rem; border-radius: 0.75rem; overflow: hidden; border: 2px solid rgba(139,92,246,0.3);">';
+                html += '<video id="export-preview-video" src="' + outputUrl + '" controls style="width: 100%; display: block; background: black;"></video>';
+                html += '</div>';
+
+                html += '<div style="display: flex; justify-content: center; gap: 1.5rem; margin-bottom: 1.25rem; color: rgba(255,255,255,0.6); font-size: 0.8rem;">';
+                html += '<span>📹 ' + totalScenes + ' scenes</span>';
+                html += '<span>⏱️ ' + formatDuration(totalDuration) + '</span>';
+                html += '<span>🎬 MP4 format</span>';
+                html += '</div>';
+            }
+
+            // Action buttons
+            html += '<div style="display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem;">';
+
+            if (outputUrl) {
+                html += '<button onclick="downloadExportedVideo()" style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 700; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">';
+                html += '<span>⬇️</span>';
+                html += '<span>Download Video</span>';
+                html += '</button>';
+            }
+
+            html += '<button onclick="exportAgain()" style="padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span>🔄</span>';
+            html += '<span>Export Again</span>';
+            html += '</button>';
+
+            html += '<button onclick="closeExportModal()" style="padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-weight: 600;">Close</button>';
+
+            html += '</div>';
+
+            // Share info
+            if (outputUrl) {
+                html += '<div style="padding: 1rem; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 0.5rem;">';
+                html += '<div style="font-size: 0.85rem; color: #10b981; margin-bottom: 0.25rem; font-weight: 600;">✅ Ready to upload!</div>';
+                html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Download your video and upload it directly to YouTube, TikTok, Instagram, or any other platform.</div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function renderExportFailedContent(exportState) {
+            var error = exportState.error || 'An unknown error occurred';
+
+            var html = '';
+            html += '<div style="text-align: center;">';
+
+            html += '<div style="font-size: 3rem; margin-bottom: 1rem;">❌</div>';
+            html += '<div style="font-size: 1.25rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">Export Failed</div>';
+            html += '<div style="color: rgba(255,255,255,0.6); margin-bottom: 1rem;">Something went wrong during export</div>';
+
+            html += '<div style="margin-bottom: 1.5rem; padding: 0.75rem; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 0.5rem;">';
+            html += '<div style="font-size: 0.8rem; color: #ef4444;">' + error + '</div>';
+            html += '</div>';
+
+            html += '<div style="display: flex; justify-content: center; gap: 0.75rem;">';
+            html += '<button onclick="retryExport()" style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span>🔄</span>';
+            html += '<span>Try Again</span>';
+            html += '</button>';
+
+            html += '<button onclick="closeExportModal()" style="padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-weight: 600;">Close</button>';
+            html += '</div>';
+
+            html += '</div>';
+            return html;
         }
 
         function setExportQuality(quality) {
