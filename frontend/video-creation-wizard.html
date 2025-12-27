@@ -8104,87 +8104,8 @@
                         </div>
                     </div>
 
-                    <!-- Bottom: Timeline -->
-                    <div style="
-                        height: 180px;
-                        min-height: 180px;
-                        background: rgba(10, 10, 20, 0.98);
-                        border-top: 1px solid rgba(255,255,255,0.15);
-                        display: flex;
-                        flex-direction: column;
-                    ">
-                        <!-- Timeline Header -->
-                        <div style="
-                            height: 36px;
-                            min-height: 36px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: space-between;
-                            padding: 0 1rem;
-                            background: rgba(0,0,0,0.3);
-                            border-bottom: 1px solid rgba(255,255,255,0.1);
-                        ">
-                            <!-- Left: Edit Tools -->
-                            <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                <button onclick="undoEdit()" ${!editHistory.canUndo() ? 'disabled' : ''} title="Undo" style="padding: 0.2rem 0.4rem; border-radius: 0.2rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${editHistory.canUndo() ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${editHistory.canUndo() ? 'pointer' : 'not-allowed'}; font-size: 0.7rem;">↶</button>
-                                <button onclick="redoEdit()" ${!editHistory.canRedo() ? 'disabled' : ''} title="Redo" style="padding: 0.2rem 0.4rem; border-radius: 0.2rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${editHistory.canRedo() ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${editHistory.canRedo() ? 'pointer' : 'not-allowed'}; font-size: 0.7rem;">↷</button>
-                                <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.2); margin: 0 0.2rem;"></div>
-                                <button onclick="splitClipAtPlayhead()" ${!isReady ? 'disabled' : ''} title="Split" style="padding: 0.2rem 0.4rem; border-radius: 0.2rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: ${isReady ? 'white' : 'rgba(255,255,255,0.3)'}; cursor: ${isReady ? 'pointer' : 'not-allowed'}; font-size: 0.7rem;">✂️</button>
-                                <button onclick="deleteSelectedClip()" ${!selectedClipId ? 'disabled' : ''} title="Delete" style="padding: 0.2rem 0.4rem; border-radius: 0.2rem; border: 1px solid ${selectedClipId ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.2)'}; background: transparent; color: ${selectedClipId ? '#ef4444' : 'rgba(255,255,255,0.3)'}; cursor: ${selectedClipId ? 'pointer' : 'not-allowed'}; font-size: 0.7rem;">🗑️</button>
-                            </div>
-
-                            <!-- Center: Timeline Label -->
-                            <div style="font-size: 0.8rem; font-weight: 600; color: white; display: flex; align-items: center; gap: 0.5rem;">
-                                <span>🎞️</span> Timeline
-                            </div>
-
-                            <!-- Right: Zoom Controls -->
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.7rem; color: rgba(255,255,255,0.6);">
-                                    <input type="checkbox" ${snapToGrid ? 'checked' : ''} onchange="toggleTimelineSnap(this.checked)" style="cursor: pointer; width: 12px; height: 12px;">
-                                    Snap
-                                </label>
-                                <div style="display: flex; align-items: center; gap: 0.3rem;">
-                                    <button onclick="zoomTimeline(-10)" style="width: 22px; height: 22px; border-radius: 0.2rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 0.8rem;">−</button>
-                                    <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5); min-width: 40px; text-align: center;">${zoom}px/s</span>
-                                    <button onclick="zoomTimeline(10)" style="width: 22px; height: 22px; border-radius: 0.2rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 0.8rem;">+</button>
-                                </div>
-                                <button onclick="fitTimelineToView()" style="padding: 0.2rem 0.4rem; border-radius: 0.2rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 0.65rem;">Fit</button>
-                            </div>
-                        </div>
-
-                        <!-- Timeline Tracks -->
-                        <div id="timeline-scroll-container" style="flex: 1; overflow-x: auto; overflow-y: hidden;" onscroll="handleTimelineScroll(this)">
-                            <div style="position: relative; min-width: ${Math.max(timelineWidth + 100, 800)}px; height: 100%;">
-                                <!-- Time Ruler -->
-                                ${renderTimeRuler(totalDuration, zoom)}
-
-                                <!-- Playhead -->
-                                <div id="timeline-playhead" style="position: absolute; top: 26px; left: ${80 + (currentTime * zoom)}px; width: 2px; height: calc(100% - 26px); background: #ef4444; z-index: 100; pointer-events: none;">
-                                    <div style="position: absolute; top: -6px; left: -5px; width: 12px; height: 12px; background: #ef4444; border-radius: 2px; transform: rotate(45deg);"></div>
-                                </div>
-
-                                <!-- Track Labels + Tracks -->
-                                <div style="display: flex; height: calc(100% - 26px);">
-                                    <!-- Track Labels -->
-                                    <div style="width: 80px; flex-shrink: 0; background: rgba(0,0,0,0.3); border-right: 1px solid rgba(255,255,255,0.1);">
-                                        <div style="height: 50px; display: flex; align-items: center; padding-left: 0.6rem; font-size: 0.7rem; color: rgba(255,255,255,0.7); border-bottom: 1px solid rgba(255,255,255,0.05);">🎬 Video</div>
-                                        <div style="height: 32px; display: flex; align-items: center; padding-left: 0.6rem; font-size: 0.7rem; color: rgba(255,255,255,0.7); border-bottom: 1px solid rgba(255,255,255,0.05);">🎙️ Voice</div>
-                                        <div style="height: 24px; display: flex; align-items: center; padding-left: 0.6rem; font-size: 0.7rem; color: rgba(255,255,255,0.7); border-bottom: 1px solid rgba(255,255,255,0.05);">🎵 Music</div>
-                                        <div style="height: 24px; display: flex; align-items: center; padding-left: 0.6rem; font-size: 0.7rem; color: rgba(255,255,255,0.7);">💬 Captions</div>
-                                    </div>
-
-                                    <!-- Tracks Content -->
-                                    <div style="flex: 1; position: relative;">
-                                        ${renderCompactVideoTrack(scriptScenes, animationScenes, zoom, selectedClipId)}
-                                        ${renderCompactVoiceTrack(scriptScenes, animationScenes, zoom)}
-                                        ${renderCompactMusicTrack(totalDuration, zoom)}
-                                        ${renderCompactCaptionTrack(scriptScenes, zoom)}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Bottom: Professional Timeline -->
+                    ${renderProfessionalTimeline(scriptScenes, animationScenes, totalDuration, zoom, snapToGrid, selectedClipId, currentTime, isReady)}
                 </div>
             `;
         }
@@ -8408,7 +8329,466 @@
             `;
         }
 
-        // Compact track renderers for full-screen editor
+        // ==========================================
+        // PROFESSIONAL TIMELINE COMPONENT
+        // ==========================================
+
+        function renderProfessionalTimeline(scriptScenes, animationScenes, totalDuration, zoom, snapToGrid, selectedClipId, currentTime, isReady) {
+            const timelineWidth = totalDuration * zoom;
+            const trackLabelWidth = 100;
+
+            return `
+                <div class="pro-timeline" style="
+                    height: 280px;
+                    min-height: 280px;
+                    background: linear-gradient(180deg, rgba(15, 15, 25, 0.98) 0%, rgba(10, 10, 18, 0.99) 100%);
+                    border-top: 1px solid rgba(139, 92, 246, 0.3);
+                    display: flex;
+                    flex-direction: column;
+                    box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+                ">
+                    <!-- Timeline Toolbar -->
+                    <div style="
+                        height: 40px;
+                        min-height: 40px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        padding: 0 1rem;
+                        background: linear-gradient(90deg, rgba(139, 92, 246, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%);
+                        border-bottom: 1px solid rgba(255,255,255,0.08);
+                    ">
+                        <!-- Left: Transport & Edit Tools -->
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <!-- Transport -->
+                            <div style="display: flex; align-items: center; gap: 0.25rem; padding-right: 0.5rem; border-right: 1px solid rgba(255,255,255,0.15);">
+                                <button onclick="seekTimelineStart()" title="Go to Start" style="width: 28px; height: 28px; border-radius: 4px; border: none; background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 0.75rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">⏮</button>
+                                <button onclick="toggleTimelinePlayback()" title="Play/Pause" style="width: 32px; height: 32px; border-radius: 6px; border: none; background: ${isReady ? 'linear-gradient(135deg, #8b5cf6, #06b6d4)' : 'rgba(255,255,255,0.1)'}; color: white; cursor: ${isReady ? 'pointer' : 'not-allowed'}; font-size: 0.9rem; box-shadow: ${isReady ? '0 2px 8px rgba(139,92,246,0.4)' : 'none'};">${state.preview.isPlaying ? '⏸' : '▶'}</button>
+                                <button onclick="seekTimelineEnd()" title="Go to End" style="width: 28px; height: 28px; border-radius: 4px; border: none; background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 0.75rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">⏭</button>
+                            </div>
+
+                            <!-- Edit Tools -->
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                <button onclick="undoEdit()" ${!editHistory.canUndo() ? 'disabled' : ''} title="Undo (Ctrl+Z)" style="width: 28px; height: 28px; border-radius: 4px; border: none; background: ${editHistory.canUndo() ? 'rgba(255,255,255,0.08)' : 'transparent'}; color: ${editHistory.canUndo() ? 'white' : 'rgba(255,255,255,0.25)'}; cursor: ${editHistory.canUndo() ? 'pointer' : 'not-allowed'}; font-size: 0.8rem;">↶</button>
+                                <button onclick="redoEdit()" ${!editHistory.canRedo() ? 'disabled' : ''} title="Redo (Ctrl+Y)" style="width: 28px; height: 28px; border-radius: 4px; border: none; background: ${editHistory.canRedo() ? 'rgba(255,255,255,0.08)' : 'transparent'}; color: ${editHistory.canRedo() ? 'white' : 'rgba(255,255,255,0.25)'}; cursor: ${editHistory.canRedo() ? 'pointer' : 'not-allowed'}; font-size: 0.8rem;">↷</button>
+                                <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 0.25rem;"></div>
+                                <button onclick="splitClipAtPlayhead()" ${!isReady ? 'disabled' : ''} title="Split at Playhead (S)" style="padding: 0.35rem 0.6rem; border-radius: 4px; border: none; background: ${isReady ? 'rgba(255,255,255,0.08)' : 'transparent'}; color: ${isReady ? 'white' : 'rgba(255,255,255,0.25)'}; cursor: ${isReady ? 'pointer' : 'not-allowed'}; font-size: 0.75rem; display: flex; align-items: center; gap: 0.3rem;"><span>✂</span> Split</button>
+                                <button onclick="deleteSelectedClip()" ${!selectedClipId ? 'disabled' : ''} title="Delete Selected (Del)" style="padding: 0.35rem 0.6rem; border-radius: 4px; border: none; background: ${selectedClipId ? 'rgba(239,68,68,0.15)' : 'transparent'}; color: ${selectedClipId ? '#f87171' : 'rgba(255,255,255,0.25)'}; cursor: ${selectedClipId ? 'pointer' : 'not-allowed'}; font-size: 0.75rem; display: flex; align-items: center; gap: 0.3rem;"><span>🗑</span> Delete</button>
+                            </div>
+                        </div>
+
+                        <!-- Center: Timeline Title & Time -->
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 1rem;">🎬</span>
+                                <span style="font-size: 0.85rem; font-weight: 600; color: white;">Timeline</span>
+                            </div>
+                            <div style="font-family: 'SF Mono', Monaco, monospace; font-size: 0.85rem; color: #8b5cf6; background: rgba(139,92,246,0.1); padding: 0.3rem 0.6rem; border-radius: 4px; border: 1px solid rgba(139,92,246,0.2);">
+                                ${formatTimecode(currentTime)} <span style="color: rgba(255,255,255,0.3);">/</span> ${formatTimecode(totalDuration)}
+                            </div>
+                        </div>
+
+                        <!-- Right: Zoom & View Controls -->
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.75rem; color: rgba(255,255,255,0.7); padding: 0.3rem 0.5rem; background: ${snapToGrid ? 'rgba(139,92,246,0.15)' : 'transparent'}; border-radius: 4px; border: 1px solid ${snapToGrid ? 'rgba(139,92,246,0.3)' : 'transparent'};">
+                                <input type="checkbox" ${snapToGrid ? 'checked' : ''} onchange="toggleTimelineSnap(this.checked)" style="cursor: pointer; accent-color: #8b5cf6;">
+                                <span>Snap</span>
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 0.3rem; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 0.2rem;">
+                                <button onclick="zoomTimeline(-10)" title="Zoom Out" style="width: 26px; height: 26px; border-radius: 4px; border: none; background: transparent; color: white; cursor: pointer; font-size: 0.9rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">−</button>
+                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.6); min-width: 50px; text-align: center; font-family: monospace;">${zoom}px/s</div>
+                                <button onclick="zoomTimeline(10)" title="Zoom In" style="width: 26px; height: 26px; border-radius: 4px; border: none; background: transparent; color: white; cursor: pointer; font-size: 0.9rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">+</button>
+                            </div>
+                            <button onclick="fitTimelineToView()" title="Fit to View" style="padding: 0.35rem 0.6rem; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 0.75rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">Fit</button>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Content Area -->
+                    <div id="timeline-scroll-container" style="flex: 1; overflow-x: auto; overflow-y: hidden; position: relative;" onscroll="handleTimelineScroll(this)">
+                        <div style="position: relative; min-width: ${Math.max(timelineWidth + 150, 900)}px; height: 100%; display: flex;">
+
+                            <!-- Track Labels Column -->
+                            <div style="width: ${trackLabelWidth}px; min-width: ${trackLabelWidth}px; flex-shrink: 0; background: rgba(0,0,0,0.4); border-right: 1px solid rgba(255,255,255,0.1); position: sticky; left: 0; z-index: 10;">
+                                <!-- Time Ruler Label -->
+                                <div style="height: 28px; border-bottom: 1px solid rgba(255,255,255,0.1);"></div>
+
+                                <!-- Video Track Label -->
+                                <div style="height: 75px; display: flex; align-items: center; padding: 0 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); background: linear-gradient(90deg, rgba(139,92,246,0.08) 0%, transparent 100%);">
+                                    <div style="flex: 1; display: flex; flex-direction: column; gap: 0.2rem;">
+                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                            <span style="font-size: 0.9rem;">🎬</span>
+                                            <span style="font-size: 0.75rem; font-weight: 600; color: white;">Video</span>
+                                        </div>
+                                        <span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">${scriptScenes.length} clips</span>
+                                    </div>
+                                    <button onclick="toggleTrackMute('video')" title="Mute Track" style="width: 22px; height: 22px; border-radius: 3px; border: none; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.6rem;">🔊</button>
+                                </div>
+
+                                <!-- Voice Track Label -->
+                                <div style="height: 50px; display: flex; align-items: center; padding: 0 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); background: linear-gradient(90deg, rgba(6,182,212,0.08) 0%, transparent 100%);">
+                                    <div style="flex: 1; display: flex; flex-direction: column; gap: 0.2rem;">
+                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                            <span style="font-size: 0.9rem;">🎙</span>
+                                            <span style="font-size: 0.75rem; font-weight: 600; color: white;">Voice</span>
+                                        </div>
+                                        <span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">Narration</span>
+                                    </div>
+                                    <button onclick="toggleTrackMute('voice')" title="Mute Track" style="width: 22px; height: 22px; border-radius: 3px; border: none; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.6rem;">🔊</button>
+                                </div>
+
+                                <!-- Music Track Label -->
+                                <div style="height: 40px; display: flex; align-items: center; padding: 0 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); background: linear-gradient(90deg, rgba(16,185,129,0.08) 0%, transparent 100%);">
+                                    <div style="flex: 1; display: flex; flex-direction: column; gap: 0.1rem;">
+                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                            <span style="font-size: 0.85rem;">🎵</span>
+                                            <span style="font-size: 0.75rem; font-weight: 600; color: white;">Music</span>
+                                        </div>
+                                    </div>
+                                    <button onclick="toggleTrackMute('music')" title="Mute Track" style="width: 22px; height: 22px; border-radius: 3px; border: none; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.6rem;">🔊</button>
+                                </div>
+
+                                <!-- Caption Track Label -->
+                                <div style="height: 35px; display: flex; align-items: center; padding: 0 0.5rem; background: linear-gradient(90deg, rgba(245,158,11,0.08) 0%, transparent 100%);">
+                                    <div style="flex: 1; display: flex; align-items: center; gap: 0.4rem;">
+                                        <span style="font-size: 0.85rem;">💬</span>
+                                        <span style="font-size: 0.75rem; font-weight: 600; color: white;">Captions</span>
+                                    </div>
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: ${state.assembly.captions?.enabled ? '#10b981' : 'rgba(255,255,255,0.2)'};"></div>
+                                </div>
+                            </div>
+
+                            <!-- Tracks Content Area -->
+                            <div style="flex: 1; position: relative;">
+                                <!-- Time Ruler -->
+                                ${renderProTimeRuler(totalDuration, zoom)}
+
+                                <!-- Playhead -->
+                                <div id="timeline-playhead" style="position: absolute; top: 0; left: ${currentTime * zoom}px; width: 2px; height: 100%; z-index: 50; pointer-events: none;">
+                                    <!-- Playhead Head -->
+                                    <div style="position: absolute; top: 0; left: -7px; width: 16px; height: 16px; background: linear-gradient(180deg, #ef4444, #dc2626); border-radius: 3px 3px 0 0; display: flex; align-items: center; justify-content: center;">
+                                        <div style="width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid white; margin-top: 2px;"></div>
+                                    </div>
+                                    <!-- Playhead Line -->
+                                    <div style="position: absolute; top: 16px; left: 0; width: 2px; height: calc(100% - 16px); background: linear-gradient(180deg, #ef4444 0%, rgba(239,68,68,0.6) 100%); box-shadow: 0 0 8px rgba(239,68,68,0.5);"></div>
+                                </div>
+
+                                <!-- Tracks -->
+                                <div style="position: absolute; top: 28px; left: 0; right: 0; bottom: 0;">
+                                    ${renderProVideoTrack(scriptScenes, animationScenes, zoom, selectedClipId)}
+                                    ${renderProVoiceTrack(scriptScenes, animationScenes, zoom)}
+                                    ${renderProMusicTrack(totalDuration, zoom)}
+                                    ${renderProCaptionTrack(scriptScenes, zoom)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderProTimeRuler(totalDuration, zoom) {
+            let tickInterval = 1;
+            if (zoom < 15) tickInterval = 10;
+            else if (zoom < 30) tickInterval = 5;
+            else if (zoom < 60) tickInterval = 2;
+            else tickInterval = 1;
+
+            let rulerHtml = `<div style="height: 28px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.15); position: relative; cursor: pointer;" onclick="seekTimelineFromRuler(event)">`;
+
+            for (let t = 0; t <= totalDuration; t += tickInterval) {
+                const x = t * zoom;
+                const isMajor = t % (tickInterval * 5) === 0 || tickInterval >= 5;
+
+                rulerHtml += `
+                    <div style="position: absolute; left: ${x}px; bottom: 0; height: ${isMajor ? '12px' : '6px'}; width: 1px; background: rgba(255,255,255,${isMajor ? '0.4' : '0.15'});"></div>
+                    ${isMajor ? `<span style="position: absolute; left: ${x + 4}px; top: 4px; font-size: 0.65rem; color: rgba(255,255,255,0.5); font-family: monospace;">${formatTimecode(t)}</span>` : ''}
+                `;
+            }
+
+            rulerHtml += `</div>`;
+            return rulerHtml;
+        }
+
+        function renderProVideoTrack(scriptScenes, animationScenes, zoom, selectedClipId) {
+            const sceneOrder = state.assembly.sceneOrder.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+
+            let currentTime = 0;
+            let trackHtml = `<div style="height: 75px; position: relative; background: linear-gradient(180deg, rgba(139,92,246,0.06) 0%, rgba(139,92,246,0.02) 100%); border-bottom: 1px solid rgba(255,255,255,0.05);">`;
+
+            sceneOrder.forEach((sceneId, index) => {
+                const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                const animScene = animationScenes.find(s => s.sceneId === sceneId);
+                const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+                const transition = state.assembly.transitions?.[sceneId] || { type: 'cut' };
+
+                if (!scriptScene) return;
+
+                const duration = scriptScene.duration || 8;
+                const width = duration * zoom;
+                const x = currentTime * zoom;
+                const isSelected = selectedClipId === sceneId;
+                const hasVideo = animScene?.videoUrl || (storyboardScene?.source === 'stock-video' && storyboardScene?.videoUrl);
+                const imageUrl = storyboardScene?.imageUrl;
+
+                // Transition indicator (diamond) between clips
+                if (index > 0 && transition.type !== 'cut') {
+                    trackHtml += `
+                        <div style="position: absolute; left: ${x - 8}px; top: 50%; transform: translateY(-50%); z-index: 5;">
+                            <div style="width: 14px; height: 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 2px; transform: rotate(45deg); box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>
+                        </div>
+                    `;
+                }
+
+                trackHtml += `
+                    <div class="timeline-clip pro-clip" data-clip-id="${sceneId}"
+                         onclick="selectTimelineClip(${sceneId}, 'video')"
+                         style="
+                            position: absolute;
+                            left: ${x + 2}px;
+                            top: 4px;
+                            width: ${width - 4}px;
+                            height: 67px;
+                            background: ${isSelected
+                                ? 'linear-gradient(180deg, rgba(139,92,246,0.5) 0%, rgba(139,92,246,0.3) 100%)'
+                                : 'linear-gradient(180deg, rgba(139,92,246,0.25) 0%, rgba(139,92,246,0.15) 100%)'};
+                            border: 2px solid ${isSelected ? '#a78bfa' : 'rgba(139,92,246,0.4)'};
+                            border-radius: 6px;
+                            overflow: hidden;
+                            cursor: pointer;
+                            display: flex;
+                            transition: all 0.15s ease;
+                            box-shadow: ${isSelected ? '0 0 12px rgba(139,92,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)' : 'inset 0 1px 0 rgba(255,255,255,0.05)'};
+                        "
+                        onmouseover="this.style.borderColor='${isSelected ? '#a78bfa' : 'rgba(139,92,246,0.6)'}'"
+                        onmouseout="this.style.borderColor='${isSelected ? '#a78bfa' : 'rgba(139,92,246,0.4)'}'"
+                    >
+                        <!-- Thumbnail -->
+                        <div style="width: 60px; min-width: 60px; height: 100%; background: rgba(0,0,0,0.4); border-right: 1px solid rgba(255,255,255,0.1); pointer-events: none;">
+                            ${imageUrl
+                                ? `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;" draggable="false">`
+                                : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-size: 1.2rem;">🎬</div>`
+                            }
+                        </div>
+                        <!-- Info Panel -->
+                        <div style="flex: 1; padding: 0.4rem 0.5rem; min-width: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: white; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    Scene ${index + 1}
+                                </div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
+                                    ${scriptScene.narration?.substring(0, 25) || 'No narration'}${scriptScene.narration?.length > 25 ? '...' : ''}
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                <span style="font-size: 0.65rem; color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.3); padding: 0.15rem 0.35rem; border-radius: 3px;">${duration}s</span>
+                                <span style="font-size: 0.6rem; color: ${hasVideo ? '#10b981' : '#f59e0b'}; background: ${hasVideo ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)'}; padding: 0.15rem 0.35rem; border-radius: 3px;">
+                                    ${hasVideo ? '✓ video' : '⚡ img'}
+                                </span>
+                            </div>
+                        </div>
+                        <!-- Selection Handles -->
+                        ${isSelected ? `
+                            <div style="position: absolute; left: 0; top: 0; width: 6px; height: 100%; background: linear-gradient(180deg, #a78bfa, #8b5cf6); cursor: ew-resize; border-radius: 6px 0 0 6px;" onmousedown="startTrimClip(${sceneId}, 'left', event)"></div>
+                            <div style="position: absolute; right: 0; top: 0; width: 6px; height: 100%; background: linear-gradient(180deg, #a78bfa, #8b5cf6); cursor: ew-resize; border-radius: 0 6px 6px 0;" onmousedown="startTrimClip(${sceneId}, 'right', event)"></div>
+                        ` : ''}
+                    </div>
+                `;
+
+                currentTime += duration;
+            });
+
+            trackHtml += `</div>`;
+            return trackHtml;
+        }
+
+        function renderProVoiceTrack(scriptScenes, animationScenes, zoom) {
+            const sceneOrder = state.assembly.sceneOrder.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+
+            let currentTime = 0;
+            let trackHtml = `<div style="height: 50px; position: relative; background: linear-gradient(180deg, rgba(6,182,212,0.06) 0%, rgba(6,182,212,0.02) 100%); border-bottom: 1px solid rgba(255,255,255,0.05);">`;
+
+            sceneOrder.forEach(sceneId => {
+                const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                const animScene = animationScenes.find(s => s.sceneId === sceneId);
+
+                if (!scriptScene) return;
+
+                const sceneDuration = scriptScene.duration || 8;
+                const hasVoiceover = animScene?.voiceoverUrl;
+                const voiceoverDuration = animScene?.voiceoverDuration || sceneDuration * 0.85;
+                const voiceoverOffset = scriptScene.voiceoverOffset || 0;
+                const width = voiceoverDuration * zoom;
+                const x = (currentTime + voiceoverOffset) * zoom;
+
+                if (hasVoiceover) {
+                    trackHtml += `
+                        <div style="
+                            position: absolute;
+                            left: ${x + 2}px;
+                            top: 5px;
+                            width: ${width - 2}px;
+                            height: 40px;
+                            background: linear-gradient(180deg, rgba(6,182,212,0.35) 0%, rgba(6,182,212,0.2) 100%);
+                            border: 1px solid rgba(6,182,212,0.5);
+                            border-radius: 5px;
+                            overflow: hidden;
+                            box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+                        ">
+                            <!-- Waveform Visualization -->
+                            <svg width="100%" height="100%" viewBox="0 0 200 40" preserveAspectRatio="none" style="opacity: 0.8;">
+                                <defs>
+                                    <linearGradient id="waveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" style="stop-color:#06b6d4;stop-opacity:0.9" />
+                                        <stop offset="50%" style="stop-color:#0891b2;stop-opacity:1" />
+                                        <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:0.9" />
+                                    </linearGradient>
+                                </defs>
+                                ${generateDetailedWaveformPath()}
+                            </svg>
+                        </div>
+                    `;
+                }
+
+                currentTime += sceneDuration;
+            });
+
+            trackHtml += `</div>`;
+            return trackHtml;
+        }
+
+        function renderProMusicTrack(totalDuration, zoom) {
+            const musicEnabled = state.assembly.music?.enabled;
+            const musicTrack = state.assembly.musicLibrary?.find(t => t.id === state.assembly.music?.trackId);
+            const width = totalDuration * zoom;
+
+            let trackHtml = `<div style="height: 40px; position: relative; background: linear-gradient(180deg, rgba(16,185,129,0.06) 0%, rgba(16,185,129,0.02) 100%); border-bottom: 1px solid rgba(255,255,255,0.05);">`;
+
+            if (musicEnabled && musicTrack) {
+                trackHtml += `
+                    <div style="
+                        position: absolute;
+                        left: 2px;
+                        top: 4px;
+                        width: ${width - 4}px;
+                        height: 32px;
+                        background: linear-gradient(90deg, rgba(16,185,129,0.25) 0%, rgba(16,185,129,0.15) 50%, rgba(16,185,129,0.25) 100%);
+                        border: 1px solid rgba(16,185,129,0.4);
+                        border-radius: 5px;
+                        display: flex;
+                        align-items: center;
+                        padding: 0 0.6rem;
+                        gap: 0.5rem;
+                        overflow: hidden;
+                    ">
+                        <span style="font-size: 0.9rem;">♫</span>
+                        <span style="font-size: 0.7rem; color: #34d399; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${musicTrack.name || 'Background Music'}
+                        </span>
+                        <span style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-left: auto;">
+                            ${state.assembly.music?.volume || 30}%
+                        </span>
+                        <!-- Repeating pattern indicator -->
+                        <div style="position: absolute; right: 0; top: 0; bottom: 0; width: 60px; background: linear-gradient(90deg, transparent, rgba(16,185,129,0.3)); display: flex; align-items: center; justify-content: center;">
+                            <span style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">🔁</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                trackHtml += `
+                    <div style="position: absolute; left: 2px; top: 4px; right: 2px; height: 32px; border: 1px dashed rgba(16,185,129,0.3); border-radius: 5px; display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 0.65rem; color: rgba(255,255,255,0.3);">No background music</span>
+                    </div>
+                `;
+            }
+
+            trackHtml += `</div>`;
+            return trackHtml;
+        }
+
+        function renderProCaptionTrack(scriptScenes, zoom) {
+            const sceneOrder = state.assembly.sceneOrder.length > 0
+                ? state.assembly.sceneOrder
+                : scriptScenes.map(s => s.id);
+            const captionsEnabled = state.assembly.captions?.enabled;
+
+            let currentTime = 0;
+            let trackHtml = `<div style="height: 35px; position: relative; background: linear-gradient(180deg, rgba(245,158,11,0.06) 0%, rgba(245,158,11,0.02) 100%);">`;
+
+            if (captionsEnabled) {
+                sceneOrder.forEach(sceneId => {
+                    const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                    if (!scriptScene) return;
+
+                    const duration = scriptScene.duration || 8;
+                    const width = duration * zoom;
+                    const x = currentTime * zoom;
+                    const caption = scriptScene.narration?.substring(0, 30) || '';
+
+                    trackHtml += `
+                        <div style="
+                            position: absolute;
+                            left: ${x + 2}px;
+                            top: 4px;
+                            width: ${width - 4}px;
+                            height: 27px;
+                            background: linear-gradient(180deg, rgba(245,158,11,0.25) 0%, rgba(245,158,11,0.15) 100%);
+                            border: 1px solid rgba(245,158,11,0.4);
+                            border-radius: 4px;
+                            display: flex;
+                            align-items: center;
+                            padding: 0 0.5rem;
+                            overflow: hidden;
+                        ">
+                            <span style="font-size: 0.6rem; color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-style: italic;">
+                                "${caption}${caption.length >= 30 ? '...' : ''}"
+                            </span>
+                        </div>
+                    `;
+
+                    currentTime += duration;
+                });
+            } else {
+                trackHtml += `
+                    <div style="position: absolute; left: 2px; top: 4px; right: 2px; height: 27px; border: 1px dashed rgba(245,158,11,0.3); border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 0.6rem; color: rgba(255,255,255,0.3);">Captions disabled</span>
+                    </div>
+                `;
+            }
+
+            trackHtml += `</div>`;
+            return trackHtml;
+        }
+
+        function generateDetailedWaveformPath() {
+            // Generate a more detailed, realistic waveform
+            let pathTop = 'M0,20 ';
+            let pathBottom = 'M0,20 ';
+
+            for (let x = 0; x <= 200; x += 2) {
+                const amplitude = 6 + Math.random() * 10;
+                const noise = Math.sin(x * 0.3) * 3 + Math.cos(x * 0.7) * 2;
+                const y1 = 20 - amplitude - noise;
+                const y2 = 20 + amplitude + noise;
+                pathTop += `L${x},${Math.max(2, y1)} `;
+                pathBottom += `L${x},${Math.min(38, y2)} `;
+            }
+
+            return `
+                <path d="${pathTop}" fill="none" stroke="url(#waveGradient)" stroke-width="1.5"/>
+                <path d="${pathBottom}" fill="none" stroke="url(#waveGradient)" stroke-width="1.5"/>
+            `;
+        }
+
+        function toggleTrackMute(trackName) {
+            // Placeholder for track mute functionality
+            showToast(`${trackName} track mute toggled`, 'info');
+        }
+
+        // Compact track renderers for full-screen editor (kept for backwards compatibility)
         function renderCompactVideoTrack(scriptScenes, animationScenes, zoom, selectedClipId) {
             const sceneOrder = state.assembly.sceneOrder.length > 0
                 ? state.assembly.sceneOrder
