@@ -6578,7 +6578,28 @@
                 animScene.voiceoverStatus = 'ready';
                 animScene.voiceoverUrl = result.data.audioUrl;
                 animScene.voiceoverDuration = result.data.duration;  // Store actual audio duration
-                console.log(`[Voiceover] Scene ${sceneId}: duration=${result.data.duration?.toFixed(2)}s`);
+
+                // Phase 2: Audio-driven scene duration
+                // Adjust scene duration to match voiceover + visual padding
+                if (result.data.duration && result.data.duration > 0) {
+                    const voiceoverDuration = result.data.duration;
+                    const visualPadding = 1.0;  // 0.5s intro + 0.5s outro buffer
+                    const newSceneDuration = Math.ceil(voiceoverDuration + visualPadding);
+
+                    // Update script scene duration
+                    const oldDuration = scriptScene.duration;
+                    scriptScene.duration = newSceneDuration;
+
+                    // Set voiceoverOffset to center audio within scene
+                    // (padding / 2) gives equal buffer before and after voiceover
+                    scriptScene.voiceoverOffset = visualPadding / 2;
+
+                    // Recalculate total video duration
+                    state.script.totalDuration = state.script.scenes.reduce((sum, s) => sum + (s.duration || 8), 0);
+
+                    console.log(`[Voiceover] Scene ${sceneId}: voiceover=${voiceoverDuration.toFixed(2)}s, scene adjusted ${oldDuration}s → ${newSceneDuration}s, offset=${scriptScene.voiceoverOffset}s`);
+                }
+
                 showToast('Voiceover generated successfully!', 'success');
             } catch (error) {
                 console.error('Voiceover generation error:', error);
@@ -10735,7 +10756,7 @@
                     index,
                     duration: scriptScene?.duration || 8,
                     voiceoverDuration: animScene?.voiceoverDuration || null,
-                    voiceoverOffset: 0, // Future: allow voiceover timing adjustment
+                    voiceoverOffset: scriptScene?.voiceoverOffset || 0,
                     transition: transition.type || 'fade',
                     transitionDuration: transition.duration || 0.5,
                     hasVideo: !!(animScene?.videoUrl),
