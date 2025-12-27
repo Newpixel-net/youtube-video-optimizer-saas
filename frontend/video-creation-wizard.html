@@ -7493,12 +7493,12 @@
         function renderTransitionsTabContent() {
             const scriptScenes = state.script.scenes || [];
             const defaultTransitionTypes = [
-                { id: 'fade', name: 'Fade', icon: '🌅', desc: 'Smooth fade between scenes' },
-                { id: 'dissolve', name: 'Dissolve', icon: '✨', desc: 'Cross-dissolve blend' },
-                { id: 'wipe', name: 'Wipe', icon: '➡️', desc: 'Horizontal wipe' },
-                { id: 'zoom', name: 'Zoom', icon: '🔍', desc: 'Zoom transition' },
-                { id: 'slide', name: 'Slide', icon: '📱', desc: 'Slide in/out' },
-                { id: 'none', name: 'Cut', icon: '✂️', desc: 'Hard cut' }
+                { id: 'fade', name: 'Fade', icon: '~', desc: 'Smooth fade between scenes' },
+                { id: 'dissolve', name: 'Dissolve', icon: '*', desc: 'Cross-dissolve blend' },
+                { id: 'wipe', name: 'Wipe', icon: '>', desc: 'Horizontal wipe' },
+                { id: 'zoom', name: 'Zoom', icon: 'O', desc: 'Zoom transition' },
+                { id: 'slide', name: 'Slide', icon: '|', desc: 'Slide in/out' },
+                { id: 'none', name: 'Cut', icon: 'X', desc: 'Hard cut' }
             ];
             const transitionTypes = state.assembly.transitionTypes?.length ? state.assembly.transitionTypes : defaultTransitionTypes;
             const globalDuration = state.assembly.transitionDuration ?? 0.5;
@@ -7551,7 +7551,7 @@
 
                 ${scriptScenes.length <= 1 ? `
                     <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.4); font-size: 0.8rem;">
-                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎬</div>
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">+</div>
                         Add more scenes to configure transitions
                     </div>
                 ` : ''}
@@ -7672,7 +7672,7 @@
                                         <!-- Transition Marker -->
                                         ${i < sceneTimings.length - 1 ? `
                                             <div style="position: absolute; right: -6px; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; background: rgba(139,92,246,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.4rem; z-index: 10; border: 1px solid rgba(255,255,255,0.3);">
-                                                ${scene.transition === 'fade' ? '◐' : scene.transition === 'none' ? '✂' : '✦'}
+                                                ${scene.transition === 'fade' ? '~' : scene.transition === 'none' ? 'X' : '*'}
                                             </div>
                                         ` : ''}
                                     </div>
