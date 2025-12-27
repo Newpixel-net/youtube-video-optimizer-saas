@@ -2818,7 +2818,11 @@
                     emotion: 'neutral',         // 'happy', 'sad', 'excited', 'serious', 'neutral'
                     energy: 0.5,                // 0-1 scale
                     tone: 0.5                   // 0=casual, 1=professional
-                }
+                },
+                // Voice roles configuration (narrator vs character voices)
+                voiceRoles: {},                 // sceneId -> 'narrator' | 'character'
+                narratorVoice: 'nova',          // Global narrator voice (consistent across all narrator scenes)
+                characterVoices: {}             // characterName -> voiceId (for future multi-character support)
             },
 
             // Step 6: Assembly
@@ -6913,42 +6917,76 @@
             // Preview Section
             html += '<div style="flex: 1; display: flex; flex-direction: column; padding: 1.25rem; overflow-y: auto;">';
 
-            // Preview Container
-            html += '<div style="position: relative; width: 100%; max-width: 640px; margin: 0 auto; aspect-ratio: 16/9; background: rgba(0,0,0,0.5); border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">';
+            // Preview Header
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; max-width: 640px; margin-left: auto; margin-right: auto; width: 100%;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span style="font-size: 0.75rem; font-weight: 600; color: white; text-transform: uppercase; letter-spacing: 0.5px;">🎬 Scene Preview</span>';
+            if (videoUrl) {
+                html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(16,185,129,0.2); color: #10b981; border-radius: 1rem; font-weight: 600;">Animated</span>';
+            } else if (imageUrl) {
+                html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(6,182,212,0.2); color: #06b6d4; border-radius: 1rem; font-weight: 600;">Ken Burns</span>';
+            }
+            html += '</div>';
+            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">Scene ' + (sceneIndex + 1) + ' of ' + scriptScenes.length + '</div>';
+            html += '</div>';
+
+            // Main Preview Container - Single Scene Display
+            html += '<div style="position: relative; width: 100%; max-width: 640px; margin: 0 auto; aspect-ratio: 16/9; background: linear-gradient(135deg, rgba(0,0,0,0.6), rgba(20,20,40,0.6)); border-radius: 0.75rem; overflow: hidden; border: 2px solid rgba(139,92,246,0.3); box-shadow: 0 8px 32px rgba(0,0,0,0.4);">';
 
             if (videoUrl) {
                 // Animated video preview
-                html += '<video id="detail-preview-video" src="' + videoUrl + '" style="width: 100%; height: 100%; object-fit: cover;"></video>';
+                html += '<video id="detail-preview-video" src="' + videoUrl + '" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;"></video>';
                 html += '<div onclick="playDetailPreview()" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); cursor: pointer; transition: background 0.2s;" onmouseenter="this.style.background=\'rgba(0,0,0,0.1)\'" onmouseleave="this.style.background=\'rgba(0,0,0,0.3)\'">';
-                html += '<div style="width: 60px; height: 60px; background: rgba(16,185,129,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(16,185,129,0.4);">';
-                html += '<span style="font-size: 1.5rem; margin-left: 4px;">▶</span>';
+                html += '<div style="width: 70px; height: 70px; background: rgba(16,185,129,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(16,185,129,0.4);">';
+                html += '<span style="font-size: 1.75rem; margin-left: 4px;">▶</span>';
                 html += '</div>';
                 html += '</div>';
-                html += '<div style="position: absolute; top: 0.75rem; right: 0.75rem; background: rgba(16,185,129,0.9); padding: 0.3rem 0.6rem; border-radius: 0.3rem; font-size: 0.65rem; font-weight: 700; color: white;">✓ ANIMATED</div>';
+                html += '<div style="position: absolute; top: 0.75rem; right: 0.75rem; background: rgba(16,185,129,0.9); padding: 0.35rem 0.7rem; border-radius: 0.35rem; font-size: 0.7rem; font-weight: 700; color: white; box-shadow: 0 2px 8px rgba(16,185,129,0.3);">✓ ANIMATED</div>';
             } else if (imageUrl) {
-                // Static image with Ken Burns preview
-                html += '<div id="ken-burns-preview" style="width: 100%; height: 100%; overflow: hidden;">';
-                html += '<img src="' + imageUrl + '" style="width: 110%; height: 110%; object-fit: cover; animation: kenBurnsPreview 8s ease-in-out infinite alternate;">';
+                // Static image with Ken Burns preview - SINGLE SCENE ONLY
+                html += '<div id="ken-burns-preview" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden;">';
+                html += '<img src="' + imageUrl + '" style="width: 115%; height: 115%; object-fit: cover; object-position: center; animation: kenBurnsPreview 8s ease-in-out infinite alternate; transform-origin: center center;">';
                 html += '</div>';
+                // Status overlay for generating
                 if (animationStatus === 'generating') {
-                    html += '<div style="position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; justify-content: center;">';
-                    html += '<div class="animate-spin" style="width: 40px; height: 40px; border: 3px solid rgba(6,182,212,0.3); border-top-color: #06b6d4; border-radius: 50%; margin-bottom: 0.75rem;"></div>';
-                    html += '<div style="color: white; font-size: 0.85rem; font-weight: 600;">Generating Animation...</div>';
+                    html += '<div style="position: absolute; inset: 0; background: rgba(0,0,0,0.75); display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(4px);">';
+                    html += '<div class="animate-spin" style="width: 48px; height: 48px; border: 3px solid rgba(6,182,212,0.3); border-top-color: #06b6d4; border-radius: 50%; margin-bottom: 1rem;"></div>';
+                    html += '<div style="color: white; font-size: 0.9rem; font-weight: 600;">Generating Animation...</div>';
+                    html += '<div style="color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-top: 0.25rem;">This may take a moment</div>';
+                    html += '</div>';
+                } else {
+                    // Play hint overlay when not generating
+                    html += '<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; background: rgba(0,0,0,0.2);" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">';
+                    html += '<div style="padding: 0.5rem 1rem; background: rgba(0,0,0,0.7); border-radius: 0.5rem; backdrop-filter: blur(4px);">';
+                    html += '<span style="color: white; font-size: 0.75rem;">🎬 Ken Burns Effect Preview</span>';
+                    html += '</div>';
                     html += '</div>';
                 }
             } else {
-                html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">';
+                // No image placeholder
+                html += '<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">';
                 html += '<div style="text-align: center;">';
-                html += '<div style="font-size: 3rem; margin-bottom: 0.5rem;">🖼️</div>';
-                html += '<div style="font-size: 0.85rem;">No image available</div>';
+                html += '<div style="font-size: 3.5rem; margin-bottom: 0.75rem;">🖼️</div>';
+                html += '<div style="font-size: 0.9rem; font-weight: 500;">No storyboard image</div>';
+                html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.2); margin-top: 0.25rem;">Generate images in Step 4</div>';
                 html += '</div>';
                 html += '</div>';
             }
 
-            // Scene info overlay
-            html += '<div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 1.5rem 1rem 0.75rem;">';
-            html += '<div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.25rem;">Scene ' + (sceneIndex + 1) + '</div>';
-            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">' + (scriptScene.duration || 8) + 's duration</div>';
+            // Scene info overlay at bottom
+            html += '<div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.85), transparent); padding: 2rem 1rem 0.85rem;">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between;">';
+            html += '<div>';
+            html += '<div style="font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.2rem;">Scene ' + (sceneIndex + 1) + '</div>';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">' + (scriptScene.duration || 8) + 's duration</div>';
+            html += '</div>';
+            // Quick action buttons
+            html += '<div style="display: flex; gap: 0.4rem;">';
+            if (!videoUrl && imageUrl) {
+                html += '<button onclick="animateScene(' + scriptScene.id + ')" style="padding: 0.4rem 0.7rem; border-radius: 0.4rem; border: none; background: rgba(6,182,212,0.9); color: white; font-size: 0.7rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.3rem;">🎬 Animate</button>';
+            }
+            html += '</div>';
+            html += '</div>';
             html += '</div>';
             html += '</div>';
 
@@ -7141,12 +7179,21 @@
             var voice = animScene.voice || state.animation.voiceover.voice || 'alloy';
             var speed = animScene.speed || state.animation.voiceover.speed || 1.0;
             var emotions = state.animation.emotionPresets || { emotion: 'neutral', energy: 0.5, tone: 0.5 };
-            var isABMode = state.animation.abCompareMode;
+
+            // Voice roles configuration (narrator vs character)
+            var voiceRoles = state.animation.voiceRoles || {};
+            var sceneVoiceRole = voiceRoles[scriptScene.id] || 'narrator';
+            var narratorVoice = state.animation.narratorVoice || 'nova';
+            var characterVoices = state.animation.characterVoices || {};
+
+            // Get characters from script if available
+            var sceneCharacters = (scriptScene.characters || []).length > 0 ? scriptScene.characters : [];
+            var hasDialogue = scriptScene.hasDialogue || sceneCharacters.length > 0;
 
             var html = '';
             html += '<div style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); border-radius: 0.75rem; padding: 1rem;">';
 
-            // Header with A/B toggle
+            // Header
             html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
             html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
             html += '<span style="font-size: 1rem;">🎙️</span>';
@@ -7157,7 +7204,10 @@
                 html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(251,191,36,0.2); color: #fbbf24; border-radius: 1rem; font-weight: 600;" class="animate-pulse">Generating...</span>';
             }
             html += '</div>';
-            html += '<button onclick="toggleABCompareMode()" style="padding: 0.35rem 0.6rem; border-radius: 0.35rem; border: 1px solid ' + (isABMode ? '#8b5cf6' : 'rgba(255,255,255,0.2)') + '; background: ' + (isABMode ? 'rgba(139,92,246,0.2)' : 'transparent') + '; color: ' + (isABMode ? '#a78bfa' : 'rgba(255,255,255,0.5)') + '; font-size: 0.65rem; cursor: pointer;">🔀 A/B Compare</button>';
+            // Voice role indicator
+            html += '<div style="display: flex; align-items: center; gap: 0.35rem;">';
+            html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: ' + (sceneVoiceRole === 'narrator' ? 'rgba(6,182,212,0.2)' : 'rgba(251,191,36,0.2)') + '; color: ' + (sceneVoiceRole === 'narrator' ? '#06b6d4' : '#fbbf24') + '; border-radius: 1rem;">' + (sceneVoiceRole === 'narrator' ? '📖 Narrator' : '🎭 Character') + '</span>';
+            html += '</div>';
             html += '</div>';
 
             // Narration preview
@@ -7166,109 +7216,158 @@
             html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); line-height: 1.4; font-style: italic;">"' + narration.substring(0, 150) + (narration.length > 150 ? '...' : '') + '"</div>';
             html += '</div>';
 
-            // A/B Comparison Mode
-            if (isABMode) {
-                html += renderABComparisonPanel(scriptScene.id);
-            } else {
-                // Real-time Waveform with Playhead
-                if (voiceoverUrl) {
-                    html += '<div style="margin-bottom: 0.75rem;">';
-                    html += '<div id="waveform-container-' + scriptScene.id + '" onclick="seekWaveform(' + scriptScene.id + ', event)" style="position: relative; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">';
-                    html += '<button onclick="event.stopPropagation(); toggleVoiceoverPlayback(' + scriptScene.id + ')" id="play-btn-' + scriptScene.id + '" style="width: 40px; height: 40px; border-radius: 50%; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;">▶</button>';
-                    html += '<div style="flex: 1; height: 40px; background: rgba(139,92,246,0.1); border-radius: 0.35rem; position: relative; overflow: hidden;">';
-                    // Waveform bars
-                    html += '<div style="position: absolute; inset: 0; display: flex; align-items: center; gap: 1px; padding: 0 0.5rem;">';
-                    for (var i = 0; i < 60; i++) {
-                        var barHeight = 25 + Math.sin(i * 0.3) * 20 + Math.random() * 30;
-                        html += '<div class="waveform-bar" style="flex: 1; height: ' + barHeight + '%; background: linear-gradient(to top, #8b5cf6, #a855f7); border-radius: 1px; min-width: 2px; transition: transform 0.1s;"></div>';
-                    }
-                    html += '</div>';
-                    // Playhead
-                    html += '<div class="waveform-playhead" style="position: absolute; top: 0; bottom: 0; left: 0%; width: 2px; background: white; box-shadow: 0 0 4px rgba(255,255,255,0.5); transition: left 0.1s linear;"></div>';
-                    // Progress overlay
-                    html += '<div class="waveform-progress" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: rgba(139,92,246,0.3);"></div>';
-                    html += '</div>';
-                    html += '<span id="time-display-' + scriptScene.id + '" style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-family: monospace; min-width: 45px;">0:00</span>';
-                    html += '</div>';
-                    html += '<audio id="voiceover-audio-' + scriptScene.id + '" src="' + voiceoverUrl + '" ontimeupdate="updateWaveformUI(' + scriptScene.id + ', this)" style="display: none;"></audio>';
-                    html += '</div>';
-                }
+            // Voice Role Selection (Narrator vs Character)
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem;">Voice Role</div>';
+            html += '<div style="display: flex; gap: 0.35rem;">';
 
-                // Emotion Presets
-                html += '<div style="margin-bottom: 0.75rem;">';
-                html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem;">Emotion Preset</div>';
-                html += '<div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">';
-                var emotionOptions = [
-                    { id: 'neutral', emoji: '😐', label: 'Neutral' },
-                    { id: 'happy', emoji: '😊', label: 'Happy' },
-                    { id: 'excited', emoji: '🤩', label: 'Excited' },
-                    { id: 'serious', emoji: '😐', label: 'Serious' },
-                    { id: 'sad', emoji: '😢', label: 'Sad' }
-                ];
-                emotionOptions.forEach(function(em) {
-                    var isActive = emotions.emotion === em.id;
-                    html += '<button onclick="setEmotionPreset(\'' + em.id + '\')" style="padding: 0.35rem 0.5rem; border-radius: 0.35rem; border: 1px solid ' + (isActive ? '#8b5cf6' : 'rgba(255,255,255,0.15)') + '; background: ' + (isActive ? 'rgba(139,92,246,0.2)' : 'transparent') + '; color: ' + (isActive ? 'white' : 'rgba(255,255,255,0.6)') + '; font-size: 0.65rem; cursor: pointer; display: flex; align-items: center; gap: 0.25rem;">';
-                    html += '<span>' + em.emoji + '</span>';
-                    html += '<span>' + em.label + '</span>';
-                    html += '</button>';
-                });
-                html += '</div>';
+            // Narrator option
+            var isNarrator = sceneVoiceRole === 'narrator';
+            html += '<button onclick="setSceneVoiceRole(' + scriptScene.id + ', \'narrator\')" style="flex: 1; padding: 0.5rem; border-radius: 0.4rem; border: 2px solid ' + (isNarrator ? '#06b6d4' : 'rgba(255,255,255,0.1)') + '; background: ' + (isNarrator ? 'rgba(6,182,212,0.15)' : 'transparent') + '; color: ' + (isNarrator ? '#06b6d4' : 'rgba(255,255,255,0.5)') + '; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem; transition: all 0.15s;">';
+            html += '<span>📖</span> Narrator';
+            html += '</button>';
+
+            // Character option
+            var isCharacter = sceneVoiceRole === 'character';
+            html += '<button onclick="setSceneVoiceRole(' + scriptScene.id + ', \'character\')" style="flex: 1; padding: 0.5rem; border-radius: 0.4rem; border: 2px solid ' + (isCharacter ? '#fbbf24' : 'rgba(255,255,255,0.1)') + '; background: ' + (isCharacter ? 'rgba(251,191,36,0.15)' : 'transparent') + '; color: ' + (isCharacter ? '#fbbf24' : 'rgba(255,255,255,0.5)') + '; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem; transition: all 0.15s;">';
+            html += '<span>🎭</span> Character';
+            html += '</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Show narrator voice config or character voice config based on selection
+            if (isNarrator) {
+                // Narrator Voice Configuration
+                html += '<div style="background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.2); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.75rem;">';
+                html += '<div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem;">';
+                html += '<span style="font-size: 0.8rem;">📖</span>';
+                html += '<span style="font-size: 0.7rem; font-weight: 600; color: #06b6d4;">Narrator Voice</span>';
                 html += '</div>';
 
-                // Voice & Speed Controls
-                html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">';
-
-                // Voice Selection
-                html += '<div>';
-                html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">Voice</label>';
                 html += '<div style="display: flex; gap: 0.35rem;">';
-                html += '<select onchange="setSceneVoice(' + scriptScene.id + ', this.value)" style="flex: 1; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">';
+                html += '<select onchange="setNarratorVoice(this.value)" style="flex: 1; padding: 0.45rem; background: rgba(30,30,50,1); border: 1px solid rgba(6,182,212,0.3); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: pointer;">';
+                var voices = ['alloy', 'nova', 'shimmer', 'echo', 'onyx', 'fable'];
+                voices.forEach(function(v) {
+                    html += '<option value="' + v + '" ' + (narratorVoice === v ? 'selected' : '') + '>' + v.charAt(0).toUpperCase() + v.slice(1) + '</option>';
+                });
+                html += '</select>';
+                html += '<button onclick="previewVoice(\'' + narratorVoice + '\')" style="width: 34px; padding: 0.45rem; background: rgba(6,182,212,0.2); border: 1px solid rgba(6,182,212,0.3); border-radius: 0.35rem; color: #06b6d4; cursor: pointer; font-size: 0.75rem;" title="Preview narrator voice">🔊</button>';
+                html += '</div>';
+                html += '</div>';
+            } else {
+                // Character Voice Configuration
+                html += '<div style="background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.75rem;">';
+                html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">';
+                html += '<div style="display: flex; align-items: center; gap: 0.4rem;">';
+                html += '<span style="font-size: 0.8rem;">🎭</span>';
+                html += '<span style="font-size: 0.7rem; font-weight: 600; color: #fbbf24;">Character Voice</span>';
+                html += '</div>';
+                html += '<span style="font-size: 0.55rem; color: rgba(255,255,255,0.4);">Coming soon: Multi-character voices</span>';
+                html += '</div>';
+
+                // For now, show single character voice selector (future: show per-character)
+                html += '<div style="display: flex; gap: 0.35rem;">';
+                html += '<select onchange="setSceneVoice(' + scriptScene.id + ', this.value)" style="flex: 1; padding: 0.45rem; background: rgba(30,30,50,1); border: 1px solid rgba(251,191,36,0.3); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: pointer;">';
                 var voices = ['alloy', 'nova', 'shimmer', 'echo', 'onyx', 'fable'];
                 voices.forEach(function(v) {
                     html += '<option value="' + v + '" ' + (voice === v ? 'selected' : '') + '>' + v.charAt(0).toUpperCase() + v.slice(1) + '</option>';
                 });
                 html += '</select>';
-                html += '<button onclick="previewVoice(\'' + voice + '\')" style="width: 36px; padding: 0.5rem; background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.4rem; color: #a78bfa; cursor: pointer; font-size: 0.8rem;" title="Preview">🔊</button>';
-                html += '</div>';
-                html += '</div>';
-
-                // Speed Control
-                html += '<div>';
-                html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">Speed: ' + speed.toFixed(1) + 'x</label>';
-                html += '<input type="range" min="0.5" max="2.0" step="0.1" value="' + speed + '" onchange="setSceneSpeed(' + scriptScene.id + ', this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #8b5cf6;">';
-                html += '</div>';
+                html += '<button onclick="previewVoice(\'' + voice + '\')" style="width: 34px; padding: 0.45rem; background: rgba(251,191,36,0.2); border: 1px solid rgba(251,191,36,0.3); border-radius: 0.35rem; color: #fbbf24; cursor: pointer; font-size: 0.75rem;" title="Preview character voice">🔊</button>';
                 html += '</div>';
 
-                // Energy & Tone Sliders
-                html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">';
-                html += '<div>';
-                html += '<label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Energy: ' + (emotions.energy < 0.4 ? 'Calm' : emotions.energy > 0.6 ? 'High' : 'Medium') + '</label>';
-                html += '<input type="range" min="0" max="1" step="0.1" value="' + emotions.energy + '" onchange="setEnergyLevel(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #06b6d4;">';
-                html += '</div>';
-                html += '<div>';
-                html += '<label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Tone: ' + (emotions.tone < 0.4 ? 'Casual' : emotions.tone > 0.6 ? 'Formal' : 'Balanced') + '</label>';
-                html += '<input type="range" min="0" max="1" step="0.1" value="' + emotions.tone + '" onchange="setToneLevel(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #10b981;">';
-                html += '</div>';
-                html += '</div>';
-
-                // Generate Button
-                var isGenerating = voiceoverStatus === 'generating';
-                html += '<button onclick="generateSceneVoiceover(' + scriptScene.id + ')" ' + (isGenerating ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (isGenerating ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #a855f7)') + '; color: ' + (isGenerating ? 'rgba(255,255,255,0.4)' : 'white') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (isGenerating ? 'wait' : 'pointer') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
-                if (isGenerating) {
-                    html += '<span class="animate-spin">⏳</span> Generating...';
-                } else if (voiceoverUrl) {
-                    html += '<span>🔄</span> Regenerate Voiceover';
-                } else {
-                    html += '<span>🎙️</span> Generate Voiceover';
+                // Future character list placeholder
+                if (sceneCharacters.length > 0) {
+                    html += '<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed rgba(251,191,36,0.2);">';
+                    html += '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.35rem;">Characters in this scene:</div>';
+                    html += '<div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">';
+                    sceneCharacters.forEach(function(char) {
+                        html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(251,191,36,0.15); color: #fbbf24; border-radius: 0.25rem;">' + char + '</span>';
+                    });
+                    html += '</div>';
+                    html += '</div>';
                 }
-                html += '</button>';
+                html += '</div>';
             }
+
+            // Real-time Waveform with Playhead (show if voiceover exists)
+            if (voiceoverUrl) {
+                html += '<div style="margin-bottom: 0.75rem;">';
+                html += '<div id="waveform-container-' + scriptScene.id + '" onclick="seekWaveform(' + scriptScene.id + ', event)" style="position: relative; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">';
+                html += '<button onclick="event.stopPropagation(); toggleVoiceoverPlayback(' + scriptScene.id + ')" id="play-btn-' + scriptScene.id + '" style="width: 40px; height: 40px; border-radius: 50%; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;">▶</button>';
+                html += '<div style="flex: 1; height: 40px; background: rgba(139,92,246,0.1); border-radius: 0.35rem; position: relative; overflow: hidden;">';
+                // Waveform bars
+                html += '<div style="position: absolute; inset: 0; display: flex; align-items: center; gap: 1px; padding: 0 0.5rem;">';
+                for (var i = 0; i < 60; i++) {
+                    var barHeight = 25 + Math.sin(i * 0.3) * 20 + Math.random() * 30;
+                    html += '<div class="waveform-bar" style="flex: 1; height: ' + barHeight + '%; background: linear-gradient(to top, #8b5cf6, #a855f7); border-radius: 1px; min-width: 2px; transition: transform 0.1s;"></div>';
+                }
+                html += '</div>';
+                // Playhead
+                html += '<div class="waveform-playhead" style="position: absolute; top: 0; bottom: 0; left: 0%; width: 2px; background: white; box-shadow: 0 0 4px rgba(255,255,255,0.5); transition: left 0.1s linear;"></div>';
+                // Progress overlay
+                html += '<div class="waveform-progress" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: rgba(139,92,246,0.3);"></div>';
+                html += '</div>';
+                html += '<span id="time-display-' + scriptScene.id + '" style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-family: monospace; min-width: 45px;">0:00</span>';
+                html += '</div>';
+                html += '<audio id="voiceover-audio-' + scriptScene.id + '" src="' + voiceoverUrl + '" ontimeupdate="updateWaveformUI(' + scriptScene.id + ', this)" style="display: none;"></audio>';
+                html += '</div>';
+            }
+
+            // Emotion Presets (compact row)
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem;">Emotion</div>';
+            html += '<div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">';
+            var emotionOptions = [
+                { id: 'neutral', emoji: '😐', label: 'Neutral' },
+                { id: 'happy', emoji: '😊', label: 'Happy' },
+                { id: 'excited', emoji: '🤩', label: 'Excited' },
+                { id: 'serious', emoji: '😐', label: 'Serious' },
+                { id: 'sad', emoji: '😢', label: 'Sad' }
+            ];
+            emotionOptions.forEach(function(em) {
+                var isActive = emotions.emotion === em.id;
+                html += '<button onclick="setEmotionPreset(\'' + em.id + '\')" style="padding: 0.3rem 0.45rem; border-radius: 0.3rem; border: 1px solid ' + (isActive ? '#8b5cf6' : 'rgba(255,255,255,0.1)') + '; background: ' + (isActive ? 'rgba(139,92,246,0.2)' : 'transparent') + '; color: ' + (isActive ? 'white' : 'rgba(255,255,255,0.5)') + '; font-size: 0.6rem; cursor: pointer; display: flex; align-items: center; gap: 0.2rem;">';
+                html += '<span>' + em.emoji + '</span>';
+                html += '<span>' + em.label + '</span>';
+                html += '</button>';
+            });
+            html += '</div>';
+            html += '</div>';
+
+            // Speed & Energy/Tone Controls (compact)
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">';
+            html += '<div>';
+            html += '<label style="display: block; font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.2rem;">Speed: ' + speed.toFixed(1) + 'x</label>';
+            html += '<input type="range" min="0.5" max="2.0" step="0.1" value="' + speed + '" onchange="setSceneSpeed(' + scriptScene.id + ', this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #8b5cf6;">';
+            html += '</div>';
+            html += '<div>';
+            html += '<label style="display: block; font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.2rem;">Energy</label>';
+            html += '<input type="range" min="0" max="1" step="0.1" value="' + emotions.energy + '" onchange="setEnergyLevel(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #06b6d4;">';
+            html += '</div>';
+            html += '<div>';
+            html += '<label style="display: block; font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.2rem;">Tone</label>';
+            html += '<input type="range" min="0" max="1" step="0.1" value="' + emotions.tone + '" onchange="setToneLevel(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #10b981;">';
+            html += '</div>';
+            html += '</div>';
+
+            // Generate Button
+            var isGenerating = voiceoverStatus === 'generating';
+            html += '<button onclick="generateSceneVoiceover(' + scriptScene.id + ')" ' + (isGenerating ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (isGenerating ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #a855f7)') + '; color: ' + (isGenerating ? 'rgba(255,255,255,0.4)' : 'white') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (isGenerating ? 'wait' : 'pointer') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
+            if (isGenerating) {
+                html += '<span class="animate-spin">⏳</span> Generating...';
+            } else if (voiceoverUrl) {
+                html += '<span>🔄</span> Regenerate Voiceover';
+            } else {
+                html += '<span>🎙️</span> Generate Voiceover';
+            }
+            html += '</button>';
 
             html += '</div>';
             return html;
         }
 
-        // A/B Comparison Panel
+        // A/B Comparison Panel (kept for backwards compatibility, now deprecated)
         function renderABComparisonPanel(sceneId) {
             var voices = state.animation.abCompareVoices || ['nova', 'alloy'];
             var audioUrls = state.animation.abCompareAudioUrls || [null, null];
@@ -7527,6 +7626,51 @@
         function previewVoice(voiceName) {
             // Create a quick sample preview of the selected voice
             showToast('Voice preview: ' + voiceName.charAt(0).toUpperCase() + voiceName.slice(1), 'info');
+        }
+
+        // ==========================================
+        // VOICE ROLE MANAGEMENT (Narrator vs Characters)
+        // ==========================================
+
+        function setSceneVoiceRole(sceneId, role) {
+            // Set whether this scene uses narrator or character voice
+            if (!state.animation.voiceRoles) {
+                state.animation.voiceRoles = {};
+            }
+            state.animation.voiceRoles[sceneId] = role;
+            saveProject();
+            render();
+        }
+
+        function setNarratorVoice(voice) {
+            // Set the global narrator voice (used for all narrator scenes)
+            state.animation.narratorVoice = voice;
+            saveProject();
+            render();
+        }
+
+        function setCharacterVoice(characterName, voice) {
+            // Set voice for a specific character (for future multi-character support)
+            if (!state.animation.characterVoices) {
+                state.animation.characterVoices = {};
+            }
+            state.animation.characterVoices[characterName] = voice;
+            saveProject();
+            render();
+        }
+
+        function getVoiceForScene(sceneId) {
+            // Get the appropriate voice for a scene based on its role
+            var voiceRoles = state.animation.voiceRoles || {};
+            var role = voiceRoles[sceneId] || 'narrator';
+
+            if (role === 'narrator') {
+                return state.animation.narratorVoice || 'nova';
+            } else {
+                // For character role, use scene-specific voice or default
+                var scene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+                return (scene && scene.voice) || 'alloy';
+            }
         }
 
         // ==========================================
