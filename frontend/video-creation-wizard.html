@@ -1480,6 +1480,20 @@
             animation: pulse 2s ease-in-out infinite;
         }
 
+        /* Animation Studio Pro 2.0 - Hover Effects */
+        .scene-card-hover:hover {
+            background: rgba(139,92,246,0.15) !important;
+            border-color: rgba(139,92,246,0.4) !important;
+        }
+
+        .scene-card-hover:hover .hover-actions {
+            display: flex !important;
+        }
+
+        .scene-card-hover:active {
+            cursor: grabbing;
+        }
+
         .animate-float {
             animation: float 3s ease-in-out infinite;
         }
@@ -2781,12 +2795,30 @@
                     speed: 1.0,
                     status: 'idle'
                 },
-                // Animation Studio Pro state
+                // Animation Studio Pro 2.0 state
                 selectedSceneId: null,
+                selectedSceneIds: [],           // Multi-select support
                 batchQueue: [],
-                batchStatus: 'idle',  // 'idle', 'processing', 'complete'
+                batchStatus: 'idle',            // 'idle', 'processing', 'complete'
                 isPreviewPlaying: false,
-                previewMode: 'animation'  // 'animation', 'voiceover', 'combined'
+                previewMode: 'animation',       // 'animation', 'voiceover', 'combined'
+                // New Pro 2.0 features
+                showKeyboardShortcuts: false,   // Keyboard shortcuts overlay
+                showQueueManager: false,        // Queue manager panel
+                cinemaMode: false,              // Full-screen cinema preview
+                cinemaModeSceneIndex: 0,        // Current scene in cinema mode
+                abCompareMode: false,           // A/B voice comparison
+                abCompareVoices: ['nova', 'alloy'], // Voices to compare
+                abCompareAudioUrls: [null, null],   // Generated audio URLs
+                draggedSceneId: null,           // Scene being dragged
+                dropTargetIndex: null,          // Drop target position
+                waveformData: {},               // Cached waveform data per scene
+                currentPlaybackTime: 0,         // Playback position for waveform
+                emotionPresets: {
+                    emotion: 'neutral',         // 'happy', 'sad', 'excited', 'serious', 'neutral'
+                    energy: 0.5,                // 0-1 scale
+                    tone: 0.5                   // 0=casual, 1=professional
+                }
             },
 
             // Step 6: Assembly
@@ -6485,31 +6517,269 @@
             html += renderAnimationBatchQueue(animationScenes, storyboardScenes);
 
             html += '</div>';
+
+            // OVERLAYS
+            // Keyboard Shortcuts Overlay
+            if (state.animation.showKeyboardShortcuts) {
+                html += renderKeyboardShortcutsOverlay();
+            }
+
+            // Cinema Mode Overlay
+            if (state.animation.cinemaMode) {
+                html += renderCinemaModeOverlay(scriptScenes, storyboardScenes, animationScenes);
+            }
+
+            // Queue Manager Panel
+            if (state.animation.showQueueManager) {
+                html += renderQueueManagerPanel(animationScenes, storyboardScenes);
+            }
+
             return html;
         }
 
-        // LEFT PANEL - Compact Scene Grid
+        // Keyboard Shortcuts Overlay
+        function renderKeyboardShortcutsOverlay() {
+            var html = '';
+            html += '<div onclick="toggleKeyboardShortcuts()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px);">';
+            html += '<div onclick="event.stopPropagation()" style="background: linear-gradient(135deg, #1a1a2e, #16213e); border: 1px solid rgba(139,92,246,0.3); border-radius: 1rem; padding: 2rem; max-width: 600px; width: 90%; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">';
+
+            // Header
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.75rem;">';
+            html += '<span style="font-size: 1.5rem;">⌨️</span>';
+            html += '<span style="font-size: 1.25rem; font-weight: 700; color: white;">Keyboard Shortcuts</span>';
+            html += '</div>';
+            html += '<button onclick="toggleKeyboardShortcuts()" style="background: none; border: none; color: rgba(255,255,255,0.5); font-size: 1.5rem; cursor: pointer;">✕</button>';
+            html += '</div>';
+
+            // Shortcuts Grid
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">';
+
+            var shortcuts = [
+                { key: '↑/↓ or J/K', action: 'Navigate scenes' },
+                { key: 'Space', action: 'Play/pause preview' },
+                { key: 'V', action: 'Generate voiceover' },
+                { key: 'Shift+V', action: 'Generate all voiceovers' },
+                { key: 'A', action: 'Animate scene' },
+                { key: 'Shift+A', action: 'Animate all scenes' },
+                { key: '1-9', action: 'Jump to scene' },
+                { key: 'C', action: 'Cinema mode' },
+                { key: 'Q', action: 'Queue manager' },
+                { key: 'B', action: 'A/B comparison' },
+                { key: '?', action: 'Show shortcuts' },
+                { key: 'ESC', action: 'Close overlays' }
+            ];
+
+            shortcuts.forEach(function(s) {
+                html += '<div style="display: flex; align-items: center; gap: 0.75rem;">';
+                html += '<kbd style="background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.4); padding: 0.35rem 0.6rem; border-radius: 0.35rem; font-family: monospace; font-size: 0.75rem; color: #a78bfa; min-width: 80px; text-align: center;">' + s.key + '</kbd>';
+                html += '<span style="font-size: 0.85rem; color: rgba(255,255,255,0.7);">' + s.action + '</span>';
+                html += '</div>';
+            });
+
+            html += '</div>';
+
+            // Footer tip
+            html += '<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); text-align: center;">';
+            html += '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Press <kbd style="background: rgba(255,255,255,0.1); padding: 0.2rem 0.4rem; border-radius: 0.25rem;">?</kbd> anytime to toggle this panel</span>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+            return html;
+        }
+
+        // Cinema Mode Overlay
+        function renderCinemaModeOverlay(scriptScenes, storyboardScenes, animationScenes) {
+            var currentIdx = state.animation.cinemaModeSceneIndex;
+            var scene = scriptScenes[currentIdx];
+            var storyboardScene = storyboardScenes.find(function(s) { return s.sceneId === scene.id; }) || {};
+            var animScene = animationScenes.find(function(s) { return s.sceneId === scene.id; }) || {};
+
+            var html = '';
+            html += '<div style="position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; flex-direction: column;">';
+
+            // Cinema Header
+            html += '<div style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);">';
+            html += '<div style="display: flex; align-items: center; gap: 1rem;">';
+            html += '<span style="font-size: 1.25rem;">🎬</span>';
+            html += '<span style="font-size: 1rem; font-weight: 600; color: white;">Cinema Preview</span>';
+            html += '<span style="font-size: 0.85rem; color: rgba(255,255,255,0.5);">Scene ' + (currentIdx + 1) + ' of ' + scriptScenes.length + '</span>';
+            html += '</div>';
+            html += '<button onclick="exitCinemaMode()" style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; cursor: pointer; font-size: 0.85rem;">✕ Exit (ESC)</button>';
+            html += '</div>';
+
+            // Main Preview Area
+            html += '<div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem;">';
+            html += '<div style="position: relative; max-width: 1200px; width: 100%; aspect-ratio: 16/9; background: #111; border-radius: 0.5rem; overflow: hidden;">';
+
+            if (animScene.videoUrl) {
+                html += '<video id="cinema-video" src="' + animScene.videoUrl + '" autoplay style="width: 100%; height: 100%; object-fit: contain;"></video>';
+            } else if (storyboardScene.imageUrl) {
+                html += '<img src="' + storyboardScene.imageUrl + '" style="width: 100%; height: 100%; object-fit: contain; animation: kenBurnsPreview 10s ease-in-out infinite alternate;">';
+            }
+
+            // Scene Info Overlay
+            html += '<div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); padding: 3rem 2rem 1.5rem;">';
+            html += '<div style="font-size: 1.1rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">Scene ' + (currentIdx + 1) + '</div>';
+            html += '<div style="font-size: 0.9rem; color: rgba(255,255,255,0.7); line-height: 1.5;">"' + (scene.narration || '').substring(0, 150) + (scene.narration && scene.narration.length > 150 ? '...' : '') + '"</div>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+
+            // Hidden audio element for voiceover
+            if (animScene.voiceoverUrl) {
+                html += '<audio id="cinema-audio" src="' + animScene.voiceoverUrl + '" autoplay></audio>';
+            }
+
+            // Bottom Controls
+            html += '<div style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 1.5rem; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);">';
+            html += '<button onclick="cinemaModePrev()" ' + (currentIdx === 0 ? 'disabled' : '') + ' style="background: rgba(255,255,255,0.1); border: none; color: ' + (currentIdx === 0 ? 'rgba(255,255,255,0.3)' : 'white') + '; padding: 0.75rem 1.5rem; border-radius: 0.5rem; cursor: ' + (currentIdx === 0 ? 'not-allowed' : 'pointer') + '; font-size: 1rem;">← Previous</button>';
+            html += '<button onclick="cinemaModePlayAll()" style="background: linear-gradient(135deg, #8b5cf6, #06b6d4); border: none; color: white; padding: 0.75rem 2rem; border-radius: 0.5rem; cursor: pointer; font-size: 1rem; font-weight: 600;">▶ Play All</button>';
+            html += '<button onclick="cinemaModeNext()" ' + (currentIdx === scriptScenes.length - 1 ? 'disabled' : '') + ' style="background: rgba(255,255,255,0.1); border: none; color: ' + (currentIdx === scriptScenes.length - 1 ? 'rgba(255,255,255,0.3)' : 'white') + '; padding: 0.75rem 1.5rem; border-radius: 0.5rem; cursor: ' + (currentIdx === scriptScenes.length - 1 ? 'not-allowed' : 'pointer') + '; font-size: 1rem;">Next →</button>';
+            html += '</div>';
+
+            // Scene Timeline
+            html += '<div style="flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; padding: 0 2rem 1rem; overflow-x: auto;">';
+            scriptScenes.forEach(function(s, idx) {
+                var sb = storyboardScenes.find(function(x) { return x.sceneId === s.id; }) || {};
+                var isActive = idx === currentIdx;
+                html += '<div onclick="state.animation.cinemaModeSceneIndex=' + idx + ';render()" style="flex-shrink: 0; width: 80px; height: 45px; border-radius: 0.35rem; overflow: hidden; border: 2px solid ' + (isActive ? '#8b5cf6' : 'transparent') + '; cursor: pointer; opacity: ' + (isActive ? '1' : '0.5') + '; transition: all 0.2s;">';
+                if (sb.imageUrl) {
+                    html += '<img src="' + sb.imageUrl + '" style="width: 100%; height: 100%; object-fit: cover;">';
+                } else {
+                    html += '<div style="width: 100%; height: 100%; background: #333; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">' + (idx + 1) + '</div>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+
+            html += '</div>';
+            return html;
+        }
+
+        // Queue Manager Panel
+        function renderQueueManagerPanel(animationScenes, storyboardScenes) {
+            var processing = animationScenes.filter(function(s) {
+                return s.voiceoverStatus === 'generating' || s.animationStatus === 'generating';
+            });
+            var pending = animationScenes.filter(function(s) {
+                return !s.voiceoverUrl && s.voiceoverStatus !== 'generating';
+            });
+
+            var html = '';
+            html += '<div onclick="toggleQueueManager()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: flex; align-items: center; justify-content: center;">';
+            html += '<div onclick="event.stopPropagation()" style="background: linear-gradient(135deg, #1a1a2e, #16213e); border: 1px solid rgba(139,92,246,0.3); border-radius: 1rem; padding: 1.5rem; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">';
+
+            // Header
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.75rem;">';
+            html += '<span style="font-size: 1.25rem;">📋</span>';
+            html += '<span style="font-size: 1.1rem; font-weight: 700; color: white;">Generation Queue</span>';
+            html += '</div>';
+            html += '<button onclick="toggleQueueManager()" style="background: none; border: none; color: rgba(255,255,255,0.5); font-size: 1.25rem; cursor: pointer;">✕</button>';
+            html += '</div>';
+
+            // Currently Processing
+            if (processing.length > 0) {
+                html += '<div style="margin-bottom: 1rem;">';
+                html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Currently Processing</div>';
+                processing.forEach(function(scene) {
+                    var sceneNum = storyboardScenes.findIndex(function(s) { return s.sceneId === scene.sceneId; }) + 1;
+                    var type = scene.voiceoverStatus === 'generating' ? 'Voiceover' : 'Animation';
+                    var icon = scene.voiceoverStatus === 'generating' ? '🎙️' : '🎬';
+                    html += '<div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(139,92,246,0.15); border-radius: 0.5rem; margin-bottom: 0.5rem;">';
+                    html += '<div class="animate-spin" style="width: 20px; height: 20px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>';
+                    html += '<span style="font-size: 1rem;">' + icon + '</span>';
+                    html += '<span style="flex: 1; color: white; font-size: 0.85rem;">Scene ' + sceneNum + ' - ' + type + '</span>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+
+            // Pending Queue
+            if (pending.length > 0) {
+                html += '<div>';
+                html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Pending (' + pending.length + ')</div>';
+                pending.slice(0, 10).forEach(function(scene, idx) {
+                    var sceneNum = storyboardScenes.findIndex(function(s) { return s.sceneId === scene.sceneId; }) + 1;
+                    html += '<div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.35rem; margin-bottom: 0.35rem;">';
+                    html += '<span style="color: rgba(255,255,255,0.3); font-size: 0.75rem; width: 20px;">' + (idx + 1) + '</span>';
+                    html += '<span style="flex: 1; color: rgba(255,255,255,0.7); font-size: 0.8rem;">Scene ' + sceneNum + '</span>';
+                    html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">🎙️ Voiceover</span>';
+                    html += '</div>';
+                });
+                if (pending.length > 10) {
+                    html += '<div style="text-align: center; font-size: 0.75rem; color: rgba(255,255,255,0.4); padding: 0.5rem;">+' + (pending.length - 10) + ' more</div>';
+                }
+                html += '</div>';
+            }
+
+            // Empty State
+            if (processing.length === 0 && pending.length === 0) {
+                html += '<div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.4);">';
+                html += '<div style="font-size: 2rem; margin-bottom: 0.5rem;">✓</div>';
+                html += '<div style="font-size: 0.9rem;">All generations complete!</div>';
+                html += '</div>';
+            }
+
+            // Actions
+            html += '<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.5rem;">';
+            html += '<button onclick="generateAllVoiceovers(); toggleQueueManager();" style="flex: 1; padding: 0.6rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; font-size: 0.8rem; font-weight: 600; cursor: pointer;">🎙️ Generate All</button>';
+            html += '<button onclick="animateAllScenes(); toggleQueueManager();" style="flex: 1; padding: 0.6rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #06b6d4, #10b981); color: white; font-size: 0.8rem; font-weight: 600; cursor: pointer;">🎬 Animate All</button>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+            return html;
+        }
+
+        // LEFT PANEL - Compact Scene Grid with Progress Rings, Hover Actions, Multi-Select, Drag & Drop
         function renderAnimationSceneGrid(scriptScenes, storyboardScenes, animationScenes) {
             var html = '';
+            var selectedIds = state.animation.selectedSceneIds || [];
+            var hasMultiSelect = selectedIds.length > 1;
+
             html += '<div style="background: rgba(15,15,28,0.98); border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; overflow: hidden;">';
 
             // Scene Grid Header
             html += '<div style="padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);">';
             html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
             html += '<span style="font-size: 0.75rem; font-weight: 600; color: white; text-transform: uppercase; letter-spacing: 0.5px;">Scenes</span>';
-            html += '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">' + scriptScenes.length + ' total</span>';
+            if (hasMultiSelect) {
+                html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(139,92,246,0.3); color: #a78bfa; border-radius: 1rem;">' + selectedIds.length + ' selected</span>';
+            }
+            html += '</div>';
+            html += '<div style="display: flex; align-items: center; gap: 0.35rem;">';
+            html += '<button onclick="toggleKeyboardShortcuts()" title="Keyboard shortcuts (?)" style="width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.65rem;">⌨️</button>';
+            html += '<button onclick="enterCinemaMode()" title="Cinema mode (C)" style="width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.65rem;">🎬</button>';
+            html += '<button onclick="toggleQueueManager()" title="Queue manager (Q)" style="width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.65rem;">📋</button>';
+            html += '</div>';
             html += '</div>';
 
-            // Quick Actions
-            html += '<div style="display: flex; gap: 0.4rem;">';
-            html += '<button onclick="generateAllVoiceovers()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.3rem; padding: 0.45rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; font-size: 0.65rem; font-weight: 600; cursor: pointer;">';
-            html += '<span>🎙️</span> All Voices';
-            html += '</button>';
-            html += '<button onclick="animateAllScenes()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.3rem; padding: 0.45rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #06b6d4, #10b981); color: white; font-size: 0.65rem; font-weight: 600; cursor: pointer;">';
-            html += '<span>🎬</span> All Anim';
-            html += '</button>';
+            // Quick Actions - Different for multi-select vs normal
+            if (hasMultiSelect) {
+                html += '<div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">';
+                html += '<button onclick="batchGenerateVoiceovers()" style="flex: 1; padding: 0.4rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; font-size: 0.6rem; font-weight: 600; cursor: pointer;">🎙️ Voice (' + selectedIds.length + ')</button>';
+                html += '<button onclick="batchAnimateScenes()" style="flex: 1; padding: 0.4rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #06b6d4, #10b981); color: white; font-size: 0.6rem; font-weight: 600; cursor: pointer;">🎬 Anim (' + selectedIds.length + ')</button>';
+                html += '</div>';
+                html += '<button onclick="clearMultiSelection()" style="width: 100%; padding: 0.35rem; border-radius: 0.35rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: rgba(255,255,255,0.6); font-size: 0.6rem; cursor: pointer;">✕ Clear Selection</button>';
+            } else {
+                html += '<div style="display: flex; gap: 0.4rem;">';
+                html += '<button onclick="generateAllVoiceovers()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.3rem; padding: 0.45rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; font-size: 0.65rem; font-weight: 600; cursor: pointer;">';
+                html += '<span>🎙️</span> All Voices';
+                html += '</button>';
+                html += '<button onclick="animateAllScenes()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.3rem; padding: 0.45rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #06b6d4, #10b981); color: white; font-size: 0.65rem; font-weight: 600; cursor: pointer;">';
+                html += '<span>🎬</span> All Anim';
+                html += '</button>';
+                html += '</div>';
+            }
             html += '</div>';
-            html += '</div>';
+
+            // Hint for multi-select
+            html += '<div style="padding: 0.35rem 1rem; background: rgba(139,92,246,0.05); border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.55rem; color: rgba(255,255,255,0.35);">💡 Ctrl+Click to multi-select • Drag to reorder</div>';
 
             // Scrollable Scene List
             html += '<div style="flex: 1; overflow-y: auto; padding: 0.5rem;">';
@@ -6518,45 +6788,79 @@
                 var storyboardScene = storyboardScenes.find(function(s) { return s.sceneId === scriptScene.id; }) || {};
                 var animScene = animationScenes.find(function(s) { return s.sceneId === scriptScene.id; }) || {};
                 var isSelected = state.animation.selectedSceneId === scriptScene.id;
+                var isMultiSelected = selectedIds.indexOf(scriptScene.id) > -1;
                 var hasVoiceover = !!animScene.voiceoverUrl;
                 var hasAnimation = !!animScene.videoUrl;
-                var isProcessing = animScene.voiceoverStatus === 'generating' || animScene.animationStatus === 'generating';
+                var isVoiceGenerating = animScene.voiceoverStatus === 'generating';
+                var isAnimGenerating = animScene.animationStatus === 'generating';
+                var isProcessing = isVoiceGenerating || isAnimGenerating;
                 var imageUrl = storyboardScene.imageUrl || '';
+                var isDropTarget = state.animation.dropTargetIndex === index;
+                var isDragging = state.animation.draggedSceneId === scriptScene.id;
 
-                // Scene status
-                var statusColor = '#ef4444'; // red - not ready
-                var statusIcon = '○';
-                if (hasVoiceover && hasAnimation) {
-                    statusColor = '#10b981'; // green - complete
-                    statusIcon = '●';
-                } else if (hasVoiceover) {
-                    statusColor = '#fbbf24'; // yellow - partial
-                    statusIcon = '◐';
-                } else if (isProcessing) {
-                    statusColor = '#8b5cf6'; // purple - processing
-                    statusIcon = '◌';
+                // Calculate progress percentage for ring
+                var progress = 0;
+                if (hasVoiceover && hasAnimation) progress = 100;
+                else if (hasVoiceover) progress = 50;
+                else if (isProcessing) progress = 25;
+
+                // Progress ring SVG
+                var ringRadius = 26;
+                var ringCircumference = 2 * Math.PI * ringRadius;
+                var ringOffset = ringCircumference - (progress / 100) * ringCircumference;
+                var ringColor = progress === 100 ? '#10b981' : progress >= 50 ? '#fbbf24' : isProcessing ? '#8b5cf6' : '#ef4444';
+
+                // Drop target indicator
+                if (isDropTarget && !isDragging) {
+                    html += '<div style="height: 3px; background: linear-gradient(90deg, #8b5cf6, #06b6d4); border-radius: 2px; margin-bottom: 0.25rem;"></div>';
                 }
 
-                html += '<div onclick="selectAnimationScene(' + scriptScene.id + ')" style="display: flex; gap: 0.6rem; padding: 0.5rem; margin-bottom: 0.4rem; background: ' + (isSelected ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)') + '; border: 1px solid ' + (isSelected ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.06)') + '; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s;">';
+                html += '<div class="scene-card-hover" draggable="true" ondragstart="handleSceneDragStart(' + scriptScene.id + ', event)" ondragend="handleSceneDragEnd(event)" ondragover="handleSceneDragOver(' + index + ', event)" ondrop="handleSceneDrop(' + index + ', event)" onclick="toggleSceneSelection(' + scriptScene.id + ', event)" style="position: relative; display: flex; gap: 0.6rem; padding: 0.5rem; margin-bottom: 0.4rem; background: ' + (isSelected || isMultiSelected ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)') + '; border: 1px solid ' + (isSelected ? 'rgba(139,92,246,0.5)' : isMultiSelected ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.06)') + '; border-radius: 0.5rem; cursor: grab; transition: all 0.15s; opacity: ' + (isDragging ? '0.5' : '1') + ';">';
 
-                // Thumbnail
-                html += '<div style="position: relative; width: 56px; height: 56px; flex-shrink: 0; border-radius: 0.35rem; overflow: hidden; background: rgba(0,0,0,0.3);">';
+                // Multi-select checkbox indicator
+                if (hasMultiSelect || isMultiSelected) {
+                    html += '<div style="position: absolute; top: -4px; left: -4px; width: 16px; height: 16px; background: ' + (isMultiSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)') + '; border: 2px solid ' + (isMultiSelected ? '#8b5cf6' : 'rgba(255,255,255,0.2)') + '; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: white; z-index: 1;">' + (isMultiSelected ? '✓' : '') + '</div>';
+                }
+
+                // Thumbnail with Progress Ring
+                html += '<div style="position: relative; width: 60px; height: 60px; flex-shrink: 0;">';
+
+                // SVG Progress Ring
+                html += '<svg style="position: absolute; top: -2px; left: -2px; width: 64px; height: 64px; transform: rotate(-90deg);">';
+                html += '<circle cx="32" cy="32" r="' + ringRadius + '" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/>';
+                if (isProcessing) {
+                    html += '<circle cx="32" cy="32" r="' + ringRadius + '" fill="none" stroke="' + ringColor + '" stroke-width="3" stroke-linecap="round" stroke-dasharray="' + ringCircumference + '" stroke-dashoffset="' + (ringCircumference * 0.7) + '" class="animate-spin" style="transform-origin: center;"/>';
+                } else {
+                    html += '<circle cx="32" cy="32" r="' + ringRadius + '" fill="none" stroke="' + ringColor + '" stroke-width="3" stroke-linecap="round" stroke-dasharray="' + ringCircumference + '" stroke-dashoffset="' + ringOffset + '" style="transition: stroke-dashoffset 0.3s;"/>';
+                }
+                html += '</svg>';
+
+                // Inner thumbnail
+                html += '<div style="position: absolute; top: 4px; left: 4px; width: 52px; height: 52px; border-radius: 0.35rem; overflow: hidden; background: rgba(0,0,0,0.3);">';
                 if (imageUrl) {
                     html += '<img src="' + imageUrl + '" style="width: 100%; height: 100%; object-fit: cover;">';
                 } else {
-                    html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-size: 1.2rem;">🖼️</div>';
+                    html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-size: 1.1rem;">🖼️</div>';
                 }
-                // Status indicator overlay
-                html += '<div style="position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center;">';
-                html += '<span style="color: ' + statusColor + '; font-size: 8px;">' + statusIcon + '</span>';
+
+                // Hover Quick Actions Overlay
+                html += '<div class="hover-actions" style="position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; gap: 0.2rem;">';
+                html += '<button onclick="event.stopPropagation(); generateSceneVoiceover(' + scriptScene.id + ')" title="Generate voiceover" style="width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(139,92,246,0.9); color: white; cursor: pointer; font-size: 0.6rem; display: flex; align-items: center; justify-content: center;">🎙️</button>';
+                html += '<button onclick="event.stopPropagation(); animateScene(' + scriptScene.id + ')" title="Animate" style="width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(6,182,212,0.9); color: white; cursor: pointer; font-size: 0.6rem; display: flex; align-items: center; justify-content: center;">🎬</button>';
                 html += '</div>';
-                // Scene number
-                html += '<div style="position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: rgba(0,0,0,0.7); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 0.55rem; font-weight: 700; color: white;">' + (index + 1) + '</div>';
+
+                html += '</div>';
+
+                // Scene number badge
+                html += '<div style="position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.55rem; font-weight: 700; color: white; z-index: 2;">' + (index + 1) + '</div>';
                 html += '</div>';
 
                 // Scene Info
                 html += '<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center;">';
                 html += '<div style="font-size: 0.7rem; color: white; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.25rem;">Scene ' + (index + 1) + '</div>';
+
+                // Progress indicator text
+                html += '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.2rem;">' + progress + '% complete</div>';
 
                 // Status badges
                 html += '<div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">';
@@ -6566,8 +6870,11 @@
                 if (hasAnimation) {
                     html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(6,182,212,0.3); color: #06b6d4; border-radius: 0.2rem;">🎬</span>';
                 }
-                if (isProcessing) {
-                    html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(251,191,36,0.3); color: #fbbf24; border-radius: 0.2rem;" class="animate-pulse">⏳</span>';
+                if (isVoiceGenerating) {
+                    html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(139,92,246,0.3); color: #a78bfa; border-radius: 0.2rem;" class="animate-pulse">🎙️...</span>';
+                }
+                if (isAnimGenerating) {
+                    html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(6,182,212,0.3); color: #06b6d4; border-radius: 0.2rem;" class="animate-pulse">🎬...</span>';
                 }
                 html += '</div>';
                 html += '</div>';
@@ -6645,19 +6952,54 @@
             html += '</div>';
             html += '</div>';
 
-            // Audio Waveform / Voiceover Section
+            // Mini Timeline Scrubber
+            html += '<div style="margin-top: 0.75rem; max-width: 640px; margin-left: auto; margin-right: auto; width: 100%;">';
+            html += renderMiniTimelineScrubber(scriptScenes, storyboardScenes, sceneIndex);
+            html += '</div>';
+
+            // Audio Waveform / Voiceover Section (Enhanced)
             html += '<div style="margin-top: 1rem; max-width: 640px; margin-left: auto; margin-right: auto; width: 100%;">';
-            html += renderVoiceoverSection(scriptScene, animScene, voiceoverUrl, voiceoverStatus, narration);
+            html += renderVoiceoverSectionPro(scriptScene, animScene, voiceoverUrl, voiceoverStatus, narration, storyboardScene);
             html += '</div>';
 
-            // Animation Style Gallery
+            // Animation Style Gallery with Smart Suggestions
             html += '<div style="margin-top: 1rem; max-width: 640px; margin-left: auto; margin-right: auto; width: 100%;">';
-            html += renderAnimationStyleGallery(scriptScene.id, animationType, !!voiceoverUrl, animationStatus);
+            html += renderAnimationStyleGalleryPro(scriptScene.id, animationType, !!voiceoverUrl, animationStatus, storyboardScene);
             html += '</div>';
 
             html += '</div>';
             html += '</div>';
 
+            return html;
+        }
+
+        // Mini Timeline Scrubber
+        function renderMiniTimelineScrubber(scriptScenes, storyboardScenes, currentIndex) {
+            var html = '';
+            html += '<div style="background: rgba(0,0,0,0.3); border-radius: 0.5rem; padding: 0.5rem;">';
+
+            // Timeline header
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">';
+            html += '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px;">Timeline</span>';
+            html += '<span style="font-size: 0.6rem; color: rgba(255,255,255,0.3);">Scene ' + (currentIndex + 1) + ' of ' + scriptScenes.length + '</span>';
+            html += '</div>';
+
+            // Timeline thumbnails
+            html += '<div style="display: flex; gap: 0.25rem; overflow-x: auto; padding-bottom: 0.25rem;">';
+            scriptScenes.forEach(function(scene, idx) {
+                var sb = storyboardScenes.find(function(s) { return s.sceneId === scene.id; }) || {};
+                var isActive = idx === currentIndex;
+                html += '<div onclick="selectAnimationScene(' + scene.id + ')" style="flex-shrink: 0; width: 48px; height: 27px; border-radius: 0.25rem; overflow: hidden; border: 2px solid ' + (isActive ? '#8b5cf6' : 'transparent') + '; cursor: pointer; opacity: ' + (isActive ? '1' : '0.6') + '; transition: all 0.15s;">';
+                if (sb.imageUrl) {
+                    html += '<img src="' + sb.imageUrl + '" style="width: 100%; height: 100%; object-fit: cover;">';
+                } else {
+                    html += '<div style="width: 100%; height: 100%; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; font-size: 0.5rem; color: rgba(255,255,255,0.3);">' + (idx + 1) + '</div>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+
+            html += '</div>';
             return html;
         }
 
@@ -6794,6 +7136,290 @@
             return html;
         }
 
+        // Enhanced Voiceover Section with Emotion Presets & A/B Comparison
+        function renderVoiceoverSectionPro(scriptScene, animScene, voiceoverUrl, voiceoverStatus, narration, storyboardScene) {
+            var voice = animScene.voice || state.animation.voiceover.voice || 'alloy';
+            var speed = animScene.speed || state.animation.voiceover.speed || 1.0;
+            var emotions = state.animation.emotionPresets || { emotion: 'neutral', energy: 0.5, tone: 0.5 };
+            var isABMode = state.animation.abCompareMode;
+
+            var html = '';
+            html += '<div style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); border-radius: 0.75rem; padding: 1rem;">';
+
+            // Header with A/B toggle
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span style="font-size: 1rem;">🎙️</span>';
+            html += '<span style="font-size: 0.85rem; font-weight: 600; color: white;">Voiceover Pro</span>';
+            if (voiceoverStatus === 'ready') {
+                html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(16,185,129,0.2); color: #10b981; border-radius: 1rem; font-weight: 600;">Ready</span>';
+            } else if (voiceoverStatus === 'generating') {
+                html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(251,191,36,0.2); color: #fbbf24; border-radius: 1rem; font-weight: 600;" class="animate-pulse">Generating...</span>';
+            }
+            html += '</div>';
+            html += '<button onclick="toggleABCompareMode()" style="padding: 0.35rem 0.6rem; border-radius: 0.35rem; border: 1px solid ' + (isABMode ? '#8b5cf6' : 'rgba(255,255,255,0.2)') + '; background: ' + (isABMode ? 'rgba(139,92,246,0.2)' : 'transparent') + '; color: ' + (isABMode ? '#a78bfa' : 'rgba(255,255,255,0.5)') + '; font-size: 0.65rem; cursor: pointer;">🔀 A/B Compare</button>';
+            html += '</div>';
+
+            // Narration preview
+            html += '<div style="background: rgba(0,0,0,0.2); border-radius: 0.5rem; padding: 0.6rem; margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">NARRATION</div>';
+            html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); line-height: 1.4; font-style: italic;">"' + narration.substring(0, 150) + (narration.length > 150 ? '...' : '') + '"</div>';
+            html += '</div>';
+
+            // A/B Comparison Mode
+            if (isABMode) {
+                html += renderABComparisonPanel(scriptScene.id);
+            } else {
+                // Real-time Waveform with Playhead
+                if (voiceoverUrl) {
+                    html += '<div style="margin-bottom: 0.75rem;">';
+                    html += '<div id="waveform-container-' + scriptScene.id + '" onclick="seekWaveform(' + scriptScene.id + ', event)" style="position: relative; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">';
+                    html += '<button onclick="event.stopPropagation(); toggleVoiceoverPlayback(' + scriptScene.id + ')" id="play-btn-' + scriptScene.id + '" style="width: 40px; height: 40px; border-radius: 50%; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;">▶</button>';
+                    html += '<div style="flex: 1; height: 40px; background: rgba(139,92,246,0.1); border-radius: 0.35rem; position: relative; overflow: hidden;">';
+                    // Waveform bars
+                    html += '<div style="position: absolute; inset: 0; display: flex; align-items: center; gap: 1px; padding: 0 0.5rem;">';
+                    for (var i = 0; i < 60; i++) {
+                        var barHeight = 25 + Math.sin(i * 0.3) * 20 + Math.random() * 30;
+                        html += '<div class="waveform-bar" style="flex: 1; height: ' + barHeight + '%; background: linear-gradient(to top, #8b5cf6, #a855f7); border-radius: 1px; min-width: 2px; transition: transform 0.1s;"></div>';
+                    }
+                    html += '</div>';
+                    // Playhead
+                    html += '<div class="waveform-playhead" style="position: absolute; top: 0; bottom: 0; left: 0%; width: 2px; background: white; box-shadow: 0 0 4px rgba(255,255,255,0.5); transition: left 0.1s linear;"></div>';
+                    // Progress overlay
+                    html += '<div class="waveform-progress" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: rgba(139,92,246,0.3);"></div>';
+                    html += '</div>';
+                    html += '<span id="time-display-' + scriptScene.id + '" style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-family: monospace; min-width: 45px;">0:00</span>';
+                    html += '</div>';
+                    html += '<audio id="voiceover-audio-' + scriptScene.id + '" src="' + voiceoverUrl + '" ontimeupdate="updateWaveformUI(' + scriptScene.id + ', this)" style="display: none;"></audio>';
+                    html += '</div>';
+                }
+
+                // Emotion Presets
+                html += '<div style="margin-bottom: 0.75rem;">';
+                html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem;">Emotion Preset</div>';
+                html += '<div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">';
+                var emotionOptions = [
+                    { id: 'neutral', emoji: '😐', label: 'Neutral' },
+                    { id: 'happy', emoji: '😊', label: 'Happy' },
+                    { id: 'excited', emoji: '🤩', label: 'Excited' },
+                    { id: 'serious', emoji: '😐', label: 'Serious' },
+                    { id: 'sad', emoji: '😢', label: 'Sad' }
+                ];
+                emotionOptions.forEach(function(em) {
+                    var isActive = emotions.emotion === em.id;
+                    html += '<button onclick="setEmotionPreset(\'' + em.id + '\')" style="padding: 0.35rem 0.5rem; border-radius: 0.35rem; border: 1px solid ' + (isActive ? '#8b5cf6' : 'rgba(255,255,255,0.15)') + '; background: ' + (isActive ? 'rgba(139,92,246,0.2)' : 'transparent') + '; color: ' + (isActive ? 'white' : 'rgba(255,255,255,0.6)') + '; font-size: 0.65rem; cursor: pointer; display: flex; align-items: center; gap: 0.25rem;">';
+                    html += '<span>' + em.emoji + '</span>';
+                    html += '<span>' + em.label + '</span>';
+                    html += '</button>';
+                });
+                html += '</div>';
+                html += '</div>';
+
+                // Voice & Speed Controls
+                html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">';
+
+                // Voice Selection
+                html += '<div>';
+                html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">Voice</label>';
+                html += '<div style="display: flex; gap: 0.35rem;">';
+                html += '<select onchange="setSceneVoice(' + scriptScene.id + ', this.value)" style="flex: 1; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">';
+                var voices = ['alloy', 'nova', 'shimmer', 'echo', 'onyx', 'fable'];
+                voices.forEach(function(v) {
+                    html += '<option value="' + v + '" ' + (voice === v ? 'selected' : '') + '>' + v.charAt(0).toUpperCase() + v.slice(1) + '</option>';
+                });
+                html += '</select>';
+                html += '<button onclick="previewVoice(\'' + voice + '\')" style="width: 36px; padding: 0.5rem; background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.4rem; color: #a78bfa; cursor: pointer; font-size: 0.8rem;" title="Preview">🔊</button>';
+                html += '</div>';
+                html += '</div>';
+
+                // Speed Control
+                html += '<div>';
+                html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">Speed: ' + speed.toFixed(1) + 'x</label>';
+                html += '<input type="range" min="0.5" max="2.0" step="0.1" value="' + speed + '" onchange="setSceneSpeed(' + scriptScene.id + ', this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #8b5cf6;">';
+                html += '</div>';
+                html += '</div>';
+
+                // Energy & Tone Sliders
+                html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">';
+                html += '<div>';
+                html += '<label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Energy: ' + (emotions.energy < 0.4 ? 'Calm' : emotions.energy > 0.6 ? 'High' : 'Medium') + '</label>';
+                html += '<input type="range" min="0" max="1" step="0.1" value="' + emotions.energy + '" onchange="setEnergyLevel(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #06b6d4;">';
+                html += '</div>';
+                html += '<div>';
+                html += '<label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Tone: ' + (emotions.tone < 0.4 ? 'Casual' : emotions.tone > 0.6 ? 'Formal' : 'Balanced') + '</label>';
+                html += '<input type="range" min="0" max="1" step="0.1" value="' + emotions.tone + '" onchange="setToneLevel(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #10b981;">';
+                html += '</div>';
+                html += '</div>';
+
+                // Generate Button
+                var isGenerating = voiceoverStatus === 'generating';
+                html += '<button onclick="generateSceneVoiceover(' + scriptScene.id + ')" ' + (isGenerating ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (isGenerating ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #a855f7)') + '; color: ' + (isGenerating ? 'rgba(255,255,255,0.4)' : 'white') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (isGenerating ? 'wait' : 'pointer') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
+                if (isGenerating) {
+                    html += '<span class="animate-spin">⏳</span> Generating...';
+                } else if (voiceoverUrl) {
+                    html += '<span>🔄</span> Regenerate Voiceover';
+                } else {
+                    html += '<span>🎙️</span> Generate Voiceover';
+                }
+                html += '</button>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // A/B Comparison Panel
+        function renderABComparisonPanel(sceneId) {
+            var voices = state.animation.abCompareVoices || ['nova', 'alloy'];
+            var audioUrls = state.animation.abCompareAudioUrls || [null, null];
+            var allVoices = ['alloy', 'nova', 'shimmer', 'echo', 'onyx', 'fable'];
+
+            var html = '';
+            html += '<div style="background: rgba(139,92,246,0.1); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.5rem; text-align: center;">🔀 Compare Two Voices</div>';
+
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">';
+
+            // Voice A
+            html += '<div style="background: rgba(0,0,0,0.2); border-radius: 0.4rem; padding: 0.5rem;">';
+            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.35rem; text-align: center;">Voice A</div>';
+            html += '<select onchange="setABCompareVoice(0, this.value)" style="width: 100%; padding: 0.4rem; background: rgba(30,30,50,1); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.35rem; color: white; font-size: 0.7rem; margin-bottom: 0.35rem;">';
+            allVoices.forEach(function(v) {
+                html += '<option value="' + v + '" ' + (voices[0] === v ? 'selected' : '') + '>' + v.charAt(0).toUpperCase() + v.slice(1) + '</option>';
+            });
+            html += '</select>';
+            if (audioUrls[0]) {
+                html += '<button onclick="document.getElementById(\'ab-audio-0\').play()" style="width: 100%; padding: 0.4rem; border-radius: 0.35rem; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; font-size: 0.7rem; cursor: pointer;">▶ Play A</button>';
+                html += '<audio id="ab-audio-0" src="' + audioUrls[0] + '"></audio>';
+            }
+            html += '</div>';
+
+            // Voice B
+            html += '<div style="background: rgba(0,0,0,0.2); border-radius: 0.4rem; padding: 0.5rem;">';
+            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.35rem; text-align: center;">Voice B</div>';
+            html += '<select onchange="setABCompareVoice(1, this.value)" style="width: 100%; padding: 0.4rem; background: rgba(30,30,50,1); border: 1px solid rgba(6,182,212,0.3); border-radius: 0.35rem; color: white; font-size: 0.7rem; margin-bottom: 0.35rem;">';
+            allVoices.forEach(function(v) {
+                html += '<option value="' + v + '" ' + (voices[1] === v ? 'selected' : '') + '>' + v.charAt(0).toUpperCase() + v.slice(1) + '</option>';
+            });
+            html += '</select>';
+            if (audioUrls[1]) {
+                html += '<button onclick="document.getElementById(\'ab-audio-1\').play()" style="width: 100%; padding: 0.4rem; border-radius: 0.35rem; border: none; background: linear-gradient(135deg, #06b6d4, #10b981); color: white; font-size: 0.7rem; cursor: pointer;">▶ Play B</button>';
+                html += '<audio id="ab-audio-1" src="' + audioUrls[1] + '"></audio>';
+            }
+            html += '</div>';
+
+            html += '</div>';
+
+            // Generate / Select buttons
+            if (!audioUrls[0] || !audioUrls[1]) {
+                html += '<button onclick="generateABComparison()" style="width: 100%; padding: 0.6rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer;">🎙️ Generate Both Voices</button>';
+            } else {
+                html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">';
+                html += '<button onclick="selectABWinner(0)" style="padding: 0.5rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; font-size: 0.7rem; font-weight: 600; cursor: pointer;">✓ Select A</button>';
+                html += '<button onclick="selectABWinner(1)" style="padding: 0.5rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #06b6d4, #10b981); color: white; font-size: 0.7rem; font-weight: 600; cursor: pointer;">✓ Select B</button>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        // Waveform UI Update Function
+        function updateWaveformUI(sceneId, audioElement) {
+            var currentTime = audioElement.currentTime;
+            var duration = audioElement.duration || 1;
+            var progress = (currentTime / duration) * 100;
+
+            var container = document.getElementById('waveform-container-' + sceneId);
+            if (container) {
+                var playhead = container.querySelector('.waveform-playhead');
+                var progressEl = container.querySelector('.waveform-progress');
+                if (playhead) playhead.style.left = progress + '%';
+                if (progressEl) progressEl.style.width = progress + '%';
+            }
+
+            var timeDisplay = document.getElementById('time-display-' + sceneId);
+            if (timeDisplay) {
+                var mins = Math.floor(currentTime / 60);
+                var secs = Math.floor(currentTime % 60);
+                timeDisplay.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+            }
+
+            var playBtn = document.getElementById('play-btn-' + sceneId);
+            if (playBtn) {
+                playBtn.textContent = audioElement.paused ? '▶' : '⏸';
+            }
+        }
+
+        // Animation Style Gallery Pro with Smart Suggestions
+        function renderAnimationStyleGalleryPro(sceneId, currentType, hasVoiceover, animationStatus, storyboardScene) {
+            var styles = [
+                { id: 'ken_burns', name: 'Ken Burns', desc: 'Smooth zoom & pan', icon: '🎬', color: '#06b6d4' },
+                { id: 'talking_head', name: 'Talking Head', desc: 'Subtle movement', icon: '🗣️', color: '#8b5cf6' },
+                { id: 'static', name: 'Static', desc: 'No animation', icon: '🖼️', color: '#6b7280' }
+            ];
+
+            // Get AI suggestion
+            var suggestion = getAnimationSuggestion(storyboardScene);
+
+            var html = '';
+            html += '<div style="background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.2); border-radius: 0.75rem; padding: 1rem;">';
+
+            // Header
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span style="font-size: 1rem;">🎬</span>';
+            html += '<span style="font-size: 0.85rem; font-weight: 600; color: white;">Animation Style</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Smart Suggestion Banner
+            if (suggestion && suggestion.type !== currentType) {
+                html += '<div onclick="applySuggestion(' + sceneId + ', \'' + suggestion.type + '\')" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(245,158,11,0.1)); border: 1px solid rgba(251,191,36,0.3); border-radius: 0.5rem; margin-bottom: 0.75rem; cursor: pointer; transition: all 0.15s;" onmouseenter="this.style.transform=\'scale(1.01)\'" onmouseleave="this.style.transform=\'scale(1)\'">';
+                html += '<span style="font-size: 1rem;">💡</span>';
+                html += '<div style="flex: 1;">';
+                html += '<div style="font-size: 0.7rem; color: #fbbf24; font-weight: 600;">AI Suggestion</div>';
+                html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.6);">' + suggestion.reason + '</div>';
+                html += '</div>';
+                html += '<span style="font-size: 0.65rem; color: #fbbf24; background: rgba(251,191,36,0.2); padding: 0.2rem 0.5rem; border-radius: 0.25rem;">Apply</span>';
+                html += '</div>';
+            }
+
+            // Style Cards Grid
+            html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.75rem;">';
+
+            styles.forEach(function(style) {
+                var isSelected = currentType === style.id;
+                var isSuggested = suggestion && suggestion.type === style.id;
+                html += '<div onclick="setSceneAnimationType(' + sceneId + ', \'' + style.id + '\')" style="position: relative; padding: 0.6rem; background: ' + (isSelected ? 'rgba(6,182,212,0.2)' : 'rgba(255,255,255,0.03)') + '; border: 2px solid ' + (isSelected ? style.color : 'rgba(255,255,255,0.08)') + '; border-radius: 0.5rem; cursor: pointer; text-align: center; transition: all 0.15s;">';
+                if (isSuggested && !isSelected) {
+                    html += '<div style="position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; background: #fbbf24; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.55rem;">💡</div>';
+                }
+                html += '<div style="font-size: 1.25rem; margin-bottom: 0.25rem;">' + style.icon + '</div>';
+                html += '<div style="font-size: 0.7rem; font-weight: 600; color: ' + (isSelected ? style.color : 'white') + ';">' + style.name + '</div>';
+                html += '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">' + style.desc + '</div>';
+                html += '</div>';
+            });
+
+            html += '</div>';
+
+            // Animate Button
+            var isAnimating = animationStatus === 'generating';
+            var canAnimate = hasVoiceover && !isAnimating;
+            html += '<button onclick="animateScene(' + sceneId + ')" ' + (!canAnimate ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (canAnimate ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)') + '; color: ' + (canAnimate ? 'white' : 'rgba(255,255,255,0.4)') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (canAnimate ? 'pointer' : 'not-allowed') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
+            if (isAnimating) {
+                html += '<span class="animate-spin">⏳</span> Animating...';
+            } else if (!hasVoiceover) {
+                html += '<span>🔒</span> Generate voiceover first';
+            } else {
+                html += '<span>🎬</span> Create Animation';
+            }
+            html += '</button>';
+
+            html += '</div>';
+            return html;
+        }
+
         // Bottom Batch Queue
         function renderAnimationBatchQueue(animationScenes, storyboardScenes) {
             var processing = animationScenes.filter(function(s) {
@@ -6901,6 +7527,457 @@
         function previewVoice(voiceName) {
             // Create a quick sample preview of the selected voice
             showToast('Voice preview: ' + voiceName.charAt(0).toUpperCase() + voiceName.slice(1), 'info');
+        }
+
+        // ==========================================
+        // ANIMATION STUDIO PRO 2.0 - NEW FEATURES
+        // ==========================================
+
+        // Keyboard Shortcuts Handler
+        function initAnimationKeyboardShortcuts() {
+            document.addEventListener('keydown', handleAnimationKeydown);
+        }
+
+        function handleAnimationKeydown(e) {
+            // Only handle if we're on step 5 and not in an input
+            if (state.currentStep !== 5) return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+            var scriptScenes = state.script.scenes || [];
+            var currentIndex = scriptScenes.findIndex(function(s) { return s.id === state.animation.selectedSceneId; });
+
+            switch(e.key) {
+                case '?':
+                    e.preventDefault();
+                    toggleKeyboardShortcuts();
+                    break;
+                case 'Escape':
+                    if (state.animation.cinemaMode) {
+                        e.preventDefault();
+                        exitCinemaMode();
+                    } else if (state.animation.showKeyboardShortcuts) {
+                        e.preventDefault();
+                        toggleKeyboardShortcuts();
+                    }
+                    break;
+                case 'ArrowUp':
+                case 'k':
+                    e.preventDefault();
+                    if (currentIndex > 0) {
+                        selectAnimationScene(scriptScenes[currentIndex - 1].id);
+                    }
+                    break;
+                case 'ArrowDown':
+                case 'j':
+                    e.preventDefault();
+                    if (currentIndex < scriptScenes.length - 1) {
+                        selectAnimationScene(scriptScenes[currentIndex + 1].id);
+                    }
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    toggleCurrentPreview();
+                    break;
+                case 'v':
+                    if (!e.shiftKey) {
+                        e.preventDefault();
+                        if (state.animation.selectedSceneId) {
+                            generateSceneVoiceover(state.animation.selectedSceneId);
+                        }
+                    } else {
+                        e.preventDefault();
+                        generateAllVoiceovers();
+                    }
+                    break;
+                case 'V':
+                    e.preventDefault();
+                    generateAllVoiceovers();
+                    break;
+                case 'a':
+                    if (!e.shiftKey) {
+                        e.preventDefault();
+                        if (state.animation.selectedSceneId) {
+                            animateScene(state.animation.selectedSceneId);
+                        }
+                    } else {
+                        e.preventDefault();
+                        animateAllScenes();
+                    }
+                    break;
+                case 'A':
+                    e.preventDefault();
+                    animateAllScenes();
+                    break;
+                case 'c':
+                    e.preventDefault();
+                    enterCinemaMode();
+                    break;
+                case 'q':
+                    e.preventDefault();
+                    toggleQueueManager();
+                    break;
+                case 'b':
+                    e.preventDefault();
+                    toggleABCompareMode();
+                    break;
+                case '1': case '2': case '3': case '4': case '5':
+                case '6': case '7': case '8': case '9':
+                    e.preventDefault();
+                    var num = parseInt(e.key) - 1;
+                    if (num < scriptScenes.length) {
+                        selectAnimationScene(scriptScenes[num].id);
+                    }
+                    break;
+            }
+        }
+
+        function toggleKeyboardShortcuts() {
+            state.animation.showKeyboardShortcuts = !state.animation.showKeyboardShortcuts;
+            render();
+        }
+
+        function toggleQueueManager() {
+            state.animation.showQueueManager = !state.animation.showQueueManager;
+            render();
+        }
+
+        function toggleCurrentPreview() {
+            var video = document.getElementById('detail-preview-video');
+            var audio = document.getElementById('voiceover-audio-' + state.animation.selectedSceneId);
+            if (video) {
+                if (video.paused) video.play(); else video.pause();
+            } else if (audio) {
+                if (audio.paused) audio.play(); else audio.pause();
+            }
+        }
+
+        // Multi-Select Functions
+        function toggleSceneSelection(sceneId, event) {
+            if (event) event.stopPropagation();
+
+            var selectedIds = state.animation.selectedSceneIds || [];
+            var index = selectedIds.indexOf(sceneId);
+
+            if (event && event.ctrlKey) {
+                // Ctrl+Click: Toggle individual selection
+                if (index > -1) {
+                    selectedIds.splice(index, 1);
+                } else {
+                    selectedIds.push(sceneId);
+                }
+            } else if (event && event.shiftKey && state.animation.selectedSceneId) {
+                // Shift+Click: Range selection
+                var scriptScenes = state.script.scenes || [];
+                var startIdx = scriptScenes.findIndex(function(s) { return s.id === state.animation.selectedSceneId; });
+                var endIdx = scriptScenes.findIndex(function(s) { return s.id === sceneId; });
+                if (startIdx > endIdx) { var temp = startIdx; startIdx = endIdx; endIdx = temp; }
+                selectedIds = [];
+                for (var i = startIdx; i <= endIdx; i++) {
+                    selectedIds.push(scriptScenes[i].id);
+                }
+            } else {
+                // Normal click: Single selection
+                selectedIds = [sceneId];
+                state.animation.selectedSceneId = sceneId;
+            }
+
+            state.animation.selectedSceneIds = selectedIds;
+            if (selectedIds.length === 1) {
+                state.animation.selectedSceneId = selectedIds[0];
+            }
+            render();
+        }
+
+        function clearMultiSelection() {
+            state.animation.selectedSceneIds = [];
+            render();
+        }
+
+        function batchGenerateVoiceovers() {
+            var selectedIds = state.animation.selectedSceneIds || [];
+            if (selectedIds.length === 0) {
+                showToast('No scenes selected', 'info');
+                return;
+            }
+            showToast('Generating voiceovers for ' + selectedIds.length + ' scenes...', 'info');
+            selectedIds.forEach(function(id) {
+                var scene = state.animation.scenes.find(function(s) { return s.sceneId === id; });
+                if (scene && !scene.voiceoverUrl) {
+                    generateSceneVoiceover(id);
+                }
+            });
+        }
+
+        function batchAnimateScenes() {
+            var selectedIds = state.animation.selectedSceneIds || [];
+            if (selectedIds.length === 0) {
+                showToast('No scenes selected', 'info');
+                return;
+            }
+            showToast('Animating ' + selectedIds.length + ' scenes...', 'info');
+            selectedIds.forEach(function(id) {
+                var scene = state.animation.scenes.find(function(s) { return s.sceneId === id; });
+                if (scene && scene.voiceoverUrl && !scene.videoUrl) {
+                    animateScene(id);
+                }
+            });
+        }
+
+        // Drag and Drop Scene Reordering
+        function handleSceneDragStart(sceneId, event) {
+            state.animation.draggedSceneId = sceneId;
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', sceneId);
+            event.target.style.opacity = '0.5';
+        }
+
+        function handleSceneDragOver(index, event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            state.animation.dropTargetIndex = index;
+            render();
+        }
+
+        function handleSceneDragEnd(event) {
+            event.target.style.opacity = '1';
+            state.animation.draggedSceneId = null;
+            state.animation.dropTargetIndex = null;
+            render();
+        }
+
+        function handleSceneDrop(targetIndex, event) {
+            event.preventDefault();
+            var draggedId = state.animation.draggedSceneId;
+            if (!draggedId) return;
+
+            var scriptScenes = state.script.scenes || [];
+            var sourceIndex = scriptScenes.findIndex(function(s) { return s.id === draggedId; });
+
+            if (sourceIndex !== -1 && sourceIndex !== targetIndex) {
+                var scene = scriptScenes.splice(sourceIndex, 1)[0];
+                if (targetIndex > sourceIndex) targetIndex--;
+                scriptScenes.splice(targetIndex, 0, scene);
+                state.script.scenes = scriptScenes;
+                saveProject();
+                showToast('Scene reordered', 'success');
+            }
+
+            state.animation.draggedSceneId = null;
+            state.animation.dropTargetIndex = null;
+            render();
+        }
+
+        // Cinema Mode
+        function enterCinemaMode() {
+            state.animation.cinemaMode = true;
+            state.animation.cinemaModeSceneIndex = 0;
+            render();
+        }
+
+        function exitCinemaMode() {
+            state.animation.cinemaMode = false;
+            render();
+        }
+
+        function cinemaModeNext() {
+            var scriptScenes = state.script.scenes || [];
+            if (state.animation.cinemaModeSceneIndex < scriptScenes.length - 1) {
+                state.animation.cinemaModeSceneIndex++;
+                render();
+            }
+        }
+
+        function cinemaModePrev() {
+            if (state.animation.cinemaModeSceneIndex > 0) {
+                state.animation.cinemaModeSceneIndex--;
+                render();
+            }
+        }
+
+        function cinemaModePlayAll() {
+            // Play all scenes sequentially
+            var scriptScenes = state.script.scenes || [];
+            var animScenes = state.animation.scenes || [];
+            var currentIdx = state.animation.cinemaModeSceneIndex;
+
+            function playNext() {
+                if (currentIdx >= scriptScenes.length) {
+                    showToast('Preview complete!', 'success');
+                    return;
+                }
+                state.animation.cinemaModeSceneIndex = currentIdx;
+                render();
+
+                var scene = scriptScenes[currentIdx];
+                var animScene = animScenes.find(function(s) { return s.sceneId === scene.id; });
+                var duration = (scene.duration || 8) * 1000;
+
+                // Play voiceover if available
+                setTimeout(function() {
+                    var audio = document.getElementById('cinema-audio');
+                    if (audio && animScene && animScene.voiceoverUrl) {
+                        audio.src = animScene.voiceoverUrl;
+                        audio.play();
+                    }
+                }, 100);
+
+                currentIdx++;
+                setTimeout(playNext, duration);
+            }
+
+            playNext();
+        }
+
+        // A/B Voice Comparison
+        function toggleABCompareMode() {
+            state.animation.abCompareMode = !state.animation.abCompareMode;
+            state.animation.abCompareAudioUrls = [null, null];
+            render();
+        }
+
+        function setABCompareVoice(index, voice) {
+            state.animation.abCompareVoices[index] = voice;
+            state.animation.abCompareAudioUrls[index] = null;
+            render();
+        }
+
+        async function generateABComparison() {
+            var sceneId = state.animation.selectedSceneId;
+            var scriptScene = state.script.scenes.find(function(s) { return s.id === sceneId; });
+            if (!scriptScene || !scriptScene.narration) {
+                showToast('No narration for this scene', 'error');
+                return;
+            }
+
+            showToast('Generating A/B comparison...', 'info');
+
+            try {
+                var generateVoiceover = firebase.functions().httpsCallable('creationWizardGenerateVoiceover');
+
+                // Generate both voices
+                var results = await Promise.all([
+                    generateVoiceover({
+                        projectId: state.project.id,
+                        sceneId: sceneId,
+                        text: scriptScene.narration,
+                        voice: state.animation.abCompareVoices[0],
+                        speed: state.animation.voiceover.speed,
+                        isABTest: true
+                    }),
+                    generateVoiceover({
+                        projectId: state.project.id,
+                        sceneId: sceneId,
+                        text: scriptScene.narration,
+                        voice: state.animation.abCompareVoices[1],
+                        speed: state.animation.voiceover.speed,
+                        isABTest: true
+                    })
+                ]);
+
+                state.animation.abCompareAudioUrls = [
+                    results[0].data.audioUrl,
+                    results[1].data.audioUrl
+                ];
+                render();
+                showToast('A/B comparison ready!', 'success');
+            } catch (error) {
+                console.error('A/B comparison error:', error);
+                showToast('Failed to generate comparison', 'error');
+            }
+        }
+
+        function selectABWinner(index) {
+            var sceneId = state.animation.selectedSceneId;
+            var animScene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+            if (animScene && state.animation.abCompareAudioUrls[index]) {
+                animScene.voiceoverUrl = state.animation.abCompareAudioUrls[index];
+                animScene.voiceoverStatus = 'ready';
+                animScene.voice = state.animation.abCompareVoices[index];
+                state.animation.abCompareMode = false;
+                saveProject();
+                render();
+                showToast('Voice ' + (index + 1) + ' selected!', 'success');
+            }
+        }
+
+        // Voice Emotion Presets
+        function setEmotionPreset(emotion) {
+            state.animation.emotionPresets.emotion = emotion;
+            render();
+        }
+
+        function setEnergyLevel(energy) {
+            state.animation.emotionPresets.energy = parseFloat(energy);
+            render();
+        }
+
+        function setToneLevel(tone) {
+            state.animation.emotionPresets.tone = parseFloat(tone);
+            render();
+        }
+
+        // Smart Animation Suggestions
+        function getAnimationSuggestion(storyboardScene) {
+            if (!storyboardScene || !storyboardScene.imageUrl) return null;
+
+            var prompt = (storyboardScene.prompt || '').toLowerCase();
+            var source = storyboardScene.source || '';
+
+            // Simple heuristics for suggestions
+            if (prompt.includes('face') || prompt.includes('person') || prompt.includes('portrait') || prompt.includes('character')) {
+                return { type: 'talking_head', reason: 'Face detected - subtle movement recommended' };
+            }
+            if (prompt.includes('landscape') || prompt.includes('city') || prompt.includes('panorama') || prompt.includes('view')) {
+                return { type: 'ken_burns', reason: 'Scenic view - smooth pan suggested' };
+            }
+            if (prompt.includes('action') || prompt.includes('dynamic') || prompt.includes('motion')) {
+                return { type: 'ken_burns', reason: 'Dynamic scene - zoom effect recommended' };
+            }
+            if (source === 'stock-video') {
+                return { type: 'static', reason: 'Stock video - no animation needed' };
+            }
+
+            return { type: 'ken_burns', reason: 'Ken Burns adds subtle motion' };
+        }
+
+        function applySuggestion(sceneId, animationType) {
+            setSceneAnimationType(sceneId, animationType);
+            showToast('Applied: ' + animationType.replace('_', ' '), 'success');
+        }
+
+        // Real-time Waveform Functions
+        function initWaveformVisualization(sceneId, audioUrl) {
+            // Generate pseudo-waveform data based on audio analysis
+            // In production, this would use Web Audio API
+            var waveformBars = [];
+            for (var i = 0; i < 60; i++) {
+                waveformBars.push(20 + Math.random() * 60);
+            }
+            state.animation.waveformData[sceneId] = waveformBars;
+        }
+
+        function updateWaveformPlayhead(sceneId, currentTime, duration) {
+            state.animation.currentPlaybackTime = currentTime;
+            var waveform = document.getElementById('waveform-container-' + sceneId);
+            if (waveform) {
+                var progress = (currentTime / duration) * 100;
+                var playhead = waveform.querySelector('.waveform-playhead');
+                if (playhead) {
+                    playhead.style.left = progress + '%';
+                }
+            }
+        }
+
+        function seekWaveform(sceneId, event) {
+            var waveform = event.currentTarget;
+            var rect = waveform.getBoundingClientRect();
+            var x = event.clientX - rect.left;
+            var progress = x / rect.width;
+
+            var audio = document.getElementById('voiceover-audio-' + sceneId);
+            if (audio && audio.duration) {
+                audio.currentTime = progress * audio.duration;
+            }
         }
 
         function initializeAnimationScenes() {
@@ -12637,6 +13714,9 @@
         // ==========================================
         async function init() {
             try {
+                // Initialize Animation Studio Pro keyboard shortcuts
+                initAnimationKeyboardShortcuts();
+
                 const user = await initAuth();
 
                 // Log auth result but DON'T redirect - let page render regardless
