@@ -2684,11 +2684,30 @@
                 sceneOrder: [],
                 transitions: {},
                 music: { enabled: false, trackId: null, volume: 30 },
-                captions: { enabled: true, style: 'karaoke', position: 'bottom', size: 1 },
+                // Enhanced caption settings
+                captions: {
+                    enabled: true,
+                    style: 'karaoke',
+                    position: 'bottom',
+                    size: 1,
+                    // New professional options
+                    mode: 'word',              // 'word' or 'sentence'
+                    fontFamily: 'Montserrat',
+                    fontWeight: 600,
+                    fillColor: '#FFFFFF',
+                    strokeColor: '#000000',
+                    strokeWidth: 2,
+                    shadowEnabled: true,
+                    effect: 'none',            // 'none', 'pop', 'fade', 'zoom', 'bounce'
+                    highlightStyle: 'color',   // 'color', 'background', 'glow'
+                    highlightColor: '#FBBF24'
+                },
                 audioMix: { voiceVolume: 100, musicVolume: 30 },
                 musicLibrary: [],
                 transitionTypes: [],
-                captionStyles: []
+                captionStyles: [],
+                // UI state for tabbed interface
+                activeTab: 'text'              // 'text', 'audio', 'media', 'transitions'
             },
 
             // Preview Engine State
@@ -6851,70 +6870,48 @@
                 if (scene) totalDuration += scene.duration || 8;
             });
 
+            const activeTab = state.assembly.activeTab || 'text';
+
             let html = '<div class="fade-in">';
 
-            // Header
+            // Compact Header
             html += `
-                <div class="content-card">
-                    <div class="content-card-header">
-                        <div class="content-card-icon">🎞️</div>
-                        <div style="flex: 1;">
-                            <div class="content-card-title">Video Assembly</div>
-                            <div class="content-card-subtitle">Arrange scenes, add music & captions • Total: ${formatDuration(totalDuration)}</div>
-                        </div>
+                <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background: rgba(30,30,50,0.95); border-radius: 0.75rem; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 1.2rem;">🎬</span>
+                        <span style="font-weight: 600; color: white;">Content Client</span>
+                    </div>
+                    <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2);"></div>
+                    <span style="color: rgba(255,255,255,0.7); font-size: 0.85rem;">Rapid Dominate</span>
+                    <div style="margin-left: auto; display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${sceneOrder.length} scenes • ${formatDuration(totalDuration)}</span>
+                        <button onclick="saveAssemblySettings()" style="padding: 0.4rem 0.75rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer;">
+                            💾 Save
+                        </button>
                     </div>
                 </div>
             `;
 
-            // Main Assembly Layout - Two columns with preview
-            html += `<div style="display: grid; grid-template-columns: 1fr 440px; gap: 1rem; margin-top: 1rem;">`;
+            // Main Professional Layout - Three columns
+            html += `<div style="display: grid; grid-template-columns: 200px 320px 1fr; gap: 1rem; height: calc(100vh - 280px); min-height: 500px;">`;
 
-            // Left Column - Timeline
-            html += `
-                <div>
-                    <div class="content-card" style="padding: 1rem;">
-                        <div style="font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>📋</span> Scene Timeline
-                            <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5); font-weight: 400; margin-left: auto;">Click to preview • Drag to reorder</span>
-                        </div>
-                        <div id="timeline-container" style="display: flex; flex-direction: column; gap: 0.5rem;">
-            `;
+            // LEFT SIDEBAR - Navigation
+            html += renderAssemblySidebar(sceneOrder.length, totalDuration);
 
-            sceneOrder.forEach((sceneId, index) => {
-                const scriptScene = scriptScenes.find(s => s.id === sceneId);
-                const animScene = animationScenes.find(s => s.sceneId === sceneId);
-                const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
-                const transition = state.assembly.transitions[sceneId] || { type: 'cut' };
+            // MIDDLE PANEL - Tabbed Controls
+            html += renderTabbedControlPanel(activeTab);
 
-                if (scriptScene) {
-                    html += renderTimelineSceneCard(scriptScene, animScene, storyboardScene, transition, index, sceneOrder.length);
-                }
-            });
-
-            html += `
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Right Column - Preview + Settings
-            html += `
-                <div style="display: flex; flex-direction: column; gap: 1rem;">
-                    ${renderPreviewPanel()}
-                    <div style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem;">
-                        ${renderMusicSettings()}
-                        ${renderCaptionSettings()}
-                        ${renderAudioMixSettings()}
-                    </div>
-                    <!-- Save Assembly Button - Outside the scrollable container -->
-                    <button onclick="saveAssemblySettings()"
-                            style="width: 100%; padding: 0.85rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; font-size: 0.9rem; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);">
-                        💾 Save Assembly Settings
-                    </button>
-                </div>
-            `;
+            // RIGHT PANEL - Preview
+            html += renderCompactPreviewPanel();
 
             html += `</div>`;
+
+            // BOTTOM - Professional Timeline
+            html += `
+                <div style="margin-top: 1rem;">
+                    ${renderProfessionalTimeline(scriptScenes, animationScenes, totalDuration)}
+                </div>
+            `;
 
             // Navigation
             const isAssemblyReady = sceneOrder.length > 0;
@@ -6922,6 +6919,469 @@
 
             html += '</div>';
             return html;
+        }
+
+        // LEFT SIDEBAR for Assembly
+        function renderAssemblySidebar(sceneCount, totalDuration) {
+            return `
+                <div style="background: rgba(20,20,35,0.95); border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.1); padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <!-- Project Info -->
+                    <div style="padding: 0.5rem; background: rgba(139,92,246,0.1); border-radius: 0.5rem; margin-bottom: 0.5rem;">
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Project</div>
+                        <div style="font-size: 0.85rem; color: white; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${state.project.name || 'Untitled'}</div>
+                    </div>
+
+                    <!-- Navigation Items -->
+                    <button onclick="setAssemblyTab('scenes')" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; color: white; cursor: pointer; text-align: left; width: 100%;">
+                        <span>📹</span>
+                        <span style="flex: 1; font-size: 0.8rem;">Scenes</span>
+                        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5); background: rgba(139,92,246,0.2); padding: 0.15rem 0.4rem; border-radius: 0.25rem;">${sceneCount}</span>
+                    </button>
+
+                    <button onclick="setAssemblyTab('text')" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem; background: ${state.assembly.activeTab === 'text' ? 'rgba(139,92,246,0.2)' : 'transparent'}; border: 1px solid ${state.assembly.activeTab === 'text' ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; color: white; cursor: pointer; text-align: left; width: 100%;">
+                        <span>💬</span>
+                        <span style="flex: 1; font-size: 0.8rem;">Captions</span>
+                        ${state.assembly.captions.enabled ? '<span style="width: 8px; height: 8px; background: #10b981; border-radius: 50%;"></span>' : ''}
+                    </button>
+
+                    <button onclick="setAssemblyTab('audio')" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem; background: ${state.assembly.activeTab === 'audio' ? 'rgba(139,92,246,0.2)' : 'transparent'}; border: 1px solid ${state.assembly.activeTab === 'audio' ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; color: white; cursor: pointer; text-align: left; width: 100%;">
+                        <span>🎵</span>
+                        <span style="flex: 1; font-size: 0.8rem;">Audio</span>
+                        ${state.assembly.music.enabled ? '<span style="width: 8px; height: 8px; background: #10b981; border-radius: 50%;"></span>' : ''}
+                    </button>
+
+                    <button onclick="setAssemblyTab('transitions')" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem; background: ${state.assembly.activeTab === 'transitions' ? 'rgba(139,92,246,0.2)' : 'transparent'}; border: 1px solid ${state.assembly.activeTab === 'transitions' ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; color: white; cursor: pointer; text-align: left; width: 100%;">
+                        <span>✨</span>
+                        <span style="flex: 1; font-size: 0.8rem;">Transitions</span>
+                    </button>
+
+                    <div style="flex: 1;"></div>
+
+                    <!-- Quick Actions -->
+                    <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.75rem; margin-top: 0.5rem;">
+                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Quick Actions</div>
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                            <button onclick="initializePreviewEngine()" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 0.4rem; color: #10b981; cursor: pointer; font-size: 0.7rem;">
+                                <span>▶</span> Preview
+                            </button>
+                            <button onclick="goToStep(7)" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.4rem; color: #a78bfa; cursor: pointer; font-size: 0.7rem;">
+                                <span>🚀</span> Export
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Duration Display -->
+                    <div style="text-align: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.4rem; margin-top: 0.5rem;">
+                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">Total Duration</div>
+                        <div style="font-size: 1rem; color: white; font-weight: 600; font-family: monospace;">${formatDuration(totalDuration)}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // TABBED CONTROL PANEL
+        function renderTabbedControlPanel(activeTab) {
+            return `
+                <div style="background: rgba(20,20,35,0.95); border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow: hidden;">
+                    <!-- Tab Headers -->
+                    <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
+                        <button onclick="setAssemblyTab('text')" style="flex: 1; padding: 0.75rem 0.5rem; background: ${activeTab === 'text' ? 'rgba(139,92,246,0.15)' : 'transparent'}; border: none; border-bottom: 2px solid ${activeTab === 'text' ? '#8b5cf6' : 'transparent'}; color: ${activeTab === 'text' ? 'white' : 'rgba(255,255,255,0.5)'}; cursor: pointer; font-size: 0.75rem; font-weight: ${activeTab === 'text' ? '600' : '400'}; transition: all 0.2s;">
+                            TEXT
+                        </button>
+                        <button onclick="setAssemblyTab('audio')" style="flex: 1; padding: 0.75rem 0.5rem; background: ${activeTab === 'audio' ? 'rgba(139,92,246,0.15)' : 'transparent'}; border: none; border-bottom: 2px solid ${activeTab === 'audio' ? '#8b5cf6' : 'transparent'}; color: ${activeTab === 'audio' ? 'white' : 'rgba(255,255,255,0.5)'}; cursor: pointer; font-size: 0.75rem; font-weight: ${activeTab === 'audio' ? '600' : '400'}; transition: all 0.2s;">
+                            Audio
+                        </button>
+                        <button onclick="setAssemblyTab('media')" style="flex: 1; padding: 0.75rem 0.5rem; background: ${activeTab === 'media' ? 'rgba(139,92,246,0.15)' : 'transparent'}; border: none; border-bottom: 2px solid ${activeTab === 'media' ? '#8b5cf6' : 'transparent'}; color: ${activeTab === 'media' ? 'white' : 'rgba(255,255,255,0.5)'}; cursor: pointer; font-size: 0.75rem; font-weight: ${activeTab === 'media' ? '600' : '400'}; transition: all 0.2s;">
+                            Media
+                        </button>
+                        <button onclick="setAssemblyTab('transitions')" style="flex: 1; padding: 0.75rem 0.5rem; background: ${activeTab === 'transitions' ? 'rgba(139,92,246,0.15)' : 'transparent'}; border: none; border-bottom: 2px solid ${activeTab === 'transitions' ? '#8b5cf6' : 'transparent'}; color: ${activeTab === 'transitions' ? 'white' : 'rgba(255,255,255,0.5)'}; cursor: pointer; font-size: 0.75rem; font-weight: ${activeTab === 'transitions' ? '600' : '400'}; transition: all 0.2s;">
+                            Transitions
+                        </button>
+                    </div>
+
+                    <!-- Tab Content -->
+                    <div style="flex: 1; overflow-y: auto; padding: 1rem;">
+                        ${activeTab === 'text' ? renderTextTabContent() : ''}
+                        ${activeTab === 'audio' ? renderAudioTabContent() : ''}
+                        ${activeTab === 'media' ? renderMediaTabContent() : ''}
+                        ${activeTab === 'transitions' ? renderTransitionsTabContent() : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // TEXT TAB - Professional Caption Controls
+        function renderTextTabContent() {
+            const captions = state.assembly.captions;
+            const fonts = ['Montserrat', 'Poppins', 'Roboto', 'Inter', 'Oswald', 'Bebas Neue', 'Anton', 'Playfair Display'];
+            const effects = [
+                { id: 'none', name: 'None', icon: '—' },
+                { id: 'pop', name: 'Pop', icon: '💥' },
+                { id: 'fade', name: 'Fade', icon: '🌫️' },
+                { id: 'zoom', name: 'Zoom', icon: '🔍' },
+                { id: 'bounce', name: 'Bounce', icon: '⚡' }
+            ];
+
+            return `
+                <!-- Captions Section Header -->
+                <div style="margin-bottom: 1rem;">
+                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Captions</div>
+                </div>
+
+                <!-- Show Captions Toggle -->
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; margin-bottom: 1rem;">
+                    <span style="font-size: 0.85rem; color: white;">Show Captions</span>
+                    <label style="position: relative; display: inline-block; width: 44px; height: 24px;">
+                        <input type="checkbox" ${captions.enabled ? 'checked' : ''} onchange="setCaptionEnabled(this.checked)" style="opacity: 0; width: 0; height: 0;">
+                        <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${captions.enabled ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; transition: 0.3s; border-radius: 24px;">
+                            <span style="position: absolute; content: ''; height: 18px; width: 18px; left: ${captions.enabled ? '23px' : '3px'}; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%;"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <div style="opacity: ${captions.enabled ? '1' : '0.4'}; pointer-events: ${captions.enabled ? 'auto' : 'none'};">
+                    <!-- Caption Style (Word/Sentence) -->
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Caption Style</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                            <button onclick="setCaptionMode('word')" style="padding: 0.5rem; border-radius: 0.4rem; border: 1px solid ${captions.mode === 'word' ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; background: ${captions.mode === 'word' ? 'rgba(139,92,246,0.2)' : 'transparent'}; color: white; cursor: pointer; font-size: 0.75rem; font-weight: ${captions.mode === 'word' ? '600' : '400'};">
+                                WORD LEVEL
+                            </button>
+                            <button onclick="setCaptionMode('sentence')" style="padding: 0.5rem; border-radius: 0.4rem; border: 1px solid ${captions.mode === 'sentence' ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; background: ${captions.mode === 'sentence' ? 'rgba(139,92,246,0.2)' : 'transparent'}; color: white; cursor: pointer; font-size: 0.75rem; font-weight: ${captions.mode === 'sentence' ? '600' : '400'};">
+                                SENTENCE LEVEL
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Font Selection -->
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Font</label>
+                        <select onchange="setCaptionFont(this.value)" style="width: 100%; padding: 0.6rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.8rem; cursor: pointer;">
+                            ${fonts.map(f => `<option value="${f}" ${captions.fontFamily === f ? 'selected' : ''} style="font-family: ${f};">${f}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <!-- Fill Color -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Fill Color</span>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="color" value="${captions.fillColor}" onchange="setCaptionFillColor(this.value)" style="width: 32px; height: 24px; border: none; border-radius: 0.25rem; cursor: pointer; background: transparent;">
+                            <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-family: monospace;">${captions.fillColor}</span>
+                        </div>
+                    </div>
+
+                    <!-- Stroke Color -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                            <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Stroke Color</span>
+                            <input type="color" value="${captions.strokeColor}" onchange="setCaptionStrokeColor(this.value)" style="width: 24px; height: 18px; border: none; border-radius: 0.2rem; cursor: pointer;">
+                        </div>
+                    </div>
+
+                    <!-- Stroke Width -->
+                    <div style="margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                            <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Stroke Width</span>
+                            <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">${captions.strokeWidth}px</span>
+                        </div>
+                        <input type="range" min="0" max="5" step="0.5" value="${captions.strokeWidth}" onchange="setCaptionStrokeWidth(this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #8b5cf6;">
+                    </div>
+
+                    <!-- Effects Section -->
+                    <div style="margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">✨ EFFECTS</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem;">
+                            ${effects.map(e => `
+                                <button onclick="setCaptionEffect('${e.id}')" style="padding: 0.4rem 0.25rem; border-radius: 0.3rem; border: 1px solid ${captions.effect === e.id ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${captions.effect === e.id ? 'rgba(139,92,246,0.2)' : 'transparent'}; color: white; cursor: pointer; font-size: 0.65rem; text-align: center;">
+                                    <div style="font-size: 0.9rem; margin-bottom: 2px;">${e.icon}</div>
+                                    ${e.name}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Text Style Presets -->
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Text Style</label>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;">
+                            <button onclick="setCaptionStyle('karaoke')" style="padding: 0.5rem; border-radius: 0.3rem; border: 1px solid ${captions.style === 'karaoke' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${captions.style === 'karaoke' ? 'rgba(139,92,246,0.2)' : 'transparent'}; color: white; cursor: pointer; font-size: 0.7rem;">
+                                Karaoke
+                            </button>
+                            <button onclick="setCaptionStyle('beasty')" style="padding: 0.5rem; border-radius: 0.3rem; border: 1px solid ${captions.style === 'beasty' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${captions.style === 'beasty' ? 'rgba(139,92,246,0.2)' : 'transparent'}; color: white; cursor: pointer; font-size: 0.7rem;">
+                                Bold
+                            </button>
+                            <button onclick="setCaptionStyle('deepdiver')" style="padding: 0.5rem; border-radius: 0.3rem; border: 1px solid ${captions.style === 'deepdiver' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${captions.style === 'deepdiver' ? 'rgba(139,92,246,0.2)' : 'transparent'}; color: white; cursor: pointer; font-size: 0.7rem;">
+                                Minimal
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Highlight Color -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); border-radius: 0.5rem;">
+                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.8);">Highlight Color</span>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="color" value="${captions.highlightColor}" onchange="setCaptionHighlightColor(this.value)" style="width: 32px; height: 24px; border: none; border-radius: 0.25rem; cursor: pointer;">
+                            <span style="font-size: 0.65rem; padding: 0.2rem 0.4rem; background: rgba(251,191,36,0.2); color: #fbbf24; border-radius: 0.25rem;">KARAOKE</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // AUDIO TAB
+        function renderAudioTabContent() {
+            const musicLibrary = state.assembly.musicLibrary || [];
+            const selectedTrackId = state.assembly.music.trackId;
+            const musicEnabled = state.assembly.music.enabled;
+            const musicVolume = state.assembly.music.volume;
+            const voiceVolume = state.assembly.audioMix?.voiceVolume || 100;
+
+            return `
+                <!-- Voice Settings -->
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Voice</div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.8rem; color: white;">🎙️ Voiceover Volume</span>
+                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${voiceVolume}%</span>
+                    </div>
+                    <input type="range" min="0" max="100" value="${voiceVolume}" onchange="setVoiceVolume(this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #06b6d4;">
+                </div>
+
+                <!-- Background Music -->
+                <div>
+                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Background Music</div>
+
+                    <!-- Enable Toggle -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; margin-bottom: 1rem;">
+                        <span style="font-size: 0.85rem; color: white;">🎵 Enable Music</span>
+                        <label style="position: relative; display: inline-block; width: 44px; height: 24px;">
+                            <input type="checkbox" ${musicEnabled ? 'checked' : ''} onchange="toggleMusic(this.checked)" style="opacity: 0; width: 0; height: 0;">
+                            <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${musicEnabled ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; transition: 0.3s; border-radius: 24px;">
+                                <span style="position: absolute; height: 18px; width: 18px; left: ${musicEnabled ? '23px' : '3px'}; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%;"></span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div style="opacity: ${musicEnabled ? '1' : '0.4'}; pointer-events: ${musicEnabled ? 'auto' : 'none'};">
+                        <!-- Track Selection -->
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Select Track</label>
+                            <select id="music-select" onchange="selectMusicTrack(this.value)" style="width: 100%; padding: 0.6rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.8rem; cursor: pointer;">
+                                <option value="">Choose a track...</option>
+                                ${musicLibrary.map(track => `
+                                    <option value="${track.id}" ${selectedTrackId === track.id ? 'selected' : ''}>
+                                        ${track.name}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+
+                        <!-- Volume -->
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="font-size: 0.8rem; color: white;">Music Volume</span>
+                                <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${musicVolume}%</span>
+                            </div>
+                            <input type="range" min="0" max="100" value="${musicVolume}" onchange="setMusicVolume(this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #8b5cf6;">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // MEDIA TAB
+        function renderMediaTabContent() {
+            const scriptScenes = state.script.scenes || [];
+            const storyboardScenes = state.storyboard.scenes || [];
+            const animationScenes = state.animation.scenes || [];
+
+            return `
+                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Scene Media</div>
+
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                    ${scriptScenes.map((scene, i) => {
+                        const storyboard = storyboardScenes.find(s => s.sceneId === scene.id);
+                        const anim = animationScenes.find(s => s.sceneId === scene.id);
+                        const imageUrl = storyboard?.imageUrl;
+                        const hasVideo = anim?.videoUrl;
+
+                        return `
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; overflow: hidden;">
+                                <div style="aspect-ratio: 16/9; background: rgba(0,0,0,0.3);">
+                                    ${imageUrl ? `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` :
+                                      `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">📷</div>`}
+                                </div>
+                                <div style="padding: 0.4rem;">
+                                    <div style="font-size: 0.7rem; color: white; margin-bottom: 0.2rem;">Scene ${i + 1}</div>
+                                    <div style="font-size: 0.6rem; color: ${hasVideo ? '#10b981' : '#f59e0b'};">
+                                        ${hasVideo ? '✓ Video' : '⚡ Image'}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        // TRANSITIONS TAB
+        function renderTransitionsTabContent() {
+            const scriptScenes = state.script.scenes || [];
+            const transitionTypes = state.assembly.transitionTypes || [];
+
+            return `
+                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Scene Transitions</div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    ${scriptScenes.slice(0, -1).map((scene, i) => {
+                        const transition = state.assembly.transitions[scene.id] || { type: 'fade' };
+                        return `
+                            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem;">
+                                <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); min-width: 80px;">
+                                    Scene ${i + 1} → ${i + 2}
+                                </div>
+                                <select onchange="setSceneTransition(${scene.id}, this.value)" style="flex: 1; padding: 0.4rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.3rem; color: white; font-size: 0.75rem; cursor: pointer;">
+                                    ${transitionTypes.map(t => `
+                                        <option value="${t.id}" ${transition.type === t.id ? 'selected' : ''}>${t.name}</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                ${scriptScenes.length <= 1 ? `
+                    <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.4); font-size: 0.8rem;">
+                        Add more scenes to configure transitions
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        // COMPACT PREVIEW PANEL
+        function renderCompactPreviewPanel() {
+            const { isReady, isPlaying, currentTime, totalDuration, currentSceneIndex, loadProgress } = state.preview;
+            const scriptScenes = state.script.scenes || [];
+            const currentScene = scriptScenes[currentSceneIndex] || {};
+
+            return `
+                <div style="background: rgba(20,20,35,0.95); border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow: hidden;">
+                    <!-- Preview Canvas -->
+                    <div style="position: relative; width: 100%; aspect-ratio: 16/9; background: #000; flex-shrink: 0;">
+                        <canvas id="preview-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+
+                        ${!isReady ? `
+                            <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem;">
+                                ${loadProgress > 0 ? `
+                                    <div style="width: 60%; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden;">
+                                        <div style="width: ${loadProgress}%; height: 100%; background: linear-gradient(135deg, #8b5cf6, #06b6d4); transition: width 0.3s;"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Loading ${loadProgress}%</span>
+                                ` : `
+                                    <button onclick="initializePreviewEngine()" style="padding: 0.75rem 1.5rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; font-weight: 600; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                                        <span style="font-size: 1.2rem;">▶</span> Load Preview
+                                    </button>
+                                `}
+                            </div>
+                        ` : `
+                            <div id="preview-play-overlay" onclick="togglePreviewPlayback()" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.2); transition: opacity 0.2s; opacity: ${isPlaying ? '0' : '1'}; pointer-events: ${isPlaying ? 'none' : 'auto'};">
+                                <div style="width: 50px; height: 50px; background: rgba(139, 92, 246, 0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
+                                    <span style="font-size: 1.2rem; margin-left: 3px;">▶</span>
+                                </div>
+                            </div>
+                        `}
+                    </div>
+
+                    <!-- Playback Controls -->
+                    <div style="padding: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <button onclick="togglePreviewPlayback()" ${!isReady ? 'disabled' : ''} style="width: 32px; height: 32px; border-radius: 50%; border: none; background: ${isReady ? 'linear-gradient(135deg, #8b5cf6, #06b6d4)' : 'rgba(255,255,255,0.1)'}; color: white; cursor: ${isReady ? 'pointer' : 'not-allowed'}; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;">
+                                ${isPlaying ? '❚❚' : '▶'}
+                            </button>
+                            <span style="font-size: 0.7rem; color: rgba(255,255,255,0.6); font-family: monospace;">
+                                ${formatDuration(currentTime)} / ${formatDuration(totalDuration)}
+                            </span>
+                            <div style="margin-left: auto; display: flex; align-items: center; gap: 0.25rem;">
+                                <span style="font-size: 0.7rem;">🔊</span>
+                                <input type="range" min="0" max="100" value="${state.preview.volume || 100}" onchange="setPreviewVolume(this.value)" style="width: 50px; height: 3px; cursor: pointer;">
+                            </div>
+                        </div>
+                        <input type="range" id="preview-scrubber" min="0" max="${totalDuration || 100}" step="0.1" value="${currentTime}" onchange="seekPreview(this.value)" ${!isReady ? 'disabled' : ''} style="width: 100%; height: 4px; cursor: ${isReady ? 'pointer' : 'not-allowed'}; accent-color: #8b5cf6;">
+                    </div>
+
+                    <!-- Scene Info -->
+                    <div style="padding: 0.5rem 0.75rem; background: rgba(139,92,246,0.1); font-size: 0.7rem;">
+                        <span style="color: rgba(255,255,255,0.5);">Scene ${currentSceneIndex + 1}:</span>
+                        <span style="color: white; margin-left: 0.25rem;">${currentScene.narration?.substring(0, 30) || 'No scene'}${currentScene.narration?.length > 30 ? '...' : ''}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Tab switching function
+        function setAssemblyTab(tab) {
+            state.assembly.activeTab = tab;
+            render();
+        }
+
+        // New caption control functions
+        function setCaptionEnabled(enabled) {
+            state.assembly.captions.enabled = enabled;
+            updatePreviewCaptions();
+            render();
+        }
+
+        function setCaptionMode(mode) {
+            state.assembly.captions.mode = mode;
+            updatePreviewCaptions();
+            render();
+        }
+
+        function setCaptionFont(font) {
+            state.assembly.captions.fontFamily = font;
+            updatePreviewCaptions();
+            render();
+        }
+
+        function setCaptionFillColor(color) {
+            state.assembly.captions.fillColor = color;
+            updatePreviewCaptions();
+            render();
+        }
+
+        function setCaptionStrokeColor(color) {
+            state.assembly.captions.strokeColor = color;
+            updatePreviewCaptions();
+            render();
+        }
+
+        function setCaptionStrokeWidth(width) {
+            state.assembly.captions.strokeWidth = parseFloat(width);
+            updatePreviewCaptions();
+            render();
+        }
+
+        function setCaptionEffect(effect) {
+            state.assembly.captions.effect = effect;
+            updatePreviewCaptions();
+            render();
+        }
+
+        function setCaptionHighlightColor(color) {
+            state.assembly.captions.highlightColor = color;
+            updatePreviewCaptions();
+            render();
+        }
+
+        function updatePreviewCaptions() {
+            if (previewEngine) {
+                previewEngine.setCaptionStyle(state.assembly.captions.style);
+                previewEngine.setCaptionPosition(state.assembly.captions.position);
+                previewEngine.setCaptionSize(state.assembly.captions.size);
+                previewEngine.setCaptionsEnabled(state.assembly.captions.enabled);
+            }
         }
 
         function renderPreviewPanel() {
