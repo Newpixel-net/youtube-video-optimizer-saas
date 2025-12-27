@@ -909,48 +909,78 @@ async function combineVideoWithAudio({ jobId, jobRef, videoFile, scenes, voiceov
 
 /**
  * Concatenate voiceovers with proper timing (silence between scenes)
+ * Applies voiceoverOffset to shift audio timing within each scene
  */
 async function concatenateVoiceovers({ jobId, scenes, voiceoverFiles, workDir, totalDuration }) {
   const outputFile = path.join(workDir, 'voiceovers_concat.mp3');
 
   // Create a concat list file with silence padding
   const listFile = path.join(workDir, 'voice_list.txt');
-  const silenceFile = path.join(workDir, 'silence.mp3');
 
-  // Generate 1 second of silence
-  await runFFmpegSimple({
-    args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', '1', '-q:a', '9', '-y', silenceFile],
-    logPrefix: `[${jobId}] [Audio] `
-  });
+  console.log(`[${jobId}] ========== AUDIO TIMING SUMMARY ==========`);
 
   let currentTime = 0;
   const listContent = [];
+  const timingIssues = [];
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
     const voiceFile = voiceoverFiles[i];
     const sceneDuration = scene.duration || 8;
+    const voiceoverOffset = scene.voiceoverOffset || 0;
+
+    console.log(`[${jobId}] Scene ${i + 1}: duration=${sceneDuration}s, offset=${voiceoverOffset}s`);
 
     if (voiceFile && fs.existsSync(voiceFile)) {
-      // Get voiceover duration
+      // Get actual voiceover duration
       const voiceDuration = await getAudioDuration(voiceFile);
+      console.log(`[${jobId}]   Voiceover: ${voiceDuration.toFixed(2)}s`);
 
-      // Add voiceover
+      // Step 1: Add silence BEFORE voiceover if offset > 0
+      if (voiceoverOffset > 0.05) {
+        const offsetSilence = path.join(workDir, `offset_silence_${i}.mp3`);
+        await runFFmpegSimple({
+          args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', String(voiceoverOffset), '-q:a', '9', '-y', offsetSilence],
+          logPrefix: `[${jobId}] [Audio] `
+        });
+        listContent.push(`file '${offsetSilence}'`);
+        console.log(`[${jobId}]   Added offset silence: ${voiceoverOffset.toFixed(2)}s`);
+      }
+
+      // Step 2: Add voiceover
       listContent.push(`file '${voiceFile}'`);
 
-      // Add silence to fill remaining scene duration
-      const remainingTime = sceneDuration - voiceDuration;
-      if (remainingTime > 0.1) {
-        // Generate exact silence duration
+      // Step 3: Calculate remaining time and validate
+      // Available time = scene duration - offset - voiceover duration
+      const availableTime = sceneDuration - voiceoverOffset;
+      const remainingTime = availableTime - voiceDuration;
+
+      if (remainingTime < -0.5) {
+        // WARNING: Voiceover overflows scene duration
+        const overflow = Math.abs(remainingTime);
+        console.warn(`[${jobId}]   ⚠️ OVERFLOW: Voiceover extends ${overflow.toFixed(2)}s past scene end`);
+        timingIssues.push({
+          scene: i + 1,
+          type: 'overflow',
+          overflow: overflow,
+          voiceDuration,
+          sceneDuration,
+          offset: voiceoverOffset
+        });
+        // No silence added - voiceover will extend into next scene's audio time
+      } else if (remainingTime > 0.1) {
+        // Add silence to fill remaining scene duration
         const sceneSilence = path.join(workDir, `silence_${i}.mp3`);
         await runFFmpegSimple({
           args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', String(remainingTime), '-q:a', '9', '-y', sceneSilence],
           logPrefix: `[${jobId}] [Audio] `
         });
         listContent.push(`file '${sceneSilence}'`);
+        console.log(`[${jobId}]   Added trailing silence: ${remainingTime.toFixed(2)}s`);
       }
     } else {
       // No voiceover - add silence for entire scene duration
+      console.log(`[${jobId}]   No voiceover - adding full silence`);
       const sceneSilence = path.join(workDir, `silence_full_${i}.mp3`);
       await runFFmpegSimple({
         args: ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', String(sceneDuration), '-q:a', '9', '-y', sceneSilence],
@@ -961,6 +991,16 @@ async function concatenateVoiceovers({ jobId, scenes, voiceoverFiles, workDir, t
 
     currentTime += sceneDuration;
   }
+
+  // Log timing issues summary
+  if (timingIssues.length > 0) {
+    console.warn(`[${jobId}] ⚠️ TIMING ISSUES DETECTED: ${timingIssues.length} scene(s) have voiceover overflow`);
+    timingIssues.forEach(issue => {
+      console.warn(`[${jobId}]   Scene ${issue.scene}: voice ${issue.voiceDuration.toFixed(1)}s + offset ${issue.offset.toFixed(1)}s > scene ${issue.sceneDuration}s`);
+    });
+  }
+
+  console.log(`[${jobId}] ==========================================`);
 
   // Write concat list
   fs.writeFileSync(listFile, listContent.join('\n'));

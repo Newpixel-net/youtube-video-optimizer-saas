@@ -143,18 +143,23 @@ export async function generateCaptions({ jobId, videoFile, workDir, captionStyle
 /**
  * Generate word-level timestamps from scene narration text
  * This is a fallback when Whisper API is unavailable
+ * Accounts for voiceoverOffset to sync captions with actual audio timing
  *
  * @param {string} jobId - Job ID for logging
- * @param {Array} scenes - Array of scenes with narration and duration
+ * @param {Array} scenes - Array of scenes with narration, duration, and voiceoverOffset
  * @returns {Object} Transcription object with words array
  */
 function generateCaptionsFromNarration(jobId, scenes) {
   const words = [];
   let currentTime = 0;
 
-  for (const scene of scenes) {
+  console.log(`[${jobId}] Generating fallback captions with voiceoverOffset support`);
+
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
     const narration = scene.narration || '';
     const duration = scene.duration || 8;
+    const voiceoverOffset = scene.voiceoverOffset || 0;
 
     if (!narration.trim()) {
       // No narration for this scene, just advance time
@@ -169,13 +174,21 @@ function generateCaptionsFromNarration(jobId, scenes) {
       continue;
     }
 
-    // Calculate time per word (with small padding at start/end)
-    const padding = 0.2; // 200ms padding at start and end
-    const effectiveDuration = Math.max(duration - (padding * 2), duration * 0.8);
-    const timePerWord = effectiveDuration / sceneWords.length;
+    // Calculate effective duration for voiceover (scene duration minus offset)
+    const effectiveVoiceDuration = duration - voiceoverOffset;
 
-    // Generate word timestamps
-    let wordTime = currentTime + padding;
+    // Apply padding at start and end of voiceover
+    const padding = 0.15; // 150ms padding
+    const availableDuration = Math.max(effectiveVoiceDuration - (padding * 2), effectiveVoiceDuration * 0.8);
+    const timePerWord = availableDuration / sceneWords.length;
+
+    // Start words AFTER the voiceoverOffset + padding
+    let wordTime = currentTime + voiceoverOffset + padding;
+
+    if (voiceoverOffset > 0) {
+      console.log(`[${jobId}]   Scene ${i + 1}: offset=${voiceoverOffset.toFixed(2)}s, words start at ${wordTime.toFixed(2)}s`);
+    }
+
     for (const word of sceneWords) {
       words.push({
         word: word,
