@@ -5139,11 +5139,19 @@
             attachEventListeners();
 
             // CRITICAL: Reattach preview engine to new canvas after DOM re-render
+            // But ONLY if not currently playing to prevent flickering
             if (previewEngine && state.preview.isReady) {
                 const canvasId = state.currentStep === 7 ? 'timeline-preview-canvas' : 'preview-canvas';
                 const newCanvas = document.getElementById(canvasId);
-                if (newCanvas) {
-                    previewEngine.attachToCanvas(newCanvas);
+                if (newCanvas && previewEngine.canvas !== newCanvas) {
+                    // Only reattach if canvas element actually changed AND not playing
+                    if (!state.preview.isPlaying) {
+                        previewEngine.attachToCanvas(newCanvas);
+                    } else {
+                        // If playing, just update the canvas reference without full reattach
+                        previewEngine.canvas = newCanvas;
+                        previewEngine.ctx = newCanvas.getContext('2d');
+                    }
                 }
             }
         }
@@ -6883,9 +6891,9 @@
                             </div>
                         ` : ''}
 
-                        <!-- Play Button Overlay (when paused) -->
-                        ${isReady && !isPlaying ? `
-                            <div onclick="togglePreviewPlayback()" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.3); transition: background 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.1)'" onmouseout="this.style.background='rgba(0,0,0,0.3)'">
+                        <!-- Play Button Overlay (when paused) - Always rendered, visibility controlled by JS -->
+                        ${isReady ? `
+                            <div id="preview-play-overlay" onclick="togglePreviewPlayback()" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.3); transition: opacity 0.2s; opacity: ${isPlaying ? '0' : '1'}; pointer-events: ${isPlaying ? 'none' : 'auto'};" onmouseover="if(!state.preview.isPlaying) this.style.background='rgba(0,0,0,0.1)'" onmouseout="if(!state.preview.isPlaying) this.style.background='rgba(0,0,0,0.3)'">
                                 <div style="width: 60px; height: 60px; background: rgba(139, 92, 246, 0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
                                     <span style="font-size: 1.5rem; margin-left: 4px;">▶</span>
                                 </div>
@@ -6895,7 +6903,7 @@
 
                     <!-- Playback Controls -->
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                        <button onclick="togglePreviewPlayback()" ${!isReady ? 'disabled' : ''}
+                        <button id="preview-play-btn" onclick="togglePreviewPlayback()" ${!isReady ? 'disabled' : ''}
                                 style="width: 36px; height: 36px; border-radius: 50%; border: none; background: ${isReady ? 'linear-gradient(135deg, #8b5cf6, #06b6d4)' : 'rgba(255,255,255,0.1)'}; color: white; cursor: ${isReady ? 'pointer' : 'not-allowed'}; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">
                             ${isPlaying ? '❚❚' : '▶'}
                         </button>
@@ -6930,7 +6938,7 @@
                     <!-- Current Scene Info -->
                     <div style="background: rgba(139, 92, 246, 0.1); border-radius: 0.4rem; padding: 0.5rem;">
                         <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.2rem;">Currently Playing</div>
-                        <div style="font-size: 0.8rem; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <div id="current-scene-info" style="font-size: 0.8rem; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             Scene ${currentSceneIndex + 1}: "${currentScene.narration?.substring(0, 35) || 'No scene loaded'}${currentScene.narration?.length > 35 ? '...' : ''}"
                         </div>
                         <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
@@ -7415,21 +7423,26 @@
                 onSceneChange: (sceneIndex) => {
                     state.preview.currentSceneIndex = sceneIndex;
                     highlightTimelineScene(sceneIndex);
-                    render();
+                    updateCurrentSceneIndicator(sceneIndex);
+                    // NO render() - prevents flickering during playback
                 },
                 onEnded: () => {
                     state.preview.isPlaying = false;
                     state.preview.currentTime = 0;
-                    render();
+                    updatePreviewPlayButton(false);
+                    // NO render() - selective update only
                 },
                 onLoadProgress: (progress) => {
                     state.preview.loadProgress = progress;
-                    render();
+                    updatePreviewLoadProgress(progress);
+                    // NO render() - selective update only
                 },
                 onReady: () => {
                     state.preview.isReady = true;
                     state.preview.loadProgress = 100;
-                    render();
+                    updatePreviewLoadProgress(100);
+                    updatePreviewPlayButton(false);
+                    // NO render() - selective update only
                 }
             });
 
@@ -7511,7 +7524,8 @@
                 previewEngine.play();
                 state.preview.isPlaying = true;
             }
-            render();
+            updatePreviewPlayButton(state.preview.isPlaying);
+            // NO render() - selective update prevents flickering
         }
 
         function stopPreview() {
@@ -7522,7 +7536,10 @@
             state.preview.isPlaying = false;
             state.preview.currentTime = 0;
             state.preview.currentSceneIndex = 0;
-            render();
+            updatePreviewPlayButton(false);
+            highlightTimelineScene(0);
+            updateCurrentSceneIndicator(0);
+            // NO render() - selective update prevents flickering
         }
 
         function seekPreview(time) {
@@ -7558,7 +7575,9 @@
                     previewEngine.seek(scenes[newIndex].startTime);
                     state.preview.currentSceneIndex = newIndex;
                     state.preview.currentTime = scenes[newIndex].startTime;
-                    render();
+                    highlightTimelineScene(newIndex);
+                    updateCurrentSceneIndicator(newIndex);
+                    // NO render() - selective update prevents flickering
                 }
             }
         }
@@ -7573,7 +7592,9 @@
                     previewEngine.seek(scenes[newIndex].startTime);
                     state.preview.currentSceneIndex = newIndex;
                     state.preview.currentTime = scenes[newIndex].startTime;
-                    render();
+                    highlightTimelineScene(newIndex);
+                    updateCurrentSceneIndicator(newIndex);
+                    // NO render() - selective update prevents flickering
                 }
             }
         }
@@ -7633,6 +7654,68 @@
                 const progressFill = currentSceneEl.querySelector('.scene-progress-fill');
                 if (progressFill) {
                     progressFill.style.width = `${progress}%`;
+                }
+            }
+        }
+
+        // ==========================================
+        // SELECTIVE DOM UPDATE FUNCTIONS (Prevent Flickering)
+        // These functions update specific UI elements without full re-render
+        // ==========================================
+
+        function updatePreviewPlayButton(isPlaying) {
+            // Update Assembly step play button (uses text characters)
+            const playBtn = document.getElementById('preview-play-btn');
+            if (playBtn) {
+                playBtn.innerHTML = isPlaying ? '❚❚' : '▶';
+            }
+
+            // Update center play overlay visibility
+            const playOverlay = document.getElementById('preview-play-overlay');
+            if (playOverlay) {
+                playOverlay.style.opacity = isPlaying ? '0' : '1';
+                playOverlay.style.pointerEvents = isPlaying ? 'none' : 'auto';
+                playOverlay.style.background = 'rgba(0,0,0,0.3)';
+            }
+
+            // Update Timeline step play button if on that step (uses text characters)
+            const timelinePlayBtn = document.getElementById('timeline-play-btn');
+            if (timelinePlayBtn) {
+                timelinePlayBtn.innerHTML = isPlaying ? '❚❚' : '▶';
+            }
+        }
+
+        function updatePreviewLoadProgress(progress) {
+            // Update loading indicator
+            const loadingOverlay = document.getElementById('preview-loading-overlay');
+            if (loadingOverlay) {
+                if (progress >= 100) {
+                    loadingOverlay.style.display = 'none';
+                } else {
+                    loadingOverlay.style.display = 'flex';
+                    const progressText = loadingOverlay.querySelector('.loading-progress-text');
+                    if (progressText) {
+                        progressText.textContent = `Loading... ${Math.round(progress)}%`;
+                    }
+                }
+            }
+
+            // Update progress bar if exists
+            const progressBar = document.getElementById('preview-load-bar');
+            if (progressBar) {
+                progressBar.style.width = `${progress}%`;
+            }
+        }
+
+        function updateCurrentSceneIndicator(sceneIndex) {
+            // Update scene info panel with current scene narration
+            const sceneInfo = document.getElementById('current-scene-info');
+            if (sceneInfo && state.script.scenes) {
+                const scene = state.script.scenes[sceneIndex];
+                if (scene) {
+                    const narrationPreview = (scene.narration || 'No scene loaded').substring(0, 35);
+                    const ellipsis = scene.narration?.length > 35 ? '...' : '';
+                    sceneInfo.textContent = `Scene ${sceneIndex + 1}: "${narrationPreview}${ellipsis}"`;
                 }
             }
         }
