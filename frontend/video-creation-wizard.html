@@ -430,8 +430,19 @@
                 this._renderScene(currentScene);
             }
 
+            // Only render captions during the voiceover timing window
             if (this.captionsEnabled && currentScene.caption) {
-                this._renderCaption(currentScene);
+                const sceneLocalTime = this.currentTime - currentScene.startTime;
+                const voiceoverOffset = currentScene.voiceoverOffset || 0;
+                const voiceoverDuration = currentScene.voiceoverDuration || (currentScene.duration * 0.85);
+
+                // Check if we're within the voiceover window
+                const captionStart = voiceoverOffset;
+                const captionEnd = voiceoverOffset + voiceoverDuration;
+
+                if (sceneLocalTime >= captionStart && sceneLocalTime < captionEnd) {
+                    this._renderCaption(currentScene);
+                }
             }
 
             if (currentScene.index !== this.currentSceneIndex) {
@@ -7528,6 +7539,7 @@
                     duration: scriptScene.duration || 8,
                     voiceoverUrl: animScene?.voiceoverUrl,
                     voiceoverDuration: animScene?.voiceoverDuration,
+                    voiceoverOffset: scriptScene.voiceoverOffset || 0,
                     caption: scriptScene.narration,
                     transition: transition.type,
                     transitionDuration: transition.duration || 0.5,
