@@ -8477,7 +8477,7 @@
                                     ${renderProVideoTrack(scriptScenes, animationScenes, zoom, selectedClipId)}
                                     ${renderProVoiceTrack(scriptScenes, animationScenes, zoom)}
                                     ${renderProMusicTrack(totalDuration, zoom)}
-                                    ${renderProCaptionTrack(scriptScenes, zoom)}
+                                    ${renderProCaptionTrack(scriptScenes, animationScenes, zoom)}
                                 </div>
                             </div>
                         </div>
@@ -8709,7 +8709,7 @@
             return trackHtml;
         }
 
-        function renderProCaptionTrack(scriptScenes, zoom) {
+        function renderProCaptionTrack(scriptScenes, animationScenes, zoom) {
             const sceneOrder = state.assembly.sceneOrder.length > 0
                 ? state.assembly.sceneOrder
                 : scriptScenes.map(s => s.id);
@@ -8721,11 +8721,15 @@
             if (captionsEnabled) {
                 sceneOrder.forEach(sceneId => {
                     const scriptScene = scriptScenes.find(s => s.id === sceneId);
+                    const animScene = animationScenes.find(s => s.sceneId === sceneId);
                     if (!scriptScene) return;
 
-                    const duration = scriptScene.duration || 8;
-                    const width = duration * zoom;
-                    const x = currentTime * zoom;
+                    const sceneDuration = scriptScene.duration || 8;
+                    // Use voiceover timing to sync with voice track
+                    const voiceoverDuration = animScene?.voiceoverDuration || sceneDuration * 0.85;
+                    const voiceoverOffset = scriptScene.voiceoverOffset || 0;
+                    const width = voiceoverDuration * zoom;
+                    const x = (currentTime + voiceoverOffset) * zoom;
                     const caption = scriptScene.narration?.substring(0, 30) || '';
 
                     trackHtml += `
@@ -8749,7 +8753,7 @@
                         </div>
                     `;
 
-                    currentTime += duration;
+                    currentTime += sceneDuration;
                 });
             } else {
                 trackHtml += `
