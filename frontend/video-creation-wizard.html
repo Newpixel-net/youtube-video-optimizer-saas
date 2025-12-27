@@ -7248,57 +7248,128 @@
             const musicVolume = state.assembly.music.volume;
             const voiceVolume = state.assembly.audioMix?.voiceVolume || 100;
 
-            return `
-                <!-- Voice Settings -->
-                <div style="margin-bottom: 1.5rem;">
-                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Voice</div>
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span style="font-size: 0.8rem; color: white;">🎙️ Voiceover Volume</span>
-                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${voiceVolume}%</span>
-                    </div>
-                    <input type="range" min="0" max="100" value="${voiceVolume}" onchange="setVoiceVolume(this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #06b6d4;">
-                </div>
+            // Phase 4: Additional audio settings
+            const audioDucking = state.assembly.audioMix?.ducking !== false;
+            const musicFadeIn = state.assembly.music.fadeIn || 2;
+            const musicFadeOut = state.assembly.music.fadeOut || 3;
 
-                <!-- Background Music -->
-                <div>
-                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Background Music</div>
+            // Pre-compute styles to avoid complex template expressions
+            const musicToggleBg = musicEnabled ? '#8b5cf6' : 'rgba(255,255,255,0.2)';
+            const musicTogglePos = musicEnabled ? '23px' : '3px';
+            const duckingToggleBg = audioDucking ? '#10b981' : 'rgba(255,255,255,0.2)';
+            const duckingTogglePos = audioDucking ? '19px' : '3px';
+            const musicPanelOpacity = musicEnabled ? '1' : '0.4';
+            const musicPanelPointer = musicEnabled ? 'auto' : 'none';
+            const voiceLabel = voiceVolume + '%';
+            const musicLabel = musicEnabled ? musicVolume + '%' : 'Off';
 
-                    <!-- Enable Toggle -->
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; margin-bottom: 1rem;">
-                        <span style="font-size: 0.85rem; color: white;">🎵 Enable Music</span>
-                        <label style="position: relative; display: inline-block; width: 44px; height: 24px;">
-                            <input type="checkbox" ${musicEnabled ? 'checked' : ''} onchange="toggleMusic(this.checked)" style="opacity: 0; width: 0; height: 0;">
-                            <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${musicEnabled ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; transition: 0.3s; border-radius: 24px;">
-                                <span style="position: absolute; height: 18px; width: 18px; left: ${musicEnabled ? '23px' : '3px'}; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%;"></span>
-                            </span>
-                        </label>
-                    </div>
+            let html = '';
 
-                    <div style="opacity: ${musicEnabled ? '1' : '0.4'}; pointer-events: ${musicEnabled ? 'auto' : 'none'};">
-                        <!-- Track Selection -->
-                        <div style="margin-bottom: 1rem;">
-                            <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Select Track</label>
-                            <select id="music-select" onchange="selectMusicTrack(this.value)" style="width: 100%; padding: 0.6rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.8rem; cursor: pointer;">
-                                <option value="">Choose a track...</option>
-                                ${musicLibrary.map(track => `
-                                    <option value="${track.id}" ${selectedTrackId === track.id ? 'selected' : ''}>
-                                        ${track.name}
-                                    </option>
-                                `).join('')}
-                            </select>
-                        </div>
+            // Audio Mix Visualization
+            html += '<div style="margin-bottom: 1.25rem; padding: 0.75rem; background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(139,92,246,0.1)); border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1);">';
+            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Audio Mix</div>';
+            html += '<div style="display: flex; align-items: flex-end; gap: 3px; height: 32px;">';
+            // Static visualization bars
+            html += '<div style="flex: 1; height: 70%; background: linear-gradient(to top, #06b6d4, #22d3ee); border-radius: 1px;"></div>';
+            html += '<div style="flex: 1; height: 85%; background: linear-gradient(to top, #06b6d4, #22d3ee); border-radius: 1px;"></div>';
+            html += '<div style="flex: 1; height: 60%; background: linear-gradient(to top, #06b6d4, #22d3ee); border-radius: 1px;"></div>';
+            html += '<div style="flex: 1; height: 90%; background: linear-gradient(to top, #8b5cf6, #a78bfa); border-radius: 1px;"></div>';
+            html += '<div style="flex: 1; height: 75%; background: linear-gradient(to top, #8b5cf6, #a78bfa); border-radius: 1px;"></div>';
+            html += '<div style="flex: 1; height: 65%; background: linear-gradient(to top, #06b6d4, #22d3ee); border-radius: 1px;"></div>';
+            html += '<div style="flex: 1; height: 80%; background: linear-gradient(to top, #8b5cf6, #a78bfa); border-radius: 1px;"></div>';
+            html += '<div style="flex: 1; height: 55%; background: linear-gradient(to top, #06b6d4, #22d3ee); border-radius: 1px;"></div>';
+            html += '</div>';
+            html += '<div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">';
+            html += '<span style="font-size: 0.6rem; color: #06b6d4;">● Voice ' + voiceLabel + '</span>';
+            html += '<span style="font-size: 0.6rem; color: #8b5cf6;">● Music ' + musicLabel + '</span>';
+            html += '</div>';
+            html += '</div>';
 
-                        <!-- Volume -->
-                        <div>
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                                <span style="font-size: 0.8rem; color: white;">Music Volume</span>
-                                <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${musicVolume}%</span>
-                            </div>
-                            <input type="range" min="0" max="100" value="${musicVolume}" onchange="setMusicVolume(this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #8b5cf6;">
-                        </div>
-                    </div>
-                </div>
-            `;
+            // Voice Settings
+            html += '<div style="margin-bottom: 1.25rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">🎙️ Voiceover</div>';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">';
+            html += '<span style="font-size: 0.8rem; color: white;">Volume</span>';
+            html += '<span style="font-size: 0.75rem; color: #06b6d4; font-weight: 600;">' + voiceVolume + '%</span>';
+            html += '</div>';
+            html += '<input type="range" min="0" max="100" value="' + voiceVolume + '" onchange="setVoiceVolume(this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #06b6d4;">';
+            html += '</div>';
+
+            // Background Music Section
+            html += '<div style="margin-bottom: 1rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">🎵 Background Music</div>';
+
+            // Enable Toggle
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; margin-bottom: 1rem;">';
+            html += '<span style="font-size: 0.85rem; color: white;">Enable Music</span>';
+            html += '<label style="position: relative; display: inline-block; width: 44px; height: 24px;">';
+            html += '<input type="checkbox" ' + (musicEnabled ? 'checked' : '') + ' onchange="toggleMusic(this.checked)" style="opacity: 0; width: 0; height: 0;">';
+            html += '<span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ' + musicToggleBg + '; transition: 0.3s; border-radius: 24px;">';
+            html += '<span style="position: absolute; height: 18px; width: 18px; left: ' + musicTogglePos + '; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%;"></span>';
+            html += '</span>';
+            html += '</label>';
+            html += '</div>';
+
+            // Music Controls (when enabled)
+            html += '<div style="opacity: ' + musicPanelOpacity + '; pointer-events: ' + musicPanelPointer + ';">';
+
+            // Track Selection
+            html += '<div style="margin-bottom: 1rem;">';
+            html += '<label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Select Track</label>';
+            html += '<select id="music-select" onchange="selectMusicTrack(this.value)" style="width: 100%; padding: 0.6rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.8rem; cursor: pointer;">';
+            html += '<option value="">Choose a track...</option>';
+            musicLibrary.forEach(function(track) {
+                var selected = selectedTrackId === track.id ? 'selected' : '';
+                html += '<option value="' + track.id + '" ' + selected + '>' + track.name + '</option>';
+            });
+            html += '</select>';
+            html += '</div>';
+
+            // Volume
+            html += '<div style="margin-bottom: 1rem;">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">';
+            html += '<span style="font-size: 0.8rem; color: white;">Volume</span>';
+            html += '<span style="font-size: 0.75rem; color: #8b5cf6; font-weight: 600;">' + musicVolume + '%</span>';
+            html += '</div>';
+            html += '<input type="range" min="0" max="100" value="' + musicVolume + '" onchange="setMusicVolume(this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #8b5cf6;">';
+            html += '</div>';
+
+            // Auto-Duck Toggle
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem; background: rgba(255,255,255,0.03); border-radius: 0.4rem; margin-bottom: 1rem;">';
+            html += '<div>';
+            html += '<span style="font-size: 0.8rem; color: white;">Auto-Duck</span>';
+            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">Lower music during voice</div>';
+            html += '</div>';
+            html += '<label style="position: relative; display: inline-block; width: 36px; height: 20px;">';
+            html += '<input type="checkbox" ' + (audioDucking ? 'checked' : '') + ' onchange="setAudioDucking(this.checked)" style="opacity: 0; width: 0; height: 0;">';
+            html += '<span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ' + duckingToggleBg + '; transition: 0.3s; border-radius: 20px;">';
+            html += '<span style="position: absolute; height: 14px; width: 14px; left: ' + duckingTogglePos + '; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%;"></span>';
+            html += '</span>';
+            html += '</label>';
+            html += '</div>';
+
+            // Fade Controls
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">';
+            html += '<div>';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">';
+            html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">Fade In</span>';
+            html += '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">' + musicFadeIn + 's</span>';
+            html += '</div>';
+            html += '<input type="range" min="0" max="5" step="0.5" value="' + musicFadeIn + '" onchange="setMusicFadeIn(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #8b5cf6;">';
+            html += '</div>';
+            html += '<div>';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">';
+            html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">Fade Out</span>';
+            html += '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">' + musicFadeOut + 's</span>';
+            html += '</div>';
+            html += '<input type="range" min="0" max="5" step="0.5" value="' + musicFadeOut + '" onchange="setMusicFadeOut(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #8b5cf6;">';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>'; // Close music controls
+            html += '</div>'; // Close background music section
+
+            return html;
         }
 
         // MEDIA TAB
@@ -7306,34 +7377,72 @@
             const scriptScenes = state.script.scenes || [];
             const storyboardScenes = state.storyboard.scenes || [];
             const animationScenes = state.animation.scenes || [];
+            const currentSceneIndex = state.preview.currentSceneIndex || 0;
 
-            return `
-                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Scene Media</div>
+            // Build HTML using string concatenation to avoid template literal issues
+            let html = '';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Scene Media</div>';
 
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
-                    ${scriptScenes.map((scene, i) => {
-                        const storyboard = storyboardScenes.find(s => s.sceneId === scene.id);
-                        const anim = animationScenes.find(s => s.sceneId === scene.id);
-                        const imageUrl = storyboard?.imageUrl;
-                        const hasVideo = anim?.videoUrl;
+            // Scene count summary
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(139,92,246,0.1); border-radius: 0.4rem;">';
+            html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">' + scriptScenes.length + ' Scenes</span>';
+            html += '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Click to jump</span>';
+            html += '</div>';
 
-                        return `
-                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; overflow: hidden;">
-                                <div style="aspect-ratio: 16/9; background: rgba(0,0,0,0.3);">
-                                    ${imageUrl ? `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` :
-                                      `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">📷</div>`}
-                                </div>
-                                <div style="padding: 0.4rem;">
-                                    <div style="font-size: 0.7rem; color: white; margin-bottom: 0.2rem;">Scene ${i + 1}</div>
-                                    <div style="font-size: 0.6rem; color: ${hasVideo ? '#10b981' : '#f59e0b'};">
-                                        ${hasVideo ? '✓ Video' : '⚡ Image'}
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            `;
+            html += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; max-height: 400px; overflow-y: auto; padding-right: 0.25rem;">';
+
+            scriptScenes.forEach(function(scene, i) {
+                const storyboard = storyboardScenes.find(function(s) { return s.sceneId === scene.id; });
+                const anim = animationScenes.find(function(s) { return s.sceneId === scene.id; });
+                const imageUrl = storyboard ? storyboard.imageUrl : null;
+                const hasVideo = anim ? anim.videoUrl : false;
+                const duration = scene.duration || 5;
+                const isActive = i === currentSceneIndex;
+
+                // Pre-compute styles
+                const borderColor = isActive ? 'rgba(139,92,246,0.8)' : 'rgba(255,255,255,0.1)';
+                const shadowStyle = isActive ? '0 0 15px rgba(139,92,246,0.4)' : 'none';
+                const bgColor = isActive ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)';
+                const statusColor = hasVideo ? '#10b981' : '#f59e0b';
+                const statusText = hasVideo ? '✓ Video' : '⚡ Image';
+
+                html += '<div onclick="seekToScene(' + scene.id + ')" ';
+                html += 'style="background: ' + bgColor + '; border: 1px solid ' + borderColor + '; border-radius: 0.5rem; overflow: hidden; cursor: pointer; transition: all 0.2s; box-shadow: ' + shadowStyle + ';" ';
+                html += 'onmouseenter="this.style.borderColor=\'rgba(139,92,246,0.6)\';this.style.transform=\'scale(1.02)\'" ';
+                html += 'onmouseleave="this.style.borderColor=\'' + borderColor + '\';this.style.transform=\'scale(1)\'">';
+
+                html += '<div style="aspect-ratio: 16/9; background: rgba(0,0,0,0.3); position: relative;">';
+                if (imageUrl) {
+                    html += '<img src="' + imageUrl + '" style="width: 100%; height: 100%; object-fit: cover;">';
+                } else {
+                    html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">📷</div>';
+                }
+
+                // Duration badge overlay
+                html += '<div style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.75); padding: 2px 6px; border-radius: 3px; font-size: 0.6rem; color: white; font-family: monospace;">';
+                html += duration.toFixed(1) + 's';
+                html += '</div>';
+
+                // Active indicator
+                if (isActive) {
+                    html += '<div style="position: absolute; top: 4px; left: 4px; background: rgba(139,92,246,0.9); padding: 2px 6px; border-radius: 3px; font-size: 0.55rem; color: white; font-weight: 600;">PLAYING</div>';
+                }
+
+                html += '</div>';
+
+                html += '<div style="padding: 0.4rem;">';
+                html += '<div style="display: flex; justify-content: space-between; align-items: center;">';
+                html += '<div style="font-size: 0.7rem; color: white; font-weight: ' + (isActive ? '600' : '400') + ';">Scene ' + (i + 1) + '</div>';
+                html += '<div style="font-size: 0.6rem; color: ' + statusColor + ';">' + statusText + '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                html += '</div>';
+            });
+
+            html += '</div>';
+
+            return html;
         }
 
         // TRANSITIONS TAB
@@ -7341,33 +7450,84 @@
             const scriptScenes = state.script.scenes || [];
             const transitionTypes = state.assembly.transitionTypes || [];
 
-            return `
-                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Scene Transitions</div>
+            // Default transitions if not defined
+            const defaultTypes = transitionTypes.length > 0 ? transitionTypes : [
+                { id: 'fade', name: 'Fade', icon: '◐' },
+                { id: 'dissolve', name: 'Dissolve', icon: '◑' },
+                { id: 'wipe', name: 'Wipe', icon: '▶' },
+                { id: 'slide', name: 'Slide', icon: '⇨' },
+                { id: 'zoom', name: 'Zoom', icon: '⊕' },
+                { id: 'none', name: 'Cut (None)', icon: '✂' }
+            ];
 
-                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                    ${scriptScenes.slice(0, -1).map((scene, i) => {
-                        const transition = state.assembly.transitions[scene.id] || { type: 'fade' };
-                        return `
-                            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem;">
-                                <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); min-width: 80px;">
-                                    Scene ${i + 1} → ${i + 2}
-                                </div>
-                                <select onchange="setSceneTransition(${scene.id}, this.value)" style="flex: 1; padding: 0.4rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.3rem; color: white; font-size: 0.75rem; cursor: pointer;">
-                                    ${transitionTypes.map(t => `
-                                        <option value="${t.id}" ${transition.type === t.id ? 'selected' : ''}>${t.name}</option>
-                                    `).join('')}
-                                </select>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
+            // Build HTML using string concatenation
+            let html = '';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Scene Transitions</div>';
 
-                ${scriptScenes.length <= 1 ? `
-                    <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.4); font-size: 0.8rem;">
-                        Add more scenes to configure transitions
-                    </div>
-                ` : ''}
-            `;
+            // Default transition selector
+            html += '<div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.5rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Default for all transitions:</div>';
+            html += '<select onchange="setDefaultTransition(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(139,92,246,0.4); border-radius: 0.4rem; color: white; font-size: 0.8rem; cursor: pointer;">';
+
+            const defaultTransition = state.assembly.defaultTransition || 'fade';
+            defaultTypes.forEach(function(t) {
+                const selected = defaultTransition === t.id ? ' selected' : '';
+                const icon = t.icon || '';
+                html += '<option value="' + t.id + '"' + selected + '>' + icon + ' ' + t.name + '</option>';
+            });
+            html += '</select>';
+            html += '</div>';
+
+            // Per-scene transitions
+            if (scriptScenes.length > 1) {
+                html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.5rem;">Per-Scene Overrides:</div>';
+                html += '<div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; padding-right: 0.25rem;">';
+
+                scriptScenes.slice(0, -1).forEach(function(scene, i) {
+                    const transition = state.assembly.transitions[scene.id] || { type: defaultTransition };
+
+                    html += '<div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.4rem;">';
+
+                    // Scene indicators with mini thumbnails
+                    html += '<div style="display: flex; align-items: center; gap: 0.3rem; min-width: 90px;">';
+                    html += '<div style="width: 24px; height: 16px; background: rgba(139,92,246,0.3); border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 0.5rem; color: white;">' + (i + 1) + '</div>';
+                    html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">→</span>';
+                    html += '<div style="width: 24px; height: 16px; background: rgba(6,182,212,0.3); border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 0.5rem; color: white;">' + (i + 2) + '</div>';
+                    html += '</div>';
+
+                    // Transition selector
+                    html += '<select onchange="setSceneTransition(' + scene.id + ', this.value)" style="flex: 1; padding: 0.35rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.3rem; color: white; font-size: 0.7rem; cursor: pointer;">';
+                    defaultTypes.forEach(function(t) {
+                        const selected = transition.type === t.id ? ' selected' : '';
+                        const icon = t.icon || '';
+                        html += '<option value="' + t.id + '"' + selected + '>' + icon + ' ' + t.name + '</option>';
+                    });
+                    html += '</select>';
+
+                    html += '</div>';
+                });
+
+                html += '</div>';
+            } else {
+                html += '<div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.4); font-size: 0.8rem;">';
+                html += 'Add more scenes to configure transitions';
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        // Set default transition for all scenes
+        function setDefaultTransition(type) {
+            state.assembly.defaultTransition = type;
+            // Apply to all scenes that don't have an override
+            const scriptScenes = state.script.scenes || [];
+            scriptScenes.forEach(function(scene) {
+                if (!state.assembly.transitions[scene.id]) {
+                    state.assembly.transitions[scene.id] = { type: type };
+                }
+            });
+            render();
         }
 
         // COMPACT PREVIEW PANEL
