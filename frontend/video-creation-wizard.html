@@ -672,14 +672,21 @@
             const caption = scene.caption || scene.narration || '';
             if (!caption) return;
 
-            // Get timing info for word-by-word effects
+            // Use voiceover timing for accurate synchronization
+            const voiceoverOffset = scene.voiceoverOffset || 0;
+            const voiceoverDuration = scene.voiceoverDuration || (scene.duration * 0.85);
             const sceneLocalTime = this.currentTime - scene.startTime;
-            const sceneDuration = scene.visualDuration || scene.duration || 5;
-            const wordTimings = this._generateWordTimings(caption, sceneDuration);
+
+            // Calculate time relative to voiceover start (not scene start)
+            // This ensures captions sync with audio, not visual scene boundaries
+            const captionLocalTime = sceneLocalTime - voiceoverOffset;
+
+            // Generate word timings based on actual voiceover duration
+            const wordTimings = this._generateWordTimings(caption, voiceoverDuration);
 
             // Find current words to display (show a window of words around current time)
             const wordsPerLine = this._getWordsPerLine();
-            const currentWordIndex = this._getCurrentWordIndex(wordTimings, sceneLocalTime);
+            const currentWordIndex = this._getCurrentWordIndex(wordTimings, captionLocalTime);
             const displayWords = this._getDisplayWords(wordTimings, currentWordIndex, wordsPerLine);
 
             if (displayWords.length === 0) return;
@@ -694,30 +701,30 @@
                 case 'bottom': default: y = this.height * 0.88; break;
             }
 
-            // Render based on style
+            // Render based on style (using captionLocalTime for word highlighting)
             switch (this.captionStyle) {
                 case 'karaoke':
-                    this._renderKaraokeStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+                    this._renderKaraokeStyle(displayWords, y, captionLocalTime, currentWordIndex);
                     break;
                 case 'beasty':
-                    this._renderBeastyStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+                    this._renderBeastyStyle(displayWords, y, captionLocalTime, currentWordIndex);
                     break;
                 case 'hormozi':
-                    this._renderHormoziStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+                    this._renderHormoziStyle(displayWords, y, captionLocalTime, currentWordIndex);
                     break;
                 case 'ali':
-                    this._renderAliStyle(displayWords, y, sceneLocalTime);
+                    this._renderAliStyle(displayWords, y, captionLocalTime);
                     break;
                 case 'podp':
                 case 'podcast':
-                    this._renderPodcastStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+                    this._renderPodcastStyle(displayWords, y, captionLocalTime, currentWordIndex);
                     break;
                 case 'deepdiver':
                 case 'minimal':
                     this._renderMinimalStyle(displayWords, y);
                     break;
                 default:
-                    this._renderDefaultStyle(displayWords, y, sceneLocalTime, currentWordIndex);
+                    this._renderDefaultStyle(displayWords, y, captionLocalTime, currentWordIndex);
             }
 
             this.ctx.restore();

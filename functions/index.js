@@ -24817,7 +24817,9 @@ exports.creationWizardStartExport = functions
           // Transition settings
           transition: transition.type,
           transitionDuration: transition.duration || 0.5,
-          voiceoverOffset: timelineScene?.voiceoverOffset || 0
+          // Voiceover timing for caption synchronization
+          voiceoverOffset: timelineScene?.voiceoverOffset || scriptScene?.voiceoverOffset || 0,
+          voiceoverDuration: animScene?.voiceoverDuration || null
         };
       }),
       // Music settings for creation-processor.js
