@@ -23,7 +23,6 @@ const axios = require('axios');
 const { GoogleGenAI } = require('@google/genai');
 const { fal } = require('@fal-ai/client');
 const sharp = require('sharp');
-const { parseBuffer } = require('music-metadata');
 
 // Explicit initialization with project ID and storage bucket
 admin.initializeApp({
@@ -24089,18 +24088,10 @@ exports.creationWizardGenerateVoiceover = functions.https.onCall(async (data, co
     await file.makePublic();
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
 
-    // Extract ACTUAL duration from the MP3 audio buffer
-    let actualDuration;
-    try {
-      const metadata = await parseBuffer(audioBuffer, { mimeType: 'audio/mpeg' });
-      actualDuration = metadata.format.duration || 0;
-      console.log(`[creationWizardGenerateVoiceover] Actual audio duration: ${actualDuration.toFixed(2)}s`);
-    } catch (metadataError) {
-      // Fallback to estimate if metadata parsing fails
-      console.warn('[creationWizardGenerateVoiceover] Could not parse audio metadata, using estimate');
-      const wordCount = text.split(/\s+/).length;
-      actualDuration = (wordCount / 150) * 60 / speed;
-    }
+    // Estimate duration based on text length and speed
+    // Average speaking rate is ~150 words per minute
+    const wordCount = text.split(/\s+/).length;
+    const estimatedDuration = Math.ceil((wordCount / 150) * 60 / speed);
 
     // Log usage
     await db.collection('apiUsage').add({
@@ -24119,7 +24110,7 @@ exports.creationWizardGenerateVoiceover = functions.https.onCall(async (data, co
       audioUrl: publicUrl,
       fileName,
       voice: selectedVoice,
-      duration: actualDuration,  // Actual duration extracted from audio
+      estimatedDuration,
       textLength: text.length
     };
 
@@ -24817,9 +24808,7 @@ exports.creationWizardStartExport = functions
           // Transition settings
           transition: transition.type,
           transitionDuration: transition.duration || 0.5,
-          // Voiceover timing for caption synchronization
-          voiceoverOffset: timelineScene?.voiceoverOffset || scriptScene?.voiceoverOffset || 0,
-          voiceoverDuration: animScene?.voiceoverDuration || null
+          voiceoverOffset: timelineScene?.voiceoverOffset || 0
         };
       }),
       // Music settings for creation-processor.js
