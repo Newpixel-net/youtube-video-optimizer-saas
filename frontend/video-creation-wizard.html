@@ -7317,25 +7317,49 @@
             const musicEnabled = state.assembly.music.enabled;
             const musicVolume = state.assembly.music.volume;
             const voiceVolume = state.assembly.audioMix?.voiceVolume || 100;
+            const audioDucking = state.assembly.audioMix?.ducking ?? true;
+            const musicFadeIn = state.assembly.music.fadeIn ?? 2;
+            const musicFadeOut = state.assembly.music.fadeOut ?? 3;
 
             return `
+                <!-- Audio Mix Visualization -->
+                <div style="margin-bottom: 1.25rem; padding: 0.75rem; background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(139,92,246,0.1)); border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Audio Mix</div>
+                    <div style="display: flex; align-items: flex-end; gap: 4px; height: 32px;">
+                        ${[...Array(16)].map((_, i) => {
+                            const voiceHeight = Math.random() * 60 + 40;
+                            const musicHeight = musicEnabled ? Math.random() * 30 + 10 : 0;
+                            return `
+                                <div style="flex: 1; display: flex; flex-direction: column; gap: 2px; align-items: center;">
+                                    <div style="width: 100%; height: ${voiceHeight}%; background: linear-gradient(to top, #06b6d4, #22d3ee); border-radius: 1px;"></div>
+                                    <div style="width: 100%; height: ${musicHeight}%; background: linear-gradient(to top, #8b5cf6, #a78bfa); border-radius: 1px; opacity: 0.7;"></div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
+                        <span style="font-size: 0.6rem; color: #06b6d4;">● Voice</span>
+                        <span style="font-size: 0.6rem; color: #8b5cf6;">● Music</span>
+                    </div>
+                </div>
+
                 <!-- Voice Settings -->
-                <div style="margin-bottom: 1.5rem;">
-                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Voice</div>
+                <div style="margin-bottom: 1.25rem;">
+                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">🎙️ Voiceover</div>
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span style="font-size: 0.8rem; color: white;">🎙️ Voiceover Volume</span>
-                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${voiceVolume}%</span>
+                        <span style="font-size: 0.8rem; color: white;">Volume</span>
+                        <span style="font-size: 0.75rem; color: #06b6d4; font-weight: 600;">${voiceVolume}%</span>
                     </div>
                     <input type="range" min="0" max="100" value="${voiceVolume}" onchange="setVoiceVolume(this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #06b6d4;">
                 </div>
 
                 <!-- Background Music -->
-                <div>
-                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Background Music</div>
+                <div style="margin-bottom: 1rem;">
+                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">🎵 Background Music</div>
 
                     <!-- Enable Toggle -->
                     <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; margin-bottom: 1rem;">
-                        <span style="font-size: 0.85rem; color: white;">🎵 Enable Music</span>
+                        <span style="font-size: 0.85rem; color: white;">Enable Music</span>
                         <label style="position: relative; display: inline-block; width: 44px; height: 24px;">
                             <input type="checkbox" ${musicEnabled ? 'checked' : ''} onchange="toggleMusic(this.checked)" style="opacity: 0; width: 0; height: 0;">
                             <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${musicEnabled ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; transition: 0.3s; border-radius: 24px;">
@@ -7352,19 +7376,51 @@
                                 <option value="">Choose a track...</option>
                                 ${musicLibrary.map(track => `
                                     <option value="${track.id}" ${selectedTrackId === track.id ? 'selected' : ''}>
-                                        ${track.name}
+                                        ${track.name} ${track.duration ? `(${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, '0')})` : ''}
                                     </option>
                                 `).join('')}
                             </select>
                         </div>
 
                         <!-- Volume -->
-                        <div>
+                        <div style="margin-bottom: 1rem;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                                <span style="font-size: 0.8rem; color: white;">Music Volume</span>
-                                <span style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${musicVolume}%</span>
+                                <span style="font-size: 0.8rem; color: white;">Volume</span>
+                                <span style="font-size: 0.75rem; color: #8b5cf6; font-weight: 600;">${musicVolume}%</span>
                             </div>
                             <input type="range" min="0" max="100" value="${musicVolume}" onchange="setMusicVolume(this.value)" style="width: 100%; height: 6px; cursor: pointer; accent-color: #8b5cf6;">
+                        </div>
+
+                        <!-- Audio Ducking -->
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem; background: rgba(255,255,255,0.03); border-radius: 0.4rem; margin-bottom: 1rem;">
+                            <div>
+                                <span style="font-size: 0.8rem; color: white;">Auto-Duck</span>
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">Lower music during voice</div>
+                            </div>
+                            <label style="position: relative; display: inline-block; width: 36px; height: 20px;">
+                                <input type="checkbox" ${audioDucking ? 'checked' : ''} onchange="setAudioDucking(this.checked)" style="opacity: 0; width: 0; height: 0;">
+                                <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${audioDucking ? '#10b981' : 'rgba(255,255,255,0.2)'}; transition: 0.3s; border-radius: 20px;">
+                                    <span style="position: absolute; height: 14px; width: 14px; left: ${audioDucking ? '19px' : '3px'}; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%;"></span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <!-- Fade Controls -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                            <div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
+                                    <span style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">Fade In</span>
+                                    <span style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">${musicFadeIn}s</span>
+                                </div>
+                                <input type="range" min="0" max="5" step="0.5" value="${musicFadeIn}" onchange="setMusicFadeIn(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #8b5cf6;">
+                            </div>
+                            <div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
+                                    <span style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">Fade Out</span>
+                                    <span style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">${musicFadeOut}s</span>
+                                </div>
+                                <input type="range" min="0" max="5" step="0.5" value="${musicFadeOut}" onchange="setMusicFadeOut(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #8b5cf6;">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -7376,28 +7432,53 @@
             const scriptScenes = state.script.scenes || [];
             const storyboardScenes = state.storyboard.scenes || [];
             const animationScenes = state.animation.scenes || [];
+            const currentSceneIndex = state.preview.currentSceneIndex;
+
+            // Calculate total duration
+            const totalDuration = scriptScenes.reduce((sum, s) => sum + (s.visualDuration || s.duration || 5), 0);
 
             return `
+                <!-- Media Overview -->
+                <div style="margin-bottom: 1rem; padding: 0.75rem; background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(6,182,212,0.1)); border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">Total Scenes</div>
+                            <div style="font-size: 1.25rem; color: white; font-weight: 600;">${scriptScenes.length}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">Duration</div>
+                            <div style="font-size: 1.25rem; color: #10b981; font-weight: 600;">${formatDuration(totalDuration)}</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Scene Media</div>
 
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; max-height: 320px; overflow-y: auto; padding-right: 0.25rem;">
                     ${scriptScenes.map((scene, i) => {
                         const storyboard = storyboardScenes.find(s => s.sceneId === scene.id);
                         const anim = animationScenes.find(s => s.sceneId === scene.id);
                         const imageUrl = storyboard?.imageUrl;
                         const hasVideo = anim?.videoUrl;
+                        const duration = scene.visualDuration || scene.duration || 5;
+                        const isActive = i === currentSceneIndex;
 
                         return `
-                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; overflow: hidden;">
-                                <div style="aspect-ratio: 16/9; background: rgba(0,0,0,0.3);">
+                            <div onclick="jumpToScene(${i})" style="background: rgba(255,255,255,0.03); border: 2px solid ${isActive ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; overflow: hidden; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='rgba(139,92,246,0.5)'" onmouseout="this.style.borderColor='${isActive ? '#8b5cf6' : 'rgba(255,255,255,0.1)}'">
+                                <div style="aspect-ratio: 16/9; background: rgba(0,0,0,0.3); position: relative;">
                                     ${imageUrl ? `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` :
                                       `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">📷</div>`}
+                                    ${isActive ? `<div style="position: absolute; top: 4px; left: 4px; padding: 2px 6px; background: #8b5cf6; border-radius: 3px; font-size: 0.55rem; color: white;">▶ PLAYING</div>` : ''}
+                                    <div style="position: absolute; bottom: 4px; right: 4px; padding: 2px 6px; background: rgba(0,0,0,0.7); border-radius: 3px; font-size: 0.6rem; color: white;">${formatDuration(duration)}</div>
                                 </div>
-                                <div style="padding: 0.4rem;">
-                                    <div style="font-size: 0.7rem; color: white; margin-bottom: 0.2rem;">Scene ${i + 1}</div>
-                                    <div style="font-size: 0.6rem; color: ${hasVideo ? '#10b981' : '#f59e0b'};">
-                                        ${hasVideo ? '✓ Video' : '⚡ Image'}
+                                <div style="padding: 0.4rem; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: white; font-weight: ${isActive ? '600' : '400'};">Scene ${i + 1}</div>
+                                        <div style="font-size: 0.6rem; color: ${hasVideo ? '#10b981' : '#f59e0b'};">
+                                            ${hasVideo ? '✓ Video' : '⚡ Image'}
+                                        </div>
                                     </div>
+                                    ${hasVideo ? '' : `<button onclick="event.stopPropagation(); regenerateSceneImage(${i})" style="padding: 0.2rem 0.4rem; background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.5); border-radius: 0.25rem; color: #a78bfa; font-size: 0.55rem; cursor: pointer;">🔄</button>`}
                                 </div>
                             </div>
                         `;
@@ -7409,24 +7490,58 @@
         // TRANSITIONS TAB
         function renderTransitionsTabContent() {
             const scriptScenes = state.script.scenes || [];
-            const transitionTypes = state.assembly.transitionTypes || [];
+            const defaultTransitionTypes = [
+                { id: 'fade', name: 'Fade', icon: '🌅', desc: 'Smooth fade between scenes' },
+                { id: 'dissolve', name: 'Dissolve', icon: '✨', desc: 'Cross-dissolve blend' },
+                { id: 'wipe', name: 'Wipe', icon: '➡️', desc: 'Horizontal wipe' },
+                { id: 'zoom', name: 'Zoom', icon: '🔍', desc: 'Zoom transition' },
+                { id: 'slide', name: 'Slide', icon: '📱', desc: 'Slide in/out' },
+                { id: 'none', name: 'Cut', icon: '✂️', desc: 'Hard cut' }
+            ];
+            const transitionTypes = state.assembly.transitionTypes?.length ? state.assembly.transitionTypes : defaultTransitionTypes;
+            const globalDuration = state.assembly.transitionDuration ?? 0.5;
 
             return `
+                <!-- Global Settings -->
+                <div style="margin-bottom: 1.25rem; padding: 0.75rem; background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(236,72,153,0.1)); border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">Default Duration</div>
+                        <span style="font-size: 0.75rem; color: #a78bfa; font-weight: 600;">${globalDuration}s</span>
+                    </div>
+                    <input type="range" min="0.2" max="2" step="0.1" value="${globalDuration}" onchange="setGlobalTransitionDuration(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #8b5cf6;">
+
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                        <button onclick="applyTransitionToAll('fade')" style="flex: 1; padding: 0.4rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.3rem; color: rgba(255,255,255,0.7); font-size: 0.65rem; cursor: pointer;">Apply Fade to All</button>
+                        <button onclick="applyTransitionToAll('none')" style="flex: 1; padding: 0.4rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.3rem; color: rgba(255,255,255,0.7); font-size: 0.65rem; cursor: pointer;">Cut All</button>
+                    </div>
+                </div>
+
                 <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Scene Transitions</div>
 
-                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 280px; overflow-y: auto; padding-right: 0.25rem;">
                     ${scriptScenes.slice(0, -1).map((scene, i) => {
-                        const transition = state.assembly.transitions[scene.id] || { type: 'fade' };
+                        const transition = state.assembly.transitions[scene.id] || { type: 'fade', duration: globalDuration };
+                        const currentType = transitionTypes.find(t => t.id === transition.type) || transitionTypes[0];
                         return `
-                            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem;">
-                                <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); min-width: 80px;">
-                                    Scene ${i + 1} → ${i + 2}
+                            <div style="padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1);">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    <div style="width: 24px; height: 24px; background: rgba(139,92,246,0.2); border-radius: 0.25rem; display: flex; align-items: center; justify-content: center; font-size: 0.7rem;">${i + 1}</div>
+                                    <div style="flex: 1; height: 2px; background: linear-gradient(90deg, rgba(139,92,246,0.5), rgba(6,182,212,0.5));"></div>
+                                    <span style="font-size: 0.9rem;">${currentType.icon}</span>
+                                    <div style="flex: 1; height: 2px; background: linear-gradient(90deg, rgba(6,182,212,0.5), rgba(139,92,246,0.5));"></div>
+                                    <div style="width: 24px; height: 24px; background: rgba(6,182,212,0.2); border-radius: 0.25rem; display: flex; align-items: center; justify-content: center; font-size: 0.7rem;">${i + 2}</div>
                                 </div>
-                                <select onchange="setSceneTransition(${scene.id}, this.value)" style="flex: 1; padding: 0.4rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.3rem; color: white; font-size: 0.75rem; cursor: pointer;">
-                                    ${transitionTypes.map(t => `
-                                        <option value="${t.id}" ${transition.type === t.id ? 'selected' : ''}>${t.name}</option>
-                                    `).join('')}
-                                </select>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <select onchange="setSceneTransition('${scene.id}', this.value)" style="flex: 1; padding: 0.4rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.3rem; color: white; font-size: 0.7rem; cursor: pointer;">
+                                        ${transitionTypes.map(t => `
+                                            <option value="${t.id}" ${transition.type === t.id ? 'selected' : ''}>${t.icon} ${t.name}</option>
+                                        `).join('')}
+                                    </select>
+                                    <div style="display: flex; align-items: center; gap: 0.25rem; padding: 0 0.4rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.3rem;">
+                                        <input type="number" min="0.1" max="3" step="0.1" value="${transition.duration || globalDuration}" onchange="setTransitionDuration('${scene.id}', this.value)" style="width: 40px; background: transparent; border: none; color: white; font-size: 0.7rem; text-align: center;">
+                                        <span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">s</span>
+                                    </div>
+                                </div>
                             </div>
                         `;
                     }).join('')}
@@ -7434,6 +7549,7 @@
 
                 ${scriptScenes.length <= 1 ? `
                     <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.4); font-size: 0.8rem;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎬</div>
                         Add more scenes to configure transitions
                     </div>
                 ` : ''}
@@ -8044,6 +8160,75 @@
                 previewEngine.musicVolume = volume / 100;
             }
             render();
+        }
+
+        // Phase 4: Enhanced audio controls
+        function setAudioDucking(enabled) {
+            if (!state.assembly.audioMix) state.assembly.audioMix = {};
+            state.assembly.audioMix.ducking = enabled;
+            saveProject();
+            render();
+        }
+
+        function setMusicFadeIn(seconds) {
+            state.assembly.music.fadeIn = parseFloat(seconds);
+            saveProject();
+            render();
+        }
+
+        function setMusicFadeOut(seconds) {
+            state.assembly.music.fadeOut = parseFloat(seconds);
+            saveProject();
+            render();
+        }
+
+        // Phase 4: Media tab functions
+        function jumpToScene(sceneIndex) {
+            if (!previewEngine) return;
+            const scriptScenes = state.script.scenes || [];
+            let targetTime = 0;
+            for (let i = 0; i < sceneIndex; i++) {
+                targetTime += scriptScenes[i]?.visualDuration || scriptScenes[i]?.duration || 5;
+            }
+            previewEngine.seek(targetTime);
+            state.preview.currentSceneIndex = sceneIndex;
+            render();
+        }
+
+        function regenerateSceneImage(sceneIndex) {
+            const scriptScenes = state.script.scenes || [];
+            const scene = scriptScenes[sceneIndex];
+            if (!scene) return;
+            // Trigger regeneration - would call storyboard generation function
+            console.log('Regenerate scene image:', sceneIndex, scene.id);
+            showNotification('Image regeneration coming soon!', 'info');
+        }
+
+        // Phase 4: Transitions tab functions
+        function setGlobalTransitionDuration(duration) {
+            state.assembly.transitionDuration = parseFloat(duration);
+            saveProject();
+            render();
+        }
+
+        function applyTransitionToAll(transitionType) {
+            const scriptScenes = state.script.scenes || [];
+            const duration = state.assembly.transitionDuration ?? 0.5;
+            scriptScenes.slice(0, -1).forEach(scene => {
+                state.assembly.transitions[scene.id] = { type: transitionType, duration };
+            });
+            saveProject();
+            updatePreviewTransitions();
+            render();
+        }
+
+        function setTransitionDuration(sceneId, duration) {
+            if (!state.assembly.transitions[sceneId]) {
+                state.assembly.transitions[sceneId] = { type: 'fade' };
+            }
+            state.assembly.transitions[sceneId].duration = parseFloat(duration);
+            saveProject();
+            updatePreviewTransitions();
         }
 
         // Helper functions to update preview settings
