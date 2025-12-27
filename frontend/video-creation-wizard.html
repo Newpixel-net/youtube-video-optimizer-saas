@@ -2899,29 +2899,34 @@
 
         async function initAuth() {
             return new Promise((resolve, reject) => {
-                // Set up a maximum wait time for auth (2.5 seconds)
+                // Set up a maximum wait time for auth (5 seconds - increased for reliability)
                 // This handles the race condition where Firebase takes time to restore auth state
                 authTimeoutId = setTimeout(() => {
                     if (authResolved) return; // Already resolved
 
                     // Final check before redirecting
                     const currentUser = auth.currentUser;
+                    console.log('Auth timeout check - currentUser:', currentUser ? 'exists' : 'null');
                     if (currentUser) {
                         authResolved = true;
                         state.user = currentUser;
                         loadUserTokens().then(() => resolve(currentUser));
                     } else {
-                        // Truly not authenticated after waiting - redirect to login
-                        console.log('Auth timeout: No user found, redirecting to login');
-                        window.location.href = '/video-optimizer';
-                        reject('Not authenticated');
+                        // Don't auto-redirect - resolve with null and let the page handle it
+                        // This prevents redirect loops and improves UX
+                        console.log('Auth timeout: No user found. Proceeding without redirect.');
+                        authResolved = true;
+                        state.user = null;
+                        resolve(null);
                     }
-                }, 2500);
+                }, 5000);
 
                 // Listen for auth state changes
                 const unsubscribe = auth.onAuthStateChanged(async (user) => {
                     // If already resolved, ignore subsequent calls
                     if (authResolved) return;
+
+                    console.log('Auth state changed:', user ? user.email : 'no user');
 
                     if (user) {
                         // User is authenticated - clear timeout and proceed
@@ -11745,7 +11750,14 @@
         // ==========================================
         async function init() {
             try {
-                await initAuth();
+                const user = await initAuth();
+
+                // Check if user is authenticated
+                if (!user) {
+                    console.log('User not authenticated, redirecting to login...');
+                    window.location.href = '/video-optimizer';
+                    return;
+                }
 
                 // Update loading text after auth
                 const loadingText = document.getElementById('loading-text');
