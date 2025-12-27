@@ -11752,12 +11752,8 @@
             try {
                 const user = await initAuth();
 
-                // Check if user is authenticated
-                if (!user) {
-                    console.log('User not authenticated, redirecting to login...');
-                    window.location.href = '/video-optimizer';
-                    return;
-                }
+                // Log auth result but DON'T redirect - let page render regardless
+                console.log('Auth complete. User:', user ? user.email : 'not authenticated');
 
                 // Update loading text after auth
                 const loadingText = document.getElementById('loading-text');
@@ -11767,7 +11763,7 @@
 
                 // Check if loading an existing project
                 const projectId = checkUrlForProject();
-                if (projectId) {
+                if (projectId && user) {
                     await loadProject(projectId);
                 } else {
                     state.isLoading = false;
