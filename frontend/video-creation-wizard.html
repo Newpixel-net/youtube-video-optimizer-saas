@@ -3127,7 +3127,7 @@
 
                 // If we deleted the current project, start fresh
                 if (state.project.id === projectId) {
-                    window.location.href = '/video-creation-wizard';
+                    window.location.href = '/video-creation';
                 }
             } catch (error) {
                 console.error('Delete project error:', error);
@@ -5196,7 +5196,7 @@
 
         function loadProjectFromModal(projectId) {
             closeProjectsModal();
-            window.location.href = `/video-creation-wizard?project=${projectId}`;
+            window.location.href = `/video-creation?project=${projectId}`;
         }
 
         async function deleteProjectFromModal(projectId) {
@@ -5226,7 +5226,7 @@
 
         function startNewProject() {
             closeProjectsModal();
-            window.location.href = '/video-creation-wizard';
+            window.location.href = '/video-creation';
         }
     </script>
 
