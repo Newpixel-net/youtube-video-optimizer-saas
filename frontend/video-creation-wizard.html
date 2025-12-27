@@ -54,7 +54,12 @@
     <!-- 1.1 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- 1.2 Firebase SDKs -->
+    <!-- 1.2 Google Fonts for Caption Styling -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Inter:wght@400;600;700&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Poppins:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- 1.3 Firebase SDKs -->
     <link rel="preload" href="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js" as="script">
     <link rel="preload" href="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js" as="script">
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
@@ -115,6 +120,16 @@
             this.captionStyle = 'karaoke';  // Default style
             this.captionPosition = 'bottom';
             this.captionSize = 1.0;  // Size multiplier (0.7 - 1.5)
+
+            // Enhanced caption properties (Phase 2)
+            this.captionMode = 'word';           // 'word' or 'sentence'
+            this.captionFontFamily = 'Montserrat';
+            this.captionFontWeight = 600;
+            this.captionFillColor = '#FFFFFF';
+            this.captionStrokeColor = '#000000';
+            this.captionStrokeWidth = 2;
+            this.captionEffect = 'none';         // 'none', 'pop', 'fade', 'zoom', 'bounce'
+            this.captionHighlightColor = '#FBBF24';
 
             this._renderLoop = this._renderLoop.bind(this);
         }
@@ -684,10 +699,18 @@
             // Generate word timings based on actual voiceover duration
             const wordTimings = this._generateWordTimings(caption, voiceoverDuration);
 
-            // Find current words to display (show a window of words around current time)
-            const wordsPerLine = this._getWordsPerLine();
-            const currentWordIndex = this._getCurrentWordIndex(wordTimings, captionLocalTime);
-            const displayWords = this._getDisplayWords(wordTimings, currentWordIndex, wordsPerLine);
+            // Handle word vs sentence mode
+            let displayWords, currentWordIndex;
+            if (this.captionMode === 'sentence') {
+                // Sentence mode: show all words, no word-by-word highlighting
+                displayWords = wordTimings;
+                currentWordIndex = -1; // No current word highlighting
+            } else {
+                // Word mode: show window of words with highlighting
+                const wordsPerLine = this._getWordsPerLine();
+                currentWordIndex = this._getCurrentWordIndex(wordTimings, captionLocalTime);
+                displayWords = this._getDisplayWords(wordTimings, currentWordIndex, wordsPerLine);
+            }
 
             if (displayWords.length === 0) return;
 
@@ -777,45 +800,87 @@
 
         _renderKaraokeStyle(words, y, localTime, currentWordIndex) {
             const fontSize = Math.round(this.height * 0.045 * this.captionSize);
-            this.ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+            // Use custom font family with fallbacks
+            const fontFamily = `${this.captionFontFamily}, Arial, sans-serif`;
+            this.ctx.font = `${this.captionFontWeight || 'bold'} ${fontSize}px ${fontFamily}`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
 
             const text = words.map(w => w.text).join(' ');
             const x = this.width / 2;
 
-            // Draw text shadow/outline
-            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-            this.ctx.lineWidth = 4;
-            this.ctx.strokeText(text, x, y);
+            // Draw text stroke/outline using custom stroke settings
+            if (this.captionStrokeWidth > 0) {
+                this.ctx.strokeStyle = this.captionStrokeColor;
+                this.ctx.lineWidth = this.captionStrokeWidth * 2;
+                this.ctx.strokeText(text, x, y);
+            }
 
             // Draw each word with appropriate color
             let xOffset = x - this.ctx.measureText(text).width / 2;
             words.forEach((word, i) => {
                 const isCurrentWord = word.index === currentWordIndex;
                 const isPastWord = word.index < currentWordIndex;
+                const wordX = xOffset + this.ctx.measureText(word.text).width / 2;
+                let wordY = y;
 
-                // Karaoke: current word is yellow/gold, past words are white, future are dimmed
+                // Apply text effects for current word
                 if (isCurrentWord) {
-                    this.ctx.fillStyle = '#FBBF24';  // Gold/yellow highlight
-                    // Scale effect for current word
                     this.ctx.save();
                     const wordWidth = this.ctx.measureText(word.text + ' ').width;
                     const wordCenterX = xOffset + wordWidth / 2;
-                    this.ctx.translate(wordCenterX, y);
-                    this.ctx.scale(1.1, 1.1);
-                    this.ctx.translate(-wordCenterX, -y);
+
+                    // Apply effect based on setting
+                    switch (this.captionEffect) {
+                        case 'pop':
+                            this.ctx.translate(wordCenterX, y);
+                            this.ctx.scale(1.15, 1.15);
+                            this.ctx.translate(-wordCenterX, -y);
+                            break;
+                        case 'zoom':
+                            const zoomPhase = (localTime * 2) % 1;
+                            const zoomScale = 1 + Math.sin(zoomPhase * Math.PI) * 0.1;
+                            this.ctx.translate(wordCenterX, y);
+                            this.ctx.scale(zoomScale, zoomScale);
+                            this.ctx.translate(-wordCenterX, -y);
+                            break;
+                        case 'bounce':
+                            const bouncePhase = (localTime * 4) % 1;
+                            wordY = y - Math.sin(bouncePhase * Math.PI) * 5;
+                            break;
+                        case 'fade':
+                            // Fade effect handled via alpha
+                            break;
+                        default:
+                            // Default subtle scale
+                            this.ctx.translate(wordCenterX, y);
+                            this.ctx.scale(1.1, 1.1);
+                            this.ctx.translate(-wordCenterX, -y);
+                    }
+
+                    // Use highlight color for current word
+                    this.ctx.fillStyle = this.captionHighlightColor;
                 } else if (isPastWord) {
-                    this.ctx.fillStyle = '#FFFFFF';  // White for spoken words
+                    this.ctx.fillStyle = this.captionFillColor;  // Custom fill for spoken words
                 } else {
-                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';  // Dimmed for future words
+                    // Dimmed for future words (50% opacity of fill color)
+                    const fillColor = this.captionFillColor;
+                    this.ctx.fillStyle = this._hexToRgba(fillColor, 0.5);
                 }
 
-                this.ctx.fillText(word.text, xOffset + this.ctx.measureText(word.text).width / 2, y);
+                this.ctx.fillText(word.text, wordX, wordY);
 
                 if (isCurrentWord) this.ctx.restore();
                 xOffset += this.ctx.measureText(word.text + ' ').width;
             });
+        }
+
+        // Helper to convert hex to rgba
+        _hexToRgba(hex, alpha) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         }
 
         _renderBeastyStyle(words, y, localTime, currentWordIndex) {
@@ -1057,6 +1122,42 @@
 
         setCaptionSize(size) {
             this.captionSize = Math.max(0.5, Math.min(2, parseFloat(size) || 1));
+            this._renderFrame();
+        }
+
+        // Enhanced caption setters (Phase 2)
+        setCaptionMode(mode) {
+            this.captionMode = mode; // 'word' or 'sentence'
+            this._renderFrame();
+        }
+
+        setCaptionFontFamily(font) {
+            this.captionFontFamily = font;
+            this._renderFrame();
+        }
+
+        setCaptionFillColor(color) {
+            this.captionFillColor = color;
+            this._renderFrame();
+        }
+
+        setCaptionStrokeColor(color) {
+            this.captionStrokeColor = color;
+            this._renderFrame();
+        }
+
+        setCaptionStrokeWidth(width) {
+            this.captionStrokeWidth = Math.max(0, Math.min(8, parseFloat(width) || 2));
+            this._renderFrame();
+        }
+
+        setCaptionEffect(effect) {
+            this.captionEffect = effect;
+            this._renderFrame();
+        }
+
+        setCaptionHighlightColor(color) {
+            this.captionHighlightColor = color;
             this._renderFrame();
         }
 
@@ -7377,10 +7478,20 @@
 
         function updatePreviewCaptions() {
             if (previewEngine) {
-                previewEngine.setCaptionStyle(state.assembly.captions.style);
-                previewEngine.setCaptionPosition(state.assembly.captions.position);
-                previewEngine.setCaptionSize(state.assembly.captions.size);
-                previewEngine.setCaptionsEnabled(state.assembly.captions.enabled);
+                const captions = state.assembly.captions;
+                // Basic settings
+                previewEngine.setCaptionStyle(captions.style);
+                previewEngine.setCaptionPosition(captions.position);
+                previewEngine.setCaptionSize(captions.size);
+                previewEngine.setCaptionsEnabled(captions.enabled);
+                // Enhanced settings (Phase 2)
+                previewEngine.setCaptionMode(captions.mode);
+                previewEngine.setCaptionFontFamily(captions.fontFamily);
+                previewEngine.setCaptionFillColor(captions.fillColor);
+                previewEngine.setCaptionStrokeColor(captions.strokeColor);
+                previewEngine.setCaptionStrokeWidth(captions.strokeWidth);
+                previewEngine.setCaptionEffect(captions.effect);
+                previewEngine.setCaptionHighlightColor(captions.highlightColor);
             }
         }
 
@@ -7984,10 +8095,19 @@
                 await previewEngine.loadScenes(scenes);
 
                 // Set caption settings - unified style-aware system
-                previewEngine.captionsEnabled = state.assembly.captions.enabled;
-                previewEngine.captionStyle = state.assembly.captions.style;
-                previewEngine.captionPosition = state.assembly.captions.position;
-                previewEngine.captionSize = state.assembly.captions.size || 1;
+                const captions = state.assembly.captions;
+                previewEngine.captionsEnabled = captions.enabled;
+                previewEngine.captionStyle = captions.style;
+                previewEngine.captionPosition = captions.position;
+                previewEngine.captionSize = captions.size || 1;
+                // Enhanced settings (Phase 2)
+                previewEngine.captionMode = captions.mode || 'word';
+                previewEngine.captionFontFamily = captions.fontFamily || 'Montserrat';
+                previewEngine.captionFillColor = captions.fillColor || '#FFFFFF';
+                previewEngine.captionStrokeColor = captions.strokeColor || '#000000';
+                previewEngine.captionStrokeWidth = captions.strokeWidth || 2;
+                previewEngine.captionEffect = captions.effect || 'none';
+                previewEngine.captionHighlightColor = captions.highlightColor || '#FBBF24';
 
                 // Set music if enabled
                 if (state.assembly.music.enabled && state.assembly.music.trackId) {
