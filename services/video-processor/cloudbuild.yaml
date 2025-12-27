@@ -50,6 +50,8 @@ steps:
       - '10'
       - '--update-env-vars'
       - 'BUCKET_NAME=ytseo-6d1b0.firebasestorage.app,NODE_ENV=production'
+      - '--update-secrets'
+      - 'OPENAI_API_KEY=openai-api-key:latest'
       - '--allow-unauthenticated'
 
 images:
@@ -62,6 +64,20 @@ options:
 
 timeout: '1800s'
 
-# Note: API keys (OPENAI_API_KEY, RAPIDAPI_KEY, etc.) should be set directly
-# on Cloud Run via console or gcloud, NOT in this file. Using --update-env-vars
-# ensures these keys persist across deployments.
+# PERSISTENT API KEYS via Secret Manager:
+# The OPENAI_API_KEY is now loaded from Secret Manager (--update-secrets).
+# This ensures the key persists across deployments automatically.
+#
+# SETUP INSTRUCTIONS (one-time):
+# 1. Create the secret in Secret Manager:
+#    gcloud secrets create openai-api-key --replication-policy="automatic"
+#
+# 2. Add the API key value:
+#    echo -n "sk-proj-YOUR-OPENAI-API-KEY" | gcloud secrets versions add openai-api-key --data-file=-
+#
+# 3. Grant Cloud Run access to the secret:
+#    gcloud secrets add-iam-policy-binding openai-api-key \
+#      --member="serviceAccount:YOUR-PROJECT-NUMBER-compute@developer.gserviceaccount.com" \
+#      --role="roles/secretmanager.secretAccessor"
+#
+# The secret will be automatically injected as OPENAI_API_KEY env var on each deployment.

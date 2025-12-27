@@ -39,9 +39,10 @@ const STYLE_ALIASES = {
  * @param {Object} params.customStyle - Custom style options
  * @param {string} params.captionPosition - Position: 'bottom', 'middle', 'top' (default: 'bottom')
  * @param {number} params.captionSize - Size multiplier: 0.5 to 2.0 (default: 1.0)
+ * @param {Array} params.scenes - Optional array of scenes with narration text (for fallback)
  * @returns {Promise<string|null>} Path to ASS subtitle file, or null if captions disabled
  */
-export async function generateCaptions({ jobId, videoFile, workDir, captionStyle, customStyle, captionPosition, captionSize }) {
+export async function generateCaptions({ jobId, videoFile, workDir, captionStyle, customStyle, captionPosition, captionSize, scenes }) {
   console.log(`[${jobId}] ========== CAPTION GENERATION ==========`);
   console.log(`[${jobId}] Caption style requested: "${captionStyle}"`);
   console.log(`[${jobId}] Caption position: "${captionPosition || 'bottom'}"`);
@@ -49,6 +50,7 @@ export async function generateCaptions({ jobId, videoFile, workDir, captionStyle
   console.log(`[${jobId}] Video file: ${videoFile}`);
   console.log(`[${jobId}] Work directory: ${workDir}`);
   console.log(`[${jobId}] Custom style: ${customStyle ? JSON.stringify(customStyle) : 'none'}`);
+  console.log(`[${jobId}] Scenes with narration provided: ${scenes?.length || 0}`);
 
   // Normalize style ID using aliases
   const normalizedStyle = STYLE_ALIASES[captionStyle] || captionStyle;
@@ -66,15 +68,49 @@ export async function generateCaptions({ jobId, videoFile, workDir, captionStyle
   console.log(`[${jobId}] Generating captions with normalized style: ${normalizedStyle}`);
 
   try {
-    // Step 1: Extract audio from video
-    const audioFile = path.join(workDir, 'audio.wav');
-    await extractAudio(jobId, videoFile, audioFile);
+    let transcription = null;
 
-    // Step 2: Transcribe with Whisper (word-level timestamps)
-    const transcription = await transcribeWithWhisper(jobId, audioFile);
+    // Step 1: Try Whisper transcription first (if API key is available)
+    const hasWhisperKey = !!process.env.OPENAI_API_KEY;
+    console.log(`[${jobId}] Whisper API key available: ${hasWhisperKey}`);
 
+    if (hasWhisperKey) {
+      try {
+        // Extract audio from video
+        const audioFile = path.join(workDir, 'audio.wav');
+        await extractAudio(jobId, videoFile, audioFile);
+
+        // Transcribe with Whisper (word-level timestamps)
+        transcription = await transcribeWithWhisper(jobId, audioFile);
+
+        if (transcription && transcription.words && transcription.words.length > 0) {
+          console.log(`[${jobId}] ✓ Whisper transcription successful: ${transcription.words.length} words`);
+        } else {
+          console.log(`[${jobId}] ✗ Whisper returned empty transcription`);
+          transcription = null;
+        }
+      } catch (whisperError) {
+        console.error(`[${jobId}] ✗ Whisper transcription failed:`, whisperError.message);
+        transcription = null;
+      }
+    }
+
+    // Step 2: Fallback to scene narration if Whisper failed or unavailable
+    if (!transcription && scenes && scenes.length > 0) {
+      console.log(`[${jobId}] Using FALLBACK: Generating captions from scene narration text`);
+      transcription = generateCaptionsFromNarration(jobId, scenes);
+
+      if (transcription && transcription.words && transcription.words.length > 0) {
+        console.log(`[${jobId}] ✓ Fallback captions generated: ${transcription.words.length} words from ${scenes.length} scenes`);
+      } else {
+        console.log(`[${jobId}] ✗ Fallback caption generation returned no words`);
+      }
+    }
+
+    // No captions available from any source
     if (!transcription || !transcription.words || transcription.words.length === 0) {
-      console.log(`[${jobId}] No words transcribed, skipping captions`);
+      console.log(`[${jobId}] ✗ No captions available from any source (Whisper or narration fallback)`);
+      console.log(`[${jobId}] ========================================`);
       return null;
     }
 
@@ -102,6 +138,71 @@ export async function generateCaptions({ jobId, videoFile, workDir, captionStyle
     // Don't fail the whole job, just skip captions
     return null;
   }
+}
+
+/**
+ * Generate word-level timestamps from scene narration text
+ * This is a fallback when Whisper API is unavailable
+ *
+ * @param {string} jobId - Job ID for logging
+ * @param {Array} scenes - Array of scenes with narration and duration
+ * @returns {Object} Transcription object with words array
+ */
+function generateCaptionsFromNarration(jobId, scenes) {
+  const words = [];
+  let currentTime = 0;
+
+  for (const scene of scenes) {
+    const narration = scene.narration || '';
+    const duration = scene.duration || 8;
+
+    if (!narration.trim()) {
+      // No narration for this scene, just advance time
+      currentTime += duration;
+      continue;
+    }
+
+    // Split narration into words
+    const sceneWords = narration.trim().split(/\s+/);
+    if (sceneWords.length === 0) {
+      currentTime += duration;
+      continue;
+    }
+
+    // Calculate time per word (with small padding at start/end)
+    const padding = 0.2; // 200ms padding at start and end
+    const effectiveDuration = Math.max(duration - (padding * 2), duration * 0.8);
+    const timePerWord = effectiveDuration / sceneWords.length;
+
+    // Generate word timestamps
+    let wordTime = currentTime + padding;
+    for (const word of sceneWords) {
+      words.push({
+        word: word,
+        start: wordTime,
+        end: wordTime + timePerWord
+      });
+      wordTime += timePerWord;
+    }
+
+    currentTime += duration;
+  }
+
+  console.log(`[${jobId}] Fallback: Generated ${words.length} words from narration across ${scenes.length} scenes`);
+
+  // Log first few words for debugging
+  if (words.length > 0) {
+    console.log(`[${jobId}] First 5 words from fallback:`);
+    words.slice(0, 5).forEach((w, i) => {
+      console.log(`[${jobId}]   ${i + 1}. "${w.word}" (${w.start.toFixed(2)}s - ${w.end.toFixed(2)}s)`);
+    });
+  }
+
+  return {
+    text: scenes.map(s => s.narration || '').join(' '),
+    words,
+    source: 'narration_fallback'
+  };
 }
 
 /**

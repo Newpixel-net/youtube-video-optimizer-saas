@@ -265,6 +265,8 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
       await updateProgress(jobRef, 82, 'Generating captions...');
 
       try {
+        // Pass scenes with narration text for fallback caption generation
+        // This allows captions to work even without Whisper/OPENAI_API_KEY
         const captionFile = await generateCaptions({
           jobId,
           videoFile: finalVideoFile,
@@ -272,7 +274,8 @@ export async function processCreationExport({ jobId, jobRef, job, storage, bucke
           captionStyle: captionStyle,
           customStyle: captionsConfig.customStyle,
           captionPosition: captionsConfig.position || 'bottom',
-          captionSize: captionsConfig.size || 1  // Numeric 0.7-1.5, same as video-wizard
+          captionSize: captionsConfig.size || 1,  // Numeric 0.7-1.5, same as video-wizard
+          scenes: scenes  // Pass scenes with narration text for fallback
         });
 
         if (captionFile && fs.existsSync(captionFile)) {
