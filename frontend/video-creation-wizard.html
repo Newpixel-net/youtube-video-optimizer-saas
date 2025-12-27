@@ -6577,6 +6577,8 @@
 
                 animScene.voiceoverStatus = 'ready';
                 animScene.voiceoverUrl = result.data.audioUrl;
+                animScene.voiceoverDuration = result.data.duration;  // Store actual audio duration
+                console.log(`[Voiceover] Scene ${sceneId}: duration=${result.data.duration?.toFixed(2)}s`);
                 showToast('Voiceover generated successfully!', 'success');
             } catch (error) {
                 console.error('Voiceover generation error:', error);
