@@ -885,36 +885,53 @@
 
         _renderBeastyStyle(words, y, localTime, currentWordIndex) {
             const fontSize = Math.round(this.height * 0.055 * this.captionSize);
-            this.ctx.font = `900 ${fontSize}px Impact, Arial Black, sans-serif`;
+            // Use custom font if not default MrBeast style
+            const fontFamily = this.captionFontFamily !== 'Montserrat'
+                ? `${this.captionFontFamily}, Impact, Arial Black, sans-serif`
+                : 'Impact, Arial Black, sans-serif';
+            this.ctx.font = `900 ${fontSize}px ${fontFamily}`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
 
             const text = words.map(w => w.text.toUpperCase()).join(' ');
             const x = this.width / 2;
 
-            // Black stroke for MrBeast style
-            this.ctx.strokeStyle = '#000000';
-            this.ctx.lineWidth = 6;
+            // Use custom stroke settings
+            this.ctx.strokeStyle = this.captionStrokeColor;
+            this.ctx.lineWidth = Math.max(this.captionStrokeWidth * 2, 6);
             this.ctx.strokeText(text, x, y);
 
-            // Yellow/gold fill
-            this.ctx.fillStyle = '#FBBF24';
+            // Use highlight color for beasty style (gold/yellow by default)
+            this.ctx.fillStyle = this.captionHighlightColor;
             this.ctx.fillText(text, x, y);
 
-            // Bounce effect on current word
+            // Apply effect based on setting
             const currentWord = words.find(w => w.index === currentWordIndex);
-            if (currentWord) {
-                const bouncePhase = (localTime * 4) % 1;
-                const bounceOffset = Math.sin(bouncePhase * Math.PI) * 3;
+            if (currentWord && this.captionEffect !== 'none') {
+                let effectOffset = 0;
 
-                // Redraw current word slightly higher for bounce effect
+                switch (this.captionEffect) {
+                    case 'bounce':
+                        const bouncePhase = (localTime * 4) % 1;
+                        effectOffset = Math.sin(bouncePhase * Math.PI) * 5;
+                        break;
+                    case 'pop':
+                        effectOffset = 2; // Slight lift
+                        break;
+                    case 'zoom':
+                        const zoomPhase = (localTime * 3) % 1;
+                        effectOffset = Math.sin(zoomPhase * Math.PI) * 3;
+                        break;
+                }
+
+                // Redraw current word with effect
                 let xOffset = x - this.ctx.measureText(text).width / 2;
                 words.forEach((word) => {
                     const wordText = word.text.toUpperCase();
                     const wordWidth = this.ctx.measureText(wordText + ' ').width;
                     if (word.index === currentWordIndex) {
-                        this.ctx.strokeText(wordText, xOffset + this.ctx.measureText(wordText).width / 2, y - bounceOffset);
-                        this.ctx.fillText(wordText, xOffset + this.ctx.measureText(wordText).width / 2, y - bounceOffset);
+                        this.ctx.strokeText(wordText, xOffset + this.ctx.measureText(wordText).width / 2, y - effectOffset);
+                        this.ctx.fillText(wordText, xOffset + this.ctx.measureText(wordText).width / 2, y - effectOffset);
                     }
                     xOffset += wordWidth;
                 });
@@ -923,7 +940,8 @@
 
         _renderHormoziStyle(words, y, localTime, currentWordIndex) {
             const fontSize = Math.round(this.height * 0.042 * this.captionSize);
-            this.ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+            const fontFamily = `${this.captionFontFamily}, Arial, sans-serif`;
+            this.ctx.font = `bold ${fontSize}px ${fontFamily}`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
 
@@ -944,28 +962,41 @@
                 const isHighlighted = word.index === currentWordIndex ||
                                      (word.index === currentWordIndex + 1 && words.length > 2);
 
+                // Apply effect offset
+                let effectY = y;
+                if (isHighlighted && this.captionEffect !== 'none') {
+                    switch (this.captionEffect) {
+                        case 'bounce':
+                            effectY = y - Math.sin((localTime * 4) % 1 * Math.PI) * 4;
+                            break;
+                        case 'pop':
+                            effectY = y - 2;
+                            break;
+                    }
+                }
+
                 if (isHighlighted) {
-                    // Green box background for highlighted words
+                    // Use highlight color for box background
                     const boxX = xOffset - padding / 2;
-                    const boxY = y - fontSize / 2 - padding / 2;
+                    const boxY = effectY - fontSize / 2 - padding / 2;
                     const boxW = wordWidth + padding;
                     const boxH = fontSize + padding;
 
-                    // Draw green box with rounded corners
-                    this.ctx.fillStyle = '#22C55E';
+                    // Draw box with custom highlight color
+                    this.ctx.fillStyle = this.captionHighlightColor;
                     this.ctx.beginPath();
                     this.ctx.roundRect(boxX, boxY, boxW, boxH, 4);
                     this.ctx.fill();
 
-                    // White text on green
+                    // White text on colored background
                     this.ctx.fillStyle = '#FFFFFF';
-                    this.ctx.fillText(word.text, xOffset + wordWidth / 2, y);
+                    this.ctx.fillText(word.text, xOffset + wordWidth / 2, effectY);
                 } else {
-                    // Regular white text with shadow
-                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
-                    this.ctx.lineWidth = 3;
+                    // Regular text with custom stroke
+                    this.ctx.strokeStyle = this.captionStrokeColor;
+                    this.ctx.lineWidth = this.captionStrokeWidth;
                     this.ctx.strokeText(word.text, xOffset + wordWidth / 2, y);
-                    this.ctx.fillStyle = '#FFFFFF';
+                    this.ctx.fillStyle = this.captionFillColor;
                     this.ctx.fillText(word.text, xOffset + wordWidth / 2, y);
                 }
 
@@ -975,21 +1006,22 @@
 
         _renderAliStyle(words, y, localTime) {
             const fontSize = Math.round(this.height * 0.04 * this.captionSize);
-            this.ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+            const fontFamily = `${this.captionFontFamily}, Arial, sans-serif`;
+            this.ctx.font = `bold ${fontSize}px ${fontFamily}`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
 
             const text = words.map(w => w.text).join(' ');
             const x = this.width / 2;
 
-            // Animated glow effect
+            // Animated glow effect using highlight color
             const glowIntensity = 0.5 + 0.5 * Math.sin(localTime * 3);
             const glowRadius = 10 + 10 * glowIntensity;
 
-            // Draw glow layers
-            this.ctx.shadowColor = 'rgba(236, 72, 153, 0.8)';  // Pink glow
+            // Draw glow layers with custom highlight color
+            this.ctx.shadowColor = this._hexToRgba(this.captionHighlightColor, 0.8);
             this.ctx.shadowBlur = glowRadius;
-            this.ctx.fillStyle = '#EC4899';  // Pink text
+            this.ctx.fillStyle = this.captionHighlightColor;
 
             // Multiple passes for stronger glow
             for (let i = 0; i < 3; i++) {
@@ -1003,7 +1035,8 @@
 
         _renderPodcastStyle(words, y, localTime, currentWordIndex) {
             const fontSize = Math.round(this.height * 0.038 * this.captionSize);
-            this.ctx.font = `500 ${fontSize}px Arial, sans-serif`;
+            const fontFamily = `${this.captionFontFamily}, Arial, sans-serif`;
+            this.ctx.font = `500 ${fontSize}px ${fontFamily}`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
 
@@ -1019,10 +1052,11 @@
             let xOffset = x - totalWidth / 2;
             words.forEach((word, i) => {
                 const wordWidth = this.ctx.measureText(word.text).width;
+                const isCurrent = word.index === currentWordIndex;
 
                 // Fade animation: current word is full opacity, others fade
                 let opacity;
-                if (word.index === currentWordIndex) {
+                if (isCurrent) {
                     opacity = 1;
                 } else if (word.index < currentWordIndex) {
                     opacity = 0.7;
@@ -1030,14 +1064,26 @@
                     opacity = 0.4;
                 }
 
-                // Shadow
-                this.ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.6})`;
-                this.ctx.lineWidth = 3;
-                this.ctx.strokeText(word.text, xOffset + wordWidth / 2, y);
+                // Apply effect to current word
+                let effectY = y;
+                if (isCurrent && this.captionEffect === 'fade') {
+                    const fadePhase = (localTime * 2) % 1;
+                    opacity = 0.7 + 0.3 * Math.sin(fadePhase * Math.PI);
+                }
 
-                // Text
-                this.ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-                this.ctx.fillText(word.text, xOffset + wordWidth / 2, y);
+                // Shadow with custom stroke color
+                const strokeOpacity = opacity * 0.6;
+                this.ctx.strokeStyle = this._hexToRgba(this.captionStrokeColor, strokeOpacity);
+                this.ctx.lineWidth = this.captionStrokeWidth;
+                this.ctx.strokeText(word.text, xOffset + wordWidth / 2, effectY);
+
+                // Text with custom fill color, use highlight for current word
+                if (isCurrent) {
+                    this.ctx.fillStyle = this._hexToRgba(this.captionHighlightColor, opacity);
+                } else {
+                    this.ctx.fillStyle = this._hexToRgba(this.captionFillColor, opacity);
+                }
+                this.ctx.fillText(word.text, xOffset + wordWidth / 2, effectY);
 
                 xOffset += wordWidth + this.ctx.measureText(' ').width;
             });
@@ -1045,20 +1091,23 @@
 
         _renderMinimalStyle(words, y) {
             const fontSize = Math.round(this.height * 0.032 * this.captionSize);
-            this.ctx.font = `400 ${fontSize}px Arial, sans-serif`;
+            const fontFamily = `${this.captionFontFamily}, Arial, sans-serif`;
+            this.ctx.font = `400 ${fontSize}px ${fontFamily}`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
 
             const text = words.map(w => w.text.toLowerCase()).join(' ');
             const x = this.width / 2;
 
-            // Subtle shadow
-            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeText(text, x, y);
+            // Subtle shadow with custom stroke color
+            if (this.captionStrokeWidth > 0) {
+                this.ctx.strokeStyle = this._hexToRgba(this.captionStrokeColor, 0.4);
+                this.ctx.lineWidth = this.captionStrokeWidth;
+                this.ctx.strokeText(text, x, y);
+            }
 
-            // Light text
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            // Light text with custom fill color
+            this.ctx.fillStyle = this._hexToRgba(this.captionFillColor, 0.85);
             this.ctx.fillText(text, x, y);
         }
 
@@ -7123,7 +7172,37 @@
                 { id: 'bounce', name: 'Bounce', icon: '⚡' }
             ];
 
+            // Generate live preview styles
+            const previewStyle = `
+                font-family: '${captions.fontFamily}', sans-serif;
+                font-weight: ${captions.fontWeight || 600};
+                color: ${captions.fillColor};
+                text-shadow:
+                    -${captions.strokeWidth}px -${captions.strokeWidth}px 0 ${captions.strokeColor},
+                    ${captions.strokeWidth}px -${captions.strokeWidth}px 0 ${captions.strokeColor},
+                    -${captions.strokeWidth}px ${captions.strokeWidth}px 0 ${captions.strokeColor},
+                    ${captions.strokeWidth}px ${captions.strokeWidth}px 0 ${captions.strokeColor};
+            `;
+
             return `
+                <!-- Live Caption Preview -->
+                <div style="margin-bottom: 1.25rem; padding: 1rem; background: linear-gradient(135deg, rgba(15,15,25,0.95), rgba(25,25,40,0.95)); border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Live Preview</div>
+                    <div id="caption-live-preview" style="min-height: 50px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); border-radius: 0.5rem; padding: 0.75rem; position: relative; overflow: hidden;">
+                        <!-- Static word preview -->
+                        <div style="display: flex; align-items: center; gap: 8px; font-size: 1.1rem;">
+                            <span style="${previewStyle} opacity: 1;">Your</span>
+                            <span id="preview-highlight-word" style="${previewStyle} color: ${captions.highlightColor}; transform: scale(1.1); transition: all 0.3s;">caption</span>
+                            <span style="${previewStyle} opacity: 0.5;">here</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.5rem;">
+                        <span style="font-size: 0.6rem; color: rgba(255,255,255,0.3);">spoken</span>
+                        <span style="font-size: 0.6rem; color: ${captions.highlightColor};">▲ current</span>
+                        <span style="font-size: 0.6rem; color: rgba(255,255,255,0.3);">upcoming</span>
+                    </div>
+                </div>
+
                 <!-- Captions Section Header -->
                 <div style="margin-bottom: 1rem;">
                     <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Captions</div>
