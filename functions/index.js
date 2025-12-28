@@ -24211,31 +24211,54 @@ ${productionSettings.specialInstructions ? `\nPRODUCTION SPECIAL: ${productionSe
 
 ${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
 
+=== CRITICAL: VISUAL VS NARRATION SEPARATION ===
+You MUST output TWO SEPARATE fields for each scene:
+
+1. "visualPrompt" - What we SEE (for AI video generation)
+   - Optimized for Minimax AI video generation
+   - Describes the visual scene, characters, actions, lighting, mood
+   - Should NOT be spoken aloud - this is camera/visual direction
+   - Start with [Camera Movement] in brackets
+   - Example: "[Push in] A man stands alone at a rain-soaked window, his reflection fractured by droplets. Dim blue lighting. Contemplative mood."
+
+2. "narration" - What we HEAR (for voiceover/TTS)
+   - The actual words that will be SPOKEN by a narrator
+   - Should COMPLEMENT the visuals, not describe them literally
+   - Can be null/empty for cinematic moments with music only
+   - Example: "In moments like these, we find clarity. When the noise fades, truth remains."
+
+⚠️ NEVER have the narrator describe what viewers can already see!
+BAD: "A man stands alone" (describing the visual)
+GOOD: "The weight of decision pressed down on him" (adding meaning to the visual)
+
+Some scenes should have NO narration (narration: null) - let the visuals and music speak.
+${productionMode === 'cinematic' ? 'For CINEMATIC mode: At least 30% of scenes should have null narration.' : ''}
+
 === OUTPUT FORMAT ===
 Return ONLY valid JSON:
 {
   "title": "Compelling ${productionSettings.name} style title (50-70 chars)",
-  "hook": "The attention-grabbing first line",
+  "hook": "The attention-grabbing first line (this IS narration)",
   "scenes": [
     {
       "id": 1,
-      "narration": "~${wordsPerScene} words in ${productionSettings.narrativeStyle} style",
-      "visual": "[Camera Movement] Detailed ${productionSettings.visualApproach}",
-      "visualDuration": ${visualDuration},
-      "narrationDuration": ${narrationDuration},
-      "wordCount": ${wordsPerScene},
+      "visualPrompt": "[Camera Movement] Detailed visual description for AI video generation - what we SEE",
+      "narration": "What we HEAR - voiceover text that complements the visual, or null for music-only scenes",
+      "visual": "[Camera Movement] Same as visualPrompt for backwards compatibility",
+      "duration": ${visualDuration},
+      "narrationStartTime": 0.5,
+      "hasNarration": true,
       "cameraMovement": ["Push in"],
-      "transition": "cut|fade|zoom|slide"
+      "mood": "contemplative|tense|uplifting|mysterious|etc",
+      "transition": "cut|fade|dissolve|zoom"
     }
   ],
   "cta": "Call-to-action woven naturally into final scene",
   "totalDuration": ${targetDuration},
   "timing": {
     "sceneCount": ${sceneCount},
-    "visualDurationPerScene": ${visualDuration},
-    "narrationDurationPerScene": ${narrationDuration},
+    "avgSceneDuration": ${visualDuration},
     "pacing": "${pacing}",
-    "wordsPerScene": ${wordsPerScene},
     "clipDuration": ${clipDuration}
   },
   "productionMode": "${productionMode}",
@@ -24282,15 +24305,22 @@ Return ONLY valid JSON:
 
     // Ensure each scene has required fields including timing and camera movements
     script.scenes = script.scenes.map((scene, index) => {
-      // Count words in narration to estimate actual duration
-      const wordCount = (scene.narration || '').split(/\s+/).filter(w => w.length > 0).length;
-      const estimatedNarrationDuration = Math.ceil(wordCount / 2.5); // ~2.5 words per second
+      // Handle narration - can be null for cinematic/music-only scenes
+      const hasNarration = scene.narration !== null && scene.narration !== undefined && scene.narration.trim() !== '';
+      const narrationText = hasNarration ? scene.narration.trim() : null;
+
+      // Count words in narration to estimate actual duration (0 if no narration)
+      const wordCount = hasNarration ? narrationText.split(/\s+/).filter(w => w.length > 0).length : 0;
+      const estimatedNarrationDuration = hasNarration ? Math.ceil(wordCount / 2.5) : 0; // ~2.5 words per second
+
+      // Get visual prompt (new field) or fall back to visual (legacy) or narration (very old)
+      const visualPrompt = scene.visualPrompt || scene.visual || '';
 
       // Extract camera movements from visual description if not provided
       let cameraMovements = scene.cameraMovement || [];
-      if (cameraMovements.length === 0 && scene.visual) {
+      if (cameraMovements.length === 0 && visualPrompt) {
         // Try to extract [Camera Movement] from visual description
-        const bracketMatch = scene.visual.match(/^\[([^\]]+)\]/);
+        const bracketMatch = visualPrompt.match(/^\[([^\]]+)\]/);
         if (bracketMatch) {
           cameraMovements = bracketMatch[1].split(',').map(m => m.trim()).slice(0, 3);
         }
@@ -24298,12 +24328,22 @@ Return ONLY valid JSON:
 
       return {
         id: scene.id || index + 1,
-        narration: scene.narration || '',
-        visual: scene.visual || '',
+        // NEW: Separate visual prompt for AI video generation (what we SEE)
+        visualPrompt: visualPrompt,
+        // NEW: Narration for voiceover (what we HEAR) - can be null
+        narration: narrationText,
+        // Flag to indicate if this scene has voiceover
+        hasNarration: hasNarration,
+        // When narration starts within the scene (in seconds)
+        narrationStartTime: scene.narrationStartTime || 0.5,
+        // Legacy field for backwards compatibility
+        visual: visualPrompt,
+        // Scene mood for audio/visual matching
+        mood: scene.mood || 'neutral',
         // Visual duration is how long the scene appears on screen
-        visualDuration: scene.visualDuration || defaultVisualDuration,
+        visualDuration: scene.visualDuration || scene.duration || defaultVisualDuration,
         // Narration duration is how long the voiceover is (estimated from word count)
-        narrationDuration: scene.narrationDuration || estimatedNarrationDuration || defaultNarrationDuration,
+        narrationDuration: estimatedNarrationDuration || 0,
         // Keep legacy duration field for backwards compatibility
         duration: scene.visualDuration || scene.duration || defaultVisualDuration,
         wordCount: wordCount,

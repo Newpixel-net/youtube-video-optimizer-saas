@@ -3836,15 +3836,56 @@
         function updateSceneNarration(sceneId, value) {
             const scene = state.script.scenes.find(s => s.id === sceneId);
             if (scene) {
-                scene.narration = value;
+                scene.narration = value && value.trim() ? value.trim() : null;
+                scene.hasNarration = !!(value && value.trim());
+                // Recalculate word count and narration duration
+                if (scene.hasNarration) {
+                    scene.wordCount = scene.narration.split(/\s+/).filter(w => w.length > 0).length;
+                    scene.narrationDuration = Math.ceil(scene.wordCount / 2.5);
+                } else {
+                    scene.wordCount = 0;
+                    scene.narrationDuration = 0;
+                }
                 scheduleAutoSave();
+            }
+        }
+
+        function toggleSceneNarration(sceneId, hasNarration) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                scene.hasNarration = hasNarration;
+                if (!hasNarration) {
+                    // Clear narration when toggling off
+                    scene.narration = null;
+                    scene.wordCount = 0;
+                    scene.narrationDuration = 0;
+                } else if (!scene.narration) {
+                    // Set placeholder when toggling on
+                    scene.narration = '';
+                }
+                scheduleAutoSave();
+                render();
+            }
+        }
+
+        // Enable narration on a scene that was music-only
+        function enableSceneNarration(sceneId) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                scene.hasNarration = true;
+                scene.narration = scene.narration || '';
+                scheduleAutoSave();
+                render();
+                showToast('Voiceover enabled for this scene', 'success');
             }
         }
 
         function updateSceneVisual(sceneId, value) {
             const scene = state.script.scenes.find(s => s.id === sceneId);
             if (scene) {
+                // Update both visual and visualPrompt for compatibility
                 scene.visual = value;
+                scene.visualPrompt = value;
                 scheduleAutoSave();
             }
         }
@@ -6701,6 +6742,8 @@
 
         function renderSceneCard(scene, index) {
             const isExpanded = state.script.expandedScene === scene.id;
+            const hasNarration = scene.hasNarration !== false && scene.narration && scene.narration.trim() !== '';
+            const visualPrompt = scene.visualPrompt || scene.visual || '';
 
             return `
                 <div class="scene-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; overflow: hidden;">
@@ -6712,10 +6755,10 @@
                         </div>
                         <div style="flex: 1; min-width: 0;">
                             <div style="color: white; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                ${scene.narration?.substring(0, 60) || 'No narration'}${scene.narration?.length > 60 ? '...' : ''}
+                                ${hasNarration ? (scene.narration?.substring(0, 60) + (scene.narration?.length > 60 ? '...' : '')) : '<span style="color: rgba(255,255,255,0.4); font-style: italic;">🎵 Music only (no voiceover)</span>'}
                             </div>
                             <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">
-                                ${scene.duration}s • ${scene.transition || 'cut'}
+                                ${scene.duration}s • ${scene.transition || 'cut'} ${scene.mood ? '• ' + scene.mood : ''}
                             </div>
                         </div>
                         <div style="color: rgba(255,255,255,0.5); transform: rotate(${isExpanded ? '180deg' : '0deg'}); transition: transform 0.2s;">▼</div>
@@ -6724,20 +6767,43 @@
                     ${isExpanded ? `
                         <!-- Expanded Content -->
                         <div style="padding: 1rem;">
-                            <!-- Narration -->
+                            <!-- Visual Prompt (What we SEE) -->
                             <div style="margin-bottom: 1rem;">
-                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">🎙️ Narration</label>
-                                <textarea id="scene-narration-${scene.id}"
-                                          onchange="updateSceneNarration(${scene.id}, this.value)"
-                                          style="width: 100%; min-height: 60px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem; resize: vertical;">${scene.narration || ''}</textarea>
-                            </div>
-
-                            <!-- Visual Description -->
-                            <div style="margin-bottom: 1rem;">
-                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">🎨 Visual Description (for AI image generation)</label>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">🎬 Visual Prompt</label>
+                                    <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(6,182,212,0.2); color: #06b6d4; border-radius: 0.25rem;">What we SEE</span>
+                                </div>
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.4rem;">Describe the visual scene for AI video generation. Include camera movement, lighting, mood.</div>
                                 <textarea id="scene-visual-${scene.id}"
                                           onchange="updateSceneVisual(${scene.id}, this.value)"
-                                          style="width: 100%; min-height: 80px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem; resize: vertical;">${scene.visual || ''}</textarea>
+                                          placeholder="[Push in] A man stands at a rain-soaked window, his reflection fractured by droplets. Dim blue lighting, contemplative mood."
+                                          style="width: 100%; min-height: 80px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(6,182,212,0.3); background: rgba(6,182,212,0.05); color: white; font-size: 0.9rem; resize: vertical;">${visualPrompt}</textarea>
+                            </div>
+
+                            <!-- Narration Toggle + Text (What we HEAR) -->
+                            <div style="margin-bottom: 1rem;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">🎙️ Voiceover</label>
+                                        <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(139,92,246,0.2); color: #a78bfa; border-radius: 0.25rem;">What we HEAR</span>
+                                    </div>
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.7rem; color: rgba(255,255,255,0.5);">
+                                        <input type="checkbox" ${hasNarration ? 'checked' : ''} onchange="toggleSceneNarration(${scene.id}, this.checked)" style="cursor: pointer;">
+                                        Has voiceover
+                                    </label>
+                                </div>
+                                ${hasNarration ? `
+                                    <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.4rem;">What the narrator says. Should complement the visuals, NOT describe them literally.</div>
+                                    <textarea id="scene-narration-${scene.id}"
+                                              onchange="updateSceneNarration(${scene.id}, this.value)"
+                                              placeholder="In moments like these, clarity emerges. When the noise fades, truth remains."
+                                              style="width: 100%; min-height: 60px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(139,92,246,0.3); background: rgba(139,92,246,0.05); color: white; font-size: 0.9rem; resize: vertical;">${scene.narration || ''}</textarea>
+                                ` : `
+                                    <div style="padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; border: 1px dashed rgba(255,255,255,0.2); text-align: center;">
+                                        <div style="font-size: 0.8rem; color: rgba(255,255,255,0.4);">🎵 Music/ambient only - no voiceover for this scene</div>
+                                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-top: 0.25rem;">Great for cinematic moments or letting visuals breathe</div>
+                                    </div>
+                                `}
                             </div>
 
                             <!-- Duration & Transition -->
@@ -7970,6 +8036,9 @@
             var speed = animScene.speed || state.animation.voiceover.speed || 1.0;
             var emotions = state.animation.emotionPresets || { emotion: 'neutral', energy: 0.5, tone: 0.5 };
 
+            // Check if scene has narration (supports new hasNarration flag)
+            var sceneHasNarration = scriptScene.hasNarration !== false && narration && narration.trim() !== '';
+
             // Voice roles configuration (narrator vs character)
             var voiceRoles = state.animation.voiceRoles || {};
             var sceneVoiceRole = voiceRoles[scriptScene.id] || 'narrator';
@@ -7988,21 +8057,37 @@
             html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
             html += '<span style="font-size: 1rem;">🎙️</span>';
             html += '<span style="font-size: 0.85rem; font-weight: 600; color: white;">Voiceover Pro</span>';
-            if (voiceoverStatus === 'ready') {
+            if (!sceneHasNarration) {
+                html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); border-radius: 1rem; font-weight: 600;">🎵 Music Only</span>';
+            } else if (voiceoverStatus === 'ready') {
                 html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(16,185,129,0.2); color: #10b981; border-radius: 1rem; font-weight: 600;">Ready</span>';
             } else if (voiceoverStatus === 'generating') {
                 html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(251,191,36,0.2); color: #fbbf24; border-radius: 1rem; font-weight: 600;" class="animate-pulse">Generating...</span>';
             }
             html += '</div>';
-            // Voice role indicator
-            html += '<div style="display: flex; align-items: center; gap: 0.35rem;">';
-            html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: ' + (sceneVoiceRole === 'narrator' ? 'rgba(6,182,212,0.2)' : 'rgba(251,191,36,0.2)') + '; color: ' + (sceneVoiceRole === 'narrator' ? '#06b6d4' : '#fbbf24') + '; border-radius: 1rem;">' + (sceneVoiceRole === 'narrator' ? '📖 Narrator' : '🎭 Character') + '</span>';
-            html += '</div>';
+            // Voice role indicator (only show if has narration)
+            if (sceneHasNarration) {
+                html += '<div style="display: flex; align-items: center; gap: 0.35rem;">';
+                html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: ' + (sceneVoiceRole === 'narrator' ? 'rgba(6,182,212,0.2)' : 'rgba(251,191,36,0.2)') + '; color: ' + (sceneVoiceRole === 'narrator' ? '#06b6d4' : '#fbbf24') + '; border-radius: 1rem;">' + (sceneVoiceRole === 'narrator' ? '📖 Narrator' : '🎭 Character') + '</span>';
+                html += '</div>';
+            }
             html += '</div>';
 
-            // Narration preview
+            // If no narration, show music-only mode
+            if (!sceneHasNarration) {
+                html += '<div style="text-align: center; padding: 1.5rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; border: 1px dashed rgba(255,255,255,0.15);">';
+                html += '<div style="font-size: 2rem; margin-bottom: 0.5rem;">🎵</div>';
+                html += '<div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); font-weight: 500;">Cinematic Music Scene</div>';
+                html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.35rem;">No voiceover - visuals and music speak for themselves</div>';
+                html += '<button onclick="enableSceneNarration(' + scriptScene.id + ')" style="margin-top: 0.75rem; padding: 0.4rem 0.75rem; border-radius: 0.35rem; border: 1px solid rgba(139,92,246,0.4); background: transparent; color: #a78bfa; font-size: 0.7rem; cursor: pointer;">+ Add Voiceover</button>';
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Narration preview (only if has narration)
             html += '<div style="background: rgba(0,0,0,0.2); border-radius: 0.5rem; padding: 0.6rem; margin-bottom: 0.75rem;">';
-            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">NARRATION</div>';
+            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">VOICEOVER TEXT</div>';
             html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); line-height: 1.4; font-style: italic;">"' + narration.substring(0, 150) + (narration.length > 150 ? '...' : '') + '"</div>';
             html += '</div>';
 
