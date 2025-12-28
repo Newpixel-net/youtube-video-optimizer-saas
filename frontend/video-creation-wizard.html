@@ -2736,8 +2736,588 @@
         };
 
         // ==========================================
-        // 4.2 VIDEO NICHES
+        // 4.1B PRODUCTION TYPES (New Wizard Architecture)
+        // Hollywood-Grade Production Type System
         // ==========================================
+        const PRODUCTION_TYPES = {
+            'social': {
+                id: 'social',
+                name: 'Social Content',
+                icon: '📱',
+                description: 'Short-form content for social platforms',
+                subTypes: {
+                    'viral': {
+                        id: 'viral',
+                        name: 'Viral/Trending',
+                        icon: '🔥',
+                        description: 'Quick hook, shareable content',
+                        characteristics: ['quick-hook', 'shareable', 'trend-based'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 15, max: 60 }
+                    },
+                    'educational-short': {
+                        id: 'educational-short',
+                        name: 'Quick Explainer',
+                        icon: '💡',
+                        description: 'Informative, concise explanations',
+                        characteristics: ['informative', 'concise', 'visual'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 30, max: 180 }
+                    },
+                    'story-short': {
+                        id: 'story-short',
+                        name: 'Story Snippet',
+                        icon: '📖',
+                        description: 'Narrative hooks, cliffhangers',
+                        characteristics: ['narrative', 'cliffhanger', 'emotional'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 30, max: 120 }
+                    },
+                    'product': {
+                        id: 'product',
+                        name: 'Product Showcase',
+                        icon: '🛍️',
+                        description: 'Product features, promotions',
+                        characteristics: ['promotional', 'visual', 'persuasive'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 15, max: 60 }
+                    },
+                    'lifestyle': {
+                        id: 'lifestyle',
+                        name: 'Lifestyle/Vlog',
+                        icon: '🌟',
+                        description: 'Personal, relatable content',
+                        characteristics: ['personal', 'relatable', 'authentic'],
+                        defaultNarration: 'first-person',
+                        suggestedDuration: { min: 60, max: 180 }
+                    },
+                    'meme-comedy': {
+                        id: 'meme-comedy',
+                        name: 'Meme/Comedy',
+                        icon: '😂',
+                        description: 'Humorous, reference-heavy content',
+                        characteristics: ['humorous', 'reference-heavy', 'quick'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 15, max: 60 }
+                    }
+                },
+                defaultNarration: 'voiceover',
+                defaultDuration: { min: 15, max: 180 },
+                characterNeeds: { min: 0, max: 2, suggested: 0 }
+            },
+
+            'movie': {
+                id: 'movie',
+                name: 'Movie/Film',
+                icon: '🎬',
+                description: 'Cinematic narrative storytelling',
+                subTypes: {
+                    'action': {
+                        id: 'action',
+                        name: 'Action',
+                        icon: '💥',
+                        description: 'High-octane, physical, thrilling',
+                        visualStyle: 'high-contrast, dynamic angles, kinetic energy',
+                        references: ['John Wick', 'Mad Max', 'Mission Impossible'],
+                        characteristics: ['fast-paced', 'physical', 'high-stakes'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 120, max: 600 }
+                    },
+                    'drama': {
+                        id: 'drama',
+                        name: 'Drama',
+                        icon: '🎭',
+                        description: 'Character-driven, emotional storytelling',
+                        visualStyle: 'intimate framing, natural lighting, emotive',
+                        references: ['Manchester by the Sea', 'Marriage Story', 'Moonlight'],
+                        characteristics: ['emotional', 'character-driven', 'dialogue-heavy'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 120, max: 600 }
+                    },
+                    'thriller': {
+                        id: 'thriller',
+                        name: 'Thriller/Suspense',
+                        icon: '🔮',
+                        description: 'Tension, mystery, psychological depth',
+                        visualStyle: 'shadows, tension-building, paranoia, tight framing',
+                        references: ['Gone Girl', 'Prisoners', 'Se7en', 'Zodiac'],
+                        characteristics: ['tense', 'mystery', 'psychological', 'twists'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 120, max: 600 }
+                    },
+                    'horror': {
+                        id: 'horror',
+                        name: 'Horror',
+                        icon: '👻',
+                        description: 'Fear, dread, supernatural or psychological terror',
+                        visualStyle: 'darkness, negative space, unsettling angles, shadows',
+                        references: ['Hereditary', 'The Conjuring', 'Get Out', 'A Quiet Place'],
+                        characteristics: ['scary', 'atmospheric', 'dread', 'suspense'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 90, max: 600 }
+                    },
+                    'scifi': {
+                        id: 'scifi',
+                        name: 'Sci-Fi',
+                        icon: '🚀',
+                        description: 'Futuristic, speculative, technological',
+                        visualStyle: 'futuristic, high-tech, otherworldly, sleek',
+                        references: ['Blade Runner 2049', 'Arrival', 'Interstellar', 'Ex Machina'],
+                        characteristics: ['speculative', 'technology', 'wonder', 'philosophical'],
+                        defaultNarration: 'dialogue',
+                        allowedCharacterTypes: ['human', 'robot', 'alien', 'ai', 'cyborg'],
+                        suggestedDuration: { min: 120, max: 600 }
+                    },
+                    'fantasy': {
+                        id: 'fantasy',
+                        name: 'Fantasy',
+                        icon: '🐉',
+                        description: 'Magical worlds, epic quests, mythical beings',
+                        visualStyle: 'magical, epic scale, mythical, rich colors',
+                        references: ['Lord of the Rings', 'Pan\'s Labyrinth', 'The Princess Bride'],
+                        characteristics: ['magical', 'world-building', 'epic', 'adventure'],
+                        defaultNarration: 'dialogue',
+                        allowedCharacterTypes: ['human', 'creature', 'magical-being', 'elf', 'dwarf', 'wizard'],
+                        suggestedDuration: { min: 120, max: 600 }
+                    },
+                    'comedy': {
+                        id: 'comedy',
+                        name: 'Comedy',
+                        icon: '😄',
+                        description: 'Humor, wit, comedic timing',
+                        visualStyle: 'bright, expressive, comedic timing, dynamic',
+                        references: ['The Grand Budapest Hotel', 'Superbad', 'Bridesmaids'],
+                        characteristics: ['funny', 'timing', 'absurd', 'character-comedy'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 90, max: 600 }
+                    },
+                    'romance': {
+                        id: 'romance',
+                        name: 'Romance',
+                        icon: '💕',
+                        description: 'Love stories, emotional connections',
+                        visualStyle: 'soft lighting, intimate, warm tones, dreamy',
+                        references: ['La La Land', 'The Notebook', 'Before Sunrise'],
+                        characteristics: ['love', 'emotional', 'relationships', 'intimate'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 120, max: 600 }
+                    },
+                    'animation': {
+                        id: 'animation',
+                        name: 'Animation',
+                        icon: '🎨',
+                        description: 'Animated storytelling in various styles',
+                        visualStyle: 'varies by animation style',
+                        references: ['Pixar', 'Studio Ghibli', 'Spider-Verse'],
+                        characteristics: ['animated', 'stylized', 'creative', 'unlimited'],
+                        subStyles: ['3D Pixar-style', '2D Anime', 'Stop Motion', 'Stylized 2D', 'Abstract'],
+                        defaultNarration: 'dialogue',
+                        allowedCharacterTypes: ['human', 'animal', 'object', 'abstract', 'creature', 'anything'],
+                        suggestedDuration: { min: 60, max: 600 }
+                    },
+                    'documentary': {
+                        id: 'documentary',
+                        name: 'Documentary',
+                        icon: '📹',
+                        description: 'Real stories, informative, observational',
+                        visualStyle: 'authentic, observational, informative, natural',
+                        references: ['Planet Earth', 'The Social Dilemma', 'Free Solo'],
+                        characteristics: ['real', 'informative', 'journalistic', 'authentic'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 180, max: 600 }
+                    },
+                    'western': {
+                        id: 'western',
+                        name: 'Western',
+                        icon: '🤠',
+                        description: 'Frontier stories, moral complexity',
+                        visualStyle: 'wide landscapes, dust, golden hour, desaturated',
+                        references: ['No Country for Old Men', 'True Grit', 'The Good The Bad The Ugly'],
+                        characteristics: ['frontier', 'moral', 'landscapes', 'showdowns'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 120, max: 600 }
+                    },
+                    'noir': {
+                        id: 'noir',
+                        name: 'Film Noir',
+                        icon: '🕵️',
+                        description: 'Dark, cynical, mystery-driven',
+                        visualStyle: 'high contrast, deep shadows, rain, smoke, neon',
+                        references: ['Sin City', 'Chinatown', 'Blade Runner', 'L.A. Confidential'],
+                        characteristics: ['dark', 'cynical', 'mystery', 'femme-fatale'],
+                        defaultNarration: 'voiceover-protagonist',
+                        suggestedDuration: { min: 120, max: 600 }
+                    }
+                },
+                defaultNarration: 'dialogue',
+                defaultDuration: { min: 120, max: 3600 },
+                characterNeeds: { min: 2, max: 10, suggested: 4 }
+            },
+
+            'series': {
+                id: 'series',
+                name: 'Series/Episodes',
+                icon: '📺',
+                description: 'Episodic storytelling with story arcs',
+                episodeConfig: true,
+                subTypes: {
+                    'crime-drama': {
+                        id: 'crime-drama',
+                        name: 'Crime/Drama',
+                        icon: '🔍',
+                        description: 'Gritty crime stories, complex characters',
+                        visualStyle: 'gritty, realistic, moody, desaturated with accent colors',
+                        references: ['Breaking Bad', 'The Wire', 'True Detective', 'Ozark'],
+                        characteristics: ['serialized', 'complex-characters', 'moral-gray', 'tension'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 300, max: 3600 }
+                    },
+                    'fantasy-epic': {
+                        id: 'fantasy-epic',
+                        name: 'Fantasy Epic',
+                        icon: '⚔️',
+                        description: 'Epic fantasy with rich world-building',
+                        visualStyle: 'epic scale, detailed worlds, magical, cinematic',
+                        references: ['Game of Thrones', 'The Witcher', 'House of the Dragon'],
+                        characteristics: ['world-building', 'political', 'epic', 'multiple-storylines'],
+                        defaultNarration: 'dialogue',
+                        allowedCharacterTypes: ['human', 'creature', 'dragon', 'wizard', 'undead'],
+                        suggestedDuration: { min: 300, max: 3600 }
+                    },
+                    'scifi-series': {
+                        id: 'scifi-series',
+                        name: 'Sci-Fi Series',
+                        icon: '🌌',
+                        description: 'Futuristic stories, often philosophical',
+                        visualStyle: 'futuristic, sleek, mysterious, high-tech',
+                        references: ['Black Mirror', 'Westworld', 'The Expanse', 'Severance'],
+                        characteristics: ['speculative', 'technological', 'philosophical', 'dystopian'],
+                        defaultNarration: 'dialogue',
+                        allowedCharacterTypes: ['human', 'robot', 'ai', 'alien', 'clone'],
+                        suggestedDuration: { min: 300, max: 3600 }
+                    },
+                    'thriller-series': {
+                        id: 'thriller-series',
+                        name: 'Thriller Series',
+                        icon: '😰',
+                        description: 'Suspenseful serialized stories',
+                        visualStyle: 'moody, tense, shadowy, paranoid',
+                        references: ['Mindhunter', 'You', 'The Sinner', 'Sharp Objects'],
+                        characteristics: ['suspense', 'cliffhangers', 'psychological', 'twists'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 300, max: 3600 }
+                    },
+                    'comedy-series': {
+                        id: 'comedy-series',
+                        name: 'Comedy Series',
+                        icon: '😂',
+                        description: 'Sitcom or single-camera comedy',
+                        visualStyle: 'bright, warm, comedic timing, expressive',
+                        references: ['The Office', 'Brooklyn Nine-Nine', 'Ted Lasso', 'Schitt\'s Creek'],
+                        characteristics: ['episodic', 'character-comedy', 'recurring-jokes', 'ensemble'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 180, max: 1800 }
+                    },
+                    'anthology': {
+                        id: 'anthology',
+                        name: 'Anthology',
+                        icon: '📚',
+                        description: 'Standalone episodes with thematic connection',
+                        visualStyle: 'varies per episode, thematically linked',
+                        references: ['Black Mirror', 'American Horror Story', 'Love Death Robots'],
+                        characteristics: ['standalone', 'thematic', 'varied', 'experimental'],
+                        defaultNarration: 'mixed',
+                        allowedCharacterTypes: ['any'],
+                        suggestedDuration: { min: 180, max: 3600 }
+                    },
+                    'limited-series': {
+                        id: 'limited-series',
+                        name: 'Limited Series',
+                        icon: '🎯',
+                        description: 'Complete story in limited episodes',
+                        visualStyle: 'cinematic, film-like, premium',
+                        references: ['Chernobyl', 'Band of Brothers', 'The Queen\'s Gambit'],
+                        characteristics: ['finite', 'focused', 'complete-arc', 'prestige'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 300, max: 3600 }
+                    },
+                    'anime': {
+                        id: 'anime',
+                        name: 'Anime',
+                        icon: '🎌',
+                        description: 'Japanese-style animated series',
+                        visualStyle: 'anime aesthetics, expressive, stylized',
+                        references: ['Attack on Titan', 'Death Note', 'Demon Slayer', 'Cowboy Bebop'],
+                        characteristics: ['animated', 'japanese-style', 'expressive', 'action'],
+                        subStyles: ['Shonen', 'Seinen', 'Slice of Life', 'Mecha', 'Isekai'],
+                        defaultNarration: 'dialogue',
+                        allowedCharacterTypes: ['human', 'demon', 'mecha', 'spirit', 'monster'],
+                        suggestedDuration: { min: 180, max: 1800 }
+                    },
+                    'docuseries': {
+                        id: 'docuseries',
+                        name: 'Docuseries',
+                        icon: '🎥',
+                        description: 'Documentary with serialized narrative',
+                        visualStyle: 'documentary with narrative arc, real footage style',
+                        references: ['Making a Murderer', 'Tiger King', 'The Last Dance'],
+                        characteristics: ['real-events', 'investigative', 'serialized', 'interviews'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 300, max: 3600 }
+                    }
+                },
+                defaultNarration: 'dialogue',
+                defaultDuration: { min: 300, max: 3600 },
+                characterNeeds: { min: 3, max: 15, suggested: 6 }
+            },
+
+            'educational': {
+                id: 'educational',
+                name: 'Educational',
+                icon: '📚',
+                description: 'Learning and informative content',
+                subTypes: {
+                    'explainer': {
+                        id: 'explainer',
+                        name: 'Explainer',
+                        icon: '💡',
+                        description: 'Complex topics made simple',
+                        visualStyle: 'clean, clear, illustrative, motion graphics',
+                        references: ['Kurzgesagt', 'Vox', 'TED-Ed', 'Veritasium'],
+                        characteristics: ['informative', 'visual-aids', 'accessible', 'engaging'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 60, max: 900 }
+                    },
+                    'tutorial': {
+                        id: 'tutorial',
+                        name: 'Tutorial/How-To',
+                        icon: '🔧',
+                        description: 'Step-by-step instructional content',
+                        visualStyle: 'step-by-step, clear visuals, demonstrations',
+                        characteristics: ['instructional', 'practical', 'step-by-step', 'hands-on'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 120, max: 1200 }
+                    },
+                    'documentary-edu': {
+                        id: 'documentary-edu',
+                        name: 'Documentary',
+                        icon: '🌍',
+                        description: 'In-depth exploration of topics',
+                        visualStyle: 'cinematic documentary, immersive',
+                        references: ['Planet Earth', 'Cosmos', 'Our Planet'],
+                        characteristics: ['informative', 'immersive', 'narrative', 'beautiful'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 300, max: 3600 }
+                    },
+                    'history': {
+                        id: 'history',
+                        name: 'History/Timeline',
+                        icon: '📜',
+                        description: 'Historical events and timelines',
+                        visualStyle: 'archival, recreations, maps, period-accurate',
+                        characteristics: ['historical', 'chronological', 'contextual', 'narrative'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 180, max: 1800 }
+                    },
+                    'science': {
+                        id: 'science',
+                        name: 'Science',
+                        icon: '🔬',
+                        description: 'Scientific concepts and discoveries',
+                        visualStyle: 'diagrams, animations, demonstrations, data visualization',
+                        references: ['Veritasium', 'SmarterEveryDay', 'MinutePhysics'],
+                        characteristics: ['scientific', 'visual-explanation', 'data', 'experiments'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 120, max: 1200 }
+                    },
+                    'course': {
+                        id: 'course',
+                        name: 'Course/Lesson',
+                        icon: '🎓',
+                        description: 'Structured educational content',
+                        visualStyle: 'structured, academic, professional',
+                        characteristics: ['structured', 'progressive', 'comprehensive', 'modular'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 300, max: 3600 }
+                    }
+                },
+                defaultNarration: 'voiceover',
+                defaultDuration: { min: 60, max: 1800 },
+                characterNeeds: { min: 0, max: 3, suggested: 0 }
+            },
+
+            'music-video': {
+                id: 'music-video',
+                name: 'Music Video',
+                icon: '🎵',
+                description: 'Visual accompaniment to music',
+                syncToMusic: true,
+                subTypes: {
+                    'performance': {
+                        id: 'performance',
+                        name: 'Performance',
+                        icon: '🎤',
+                        description: 'Artist/band performing',
+                        visualStyle: 'concert-like, energetic, artist-focused',
+                        characteristics: ['live-feel', 'energetic', 'artist-focused', 'dynamic'],
+                        defaultNarration: 'none',
+                        suggestedDuration: { min: 120, max: 420 }
+                    },
+                    'narrative-mv': {
+                        id: 'narrative-mv',
+                        name: 'Narrative',
+                        icon: '🎬',
+                        description: 'Story-driven music video',
+                        visualStyle: 'story-driven, cinematic, emotional',
+                        references: ['Thriller (Michael Jackson)', 'This Is America', 'Bad Guy'],
+                        characteristics: ['story', 'cinematic', 'conceptual', 'emotional'],
+                        defaultNarration: 'none',
+                        suggestedDuration: { min: 180, max: 420 }
+                    },
+                    'visual-art': {
+                        id: 'visual-art',
+                        name: 'Visual Art',
+                        icon: '🎨',
+                        description: 'Abstract, artistic, experimental',
+                        visualStyle: 'abstract, artistic, experimental, mood-driven',
+                        characteristics: ['artistic', 'abstract', 'mood-driven', 'experimental'],
+                        defaultNarration: 'none',
+                        suggestedDuration: { min: 120, max: 420 }
+                    },
+                    'lyric-video': {
+                        id: 'lyric-video',
+                        name: 'Lyric Video',
+                        icon: '📝',
+                        description: 'Typography and motion graphics',
+                        visualStyle: 'typography, motion graphics, kinetic text',
+                        characteristics: ['text-focused', 'animated', 'simple', 'readable'],
+                        defaultNarration: 'none',
+                        suggestedDuration: { min: 120, max: 420 }
+                    },
+                    'animation-mv': {
+                        id: 'animation-mv',
+                        name: 'Animated',
+                        icon: '✨',
+                        description: 'Fully animated music video',
+                        visualStyle: 'animated, any style, creative freedom',
+                        characteristics: ['animated', 'creative', 'unlimited', 'stylized'],
+                        defaultNarration: 'none',
+                        allowedCharacterTypes: ['anything'],
+                        suggestedDuration: { min: 120, max: 420 }
+                    }
+                },
+                defaultNarration: 'none',
+                defaultDuration: { min: 120, max: 420 },
+                characterNeeds: { min: 0, max: 5, suggested: 1 }
+            },
+
+            'commercial': {
+                id: 'commercial',
+                name: 'Commercial/Promo',
+                icon: '📢',
+                description: 'Promotional and advertising content',
+                subTypes: {
+                    'brand-story': {
+                        id: 'brand-story',
+                        name: 'Brand Story',
+                        icon: '🏢',
+                        description: 'Company/brand narrative',
+                        visualStyle: 'polished, aspirational, branded',
+                        characteristics: ['emotional', 'brand-focused', 'inspiring', 'values'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 30, max: 180 }
+                    },
+                    'product-launch': {
+                        id: 'product-launch',
+                        name: 'Product Launch',
+                        icon: '📦',
+                        description: 'New product introduction',
+                        visualStyle: 'sleek, product-focused, modern',
+                        characteristics: ['product-focused', 'features', 'exciting', 'aspirational'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 15, max: 120 }
+                    },
+                    'testimonial': {
+                        id: 'testimonial',
+                        name: 'Testimonial',
+                        icon: '💬',
+                        description: 'Customer stories and reviews',
+                        visualStyle: 'authentic, personal, trustworthy',
+                        characteristics: ['authentic', 'personal', 'trustworthy', 'relatable'],
+                        defaultNarration: 'dialogue',
+                        suggestedDuration: { min: 30, max: 120 }
+                    },
+                    'announcement': {
+                        id: 'announcement',
+                        name: 'Announcement',
+                        icon: '📣',
+                        description: 'News, updates, reveals',
+                        visualStyle: 'exciting, news-like, urgent',
+                        characteristics: ['urgent', 'exciting', 'news', 'impactful'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 15, max: 60 }
+                    },
+                    'event-promo': {
+                        id: 'event-promo',
+                        name: 'Event Promo',
+                        icon: '🎪',
+                        description: 'Event promotion and hype',
+                        visualStyle: 'energetic, exciting, countdown feel',
+                        characteristics: ['exciting', 'countdown', 'hype', 'call-to-action'],
+                        defaultNarration: 'voiceover',
+                        suggestedDuration: { min: 15, max: 90 }
+                    }
+                },
+                defaultNarration: 'voiceover',
+                defaultDuration: { min: 15, max: 180 },
+                characterNeeds: { min: 0, max: 3, suggested: 0 }
+            }
+        };
+
+        // ==========================================
+        // 4.1C FORMAT PRESETS (Simplified from Platform)
+        // ==========================================
+        const FORMAT_PRESETS = {
+            'widescreen': {
+                id: 'widescreen',
+                name: 'Widescreen',
+                icon: '🖥️',
+                aspectRatio: '16:9',
+                description: 'YouTube, TV, Movies',
+                resolution: { width: 1920, height: 1080 },
+                resolution4k: { width: 3840, height: 2160 }
+            },
+            'vertical': {
+                id: 'vertical',
+                name: 'Vertical',
+                icon: '📱',
+                aspectRatio: '9:16',
+                description: 'TikTok, Reels, Shorts',
+                resolution: { width: 1080, height: 1920 },
+                resolution4k: { width: 2160, height: 3840 }
+            },
+            'square': {
+                id: 'square',
+                name: 'Square',
+                icon: '⬜',
+                aspectRatio: '1:1',
+                description: 'Instagram Feed',
+                resolution: { width: 1080, height: 1080 },
+                resolution4k: { width: 2160, height: 2160 }
+            },
+            'tall': {
+                id: 'tall',
+                name: 'Tall',
+                icon: '📐',
+                aspectRatio: '4:5',
+                description: 'Instagram Portrait',
+                resolution: { width: 1080, height: 1350 },
+                resolution4k: { width: 2160, height: 2700 }
+            }
+        };
+
+        // ==========================================
+        // 4.2 VIDEO NICHES (Legacy - keeping for backwards compatibility)
         const VIDEO_NICHES = {
             entertainment: {
                 id: 'entertainment',
@@ -3012,7 +3592,7 @@
                 updatedAt: null
             },
 
-            // Step 1: Platform & Format
+            // Step 1: Platform & Format (Legacy - keeping for backwards compatibility)
             platform: {
                 selected: null,           // Platform ID
                 preset: null,             // Full preset object
@@ -3020,7 +3600,48 @@
                 targetDuration: 60        // Target duration in seconds
             },
 
-            // Step 2: Niche & Style
+            // ==========================================
+            // NEW WIZARD FLOW: Production Type System
+            // ==========================================
+            // Step 1 (New): Format Selection
+            production: {
+                format: null,               // FORMAT_PRESET id (widescreen, vertical, square, tall)
+                formatConfig: null,         // Full FORMAT_PRESET object
+                type: null,                 // PRODUCTION_TYPE id (social, movie, series, educational, music-video, commercial)
+                typeConfig: null,           // Full PRODUCTION_TYPE object
+                subType: null,              // Sub-type id (e.g., thriller, comedy, explainer)
+                subTypeConfig: null,        // Full sub-type configuration object
+                targetDuration: 180,        // Target duration in seconds
+                episodeConfig: null         // For series: { season, episode, totalEpisodes }
+            },
+
+            // Step 2 (New): Concept Development
+            concept: {
+                status: 'idle',             // 'idle', 'generating', 'ready', 'error'
+                keywords: [],               // User's input keywords
+                rawInput: '',               // Original user input
+                ideas: [],                  // AI-generated unique ideas
+                selectedIdea: null,         // User's selected idea (index or object)
+                refinedConcept: null,       // Final refined concept with all details
+                styleReference: '',         // Style inspiration (NOT subject matter - critical distinction)
+                uniqueElements: [],         // What makes this unique
+                avoidElements: [],          // What to explicitly avoid (like direct copies)
+                logline: '',                // One-line summary
+                worldBuilding: null         // For fantasy/scifi: world rules and elements
+            },
+
+            // Step 3 (New): Character Intelligence
+            characterIntelligence: {
+                status: 'idle',             // 'idle', 'analyzing', 'ready'
+                characterType: 'auto',      // 'auto' | 'human' | 'non-human' | 'abstract' | 'mixed' | 'none'
+                narrationMode: 'auto',      // 'auto' | 'dialogue' | 'voiceover' | 'narrator' | 'mixed' | 'none'
+                suggestedCount: 0,          // AI-suggested character count
+                characters: [],             // Array of { id, name, role, type, description, visualDescription, personality, voice }
+                narratorConfig: null,       // If using narrator: { style, voice, personality }
+                recommendations: null       // AI recommendations based on production type
+            },
+
+            // Step 2: Niche & Style (Legacy)
             content: {
                 niche: null,              // Niche ID
                 subniche: null,           // Sub-niche ID
@@ -3435,6 +4056,11 @@
                     status: state.project.status,
                     platform: state.platform,
                     content: state.content,
+                    // NEW WIZARD FLOW: Production + Concept + Character Intelligence
+                    production: state.production,
+                    concept: state.concept,
+                    characterIntelligence: state.characterIntelligence,
+                    // End new wizard flow
                     script: state.script,
                     storyboard: state.storyboard,
                     animation: state.animation,
@@ -3502,6 +4128,31 @@
                     // Restore content config
                     if (project.content) {
                         state.content = { ...state.content, ...project.content };
+                    }
+
+                    // NEW WIZARD FLOW: Restore production config
+                    if (project.production) {
+                        state.production = { ...state.production, ...project.production };
+                        // Restore full config objects from constants
+                        if (project.production.format && FORMAT_PRESETS[project.production.format]) {
+                            state.production.formatConfig = FORMAT_PRESETS[project.production.format];
+                        }
+                        if (project.production.type && PRODUCTION_TYPES[project.production.type]) {
+                            state.production.typeConfig = PRODUCTION_TYPES[project.production.type];
+                            if (project.production.subType) {
+                                state.production.subTypeConfig = PRODUCTION_TYPES[project.production.type].subTypes[project.production.subType];
+                            }
+                        }
+                    }
+
+                    // NEW WIZARD FLOW: Restore concept development
+                    if (project.concept) {
+                        state.concept = { ...state.concept, ...project.concept };
+                    }
+
+                    // NEW WIZARD FLOW: Restore character intelligence
+                    if (project.characterIntelligence) {
+                        state.characterIntelligence = { ...state.characterIntelligence, ...project.characterIntelligence };
                     }
 
                     // Restore script data
@@ -3640,10 +4291,23 @@
         }
 
         function isStepComplete(step) {
+            // Check if using new production flow or legacy flow
+            const usingNewFlow = state.production.type && state.production.format;
+
             switch (step) {
                 case 1:
+                    // New flow: Format + Production Type + SubType selected
+                    // Legacy flow: Platform + Aspect ratio selected
+                    if (usingNewFlow) {
+                        return state.production.format && state.production.type && state.production.subType;
+                    }
                     return state.platform.selected && state.platform.aspectRatio;
                 case 2:
+                    // New flow: Concept developed (either has selected idea OR has topic)
+                    // Legacy flow: Niche + Style selected
+                    if (usingNewFlow) {
+                        return state.concept.selectedIdea !== null || (state.concept.rawInput && state.concept.rawInput.length > 10);
+                    }
                     return state.content.niche && state.content.style;
                 case 3:
                     return state.script.scenes.length > 0;
@@ -3703,6 +4367,143 @@
                 preset.maxDuration,
                 Math.max(preset.minDuration, parseInt(duration))
             );
+            render();
+            scheduleAutoSave();
+        }
+
+        // ==========================================
+        // 6.5B CONCEPT DEVELOPMENT FUNCTIONS (New Wizard Flow)
+        // ==========================================
+        function updateConceptInput(value) {
+            state.concept.rawInput = value;
+            // Parse keywords from input
+            state.concept.keywords = value.split(/[,\n]/).map(k => k.trim()).filter(k => k.length > 0);
+            scheduleAutoSave();
+        }
+
+        function updateStyleReference(value) {
+            state.concept.styleReference = value;
+            scheduleAutoSave();
+        }
+
+        function updateAvoidElements(value) {
+            state.concept.avoidElements = value.split(',').map(e => e.trim()).filter(e => e.length > 0);
+            scheduleAutoSave();
+        }
+
+        function updateConceptLogline(value) {
+            state.concept.logline = value;
+            scheduleAutoSave();
+        }
+
+        function selectConceptIdea(index) {
+            state.concept.selectedIdea = index;
+            const idea = state.concept.ideas[index];
+            if (idea) {
+                state.concept.logline = idea.logline || idea.description || '';
+                state.concept.uniqueElements = idea.uniqueElements || [];
+                state.concept.refinedConcept = idea;
+                // Also update legacy content.topic for compatibility
+                state.content.topic = idea.title + ': ' + (idea.logline || idea.description || '');
+            }
+            render();
+            scheduleAutoSave();
+        }
+
+        async function generateConceptIdeas() {
+            const rawInput = state.concept.rawInput;
+            const styleReference = state.concept.styleReference;
+            const avoidElements = state.concept.avoidElements;
+            const production = state.production;
+
+            if (!rawInput && !production.type) {
+                showToast('Please enter a concept idea or select a production type', 'warning');
+                return;
+            }
+
+            state.concept.status = 'generating';
+            render();
+
+            try {
+                // Build the concept generation prompt
+                const productionContext = production.type ? {
+                    type: production.typeConfig?.name || production.type,
+                    subType: production.subTypeConfig?.name || production.subType,
+                    visualStyle: production.subTypeConfig?.visualStyle || '',
+                    references: production.subTypeConfig?.references || [],
+                    characteristics: production.subTypeConfig?.characteristics || [],
+                    duration: production.targetDuration
+                } : null;
+
+                const generateConcepts = firebase.functions().httpsCallable('creationWizardGenerateConcepts');
+                const result = await generateConcepts({
+                    rawInput: rawInput,
+                    styleReference: styleReference,
+                    avoidElements: avoidElements,
+                    production: productionContext
+                });
+
+                if (result.data.success && result.data.ideas) {
+                    state.concept.ideas = result.data.ideas;
+                    state.concept.status = 'ready';
+                } else {
+                    // Generate fallback ideas locally if backend fails
+                    state.concept.ideas = generateFallbackIdeas(rawInput, productionContext);
+                    state.concept.status = 'ready';
+                }
+            } catch (error) {
+                console.error('Concept generation error:', error);
+                // Generate fallback ideas locally
+                state.concept.ideas = generateFallbackIdeas(rawInput, state.production);
+                state.concept.status = 'ready';
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        // Fallback idea generation when backend is unavailable
+        function generateFallbackIdeas(rawInput, productionContext) {
+            const baseIdea = rawInput || 'An untold story waiting to be discovered';
+            const productionType = productionContext?.type || 'content';
+            const visualStyle = productionContext?.visualStyle || 'cinematic';
+
+            return [
+                {
+                    title: `${productionType} Concept 1`,
+                    logline: `A unique exploration of ${baseIdea} with ${visualStyle} visuals`,
+                    description: `Original interpretation inspired by your concept: ${baseIdea}`,
+                    uniqueElements: ['Original characters', 'Unique setting', 'Fresh perspective'],
+                    mood: 'Engaging',
+                    tone: 'Professional'
+                },
+                {
+                    title: `${productionType} Concept 2`,
+                    logline: `A dramatic take on ${baseIdea} that captivates audiences`,
+                    description: `Reimagined with a completely original cast and scenario`,
+                    uniqueElements: ['Distinctive protagonist', 'Unexpected twist', 'Visual innovation'],
+                    mood: 'Dramatic',
+                    tone: 'Intense'
+                },
+                {
+                    title: `${productionType} Concept 3`,
+                    logline: `An emotional journey through ${baseIdea}`,
+                    description: `A deeply personal story with universal themes`,
+                    uniqueElements: ['Character depth', 'Emotional resonance', 'Memorable moments'],
+                    mood: 'Emotional',
+                    tone: 'Thoughtful'
+                }
+            ];
+        }
+
+        function setNarrationMode(mode) {
+            state.characterIntelligence.narrationMode = mode;
+            render();
+            scheduleAutoSave();
+        }
+
+        function setCharacterCount(count) {
+            state.characterIntelligence.suggestedCount = parseInt(count);
             render();
             scheduleAutoSave();
         }
@@ -7404,98 +8205,165 @@
         // 7.5 STEP 1: PLATFORM & FORMAT
         // ==========================================
         function renderStep1Platform() {
-            const selectedPlatform = state.platform.selected;
-            const preset = state.platform.preset;
+            // NEW WIZARD FLOW: Minimal Format + Production Type Selection
+            const selectedFormat = state.production.format;
+            const selectedType = state.production.type;
+            const selectedSubType = state.production.subType;
 
             let html = '<div class="fade-in">';
 
-            // Platform Selection Card
+            // ==========================================
+            // PHASE 1: Minimal Format Selection
+            // ==========================================
             html += `
                 <div class="content-card">
                     <div class="content-card-header">
-                        <div class="content-card-icon">📱</div>
+                        <div class="content-card-icon">📐</div>
                         <div>
-                            <div class="content-card-title">Choose Platform</div>
-                            <div class="content-card-subtitle">Where will your video be published?</div>
+                            <div class="content-card-title">Video Format</div>
+                            <div class="content-card-subtitle">Choose your aspect ratio</div>
                         </div>
                     </div>
 
-                    <div class="platform-grid">
+                    <div class="format-selector" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">
             `;
 
-            Object.values(PLATFORM_PRESETS).forEach(platform => {
-                const isSelected = selectedPlatform === platform.id;
+            Object.values(FORMAT_PRESETS).forEach(format => {
+                const isSelected = selectedFormat === format.id;
                 html += `
-                    <div class="platform-card ${isSelected ? 'selected' : ''}"
-                         onclick="selectPlatform('${platform.id}')">
-                        <div class="platform-card-icon">${platform.icon}</div>
-                        <div class="platform-card-name">${platform.name}</div>
-                        <div class="platform-card-info">${platform.description}</div>
+                    <div class="format-option ${isSelected ? 'selected' : ''}"
+                         onclick="selectProductionFormat('${format.id}')"
+                         style="cursor: pointer; padding: 1rem; border-radius: 0.75rem; background: ${isSelected ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.05)'}; border: 2px solid ${isSelected ? '#8b5cf6' : 'transparent'}; text-align: center; transition: all 0.2s;">
+                        <div style="font-size: 1.75rem; margin-bottom: 0.5rem;">${format.icon}</div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">${format.name}</div>
+                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${format.aspectRatio}</div>
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">${format.description}</div>
                     </div>
                 `;
             });
 
             html += '</div></div>';
 
-            // Format Selection (only show if platform selected)
-            if (preset) {
-                html += `
-                    <div class="content-card">
-                        <div class="content-card-header">
-                            <div class="content-card-icon">📐</div>
-                            <div>
-                                <div class="content-card-title">Select Format</div>
-                                <div class="content-card-subtitle">Choose aspect ratio for your video</div>
-                            </div>
+            // ==========================================
+            // PHASE 2: Production Type Selection
+            // ==========================================
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎬</div>
+                        <div>
+                            <div class="content-card-title">What are you creating?</div>
+                            <div class="content-card-subtitle">Select your production type</div>
                         </div>
+                    </div>
 
-                        <div class="format-selector">
+                    <div class="production-type-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+            `;
+
+            Object.values(PRODUCTION_TYPES).forEach(type => {
+                const isSelected = selectedType === type.id;
+                html += `
+                    <div class="production-type-card ${isSelected ? 'selected' : ''}"
+                         onclick="selectProductionType('${type.id}')"
+                         style="cursor: pointer; padding: 1.25rem; border-radius: 0.75rem; background: ${isSelected ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.05)'}; border: 2px solid ${isSelected ? '#8b5cf6' : 'transparent'}; text-align: center; transition: all 0.2s;">
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">${type.icon}</div>
+                        <div style="font-weight: 600; font-size: 0.95rem;">${type.name}</div>
+                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">${type.description}</div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+
+            // Sub-type Selection (show when production type selected)
+            if (selectedType && PRODUCTION_TYPES[selectedType]) {
+                const productionType = PRODUCTION_TYPES[selectedType];
+                const subTypes = productionType.subTypes;
+
+                html += `
+                    <div class="subtype-section" style="margin-top: 1.5rem;">
+                        <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>${productionType.icon}</span>
+                            <span>Select ${productionType.name} Style:</span>
+                        </div>
+                        <div class="subtype-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;">
                 `;
 
-                const allFormats = ['16:9', '9:16', '1:1', '4:5'];
-                allFormats.forEach(format => {
-                    const isAvailable = preset.formats.includes(format);
-                    const isSelected = state.platform.aspectRatio === format;
-                    const info = FORMAT_INFO[format];
-
+                Object.values(subTypes).forEach(subType => {
+                    const isSubSelected = selectedSubType === subType.id;
                     html += `
-                        <div class="format-option ${isSelected ? 'selected' : ''} ${!isAvailable ? 'disabled' : ''}"
-                             onclick="${isAvailable ? `selectFormat('${format}')` : ''}">
-                            <div class="format-preview">
-                                <div class="format-preview-box ${info.className}"></div>
+                        <div class="subtype-card ${isSubSelected ? 'selected' : ''}"
+                             onclick="selectProductionSubType('${subType.id}')"
+                             style="cursor: pointer; padding: 0.75rem 1rem; border-radius: 0.5rem; background: ${isSubSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${isSubSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; transition: all 0.2s;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 1.1rem;">${subType.icon}</span>
+                                <span style="font-weight: 500; font-size: 0.85rem;">${subType.name}</span>
                             </div>
-                            <div class="format-label">${info.ratio}</div>
-                            <div class="format-desc">${info.desc}</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem; margin-left: 1.6rem;">${subType.description}</div>
                         </div>
                     `;
                 });
 
-                html += '</div>';
+                html += '</div></div>';
 
-                // Duration Slider
-                html += `
-                    <div class="duration-container">
-                        <div class="duration-header">
-                            <span class="duration-label">Video Duration</span>
-                            <span class="duration-value">${formatDuration(state.platform.targetDuration)}</span>
+                // Show selected sub-type details
+                if (selectedSubType && subTypes[selectedSubType]) {
+                    const subTypeConfig = subTypes[selectedSubType];
+                    html += `
+                        <div class="subtype-details" style="margin-top: 1rem; padding: 1rem; background: rgba(139, 92, 246, 0.1); border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span style="font-size: 1.25rem;">${subTypeConfig.icon}</span>
+                                <span style="font-weight: 600;">${subTypeConfig.name}</span>
+                            </div>
+                            ${subTypeConfig.visualStyle ? `<div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;"><span style="color: #8b5cf6;">Visual Style:</span> ${subTypeConfig.visualStyle}</div>` : ''}
+                            ${subTypeConfig.references ? `<div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);"><span style="color: #8b5cf6;">Style References:</span> ${subTypeConfig.references.join(', ')}</div>` : ''}
+                            ${subTypeConfig.characteristics ? `<div style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.5rem;">Characteristics: ${subTypeConfig.characteristics.join(' • ')}</div>` : ''}
                         </div>
-                        <input type="range"
-                               class="duration-slider"
-                               id="duration-slider"
-                               min="${preset.minDuration}"
-                               max="${preset.maxDuration}"
-                               value="${state.platform.targetDuration}"
-                               oninput="setDuration(this.value)">
-                        <div class="duration-presets">
-                            <span class="duration-preset" onclick="setDuration(${preset.minDuration})">${formatDuration(preset.minDuration)}</span>
-                            <span class="duration-preset" onclick="setDuration(${Math.floor((preset.minDuration + preset.maxDuration) / 2)})">${formatDuration(Math.floor((preset.minDuration + preset.maxDuration) / 2))}</span>
-                            <span class="duration-preset" onclick="setDuration(${preset.maxDuration})">${formatDuration(preset.maxDuration)}</span>
+                    `;
+                }
+            }
+
+            html += '</div>';
+
+            // Duration Selection (contextual based on production type)
+            if (selectedType && selectedSubType) {
+                const productionType = PRODUCTION_TYPES[selectedType];
+                const subTypeConfig = productionType.subTypes[selectedSubType];
+                const durationRange = subTypeConfig?.suggestedDuration || productionType.defaultDuration;
+
+                html += `
+                    <div class="content-card">
+                        <div class="content-card-header">
+                            <div class="content-card-icon">⏱️</div>
+                            <div>
+                                <div class="content-card-title">Target Duration</div>
+                                <div class="content-card-subtitle">Recommended for ${subTypeConfig?.name || productionType.name}</div>
+                            </div>
+                        </div>
+
+                        <div class="duration-container">
+                            <div class="duration-header">
+                                <span class="duration-label">Video Length</span>
+                                <span class="duration-value">${formatDuration(state.production.targetDuration)}</span>
+                            </div>
+                            <input type="range"
+                                   class="duration-slider"
+                                   id="duration-slider"
+                                   min="${durationRange.min}"
+                                   max="${durationRange.max}"
+                                   value="${state.production.targetDuration}"
+                                   oninput="setProductionDuration(this.value)">
+                            <div class="duration-presets">
+                                <span class="duration-preset" onclick="setProductionDuration(${durationRange.min})">${formatDuration(durationRange.min)}</span>
+                                <span class="duration-preset" onclick="setProductionDuration(${Math.floor((durationRange.min + durationRange.max) / 2)})">${formatDuration(Math.floor((durationRange.min + durationRange.max) / 2))}</span>
+                                <span class="duration-preset" onclick="setProductionDuration(${durationRange.max})">${formatDuration(durationRange.max)}</span>
+                            </div>
                         </div>
                     </div>
                 `;
 
                 // Cost Estimate
-                const cost = estimateCost();
+                const cost = estimateCostForProduction();
                 html += `
                     <div class="cost-estimate">
                         <div class="cost-estimate-header">
@@ -7507,29 +8375,397 @@
                         </div>
                     </div>
                 `;
-
-                html += '</div>';
             }
 
             // Navigation
-            html += renderNavButtons(null, isStepComplete(1) ? 2 : null);
+            const canProceed = selectedFormat && selectedType && selectedSubType;
+            html += renderNavButtons(null, canProceed ? 2 : null);
 
             html += '</div>';
             return html;
         }
 
+        // Helper function for new production flow
+        function selectProductionFormat(formatId) {
+            const formatConfig = FORMAT_PRESETS[formatId];
+            state.production.format = formatId;
+            state.production.formatConfig = formatConfig;
+            // Also update legacy platform state for compatibility
+            state.platform.aspectRatio = formatConfig.aspectRatio;
+            render();
+        }
+
+        function selectProductionType(typeId) {
+            const typeConfig = PRODUCTION_TYPES[typeId];
+            state.production.type = typeId;
+            state.production.typeConfig = typeConfig;
+            state.production.subType = null;
+            state.production.subTypeConfig = null;
+            // Set initial duration based on production type
+            state.production.targetDuration = typeConfig.defaultDuration.min;
+            render();
+        }
+
+        function selectProductionSubType(subTypeId) {
+            const typeConfig = PRODUCTION_TYPES[state.production.type];
+            const subTypeConfig = typeConfig.subTypes[subTypeId];
+            state.production.subType = subTypeId;
+            state.production.subTypeConfig = subTypeConfig;
+            // Update duration to sub-type's suggested range
+            if (subTypeConfig.suggestedDuration) {
+                state.production.targetDuration = subTypeConfig.suggestedDuration.min;
+            }
+            render();
+        }
+
+        function setProductionDuration(value) {
+            state.production.targetDuration = parseInt(value);
+            // Also update legacy state for compatibility
+            state.platform.targetDuration = parseInt(value);
+            render();
+        }
+
+        function estimateCostForProduction() {
+            const duration = state.production.targetDuration || 180;
+            const sceneCount = Math.ceil(duration / 6); // ~6 seconds per scene
+            const breakdown = {
+                script: 5,
+                images: sceneCount * 3,
+                voiceover: Math.ceil(duration / 30) * 2,
+                animation: sceneCount * 10,
+                export: 5
+            };
+            return {
+                sceneCount,
+                total: breakdown.script + breakdown.images + breakdown.voiceover + breakdown.animation + breakdown.export,
+                breakdown
+            };
+        }
+
         // ==========================================
-        // 7.6 STEP 2: NICHE & STYLE
+        // 7.6 STEP 2: CONCEPT DEVELOPMENT (Replaces Niche & Style)
+        // ==========================================
+        // This is the critical step that generates UNIQUE concepts
+        // and distinguishes between STYLE REFERENCES and SUBJECT MATTER
         // ==========================================
         function renderStep2NicheStyle() {
-            const selectedNiche = state.content.niche;
-            const selectedSubniche = state.content.subniche;
-            const selectedStyle = state.content.style;
+            const concept = state.concept;
+            const production = state.production;
+            const isGenerating = concept.status === 'generating';
+            const hasIdeas = concept.ideas && concept.ideas.length > 0;
+            const hasSelectedIdea = concept.selectedIdea !== null;
 
             let html = '<div class="fade-in">';
 
-            // Niche Selection Card
+            // ==========================================
+            // CONCEPT INPUT CARD
+            // ==========================================
             html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">💡</div>
+                        <div>
+                            <div class="content-card-title">Develop Your Concept</div>
+                            <div class="content-card-subtitle">Tell us what you want to create - we'll generate unique ideas</div>
+                        </div>
+                    </div>
+
+                    <!-- Production Context -->
+                    ${production.type ? `
+                    <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 0.75rem; margin-bottom: 1rem;">
+                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <span>Creating:</span>
+                            <span style="background: rgba(139, 92, 246, 0.3); padding: 0.25rem 0.5rem; border-radius: 0.25rem;">
+                                ${production.typeConfig?.icon || ''} ${production.typeConfig?.name || ''}
+                            </span>
+                            ${production.subTypeConfig ? `
+                            <span>→</span>
+                            <span style="background: rgba(139, 92, 246, 0.3); padding: 0.25rem 0.5rem; border-radius: 0.25rem;">
+                                ${production.subTypeConfig.icon || ''} ${production.subTypeConfig.name || ''}
+                            </span>
+                            ` : ''}
+                            <span style="margin-left: auto; color: #8b5cf6;">
+                                ${formatDuration(production.targetDuration)}
+                            </span>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- Concept Input Area -->
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
+                            What's your video about?
+                        </label>
+                        <textarea id="concept-input"
+                                  placeholder="Describe your idea, theme, or story... Be creative! Examples:
+• A mysterious figure discovers an ancient power
+• The untold story of a small town's greatest secret
+• A journey through impossible landscapes
+• An entrepreneur's rise from nothing"
+                                  style="width: 100%; min-height: 100px; padding: 0.75rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: vertical;"
+                                  onchange="updateConceptInput(this.value)">${concept.rawInput || ''}</textarea>
+                    </div>
+
+                    <!-- CRITICAL: Style Reference (NOT subject matter) -->
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.25rem;">
+                            Style Inspiration (Optional)
+                        </label>
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.5rem;">
+                            ⚠️ This is for VISUAL STYLE only - your content will be 100% original
+                        </div>
+                        <input type="text"
+                               id="style-reference-input"
+                               placeholder="e.g., 'Breaking Bad cinematography', 'Wes Anderson color palette', 'documentary noir'"
+                               value="${concept.styleReference || ''}"
+                               style="width: 100%; padding: 0.65rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem;"
+                               onchange="updateStyleReference(this.value)">
+                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">
+                            We'll capture the visual FEEL without copying any content or characters
+                        </div>
+                    </div>
+
+                    <!-- What to Avoid (explicitly prevent copyrighted content) -->
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.25rem;">
+                            Things to Avoid (Optional)
+                        </label>
+                        <input type="text"
+                               id="avoid-input"
+                               placeholder="e.g., 'specific brand names', 'real people', 'trademarked characters'"
+                               value="${(concept.avoidElements || []).join(', ')}"
+                               style="width: 100%; padding: 0.65rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem;"
+                               onchange="updateAvoidElements(this.value)">
+                    </div>
+
+                    <!-- Generate Ideas Button -->
+                    <button onclick="generateConceptIdeas()"
+                            ${isGenerating ? 'disabled' : ''}
+                            style="width: 100%; padding: 0.85rem; background: linear-gradient(135deg, #8b5cf6, #ec4899); border: none; border-radius: 0.5rem; color: white; font-weight: 600; font-size: 0.9rem; cursor: ${isGenerating ? 'wait' : 'pointer'}; display: flex; align-items: center; justify-content: center; gap: 0.5rem; opacity: ${isGenerating ? '0.7' : '1'};">
+                        ${isGenerating ? `
+                            <span style="animation: spin 1s linear infinite;">✨</span>
+                            <span>Generating unique ideas...</span>
+                        ` : `
+                            <span>✨</span>
+                            <span>Generate Unique Ideas</span>
+                        `}
+                    </button>
+                </div>
+            `;
+
+            // ==========================================
+            // GENERATED IDEAS SECTION
+            // ==========================================
+            if (hasIdeas) {
+                html += `
+                    <div class="content-card">
+                        <div class="content-card-header">
+                            <div class="content-card-icon">🎯</div>
+                            <div>
+                                <div class="content-card-title">Choose Your Concept</div>
+                                <div class="content-card-subtitle">Select an idea to develop further</div>
+                            </div>
+                        </div>
+
+                        <div class="idea-grid" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                `;
+
+                concept.ideas.forEach((idea, index) => {
+                    const isSelected = concept.selectedIdea === index;
+                    html += `
+                        <div class="idea-card ${isSelected ? 'selected' : ''}"
+                             onclick="selectConceptIdea(${index})"
+                             style="cursor: pointer; padding: 1rem; border-radius: 0.75rem; background: ${isSelected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.03)'}; border: 2px solid ${isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; transition: all 0.2s;">
+                            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                                <div style="width: 28px; height: 28px; border-radius: 50%; background: ${isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.8rem; flex-shrink: 0;">
+                                    ${index + 1}
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; font-size: 0.9rem; color: white; margin-bottom: 0.25rem;">
+                                        ${idea.title || 'Untitled Concept'}
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: rgba(255,255,255,0.7); line-height: 1.4;">
+                                        ${idea.logline || idea.description || ''}
+                                    </div>
+                                    ${idea.uniqueElements ? `
+                                    <div style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                                        ${idea.uniqueElements.slice(0, 3).map(el => `
+                                            <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: rgba(139, 92, 246, 0.2); border-radius: 0.25rem; color: #a78bfa;">
+                                                ${el}
+                                            </span>
+                                        `).join('')}
+                                    </div>
+                                    ` : ''}
+                                </div>
+                                ${isSelected ? `
+                                <div style="color: #10b981; font-size: 1.25rem;">✓</div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div></div>';
+            }
+
+            // ==========================================
+            // REFINED CONCEPT (if idea selected)
+            // ==========================================
+            if (hasSelectedIdea && concept.ideas[concept.selectedIdea]) {
+                const selectedIdea = concept.ideas[concept.selectedIdea];
+                html += `
+                    <div class="content-card">
+                        <div class="content-card-header">
+                            <div class="content-card-icon">🎬</div>
+                            <div>
+                                <div class="content-card-title">Your Concept</div>
+                                <div class="content-card-subtitle">Ready for script generation</div>
+                            </div>
+                        </div>
+
+                        <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1)); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem;">
+                            <div style="font-weight: 600; font-size: 1rem; color: white; margin-bottom: 0.5rem;">
+                                ${selectedIdea.title}
+                            </div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.5; margin-bottom: 0.75rem;">
+                                ${selectedIdea.logline || selectedIdea.description}
+                            </div>
+
+                            ${concept.styleReference ? `
+                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">
+                                <span style="color: #8b5cf6;">Visual Style:</span> ${concept.styleReference}
+                            </div>
+                            ` : ''}
+
+                            ${selectedIdea.mood ? `
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: rgba(16, 185, 129, 0.2); border-radius: 0.25rem; color: #10b981;">
+                                    Mood: ${selectedIdea.mood}
+                                </span>
+                                ${selectedIdea.tone ? `
+                                <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: rgba(6, 182, 212, 0.2); border-radius: 0.25rem; color: #06b6d4;">
+                                    Tone: ${selectedIdea.tone}
+                                </span>
+                                ` : ''}
+                            </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- Editable logline -->
+                        <div style="margin-top: 1rem;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; color: white; margin-bottom: 0.35rem;">
+                                One-Line Summary (Logline)
+                            </label>
+                            <textarea id="concept-logline"
+                                      placeholder="A one-sentence summary of your video..."
+                                      style="width: 100%; min-height: 60px; padding: 0.65rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: vertical;"
+                                      onchange="updateConceptLogline(this.value)">${concept.logline || selectedIdea.logline || ''}</textarea>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // ==========================================
+            // CHARACTER INTELLIGENCE PREVIEW (Phase 4)
+            // ==========================================
+            if (hasSelectedIdea && production.typeConfig) {
+                const characterNeeds = production.typeConfig.characterNeeds || { min: 0, max: 5, suggested: 0 };
+                const subTypeConfig = production.subTypeConfig;
+                const defaultNarration = subTypeConfig?.defaultNarration || production.typeConfig.defaultNarration || 'voiceover';
+
+                html += `
+                    <div class="content-card">
+                        <div class="content-card-header">
+                            <div class="content-card-icon">👥</div>
+                            <div>
+                                <div class="content-card-title">Character Intelligence</div>
+                                <div class="content-card-subtitle">AI-suggested based on your production type</div>
+                            </div>
+                            <span style="margin-left: auto; font-size: 0.6rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 0.25rem; color: white;">AI</span>
+                        </div>
+
+                        <!-- Narration Mode -->
+                        <div style="margin-bottom: 1rem;">
+                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Narration Style</div>
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                                ${['voiceover', 'dialogue', 'narrator', 'none'].map(mode => {
+                                    const icons = { voiceover: '🎙️', dialogue: '💬', narrator: '📖', none: '🔇' };
+                                    const labels = { voiceover: 'Voiceover', dialogue: 'Dialogue', narrator: 'Narrator', none: 'No Voice' };
+                                    const isDefault = mode === defaultNarration;
+                                    const isSelected = (state.characterIntelligence.narrationMode === mode) ||
+                                                      (state.characterIntelligence.narrationMode === 'auto' && isDefault);
+                                    return `
+                                        <div onclick="setNarrationMode('${mode}')"
+                                             style="padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; background: ${isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                            <div style="font-size: 1.1rem;">${icons[mode]}</div>
+                                            <div style="font-size: 0.7rem; color: ${isSelected ? '#a78bfa' : 'rgba(255,255,255,0.6)'}; margin-top: 0.25rem;">${labels[mode]}</div>
+                                            ${isDefault ? '<div style="font-size: 0.55rem; color: rgba(255,255,255,0.4);">suggested</div>' : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Character Count -->
+                        <div style="margin-bottom: 1rem;">
+                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Character Count
+                                <span style="color: #8b5cf6; margin-left: 0.5rem;">Suggested: ${characterNeeds.suggested}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <input type="range"
+                                       id="character-count-slider"
+                                       min="${characterNeeds.min}"
+                                       max="${characterNeeds.max}"
+                                       value="${state.characterIntelligence.suggestedCount || characterNeeds.suggested}"
+                                       oninput="setCharacterCount(this.value)"
+                                       style="flex: 1;">
+                                <span style="font-size: 1rem; font-weight: 600; color: #8b5cf6; min-width: 30px; text-align: center;">
+                                    ${state.characterIntelligence.suggestedCount || characterNeeds.suggested}
+                                </span>
+                            </div>
+                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">
+                                ${characterNeeds.min === 0 ? 'No characters required for this format' : `Minimum ${characterNeeds.min} characters recommended`}
+                            </div>
+                        </div>
+
+                        <!-- Character Type (for non-human support) -->
+                        ${subTypeConfig?.allowedCharacterTypes ? `
+                        <div style="margin-bottom: 0.5rem;">
+                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Allowed Character Types</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                                ${subTypeConfig.allowedCharacterTypes.map(type => {
+                                    const typeIcons = {
+                                        human: '👤', robot: '🤖', alien: '👽', ai: '🧠', cyborg: '🦾',
+                                        creature: '🐉', 'magical-being': '✨', elf: '🧝', dwarf: '⛏️', wizard: '🧙',
+                                        dragon: '🐲', undead: '💀', demon: '😈', mecha: '🦿', spirit: '👻',
+                                        monster: '👹', animal: '🐾', object: '📦', abstract: '💫', anything: '🎭',
+                                        any: '🌟', clone: '👥'
+                                    };
+                                    return `
+                                        <span style="font-size: 0.7rem; padding: 0.25rem 0.5rem; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.25rem; color: #a78bfa; display: flex; align-items: center; gap: 0.25rem;">
+                                            <span>${typeIcons[type] || '❓'}</span>
+                                            <span style="text-transform: capitalize;">${type.replace('-', ' ')}</span>
+                                        </span>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            // ==========================================
+            // LEGACY: Niche Selection (for backwards compatibility)
+            // Show only if production type wasn't selected
+            // ==========================================
+            if (!production.type) {
+                const selectedNiche = state.content.niche;
+                const selectedSubniche = state.content.subniche;
+                const selectedStyle = state.content.style;
+
+                html += `
                 <div class="content-card">
                     <div class="content-card-header">
                         <div class="content-card-icon">📂</div>
