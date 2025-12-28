@@ -23086,6 +23086,44 @@ exports.creationWizardSaveProject = functions.https.onCall(async (data, context)
         emotionalJourney: projectData.content.emotionalJourney || null
       } : null,
 
+      // NEW WIZARD FLOW: Production Type System
+      production: projectData.production ? {
+        format: projectData.production.format || null,
+        formatConfig: projectData.production.formatConfig || null,
+        type: projectData.production.type || null,
+        typeConfig: projectData.production.typeConfig || null,
+        subType: projectData.production.subType || null,
+        subTypeConfig: projectData.production.subTypeConfig || null,
+        targetDuration: projectData.production.targetDuration || 180,
+        episodeConfig: projectData.production.episodeConfig || null
+      } : null,
+
+      // NEW WIZARD FLOW: Concept Development
+      concept: projectData.concept ? {
+        status: projectData.concept.status || 'idle',
+        keywords: projectData.concept.keywords || [],
+        rawInput: projectData.concept.rawInput || '',
+        ideas: projectData.concept.ideas || [],
+        selectedIdea: projectData.concept.selectedIdea,
+        refinedConcept: projectData.concept.refinedConcept || null,
+        styleReference: projectData.concept.styleReference || '',
+        uniqueElements: projectData.concept.uniqueElements || [],
+        avoidElements: projectData.concept.avoidElements || [],
+        logline: projectData.concept.logline || '',
+        worldBuilding: projectData.concept.worldBuilding || null
+      } : null,
+
+      // NEW WIZARD FLOW: Character Intelligence
+      characterIntelligence: projectData.characterIntelligence ? {
+        status: projectData.characterIntelligence.status || 'idle',
+        characterType: projectData.characterIntelligence.characterType || 'auto',
+        narrationMode: projectData.characterIntelligence.narrationMode || 'auto',
+        suggestedCount: projectData.characterIntelligence.suggestedCount || 0,
+        characters: projectData.characterIntelligence.characters || [],
+        narratorConfig: projectData.characterIntelligence.narratorConfig || null,
+        recommendations: projectData.characterIntelligence.recommendations || null
+      } : null,
+
       // Script data - complete
       script: projectData.script ? {
         text: projectData.script.text || '',
@@ -23341,6 +23379,180 @@ exports.creationWizardDeleteProject = functions.https.onCall(async (data, contex
     console.error('[creationWizardDeleteProject] Error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to delete project'));
+  }
+});
+
+/**
+ * creationWizardGenerateConcepts - Generates unique video concepts using GPT-4o
+ *
+ * CRITICAL: This function distinguishes between STYLE REFERENCES and SUBJECT MATTER
+ * - Style references are for VISUAL STYLE only (cinematography, color grading, mood)
+ * - We generate 100% ORIGINAL content inspired by the style, never copying characters/plots
+ *
+ * Takes:
+ * - rawInput: User's concept description
+ * - styleReference: Visual style inspiration (e.g., "Breaking Bad cinematography")
+ * - avoidElements: Things to explicitly avoid
+ * - production: Production type context (movie, series, educational, etc.)
+ *
+ * Returns:
+ * - ideas: Array of 3 unique concept options with titles, loglines, unique elements
+ */
+exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { rawInput, styleReference, avoidElements, production } = data;
+
+  console.log('[creationWizardGenerateConcepts] Generating concepts for:', {
+    rawInput: rawInput?.substring(0, 100),
+    styleReference,
+    production: production?.type,
+    uid
+  });
+
+  // Build the prompt for concept generation
+  const productionContext = production ? `
+Production Type: ${production.type}
+Sub-Type: ${production.subType || 'Not specified'}
+Visual Style Guidance: ${production.visualStyle || 'Cinematic'}
+Style References (for VISUAL inspiration only): ${(production.references || []).join(', ')}
+Characteristics: ${(production.characteristics || []).join(', ')}
+Target Duration: ${production.duration || 180} seconds
+` : '';
+
+  const styleWarning = styleReference ? `
+CRITICAL STYLE INSTRUCTION:
+The user mentioned "${styleReference}" - this is for VISUAL STYLE ONLY.
+- DO NOT create content about ${styleReference.replace(/cinematography|style|palette|look|feel|aesthetic|visuals/gi, '').trim()}
+- DO NOT use any characters, plots, or specific elements from ${styleReference}
+- DO capture the FEELING, MOOD, and VISUAL APPROACH of ${styleReference}
+- Create 100% ORIGINAL characters, settings, and stories
+` : '';
+
+  const avoidList = avoidElements && avoidElements.length > 0 ?
+    `\nExplicitly AVOID: ${avoidElements.join(', ')}` : '';
+
+  const prompt = `You are a Hollywood-grade concept developer. Generate 3 UNIQUE and ORIGINAL video concepts.
+
+USER'S IDEA:
+${rawInput || 'Create something engaging and original'}
+
+${productionContext}
+${styleWarning}
+${avoidList}
+
+REQUIREMENTS:
+1. Each concept must be 100% ORIGINAL - no copying from existing media
+2. Create unique characters with original names and backstories
+3. Develop fresh settings that aren't direct copies of existing properties
+4. If style references are mentioned, capture the VISUAL FEEL only
+5. Each concept should have a clear hook that grabs attention
+
+Return EXACTLY this JSON structure:
+{
+  "ideas": [
+    {
+      "title": "Short, catchy title",
+      "logline": "One compelling sentence describing the concept",
+      "description": "2-3 sentences expanding on the concept",
+      "uniqueElements": ["Element 1", "Element 2", "Element 3"],
+      "mood": "Primary mood (e.g., Tense, Uplifting, Mysterious)",
+      "tone": "Tone (e.g., Serious, Playful, Dark)",
+      "visualApproach": "How this should look visually"
+    }
+  ]
+}
+
+Generate 3 diverse concepts that offer different creative directions.`;
+
+  try {
+    // Use GPT-4o for concept generation
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY || functions.config().openai?.key}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a creative director at a major studio. Generate original, compelling video concepts. Always return valid JSON.'
+          },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 2000,
+        temperature: 0.9
+      })
+    });
+
+    if (!openaiResponse.ok) {
+      console.error('[creationWizardGenerateConcepts] OpenAI error:', openaiResponse.status);
+      throw new Error(`OpenAI API error: ${openaiResponse.status}`);
+    }
+
+    const openaiData = await openaiResponse.json();
+    let responseText = openaiData.choices?.[0]?.message?.content || '';
+
+    // Clean up response - extract JSON
+    responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+    // Parse the JSON response
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('[creationWizardGenerateConcepts] JSON parse error, trying to extract:', parseError);
+      // Try to find JSON in the response
+      const jsonMatch = responseText.match(/\{[\s\S]*"ideas"[\s\S]*\}/);
+      if (jsonMatch) {
+        parsedResponse = JSON.parse(jsonMatch[0]);
+      } else {
+        throw parseError;
+      }
+    }
+
+    console.log('[creationWizardGenerateConcepts] Generated', parsedResponse.ideas?.length, 'concepts');
+
+    return {
+      success: true,
+      ideas: parsedResponse.ideas || []
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateConcepts] Error:', error);
+
+    // Return fallback ideas if AI fails
+    return {
+      success: true,
+      fallback: true,
+      ideas: [
+        {
+          title: 'Original Concept 1',
+          logline: `A unique exploration of ${rawInput || 'an untold story'}`,
+          description: 'An original narrative with compelling characters',
+          uniqueElements: ['Original protagonist', 'Fresh setting', 'Unique twist'],
+          mood: 'Engaging',
+          tone: 'Dynamic'
+        },
+        {
+          title: 'Original Concept 2',
+          logline: `A dramatic journey through ${rawInput || 'new territory'}`,
+          description: 'A character-driven story with emotional depth',
+          uniqueElements: ['Complex characters', 'Unexpected development', 'Strong visuals'],
+          mood: 'Dramatic',
+          tone: 'Intense'
+        },
+        {
+          title: 'Original Concept 3',
+          logline: `An exploration of ${rawInput || 'human experience'}`,
+          description: 'A thoughtful piece with universal themes',
+          uniqueElements: ['Relatable themes', 'Visual storytelling', 'Memorable moments'],
+          mood: 'Thoughtful',
+          tone: 'Contemplative'
+        }
+      ]
+    };
   }
 });
 
