@@ -1468,6 +1468,177 @@
             100% { transform: scale(1.15) translate(-3%, -2%); }
         }
 
+        /* Device Preview Modal Styles */
+        @keyframes devicePreviewSlideUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes devicePreviewMobileSlide {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .device-preview-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .device-preview-modal {
+            position: relative;
+            animation: devicePreviewSlideUp 0.3s ease-out;
+            max-width: 90vw;
+            max-height: 90vh;
+        }
+
+        /* Device Frames */
+        .device-frame-mobile {
+            width: 280px;
+            height: 560px;
+            background: linear-gradient(145deg, #1a1a2e, #16162a);
+            border-radius: 36px;
+            padding: 12px;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(255,255,255,0.1);
+            position: relative;
+        }
+
+        .device-frame-mobile::before {
+            content: '';
+            position: absolute;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 24px;
+            background: #0a0a14;
+            border-radius: 12px;
+        }
+
+        .device-frame-laptop {
+            width: 700px;
+            max-width: 85vw;
+            background: linear-gradient(145deg, #1a1a2e, #16162a);
+            border-radius: 16px 16px 0 0;
+            padding: 16px 16px 0 16px;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(255,255,255,0.1);
+            position: relative;
+        }
+
+        .device-frame-laptop::after {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: -40px;
+            right: -40px;
+            height: 20px;
+            background: linear-gradient(145deg, #252540, #1e1e35);
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .device-frame-tablet {
+            width: 500px;
+            max-width: 85vw;
+            height: auto;
+            aspect-ratio: 4/3;
+            background: linear-gradient(145deg, #1a1a2e, #16162a);
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(255,255,255,0.1);
+        }
+
+        .device-screen {
+            width: 100%;
+            height: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .device-frame-mobile .device-screen {
+            border-radius: 28px;
+            height: calc(100% - 8px);
+            margin-top: 20px;
+        }
+
+        /* Mobile Responsive - Bottom Sheet */
+        @media (max-width: 768px) {
+            .device-preview-overlay {
+                align-items: flex-end;
+            }
+
+            .device-preview-modal {
+                width: 100%;
+                max-width: 100%;
+                max-height: 85vh;
+                animation: devicePreviewMobileSlide 0.3s ease-out;
+                background: linear-gradient(180deg, #1a1a2e, #0f0f1a);
+                border-radius: 24px 24px 0 0;
+                padding: 1rem;
+                padding-bottom: env(safe-area-inset-bottom, 1rem);
+            }
+
+            .device-preview-modal::before {
+                content: '';
+                position: absolute;
+                top: 8px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 40px;
+                height: 4px;
+                background: rgba(255,255,255,0.3);
+                border-radius: 2px;
+            }
+
+            .device-frame-mobile,
+            .device-frame-laptop,
+            .device-frame-tablet {
+                width: 100%;
+                max-width: 100%;
+                height: auto;
+                padding: 8px;
+                border-radius: 12px;
+            }
+
+            .device-frame-laptop::after {
+                display: none;
+            }
+        }
+
+        .device-selector-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            border: 2px solid transparent;
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.5);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            transition: all 0.2s ease;
+        }
+
+        .device-selector-btn:hover {
+            background: rgba(139,92,246,0.2);
+            color: white;
+        }
+
+        .device-selector-btn.active {
+            border-color: #8b5cf6;
+            background: rgba(139,92,246,0.2);
+            color: #a78bfa;
+        }
+
         .fade-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
@@ -2822,7 +2993,13 @@
                 // Voice roles configuration (narrator vs character voices)
                 voiceRoles: {},                 // sceneId -> 'narrator' | 'character'
                 narratorVoice: 'nova',          // Global narrator voice (consistent across all narrator scenes)
-                characterVoices: {}             // characterName -> voiceId (for future multi-character support)
+                characterVoices: {},            // characterName -> voiceId (for future multi-character support)
+                // Device Preview Modal
+                devicePreview: {
+                    isOpen: false,                  // Modal open state
+                    device: 'laptop',               // 'mobile' | 'laptop' | 'tablet' (default laptop for 16:9)
+                    currentClipIndex: 0             // Current clip being previewed
+                }
             },
 
             // Step 6: Assembly
@@ -6538,6 +6715,9 @@
                 html += renderQueueManagerPanel(animationScenes, storyboardScenes);
             }
 
+            // Device Preview Modal
+            html += renderDevicePreviewModal();
+
             return html;
         }
 
@@ -6927,7 +7107,14 @@
                 html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(6,182,212,0.2); color: #06b6d4; border-radius: 1rem; font-weight: 600;">Ken Burns</span>';
             }
             html += '</div>';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            // Device Preview Button
+            html += '<button onclick="openDevicePreview()" style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.6rem; border-radius: 0.35rem; border: 1px solid rgba(139,92,246,0.3); background: rgba(139,92,246,0.1); color: #a78bfa; font-size: 0.65rem; cursor: pointer; transition: all 0.2s;" onmouseenter="this.style.background=\'rgba(139,92,246,0.2)\'" onmouseleave="this.style.background=\'rgba(139,92,246,0.1)\'">';
+            html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>';
+            html += 'Preview';
+            html += '</button>';
             html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">Scene ' + (sceneIndex + 1) + ' of ' + scriptScenes.length + '</div>';
+            html += '</div>';
             html += '</div>';
 
             // Main Preview Container - Single Scene Display
@@ -7671,6 +7858,154 @@
                 var scene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
                 return (scene && scene.voice) || 'alloy';
             }
+        }
+
+        // ==========================================
+        // DEVICE PREVIEW MODAL
+        // ==========================================
+
+        function openDevicePreview() {
+            if (!state.animation.devicePreview) {
+                state.animation.devicePreview = { isOpen: false, device: 'laptop', currentClipIndex: 0 };
+            }
+            state.animation.devicePreview.isOpen = true;
+            state.animation.devicePreview.currentClipIndex = 0;
+            render();
+        }
+
+        function closeDevicePreview() {
+            if (state.animation.devicePreview) {
+                state.animation.devicePreview.isOpen = false;
+            }
+            render();
+        }
+
+        function setDevicePreviewType(deviceType) {
+            if (!state.animation.devicePreview) {
+                state.animation.devicePreview = { isOpen: true, device: 'laptop', currentClipIndex: 0 };
+            }
+            state.animation.devicePreview.device = deviceType;
+            render();
+        }
+
+        function prevDevicePreviewClip() {
+            var devicePreview = state.animation.devicePreview;
+            if (devicePreview && devicePreview.currentClipIndex > 0) {
+                devicePreview.currentClipIndex--;
+                render();
+            }
+        }
+
+        function nextDevicePreviewClip() {
+            var devicePreview = state.animation.devicePreview;
+            var storyboardScenes = state.storyboard.scenes || [];
+            if (devicePreview && devicePreview.currentClipIndex < storyboardScenes.length - 1) {
+                devicePreview.currentClipIndex++;
+                render();
+            }
+        }
+
+        function renderDevicePreviewModal() {
+            var devicePreview = state.animation.devicePreview;
+            if (!devicePreview || !devicePreview.isOpen) {
+                return '';
+            }
+
+            var device = devicePreview.device || 'laptop';
+            var clipIndex = devicePreview.currentClipIndex || 0;
+            var storyboardScenes = state.storyboard.scenes || [];
+            var scriptScenes = state.script.scenes || [];
+            var totalClips = storyboardScenes.length;
+
+            // Get current scene data
+            var currentStoryboard = storyboardScenes[clipIndex] || {};
+            var currentScript = scriptScenes.find(function(s) { return s.id === currentStoryboard.sceneId; }) || {};
+            var imageUrl = currentStoryboard.imageUrl || '';
+            var videoUrl = currentStoryboard.videoUrl || '';
+            var narration = currentScript.narration || '';
+
+            var html = '';
+            html += '<div class="device-preview-overlay" onclick="closeDevicePreview()">';
+            html += '<div class="device-preview-modal" onclick="event.stopPropagation()">';
+
+            // Header with device selector and close button
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding: 0 0.5rem;">';
+
+            // Device selector buttons
+            html += '<div style="display: flex; gap: 0.5rem;">';
+            html += '<button onclick="setDevicePreviewType(\'mobile\')" class="device-selector-btn ' + (device === 'mobile' ? 'active' : '') + '" title="Mobile (9:16)">';
+            html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>';
+            html += '</button>';
+            html += '<button onclick="setDevicePreviewType(\'laptop\')" class="device-selector-btn ' + (device === 'laptop' ? 'active' : '') + '" title="Laptop (16:9)">';
+            html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="2" y1="20" x2="22" y2="20"/></svg>';
+            html += '</button>';
+            html += '<button onclick="setDevicePreviewType(\'tablet\')" class="device-selector-btn ' + (device === 'tablet' ? 'active' : '') + '" title="Tablet (4:3)">';
+            html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>';
+            html += '</button>';
+            html += '</div>';
+
+            // Close button
+            html += '<button onclick="closeDevicePreview()" style="width: 36px; height: 36px; border-radius: 50%; border: none; background: rgba(255,255,255,0.1); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: all 0.2s;" onmouseenter="this.style.background=\'rgba(239,68,68,0.3)\'" onmouseleave="this.style.background=\'rgba(255,255,255,0.1)\'">';
+            html += '×';
+            html += '</button>';
+            html += '</div>';
+
+            // Device Frame
+            html += '<div class="device-frame-' + device + '">';
+            html += '<div class="device-screen">';
+
+            // Content inside device
+            if (videoUrl) {
+                html += '<video src="' + videoUrl + '" style="width: 100%; height: 100%; object-fit: cover;" autoplay muted loop></video>';
+            } else if (imageUrl) {
+                html += '<div style="width: 100%; height: 100%; overflow: hidden;">';
+                html += '<img src="' + imageUrl + '" style="width: 115%; height: 115%; object-fit: cover; animation: kenBurnsPreview 8s ease-in-out infinite alternate;">';
+                html += '</div>';
+            } else {
+                html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(20,20,30,1); color: rgba(255,255,255,0.3);">';
+                html += '<div style="text-align: center;">';
+                html += '<div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎬</div>';
+                html += '<div style="font-size: 0.8rem;">No preview available</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Narration overlay (for mobile view especially)
+            if (device === 'mobile' && narration) {
+                html += '<div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); padding: 2rem 1rem 1rem;">';
+                html += '<div style="font-size: 0.75rem; color: white; text-align: center; line-height: 1.4;">' + narration.substring(0, 100) + (narration.length > 100 ? '...' : '') + '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // device-screen
+            html += '</div>'; // device-frame
+
+            // Navigation controls
+            html += '<div style="display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1.25rem;">';
+
+            // Prev button
+            var prevDisabled = clipIndex === 0;
+            html += '<button onclick="prevDevicePreviewClip()" ' + (prevDisabled ? 'disabled' : '') + ' style="padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: ' + (prevDisabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)') + '; color: ' + (prevDisabled ? 'rgba(255,255,255,0.3)' : 'white') + '; font-size: 0.8rem; cursor: ' + (prevDisabled ? 'not-allowed' : 'pointer') + '; display: flex; align-items: center; gap: 0.3rem;">';
+            html += '← Prev';
+            html += '</button>';
+
+            // Clip counter
+            html += '<div style="padding: 0.4rem 0.8rem; background: rgba(139,92,246,0.2); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa; font-weight: 600;">';
+            html += 'Clip ' + (clipIndex + 1) + ' of ' + totalClips;
+            html += '</div>';
+
+            // Next button
+            var nextDisabled = clipIndex >= totalClips - 1;
+            html += '<button onclick="nextDevicePreviewClip()" ' + (nextDisabled ? 'disabled' : '') + ' style="padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: ' + (nextDisabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)') + '; color: ' + (nextDisabled ? 'rgba(255,255,255,0.3)' : 'white') + '; font-size: 0.8rem; cursor: ' + (nextDisabled ? 'not-allowed' : 'pointer') + '; display: flex; align-items: center; gap: 0.3rem;">';
+            html += 'Next →';
+            html += '</button>';
+
+            html += '</div>';
+
+            html += '</div>'; // device-preview-modal
+            html += '</div>'; // device-preview-overlay
+
+            return html;
         }
 
         // ==========================================
