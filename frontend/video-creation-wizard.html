@@ -2917,8 +2917,16 @@
                 style: null,              // Style ID
                 topic: '',                // User's topic/theme
                 tone: 'engaging',         // casual, professional, humorous, serious
-                pacing: 'medium',         // 'fast' | 'medium' | 'slow' - controls scene timing
-                contentDepth: 'detailed'  // 'minimal' | 'standard' | 'detailed' | 'comprehensive' - content richness
+                pacing: 'balanced',       // 'fast' | 'balanced' | 'contemplative' - controls scene timing
+                contentDepth: 'detailed', // 'minimal' | 'standard' | 'detailed' | 'comprehensive' - content richness
+                // Video Generation Model Configuration
+                videoModel: {
+                    provider: 'minimax',                    // 'minimax' | 'runpod' (future providers)
+                    model: 'hailuo-2.3',                    // 'hailuo-2.3' | 'hailuo-2.3-fast' | 'hailuo-02'
+                    duration: '6s',                         // '6s' | '10s'
+                    resolution: '1080p',                    // '768p' | '1080p' (1080p only for 6s)
+                    mode: 'quality'                         // 'quality' | 'fast' | 'continuity'
+                }
             },
 
             // Step 3: Script
@@ -3512,6 +3520,82 @@
 
         function setPacing(pacing) {
             state.content.pacing = pacing;
+
+            // Auto-configure video model duration based on pacing
+            if (!state.content.videoModel) {
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            }
+
+            // Fast pacing = 6s clips, Contemplative = 10s clips (768p only)
+            if (pacing === 'fast') {
+                state.content.videoModel.duration = '6s';
+            } else if (pacing === 'contemplative') {
+                state.content.videoModel.duration = '10s';
+                // 10s clips only support 768p
+                if (state.content.videoModel.resolution === '1080p') {
+                    state.content.videoModel.resolution = '768p';
+                }
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        // Video Model Configuration Functions
+        function setVideoModelMode(mode) {
+            if (!state.content.videoModel) {
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            }
+
+            state.content.videoModel.mode = mode;
+
+            // Map mode to model
+            const modeToModel = {
+                'quality': 'hailuo-2.3',
+                'fast': 'hailuo-2.3-fast',
+                'continuity': 'hailuo-02'
+            };
+            state.content.videoModel.model = modeToModel[mode] || 'hailuo-2.3';
+
+            render();
+            scheduleAutoSave();
+        }
+
+        function setVideoModelDuration(duration) {
+            if (!state.content.videoModel) {
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            }
+
+            state.content.videoModel.duration = duration;
+
+            // If switching to 10s, force 768p (1080p not supported for 10s)
+            if (duration === '10s' && state.content.videoModel.resolution === '1080p') {
+                state.content.videoModel.resolution = '768p';
+            }
+
+            // Auto-adjust pacing to match duration
+            if (duration === '6s' && state.content.pacing === 'contemplative') {
+                // Keep contemplative but note it's using 6s clips
+            } else if (duration === '10s' && state.content.pacing === 'fast') {
+                state.content.pacing = 'balanced'; // Fast pacing doesn't match 10s clips well
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        function setVideoModelResolution(resolution) {
+            if (!state.content.videoModel) {
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            }
+
+            // 1080p only available for 6s clips
+            if (resolution === '1080p' && state.content.videoModel.duration === '10s') {
+                showToast('1080p resolution is only available for 6s clips', 'warning');
+                return;
+            }
+
+            state.content.videoModel.resolution = resolution;
             render();
             scheduleAutoSave();
         }
@@ -5835,27 +5919,110 @@
                              style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'fast' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'fast' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
                             <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚡</div>
                             <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Fast</div>
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Quick cuts, dense narration<br>~8s per scene</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Quick cuts, dense narration<br>~6s per scene</div>
                         </div>
-                        <div onclick="setPacing('medium')"
-                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'medium' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'medium' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                        <div onclick="setPacing('balanced')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'balanced' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'balanced' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
                             <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
                             <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Balanced</div>
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Natural flow<br>~12s per scene</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Natural flow<br>~6-10s per scene</div>
                         </div>
-                        <div onclick="setPacing('slow')"
-                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'slow' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'slow' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                        <div onclick="setPacing('contemplative')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'contemplative' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'contemplative' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
                             <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌊</div>
                             <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Contemplative</div>
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Visual breathing room<br>~18s per scene</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Visual breathing room<br>~10s per scene</div>
                         </div>
                     </div>
 
                     <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(139, 92, 246, 0.1); border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
                         <div style="font-size: 0.75rem; color: #a78bfa;">
                             📊 For your ${formatDuration(state.platform.targetDuration)} video:
-                            <strong>${Math.round(state.platform.targetDuration / (state.content.pacing === 'fast' ? 8 : state.content.pacing === 'slow' ? 18 : 12))} scenes</strong>
-                            with <strong>${state.content.pacing === 'fast' ? '85%' : state.content.pacing === 'slow' ? '50%' : '70%'}</strong> narration coverage
+                            <strong>${Math.round(state.platform.targetDuration / (state.content.pacing === 'fast' ? 6 : state.content.pacing === 'contemplative' ? 10 : 8))} scenes</strong>
+                            with <strong>${state.content.pacing === 'fast' ? '85%' : state.content.pacing === 'contemplative' ? '50%' : '70%'}</strong> narration coverage
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // AI Video Model Selection Card
+            const videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            const canUse1080p = videoModel.duration === '6s'; // 1080p only available for 6s
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎬</div>
+                        <div>
+                            <div class="content-card-title">AI Video Model</div>
+                            <div class="content-card-subtitle">Choose your video generation engine</div>
+                        </div>
+                    </div>
+
+                    <!-- Model Mode Selection -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-top: 0.5rem;">
+                        <div onclick="setVideoModelMode('quality')"
+                             style="padding: 0.85rem; border-radius: 0.75rem; border: 2px solid ${videoModel.mode === 'quality' ? '#10b981' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.mode === 'quality' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.25rem; margin-bottom: 0.4rem;">✨</div>
+                            <div style="font-weight: 600; color: ${videoModel.mode === 'quality' ? '#10b981' : 'white'}; font-size: 0.85rem;">Quality</div>
+                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Hailuo 2.3<br>Best visuals</div>
+                        </div>
+                        <div onclick="setVideoModelMode('fast')"
+                             style="padding: 0.85rem; border-radius: 0.75rem; border: 2px solid ${videoModel.mode === 'fast' ? '#f59e0b' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.mode === 'fast' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.25rem; margin-bottom: 0.4rem;">⚡</div>
+                            <div style="font-weight: 600; color: ${videoModel.mode === 'fast' ? '#f59e0b' : 'white'}; font-size: 0.85rem;">Fast</div>
+                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Hailuo 2.3 Fast<br>50% cheaper</div>
+                        </div>
+                        <div onclick="setVideoModelMode('continuity')"
+                             style="padding: 0.85rem; border-radius: 0.75rem; border: 2px solid ${videoModel.mode === 'continuity' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.mode === 'continuity' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.25rem; margin-bottom: 0.4rem;">🔗</div>
+                            <div style="font-weight: 600; color: ${videoModel.mode === 'continuity' ? '#a78bfa' : 'white'}; font-size: 0.85rem;">Continuity</div>
+                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Hailuo 02<br>Seamless scenes</div>
+                        </div>
+                    </div>
+
+                    <!-- Duration & Resolution -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                        <!-- Duration -->
+                        <div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Clip Duration</div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <div onclick="setVideoModelDuration('6s')"
+                                     style="flex: 1; padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${videoModel.duration === '6s' ? '#06b6d4' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.duration === '6s' ? 'rgba(6, 182, 212, 0.15)' : 'transparent'}; cursor: pointer; text-align: center;">
+                                    <div style="font-weight: 600; color: ${videoModel.duration === '6s' ? '#06b6d4' : 'white'}; font-size: 0.9rem;">6s</div>
+                                </div>
+                                <div onclick="setVideoModelDuration('10s')"
+                                     style="flex: 1; padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${videoModel.duration === '10s' ? '#06b6d4' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.duration === '10s' ? 'rgba(6, 182, 212, 0.15)' : 'transparent'}; cursor: pointer; text-align: center;">
+                                    <div style="font-weight: 600; color: ${videoModel.duration === '10s' ? '#06b6d4' : 'white'}; font-size: 0.9rem;">10s</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resolution -->
+                        <div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Resolution</div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <div onclick="setVideoModelResolution('768p')"
+                                     style="flex: 1; padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${videoModel.resolution === '768p' ? '#06b6d4' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.resolution === '768p' ? 'rgba(6, 182, 212, 0.15)' : 'transparent'}; cursor: pointer; text-align: center;">
+                                    <div style="font-weight: 600; color: ${videoModel.resolution === '768p' ? '#06b6d4' : 'white'}; font-size: 0.9rem;">768p</div>
+                                </div>
+                                <div onclick="setVideoModelResolution('1080p')"
+                                     style="flex: 1; padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${videoModel.resolution === '1080p' && canUse1080p ? '#06b6d4' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.resolution === '1080p' && canUse1080p ? 'rgba(6, 182, 212, 0.15)' : 'transparent'}; cursor: ${canUse1080p ? 'pointer' : 'not-allowed'}; text-align: center; opacity: ${canUse1080p ? '1' : '0.4'};">
+                                    <div style="font-weight: 600; color: ${videoModel.resolution === '1080p' && canUse1080p ? '#06b6d4' : 'white'}; font-size: 0.9rem;">1080p</div>
+                                    ${!canUse1080p ? '<div style="font-size: 0.55rem; color: rgba(255,255,255,0.4);">6s only</div>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Model Info -->
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(6, 182, 212, 0.1); border-radius: 0.5rem; border: 1px solid rgba(6, 182, 212, 0.2);">
+                        <div style="font-size: 0.75rem; color: #06b6d4; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>🎬</span>
+                            <span>
+                                <strong>${videoModel.mode === 'quality' ? 'Hailuo 2.3' : videoModel.mode === 'fast' ? 'Hailuo 2.3 Fast' : 'Hailuo 02'}</strong>
+                                • ${videoModel.duration} clips @ ${canUse1080p ? videoModel.resolution : '768p'}
+                                • ~$${videoModel.mode === 'fast' ? '0.14-0.25' : '0.28-0.49'}/clip
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -7689,21 +7856,224 @@
 
             html += '</div>';
 
-            // Animate Button
+            // Camera Movement Selection (for Minimax AI Video)
+            var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p' };
+            var sceneCameraMovements = (state.animation.cameraMovements && state.animation.cameraMovements[sceneId]) || [];
+
+            html += '<div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.08);">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.4rem;">';
+            html += '<span style="font-size: 0.85rem;">🎥</span>';
+            html += '<span style="font-size: 0.75rem; font-weight: 600; color: white;">Camera Movement</span>';
+            html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(6,182,212,0.2); color: #06b6d4; border-radius: 0.25rem;">Minimax AI</span>';
+            html += '</div>';
+            if (sceneCameraMovements.length > 0) {
+                html += '<span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">' + sceneCameraMovements.length + '/3 selected</span>';
+            }
+            html += '</div>';
+
+            // Camera movement buttons (show common ones, max 3 selectable)
+            var cameraOptions = [
+                { id: 'Pan left', icon: '⬅️', label: 'Pan L' },
+                { id: 'Pan right', icon: '➡️', label: 'Pan R' },
+                { id: 'Zoom in', icon: '🔍', label: 'Zoom+' },
+                { id: 'Zoom out', icon: '🔎', label: 'Zoom-' },
+                { id: 'Push in', icon: '⏩', label: 'Push' },
+                { id: 'Pull out', icon: '⏪', label: 'Pull' },
+                { id: 'Tilt up', icon: '⬆️', label: 'Tilt↑' },
+                { id: 'Tilt down', icon: '⬇️', label: 'Tilt↓' },
+                { id: 'Tracking shot', icon: '🎯', label: 'Track' },
+                { id: 'Static shot', icon: '🔲', label: 'Static' }
+            ];
+
+            html += '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">';
+            cameraOptions.forEach(function(cam) {
+                var isSelected = sceneCameraMovements.includes(cam.id);
+                var canSelect = isSelected || sceneCameraMovements.length < 3;
+                html += '<button onclick="toggleCameraMovement(' + sceneId + ', \'' + cam.id + '\')" ' + (!canSelect ? 'disabled' : '') + ' style="padding: 0.35rem 0.5rem; border-radius: 0.35rem; border: 1px solid ' + (isSelected ? '#06b6d4' : 'rgba(255,255,255,0.15)') + '; background: ' + (isSelected ? 'rgba(6,182,212,0.2)' : 'transparent') + '; color: ' + (isSelected ? '#06b6d4' : (canSelect ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)')) + '; font-size: 0.6rem; cursor: ' + (canSelect ? 'pointer' : 'not-allowed') + '; display: flex; align-items: center; gap: 0.2rem; transition: all 0.15s;">';
+                html += '<span style="font-size: 0.7rem;">' + cam.icon + '</span>';
+                html += '<span>' + cam.label + '</span>';
+                html += '</button>';
+            });
+            html += '</div>';
+
+            // Show selected movements preview
+            if (sceneCameraMovements.length > 0) {
+                html += '<div style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(6,182,212,0.1); border-radius: 0.35rem; font-size: 0.65rem; color: #06b6d4;">';
+                html += '📽️ [' + sceneCameraMovements.join(', ') + ']';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Animate Button with Model Info
             var isAnimating = animationStatus === 'generating';
             var canAnimate = hasVoiceover && !isAnimating;
-            html += '<button onclick="animateScene(' + sceneId + ')" ' + (!canAnimate ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (canAnimate ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)') + '; color: ' + (canAnimate ? 'white' : 'rgba(255,255,255,0.4)') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (canAnimate ? 'pointer' : 'not-allowed') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
+            html += '<div style="margin-top: 0.75rem;">';
+            html += '<button onclick="animateSceneWithMinimax(' + sceneId + ')" ' + (!canAnimate ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (canAnimate ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)') + '; color: ' + (canAnimate ? 'white' : 'rgba(255,255,255,0.4)') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (canAnimate ? 'pointer' : 'not-allowed') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
             if (isAnimating) {
-                html += '<span class="animate-spin">⏳</span> Animating...';
+                html += '<span class="animate-spin">⏳</span> Generating AI Video...';
             } else if (!hasVoiceover) {
                 html += '<span>🔒</span> Generate voiceover first';
             } else {
-                html += '<span>🎬</span> Create Animation';
+                html += '<span>🎬</span> Generate ' + videoModel.duration + ' AI Video';
             }
             html += '</button>';
+            // Model info below button
+            html += '<div style="text-align: center; margin-top: 0.35rem; font-size: 0.6rem; color: rgba(255,255,255,0.4);">';
+            html += 'Using ' + (videoModel.model === 'hailuo-2.3' ? 'Hailuo 2.3' : videoModel.model === 'hailuo-2.3-fast' ? 'Hailuo 2.3 Fast' : 'Hailuo 02') + ' @ ' + videoModel.resolution;
+            html += '</div>';
+            html += '</div>';
 
             html += '</div>';
             return html;
+        }
+
+        // Camera movement toggle function
+        function toggleCameraMovement(sceneId, movement) {
+            if (!state.animation.cameraMovements) {
+                state.animation.cameraMovements = {};
+            }
+            if (!state.animation.cameraMovements[sceneId]) {
+                state.animation.cameraMovements[sceneId] = [];
+            }
+
+            var movements = state.animation.cameraMovements[sceneId];
+            var index = movements.indexOf(movement);
+
+            if (index > -1) {
+                // Remove if already selected
+                movements.splice(index, 1);
+            } else if (movements.length < 3) {
+                // Add if under limit
+                movements.push(movement);
+            } else {
+                showToast('Maximum 3 camera movements allowed', 'warning');
+                return;
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        // Animate scene with Minimax AI
+        async function animateSceneWithMinimax(sceneId) {
+            var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p' };
+            var sceneCameraMovements = (state.animation.cameraMovements && state.animation.cameraMovements[sceneId]) || [];
+
+            // Get scene data
+            var storyboardScene = state.storyboard.scenes.find(function(s) { return s.sceneId === sceneId; });
+            var scriptScene = state.script.scenes.find(function(s) { return s.id === sceneId; });
+
+            if (!storyboardScene || !storyboardScene.imageUrl) {
+                showToast('No image available for this scene', 'error');
+                return;
+            }
+
+            // Update animation status
+            var animScene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+            if (!animScene) {
+                animScene = { sceneId: sceneId };
+                state.animation.scenes.push(animScene);
+            }
+            animScene.animationStatus = 'generating';
+            animScene.animationProvider = 'minimax';
+            render();
+
+            try {
+                // Build visual prompt from storyboard + script
+                var visualPrompt = (storyboardScene.prompt || '') + ' ' + (scriptScene.visualDescription || scriptScene.narration || '');
+
+                // Call Minimax API via cloud function
+                var generateMinimaxVideoFn = firebase.functions().httpsCallable('creationWizardGenerateMinimaxVideo');
+                var result = await generateMinimaxVideoFn({
+                    projectId: state.project.id,
+                    sceneId: sceneId,
+                    prompt: visualPrompt.trim().substring(0, 1500),
+                    imageUrl: storyboardScene.imageUrl,
+                    model: videoModel.model,
+                    duration: videoModel.duration,
+                    resolution: videoModel.resolution,
+                    cameraMovements: sceneCameraMovements,
+                    promptOptimizer: true
+                });
+
+                if (result.data.success) {
+                    animScene.minimaxTaskId = result.data.taskId;
+                    animScene.animationStatus = 'processing';
+                    showToast('AI video generation started!', 'success');
+
+                    // Start polling for status
+                    pollMinimaxVideoStatus(sceneId, result.data.taskId);
+                } else {
+                    throw new Error(result.data.error || 'Failed to start video generation');
+                }
+
+            } catch (error) {
+                console.error('Minimax video generation error:', error);
+                animScene.animationStatus = 'error';
+                showToast('Failed to generate AI video: ' + error.message, 'error');
+            }
+
+            render();
+            saveProject();
+        }
+
+        // Poll Minimax video status
+        async function pollMinimaxVideoStatus(sceneId, taskId) {
+            var checkStatusFn = firebase.functions().httpsCallable('creationWizardCheckMinimaxVideoStatus');
+            var maxAttempts = 60; // 5 minutes max (5s intervals)
+            var attempts = 0;
+
+            var pollInterval = setInterval(async function() {
+                attempts++;
+
+                try {
+                    var result = await checkStatusFn({ taskId: taskId });
+
+                    if (result.data.status === 'completed' && result.data.videoUrl) {
+                        clearInterval(pollInterval);
+
+                        // Update scene with video URL
+                        var animScene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+                        if (animScene) {
+                            animScene.videoUrl = result.data.videoUrl;
+                            animScene.animationStatus = 'ready';
+                            animScene.minimaxFileId = result.data.fileId;
+                        }
+
+                        showToast('AI video generated successfully!', 'success');
+                        render();
+                        saveProject();
+
+                    } else if (result.data.status === 'failed') {
+                        clearInterval(pollInterval);
+
+                        var animScene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+                        if (animScene) {
+                            animScene.animationStatus = 'error';
+                        }
+
+                        showToast('AI video generation failed: ' + (result.data.error || 'Unknown error'), 'error');
+                        render();
+
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+
+                        var animScene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+                        if (animScene) {
+                            animScene.animationStatus = 'error';
+                        }
+
+                        showToast('AI video generation timed out', 'error');
+                        render();
+                    }
+
+                } catch (error) {
+                    console.error('Error polling video status:', error);
+                    // Continue polling on transient errors
+                }
+
+            }, 5000); // Poll every 5 seconds
         }
 
         // Bottom Batch Queue

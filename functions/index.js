@@ -24309,6 +24309,298 @@ exports.creationWizardUpdateAnimation = functions.https.onCall(async (data, cont
 });
 
 // ==============================================
+// CREATION WIZARD - MINIMAX VIDEO GENERATION
+// ==============================================
+
+/**
+ * Minimax Video Model Configuration
+ */
+const MINIMAX_VIDEO_MODELS = {
+  'hailuo-2.3': {
+    name: 'Hailuo 2.3 Quality',
+    modelId: 'T2V-01',
+    inputTypes: ['text', 'image'],
+    durations: {
+      '6s': ['768p', '1080p'],
+      '10s': ['768p']
+    },
+    pricing: { '6s-768p': 0.28, '6s-1080p': 0.49, '10s-768p': 0.40 },
+    features: ['camera_control', 'prompt_optimizer']
+  },
+  'hailuo-2.3-fast': {
+    name: 'Hailuo 2.3 Fast',
+    modelId: 'T2V-01-Fast',
+    inputTypes: ['image'],
+    durations: {
+      '6s': ['768p', '1080p'],
+      '10s': ['768p']
+    },
+    pricing: { '6s-768p': 0.14, '6s-1080p': 0.25, '10s-768p': 0.20 },
+    features: ['camera_control', 'fast_generation']
+  },
+  'hailuo-02': {
+    name: 'Hailuo 02',
+    modelId: 'T2V-02',
+    inputTypes: ['text', 'image'],
+    durations: {
+      '6s': ['512p', '768p', '1080p'],
+      '10s': ['512p', '768p']
+    },
+    pricing: { '6s-768p': 0.28, '6s-1080p': 0.49, '10s-768p': 0.40 },
+    features: ['camera_control', 'last_frame_conditioning']
+  }
+};
+
+/**
+ * Camera movement commands supported by Minimax
+ */
+const MINIMAX_CAMERA_MOVEMENTS = [
+  'Truck left', 'Truck right',
+  'Pan left', 'Pan right',
+  'Push in', 'Pull out',
+  'Pedestal up', 'Pedestal down',
+  'Tilt up', 'Tilt down',
+  'Zoom in', 'Zoom out',
+  'Shake', 'Tracking shot', 'Static shot'
+];
+
+/**
+ * creationWizardGenerateMinimaxVideo - Generate video using Minimax API
+ *
+ * Supports both text-to-video and image-to-video generation
+ */
+exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    projectId,
+    sceneId,
+    prompt,
+    imageUrl = null,
+    model = 'hailuo-2.3',
+    duration = '6s',
+    resolution = '768p',
+    cameraMovements = [],
+    promptOptimizer = true
+  } = data;
+
+  if (!prompt || prompt.trim().length < 5) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video prompt is required (min 5 chars)');
+  }
+
+  // Validate model
+  const modelConfig = MINIMAX_VIDEO_MODELS[model];
+  if (!modelConfig) {
+    throw new functions.https.HttpsError('invalid-argument', `Invalid model: ${model}`);
+  }
+
+  // Validate duration/resolution combination
+  const allowedResolutions = modelConfig.durations[duration];
+  if (!allowedResolutions) {
+    throw new functions.https.HttpsError('invalid-argument', `Duration ${duration} not supported for model ${model}`);
+  }
+  if (!allowedResolutions.includes(resolution)) {
+    throw new functions.https.HttpsError('invalid-argument', `Resolution ${resolution} not supported for ${duration} duration. Allowed: ${allowedResolutions.join(', ')}`);
+  }
+
+  // Get Minimax API key
+  const minimaxKey = functions.config().minimax?.key;
+  if (!minimaxKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured. Set with: firebase functions:config:set minimax.key="YOUR_KEY"');
+  }
+
+  try {
+    // Build prompt with camera movements
+    let enhancedPrompt = prompt.trim();
+    if (cameraMovements.length > 0) {
+      // Validate camera movements
+      const validMovements = cameraMovements.filter(m => MINIMAX_CAMERA_MOVEMENTS.includes(m));
+      if (validMovements.length > 0) {
+        // Add up to 3 camera movements
+        const movementString = validMovements.slice(0, 3).join(', ');
+        enhancedPrompt = `[${movementString}] ${enhancedPrompt}`;
+      }
+    }
+
+    // Determine API endpoint and payload
+    const isImageToVideo = imageUrl && modelConfig.inputTypes.includes('image');
+    const apiEndpoint = isImageToVideo
+      ? 'https://api.minimax.io/v1/video_generation'
+      : 'https://api.minimax.io/v1/video_generation';
+
+    // Build request payload
+    const payload = {
+      model: modelConfig.modelId,
+      prompt: enhancedPrompt,
+      prompt_optimizer: promptOptimizer
+    };
+
+    // Add image for I2V
+    if (isImageToVideo) {
+      payload.first_frame_image = imageUrl;
+    }
+
+    // Map duration string to seconds
+    const durationSeconds = duration === '6s' ? 6 : 10;
+
+    // Map resolution to Minimax format
+    const resolutionMap = {
+      '512p': '512',
+      '768p': '768',
+      '1080p': '1080'
+    };
+
+    // Add optional parameters if supported
+    if (modelConfig.features.includes('fast_generation')) {
+      payload.fast_pretreatment = true;
+    }
+
+    // Call Minimax API
+    const minimaxResponse = await axios.post(apiEndpoint, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${minimaxKey}`
+      },
+      timeout: 60000
+    });
+
+    const taskId = minimaxResponse.data.task_id;
+    const baseResp = minimaxResponse.data.base_resp;
+
+    if (baseResp && baseResp.status_code !== 0) {
+      throw new Error(`Minimax API error: ${baseResp.status_msg || 'Unknown error'}`);
+    }
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'minimax_video_generation',
+      model: model,
+      modelId: modelConfig.modelId,
+      projectId: projectId || null,
+      sceneId: sceneId || null,
+      duration,
+      resolution,
+      isImageToVideo,
+      estimatedCost: modelConfig.pricing[`${duration}-${resolution}`] || 0,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      taskId,
+      sceneId,
+      model,
+      duration,
+      resolution,
+      provider: 'minimax',
+      status: 'processing'
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateMinimaxVideo] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to start Minimax video generation'));
+  }
+});
+
+/**
+ * creationWizardCheckMinimaxVideoStatus - Check Minimax video generation status
+ */
+exports.creationWizardCheckMinimaxVideoStatus = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { taskId } = data;
+
+  if (!taskId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Task ID is required');
+  }
+
+  const minimaxKey = functions.config().minimax?.key;
+  if (!minimaxKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured');
+  }
+
+  try {
+    // Query task status
+    const statusResponse = await axios.get(
+      `https://api.minimax.io/v1/query/video_generation?task_id=${taskId}`,
+      {
+        headers: { 'Authorization': `Bearer ${minimaxKey}` },
+        timeout: 15000
+      }
+    );
+
+    const { status, file_id, base_resp } = statusResponse.data;
+
+    if (base_resp && base_resp.status_code !== 0) {
+      return {
+        success: false,
+        taskId,
+        status: 'failed',
+        error: base_resp.status_msg || 'Unknown error'
+      };
+    }
+
+    // Map Minimax status to our status
+    const statusMap = {
+      'Queueing': 'queued',
+      'Processing': 'processing',
+      'Success': 'completed',
+      'Fail': 'failed'
+    };
+
+    const result = {
+      success: true,
+      taskId,
+      status: statusMap[status] || status.toLowerCase(),
+      fileId: file_id || null
+    };
+
+    // If completed, get the video URL
+    if (status === 'Success' && file_id) {
+      try {
+        const fileResponse = await axios.get(
+          `https://api.minimax.io/v1/files/retrieve?file_id=${file_id}`,
+          {
+            headers: { 'Authorization': `Bearer ${minimaxKey}` },
+            timeout: 15000
+          }
+        );
+
+        if (fileResponse.data.file && fileResponse.data.file.download_url) {
+          result.videoUrl = fileResponse.data.file.download_url;
+        }
+      } catch (fileError) {
+        console.error('[creationWizardCheckMinimaxVideoStatus] Error fetching file:', fileError);
+      }
+    }
+
+    return result;
+
+  } catch (error) {
+    console.error('[creationWizardCheckMinimaxVideoStatus] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check Minimax video status'));
+  }
+});
+
+/**
+ * creationWizardGetMinimaxModels - Get available Minimax video models
+ */
+exports.creationWizardGetMinimaxModels = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  return {
+    success: true,
+    models: MINIMAX_VIDEO_MODELS,
+    cameraMovements: MINIMAX_CAMERA_MOVEMENTS,
+    recommendations: {
+      quality: 'hailuo-2.3',
+      speed: 'hailuo-2.3-fast',
+      continuity: 'hailuo-02'
+    }
+  };
+});
+
+// ==============================================
 // CREATION WIZARD - PHASE 5: ASSEMBLY
 // ==============================================
 
