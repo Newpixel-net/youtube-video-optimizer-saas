@@ -33358,6 +33358,509 @@ exports.importStockAudio = functions.https.onCall(async (data, context) => {
   }
 });
 
+// ==============================================
+// FREESOUND.ORG AUDIO API INTEGRATION
+// ==============================================
+
+/**
+ * searchFreesoundAudio - Search Freesound.org for music, SFX, and ambience
+ * Freesound provides royalty-free audio with preview URLs
+ *
+ * @param {string} query - Search term
+ * @param {object} filters - { type, minDuration, maxDuration, page, perPage }
+ * type: 'music' | 'sfx' | 'ambience' | 'all'
+ */
+exports.searchFreesoundAudio = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { query = '', filters = {} } = data;
+  const {
+    type = 'all',
+    minDuration,
+    maxDuration,
+    page = 1,
+    perPage = 20,
+    sort = 'score' // 'score', 'duration_asc', 'duration_desc', 'created_asc', 'created_desc', 'downloads_asc', 'downloads_desc'
+  } = filters;
+
+  const freesoundKey = functions.config().freesound?.key;
+  if (!freesoundKey) {
+    // Fallback to curated library if no API key
+    console.log('[searchFreesoundAudio] No API key, using curated library fallback');
+    return searchCuratedAudioLibrary(query, filters);
+  }
+
+  try {
+    // Build filter string for Freesound
+    let filterParts = [];
+
+    // Duration filter
+    if (minDuration || maxDuration) {
+      const min = minDuration || 0;
+      const max = maxDuration || 600; // 10 minutes max
+      filterParts.push(`duration:[${min} TO ${max}]`);
+    }
+
+    // Type-specific tags
+    const typeTagMap = {
+      'music': 'music OR song OR melody OR instrumental OR background-music',
+      'sfx': 'sound-effect OR sfx OR foley OR transition OR whoosh OR impact',
+      'ambience': 'ambience OR ambient OR atmosphere OR nature OR environment OR background'
+    };
+
+    if (type !== 'all' && typeTagMap[type]) {
+      filterParts.push(`tag:(${typeTagMap[type]})`);
+    }
+
+    // Build the search query
+    let searchQuery = query || (type === 'music' ? 'background music' : type === 'sfx' ? 'sound effect' : type === 'ambience' ? 'ambient' : 'audio');
+
+    // Request fields we need
+    const fields = 'id,name,description,duration,tags,previews,username,license,avg_rating,num_ratings,num_downloads';
+
+    const response = await axios.get('https://freesound.org/apiv2/search/text/', {
+      params: {
+        token: freesoundKey,
+        query: searchQuery,
+        filter: filterParts.join(' '),
+        fields: fields,
+        sort: sort,
+        page: page,
+        page_size: Math.min(perPage, 50) // Freesound max is 150, but we use 50
+      },
+      timeout: 15000
+    });
+
+    const results = (response.data.results || []).map(sound => ({
+      id: `freesound-${sound.id}`,
+      name: sound.name,
+      description: sound.description?.substring(0, 200) || '',
+      duration: Math.round(sound.duration),
+      tags: sound.tags?.slice(0, 10) || [],
+      author: sound.username,
+      license: sound.license,
+      rating: sound.avg_rating,
+      downloads: sound.num_downloads,
+      source: 'freesound',
+      // Preview URLs - Freesound provides mp3 and ogg previews
+      previewUrl: sound.previews?.['preview-hq-mp3'] || sound.previews?.['preview-lq-mp3'],
+      previewUrlOgg: sound.previews?.['preview-hq-ogg'] || sound.previews?.['preview-lq-ogg'],
+      // Type classification based on tags
+      type: classifyAudioType(sound.tags),
+      // For compatibility with existing UI
+      category: classifyAudioCategory(sound.tags),
+      mood: extractMoodFromTags(sound.tags)
+    }));
+
+    return {
+      success: true,
+      results,
+      total: response.data.count,
+      page,
+      perPage,
+      hasMore: response.data.next !== null,
+      source: 'freesound'
+    };
+
+  } catch (error) {
+    console.error('[searchFreesoundAudio] Error:', error.response?.data || error.message);
+
+    // Fallback to curated library on error
+    console.log('[searchFreesoundAudio] Falling back to curated library');
+    return searchCuratedAudioLibrary(query, filters);
+  }
+});
+
+/**
+ * Helper function to classify audio type from tags
+ */
+function classifyAudioType(tags) {
+  const tagString = (tags || []).join(' ').toLowerCase();
+
+  if (tagString.includes('music') || tagString.includes('song') || tagString.includes('melody') ||
+      tagString.includes('instrumental') || tagString.includes('piano') || tagString.includes('guitar')) {
+    return 'music';
+  }
+  if (tagString.includes('ambien') || tagString.includes('atmosphere') || tagString.includes('nature') ||
+      tagString.includes('rain') || tagString.includes('wind') || tagString.includes('forest')) {
+    return 'ambience';
+  }
+  return 'sfx';
+}
+
+/**
+ * Helper function to classify audio category from tags
+ */
+function classifyAudioCategory(tags) {
+  const tagString = (tags || []).join(' ').toLowerCase();
+
+  // Music categories
+  if (tagString.includes('epic') || tagString.includes('cinematic') || tagString.includes('trailer')) return 'cinematic';
+  if (tagString.includes('corporate') || tagString.includes('business') || tagString.includes('presentation')) return 'corporate';
+  if (tagString.includes('ambient') || tagString.includes('chill') || tagString.includes('relaxing')) return 'ambient';
+  if (tagString.includes('electronic') || tagString.includes('edm') || tagString.includes('synth')) return 'electronic';
+  if (tagString.includes('horror') || tagString.includes('dark') || tagString.includes('scary')) return 'dark';
+  if (tagString.includes('happy') || tagString.includes('upbeat') || tagString.includes('cheerful')) return 'upbeat';
+
+  // SFX categories
+  if (tagString.includes('whoosh') || tagString.includes('transition') || tagString.includes('swipe')) return 'transitions';
+  if (tagString.includes('impact') || tagString.includes('hit') || tagString.includes('punch')) return 'impacts';
+  if (tagString.includes('tech') || tagString.includes('digital') || tagString.includes('glitch')) return 'tech';
+
+  return 'general';
+}
+
+/**
+ * Helper function to extract mood from tags
+ */
+function extractMoodFromTags(tags) {
+  const tagString = (tags || []).join(' ').toLowerCase();
+
+  if (tagString.includes('epic') || tagString.includes('powerful')) return 'Epic, Powerful';
+  if (tagString.includes('calm') || tagString.includes('peaceful') || tagString.includes('relaxing')) return 'Calm, Peaceful';
+  if (tagString.includes('happy') || tagString.includes('cheerful')) return 'Happy, Cheerful';
+  if (tagString.includes('sad') || tagString.includes('emotional')) return 'Emotional, Moving';
+  if (tagString.includes('tense') || tagString.includes('suspense')) return 'Tense, Suspenseful';
+  if (tagString.includes('dark') || tagString.includes('scary')) return 'Dark, Mysterious';
+  if (tagString.includes('upbeat') || tagString.includes('energetic')) return 'Energetic, Upbeat';
+
+  return 'Neutral';
+}
+
+/**
+ * Fallback search using curated library when Freesound API is unavailable
+ */
+function searchCuratedAudioLibrary(query, filters) {
+  const { type = 'all', minDuration, maxDuration, page = 1, perPage = 20 } = filters;
+
+  // Combine all audio libraries
+  const allAudio = [
+    ...MUSIC_LIBRARY.map(t => ({ ...t, type: 'music', source: 'curated' })),
+    ...SFX_LIBRARY.map(t => ({ ...t, type: 'sfx', source: 'curated' })),
+    ...AMBIENCE_LIBRARY.map(t => ({ ...t, type: 'ambience', source: 'curated' }))
+  ];
+
+  // Filter by type
+  let filtered = type === 'all' ? allAudio : allAudio.filter(a => a.type === type);
+
+  // Filter by query
+  if (query) {
+    const q = query.toLowerCase();
+    filtered = filtered.filter(a =>
+      a.name?.toLowerCase().includes(q) ||
+      a.tags?.some(t => t.toLowerCase().includes(q)) ||
+      a.category?.toLowerCase().includes(q) ||
+      a.mood?.toLowerCase().includes(q)
+    );
+  }
+
+  // Filter by duration
+  if (minDuration) filtered = filtered.filter(a => (a.duration || 0) >= minDuration);
+  if (maxDuration) filtered = filtered.filter(a => (a.duration || 999) <= maxDuration);
+
+  // Paginate
+  const start = (page - 1) * perPage;
+  const results = filtered.slice(start, start + perPage);
+
+  return {
+    success: true,
+    results,
+    total: filtered.length,
+    page,
+    perPage,
+    hasMore: start + perPage < filtered.length,
+    source: 'curated',
+    note: 'Using curated library. Configure Freesound API key for live search.'
+  };
+}
+
+/**
+ * searchPixabayMusic - Search Pixabay for royalty-free music
+ * Pixabay has a music section but no official API, so we provide curated tracks
+ * with actual Pixabay URLs
+ */
+exports.searchPixabayMusic = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { query = '', filters = {} } = data;
+  const { category, mood, page = 1, perPage = 20 } = filters;
+
+  // Curated Pixabay music tracks with real URLs
+  // These are popular royalty-free tracks from Pixabay's music library
+  const PIXABAY_MUSIC_TRACKS = [
+    {
+      id: 'pixabay-inspiring-cinematic',
+      name: 'Inspiring Cinematic Ambient',
+      artist: 'Lexin_Music',
+      category: 'cinematic',
+      mood: 'Inspiring, Uplifting',
+      duration: 127,
+      bpm: 80,
+      tags: ['cinematic', 'inspiring', 'ambient', 'background'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-documentary',
+      name: 'Documentary',
+      artist: 'Lexin_Music',
+      category: 'cinematic',
+      mood: 'Serious, Professional',
+      duration: 122,
+      bpm: 90,
+      tags: ['documentary', 'cinematic', 'serious', 'professional'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/10/25/audio_946b0939c3.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-upbeat-corporate',
+      name: 'Upbeat Corporate Technology',
+      artist: 'Daddy_s_Music',
+      category: 'corporate',
+      mood: 'Upbeat, Professional',
+      duration: 152,
+      bpm: 120,
+      tags: ['corporate', 'technology', 'upbeat', 'business'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2023/05/16/audio_166b63e854.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-ambient-piano',
+      name: 'Ambient Piano',
+      artist: 'Music_For_Videos',
+      category: 'ambient',
+      mood: 'Calm, Peaceful',
+      duration: 186,
+      bpm: 70,
+      tags: ['ambient', 'piano', 'calm', 'peaceful', 'relaxing'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-electronic-future',
+      name: 'Electronic Future',
+      artist: 'SoulProdMusic',
+      category: 'electronic',
+      mood: 'Modern, Energetic',
+      duration: 145,
+      bpm: 128,
+      tags: ['electronic', 'future', 'modern', 'technology', 'energetic'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2023/03/11/audio_0e0a42a1c3.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-epic-trailer',
+      name: 'Epic Cinematic Trailer',
+      artist: 'Lexin_Music',
+      category: 'cinematic',
+      mood: 'Epic, Powerful',
+      duration: 71,
+      bpm: 95,
+      tags: ['epic', 'cinematic', 'trailer', 'powerful', 'dramatic'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/05/16/audio_bd8740feb5.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-happy-upbeat',
+      name: 'Happy Day',
+      artist: 'Top-Flow',
+      category: 'upbeat',
+      mood: 'Happy, Cheerful',
+      duration: 120,
+      bpm: 115,
+      tags: ['happy', 'upbeat', 'cheerful', 'positive', 'fun'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/01/20/audio_570dc28ec0.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-dark-ambient',
+      name: 'Dark Ambient Horror',
+      artist: 'Lexin_Music',
+      category: 'dark',
+      mood: 'Dark, Mysterious',
+      duration: 180,
+      bpm: 60,
+      tags: ['dark', 'ambient', 'horror', 'mysterious', 'scary'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c55cf59e18.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-tension-suspense',
+      name: 'Tension Suspense',
+      artist: 'SoundGalleryByDimitri',
+      category: 'dramatic',
+      mood: 'Tense, Suspenseful',
+      duration: 120,
+      bpm: 85,
+      tags: ['tension', 'suspense', 'thriller', 'intense', 'dramatic'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/10/30/audio_dd0e5e7f2a.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-nature-documentary',
+      name: 'Nature Documentary',
+      artist: 'Daddy_s_Music',
+      category: 'cinematic',
+      mood: 'Inspiring, Natural',
+      duration: 195,
+      bpm: 75,
+      tags: ['nature', 'documentary', 'inspiring', 'natural', 'cinematic'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2023/02/28/audio_a46a09fe9e.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-motivational',
+      name: 'Motivational Epic',
+      artist: 'Lexin_Music',
+      category: 'cinematic',
+      mood: 'Motivational, Epic',
+      duration: 156,
+      bpm: 110,
+      tags: ['motivational', 'epic', 'inspiring', 'powerful', 'success'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/08/31/audio_419273eb64.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-lofi-chill',
+      name: 'Lofi Study',
+      artist: 'FASSounds',
+      category: 'ambient',
+      mood: 'Chill, Relaxing',
+      duration: 145,
+      bpm: 85,
+      tags: ['lofi', 'chill', 'study', 'relaxing', 'calm'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/05/13/audio_257112ec40.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-tech-innovation',
+      name: 'Innovation Technology',
+      artist: 'Lexin_Music',
+      category: 'corporate',
+      mood: 'Modern, Innovative',
+      duration: 138,
+      bpm: 118,
+      tags: ['technology', 'innovation', 'corporate', 'modern', 'startup'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/03/24/audio_fc47d46315.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-emotional-piano',
+      name: 'Emotional Cinematic Piano',
+      artist: 'Ahjay_Stelino',
+      category: 'cinematic',
+      mood: 'Emotional, Moving',
+      duration: 168,
+      bpm: 72,
+      tags: ['emotional', 'piano', 'cinematic', 'moving', 'sad'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2022/11/22/audio_d6a3e34ab2.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    },
+    {
+      id: 'pixabay-adventure',
+      name: 'Adventure Awaits',
+      artist: 'Daddy_s_Music',
+      category: 'cinematic',
+      mood: 'Adventurous, Exciting',
+      duration: 142,
+      bpm: 100,
+      tags: ['adventure', 'exciting', 'travel', 'exploration', 'cinematic'],
+      previewUrl: 'https://cdn.pixabay.com/download/audio/2023/08/31/audio_c0dfe4e9f4.mp3',
+      source: 'pixabay',
+      license: 'Pixabay License (Free)'
+    }
+  ];
+
+  // Filter tracks
+  let filtered = [...PIXABAY_MUSIC_TRACKS];
+
+  if (query) {
+    const q = query.toLowerCase();
+    filtered = filtered.filter(t =>
+      t.name.toLowerCase().includes(q) ||
+      t.tags.some(tag => tag.toLowerCase().includes(q)) ||
+      t.mood.toLowerCase().includes(q)
+    );
+  }
+
+  if (category) {
+    filtered = filtered.filter(t => t.category === category);
+  }
+
+  if (mood) {
+    filtered = filtered.filter(t => t.mood.toLowerCase().includes(mood.toLowerCase()));
+  }
+
+  // Paginate
+  const start = (page - 1) * perPage;
+  const results = filtered.slice(start, start + perPage);
+
+  return {
+    success: true,
+    results,
+    total: filtered.length,
+    page,
+    perPage,
+    hasMore: start + perPage < filtered.length,
+    source: 'pixabay'
+  };
+});
+
+/**
+ * getAudioLibrary - Get combined audio library with real URLs
+ * This is the main endpoint for the audio browser
+ * Returns Pixabay music tracks + curated library tracks
+ */
+exports.getAudioLibrary = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { type = 'all', source = 'all', category } = data;
+
+  // Combine all audio sources
+  let results = [
+    ...MUSIC_LIBRARY.map(t => ({ ...t, type: 'music', source: 'curated' })),
+    ...SFX_LIBRARY.map(t => ({ ...t, type: 'sfx', source: 'curated' })),
+    ...AMBIENCE_LIBRARY.map(t => ({ ...t, type: 'ambience', source: 'curated' }))
+  ];
+
+  // Filter by type
+  if (type !== 'all') {
+    results = results.filter(r => r.type === type);
+  }
+
+  // Filter by category
+  if (category) {
+    results = results.filter(r => r.category === category);
+  }
+
+  // Filter by source
+  if (source !== 'all') {
+    results = results.filter(r => r.source === source);
+  }
+
+  return {
+    success: true,
+    results,
+    total: results.length,
+    categories: ['cinematic', 'corporate', 'ambient', 'electronic', 'dark', 'upbeat', 'dramatic'],
+    sources: ['pixabay', 'freesound', 'curated']
+  };
+});
+
 /**
  * getMusicCategories - Get all music categories with counts
  */

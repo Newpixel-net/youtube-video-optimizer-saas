@@ -13558,15 +13558,15 @@
         async function openMusicBrowser() {
             state.assembly.musicBrowser.isOpen = true;
             state.assembly.musicBrowser.loading = true;
+            state.assembly.musicBrowser.activeSource = 'pixabay'; // 'pixabay' | 'freesound'
             render();
 
             try {
-                // Load categories and initial results
-                const [categoriesResult, searchResult] = await Promise.all([
+                // Load Pixabay tracks (with real URLs) and categories
+                const [categoriesResult, pixabayResult] = await Promise.all([
                     firebase.functions().httpsCallable('getMusicCategories')({}),
-                    firebase.functions().httpsCallable('searchEnhancedMusicLibrary')({
-                        page: 1,
-                        perPage: 12
+                    firebase.functions().httpsCallable('searchPixabayMusic')({
+                        filters: { page: 1, perPage: 20 }
                     })
                 ]);
 
@@ -13574,9 +13574,9 @@
                     state.assembly.musicBrowser.categories = categoriesResult.data.categories;
                 }
 
-                if (searchResult.data.success) {
-                    state.assembly.musicBrowser.results = searchResult.data.results;
-                    state.assembly.musicBrowser.total = searchResult.data.total;
+                if (pixabayResult.data.success) {
+                    state.assembly.musicBrowser.results = pixabayResult.data.results;
+                    state.assembly.musicBrowser.total = pixabayResult.data.total;
                 }
             } catch (error) {
                 console.error('[openMusicBrowser] Error:', error);
@@ -13587,7 +13587,55 @@
             }
         }
 
+        // Audio preview player for music browser
+        let audioPreviewPlayer = null;
+        let currentPreviewTrackId = null;
+
+        function previewMusicTrack(trackId, previewUrl, event) {
+            event.stopPropagation();
+
+            // If same track is playing, stop it
+            if (currentPreviewTrackId === trackId && audioPreviewPlayer && !audioPreviewPlayer.paused) {
+                audioPreviewPlayer.pause();
+                currentPreviewTrackId = null;
+                render();
+                return;
+            }
+
+            // Stop any existing preview
+            if (audioPreviewPlayer) {
+                audioPreviewPlayer.pause();
+                audioPreviewPlayer = null;
+            }
+
+            // Play new preview
+            audioPreviewPlayer = new Audio(previewUrl);
+            audioPreviewPlayer.volume = 0.5;
+            currentPreviewTrackId = trackId;
+
+            audioPreviewPlayer.play().catch(err => {
+                console.error('Preview playback failed:', err);
+                showToast('Unable to preview audio', 'error');
+            });
+
+            audioPreviewPlayer.onended = () => {
+                currentPreviewTrackId = null;
+                render();
+            };
+
+            render();
+        }
+
+        function stopMusicPreview() {
+            if (audioPreviewPlayer) {
+                audioPreviewPlayer.pause();
+                audioPreviewPlayer = null;
+            }
+            currentPreviewTrackId = null;
+        }
+
         function closeMusicBrowser() {
+            stopMusicPreview(); // Stop any playing preview
             state.assembly.musicBrowser.isOpen = false;
             render();
         }
@@ -13596,15 +13644,19 @@
             state.assembly.musicBrowser.searchQuery = query;
             state.assembly.musicBrowser.loading = true;
             state.assembly.musicBrowser.page = 1;
+            stopMusicPreview();
             render();
 
             try {
-                const searchMusic = firebase.functions().httpsCallable('searchEnhancedMusicLibrary');
+                // Use Pixabay for tracks with real URLs
+                const searchMusic = firebase.functions().httpsCallable('searchPixabayMusic');
                 const result = await searchMusic({
                     query: query,
-                    category: state.assembly.musicBrowser.selectedCategory,
-                    page: 1,
-                    perPage: 12
+                    filters: {
+                        category: state.assembly.musicBrowser.selectedCategory,
+                        page: 1,
+                        perPage: 20
+                    }
                 });
 
                 if (result.data.success) {
@@ -13623,15 +13675,18 @@
             state.assembly.musicBrowser.selectedCategory = category;
             state.assembly.musicBrowser.loading = true;
             state.assembly.musicBrowser.page = 1;
+            stopMusicPreview();
             render();
 
             try {
-                const searchMusic = firebase.functions().httpsCallable('searchEnhancedMusicLibrary');
+                const searchMusic = firebase.functions().httpsCallable('searchPixabayMusic');
                 const result = await searchMusic({
                     query: state.assembly.musicBrowser.searchQuery,
-                    category: category,
-                    page: 1,
-                    perPage: 12
+                    filters: {
+                        category: category,
+                        page: 1,
+                        perPage: 20
+                    }
                 });
 
                 if (result.data.success) {
@@ -13646,13 +13701,100 @@
             }
         }
 
+        async function searchFreesoundAudio(query, type = 'all') {
+            state.assembly.musicBrowser.loading = true;
+            stopMusicPreview();
+            render();
+
+            try {
+                const searchFn = firebase.functions().httpsCallable('searchFreesoundAudio');
+                const result = await searchFn({
+                    query: query,
+                    filters: {
+                        type: type,
+                        page: 1,
+                        perPage: 20
+                    }
+                });
+
+                if (result.data.success) {
+                    state.assembly.musicBrowser.results = result.data.results;
+                    state.assembly.musicBrowser.total = result.data.total;
+                }
+            } catch (error) {
+                console.error('[searchFreesoundAudio] Error:', error);
+            } finally {
+                state.assembly.musicBrowser.loading = false;
+                render();
+            }
+        }
+
+        async function switchAudioSource(source) {
+            state.assembly.musicBrowser.activeSource = source;
+            state.assembly.musicBrowser.loading = true;
+            state.assembly.musicBrowser.searchQuery = '';
+            state.assembly.musicBrowser.selectedCategory = null;
+            stopMusicPreview();
+            render();
+
+            try {
+                if (source === 'pixabay') {
+                    // Load Pixabay music tracks
+                    const result = await firebase.functions().httpsCallable('searchPixabayMusic')({
+                        filters: { page: 1, perPage: 20 }
+                    });
+                    if (result.data.success) {
+                        state.assembly.musicBrowser.results = result.data.results;
+                        state.assembly.musicBrowser.total = result.data.total;
+                    }
+                } else if (source === 'freesound') {
+                    // Load Freesound sound effects
+                    const result = await firebase.functions().httpsCallable('searchFreesoundAudio')({
+                        query: 'sound effect transition',
+                        filters: { type: 'sfx', page: 1, perPage: 20 }
+                    });
+                    if (result.data.success) {
+                        state.assembly.musicBrowser.results = result.data.results;
+                        state.assembly.musicBrowser.total = result.data.total;
+                    }
+                } else if (source === 'ambience') {
+                    // Load ambience tracks from Freesound
+                    const result = await firebase.functions().httpsCallable('searchFreesoundAudio')({
+                        query: 'ambient background atmosphere',
+                        filters: { type: 'ambience', page: 1, perPage: 20 }
+                    });
+                    if (result.data.success) {
+                        state.assembly.musicBrowser.results = result.data.results;
+                        state.assembly.musicBrowser.total = result.data.total;
+                    }
+                }
+            } catch (error) {
+                console.error('[switchAudioSource] Error:', error);
+                showToast('Failed to load audio library', 'error');
+            } finally {
+                state.assembly.musicBrowser.loading = false;
+                render();
+            }
+        }
+
         function selectMusicFromBrowser(trackId) {
-            // Find the track in the results or add to library
+            // Find the track in the results
             const track = state.assembly.musicBrowser.results.find(t => t.id === trackId);
             if (track) {
+                stopMusicPreview();
+
+                // Ensure track has a playable URL
+                const trackWithUrl = {
+                    ...track,
+                    url: track.previewUrl || track.url // Use previewUrl if available
+                };
+
                 // Add to music library if not already present
-                if (!state.assembly.musicLibrary.find(t => t.id === trackId)) {
-                    state.assembly.musicLibrary.push(track);
+                const existingIndex = state.assembly.musicLibrary.findIndex(t => t.id === trackId);
+                if (existingIndex >= 0) {
+                    state.assembly.musicLibrary[existingIndex] = trackWithUrl;
+                } else {
+                    state.assembly.musicLibrary.push(trackWithUrl);
                 }
 
                 // Select the track
@@ -13661,6 +13803,7 @@
 
                 closeMusicBrowser();
                 scheduleAutoSave();
+                updatePreviewMusic(); // Update the preview engine with new music
                 showToast(`Selected: ${track.name}`, 'success');
             }
         }
@@ -13684,11 +13827,32 @@
             html += '<div style="display: flex; align-items: center; gap: 0.75rem;">';
             html += '<span style="font-size: 1.5rem;">🎵</span>';
             html += '<div>';
-            html += '<div style="font-size: 1.1rem; font-weight: 700; color: white;">Music Library</div>';
-            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">' + browser.total + ' tracks available</div>';
+            html += '<div style="font-size: 1.1rem; font-weight: 700; color: white;">Audio Library</div>';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">' + browser.total + ' royalty-free tracks</div>';
             html += '</div>';
             html += '</div>';
             html += '<button onclick="closeMusicBrowser()" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 1rem;">✕</button>';
+            html += '</div>';
+
+            // Source Tabs
+            const activeSource = browser.activeSource || 'pixabay';
+            html += '<div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1);">';
+
+            // Pixabay Tab (Music)
+            html += '<button onclick="switchAudioSource(\'pixabay\')" style="flex: 1; padding: 0.75rem; background: ' + (activeSource === 'pixabay' ? 'rgba(0,171,108,0.15)' : 'transparent') + '; border: none; border-bottom: 2px solid ' + (activeSource === 'pixabay' ? '#00ab6c' : 'transparent') + '; color: ' + (activeSource === 'pixabay' ? '#00ab6c' : 'rgba(255,255,255,0.6)') + '; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: all 0.2s;">';
+            html += '🎵 Background Music';
+            html += '</button>';
+
+            // Freesound Tab (SFX)
+            html += '<button onclick="switchAudioSource(\'freesound\')" style="flex: 1; padding: 0.75rem; background: ' + (activeSource === 'freesound' ? 'rgba(255,107,53,0.15)' : 'transparent') + '; border: none; border-bottom: 2px solid ' + (activeSource === 'freesound' ? '#ff6b35' : 'transparent') + '; color: ' + (activeSource === 'freesound' ? '#ff6b35' : 'rgba(255,255,255,0.6)') + '; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: all 0.2s;">';
+            html += '🔊 Sound Effects';
+            html += '</button>';
+
+            // Ambience Tab
+            html += '<button onclick="switchAudioSource(\'ambience\')" style="flex: 1; padding: 0.75rem; background: ' + (activeSource === 'ambience' ? 'rgba(139,92,246,0.15)' : 'transparent') + '; border: none; border-bottom: 2px solid ' + (activeSource === 'ambience' ? '#8b5cf6' : 'transparent') + '; color: ' + (activeSource === 'ambience' ? '#8b5cf6' : 'rgba(255,255,255,0.6)') + '; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: all 0.2s;">';
+            html += '🌿 Ambience';
+            html += '</button>';
+
             html += '</div>';
 
             // Search & Filters
@@ -13730,25 +13894,45 @@
 
                 browser.results.forEach(function(track) {
                     const isSelected = state.assembly.music.trackId === track.id;
+                    const isPlaying = currentPreviewTrackId === track.id;
+                    const hasPreview = track.previewUrl || track.url;
 
                     html += '<div onclick="selectMusicFromBrowser(\'' + track.id + '\')" style="background: ' + (isSelected ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)') + '; border: 1px solid ' + (isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)') + '; border-radius: 0.75rem; padding: 1rem; cursor: pointer; transition: all 0.2s;" onmouseenter="this.style.borderColor=\'rgba(139,92,246,0.5)\'" onmouseleave="this.style.borderColor=\'' + (isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)') + '\'">';
 
-                    // Track icon & name
+                    // Track icon & name with play preview button
                     html += '<div style="display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.75rem;">';
-                    html += '<div style="width: 40px; height: 40px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">';
-                    html += '<span style="font-size: 1.1rem;">🎵</span>';
-                    html += '</div>';
+
+                    // Play/Preview button
+                    if (hasPreview) {
+                        const previewUrl = track.previewUrl || track.url;
+                        html += '<button onclick="previewMusicTrack(\'' + track.id + '\', \'' + previewUrl.replace(/'/g, "\\'") + '\', event)" style="width: 40px; height: 40px; background: linear-gradient(135deg, ' + (isPlaying ? '#10b981, #059669' : '#8b5cf6, #6366f1') + '); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: none; cursor: pointer; transition: all 0.2s;" title="' + (isPlaying ? 'Stop preview' : 'Preview track') + '">';
+                        html += '<span style="font-size: 1.1rem; color: white;">' + (isPlaying ? '⏸' : '▶') + '</span>';
+                        html += '</button>';
+                    } else {
+                        html += '<div style="width: 40px; height: 40px; background: linear-gradient(135deg, #6b7280, #4b5563); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">';
+                        html += '<span style="font-size: 1.1rem;">🎵</span>';
+                        html += '</div>';
+                    }
+
                     html += '<div style="flex: 1; min-width: 0;">';
                     html += '<div style="font-size: 0.85rem; font-weight: 600; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' + track.name + '</div>';
-                    html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">' + (track.mood || track.category || '') + '</div>';
+                    html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">' + (track.artist || track.mood || track.category || '') + '</div>';
                     html += '</div>';
                     if (isSelected) {
                         html += '<span style="color: #10b981; font-size: 1rem;">✓</span>';
                     }
                     html += '</div>';
 
-                    // Track metadata
-                    html += '<div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">';
+                    // Track metadata with source badge
+                    html += '<div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">';
+                    if (track.source) {
+                        const sourceColors = {
+                            'pixabay': '#00ab6c',
+                            'freesound': '#ff6b35',
+                            'curated': '#8b5cf6'
+                        };
+                        html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: ' + (sourceColors[track.source] || '#6b7280') + '; color: white; border-radius: 0.25rem; font-weight: 600;">' + track.source.toUpperCase() + '</span>';
+                    }
                     if (track.duration) {
                         html += '<span style="font-size: 0.6rem; padding: 0.2rem 0.4rem; background: rgba(255,255,255,0.1); border-radius: 0.25rem; color: rgba(255,255,255,0.6);">⏱ ' + formatTrackDuration(track.duration) + '</span>';
                     }
@@ -13780,7 +13964,7 @@
 
             // Footer
             html += '<div style="padding: 1rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">';
-            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Click a track to select it</div>';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">▶ Preview • Click to select • All tracks are royalty-free</div>';
             html += '<button onclick="closeMusicBrowser()" style="padding: 0.5rem 1rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: rgba(255,255,255,0.7); font-size: 0.75rem; cursor: pointer;">Close</button>';
             html += '</div>';
 
@@ -14443,12 +14627,17 @@
 
             if (state.assembly.music.enabled && state.assembly.music.trackId) {
                 const track = state.assembly.musicLibrary.find(t => t.id === state.assembly.music.trackId);
-                if (track?.url) {
+                // Use url or previewUrl - tracks from Pixabay have previewUrl
+                const audioUrl = track?.url || track?.previewUrl;
+                if (audioUrl) {
                     try {
-                        await previewEngine.setBackgroundMusic(track.url, state.assembly.music.volume / 100);
+                        await previewEngine.setBackgroundMusic(audioUrl, state.assembly.music.volume / 100);
+                        console.log('[updatePreviewMusic] Playing:', track.name, 'from', audioUrl.substring(0, 50) + '...');
                     } catch (e) {
                         console.error('Failed to update music:', e);
                     }
+                } else {
+                    console.warn('[updatePreviewMusic] No audio URL for track:', track?.name);
                 }
             } else {
                 // Disable music
@@ -14572,8 +14761,9 @@
                 // Set music if enabled
                 if (state.assembly.music.enabled && state.assembly.music.trackId) {
                     const track = state.assembly.musicLibrary.find(t => t.id === state.assembly.music.trackId);
-                    if (track?.url) {
-                        await previewEngine.setBackgroundMusic(track.url, state.assembly.music.volume / 100);
+                    const audioUrl = track?.url || track?.previewUrl;
+                    if (audioUrl) {
+                        await previewEngine.setBackgroundMusic(audioUrl, state.assembly.music.volume / 100);
                     }
                 }
 
@@ -16625,8 +16815,9 @@
 
                     if (state.assembly.music?.enabled && state.assembly.music?.trackId) {
                         const track = state.assembly.musicLibrary?.find(t => t.id === state.assembly.music?.trackId);
-                        if (track?.url) {
-                            await previewEngine.setBackgroundMusic(track.url, state.assembly.music.volume / 100);
+                        const audioUrl = track?.url || track?.previewUrl;
+                        if (audioUrl) {
+                            await previewEngine.setBackgroundMusic(audioUrl, state.assembly.music.volume / 100);
                         }
                     }
                 } catch (error) {
