@@ -2917,8 +2917,27 @@
                 style: null,              // Style ID
                 topic: '',                // User's topic/theme
                 tone: 'engaging',         // casual, professional, humorous, serious
-                pacing: 'medium',         // 'fast' | 'medium' | 'slow' - controls scene timing
-                contentDepth: 'detailed'  // 'minimal' | 'standard' | 'detailed' | 'comprehensive' - content richness
+                pacing: 'balanced',       // 'fast' | 'balanced' | 'contemplative' - controls scene timing
+                contentDepth: 'detailed', // 'minimal' | 'standard' | 'detailed' | 'comprehensive' - content richness
+                // Hollywood Production Mode (Phase 2)
+                productionMode: 'standard', // 'standard' | 'documentary' | 'thriller' | 'inspirational' | 'story' | 'cinematic'
+                // Phase 3A: Genre Reference System
+                genre: null,              // Genre key (e.g., 'documentary-nature', 'educational-explainer')
+                contentFormat: 'medium-form', // 'short-form' | 'medium-form' | 'long-form' | 'episodic'
+                // Phase 3F: Narrative Structure Intelligence
+                narrativePreset: null,    // 'youtube-standard' | 'tiktok-viral' | 'cinematic-short' | etc.
+                storyArc: null,           // 'three-act' | 'heros-journey' | 'dan-harmon-circle' | etc.
+                emotionalJourney: null,   // 'triumph' | 'redemption' | 'thriller' | etc.
+                tensionCurve: null,       // 'steady-build' | 'waves' | 'slow-burn' | etc.
+                narrativeAnalysis: null,  // Cached analysis from AI
+                // Video Generation Model Configuration
+                videoModel: {
+                    provider: 'minimax',                    // 'minimax' | 'runpod' (future providers)
+                    model: 'hailuo-2.3',                    // 'hailuo-2.3' | 'hailuo-2.3-fast' | 'hailuo-02'
+                    duration: '6s',                         // '6s' | '10s'
+                    resolution: '1080p',                    // '768p' | '1080p' (1080p only for 6s)
+                    mode: 'quality'                         // 'quality' | 'fast' | 'continuity'
+                }
             },
 
             // Step 3: Script
@@ -2946,6 +2965,13 @@
                 modifyStyle: null,     // Current style in modify modal
                 // Image generation settings
                 imageModel: 'hidream',  // 'hidream' | 'nanobanana-pro' | 'nanobanana'
+                // Phase 3B: Visual Style settings
+                visualStyle: {
+                    composition: null,      // null = auto from genre
+                    lighting: null,         // null = auto from genre
+                    colorPalette: null,     // null = auto from genre
+                    mood: null              // optional mood override
+                },
                 // Edit with AI state
                 editingScene: null,     // Scene ID being edited
                 editMaskCanvas: null,   // Canvas element for mask
@@ -3007,6 +3033,7 @@
                 status: 'idle',
                 sceneOrder: [],
                 transitions: {},
+                defaultTransition: 'fade',     // Default transition type
                 music: { enabled: false, trackId: null, volume: 30 },
                 // Enhanced caption settings
                 captions: {
@@ -3031,7 +3058,18 @@
                 transitionTypes: [],
                 captionStyles: [],
                 // UI state for tabbed interface
-                activeTab: 'text'              // 'text', 'audio', 'media', 'transitions'
+                activeTab: 'text',             // 'text', 'audio', 'media', 'transitions'
+                // Phase 3D: Audio Intelligence
+                audioMood: null,               // 'epic' | 'intimate' | 'mysterious' | etc.
+                voiceProfile: null,            // 'narrator-warm' | 'documentary' | etc.
+                transitionSound: null,         // 'whoosh-soft' | 'glitch' | etc.
+                ambienceLayer: null,           // 'nature-forest' | 'urban-city' | etc.
+                // Phase 3E: Smart Assembly Engine
+                assemblyPreset: null,          // 'youtube-engaging' | 'cinematic-film' | etc.
+                pacingProfile: null,           // 'rapid-fire' | 'balanced' | 'cinematic' | etc.
+                beatSyncMode: 'off',           // 'off' | 'subtle' | 'moderate' | 'aggressive' | 'music-video'
+                patternInterrupt: null,        // 'youtube' | 'tiktok' | 'cinema' | etc.
+                bRollStrategy: null            // 'aggressive' | 'moderate' | 'minimal' | etc.
             },
 
             // Preview Engine State
@@ -3055,7 +3093,13 @@
                 outputUrl: null,
                 error: null,
                 selectedQuality: '1080p',
-                selectedRenderQuality: 'balanced'  // fast, balanced, or best
+                selectedRenderQuality: 'balanced',  // fast, balanced, or best
+                // Phase 3C: Export Intelligence
+                selectedPlatform: null,        // null = use wizard platform
+                additionalPlatforms: [],       // for multi-platform export
+                seriesInfo: null,              // { template: 'youtube-series', episodeNumber: 1, seasonNumber: 1 }
+                showAdvancedOptions: false,
+                recommendations: null          // cached recommendations from backend
             },
 
             // Timeline Editor State
@@ -3512,8 +3556,150 @@
 
         function setPacing(pacing) {
             state.content.pacing = pacing;
+
+            // Auto-configure video model duration based on pacing
+            if (!state.content.videoModel) {
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            }
+
+            // Fast pacing = 6s clips, Contemplative = 10s clips (768p only)
+            if (pacing === 'fast') {
+                state.content.videoModel.duration = '6s';
+            } else if (pacing === 'contemplative') {
+                state.content.videoModel.duration = '10s';
+                // 10s clips only support 768p
+                if (state.content.videoModel.resolution === '1080p') {
+                    state.content.videoModel.resolution = '768p';
+                }
+            }
+
             render();
             scheduleAutoSave();
+        }
+
+        // Video Model Configuration Functions
+        function setVideoModelMode(mode) {
+            if (!state.content.videoModel) {
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            }
+
+            state.content.videoModel.mode = mode;
+
+            // Map mode to model
+            const modeToModel = {
+                'quality': 'hailuo-2.3',
+                'fast': 'hailuo-2.3-fast',
+                'continuity': 'hailuo-02'
+            };
+            state.content.videoModel.model = modeToModel[mode] || 'hailuo-2.3';
+
+            render();
+            scheduleAutoSave();
+        }
+
+        function setVideoModelDuration(duration) {
+            if (!state.content.videoModel) {
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            }
+
+            state.content.videoModel.duration = duration;
+
+            // If switching to 10s, force 768p (1080p not supported for 10s)
+            if (duration === '10s' && state.content.videoModel.resolution === '1080p') {
+                state.content.videoModel.resolution = '768p';
+            }
+
+            // Auto-adjust pacing to match duration
+            if (duration === '6s' && state.content.pacing === 'contemplative') {
+                // Keep contemplative but note it's using 6s clips
+            } else if (duration === '10s' && state.content.pacing === 'fast') {
+                state.content.pacing = 'balanced'; // Fast pacing doesn't match 10s clips well
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        function setVideoModelResolution(resolution) {
+            if (!state.content.videoModel) {
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            }
+
+            // 1080p only available for 6s clips
+            if (resolution === '1080p' && state.content.videoModel.duration === '10s') {
+                showToast('1080p resolution is only available for 6s clips', 'warning');
+                return;
+            }
+
+            state.content.videoModel.resolution = resolution;
+            render();
+            scheduleAutoSave();
+        }
+
+        function setProductionMode(mode) {
+            state.content.productionMode = mode;
+
+            // Auto-adjust pacing based on production mode
+            if (mode === 'cinematic') {
+                // Cinematic = slower, more visual breathing room
+                state.content.pacing = 'contemplative';
+            } else if (mode === 'thriller') {
+                // Thriller = medium pacing with strategic pauses
+                state.content.pacing = 'balanced';
+            } else if (mode === 'documentary') {
+                // Documentary = balanced pacing
+                state.content.pacing = 'balanced';
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        function setGenre(genreId) {
+            state.content.genre = genreId;
+            render();
+            scheduleAutoSave();
+        }
+
+        function setContentFormat(formatId) {
+            state.content.contentFormat = formatId;
+            render();
+            scheduleAutoSave();
+        }
+
+        // Phase 3B: Visual Style Control
+        function setVisualStyle(property, value) {
+            if (!state.storyboard.visualStyle) {
+                state.storyboard.visualStyle = {
+                    composition: null,
+                    lighting: null,
+                    colorPalette: null,
+                    mood: null
+                };
+            }
+
+            // Set value (empty string becomes null for "Auto")
+            state.storyboard.visualStyle[property] = value || null;
+
+            // If mood is set, it can auto-suggest other settings
+            // but we don't override user choices
+
+            render();
+            scheduleAutoSave();
+
+            // Show feedback
+            const propertyNames = {
+                mood: 'Mood',
+                lighting: 'Lighting',
+                colorPalette: 'Color Palette',
+                composition: 'Composition'
+            };
+
+            if (value) {
+                showToast(`${propertyNames[property]} set to ${value}`, 'success');
+            } else {
+                showToast(`${propertyNames[property]} set to auto (genre-based)`, 'info');
+            }
         }
 
         function applyTopicSuggestion(topic) {
@@ -3565,8 +3751,15 @@
                     style: state.content.style,
                     topic: topic,
                     tone: state.content.tone || 'engaging',
-                    pacing: state.content.pacing || 'medium',
+                    pacing: state.content.pacing || 'balanced',
                     contentDepth: state.content.contentDepth || 'detailed',
+                    // Phase 2: Hollywood Production Mode
+                    productionMode: state.content.productionMode || 'standard',
+                    // Phase 3A: Genre Reference System
+                    genre: state.content.genre || null,
+                    contentFormat: state.content.contentFormat || 'medium-form',
+                    // Video Model Configuration (for scene timing optimization)
+                    videoModel: state.content.videoModel || { duration: '6s', resolution: '1080p' },
                     additionalInstructions
                 };
 
@@ -3887,7 +4080,16 @@
                         sceneId: sceneId,
                         prompt: prompt,
                         style: state.content.style,
-                        aspectRatio: state.platform.aspectRatio
+                        aspectRatio: state.platform.aspectRatio,
+                        // Phase 3B: Visual Intelligence parameters
+                        genre: state.content.genre || null,
+                        productionMode: state.content.productionMode || 'standard',
+                        mood: state.storyboard.visualStyle?.mood || null,
+                        visualSettings: {
+                            composition: state.storyboard.visualStyle?.composition || null,
+                            lighting: state.storyboard.visualStyle?.lighting || null,
+                            colorPalette: state.storyboard.visualStyle?.colorPalette || null
+                        }
                     });
 
                     if (result.data.success) {
@@ -5835,27 +6037,354 @@
                              style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'fast' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'fast' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
                             <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚡</div>
                             <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Fast</div>
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Quick cuts, dense narration<br>~8s per scene</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Quick cuts, dense narration<br>~6s per scene</div>
                         </div>
-                        <div onclick="setPacing('medium')"
-                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'medium' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'medium' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                        <div onclick="setPacing('balanced')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'balanced' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'balanced' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
                             <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
                             <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Balanced</div>
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Natural flow<br>~12s per scene</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Natural flow<br>~6-10s per scene</div>
                         </div>
-                        <div onclick="setPacing('slow')"
-                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'slow' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'slow' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                        <div onclick="setPacing('contemplative')"
+                             style="padding: 1rem; border-radius: 0.75rem; border: 2px solid ${state.content.pacing === 'contemplative' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${state.content.pacing === 'contemplative' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
                             <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌊</div>
                             <div style="font-weight: 600; color: white; margin-bottom: 0.25rem;">Contemplative</div>
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Visual breathing room<br>~18s per scene</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Visual breathing room<br>~10s per scene</div>
                         </div>
                     </div>
 
                     <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(139, 92, 246, 0.1); border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
                         <div style="font-size: 0.75rem; color: #a78bfa;">
                             📊 For your ${formatDuration(state.platform.targetDuration)} video:
-                            <strong>${Math.round(state.platform.targetDuration / (state.content.pacing === 'fast' ? 8 : state.content.pacing === 'slow' ? 18 : 12))} scenes</strong>
-                            with <strong>${state.content.pacing === 'fast' ? '85%' : state.content.pacing === 'slow' ? '50%' : '70%'}</strong> narration coverage
+                            <strong>${Math.round(state.platform.targetDuration / (state.content.pacing === 'fast' ? 6 : state.content.pacing === 'contemplative' ? 10 : 8))} scenes</strong>
+                            with <strong>${state.content.pacing === 'fast' ? '85%' : state.content.pacing === 'contemplative' ? '50%' : '70%'}</strong> narration coverage
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Hollywood Production Mode Card
+            const productionMode = state.content.productionMode || 'standard';
+            const productionModes = {
+                standard: { icon: '📺', name: 'Standard', desc: 'Clean, professional content', color: '#9ca3af' },
+                documentary: { icon: '🎬', name: 'Documentary', desc: 'Ken Burns style, educational', color: '#3b82f6' },
+                thriller: { icon: '🔮', name: 'Thriller', desc: 'Suspenseful, mystery-driven', color: '#ef4444' },
+                inspirational: { icon: '✨', name: 'Inspirational', desc: 'Uplifting, motivational', color: '#f59e0b' },
+                story: { icon: '📖', name: 'Story', desc: 'Character-driven narrative', color: '#10b981' },
+                cinematic: { icon: '🎥', name: 'Cinematic', desc: 'Film-quality production', color: '#8b5cf6' }
+            };
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎭</div>
+                        <div>
+                            <div class="content-card-title">Production Mode</div>
+                            <div class="content-card-subtitle">Hollywood-style storytelling approach</div>
+                        </div>
+                        <span style="margin-left: auto; font-size: 0.65rem; padding: 0.2rem 0.5rem; background: linear-gradient(135deg, #8b5cf6, #ec4899); border-radius: 1rem; color: white; font-weight: 600;">NEW</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.5rem;">
+                        ${Object.entries(productionModes).map(([id, mode]) => `
+                            <div onclick="setProductionMode('${id}')"
+                                 style="padding: 0.75rem 0.5rem; border-radius: 0.75rem; border: 2px solid ${productionMode === id ? mode.color : 'rgba(255,255,255,0.12)'}; background: ${productionMode === id ? mode.color + '20' : 'rgba(255,255,255,0.03)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                <div style="font-size: 1.25rem; margin-bottom: 0.3rem;">${mode.icon}</div>
+                                <div style="font-weight: 600; color: ${productionMode === id ? mode.color : 'white'}; font-size: 0.75rem;">${mode.name}</div>
+                                <div style="font-size: 0.55rem; color: rgba(255,255,255,0.45); margin-top: 0.15rem; line-height: 1.3;">${mode.desc}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    ${productionMode !== 'standard' ? `
+                    <div style="margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: ${productionModes[productionMode].color}15; border-radius: 0.5rem; border: 1px solid ${productionModes[productionMode].color}30;">
+                        <div style="font-size: 0.7rem; color: ${productionModes[productionMode].color};">
+                            ${productionMode === 'documentary' ? '🎯 Your script will include: authoritative narration, Ken Burns visual style, moments of wonder and discovery' :
+                              productionMode === 'thriller' ? '🎯 Your script will include: tension-building narration, dramatic reveals, mystery-driven structure' :
+                              productionMode === 'inspirational' ? '🎯 Your script will include: motivational arc, transformation story, empowering conclusion' :
+                              productionMode === 'story' ? '🎯 Your script will include: character development, three-act structure, emotional climax' :
+                              '🎯 Your script will include: sparse poetic narration, cinematic visuals, iconic framing'}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+
+            // Phase 3A: Genre Reference Card
+            const selectedGenre = state.content.genre;
+            const selectedFormat = state.content.contentFormat || 'medium-form';
+            const genreLibrary = {
+                // Documentary
+                'documentary-nature': { icon: '🌍', name: 'Nature Doc', category: 'documentary', refs: 'Planet Earth, Our Planet', color: '#10b981' },
+                'documentary-true-crime': { icon: '🔍', name: 'True Crime', category: 'documentary', refs: 'Making a Murderer, The Jinx', color: '#ef4444' },
+                'documentary-social': { icon: '📢', name: 'Social Doc', category: 'documentary', refs: 'The Social Dilemma', color: '#3b82f6' },
+                'documentary-historical': { icon: '📜', name: 'Historical', category: 'documentary', refs: 'Ken Burns, Apollo 11', color: '#f59e0b' },
+                // Educational
+                'educational-explainer': { icon: '💡', name: 'Explainer', category: 'educational', refs: 'Kurzgesagt, Vox', color: '#8b5cf6' },
+                'educational-tutorial': { icon: '🛠️', name: 'Tutorial', category: 'educational', refs: 'Mark Rober, Babish', color: '#06b6d4' },
+                'educational-science': { icon: '🔬', name: 'Science', category: 'educational', refs: 'Veritasium, Vsauce', color: '#10b981' },
+                // Entertainment
+                'entertainment-comedy': { icon: '😂', name: 'Comedy', category: 'entertainment', refs: 'The Office, Key & Peele', color: '#f59e0b' },
+                'entertainment-drama': { icon: '🎭', name: 'Drama', category: 'entertainment', refs: 'Breaking Bad, Succession', color: '#ef4444' },
+                'entertainment-horror': { icon: '👻', name: 'Horror', category: 'entertainment', refs: 'Black Mirror, Get Out', color: '#6366f1' },
+                // Business
+                'business-brand': { icon: '✨', name: 'Brand Story', category: 'business', refs: 'Apple, Nike', color: '#ec4899' },
+                'business-product': { icon: '🚀', name: 'Product', category: 'business', refs: 'Apple reveals, MKBHD', color: '#8b5cf6' },
+                'business-testimonial': { icon: '💬', name: 'Testimonial', category: 'business', refs: 'Shot on iPhone', color: '#10b981' },
+                // Social
+                'social-viral': { icon: '🔥', name: 'Viral', category: 'social', refs: 'MrBeast, TikTok', color: '#ef4444' },
+                'social-storytime': { icon: '📖', name: 'Storytime', category: 'social', refs: 'Reddit stories', color: '#f59e0b' },
+                // Series
+                'series-docuseries': { icon: '📺', name: 'Docuseries', category: 'series', refs: 'Drive to Survive', color: '#3b82f6' }
+            };
+            const formatOptions = {
+                'short-form': { icon: '⚡', name: 'Short', desc: '< 60s' },
+                'medium-form': { icon: '📱', name: 'Medium', desc: '1-5 min' },
+                'long-form': { icon: '🎬', name: 'Long', desc: '5-20 min' },
+                'episodic': { icon: '📺', name: 'Series', desc: 'Episodes' }
+            };
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎯</div>
+                        <div>
+                            <div class="content-card-title">Genre Reference</div>
+                            <div class="content-card-subtitle">Learn from the best productions ever made</div>
+                        </div>
+                        <span style="margin-left: auto; font-size: 0.6rem; padding: 0.2rem 0.5rem; background: linear-gradient(135deg, #f59e0b, #ef4444); border-radius: 1rem; color: white; font-weight: 600;">PRO</span>
+                    </div>
+
+                    <!-- Content Format Selection -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Content Format</div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            ${Object.entries(formatOptions).map(([id, fmt]) => `
+                                <div onclick="setContentFormat('${id}')"
+                                     style="flex: 1; padding: 0.5rem; border-radius: 0.5rem; border: 2px solid ${selectedFormat === id ? '#06b6d4' : 'rgba(255,255,255,0.12)'}; background: ${selectedFormat === id ? 'rgba(6,182,212,0.15)' : 'transparent'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                    <div style="font-size: 1rem;">${fmt.icon}</div>
+                                    <div style="font-size: 0.7rem; font-weight: 600; color: ${selectedFormat === id ? '#06b6d4' : 'white'};">${fmt.name}</div>
+                                    <div style="font-size: 0.55rem; color: rgba(255,255,255,0.4);">${fmt.desc}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Genre Selection -->
+                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Genre Style (Optional)</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; max-height: 180px; overflow-y: auto; padding: 0.25rem;">
+                        <div onclick="setGenre(null)"
+                             style="padding: 0.4rem 0.6rem; border-radius: 0.4rem; border: 1px solid ${!selectedGenre ? '#9ca3af' : 'rgba(255,255,255,0.1)'}; background: ${!selectedGenre ? 'rgba(156,163,175,0.2)' : 'transparent'}; cursor: pointer; display: flex; align-items: center; gap: 0.3rem; transition: all 0.15s;">
+                            <span style="font-size: 0.75rem;">🎯</span>
+                            <span style="font-size: 0.65rem; color: ${!selectedGenre ? 'white' : 'rgba(255,255,255,0.6)'};">Auto</span>
+                        </div>
+                        ${Object.entries(genreLibrary).map(([id, genre]) => `
+                            <div onclick="setGenre('${id}')"
+                                 style="padding: 0.4rem 0.6rem; border-radius: 0.4rem; border: 1px solid ${selectedGenre === id ? genre.color : 'rgba(255,255,255,0.1)'}; background: ${selectedGenre === id ? genre.color + '25' : 'transparent'}; cursor: pointer; display: flex; align-items: center; gap: 0.3rem; transition: all 0.15s;">
+                                <span style="font-size: 0.75rem;">${genre.icon}</span>
+                                <span style="font-size: 0.65rem; color: ${selectedGenre === id ? genre.color : 'rgba(255,255,255,0.6)'};">${genre.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    ${selectedGenre && genreLibrary[selectedGenre] ? `
+                    <div style="margin-top: 0.6rem; padding: 0.5rem 0.65rem; background: ${genreLibrary[selectedGenre].color}15; border-radius: 0.4rem; border: 1px solid ${genreLibrary[selectedGenre].color}30;">
+                        <div style="font-size: 0.65rem; color: ${genreLibrary[selectedGenre].color};">
+                            📚 References: ${genreLibrary[selectedGenre].refs}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+
+            // Phase 3F: Narrative Structure Intelligence Card
+            const narrativePreset = state.content.narrativePreset || '';
+            const storyArc = state.content.storyArc || '';
+            const emotionalJourney = state.content.emotionalJourney || '';
+            const tensionCurve = state.content.tensionCurve || '';
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">📖</div>
+                        <div>
+                            <div class="content-card-title">Narrative Structure</div>
+                            <div class="content-card-subtitle">Professional story architecture for your content</div>
+                        </div>
+                        <span style="margin-left: auto; font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 0.2rem; color: white; font-weight: 600;">AI</span>
+                    </div>
+
+                    <!-- Narrative Preset -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Narrative Preset</div>
+                        <select onchange="setNarrativePreset(this.value)" style="width: 100%; padding: 0.6rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.8rem; cursor: pointer;">
+                            <option value="">Auto (from genre)</option>
+                            <option value="youtube-standard" ${narrativePreset === 'youtube-standard' ? 'selected' : ''}>📺 YouTube Standard</option>
+                            <option value="tiktok-viral" ${narrativePreset === 'tiktok-viral' ? 'selected' : ''}>⚡ TikTok Viral</option>
+                            <option value="cinematic-short" ${narrativePreset === 'cinematic-short' ? 'selected' : ''}>🎬 Cinematic Short</option>
+                            <option value="documentary-feature" ${narrativePreset === 'documentary-feature' ? 'selected' : ''}>📽️ Documentary</option>
+                            <option value="series-episode" ${narrativePreset === 'series-episode' ? 'selected' : ''}>📺 Series Episode</option>
+                            <option value="commercial-spot" ${narrativePreset === 'commercial-spot' ? 'selected' : ''}>📢 Commercial/Ad</option>
+                            <option value="music-video-narrative" ${narrativePreset === 'music-video-narrative' ? 'selected' : ''}>🎵 Music Video</option>
+                            <option value="thriller-short" ${narrativePreset === 'thriller-short' ? 'selected' : ''}>😰 Thriller</option>
+                            <option value="horror-short" ${narrativePreset === 'horror-short' ? 'selected' : ''}>👻 Horror</option>
+                            <option value="inspirational" ${narrativePreset === 'inspirational' ? 'selected' : ''}>🌟 Inspirational</option>
+                        </select>
+                    </div>
+
+                    <!-- Story Arc -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Story Arc</div>
+                        <select onchange="setStoryArc(this.value)" style="width: 100%; padding: 0.6rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.8rem; cursor: pointer;">
+                            <option value="">Auto (from preset)</option>
+                            <option value="three-act" ${storyArc === 'three-act' ? 'selected' : ''}>🎬 Three-Act (Hollywood)</option>
+                            <option value="five-act" ${storyArc === 'five-act' ? 'selected' : ''}>🎭 Five-Act (Shakespeare)</option>
+                            <option value="heros-journey" ${storyArc === 'heros-journey' ? 'selected' : ''}>⚔️ Hero's Journey</option>
+                            <option value="dan-harmon-circle" ${storyArc === 'dan-harmon-circle' ? 'selected' : ''}>🔄 Story Circle (Dan Harmon)</option>
+                            <option value="freytags-pyramid" ${storyArc === 'freytags-pyramid' ? 'selected' : ''}>📐 Freytag's Pyramid</option>
+                            <option value="kishotenketsu" ${storyArc === 'kishotenketsu' ? 'selected' : ''}>🎌 Kishotenketsu (East Asian)</option>
+                            <option value="youtube-retention" ${storyArc === 'youtube-retention' ? 'selected' : ''}>📈 YouTube Retention</option>
+                            <option value="tiktok-viral" ${storyArc === 'tiktok-viral' ? 'selected' : ''}>⚡ TikTok Viral</option>
+                            <option value="problem-solution" ${storyArc === 'problem-solution' ? 'selected' : ''}>💡 Problem-Solution</option>
+                            <option value="before-after-bridge" ${storyArc === 'before-after-bridge' ? 'selected' : ''}>🌉 Before-After-Bridge</option>
+                            <option value="inverted-pyramid" ${storyArc === 'inverted-pyramid' ? 'selected' : ''}>📰 Inverted Pyramid (News)</option>
+                            <option value="documentary-observational" ${storyArc === 'documentary-observational' ? 'selected' : ''}>🎥 Documentary Observational</option>
+                        </select>
+                    </div>
+
+                    <!-- Emotional Journey & Tension (side by side) -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Emotional Arc</div>
+                            <select onchange="setEmotionalJourney(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">
+                                <option value="">Auto</option>
+                                <option value="triumph" ${emotionalJourney === 'triumph' ? 'selected' : ''}>🏆 Triumph</option>
+                                <option value="redemption" ${emotionalJourney === 'redemption' ? 'selected' : ''}>💫 Redemption</option>
+                                <option value="cinderella" ${emotionalJourney === 'cinderella' ? 'selected' : ''}>✨ Cinderella</option>
+                                <option value="tragedy" ${emotionalJourney === 'tragedy' ? 'selected' : ''}>💔 Tragedy</option>
+                                <option value="thriller" ${emotionalJourney === 'thriller' ? 'selected' : ''}>😰 Thriller</option>
+                                <option value="mystery" ${emotionalJourney === 'mystery' ? 'selected' : ''}>🔍 Mystery</option>
+                                <option value="comedy" ${emotionalJourney === 'comedy' ? 'selected' : ''}>😄 Comedy</option>
+                                <option value="horror" ${emotionalJourney === 'horror' ? 'selected' : ''}>👻 Horror</option>
+                                <option value="educational" ${emotionalJourney === 'educational' ? 'selected' : ''}>📚 Educational</option>
+                                <option value="meditative" ${emotionalJourney === 'meditative' ? 'selected' : ''}>🧘 Meditative</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Tension Style</div>
+                            <select onchange="setTensionCurve(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">
+                                <option value="">Auto</option>
+                                <option value="steady-build" ${tensionCurve === 'steady-build' ? 'selected' : ''}>📈 Steady Build</option>
+                                <option value="waves" ${tensionCurve === 'waves' ? 'selected' : ''}>🌊 Waves</option>
+                                <option value="slow-burn" ${tensionCurve === 'slow-burn' ? 'selected' : ''}>🔥 Slow Burn</option>
+                                <option value="flat-with-spikes" ${tensionCurve === 'flat-with-spikes' ? 'selected' : ''}>⚡ Spikes</option>
+                                <option value="escalating-steps" ${tensionCurve === 'escalating-steps' ? 'selected' : ''}>🪜 Steps</option>
+                                <option value="rollercoaster" ${tensionCurve === 'rollercoaster' ? 'selected' : ''}>🎢 Rollercoaster</option>
+                                <option value="double-peak" ${tensionCurve === 'double-peak' ? 'selected' : ''}>⛰️⛰️ Double Peak</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    ${narrativePreset ? `
+                    <div style="margin-top: 0.75rem; padding: 0.6rem; background: rgba(139,92,246,0.1); border-radius: 0.5rem; border: 1px solid rgba(139,92,246,0.2);">
+                        <div style="font-size: 0.65rem; color: #a78bfa;">
+                            ${narrativePreset === 'youtube-standard' ? '💡 Hook in 5s, pattern breaks every 45-60s, strong CTA ending' :
+                              narrativePreset === 'tiktok-viral' ? '💡 Stop the scroll immediately, build to payoff at 80%, loop-worthy ending' :
+                              narrativePreset === 'cinematic-short' ? '💡 Character development focus, slow-burn tension, emotional resolution' :
+                              narrativePreset === 'documentary-feature' ? '💡 Evidence-based reveals, interview integration, reflective ending' :
+                              narrativePreset === 'series-episode' ? '💡 Cliffhanger ending, serial elements, double-peak tension' :
+                              narrativePreset === 'commercial-spot' ? '💡 Brand reveal at 80%, problem-solution arc, strong CTA' :
+                              narrativePreset === 'thriller-short' ? '💡 Twist at 75%, ratcheting tension, revelation climax' :
+                              narrativePreset === 'horror-short' ? '💡 Scares every 45s, flat-with-spikes tension, ambiguous ending' :
+                              narrativePreset === 'inspirational' ? '💡 Transformation arc, escalating emotional peaks, uplifting ending' :
+                              '💡 Optimized narrative structure applied'}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <button onclick="analyzeNarrativePacing()" style="width: 100%; margin-top: 0.75rem; padding: 0.65rem; background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(6,182,212,0.2)); border: 1px solid rgba(139,92,246,0.4); border-radius: 0.5rem; color: white; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"
+                            onmouseenter="this.style.background='linear-gradient(135deg, rgba(139,92,246,0.3), rgba(6,182,212,0.3))'"
+                            onmouseleave="this.style.background='linear-gradient(135deg, rgba(139,92,246,0.2), rgba(6,182,212,0.2))'">
+                        <span>✨</span> Analyze & Optimize Narrative
+                    </button>
+                </div>
+            `;
+
+            // AI Video Model Selection Card
+            const videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            const canUse1080p = videoModel.duration === '6s'; // 1080p only available for 6s
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎬</div>
+                        <div>
+                            <div class="content-card-title">AI Video Model</div>
+                            <div class="content-card-subtitle">Choose your video generation engine</div>
+                        </div>
+                    </div>
+
+                    <!-- Model Mode Selection -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-top: 0.5rem;">
+                        <div onclick="setVideoModelMode('quality')"
+                             style="padding: 0.85rem; border-radius: 0.75rem; border: 2px solid ${videoModel.mode === 'quality' ? '#10b981' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.mode === 'quality' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.25rem; margin-bottom: 0.4rem;">✨</div>
+                            <div style="font-weight: 600; color: ${videoModel.mode === 'quality' ? '#10b981' : 'white'}; font-size: 0.85rem;">Quality</div>
+                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Hailuo 2.3<br>Best visuals</div>
+                        </div>
+                        <div onclick="setVideoModelMode('fast')"
+                             style="padding: 0.85rem; border-radius: 0.75rem; border: 2px solid ${videoModel.mode === 'fast' ? '#f59e0b' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.mode === 'fast' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.25rem; margin-bottom: 0.4rem;">⚡</div>
+                            <div style="font-weight: 600; color: ${videoModel.mode === 'fast' ? '#f59e0b' : 'white'}; font-size: 0.85rem;">Fast</div>
+                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Hailuo 2.3 Fast<br>50% cheaper</div>
+                        </div>
+                        <div onclick="setVideoModelMode('continuity')"
+                             style="padding: 0.85rem; border-radius: 0.75rem; border: 2px solid ${videoModel.mode === 'continuity' ? '#8b5cf6' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.mode === 'continuity' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.05)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                            <div style="font-size: 1.25rem; margin-bottom: 0.4rem;">🔗</div>
+                            <div style="font-weight: 600; color: ${videoModel.mode === 'continuity' ? '#a78bfa' : 'white'}; font-size: 0.85rem;">Continuity</div>
+                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Hailuo 02<br>Seamless scenes</div>
+                        </div>
+                    </div>
+
+                    <!-- Duration & Resolution -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                        <!-- Duration -->
+                        <div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Clip Duration</div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <div onclick="setVideoModelDuration('6s')"
+                                     style="flex: 1; padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${videoModel.duration === '6s' ? '#06b6d4' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.duration === '6s' ? 'rgba(6, 182, 212, 0.15)' : 'transparent'}; cursor: pointer; text-align: center;">
+                                    <div style="font-weight: 600; color: ${videoModel.duration === '6s' ? '#06b6d4' : 'white'}; font-size: 0.9rem;">6s</div>
+                                </div>
+                                <div onclick="setVideoModelDuration('10s')"
+                                     style="flex: 1; padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${videoModel.duration === '10s' ? '#06b6d4' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.duration === '10s' ? 'rgba(6, 182, 212, 0.15)' : 'transparent'}; cursor: pointer; text-align: center;">
+                                    <div style="font-weight: 600; color: ${videoModel.duration === '10s' ? '#06b6d4' : 'white'}; font-size: 0.9rem;">10s</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resolution -->
+                        <div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Resolution</div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <div onclick="setVideoModelResolution('768p')"
+                                     style="flex: 1; padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${videoModel.resolution === '768p' ? '#06b6d4' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.resolution === '768p' ? 'rgba(6, 182, 212, 0.15)' : 'transparent'}; cursor: pointer; text-align: center;">
+                                    <div style="font-weight: 600; color: ${videoModel.resolution === '768p' ? '#06b6d4' : 'white'}; font-size: 0.9rem;">768p</div>
+                                </div>
+                                <div onclick="setVideoModelResolution('1080p')"
+                                     style="flex: 1; padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${videoModel.resolution === '1080p' && canUse1080p ? '#06b6d4' : 'rgba(255,255,255,0.15)'}; background: ${videoModel.resolution === '1080p' && canUse1080p ? 'rgba(6, 182, 212, 0.15)' : 'transparent'}; cursor: ${canUse1080p ? 'pointer' : 'not-allowed'}; text-align: center; opacity: ${canUse1080p ? '1' : '0.4'};">
+                                    <div style="font-weight: 600; color: ${videoModel.resolution === '1080p' && canUse1080p ? '#06b6d4' : 'white'}; font-size: 0.9rem;">1080p</div>
+                                    ${!canUse1080p ? '<div style="font-size: 0.55rem; color: rgba(255,255,255,0.4);">6s only</div>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Model Info -->
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(6, 182, 212, 0.1); border-radius: 0.5rem; border: 1px solid rgba(6, 182, 212, 0.2);">
+                        <div style="font-size: 0.75rem; color: #06b6d4; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>🎬</span>
+                            <span>
+                                <strong>${videoModel.mode === 'quality' ? 'Hailuo 2.3' : videoModel.mode === 'fast' ? 'Hailuo 2.3 Fast' : 'Hailuo 02'}</strong>
+                                • ${videoModel.duration} clips @ ${canUse1080p ? videoModel.resolution : '768p'}
+                                • ~$${videoModel.mode === 'fast' ? '0.14-0.25' : '0.28-0.49'}/clip
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -6302,6 +6831,80 @@
                         </div>
                         <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem; margin-top: 0.5rem;">
                             ${modelConfig.description}
+                        </div>
+                    </div>
+
+                    <!-- Phase 3B: Visual Style Controls -->
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <div style="color: rgba(255,255,255,0.7); font-size: 0.75rem;">🎬 Visual Style</div>
+                            <span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #f59e0b, #ef4444); border-radius: 0.75rem; color: white; font-weight: 600;">PRO</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                            <!-- Mood Selector -->
+                            <div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Mood</div>
+                                <select onchange="setVisualStyle('mood', this.value)" style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.7rem;">
+                                    <option value="" ${!state.storyboard.visualStyle?.mood ? 'selected' : ''}>Auto</option>
+                                    <option value="epic" ${state.storyboard.visualStyle?.mood === 'epic' ? 'selected' : ''}>🎬 Epic</option>
+                                    <option value="intimate" ${state.storyboard.visualStyle?.mood === 'intimate' ? 'selected' : ''}>💝 Intimate</option>
+                                    <option value="mysterious" ${state.storyboard.visualStyle?.mood === 'mysterious' ? 'selected' : ''}>🔮 Mysterious</option>
+                                    <option value="energetic" ${state.storyboard.visualStyle?.mood === 'energetic' ? 'selected' : ''}>⚡ Energetic</option>
+                                    <option value="contemplative" ${state.storyboard.visualStyle?.mood === 'contemplative' ? 'selected' : ''}>🌙 Contemplative</option>
+                                    <option value="tense" ${state.storyboard.visualStyle?.mood === 'tense' ? 'selected' : ''}>😰 Tense</option>
+                                    <option value="hopeful" ${state.storyboard.visualStyle?.mood === 'hopeful' ? 'selected' : ''}>🌅 Hopeful</option>
+                                    <option value="professional" ${state.storyboard.visualStyle?.mood === 'professional' ? 'selected' : ''}>💼 Professional</option>
+                                    <option value="nostalgic" ${state.storyboard.visualStyle?.mood === 'nostalgic' ? 'selected' : ''}>📷 Nostalgic</option>
+                                    <option value="dark" ${state.storyboard.visualStyle?.mood === 'dark' ? 'selected' : ''}>🌑 Dark</option>
+                                </select>
+                            </div>
+                            <!-- Lighting Selector -->
+                            <div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Lighting</div>
+                                <select onchange="setVisualStyle('lighting', this.value)" style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.7rem;">
+                                    <option value="" ${!state.storyboard.visualStyle?.lighting ? 'selected' : ''}>Auto</option>
+                                    <option value="natural" ${state.storyboard.visualStyle?.lighting === 'natural' ? 'selected' : ''}>☀️ Natural</option>
+                                    <option value="golden-hour" ${state.storyboard.visualStyle?.lighting === 'golden-hour' ? 'selected' : ''}>🌅 Golden Hour</option>
+                                    <option value="blue-hour" ${state.storyboard.visualStyle?.lighting === 'blue-hour' ? 'selected' : ''}>🌙 Blue Hour</option>
+                                    <option value="high-key" ${state.storyboard.visualStyle?.lighting === 'high-key' ? 'selected' : ''}>💡 High Key</option>
+                                    <option value="low-key" ${state.storyboard.visualStyle?.lighting === 'low-key' ? 'selected' : ''}>🌑 Low Key/Noir</option>
+                                    <option value="neon" ${state.storyboard.visualStyle?.lighting === 'neon' ? 'selected' : ''}>💜 Neon</option>
+                                    <option value="silhouette" ${state.storyboard.visualStyle?.lighting === 'silhouette' ? 'selected' : ''}>👤 Silhouette</option>
+                                </select>
+                            </div>
+                            <!-- Color Palette Selector -->
+                            <div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Colors</div>
+                                <select onchange="setVisualStyle('colorPalette', this.value)" style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.7rem;">
+                                    <option value="" ${!state.storyboard.visualStyle?.colorPalette ? 'selected' : ''}>Auto</option>
+                                    <option value="teal-orange" ${state.storyboard.visualStyle?.colorPalette === 'teal-orange' ? 'selected' : ''}>🎬 Teal/Orange</option>
+                                    <option value="warm-tones" ${state.storyboard.visualStyle?.colorPalette === 'warm-tones' ? 'selected' : ''}>🔥 Warm</option>
+                                    <option value="cool-tones" ${state.storyboard.visualStyle?.colorPalette === 'cool-tones' ? 'selected' : ''}>❄️ Cool</option>
+                                    <option value="desaturated" ${state.storyboard.visualStyle?.colorPalette === 'desaturated' ? 'selected' : ''}>🌫️ Desaturated</option>
+                                    <option value="high-saturation" ${state.storyboard.visualStyle?.colorPalette === 'high-saturation' ? 'selected' : ''}>🌈 Vibrant</option>
+                                    <option value="pastel" ${state.storyboard.visualStyle?.colorPalette === 'pastel' ? 'selected' : ''}>🎀 Pastel</option>
+                                    <option value="earth-tones" ${state.storyboard.visualStyle?.colorPalette === 'earth-tones' ? 'selected' : ''}>🌿 Earth</option>
+                                    <option value="noir-bw" ${state.storyboard.visualStyle?.colorPalette === 'noir-bw' ? 'selected' : ''}>⬛ B&W Noir</option>
+                                </select>
+                            </div>
+                            <!-- Composition Selector -->
+                            <div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Shot</div>
+                                <select onchange="setVisualStyle('composition', this.value)" style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.7rem;">
+                                    <option value="" ${!state.storyboard.visualStyle?.composition ? 'selected' : ''}>Auto</option>
+                                    <option value="wide-establishing" ${state.storyboard.visualStyle?.composition === 'wide-establishing' ? 'selected' : ''}>🏔️ Wide</option>
+                                    <option value="medium-shot" ${state.storyboard.visualStyle?.composition === 'medium-shot' ? 'selected' : ''}>👤 Medium</option>
+                                    <option value="close-up" ${state.storyboard.visualStyle?.composition === 'close-up' ? 'selected' : ''}>😊 Close-up</option>
+                                    <option value="extreme-close-up" ${state.storyboard.visualStyle?.composition === 'extreme-close-up' ? 'selected' : ''}>👁️ Extreme CU</option>
+                                    <option value="low-angle" ${state.storyboard.visualStyle?.composition === 'low-angle' ? 'selected' : ''}>⬆️ Low Angle</option>
+                                    <option value="birds-eye" ${state.storyboard.visualStyle?.composition === 'birds-eye' ? 'selected' : ''}>🦅 Bird's Eye</option>
+                                    <option value="dutch-angle" ${state.storyboard.visualStyle?.composition === 'dutch-angle' ? 'selected' : ''}>📐 Dutch</option>
+                                    <option value="symmetrical" ${state.storyboard.visualStyle?.composition === 'symmetrical' ? 'selected' : ''}>⚖️ Symmetrical</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="color: rgba(255,255,255,0.4); font-size: 0.6rem; margin-top: 0.4rem;">
+                            💡 "Auto" uses genre-appropriate defaults based on your content settings
                         </div>
                     </div>
                 </div>
@@ -7689,21 +8292,238 @@
 
             html += '</div>';
 
-            // Animate Button
+            // Camera Movement Selection (for Minimax AI Video)
+            var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p' };
+            var manualCameraMovements = (state.animation.cameraMovements && state.animation.cameraMovements[sceneId]) || [];
+            // Get script-generated camera movements if no manual selection
+            var scriptSceneForCamera = state.script.scenes.find(function(s) { return s.id === sceneId; });
+            var scriptCameraMovements = (scriptSceneForCamera && scriptSceneForCamera.cameraMovement) || [];
+            var sceneCameraMovements = manualCameraMovements.length > 0 ? manualCameraMovements : scriptCameraMovements;
+            var hasScriptMovements = manualCameraMovements.length === 0 && scriptCameraMovements.length > 0;
+
+            html += '<div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.08);">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.4rem;">';
+            html += '<span style="font-size: 0.85rem;">🎥</span>';
+            html += '<span style="font-size: 0.75rem; font-weight: 600; color: white;">Camera Movement</span>';
+            html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(6,182,212,0.2); color: #06b6d4; border-radius: 0.25rem;">Minimax AI</span>';
+            if (hasScriptMovements) {
+                html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(139,92,246,0.2); color: #a78bfa; border-radius: 0.25rem; margin-left: 0.25rem;">AI Suggested</span>';
+            }
+            html += '</div>';
+            if (sceneCameraMovements.length > 0) {
+                html += '<span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">' + sceneCameraMovements.length + '/3 ' + (hasScriptMovements ? 'suggested' : 'selected') + '</span>';
+            }
+            html += '</div>';
+
+            // Camera movement buttons (show common ones, max 3 selectable)
+            var cameraOptions = [
+                { id: 'Pan left', icon: '⬅️', label: 'Pan L' },
+                { id: 'Pan right', icon: '➡️', label: 'Pan R' },
+                { id: 'Zoom in', icon: '🔍', label: 'Zoom+' },
+                { id: 'Zoom out', icon: '🔎', label: 'Zoom-' },
+                { id: 'Push in', icon: '⏩', label: 'Push' },
+                { id: 'Pull out', icon: '⏪', label: 'Pull' },
+                { id: 'Tilt up', icon: '⬆️', label: 'Tilt↑' },
+                { id: 'Tilt down', icon: '⬇️', label: 'Tilt↓' },
+                { id: 'Tracking shot', icon: '🎯', label: 'Track' },
+                { id: 'Static shot', icon: '🔲', label: 'Static' }
+            ];
+
+            html += '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">';
+            cameraOptions.forEach(function(cam) {
+                var isSelected = sceneCameraMovements.includes(cam.id);
+                var canSelect = isSelected || sceneCameraMovements.length < 3;
+                html += '<button onclick="toggleCameraMovement(' + sceneId + ', \'' + cam.id + '\')" ' + (!canSelect ? 'disabled' : '') + ' style="padding: 0.35rem 0.5rem; border-radius: 0.35rem; border: 1px solid ' + (isSelected ? '#06b6d4' : 'rgba(255,255,255,0.15)') + '; background: ' + (isSelected ? 'rgba(6,182,212,0.2)' : 'transparent') + '; color: ' + (isSelected ? '#06b6d4' : (canSelect ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)')) + '; font-size: 0.6rem; cursor: ' + (canSelect ? 'pointer' : 'not-allowed') + '; display: flex; align-items: center; gap: 0.2rem; transition: all 0.15s;">';
+                html += '<span style="font-size: 0.7rem;">' + cam.icon + '</span>';
+                html += '<span>' + cam.label + '</span>';
+                html += '</button>';
+            });
+            html += '</div>';
+
+            // Show selected movements preview
+            if (sceneCameraMovements.length > 0) {
+                html += '<div style="margin-top: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(6,182,212,0.1); border-radius: 0.35rem; font-size: 0.65rem; color: #06b6d4;">';
+                html += '📽️ [' + sceneCameraMovements.join(', ') + ']';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Animate Button with Model Info
             var isAnimating = animationStatus === 'generating';
             var canAnimate = hasVoiceover && !isAnimating;
-            html += '<button onclick="animateScene(' + sceneId + ')" ' + (!canAnimate ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (canAnimate ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)') + '; color: ' + (canAnimate ? 'white' : 'rgba(255,255,255,0.4)') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (canAnimate ? 'pointer' : 'not-allowed') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
+            html += '<div style="margin-top: 0.75rem;">';
+            html += '<button onclick="animateSceneWithMinimax(' + sceneId + ')" ' + (!canAnimate ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (canAnimate ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)') + '; color: ' + (canAnimate ? 'white' : 'rgba(255,255,255,0.4)') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (canAnimate ? 'pointer' : 'not-allowed') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
             if (isAnimating) {
-                html += '<span class="animate-spin">⏳</span> Animating...';
+                html += '<span class="animate-spin">⏳</span> Generating AI Video...';
             } else if (!hasVoiceover) {
                 html += '<span>🔒</span> Generate voiceover first';
             } else {
-                html += '<span>🎬</span> Create Animation';
+                html += '<span>🎬</span> Generate ' + videoModel.duration + ' AI Video';
             }
             html += '</button>';
+            // Model info below button
+            html += '<div style="text-align: center; margin-top: 0.35rem; font-size: 0.6rem; color: rgba(255,255,255,0.4);">';
+            html += 'Using ' + (videoModel.model === 'hailuo-2.3' ? 'Hailuo 2.3' : videoModel.model === 'hailuo-2.3-fast' ? 'Hailuo 2.3 Fast' : 'Hailuo 02') + ' @ ' + videoModel.resolution;
+            html += '</div>';
+            html += '</div>';
 
             html += '</div>';
             return html;
+        }
+
+        // Camera movement toggle function
+        function toggleCameraMovement(sceneId, movement) {
+            if (!state.animation.cameraMovements) {
+                state.animation.cameraMovements = {};
+            }
+            if (!state.animation.cameraMovements[sceneId]) {
+                state.animation.cameraMovements[sceneId] = [];
+            }
+
+            var movements = state.animation.cameraMovements[sceneId];
+            var index = movements.indexOf(movement);
+
+            if (index > -1) {
+                // Remove if already selected
+                movements.splice(index, 1);
+            } else if (movements.length < 3) {
+                // Add if under limit
+                movements.push(movement);
+            } else {
+                showToast('Maximum 3 camera movements allowed', 'warning');
+                return;
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        // Animate scene with Minimax AI
+        async function animateSceneWithMinimax(sceneId) {
+            var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p' };
+
+            // Get scene data
+            var storyboardScene = state.storyboard.scenes.find(function(s) { return s.sceneId === sceneId; });
+            var scriptScene = state.script.scenes.find(function(s) { return s.id === sceneId; });
+
+            // Get camera movements: prioritize manual selection, then script-generated, then empty
+            var sceneCameraMovements = (state.animation.cameraMovements && state.animation.cameraMovements[sceneId]) || [];
+            if (sceneCameraMovements.length === 0 && scriptScene && scriptScene.cameraMovement) {
+                // Use camera movements from the AI-generated script
+                sceneCameraMovements = scriptScene.cameraMovement;
+            }
+
+            if (!storyboardScene || !storyboardScene.imageUrl) {
+                showToast('No image available for this scene', 'error');
+                return;
+            }
+
+            // Update animation status
+            var animScene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+            if (!animScene) {
+                animScene = { sceneId: sceneId };
+                state.animation.scenes.push(animScene);
+            }
+            animScene.animationStatus = 'generating';
+            animScene.animationProvider = 'minimax';
+            render();
+
+            try {
+                // Build visual prompt from storyboard + script
+                var visualPrompt = (storyboardScene.prompt || '') + ' ' + (scriptScene.visualDescription || scriptScene.narration || '');
+
+                // Call Minimax API via cloud function
+                var generateMinimaxVideoFn = firebase.functions().httpsCallable('creationWizardGenerateMinimaxVideo');
+                var result = await generateMinimaxVideoFn({
+                    projectId: state.project.id,
+                    sceneId: sceneId,
+                    prompt: visualPrompt.trim().substring(0, 1500),
+                    imageUrl: storyboardScene.imageUrl,
+                    model: videoModel.model,
+                    duration: videoModel.duration,
+                    resolution: videoModel.resolution,
+                    cameraMovements: sceneCameraMovements,
+                    promptOptimizer: true
+                });
+
+                if (result.data.success) {
+                    animScene.minimaxTaskId = result.data.taskId;
+                    animScene.animationStatus = 'processing';
+                    showToast('AI video generation started!', 'success');
+
+                    // Start polling for status
+                    pollMinimaxVideoStatus(sceneId, result.data.taskId);
+                } else {
+                    throw new Error(result.data.error || 'Failed to start video generation');
+                }
+
+            } catch (error) {
+                console.error('Minimax video generation error:', error);
+                animScene.animationStatus = 'error';
+                showToast('Failed to generate AI video: ' + error.message, 'error');
+            }
+
+            render();
+            saveProject();
+        }
+
+        // Poll Minimax video status
+        async function pollMinimaxVideoStatus(sceneId, taskId) {
+            var checkStatusFn = firebase.functions().httpsCallable('creationWizardCheckMinimaxVideoStatus');
+            var maxAttempts = 60; // 5 minutes max (5s intervals)
+            var attempts = 0;
+
+            var pollInterval = setInterval(async function() {
+                attempts++;
+
+                try {
+                    var result = await checkStatusFn({ taskId: taskId });
+
+                    if (result.data.status === 'completed' && result.data.videoUrl) {
+                        clearInterval(pollInterval);
+
+                        // Update scene with video URL
+                        var animScene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+                        if (animScene) {
+                            animScene.videoUrl = result.data.videoUrl;
+                            animScene.animationStatus = 'ready';
+                            animScene.minimaxFileId = result.data.fileId;
+                        }
+
+                        showToast('AI video generated successfully!', 'success');
+                        render();
+                        saveProject();
+
+                    } else if (result.data.status === 'failed') {
+                        clearInterval(pollInterval);
+
+                        var animScene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+                        if (animScene) {
+                            animScene.animationStatus = 'error';
+                        }
+
+                        showToast('AI video generation failed: ' + (result.data.error || 'Unknown error'), 'error');
+                        render();
+
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+
+                        var animScene = state.animation.scenes.find(function(s) { return s.sceneId === sceneId; });
+                        if (animScene) {
+                            animScene.animationStatus = 'error';
+                        }
+
+                        showToast('AI video generation timed out', 'error');
+                        render();
+                    }
+
+                } catch (error) {
+                    console.error('Error polling video status:', error);
+                    // Continue polling on transient errors
+                }
+
+            }, 5000); // Poll every 5 seconds
         }
 
         // Bottom Batch Queue
@@ -9301,6 +10121,102 @@
             html += '</div>'; // Close music controls
             html += '</div>'; // Close background music section
 
+            // Phase 3D: Audio Intelligence Section
+            html += '<div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px;">🎚️ Audio Intelligence</div>';
+            html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #f59e0b, #ef4444); border-radius: 0.2rem; color: white; font-weight: 600;">AI</span>';
+            html += '</div>';
+
+            // Audio Mood Selector (links to Visual Intelligence)
+            var audioMood = state.assembly.audioMood || state.storyboard.visualStyle?.mood || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Audio Mood</label>';
+            html += '<select onchange="setAudioMood(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from genre)</option>';
+            html += '<option value="epic"' + (audioMood === 'epic' ? ' selected' : '') + '>🎬 Epic</option>';
+            html += '<option value="intimate"' + (audioMood === 'intimate' ? ' selected' : '') + '>💝 Intimate</option>';
+            html += '<option value="mysterious"' + (audioMood === 'mysterious' ? ' selected' : '') + '>🔮 Mysterious</option>';
+            html += '<option value="energetic"' + (audioMood === 'energetic' ? ' selected' : '') + '>⚡ Energetic</option>';
+            html += '<option value="contemplative"' + (audioMood === 'contemplative' ? ' selected' : '') + '>🌙 Contemplative</option>';
+            html += '<option value="tense"' + (audioMood === 'tense' ? ' selected' : '') + '>😰 Tense</option>';
+            html += '<option value="hopeful"' + (audioMood === 'hopeful' ? ' selected' : '') + '>🌅 Hopeful</option>';
+            html += '<option value="professional"' + (audioMood === 'professional' ? ' selected' : '') + '>💼 Professional</option>';
+            html += '<option value="nostalgic"' + (audioMood === 'nostalgic' ? ' selected' : '') + '>📷 Nostalgic</option>';
+            html += '<option value="dark"' + (audioMood === 'dark' ? ' selected' : '') + '>🌑 Dark</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Voice Enhancement Profile
+            var voiceProfile = state.assembly.voiceProfile || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Voice Style</label>';
+            html += '<select onchange="setVoiceProfile(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from genre)</option>';
+            html += '<option value="narrator-warm"' + (voiceProfile === 'narrator-warm' ? ' selected' : '') + '>🎙️ Warm Narrator</option>';
+            html += '<option value="narrator-authoritative"' + (voiceProfile === 'narrator-authoritative' ? ' selected' : '') + '>📢 Authoritative</option>';
+            html += '<option value="narrator-intimate"' + (voiceProfile === 'narrator-intimate' ? ' selected' : '') + '>💭 Intimate</option>';
+            html += '<option value="narrator-energetic"' + (voiceProfile === 'narrator-energetic' ? ' selected' : '') + '>⚡ Energetic</option>';
+            html += '<option value="documentary"' + (voiceProfile === 'documentary' ? ' selected' : '') + '>🎬 Documentary</option>';
+            html += '<option value="cinematic-trailer"' + (voiceProfile === 'cinematic-trailer' ? ' selected' : '') + '>🎥 Cinematic Trailer</option>';
+            html += '<option value="podcast"' + (voiceProfile === 'podcast' ? ' selected' : '') + '>🎧 Podcast</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Transition Sound Style
+            var transitionSound = state.assembly.transitionSound || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Transition Sounds</label>';
+            html += '<select onchange="setTransitionSound(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">None</option>';
+            html += '<option value="whoosh-soft"' + (transitionSound === 'whoosh-soft' ? ' selected' : '') + '>🌊 Soft Whoosh</option>';
+            html += '<option value="whoosh-medium"' + (transitionSound === 'whoosh-medium' ? ' selected' : '') + '>💨 Medium Whoosh</option>';
+            html += '<option value="whoosh-hard"' + (transitionSound === 'whoosh-hard' ? ' selected' : '') + '>⚡ Hard Whoosh</option>';
+            html += '<option value="swoosh-magical"' + (transitionSound === 'swoosh-magical' ? ' selected' : '') + '>✨ Magical Swoosh</option>';
+            html += '<option value="glitch"' + (transitionSound === 'glitch' ? ' selected' : '') + '>🔌 Glitch</option>';
+            html += '<option value="tape-stop"' + (transitionSound === 'tape-stop' ? ' selected' : '') + '>📼 Tape Stop</option>';
+            html += '<option value="sub-drop"' + (transitionSound === 'sub-drop' ? ' selected' : '') + '>💥 Sub Drop</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Ambience Layer
+            var ambienceLayer = state.assembly.ambienceLayer || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Ambience Layer</label>';
+            html += '<select onchange="setAmbienceLayer(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">None</option>';
+            html += '<option value="nature-forest"' + (ambienceLayer === 'nature-forest' ? ' selected' : '') + '>🌲 Forest</option>';
+            html += '<option value="nature-ocean"' + (ambienceLayer === 'nature-ocean' ? ' selected' : '') + '>🌊 Ocean</option>';
+            html += '<option value="nature-rain"' + (ambienceLayer === 'nature-rain' ? ' selected' : '') + '>🌧️ Rain</option>';
+            html += '<option value="nature-night"' + (ambienceLayer === 'nature-night' ? ' selected' : '') + '>🌙 Night</option>';
+            html += '<option value="urban-city"' + (ambienceLayer === 'urban-city' ? ' selected' : '') + '>🏙️ City</option>';
+            html += '<option value="urban-cafe"' + (ambienceLayer === 'urban-cafe' ? ' selected' : '') + '>☕ Café</option>';
+            html += '<option value="urban-office"' + (ambienceLayer === 'urban-office' ? ' selected' : '') + '>🏢 Office</option>';
+            html += '<option value="space-scifi"' + (ambienceLayer === 'space-scifi' ? ' selected' : '') + '>🚀 Space/Sci-Fi</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Audio Intelligence Tip
+            if (audioMood) {
+                var moodTips = {
+                    'epic': 'Orchestral swells, brass fanfares, wide dynamics',
+                    'intimate': 'Soft piano, minimal arrangement, gentle pads',
+                    'mysterious': 'Dark drones, sparse elements, tension holds',
+                    'energetic': 'Driving drums, punchy bass, constant momentum',
+                    'contemplative': 'Ambient textures, slow evolution, space',
+                    'tense': 'Staccato strings, building pressure, dissonance',
+                    'hopeful': 'Uplifting strings, major keys, dawn-like builds',
+                    'professional': 'Clean synths, consistent dynamics, polished',
+                    'nostalgic': 'Warm tones, vinyl texture, retro keys',
+                    'dark': 'Sub bass, industrial elements, ominous choir'
+                };
+                html += '<div style="padding: 0.5rem; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); border-radius: 0.4rem; margin-top: 0.5rem;">';
+                html += '<div style="font-size: 0.65rem; color: #a78bfa;">💡 ' + (moodTips[audioMood] || 'Custom audio treatment applied') + '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // Close Audio Intelligence section
+
             return html;
         }
 
@@ -9445,6 +10361,112 @@
                 html += 'Add more scenes to configure transitions';
                 html += '</div>';
             }
+
+            // Phase 3E: Smart Assembly Intelligence Section
+            html += '<div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px;">🎬 Smart Assembly</div>';
+            html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #06b6d4, #8b5cf6); border-radius: 0.2rem; color: white; font-weight: 600;">AI</span>';
+            html += '</div>';
+
+            // Assembly Preset Selector
+            var assemblyPreset = state.assembly.assemblyPreset || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Assembly Preset</label>';
+            html += '<select onchange="setAssemblyPreset(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from genre)</option>';
+            html += '<option value="youtube-engaging"' + (assemblyPreset === 'youtube-engaging' ? ' selected' : '') + '>🎯 YouTube Engaging</option>';
+            html += '<option value="tiktok-viral"' + (assemblyPreset === 'tiktok-viral' ? ' selected' : '') + '>⚡ TikTok Viral</option>';
+            html += '<option value="cinematic-film"' + (assemblyPreset === 'cinematic-film' ? ' selected' : '') + '>🎬 Cinematic Film</option>';
+            html += '<option value="documentary"' + (assemblyPreset === 'documentary' ? ' selected' : '') + '>📽️ Documentary</option>';
+            html += '<option value="music-video"' + (assemblyPreset === 'music-video' ? ' selected' : '') + '>🎵 Music Video</option>';
+            html += '<option value="commercial-ad"' + (assemblyPreset === 'commercial-ad' ? ' selected' : '') + '>📺 Commercial/Ad</option>';
+            html += '<option value="educational"' + (assemblyPreset === 'educational' ? ' selected' : '') + '>📚 Educational</option>';
+            html += '<option value="asmr-relaxation"' + (assemblyPreset === 'asmr-relaxation' ? ' selected' : '') + '>🌙 ASMR/Relaxation</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Pacing Profile Selector
+            var pacingProfile = state.assembly.pacingProfile || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Pacing Profile</label>';
+            html += '<select onchange="setPacingProfile(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from preset)</option>';
+            html += '<option value="rapid-fire"' + (pacingProfile === 'rapid-fire' ? ' selected' : '') + '>⚡ Rapid Fire (1-2s)</option>';
+            html += '<option value="fast"' + (pacingProfile === 'fast' ? ' selected' : '') + '>🏃 Fast (2-3s)</option>';
+            html += '<option value="dynamic"' + (pacingProfile === 'dynamic' ? ' selected' : '') + '>📈 Dynamic (varies)</option>';
+            html += '<option value="balanced"' + (pacingProfile === 'balanced' ? ' selected' : '') + '>⚖️ Balanced (3-5s)</option>';
+            html += '<option value="contemplative"' + (pacingProfile === 'contemplative' ? ' selected' : '') + '>🧘 Contemplative (5-8s)</option>';
+            html += '<option value="cinematic"' + (pacingProfile === 'cinematic' ? ' selected' : '') + '>🎥 Cinematic (6-12s)</option>';
+            html += '<option value="episodic"' + (pacingProfile === 'episodic' ? ' selected' : '') + '>📺 Episodic (structured)</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Beat Sync Mode Selector
+            var beatSyncMode = state.assembly.beatSyncMode || 'off';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Beat Synchronization</label>';
+            html += '<select onchange="setBeatSyncMode(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="off"' + (beatSyncMode === 'off' ? ' selected' : '') + '>🔇 Off</option>';
+            html += '<option value="subtle"' + (beatSyncMode === 'subtle' ? ' selected' : '') + '>🎵 Subtle (phrases)</option>';
+            html += '<option value="moderate"' + (beatSyncMode === 'moderate' ? ' selected' : '') + '>🎶 Moderate (measures)</option>';
+            html += '<option value="aggressive"' + (beatSyncMode === 'aggressive' ? ' selected' : '') + '>🥁 Aggressive (beats)</option>';
+            html += '<option value="music-video"' + (beatSyncMode === 'music-video' ? ' selected' : '') + '>⚡ Music Video (every beat)</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Pattern Interrupt Strategy
+            var patternInterrupt = state.assembly.patternInterrupt || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Pattern Interrupts</label>';
+            html += '<select onchange="setPatternInterrupt(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from platform)</option>';
+            html += '<option value="youtube"' + (patternInterrupt === 'youtube' ? ' selected' : '') + '>📺 YouTube (every 45-60s)</option>';
+            html += '<option value="tiktok"' + (patternInterrupt === 'tiktok' ? ' selected' : '') + '>⚡ TikTok (every 3-5s)</option>';
+            html += '<option value="instagram"' + (patternInterrupt === 'instagram' ? ' selected' : '') + '>📱 Instagram (every 15-20s)</option>';
+            html += '<option value="cinema"' + (patternInterrupt === 'cinema' ? ' selected' : '') + '>🎬 Cinema (story beats)</option>';
+            html += '<option value="documentary"' + (patternInterrupt === 'documentary' ? ' selected' : '') + '>📽️ Documentary (every 90-120s)</option>';
+            html += '<option value="minimal"' + (patternInterrupt === 'minimal' ? ' selected' : '') + '>🌙 Minimal (rare)</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // B-Roll Strategy
+            var bRollStrategy = state.assembly.bRollStrategy || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">B-Roll Strategy</label>';
+            html += '<select onchange="setBRollStrategy(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from genre)</option>';
+            html += '<option value="aggressive"' + (bRollStrategy === 'aggressive' ? ' selected' : '') + '>⚡ Aggressive (50-70%)</option>';
+            html += '<option value="moderate"' + (bRollStrategy === 'moderate' ? ' selected' : '') + '>📊 Moderate (30-50%)</option>';
+            html += '<option value="minimal"' + (bRollStrategy === 'minimal' ? ' selected' : '') + '>🔹 Minimal (10-30%)</option>';
+            html += '<option value="talking-head"' + (bRollStrategy === 'talking-head' ? ' selected' : '') + '>🎙️ Talking Head Focus</option>';
+            html += '<option value="montage"' + (bRollStrategy === 'montage' ? ' selected' : '') + '>🎬 Montage Heavy (70%+)</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Smart Assembly Tips
+            var tipMessages = {
+                'youtube-engaging': 'Hook in first 5s, pattern breaks every 45-60s, visual variety',
+                'tiktok-viral': 'Rapid cuts, text overlays, trending transitions, high energy',
+                'cinematic-film': 'Motivated cuts, emotional pacing, film language transitions',
+                'documentary': 'Evidence-based cuts, archival integration, interview rhythm',
+                'music-video': 'Beat-synced cuts, creative transitions, performance focus',
+                'commercial-ad': 'Feature highlights, call-to-action timing, brand reveals',
+                'educational': 'Concept reinforcement, visual aids timing, retention points',
+                'asmr-relaxation': 'Slow dissolves, minimal cuts, ambient flow'
+            };
+            if (assemblyPreset && tipMessages[assemblyPreset]) {
+                html += '<div style="padding: 0.5rem; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 0.4rem; margin-top: 0.5rem;">';
+                html += '<div style="font-size: 0.65rem; color: #22d3ee;">💡 ' + tipMessages[assemblyPreset] + '</div>';
+                html += '</div>';
+            }
+
+            // Get AI Recommendations Button
+            html += '<button onclick="getAssemblyRecommendationsForProject()" style="width: 100%; margin-top: 0.75rem; padding: 0.6rem; background: linear-gradient(135deg, rgba(6,182,212,0.2), rgba(139,92,246,0.2)); border: 1px solid rgba(6,182,212,0.4); border-radius: 0.4rem; color: white; font-size: 0.7rem; cursor: pointer; transition: all 0.2s;" onmouseenter="this.style.background=\'linear-gradient(135deg, rgba(6,182,212,0.3), rgba(139,92,246,0.3))\'" onmouseleave="this.style.background=\'linear-gradient(135deg, rgba(6,182,212,0.2), rgba(139,92,246,0.2))\'">';
+            html += '✨ Get AI Assembly Recommendations';
+            html += '</button>';
+
+            html += '</div>'; // Close Smart Assembly section
 
             return html;
         }
@@ -10063,6 +11085,458 @@
                 previewEngine.musicVolume = volume / 100;
             }
             render();
+        }
+
+        // Phase 3D: Audio Intelligence Functions
+        function setAudioMood(mood) {
+            state.assembly.audioMood = mood || null;
+
+            // Show mood-specific feedback
+            const moodNames = {
+                'epic': 'Epic - Orchestral swells & wide dynamics',
+                'intimate': 'Intimate - Soft piano & gentle pads',
+                'mysterious': 'Mysterious - Dark drones & tension',
+                'energetic': 'Energetic - Driving drums & momentum',
+                'contemplative': 'Contemplative - Ambient & reflective',
+                'tense': 'Tense - Building pressure & suspense',
+                'hopeful': 'Hopeful - Uplifting & inspiring',
+                'professional': 'Professional - Clean & polished',
+                'nostalgic': 'Nostalgic - Warm vintage tones',
+                'dark': 'Dark - Ominous & heavy'
+            };
+
+            if (mood) {
+                showToast(`Audio mood: ${moodNames[mood] || mood}`, 'success');
+            } else {
+                showToast('Audio mood: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setVoiceProfile(profile) {
+            state.assembly.voiceProfile = profile || null;
+
+            const profileNames = {
+                'narrator-warm': 'Warm Narrator',
+                'narrator-authoritative': 'Authoritative',
+                'narrator-intimate': 'Intimate',
+                'narrator-energetic': 'Energetic',
+                'documentary': 'Documentary',
+                'cinematic-trailer': 'Cinematic Trailer',
+                'podcast': 'Podcast'
+            };
+
+            if (profile) {
+                showToast(`Voice style: ${profileNames[profile] || profile}`, 'success');
+            } else {
+                showToast('Voice style: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setTransitionSound(sound) {
+            state.assembly.transitionSound = sound || null;
+
+            if (sound) {
+                const soundNames = {
+                    'whoosh-soft': 'Soft Whoosh',
+                    'whoosh-medium': 'Medium Whoosh',
+                    'whoosh-hard': 'Hard Whoosh',
+                    'swoosh-magical': 'Magical Swoosh',
+                    'glitch': 'Glitch',
+                    'tape-stop': 'Tape Stop',
+                    'sub-drop': 'Sub Drop'
+                };
+                showToast(`Transition sound: ${soundNames[sound] || sound}`, 'success');
+            } else {
+                showToast('Transition sounds disabled', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setAmbienceLayer(ambience) {
+            state.assembly.ambienceLayer = ambience || null;
+
+            if (ambience) {
+                const ambienceNames = {
+                    'nature-forest': 'Forest ambience',
+                    'nature-ocean': 'Ocean waves',
+                    'nature-rain': 'Rain sounds',
+                    'nature-night': 'Night atmosphere',
+                    'urban-city': 'City sounds',
+                    'urban-cafe': 'Café ambience',
+                    'urban-office': 'Office atmosphere',
+                    'space-scifi': 'Space/Sci-Fi atmosphere'
+                };
+                showToast(`Ambience: ${ambienceNames[ambience] || ambience}`, 'success');
+            } else {
+                showToast('Ambience layer disabled', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        async function getAudioRecommendationsForProject() {
+            try {
+                const getRecommendations = functions.httpsCallable('creationWizardGetAudioRecommendations');
+                const result = await getRecommendations({
+                    genre: state.content.genre,
+                    mood: state.assembly.audioMood || state.storyboard.visualStyle?.mood,
+                    productionMode: state.content.productionMode,
+                    sceneEnergy: 'medium',
+                    hasVoiceover: true
+                });
+
+                if (result.data.success) {
+                    return result.data.recommendations;
+                }
+            } catch (error) {
+                console.error('Failed to get audio recommendations:', error);
+            }
+            return null;
+        }
+
+        // Phase 3E: Smart Assembly Intelligence Functions
+        function setAssemblyPreset(preset) {
+            state.assembly.assemblyPreset = preset || null;
+
+            const presetNames = {
+                'youtube-engaging': 'YouTube Engaging - Hook-driven, pattern breaks',
+                'tiktok-viral': 'TikTok Viral - Rapid cuts, trending style',
+                'cinematic-film': 'Cinematic Film - Motivated cuts, film language',
+                'documentary': 'Documentary - Evidence-based, interview rhythm',
+                'music-video': 'Music Video - Beat-synced, creative transitions',
+                'commercial-ad': 'Commercial/Ad - Feature highlights, CTA timing',
+                'educational': 'Educational - Concept reinforcement, retention',
+                'asmr-relaxation': 'ASMR/Relaxation - Slow dissolves, ambient'
+            };
+
+            if (preset) {
+                showToast(`Assembly preset: ${presetNames[preset] || preset}`, 'success');
+            } else {
+                showToast('Assembly preset: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setPacingProfile(profile) {
+            state.assembly.pacingProfile = profile || null;
+
+            const profileNames = {
+                'rapid-fire': 'Rapid Fire (1-2s cuts)',
+                'fast': 'Fast (2-3s cuts)',
+                'dynamic': 'Dynamic (varies with content)',
+                'balanced': 'Balanced (3-5s cuts)',
+                'contemplative': 'Contemplative (5-8s cuts)',
+                'cinematic': 'Cinematic (6-12s cuts)',
+                'episodic': 'Episodic (structured rhythm)'
+            };
+
+            if (profile) {
+                showToast(`Pacing: ${profileNames[profile] || profile}`, 'success');
+            } else {
+                showToast('Pacing: Auto (from preset)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setBeatSyncMode(mode) {
+            state.assembly.beatSyncMode = mode || 'off';
+
+            const modeNames = {
+                'off': 'Beat sync disabled',
+                'subtle': 'Subtle - Cut on musical phrases',
+                'moderate': 'Moderate - Cut on measures',
+                'aggressive': 'Aggressive - Cut on beats',
+                'music-video': 'Music Video - Every beat triggers cut'
+            };
+
+            showToast(`Beat sync: ${modeNames[mode] || mode}`, 'success');
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setPatternInterrupt(strategy) {
+            state.assembly.patternInterrupt = strategy || null;
+
+            const strategyNames = {
+                'youtube': 'YouTube - Pattern breaks every 45-60s',
+                'tiktok': 'TikTok - High frequency every 3-5s',
+                'instagram': 'Instagram - Medium frequency 15-20s',
+                'cinema': 'Cinema - Story beat driven',
+                'documentary': 'Documentary - Slower 90-120s',
+                'minimal': 'Minimal - Rare interrupts'
+            };
+
+            if (strategy) {
+                showToast(`Pattern interrupts: ${strategyNames[strategy] || strategy}`, 'success');
+            } else {
+                showToast('Pattern interrupts: Auto (from platform)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setBRollStrategy(strategy) {
+            state.assembly.bRollStrategy = strategy || null;
+
+            const strategyNames = {
+                'aggressive': 'Aggressive - 50-70% B-roll coverage',
+                'moderate': 'Moderate - 30-50% B-roll coverage',
+                'minimal': 'Minimal - 10-30% B-roll coverage',
+                'talking-head': 'Talking Head Focus - Minimal cutaways',
+                'montage': 'Montage Heavy - 70%+ visual sequences'
+            };
+
+            if (strategy) {
+                showToast(`B-Roll: ${strategyNames[strategy] || strategy}`, 'success');
+            } else {
+                showToast('B-Roll strategy: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        async function getAssemblyRecommendationsForProject() {
+            showToast('Analyzing project for assembly recommendations...', 'info');
+
+            try {
+                const functions = firebase.functions();
+                const buildPlan = functions.httpsCallable('creationWizardBuildAssemblyPlan');
+                const result = await buildPlan({
+                    genre: state.content.genre,
+                    platform: state.export?.platform || 'youtube',
+                    duration: calculateTotalDuration(),
+                    sceneCount: (state.script.scenes || []).length,
+                    mood: state.assembly.audioMood || state.storyboard.visualStyle?.mood,
+                    preset: state.assembly.assemblyPreset,
+                    hasMusic: state.assembly.music?.enabled,
+                    tempo: state.assembly.music?.tempo || 120
+                });
+
+                if (result.data.success && result.data.plan) {
+                    const plan = result.data.plan;
+
+                    // Apply recommendations
+                    if (plan.preset && !state.assembly.assemblyPreset) {
+                        state.assembly.assemblyPreset = plan.preset;
+                    }
+                    if (plan.pacing && !state.assembly.pacingProfile) {
+                        state.assembly.pacingProfile = plan.pacing.profile;
+                    }
+                    if (plan.beatSync && !state.assembly.beatSyncMode) {
+                        state.assembly.beatSyncMode = plan.beatSync.mode;
+                    }
+
+                    showToast(`AI recommendations applied! Preset: ${plan.preset || 'custom'}`, 'success');
+                    render();
+                } else {
+                    showToast('Using default assembly settings', 'info');
+                }
+            } catch (error) {
+                console.error('Failed to get assembly recommendations:', error);
+                showToast('Could not get AI recommendations', 'error');
+            }
+        }
+
+        function calculateTotalDuration() {
+            const scenes = state.script.scenes || [];
+            return scenes.reduce((total, scene) => total + (scene.duration || 5), 0);
+        }
+
+        // Phase 3F: Narrative Structure Intelligence Functions
+        function setNarrativePreset(preset) {
+            state.content.narrativePreset = preset || null;
+
+            const presetNames = {
+                'youtube-standard': 'YouTube Standard - Hook-driven with pattern breaks',
+                'tiktok-viral': 'TikTok Viral - Rapid hook, payoff at 80%',
+                'cinematic-short': 'Cinematic Short - Character-focused drama',
+                'documentary-feature': 'Documentary - Evidence-based structure',
+                'series-episode': 'Series Episode - Cliffhanger ending',
+                'commercial-spot': 'Commercial - Problem-solution with CTA',
+                'music-video-narrative': 'Music Video - Beat-synced narrative',
+                'thriller-short': 'Thriller - Twist-driven tension',
+                'horror-short': 'Horror - Scare-paced structure',
+                'inspirational': 'Inspirational - Transformation arc'
+            };
+
+            if (preset) {
+                showToast(`Narrative preset: ${presetNames[preset] || preset}`, 'success');
+            } else {
+                showToast('Narrative preset: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setStoryArc(arc) {
+            state.content.storyArc = arc || null;
+
+            const arcNames = {
+                'three-act': 'Three-Act Structure (Hollywood)',
+                'five-act': 'Five-Act Structure (Shakespeare)',
+                'heros-journey': "Hero's Journey (Campbell)",
+                'dan-harmon-circle': 'Story Circle (Dan Harmon)',
+                'freytags-pyramid': "Freytag's Pyramid",
+                'kishotenketsu': 'Kishotenketsu (East Asian)',
+                'youtube-retention': 'YouTube Retention Structure',
+                'tiktok-viral': 'TikTok Viral Structure',
+                'problem-solution': 'Problem-Solution',
+                'before-after-bridge': 'Before-After-Bridge',
+                'inverted-pyramid': 'Inverted Pyramid (News)',
+                'documentary-observational': 'Documentary Observational'
+            };
+
+            if (arc) {
+                showToast(`Story arc: ${arcNames[arc] || arc}`, 'success');
+            } else {
+                showToast('Story arc: Auto (from preset)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setEmotionalJourney(journey) {
+            state.content.emotionalJourney = journey || null;
+
+            const journeyNames = {
+                'triumph': 'Triumph - Low to high emotional arc',
+                'redemption': 'Redemption - Fall then rise',
+                'cinderella': 'Cinderella - Rise, fall, rise pattern',
+                'tragedy': 'Tragedy - High to low arc',
+                'thriller': 'Thriller - Tension with peaks',
+                'mystery': 'Mystery - Curiosity building',
+                'comedy': 'Comedy - Ups and downs, happy ending',
+                'horror': 'Horror - Dread building with shocks',
+                'educational': 'Educational - Steady engagement',
+                'meditative': 'Meditative - Calm throughout'
+            };
+
+            if (journey) {
+                showToast(`Emotional arc: ${journeyNames[journey] || journey}`, 'success');
+            } else {
+                showToast('Emotional arc: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setTensionCurve(curve) {
+            state.content.tensionCurve = curve || null;
+
+            const curveNames = {
+                'steady-build': 'Steady Build - Continuous increase',
+                'waves': 'Waves - Build and release cycles',
+                'slow-burn': 'Slow Burn - Gradual to explosive',
+                'flat-with-spikes': 'Spikes - Calm with sudden peaks',
+                'escalating-steps': 'Steps - Stepped increases',
+                'rollercoaster': 'Rollercoaster - Extreme ups/downs',
+                'double-peak': 'Double Peak - Two climaxes'
+            };
+
+            if (curve) {
+                showToast(`Tension style: ${curveNames[curve] || curve}`, 'success');
+            } else {
+                showToast('Tension style: Auto (from preset)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        async function analyzeNarrativePacing() {
+            const scenes = state.script.scenes || [];
+            if (scenes.length === 0) {
+                showToast('Generate a script first to analyze narrative pacing', 'info');
+                return;
+            }
+
+            showToast('Analyzing narrative structure...', 'info');
+
+            try {
+                const functions = firebase.functions();
+                const analyzePacing = functions.httpsCallable('creationWizardAnalyzeNarrativePacing');
+                const result = await analyzePacing({
+                    scenes: scenes.map(s => ({ id: s.id, duration: s.duration || 5 })),
+                    genre: state.content.genre,
+                    preset: state.content.narrativePreset,
+                    targetDuration: calculateTotalDuration()
+                });
+
+                if (result.data.success) {
+                    const { structure, analysis, overallRecommendations } = result.data;
+
+                    // Store the analysis for display
+                    state.content.narrativeAnalysis = {
+                        structure,
+                        analysis,
+                        recommendations: overallRecommendations
+                    };
+
+                    // Apply the recommended structure if not already set
+                    if (!state.content.storyArc && structure.arc) {
+                        state.content.storyArc = structure.arc;
+                    }
+                    if (!state.content.emotionalJourney && structure.emotionalJourney) {
+                        state.content.emotionalJourney = structure.emotionalJourney;
+                    }
+
+                    // Show summary
+                    const suggestions = analysis.filter(a => a.suggestions && a.suggestions.length > 0);
+                    if (suggestions.length > 0) {
+                        showToast(`Analyzed! ${suggestions.length} scenes have pacing suggestions`, 'success');
+                    } else {
+                        showToast(`Perfect! All ${scenes.length} scenes align with ${structure.arc} structure`, 'success');
+                    }
+
+                    render();
+                } else {
+                    showToast('Analysis complete - using current structure', 'info');
+                }
+            } catch (error) {
+                console.error('Failed to analyze narrative:', error);
+                showToast('Could not analyze narrative structure', 'error');
+            }
+        }
+
+        async function getNarrativeRecommendationsForProject() {
+            try {
+                const functions = firebase.functions();
+                const buildStructure = functions.httpsCallable('creationWizardBuildNarrativeStructure');
+                const result = await buildStructure({
+                    genre: state.content.genre,
+                    duration: calculateTotalDuration(),
+                    platform: state.export?.platform || 'youtube',
+                    preset: state.content.narrativePreset,
+                    sceneCount: (state.script.scenes || []).length,
+                    mood: state.assembly.audioMood || state.storyboard.visualStyle?.mood
+                });
+
+                if (result.data.success) {
+                    return result.data.structure;
+                }
+            } catch (error) {
+                console.error('Failed to get narrative recommendations:', error);
+            }
+            return null;
         }
 
         // Helper functions to update preview settings
@@ -13646,6 +15120,97 @@
                 html += '</div>';
             }
 
+            // Phase 3C: Export Intelligence - Platform Selection
+            html += '<div style="margin-bottom: 1.25rem;">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.85rem; font-weight: 600; color: white;">🎯 Target Platform</div>';
+            html += '<span style="font-size: 0.6rem; padding: 0.2rem 0.5rem; background: linear-gradient(135deg, #f59e0b, #ef4444); border-radius: 0.25rem; color: white; font-weight: 600;">SMART</span>';
+            html += '</div>';
+
+            // Platform quick select grid
+            var exportPlatforms = [
+                { id: 'youtube-standard', icon: '📺', name: 'YouTube', aspect: '16:9' },
+                { id: 'youtube-shorts', icon: '🎬', name: 'YT Shorts', aspect: '9:16' },
+                { id: 'tiktok-standard', icon: '🎵', name: 'TikTok', aspect: '9:16' },
+                { id: 'instagram-reels', icon: '📸', name: 'Reels', aspect: '9:16' },
+                { id: 'linkedin-video', icon: '💼', name: 'LinkedIn', aspect: '16:9' },
+                { id: 'twitter-video', icon: '🐦', name: 'Twitter/X', aspect: '16:9' }
+            ];
+
+            var selectedExportPlatform = state.export.selectedPlatform || state.platform.selected || 'youtube';
+            // Map wizard platform to export platform
+            var platformMapping = {
+                'youtube': 'youtube-standard',
+                'youtube-shorts': 'youtube-shorts',
+                'tiktok': 'tiktok-standard',
+                'instagram': 'instagram-reels',
+                'linkedin': 'linkedin-video',
+                'twitter': 'twitter-video'
+            };
+            if (platformMapping[selectedExportPlatform]) {
+                selectedExportPlatform = platformMapping[selectedExportPlatform];
+            }
+
+            html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;">';
+            for (var i = 0; i < exportPlatforms.length; i++) {
+                var ep = exportPlatforms[i];
+                var isActive = selectedExportPlatform === ep.id;
+                var epBorder = isActive ? 'rgba(139,92,246,0.6)' : 'rgba(255,255,255,0.15)';
+                var epBg = isActive ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)';
+
+                html += '<button onclick="setExportPlatform(\'' + ep.id + '\')" style="padding: 0.5rem; border-radius: 0.4rem; border: 1px solid ' + epBorder + '; background: ' + epBg + '; color: white; cursor: pointer; text-align: center;">';
+                html += '<div style="font-size: 1rem;">' + ep.icon + '</div>';
+                html += '<div style="font-size: 0.7rem; font-weight: 500;">' + ep.name + '</div>';
+                html += '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">' + ep.aspect + '</div>';
+                html += '</button>';
+            }
+            html += '</div>';
+
+            // Platform Intelligence Tips
+            var platformTips = {
+                'youtube-standard': { hook: '30s', optimal: '8-15 min', tip: 'Use chapters and end screens' },
+                'youtube-shorts': { hook: '3s', optimal: '30-58s', tip: 'Loop-friendly content performs best' },
+                'tiktok-standard': { hook: '2s', optimal: '21-34s', tip: 'Trending sounds boost reach 40%' },
+                'instagram-reels': { hook: '2s', optimal: '15-30s', tip: 'Saves and shares boost algorithm' },
+                'linkedin-video': { hook: '5s', optimal: '30-120s', tip: 'Native captions are essential' },
+                'twitter-video': { hook: '3s', optimal: '15-60s', tip: 'Assume muted autoplay' }
+            };
+            var currentTip = platformTips[selectedExportPlatform] || platformTips['youtube-standard'];
+
+            html += '<div style="margin-top: 0.5rem; padding: 0.6rem; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); border-radius: 0.4rem;">';
+            html += '<div style="display: flex; gap: 1rem; font-size: 0.7rem;">';
+            html += '<div><span style="color: rgba(255,255,255,0.5);">Hook:</span> <span style="color: #a78bfa;">' + currentTip.hook + '</span></div>';
+            html += '<div><span style="color: rgba(255,255,255,0.5);">Optimal:</span> <span style="color: #10b981;">' + currentTip.optimal + '</span></div>';
+            html += '</div>';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.7); margin-top: 0.35rem;">💡 ' + currentTip.tip + '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Duration check warning
+            var durationWarning = '';
+            if (selectedExportPlatform === 'youtube-shorts' && totalDuration > 60) {
+                durationWarning = 'Video exceeds 60s Shorts limit. Will be split or trimmed.';
+            } else if (selectedExportPlatform === 'tiktok-standard' && totalDuration > 60) {
+                durationWarning = 'Consider TikTok Extended for videos over 60s.';
+            } else if (selectedExportPlatform === 'instagram-reels' && totalDuration > 90) {
+                durationWarning = 'Exceeds 90s Reels limit. Content will be trimmed.';
+            }
+
+            if (durationWarning) {
+                html += '<div style="margin-bottom: 1rem; padding: 0.6rem; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 0.4rem;">';
+                html += '<div style="font-size: 0.75rem; color: #f59e0b;">⚠️ ' + durationWarning + '</div>';
+                html += '</div>';
+            }
+
+            // Multi-Platform Export Toggle
+            html += '<div style="margin-bottom: 1.25rem;">';
+            html += '<button onclick="toggleMultiPlatformExport()" style="width: 100%; padding: 0.6rem; border-radius: 0.4rem; border: 1px dashed rgba(255,255,255,0.2); background: transparent; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
+            html += '<span>➕</span>';
+            html += '<span>Export to Multiple Platforms</span>';
+            html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(6,182,212,0.2); border-radius: 0.2rem; color: #06b6d4;">PRO</span>';
+            html += '</button>';
+            html += '</div>';
+
             // Quality Selection
             html += '<div style="margin-bottom: 1.25rem;">';
             html += '<div style="font-size: 0.85rem; font-weight: 600; color: white; margin-bottom: 0.75rem;">⚙️ Export Quality</div>';
@@ -13857,6 +15422,85 @@
             if (!state.export) state.export = {};
             state.export.selectedRenderQuality = quality;
             render();
+        }
+
+        // Phase 3C: Export Intelligence Functions
+        function setExportPlatform(platformId) {
+            if (!state.export) state.export = {};
+            state.export.selectedPlatform = platformId;
+
+            // Show platform-specific tips
+            const platformNames = {
+                'youtube-standard': 'YouTube Standard',
+                'youtube-shorts': 'YouTube Shorts',
+                'tiktok-standard': 'TikTok',
+                'instagram-reels': 'Instagram Reels',
+                'linkedin-video': 'LinkedIn',
+                'twitter-video': 'Twitter/X'
+            };
+
+            showToast(`Export target: ${platformNames[platformId] || platformId}`, 'success');
+            render();
+        }
+
+        function toggleMultiPlatformExport() {
+            showToast('Multi-platform export coming soon! Export to multiple platforms at once.', 'info');
+            // Future: Open multi-platform selection modal
+        }
+
+        function toggleSeriesMode() {
+            if (!state.export.seriesInfo) {
+                state.export.seriesInfo = {
+                    template: 'youtube-series',
+                    episodeNumber: 1,
+                    seasonNumber: 1,
+                    seriesName: state.project.name || 'My Series'
+                };
+                showToast('Series mode enabled', 'success');
+            } else {
+                state.export.seriesInfo = null;
+                showToast('Series mode disabled', 'info');
+            }
+            render();
+        }
+
+        function setSeriesTemplate(template) {
+            if (!state.export.seriesInfo) {
+                state.export.seriesInfo = { template, episodeNumber: 1, seasonNumber: 1 };
+            } else {
+                state.export.seriesInfo.template = template;
+            }
+            render();
+        }
+
+        function setEpisodeNumber(num) {
+            if (!state.export.seriesInfo) return;
+            state.export.seriesInfo.episodeNumber = parseInt(num) || 1;
+            render();
+        }
+
+        async function getExportRecommendations() {
+            try {
+                const getRecommendations = functions.httpsCallable('creationWizardGetExportRecommendations');
+                const scriptScenes = state.script.scenes || [];
+                const totalDuration = scriptScenes.reduce((sum, s) => sum + (s.duration || 8), 0);
+
+                const result = await getRecommendations({
+                    platform: state.export.selectedPlatform || state.platform.selected,
+                    duration: totalDuration,
+                    contentType: state.content.contentFormat || 'standard',
+                    genre: state.content.genre,
+                    hasDialogue: true,
+                    seriesInfo: state.export.seriesInfo
+                });
+
+                if (result.data.success) {
+                    state.export.recommendations = result.data.recommendations;
+                    render();
+                }
+            } catch (error) {
+                console.error('Failed to get export recommendations:', error);
+            }
         }
 
         async function startExport() {

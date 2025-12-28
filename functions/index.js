@@ -23320,7 +23320,14 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     tone = 'engaging',
     pacing = 'medium', // 'fast' | 'medium' | 'slow' - controls visual breathing room
     contentDepth = 'standard', // 'minimal' | 'standard' | 'detailed' | 'comprehensive' - content richness
-    additionalInstructions = ''
+    additionalInstructions = '',
+    // Phase 2: Hollywood Production Mode
+    productionMode = 'standard', // 'standard' | 'documentary' | 'thriller' | 'inspirational' | 'story' | 'cinematic'
+    // Phase 3A: Genre Reference System
+    genre = null, // Genre key from GENRE_REFERENCE_LIBRARY (e.g., 'documentary-nature', 'educational-explainer')
+    contentFormat = 'medium-form', // 'short-form' | 'medium-form' | 'long-form' | 'episodic'
+    // Video Model Configuration (for scene duration optimization)
+    videoModel = { duration: '6s', resolution: '1080p' }
   } = config;
 
   if (!topic || topic.trim().length < 3) {
@@ -23367,15 +23374,652 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
 
     const depthSettings = contentDepthConfig[contentDepth] || contentDepthConfig.standard;
 
-    // === SMART TIMING CALCULATION ===
-    // Pacing determines how much of each scene is narration vs visual-only breathing room
-    const pacingConfig = {
-      fast: { narrationRatio: 0.90, avgSceneDuration: 8, wordsPerSecond: 2.8 },
-      medium: { narrationRatio: 0.85, avgSceneDuration: 12, wordsPerSecond: 2.5 },
-      slow: { narrationRatio: 0.75, avgSceneDuration: 18, wordsPerSecond: 2.2 }
+    // ============================================================
+    // PHASE 3A: GENRE REFERENCE LIBRARY
+    // Real-world production references for premium content creation
+    // ============================================================
+
+    /**
+     * GENRE REFERENCE LIBRARY
+     * Each genre contains references to successful productions and what makes them work.
+     * This ensures content never feels like a "basic presentation" regardless of assets used.
+     */
+    const GENRE_REFERENCE_LIBRARY = {
+      // === DOCUMENTARY GENRES ===
+      'documentary-nature': {
+        name: 'Nature Documentary',
+        category: 'documentary',
+        references: ['Planet Earth (BBC)', 'Our Planet (Netflix)', 'Blue Planet', 'Life (BBC)'],
+        whatMakesItWork: 'Epic scale contrasted with intimate moments. Anthropomorphizing animals without being childish. The drama of survival. Patience in letting moments breathe.',
+        narrativeVoice: 'Warm, authoritative, filled with wonder. David Attenborough energy. Never condescending. Treats subject with reverence.',
+        signatureTechniques: [
+          'The patient reveal - let beauty unfold slowly',
+          'Micro to macro transitions (dewdrop → forest → planet)',
+          'Behavior sequences that tell mini-stories',
+          'Silence before majesty - let visuals speak'
+        ],
+        hookStyles: [
+          'The impossible image: Start with something viewers have never seen',
+          'The countdown: "Every X seconds, something remarkable happens..."',
+          'The hidden world: "Just beneath the surface..."',
+          'The journey: "10,000 miles. One destination."'
+        ],
+        visualGrammar: 'Sweeping aerials, extreme close-ups, golden hour lighting, long takes that reward patience. 16:9 or wider aspect ratios.',
+        pacing: 'Slow build with punctuated moments of action. Breathing room between sequences.',
+        emotionalBeats: ['wonder', 'tension', 'relief', 'awe', 'hope'],
+        avoidAtAllCosts: ['Rushed narration', 'over-explaining visuals', 'cheap stock footage feeling', 'generic transitions']
+      },
+
+      'documentary-true-crime': {
+        name: 'True Crime',
+        category: 'documentary',
+        references: ['Making a Murderer', 'The Jinx', 'Tiger King', 'Serial (podcast)', 'Mindhunter'],
+        whatMakesItWork: 'The puzzle. Unreliable narrators. Information revealed strategically. The feeling that YOU are solving the case. Moral ambiguity.',
+        narrativeVoice: 'Investigative, measured, occasionally ominous. Let interview subjects reveal themselves. Narrator as guide, not judge.',
+        signatureTechniques: [
+          'The timeline reveal - show how pieces connect',
+          'Contradicting testimonies back-to-back',
+          'The detail that doesn\'t fit',
+          'Archival footage that takes on new meaning',
+          'The cliffhanger cut'
+        ],
+        hookStyles: [
+          'The missing piece: "One detail never made sense..."',
+          'The reversal: "Everything pointed to him. Until it didn\'t."',
+          'The witness: "She saw something that night. She\'s never told anyone."',
+          'The cold open: Start with the crime, no context'
+        ],
+        visualGrammar: 'Moody lighting, evidence close-ups, talking heads in shadowy settings, newspaper clippings, crime scene photos (tastefully), maps and timelines.',
+        pacing: 'Build tension, release with revelation, immediately raise new questions. Cliffhangers between scenes.',
+        emotionalBeats: ['intrigue', 'suspicion', 'shock', 'doubt', 'unsettling realization'],
+        avoidAtAllCosts: ['Sensationalism without substance', 'giving away the twist early', 'one-dimensional villains', 'fake dramatic pauses']
+      },
+
+      'documentary-social': {
+        name: 'Social Documentary',
+        category: 'documentary',
+        references: ['The Social Dilemma', 'Blackfish', '13th', 'Icarus', 'Won\'t You Be My Neighbor'],
+        whatMakesItWork: 'Personal stories that reveal systemic issues. Expert credibility. The "I had no idea" moment. Call to awareness.',
+        narrativeVoice: 'Urgent but not preachy. Let subjects speak for themselves. Data made human. Righteous anger earned through evidence.',
+        signatureTechniques: [
+          'The insider perspective - someone who was there',
+          'Statistics made visceral',
+          'The juxtaposition (what they say vs what happens)',
+          'The tipping point moment',
+          'The "this affects YOU" bridge'
+        ],
+        hookStyles: [
+          'The confession: "I helped build this. Now I regret it."',
+          'The statistic that shocks: "Every X minutes..."',
+          'The hidden connection: "Your morning routine funds..."',
+          'The question you\'ve never asked'
+        ],
+        visualGrammar: 'Intimate interviews, B-roll of everyday life affected, data visualizations, archival footage, behind-the-scenes access.',
+        pacing: 'Build the case methodically. Emotional peaks tied to human stories.',
+        emotionalBeats: ['curiosity', 'concern', 'anger', 'empathy', 'determination'],
+        avoidAtAllCosts: ['Preaching', 'one-sided without addressing counter-arguments', 'statistics without human context', 'guilt-tripping']
+      },
+
+      'documentary-historical': {
+        name: 'Historical Documentary',
+        category: 'documentary',
+        references: ['The Civil War (Ken Burns)', 'The Last Dance', 'Apollo 11', 'They Shall Not Grow Old'],
+        whatMakesItWork: 'Making the past feel alive and relevant. Finding the human stories within history. The "you are there" feeling. Connecting then to now.',
+        narrativeVoice: 'Authoritative but warm. Reading primary sources brings voices to life. Historians as storytellers, not lecturers.',
+        signatureTechniques: [
+          'The Ken Burns effect - life in still images',
+          'Letters and diaries read aloud',
+          'Then-and-now transitions',
+          'The overlooked perspective',
+          'The moment that changed everything'
+        ],
+        hookStyles: [
+          'The forgotten story: "History forgot them. Until now."',
+          'The parallel: "It happened before. It\'s happening again."',
+          'The artifact: "This letter was never meant to be found."',
+          'The eyewitness: "He was the last person alive who saw it."'
+        ],
+        visualGrammar: 'Archival photos with subtle movement, documents and maps, recreated scenes (tastefully), locations as they are today, artifacts in museums.',
+        pacing: 'Chronological with strategic flashbacks. Build to the pivotal moment.',
+        emotionalBeats: ['context', 'immersion', 'tension', 'tragedy or triumph', 'reflection'],
+        avoidAtAllCosts: ['Dry recitation of dates', 'assuming viewer knowledge', 'cheesy reenactments', 'ignoring human cost']
+      },
+
+      // === EDUCATIONAL GENRES ===
+      'educational-explainer': {
+        name: 'Explainer',
+        category: 'educational',
+        references: ['Kurzgesagt', 'Vox', 'Wendover Productions', 'Real Engineering', 'Veritasium'],
+        whatMakesItWork: 'Complex made simple without being dumbed down. Visual metaphors that click. The "aha" moment. Respecting viewer intelligence.',
+        narrativeVoice: 'Curious, enthusiastic, slightly nerdy. Explaining to a smart friend. Admitting what we don\'t know. Building mental models.',
+        signatureTechniques: [
+          'The unexpected connection (A relates to B how?!)',
+          'Scale comparisons that click',
+          'The common misconception corrected',
+          'Building complexity layer by layer',
+          'The satisfying callback'
+        ],
+        hookStyles: [
+          'The question you didn\'t know you had: "Why is X actually Y?"',
+          'The mind-blowing fact: "There\'s more X than Y on Earth."',
+          'The misconception: "Everything you know about X is wrong."',
+          'The challenge: "Can you explain X? Most people can\'t."'
+        ],
+        visualGrammar: 'Clean animations, infographics, real-world footage to ground concepts, visual metaphors, color-coded systems.',
+        pacing: 'Quick but not rushed. Each concept lands before the next. Occasional breathers for absorption.',
+        emotionalBeats: ['curiosity', 'confusion (brief)', 'understanding', 'wonder', 'satisfaction'],
+        avoidAtAllCosts: ['Talking down to viewers', 'jargon without explanation', 'boring visuals for complex topics', 'info-dumping']
+      },
+
+      'educational-tutorial': {
+        name: 'Tutorial/How-To',
+        category: 'educational',
+        references: ['Mark Rober', 'Simone Giertz', 'Adam Savage', 'Binging with Babish', 'DIY Perks'],
+        whatMakesItWork: 'Personality-driven teaching. Showing the process AND the struggle. Results that inspire. Making the viewer feel capable.',
+        narrativeVoice: 'Encouraging, patient, celebrating small wins. Acknowledging difficulty. The mentor vibe.',
+        signatureTechniques: [
+          'The "here\'s what I messed up" moment',
+          'Time-lapses of tedious parts',
+          'Close-ups at crucial steps',
+          'The reveal of finished product',
+          'Pro tips dropped casually'
+        ],
+        hookStyles: [
+          'The impossible result: "I built X in my garage."',
+          'The challenge: "They said it couldn\'t be done."',
+          'The problem solver: "I was tired of X, so I fixed it."',
+          'The transformation: "From junk to [amazing thing]"'
+        ],
+        visualGrammar: 'Clean workspace shots, hands in frame doing the work, before/after comparisons, materials laid out satisfyingly.',
+        pacing: 'Varies - quick for simple steps, slow for crucial moments. Always show the result early to hook.',
+        emotionalBeats: ['inspiration', 'follow-along confidence', 'problem-solving satisfaction', 'pride in result'],
+        avoidAtAllCosts: ['Skipping crucial steps', 'making it look too easy', 'boring tool explanations', 'no personality']
+      },
+
+      'educational-science': {
+        name: 'Science/Tech',
+        category: 'educational',
+        references: ['Veritasium', 'SmarterEveryDay', 'Vsauce', 'Numberphile', 'Physics Girl'],
+        whatMakesItWork: 'Wonder at the universe. Experiments that prove concepts. The joy of discovery. Making viewers feel smart.',
+        narrativeVoice: 'Genuinely excited by knowledge. Asking questions with viewers. "Isn\'t that weird?" energy.',
+        signatureTechniques: [
+          'The experiment that proves it',
+          'Slow-motion reveals',
+          'The intuition that\'s wrong',
+          'Expert interviews that humanize science',
+          'The "but wait, there\'s more" escalation'
+        ],
+        hookStyles: [
+          'The paradox: "This shouldn\'t be possible. And yet..."',
+          'The demo: [Show something impossible-looking first]',
+          'The question: "What would happen if..."',
+          'The mistake everyone makes'
+        ],
+        visualGrammar: 'Lab settings, real experiments, diagrams that build, slow-motion, microscopic/telescopic footage.',
+        pacing: 'Build curiosity, test hypothesis, reveal answer, explore implications.',
+        emotionalBeats: ['curiosity', 'prediction', 'surprise', 'understanding', 'wonder'],
+        avoidAtAllCosts: ['Being a boring lecture', 'no visual demonstration', 'assuming prior knowledge', 'no payoff to setup']
+      },
+
+      // === ENTERTAINMENT GENRES ===
+      'entertainment-comedy': {
+        name: 'Comedy',
+        category: 'entertainment',
+        references: ['The Office', 'Brooklyn 99', 'Key & Peele', 'SNL Digital Shorts', 'Ryan George (Pitch Meetings)'],
+        whatMakesItWork: 'Timing. Subverted expectations. Specificity over generality. Callbacks. Commitment to the bit.',
+        narrativeVoice: 'Depends on style - deadpan, manic, observational. The character\'s voice IS the comedy.',
+        signatureTechniques: [
+          'The callback - setup early, payoff late',
+          'The escalation - each beat more absurd',
+          'The cut - comedic timing through editing',
+          'The straight man - ground absurdity in reality',
+          'The pause - let the joke land'
+        ],
+        hookStyles: [
+          'The absurd premise stated matter-of-factly',
+          'The relatable situation pushed to extreme',
+          'The fish-out-of-water setup',
+          'Cold open with no context (context comes later for payoff)'
+        ],
+        visualGrammar: 'Timing-aware editing, reaction shots, awkward silence holds, visual gags in background, motivated camera moves for punchlines.',
+        pacing: 'Rapid-fire OR slow burn. Rarely in between. Jokes need breathing room.',
+        emotionalBeats: ['setup', 'misdirection', 'punchline', 'callback', 'button'],
+        avoidAtAllCosts: ['Explaining the joke', 'rushing punchlines', 'no straight man', 'trying too hard']
+      },
+
+      'entertainment-drama': {
+        name: 'Drama',
+        category: 'entertainment',
+        references: ['Breaking Bad', 'Succession', 'The Crown', 'Better Call Saul', 'Chernobyl'],
+        whatMakesItWork: 'Stakes. Character conflict. Moral complexity. Tension in silence. Making viewers root for flawed people.',
+        narrativeVoice: 'Measured, allowing subtext. Dialogue with layers. What isn\'t said matters.',
+        signatureTechniques: [
+          'The moral dilemma with no good answer',
+          'Slow push-in during revelation',
+          'Silence that speaks',
+          'The scene before the storm',
+          'Parallel editing building to collision'
+        ],
+        hookStyles: [
+          'In media res - middle of conflict',
+          'The aftermath - show destruction, then flashback',
+          'The choice - protagonist facing impossible decision',
+          'The lie that will unravel'
+        ],
+        visualGrammar: 'Cinematic compositions, meaningful blocking, shadow and light for moral ambiguity, close-ups in emotional moments.',
+        pacing: 'Slow burn punctuated by explosive moments. Tension is the currency.',
+        emotionalBeats: ['normalcy', 'disturbance', 'escalation', 'crisis', 'transformation'],
+        avoidAtAllCosts: ['Melodrama without earned emotion', 'on-the-nose dialogue', 'convenient resolutions', 'flat characters']
+      },
+
+      'entertainment-horror': {
+        name: 'Horror/Thriller',
+        category: 'entertainment',
+        references: ['Black Mirror', 'Get Out', 'Hereditary', 'The Haunting of Hill House', 'A Quiet Place'],
+        whatMakesItWork: 'Dread over jump scares. The unknown. Making familiar things threatening. Psychological unease. Rules that make it scarier.',
+        narrativeVoice: 'Unreliable, paranoid, or ominously calm. The voice itself can unsettle.',
+        signatureTechniques: [
+          'The long take building dread',
+          'Something wrong in the frame (viewer notices before character)',
+          'Sound design that unsettles',
+          'The fake-out relief before real scare',
+          'The rules that make it worse'
+        ],
+        hookStyles: [
+          'The mundane made wrong - something is off',
+          'The warning ignored',
+          'The discovery that shouldn\'t exist',
+          'The voice that shouldn\'t be there'
+        ],
+        visualGrammar: 'Deep shadows, unsettling framing, slow zooms, negative space that threatens, practical effects feeling.',
+        pacing: 'Slow build, release, LONGER slow build, bigger release. Escalating cycle.',
+        emotionalBeats: ['unease', 'tension', 'false relief', 'dread', 'horror', 'lingering discomfort'],
+        avoidAtAllCosts: ['Jump scares without buildup', 'over-explaining the threat', 'gore as substitute for tension', 'breaking established rules cheaply']
+      },
+
+      // === BUSINESS/MARKETING GENRES ===
+      'business-brand': {
+        name: 'Brand Story',
+        category: 'business',
+        references: ['Apple keynotes', 'Nike campaigns', 'Patagonia', 'Dollar Shave Club', 'Mailchimp'],
+        whatMakesItWork: 'Values over features. Aspiration over information. The customer as hero. Emotional truth.',
+        narrativeVoice: 'Confident without arrogance. Speaks to identity, not just needs. "We believe" energy.',
+        signatureTechniques: [
+          'The manifesto moment - what we stand for',
+          'The customer transformation story',
+          'The origin story with purpose',
+          'Show don\'t tell the value',
+          'The rallying cry close'
+        ],
+        hookStyles: [
+          'The bold statement: "We believe..."',
+          'The enemy: "Most companies do X. We don\'t."',
+          'The movement: "Join the [type of] people who..."',
+          'The question of identity: "Are you the kind of person who..."'
+        ],
+        visualGrammar: 'Aspirational lifestyle imagery, real customers, behind-the-scenes authenticity, product in context of life.',
+        pacing: 'Building emotional crescendo. End on high.',
+        emotionalBeats: ['recognition', 'belonging', 'aspiration', 'conviction', 'action'],
+        avoidAtAllCosts: ['Features lists', 'corporate speak', 'inauthentic diversity', 'hard sell']
+      },
+
+      'business-product': {
+        name: 'Product Launch',
+        category: 'business',
+        references: ['Apple product reveals', 'Tesla unveilings', 'Dyson', 'MKBHD reviews', 'Unbox Therapy'],
+        whatMakesItWork: 'Building anticipation. Strategic reveals. Technical excellence made emotional. The moment of truth.',
+        narrativeVoice: 'Authoritative, precise, building to enthusiasm. Facts that impress.',
+        signatureTechniques: [
+          'The problem no one knew they had',
+          'The "one more thing" reveal',
+          'Specs made meaningful',
+          'The satisfying unboxing',
+          'Real-world demo over marketing claims'
+        ],
+        hookStyles: [
+          'The tease: Show result before showing product',
+          'The problem: Start with frustration, then solution',
+          'The comparison: "While others do X..."',
+          'The numbers: One spec that stops scrolling'
+        ],
+        visualGrammar: 'Clean product shots, 360 views, detail macro shots, size/scale references, dramatic lighting.',
+        pacing: 'Build anticipation, reveal, explore, demonstrate, close with aspiration.',
+        emotionalBeats: ['curiosity', 'anticipation', 'reveal satisfaction', 'want', 'justified desire'],
+        avoidAtAllCosts: ['Specs without context', 'overpromising', 'no real demo', 'ignoring competition dishonestly']
+      },
+
+      'business-testimonial': {
+        name: 'Testimonial/Case Study',
+        category: 'business',
+        references: ['Salesforce customer stories', 'Apple "Shot on iPhone"', 'Squarespace creators'],
+        whatMakesItWork: 'Real people, real results. Specific over generic. The transformation story. Credible authenticity.',
+        narrativeVoice: 'Let the customer speak. Minimal brand voice. Genuine, unscripted feeling.',
+        signatureTechniques: [
+          'The before/after with specifics',
+          'The unexpected benefit',
+          'Day-in-the-life authenticity',
+          'Numbers that prove it',
+          'The moment of realization'
+        ],
+        hookStyles: [
+          'The transformation: "I went from X to Y"',
+          'The skeptic converted: "I didn\'t believe it until..."',
+          'The specific result: "In 3 months, we..."',
+          'The peer recommendation: "If you\'re like me..."'
+        ],
+        visualGrammar: 'Real settings, authentic lighting, the person in their element, B-roll of them working/succeeding.',
+        pacing: 'Problem → Discovery → Skepticism → Trial → Success → Advocacy',
+        emotionalBeats: ['relatability', 'recognition', 'hope', 'proof', 'inspiration'],
+        avoidAtAllCosts: ['Script-reading', 'too polished', 'vague claims', 'no specific results']
+      },
+
+      // === SOCIAL MEDIA NATIVE GENRES ===
+      'social-viral': {
+        name: 'Viral/Hook-Driven',
+        category: 'social',
+        references: ['MrBeast hooks', 'TikTok trending sounds', 'Instagram Reels top performers'],
+        whatMakesItWork: 'First 1 second stops the scroll. Pattern interrupt. Curiosity gap. Instant value promise.',
+        narrativeVoice: 'High energy, direct, no preamble. "Here\'s the thing" energy.',
+        signatureTechniques: [
+          'The mid-action start',
+          'The impossible thumbnail moment',
+          'The countdown/list format',
+          'The result shown first',
+          'The loop - ending that makes you rewatch'
+        ],
+        hookStyles: [
+          'The POV: "POV: You just discovered..."',
+          'The controversial take: "Unpopular opinion..."',
+          'The hack: "Stop doing X, do Y instead"',
+          'The reaction: Start with the payoff expression'
+        ],
+        visualGrammar: 'Vertical, in-your-face, fast cuts, text overlays, trending effects.',
+        pacing: 'No slow moments. Every second earns the next.',
+        emotionalBeats: ['interrupt', 'hook', 'deliver', 'payoff/twist', 'call to action'],
+        avoidAtAllCosts: ['Slow starts', 'burying the lead', 'inside jokes', 'horizontal thinking']
+      },
+
+      'social-storytime': {
+        name: 'Storytime',
+        category: 'social',
+        references: ['Reddit stories on TikTok', 'True crime TikTok', 'Commentary channels'],
+        whatMakesItWork: 'Bingeable narrative. Strategic cliffhangers. Personality of the teller. "And then it got worse" energy.',
+        narrativeVoice: 'Conversational, expressive, reactive. Like telling a friend the craziest thing.',
+        signatureTechniques: [
+          'The teased ending: "What happened next changed everything"',
+          'The reaction inserts',
+          'Building to "the part"',
+          'Strategic pauses for drama',
+          'The satisfying callback'
+        ],
+        hookStyles: [
+          'The chaos preview: "So there I was..."',
+          'The rating: "This is a 10/10 crazy story"',
+          'The category: "Insane customer stories, part 47"',
+          'The question: "Has this ever happened to you?"'
+        ],
+        visualGrammar: 'Face-to-camera, expressive reactions, simple visuals that don\'t distract, maybe relevant B-roll.',
+        pacing: 'Build tension, milk the drama, deliver the payoff, button with reaction.',
+        emotionalBeats: ['hook', 'context', 'escalation', 'climax', 'reaction/callback'],
+        avoidAtAllCosts: ['Spoiling the ending', 'too much context', 'underselling the payoff', 'no personality']
+      },
+
+      // === SERIES/EPISODIC GENRES ===
+      'series-docuseries': {
+        name: 'Docuseries',
+        category: 'series',
+        references: ['The Last Dance', 'Formula 1: Drive to Survive', 'Chef\'s Table', 'Abstract'],
+        whatMakesItWork: 'Each episode complete but connected. Overarching narrative. Character development across episodes. The binge factor.',
+        narrativeVoice: 'Consistent tone, evolving perspective. Characters become familiar.',
+        signatureTechniques: [
+          'The episode-end cliffhanger',
+          'The season arc tease',
+          'Character intro episodes that set up payoffs',
+          'The callback to earlier episodes',
+          'The previously on...'
+        ],
+        hookStyles: [
+          'The season tease: Montage of what\'s coming',
+          'The immediate drama: Drop into conflict',
+          'The character hook: Who is this person?',
+          'The question the season will answer'
+        ],
+        visualGrammar: 'Consistent visual language across episodes, signature shots, evolving as story evolves.',
+        pacing: 'Each episode: setup, development, mini-climax, tease next. Season: build to finale.',
+        emotionalBeats: ['per episode arc within larger season arc'],
+        avoidAtAllCosts: ['Episodes that feel standalone', 'no payoff to setups', 'inconsistent quality', 'filler episodes']
+      }
     };
 
+    /**
+     * CONTENT FORMAT MODIFIERS
+     * How the genre adapts to different content lengths/platforms
+     */
+    const CONTENT_FORMATS = {
+      'short-form': {
+        name: 'Short-Form (< 60s)',
+        platforms: ['TikTok', 'Reels', 'Shorts'],
+        adaptations: 'Compress to essence. Hook in 0.5s. One key idea. Strong close loop.',
+        pacingMultiplier: 1.5, // Faster
+        sceneCount: '3-5 scenes',
+        hookCritical: true
+      },
+      'medium-form': {
+        name: 'Medium-Form (1-5 min)',
+        platforms: ['YouTube', 'Instagram', 'LinkedIn'],
+        adaptations: 'Full narrative arc possible. Multiple beats. Room for nuance.',
+        pacingMultiplier: 1.0,
+        sceneCount: '5-12 scenes',
+        hookCritical: true
+      },
+      'long-form': {
+        name: 'Long-Form (5-20 min)',
+        platforms: ['YouTube', 'Podcast video', 'Course content'],
+        adaptations: 'Deep exploration. Multiple sub-sections. Varied pacing. Retention strategies throughout.',
+        pacingMultiplier: 0.8,
+        sceneCount: '10-25 scenes',
+        hookCritical: true
+      },
+      'episodic': {
+        name: 'Episodic (Series)',
+        platforms: ['YouTube series', 'Netflix-style', 'Course modules'],
+        adaptations: 'Each episode complete but connected. Cliffhangers. Character development. Previously on...',
+        pacingMultiplier: 0.9,
+        sceneCount: 'Varies by episode',
+        hookCritical: true
+      }
+    };
+
+    /**
+     * HOOK ARCHETYPES
+     * Universal hook structures that work across genres
+     */
+    const HOOK_ARCHETYPES = {
+      'curiosity-gap': {
+        name: 'Curiosity Gap',
+        structure: 'Reveal partial information that demands completion',
+        examples: ['There\'s one thing about X that nobody talks about...', 'What happened next surprised everyone...'],
+        bestFor: ['documentary', 'educational', 'mystery']
+      },
+      'pattern-interrupt': {
+        name: 'Pattern Interrupt',
+        structure: 'Start with something unexpected that breaks mental autopilot',
+        examples: ['[Unexpected visual/sound]', 'Forget everything you know about X...'],
+        bestFor: ['social', 'comedy', 'educational']
+      },
+      'identity-hook': {
+        name: 'Identity Hook',
+        structure: 'Appeal to who the viewer wants to be',
+        examples: ['If you\'re the kind of person who...', 'Most people will scroll past this...'],
+        bestFor: ['business', 'inspirational', 'tutorial']
+      },
+      'result-first': {
+        name: 'Result First',
+        structure: 'Show the payoff immediately, then explain how',
+        examples: ['[Show amazing result] Want to know how?', 'I made $X in Y days. Here\'s exactly how.'],
+        bestFor: ['tutorial', 'business', 'transformation']
+      },
+      'controversy': {
+        name: 'Controversial Take',
+        structure: 'State an opinion that challenges common belief',
+        examples: ['X is actually bad for you. Here\'s why.', 'Unpopular opinion: [take]'],
+        bestFor: ['educational', 'social', 'commentary']
+      },
+      'story-drop': {
+        name: 'Story Drop',
+        structure: 'Begin mid-story with high stakes',
+        examples: ['So there I was, $10,000 in debt, when...', 'The day I almost lost everything...'],
+        bestFor: ['story', 'testimonial', 'drama']
+      },
+      'the-list': {
+        name: 'The List',
+        structure: 'Promise a specific number of valuable items',
+        examples: ['7 things I wish I knew before...', '3 mistakes that are costing you...'],
+        bestFor: ['educational', 'tutorial', 'business']
+      },
+      'demonstration': {
+        name: 'Demonstration',
+        structure: 'Show don\'t tell - lead with action',
+        examples: ['[Start with the experiment/demo]', 'Watch what happens when I...'],
+        bestFor: ['science', 'tutorial', 'product']
+      }
+    };
+
+    /**
+     * ANTI-GENERIC RULES
+     * Rules to ensure content never feels like a basic presentation
+     */
+    const ANTI_GENERIC_RULES = [
+      'Never start with "Hey guys" or "What\'s up everyone" - earn attention first',
+      'Never use stock transitions without purpose',
+      'Never explain what you\'re about to explain - just explain it',
+      'Never use generic background music that doesn\'t match mood',
+      'Never have talking head without B-roll for more than 10 seconds',
+      'Never use bullet points on screen - visualize concepts instead',
+      'Never end with "Don\'t forget to like and subscribe" as the main CTA',
+      'Never have dead air without intentional purpose',
+      'Never use the first take if authenticity isn\'t the point',
+      'Never describe what viewers can already see',
+      'Never rush through the payoff after slow buildup',
+      'Never have consistent energy throughout - vary rhythm'
+    ];
+
+    // Get genre settings if specified
+    const genreKey = config.genre || null;
+    const genreSettings = genreKey ? GENRE_REFERENCE_LIBRARY[genreKey] : null;
+    const formatKey = config.contentFormat || 'medium-form';
+    const formatSettings = CONTENT_FORMATS[formatKey] || CONTENT_FORMATS['medium-form'];
+
+    // === HOLLYWOOD PRODUCTION MODES ===
+    // Cinematic templates for professional-quality video storytelling
+    const productionModes = {
+      standard: {
+        name: 'Standard',
+        description: 'Clean, professional content',
+        narrativeStyle: 'straightforward informative narration',
+        visualApproach: 'clean compositions with good lighting',
+        emotionalArc: 'neutral to mildly engaging',
+        openingStyle: 'direct hook with value proposition',
+        closingStyle: 'clear call-to-action',
+        cameraDirections: [],
+        musicMood: 'upbeat corporate',
+        specialInstructions: ''
+      },
+      documentary: {
+        name: 'Documentary',
+        description: 'Ken Burns style - educational, authoritative, visually rich',
+        narrativeStyle: 'authoritative narrator voice, like David Attenborough or Morgan Freeman. Use present tense for immediacy. Include moments of wonder and discovery.',
+        visualApproach: 'Ken Burns effect on historical images, slow zooms on details, wide establishing shots, intimate close-ups. Think National Geographic or BBC Earth.',
+        emotionalArc: 'curiosity → discovery → understanding → appreciation',
+        openingStyle: 'Start with a powerful image and a thought-provoking observation. No greeting - dive straight into the subject.',
+        closingStyle: 'End with broader implications or a reflective thought that lingers',
+        cameraDirections: ['Zoom in', 'Pan left', 'Pan right', 'Static shot'],
+        musicMood: 'ambient orchestral, contemplative',
+        specialInstructions: 'Use specific details and numbers. Reference real places, people, or events. Include "moments of pause" where visuals speak alone.'
+      },
+      thriller: {
+        name: 'Thriller/Mystery',
+        description: 'Suspenseful, revelation-driven, keeps viewers on edge',
+        narrativeStyle: 'mysterious, building tension with each scene. Use short punchy sentences. Strategic pauses. Rhetorical questions that haunt.',
+        visualApproach: 'Dramatic shadows, noir lighting, tight framing that creates claustrophobia. Dutch angles for unease. Slow reveals.',
+        emotionalArc: 'intrigue → tension → escalation → twist → resolution',
+        openingStyle: 'Start mid-mystery. Something is wrong. A question that demands answers.',
+        closingStyle: 'The revelation. But leave one thread hanging - a final question.',
+        cameraDirections: ['Push in', 'Zoom in', 'Static shot', 'Tracking shot'],
+        musicMood: 'tense, pulsing, minimal',
+        specialInstructions: 'Build tension through information withholding. Each scene reveals a piece but raises new questions. Use "But then..." and "What they didn\'t know was..." transitions.'
+      },
+      inspirational: {
+        name: 'Inspirational',
+        description: 'Uplifting, motivational, emotionally resonant',
+        narrativeStyle: 'warm, encouraging, building towards triumph. Use "you" directly - speak to the viewer. Share the struggle before the victory.',
+        visualApproach: 'Golden hour lighting, upward camera angles suggesting aspiration, wide open spaces, people in silhouette against bright backgrounds.',
+        emotionalArc: 'challenge → struggle → breakthrough → triumph → call to action',
+        openingStyle: 'Start with a relatable struggle or universal dream. "You\'ve felt this..." or "Imagine if..."',
+        closingStyle: 'End with empowerment. The viewer should feel capable of anything.',
+        cameraDirections: ['Tilt up', 'Pull out', 'Push in', 'Pedestal up'],
+        musicMood: 'building orchestral, uplifting crescendo',
+        specialInstructions: 'Include a specific transformation story. Use contrast between "before" and "after" states. The protagonist overcomes through their own agency.'
+      },
+      story: {
+        name: 'Story/Narrative',
+        description: 'Character-driven, arc-based storytelling',
+        narrativeStyle: 'storyteller voice with character moments. Use dialogue snippets. Describe actions, not just concepts. "Show don\'t tell."',
+        visualApproach: 'Cinematic compositions like a movie. Character close-ups for emotion, wide shots for context. Visual metaphors that echo themes.',
+        emotionalArc: 'setup → inciting incident → rising action → climax → resolution',
+        openingStyle: 'In media res - start in the middle of action. "The day everything changed started like any other..."',
+        closingStyle: 'The lesson learned. Circle back to the opening with new meaning.',
+        cameraDirections: ['Tracking shot', 'Push in', 'Pull out', 'Pan left', 'Pan right'],
+        musicMood: 'emotional score, thematic',
+        specialInstructions: 'Create a protagonist (can be the viewer, a person, or even a concept). Include a clear antagonist or obstacle. Use the three-act structure within your scene count.'
+      },
+      cinematic: {
+        name: 'Cinematic',
+        description: 'High production value, film-quality storytelling',
+        narrativeStyle: 'sparse, powerful narration. Let visuals carry emotion. Every word is deliberate. Poetic but not pretentious.',
+        visualApproach: 'Movie-quality compositions. Anamorphic style, dramatic lighting contrasts, motivated camera movement. Think Nolan, Villeneuve, Fincher.',
+        emotionalArc: 'immersion → building atmosphere → emotional peak → contemplation',
+        openingStyle: 'A striking visual with minimal or no narration for the first 3 seconds. Sound design matters.',
+        closingStyle: 'Land on a powerful final image. The last frame should be iconic.',
+        cameraDirections: ['Push in', 'Pull out', 'Tracking shot', 'Tilt up', 'Zoom in'],
+        musicMood: 'cinematic score, hans zimmer style',
+        specialInstructions: 'Plan for 30% more visual-only moments than other modes. Use aspect ratio to full effect. Include at least one visual metaphor. Color grade suggestions in visual descriptions (teal/orange, desaturated, high contrast).'
+      }
+    };
+
+    const productionSettings = productionModes[productionMode] || productionModes.standard;
+
+    // === VIDEO MODEL-AWARE TIMING ===
+    // Adjust scene structure based on AI video clip duration
+    const clipDuration = videoModel.duration === '10s' ? 10 : 6;
+    const isExtendedClip = clipDuration === 10;
+
+    // === SMART TIMING CALCULATION ===
+    // Pacing determines how much of each scene is narration vs visual-only breathing room
+    // Now optimized for video model clip duration (6s or 10s)
+    const pacingConfig = {
+      fast: {
+        narrationRatio: 0.90,
+        avgSceneDuration: isExtendedClip ? 10 : 6, // Align with clip duration
+        wordsPerSecond: 2.8
+      },
+      medium: {
+        narrationRatio: 0.85,
+        avgSceneDuration: isExtendedClip ? 10 : 8,
+        wordsPerSecond: 2.5
+      },
+      slow: {
+        narrationRatio: 0.70, // More visual breathing room
+        avgSceneDuration: isExtendedClip ? 10 : 6,
+        wordsPerSecond: 2.2
+      }
+    };
+
+    // Cinematic mode gets extra visual breathing room
     const pacingSettings = pacingConfig[pacing] || pacingConfig.medium;
+    if (productionMode === 'cinematic') {
+      pacingSettings.narrationRatio = Math.min(pacingSettings.narrationRatio, 0.70);
+    }
 
     // Calculate optimal number of scenes based on target duration
     const sceneCount = Math.max(4, Math.min(15, Math.round(targetDuration / pacingSettings.avgSceneDuration)));
@@ -23402,97 +24046,204 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
       contentRequirements.push('Weave in storytelling elements - problems, solutions, transformations');
     }
 
-    // Build the prompt for GPT-4o
-    const systemPrompt = `You are an expert video scriptwriter and content creator specializing in ${niche || 'general'} content.
-You create engaging, well-structured scripts optimized for ${platform || 'social media'} in ${aspectRatio || '16:9'} format.
-Your scripts are known for:
-- Strong hooks that grab attention in the first 3 seconds
-- Clear storytelling with emotional resonance
-- Educational value with practical takeaways
-- Compelling calls-to-action that feel natural
+    // Build camera direction guidance for production mode
+    const cameraGuidance = productionSettings.cameraDirections.length > 0
+      ? `\nSuggested camera movements for this style: ${productionSettings.cameraDirections.join(', ')}`
+      : '';
 
-CONTENT DEPTH LEVEL: ${contentDepth.toUpperCase()} - ${depthSettings.description}
+    // Build genre-specific guidance if genre is selected
+    let genreGuidance = '';
+    if (genreSettings) {
+      genreGuidance = `
+
+=== GENRE REFERENCE: ${genreSettings.name.toUpperCase()} ===
+Study these successful productions for reference: ${genreSettings.references.join(', ')}
+
+WHAT MAKES THIS GENRE WORK:
+${genreSettings.whatMakesItWork}
+
+NARRATIVE VOICE FOR THIS GENRE:
+${genreSettings.narrativeVoice}
+
+SIGNATURE TECHNIQUES TO USE:
+${genreSettings.signatureTechniques.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+HOOK STYLES FOR THIS GENRE:
+${genreSettings.hookStyles.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+
+VISUAL GRAMMAR:
+${genreSettings.visualGrammar}
+
+EMOTIONAL BEATS: ${genreSettings.emotionalBeats.join(' → ')}
+
+⚠️ AVOID AT ALL COSTS:
+${genreSettings.avoidAtAllCosts.map(a => `- ${a}`).join('\n')}`;
+    }
+
+    // Build format-specific guidance
+    const formatGuidance = `
+CONTENT FORMAT: ${formatSettings.name}
+- Platforms: ${formatSettings.platforms.join(', ')}
+- Adaptation: ${formatSettings.adaptations}
+- Scene Count: ${formatSettings.sceneCount}`;
+
+    // Anti-generic rules to ensure premium quality
+    const antiGenericGuidance = `
+
+🚫 ANTI-GENERIC RULES (NEVER DO THESE):
+${ANTI_GENERIC_RULES.slice(0, 6).map(r => `- ${r}`).join('\n')}`;
+
+    // Build the prompt for GPT-4o
+    const systemPrompt = `You are a HOLLYWOOD-LEVEL PRODUCTION DIRECTOR creating premium video content.
+You have studied the greatest productions ever made and apply their techniques with precision.
+Your content NEVER feels like a basic presentation or generic corporate video.
+
+PRODUCTION MODE: ${productionSettings.name.toUpperCase()}
+${productionSettings.description}
+
+PRODUCTION STYLE GUIDE:
+- Narrative Voice: ${productionSettings.narrativeStyle}
+- Visual Approach: ${productionSettings.visualApproach}
+- Emotional Arc: ${productionSettings.emotionalArc}
+- Opening: ${productionSettings.openingStyle}
+- Closing: ${productionSettings.closingStyle}
+- Music Mood: ${productionSettings.musicMood}
+${productionSettings.specialInstructions ? `- Special: ${productionSettings.specialInstructions}` : ''}
+${cameraGuidance}
+${genreGuidance}
+${formatGuidance}
+${antiGenericGuidance}
+
+You create scripts for ${platform || 'social media'} in ${aspectRatio || '16:9'} format, specializing in ${niche || 'general'} content.
+
+CONTENT DEPTH: ${contentDepth.toUpperCase()} - ${depthSettings.description}
 You must provide ${depthSettings.requirements}.
+
+VIDEO TECHNOLOGY CONSTRAINT:
+Each scene will be generated as a ${clipDuration}-second AI video clip using Minimax Hailuo.
+Visual descriptions MUST include camera movement directions in [brackets] at the start.
+Example: "[Push in, Zoom in] A figure emerges from shadows..."
 
 CRITICAL TIMING RULE: You MUST write narrations with the EXACT word count specified. This determines video pacing.
 Count your words carefully. Too few words = awkward pauses. Too many words = rushed audio.
 Always return valid JSON exactly matching the requested structure.`;
 
-    const userPrompt = `Create a ${targetDuration}-second video script about: "${topic}"
+    // Build production-specific narrative structure
+    const narrativeStructure = productionMode === 'standard' ? `
+- Scene 1 (HOOK): Surprising fact, provocative question, or bold statement that demands attention
+- Scenes 2-3 (SETUP): Establish the problem, context, or "why this matters"
+- Scenes 4-${sceneCount - 2} (BODY): Main content with clear explanations
+- Scene ${sceneCount - 1} (CLIMAX): Key insight, transformation, or "aha moment"
+- Scene ${sceneCount} (CTA): Natural conclusion with clear call-to-action` : productionMode === 'documentary' ? `
+- Scene 1 (OPENING): A powerful, unexpected observation. No greeting. Dive straight in.
+- Scene 2 (CONTEXT): Pull back to show the bigger picture. Why does this matter?
+- Scenes 3-${sceneCount - 2} (EXPLORATION): Each scene reveals a new facet. Build wonder and understanding.
+- Scene ${sceneCount - 1} (REVELATION): The key insight that changes how we see the subject
+- Scene ${sceneCount} (REFLECTION): Broader implications. Leave viewers thinking.` : productionMode === 'thriller' ? `
+- Scene 1 (HOOK): Something is wrong. A mystery that demands answers.
+- Scene 2 (SETUP): Establish the stakes. What's at risk?
+- Scenes 3-${sceneCount - 2} (ESCALATION): Each scene raises the tension. "But then..." "What they didn't know..."
+- Scene ${sceneCount - 1} (TWIST): The revelation that changes everything
+- Scene ${sceneCount} (RESOLUTION): But leave one thread hanging. A final question.` : productionMode === 'inspirational' ? `
+- Scene 1 (THE STRUGGLE): Start with a relatable challenge. "You've felt this..."
+- Scene 2 (THE BARRIER): What makes this hard? Why do people fail?
+- Scenes 3-${sceneCount - 2} (THE JOURNEY): Show the transformation happening. Small wins building.
+- Scene ${sceneCount - 1} (THE BREAKTHROUGH): The moment of triumph. Victory earned.
+- Scene ${sceneCount} (EMPOWERMENT): You can do this too. The call to action.` : productionMode === 'story' ? `
+- Scene 1 (IN MEDIA RES): Start mid-action. "The day everything changed..."
+- Scene 2 (INCITING INCIDENT): What disrupts the status quo?
+- Scenes 3-${sceneCount - 2} (RISING ACTION): Obstacles, attempts, escalating stakes
+- Scene ${sceneCount - 1} (CLIMAX): The decisive moment. Everything hangs in the balance.
+- Scene ${sceneCount} (RESOLUTION): The lesson. Circle back to the opening with new meaning.` : `
+- Scene 1 (STRIKING IMAGE): Open with a powerful visual. Minimal or no narration for 3 seconds.
+- Scene 2 (ATMOSPHERE): Establish the world. Slow, deliberate pacing.
+- Scenes 3-${sceneCount - 2} (IMMERSION): Each scene deepens the emotional experience. Let visuals breathe.
+- Scene ${sceneCount - 1} (EMOTIONAL PEAK): The most powerful moment. Maximum impact.
+- Scene ${sceneCount} (ICONIC CLOSE): Land on an unforgettable final image.`;
+
+    const userPrompt = `Create a ${targetDuration}-second ${productionSettings.name.toUpperCase()} style video script about: "${topic}"
+
+=== PRODUCTION MODE: ${productionSettings.name.toUpperCase()} ===
+${productionSettings.description}
+Emotional Arc: ${productionSettings.emotionalArc}
 
 === CONFIGURATION ===
 Platform: ${platform || 'YouTube'}
 Aspect Ratio: ${aspectRatio || '16:9'}
-TOTAL VIDEO DURATION: ${targetDuration} seconds (THIS IS THE TARGET LENGTH)
+TOTAL VIDEO DURATION: ${targetDuration} seconds
 Niche: ${niche || 'general'}${subniche ? ` > ${subniche}` : ''}
 Visual Style: ${style || 'modern'}
 Tone: ${tone}
 Pacing: ${pacing} (${pacing === 'fast' ? 'energetic, quick cuts' : pacing === 'slow' ? 'contemplative, visual breathing room' : 'balanced pacing'})
-Content Depth: ${contentDepth.toUpperCase()} - ${depthSettings.description}
+Content Depth: ${contentDepth.toUpperCase()}
 
-=== CRITICAL TIMING BREAKDOWN ===
+=== AI VIDEO TECHNOLOGY ===
+Each scene = ONE ${clipDuration}-second AI video clip (Minimax Hailuo ${videoModel.resolution || '1080p'})
+IMPORTANT: Visual descriptions MUST start with camera movement in [brackets]
+Available movements: Push in, Pull out, Pan left, Pan right, Tilt up, Tilt down, Zoom in, Zoom out, Tracking shot, Static shot
+${productionSettings.cameraDirections.length > 0 ? `Recommended for ${productionSettings.name}: ${productionSettings.cameraDirections.join(', ')}` : ''}
+
+=== TIMING BREAKDOWN ===
 Total Duration: ${targetDuration} seconds
-Number of Scenes: ${sceneCount}
-Each Scene Visual Duration: ${visualDuration} seconds (how long the scene appears)
-Each Scene Narration Duration: ${narrationDuration} seconds (voiceover length)
-Visual-Only Time per Scene: ${visualDuration - narrationDuration} seconds (no voiceover, just visuals)
-Words per Scene: ~${wordsPerScene} words (to fill ${narrationDuration}s at ${pacingSettings.wordsPerSecond} words/sec)
+Number of Scenes: ${sceneCount} (each = ${clipDuration}s AI video clip)
+Narration per Scene: ${narrationDuration} seconds
+Visual-Only Time: ${visualDuration - narrationDuration} seconds per scene
+Words per Scene: ~${wordsPerScene} words
 
 === CONTENT REQUIREMENTS ===
 ${contentRequirements.length > 0 ? contentRequirements.map((req, i) => `${i + 1}. ${req}`).join('\n') : '- Standard content depth'}
+${productionSettings.specialInstructions ? `\nPRODUCTION SPECIAL: ${productionSettings.specialInstructions}` : ''}
 
-=== NARRATIVE STRUCTURE ===
-Your script MUST follow this story arc:
-- Scene 1 (HOOK): Surprising fact, provocative question, or bold statement that demands attention
-- Scenes 2-3 (SETUP): Establish the problem, context, or "why this matters"
-- Scenes 4-${sceneCount - 2} (BODY): Main content with ${depthSettings.includeStats ? 'statistics, ' : ''}${depthSettings.includeExamples ? 'examples, ' : ''}clear explanations
-- Scene ${sceneCount - 1} (CLIMAX): Key insight, transformation, or "aha moment"
-- Scene ${sceneCount} (CTA): Natural conclusion with clear call-to-action
+=== ${productionSettings.name.toUpperCase()} NARRATIVE STRUCTURE ===${narrativeStructure}
 
 === REQUIREMENTS ===
-1. HOOK (Scene 1): Grab attention immediately - surprising fact, question, or bold statement
-2. Create EXACTLY ${sceneCount} scenes that build a compelling narrative
-3. EACH SCENE NARRATION MUST BE ~${wordsPerScene} WORDS (±5 words) - COUNT CAREFULLY!
+1. OPENING: ${productionSettings.openingStyle}
+2. Create EXACTLY ${sceneCount} scenes following the emotional arc: ${productionSettings.emotionalArc}
+3. EACH SCENE NARRATION: ~${wordsPerScene} WORDS (±5 words) - COUNT CAREFULLY!
 4. Each scene needs:
-   - narration: ~${wordsPerScene} words of voiceover text (COUNT YOUR WORDS!)
-   - visual: Detailed description for AI image generation (composition, subjects, lighting, mood)
-   - visualDuration: ${visualDuration} (total seconds this scene appears)
-   - narrationDuration: ${narrationDuration} (seconds of voiceover)
-5. Make every sentence count - no filler words or vague statements
-6. CTA should be woven into the final scene naturally
-7. Visual descriptions should be specific: composition, subjects, lighting, colors, camera angle
+   - narration: ~${wordsPerScene} words in ${productionSettings.narrativeStyle} voice
+   - visual: Start with [Camera Movement], then detailed ${productionSettings.visualApproach}
+   - visualDuration: ${visualDuration}
+   - narrationDuration: ${narrationDuration}
+   - cameraMovement: Array of 1-3 movements from the available list
+5. CLOSING: ${productionSettings.closingStyle}
+6. Visual descriptions: ${productionSettings.visualApproach}
 
 ${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON:
 {
-  "title": "Compelling video title (50-70 chars)",
-  "hook": "The attention-grabbing first line (this IS scene 1's narration start)",
+  "title": "Compelling ${productionSettings.name} style title (50-70 chars)",
+  "hook": "The attention-grabbing first line",
   "scenes": [
     {
       "id": 1,
-      "narration": "EXACTLY ~${wordsPerScene} words. Count them! This determines timing.",
-      "visual": "Detailed: scene composition, subjects, lighting, colors, mood, camera angle",
+      "narration": "~${wordsPerScene} words in ${productionSettings.narrativeStyle} style",
+      "visual": "[Camera Movement] Detailed ${productionSettings.visualApproach}",
       "visualDuration": ${visualDuration},
       "narrationDuration": ${narrationDuration},
       "wordCount": ${wordsPerScene},
+      "cameraMovement": ["Push in"],
       "transition": "cut|fade|zoom|slide"
     }
   ],
-  "cta": "Call-to-action (integrated into final scene)",
+  "cta": "Call-to-action woven naturally into final scene",
   "totalDuration": ${targetDuration},
   "timing": {
     "sceneCount": ${sceneCount},
     "visualDurationPerScene": ${visualDuration},
     "narrationDurationPerScene": ${narrationDuration},
     "pacing": "${pacing}",
-    "wordsPerScene": ${wordsPerScene}
+    "wordsPerScene": ${wordsPerScene},
+    "clipDuration": ${clipDuration}
   },
+  "productionMode": "${productionMode}",
   "metadata": {
     "targetAudience": "Who this video is for",
     "keyMessage": "The main takeaway",
-    "suggestedMusic": "Type of background music"
+    "suggestedMusic": "${productionSettings.musicMood}",
+    "emotionalArc": "${productionSettings.emotionalArc}"
   }
 }`;
 
@@ -23529,11 +24280,21 @@ Return ONLY valid JSON:
     const defaultVisualDuration = Math.round(targetDuration / script.scenes.length);
     const defaultNarrationDuration = Math.round(defaultVisualDuration * 0.7);
 
-    // Ensure each scene has required fields including timing
+    // Ensure each scene has required fields including timing and camera movements
     script.scenes = script.scenes.map((scene, index) => {
       // Count words in narration to estimate actual duration
       const wordCount = (scene.narration || '').split(/\s+/).filter(w => w.length > 0).length;
       const estimatedNarrationDuration = Math.ceil(wordCount / 2.5); // ~2.5 words per second
+
+      // Extract camera movements from visual description if not provided
+      let cameraMovements = scene.cameraMovement || [];
+      if (cameraMovements.length === 0 && scene.visual) {
+        // Try to extract [Camera Movement] from visual description
+        const bracketMatch = scene.visual.match(/^\[([^\]]+)\]/);
+        if (bracketMatch) {
+          cameraMovements = bracketMatch[1].split(',').map(m => m.trim()).slice(0, 3);
+        }
+      }
 
       return {
         id: scene.id || index + 1,
@@ -23546,6 +24307,8 @@ Return ONLY valid JSON:
         // Keep legacy duration field for backwards compatibility
         duration: scene.visualDuration || scene.duration || defaultVisualDuration,
         wordCount: wordCount,
+        // Camera movements for Minimax AI video generation
+        cameraMovement: cameraMovements,
         transition: scene.transition || 'cut',
         status: 'pending' // For tracking storyboard/animation progress
       };
@@ -23565,7 +24328,14 @@ Return ONLY valid JSON:
       subniche,
       style,
       tone,
-      pacing
+      pacing,
+      contentDepth,
+      productionMode,
+      // Phase 3A: Genre Reference
+      genre: genreKey,
+      genreName: genreSettings?.name || null,
+      contentFormat: formatKey,
+      videoModel
     };
     script.timing = script.timing || {
       sceneCount: script.scenes.length,
@@ -23700,14 +24470,504 @@ Return ONLY valid JSON:
   }
 });
 
+// ============================================================
+// PHASE 3B: VISUAL INTELLIGENCE SYSTEM
+// Cinematic compositions, lighting, and color grading
+// ============================================================
+
+/**
+ * VISUAL INTELLIGENCE - Comprehensive visual enhancement system
+ * Maps genres, moods, and production modes to cinematic visual styles
+ */
+const VISUAL_INTELLIGENCE = {
+  // === SHOT COMPOSITION LIBRARY ===
+  compositions: {
+    'wide-establishing': {
+      name: 'Wide Establishing Shot',
+      prompt: 'wide angle establishing shot, expansive view, full environment visible, cinematic scope',
+      useFor: ['opening', 'context', 'scale'],
+      genres: ['documentary-nature', 'documentary-historical', 'cinematic']
+    },
+    'medium-shot': {
+      name: 'Medium Shot',
+      prompt: 'medium shot, waist-up framing, balanced composition, subject clearly visible',
+      useFor: ['dialogue', 'action', 'explanation'],
+      genres: ['educational-tutorial', 'business-testimonial', 'social-storytime']
+    },
+    'close-up': {
+      name: 'Close-Up',
+      prompt: 'close-up shot, face or detail filling frame, intimate framing, emotional connection',
+      useFor: ['emotion', 'detail', 'emphasis'],
+      genres: ['entertainment-drama', 'inspirational', 'documentary-true-crime']
+    },
+    'extreme-close-up': {
+      name: 'Extreme Close-Up',
+      prompt: 'extreme close-up, macro detail, texture visible, dramatic intimacy',
+      useFor: ['tension', 'detail', 'reveal'],
+      genres: ['entertainment-horror', 'documentary-nature', 'educational-science']
+    },
+    'over-the-shoulder': {
+      name: 'Over the Shoulder',
+      prompt: 'over-the-shoulder shot, perspective framing, depth layering, conversational angle',
+      useFor: ['dialogue', 'pov', 'interaction'],
+      genres: ['entertainment-drama', 'business-testimonial', 'documentary-social']
+    },
+    'birds-eye': {
+      name: 'Bird\'s Eye View',
+      prompt: 'birds eye view, top-down perspective, god-like vantage point, pattern visible from above',
+      useFor: ['scale', 'overview', 'drama'],
+      genres: ['documentary-nature', 'cinematic', 'documentary-historical']
+    },
+    'low-angle': {
+      name: 'Low Angle',
+      prompt: 'low angle shot, looking up at subject, powerful imposing presence, heroic framing',
+      useFor: ['power', 'inspiration', 'drama'],
+      genres: ['inspirational', 'business-brand', 'entertainment-drama']
+    },
+    'dutch-angle': {
+      name: 'Dutch Angle',
+      prompt: 'dutch angle, tilted frame, disorienting composition, psychological tension',
+      useFor: ['unease', 'tension', 'chaos'],
+      genres: ['entertainment-horror', 'thriller', 'entertainment-drama']
+    },
+    'symmetrical': {
+      name: 'Symmetrical',
+      prompt: 'perfectly symmetrical composition, centered subject, balanced framing, Wes Anderson style',
+      useFor: ['order', 'beauty', 'emphasis'],
+      genres: ['cinematic', 'business-product', 'educational-explainer']
+    },
+    'rule-of-thirds': {
+      name: 'Rule of Thirds',
+      prompt: 'rule of thirds composition, subject off-center, balanced negative space, professional framing',
+      useFor: ['standard', 'dynamic', 'professional'],
+      genres: ['all']
+    },
+    'leading-lines': {
+      name: 'Leading Lines',
+      prompt: 'leading lines composition, visual path guiding eye to subject, depth perspective, dynamic composition',
+      useFor: ['journey', 'direction', 'depth'],
+      genres: ['documentary-historical', 'inspirational', 'business-brand']
+    },
+    'frame-within-frame': {
+      name: 'Frame Within Frame',
+      prompt: 'frame within frame composition, subject framed by environment, layered depth, cinematic framing',
+      useFor: ['focus', 'isolation', 'art'],
+      genres: ['cinematic', 'entertainment-drama', 'documentary-social']
+    }
+  },
+
+  // === LIGHTING STYLES ===
+  lighting: {
+    'natural': {
+      name: 'Natural Light',
+      prompt: 'natural lighting, soft daylight, realistic illumination, organic light sources',
+      mood: 'authentic, documentary, honest',
+      genres: ['documentary-nature', 'documentary-social', 'educational-tutorial']
+    },
+    'golden-hour': {
+      name: 'Golden Hour',
+      prompt: 'golden hour lighting, warm orange sunset glow, magical hour, romantic light',
+      mood: 'warm, hopeful, beautiful',
+      genres: ['inspirational', 'documentary-nature', 'business-brand']
+    },
+    'blue-hour': {
+      name: 'Blue Hour',
+      prompt: 'blue hour lighting, cool twilight tones, contemplative atmosphere, pre-dawn or post-sunset',
+      mood: 'melancholy, thoughtful, peaceful',
+      genres: ['documentary-historical', 'entertainment-drama', 'cinematic']
+    },
+    'high-key': {
+      name: 'High Key',
+      prompt: 'high key lighting, bright even illumination, minimal shadows, clean professional look',
+      mood: 'clean, optimistic, professional',
+      genres: ['business-product', 'educational-explainer', 'business-testimonial']
+    },
+    'low-key': {
+      name: 'Low Key / Noir',
+      prompt: 'low key lighting, dramatic shadows, high contrast, film noir style, chiaroscuro',
+      mood: 'mysterious, dramatic, intense',
+      genres: ['entertainment-horror', 'thriller', 'documentary-true-crime', 'entertainment-drama']
+    },
+    'rembrandt': {
+      name: 'Rembrandt Lighting',
+      prompt: 'Rembrandt lighting, triangle of light on cheek, classic portrait lighting, dramatic yet natural',
+      mood: 'classic, artistic, dignified',
+      genres: ['documentary-historical', 'business-testimonial', 'cinematic']
+    },
+    'neon': {
+      name: 'Neon / Cyberpunk',
+      prompt: 'neon lighting, vibrant colored lights, cyberpunk aesthetic, electric glow, urban night',
+      mood: 'futuristic, edgy, energetic',
+      genres: ['educational-science', 'social-viral', 'entertainment-comedy']
+    },
+    'silhouette': {
+      name: 'Silhouette',
+      prompt: 'silhouette lighting, backlit subject, dramatic outline, mysterious figure against light',
+      mood: 'dramatic, mysterious, iconic',
+      genres: ['inspirational', 'cinematic', 'documentary-social']
+    },
+    'soft-diffused': {
+      name: 'Soft Diffused',
+      prompt: 'soft diffused lighting, gentle shadows, flattering illumination, dreamy atmosphere',
+      mood: 'gentle, approachable, comforting',
+      genres: ['educational-tutorial', 'business-testimonial', 'inspirational']
+    },
+    'harsh-dramatic': {
+      name: 'Harsh Dramatic',
+      prompt: 'harsh dramatic lighting, strong shadows, high contrast, intense spotlight effect',
+      mood: 'intense, confrontational, powerful',
+      genres: ['entertainment-horror', 'thriller', 'business-brand']
+    }
+  },
+
+  // === COLOR PALETTES ===
+  colorPalettes: {
+    'teal-orange': {
+      name: 'Teal & Orange',
+      prompt: 'teal and orange color grading, complementary colors, cinematic blockbuster look, Hollywood color palette',
+      mood: 'cinematic, dynamic, polished',
+      genres: ['cinematic', 'entertainment-drama', 'business-brand']
+    },
+    'desaturated': {
+      name: 'Desaturated',
+      prompt: 'desaturated color palette, muted tones, subtle colors, understated elegance',
+      mood: 'serious, sophisticated, documentary',
+      genres: ['documentary-historical', 'documentary-true-crime', 'entertainment-drama']
+    },
+    'high-saturation': {
+      name: 'High Saturation',
+      prompt: 'high saturation colors, vibrant vivid palette, eye-catching hues, bold color choices',
+      mood: 'energetic, fun, attention-grabbing',
+      genres: ['social-viral', 'entertainment-comedy', 'educational-explainer']
+    },
+    'warm-tones': {
+      name: 'Warm Tones',
+      prompt: 'warm color palette, orange red yellow tones, cozy inviting atmosphere, sunset colors',
+      mood: 'nostalgic, comforting, friendly',
+      genres: ['inspirational', 'documentary-historical', 'business-testimonial']
+    },
+    'cool-tones': {
+      name: 'Cool Tones',
+      prompt: 'cool color palette, blue green teal tones, calm professional atmosphere, modern feel',
+      mood: 'professional, calm, trustworthy',
+      genres: ['educational-science', 'business-product', 'documentary-social']
+    },
+    'monochromatic': {
+      name: 'Monochromatic',
+      prompt: 'monochromatic color scheme, single color variations, sophisticated unified look, artistic palette',
+      mood: 'artistic, focused, elegant',
+      genres: ['cinematic', 'business-brand', 'documentary-historical']
+    },
+    'noir-bw': {
+      name: 'Noir Black & White',
+      prompt: 'black and white, film noir aesthetic, high contrast monochrome, classic cinema look',
+      mood: 'timeless, dramatic, artistic',
+      genres: ['documentary-historical', 'entertainment-drama', 'documentary-true-crime']
+    },
+    'pastel': {
+      name: 'Pastel',
+      prompt: 'pastel color palette, soft muted colors, gentle aesthetic, light and airy',
+      mood: 'gentle, approachable, modern',
+      genres: ['educational-tutorial', 'business-testimonial', 'inspirational']
+    },
+    'earth-tones': {
+      name: 'Earth Tones',
+      prompt: 'earth tone palette, natural browns greens, organic colors, grounded aesthetic',
+      mood: 'natural, authentic, grounded',
+      genres: ['documentary-nature', 'documentary-social', 'inspirational']
+    },
+    'neon-pop': {
+      name: 'Neon Pop',
+      prompt: 'neon pop colors, electric bright palette, bold contrasting hues, high energy colors',
+      mood: 'exciting, youthful, bold',
+      genres: ['social-viral', 'entertainment-comedy', 'educational-science']
+    }
+  },
+
+  // === MOOD ATMOSPHERES ===
+  moods: {
+    'epic': {
+      prompt: 'epic cinematic atmosphere, grand scale, awe-inspiring, majestic feel',
+      lighting: 'golden-hour',
+      composition: 'wide-establishing',
+      colorPalette: 'teal-orange'
+    },
+    'intimate': {
+      prompt: 'intimate personal atmosphere, close connection, emotional depth, private moment',
+      lighting: 'soft-diffused',
+      composition: 'close-up',
+      colorPalette: 'warm-tones'
+    },
+    'mysterious': {
+      prompt: 'mysterious atmospheric, enigmatic mood, hidden depths, intriguing shadows',
+      lighting: 'low-key',
+      composition: 'frame-within-frame',
+      colorPalette: 'desaturated'
+    },
+    'energetic': {
+      prompt: 'energetic dynamic atmosphere, high energy, exciting motion, vibrant action',
+      lighting: 'neon',
+      composition: 'dutch-angle',
+      colorPalette: 'high-saturation'
+    },
+    'contemplative': {
+      prompt: 'contemplative peaceful atmosphere, thoughtful mood, serene reflection, quiet beauty',
+      lighting: 'blue-hour',
+      composition: 'symmetrical',
+      colorPalette: 'cool-tones'
+    },
+    'tense': {
+      prompt: 'tense suspenseful atmosphere, building dread, uncomfortable anticipation, edge of seat',
+      lighting: 'harsh-dramatic',
+      composition: 'dutch-angle',
+      colorPalette: 'desaturated'
+    },
+    'hopeful': {
+      prompt: 'hopeful optimistic atmosphere, rising possibility, dawn of change, inspirational mood',
+      lighting: 'golden-hour',
+      composition: 'low-angle',
+      colorPalette: 'warm-tones'
+    },
+    'professional': {
+      prompt: 'professional polished atmosphere, clean competent, trustworthy quality, business appropriate',
+      lighting: 'high-key',
+      composition: 'rule-of-thirds',
+      colorPalette: 'cool-tones'
+    },
+    'nostalgic': {
+      prompt: 'nostalgic wistful atmosphere, remembering past, bittersweet memories, time gone by',
+      lighting: 'golden-hour',
+      composition: 'medium-shot',
+      colorPalette: 'warm-tones'
+    },
+    'dark': {
+      prompt: 'dark ominous atmosphere, foreboding shadows, dangerous undertones, threat lurking',
+      lighting: 'low-key',
+      composition: 'extreme-close-up',
+      colorPalette: 'noir-bw'
+    }
+  },
+
+  // === GENRE TO VISUAL MAPPING ===
+  genreVisuals: {
+    'documentary-nature': {
+      defaultComposition: 'wide-establishing',
+      defaultLighting: 'natural',
+      defaultPalette: 'earth-tones',
+      promptModifiers: 'nature documentary style, National Geographic quality, wildlife photography aesthetic, BBC Earth cinematography',
+      negativeModifiers: 'artificial, studio, urban, man-made'
+    },
+    'documentary-true-crime': {
+      defaultComposition: 'close-up',
+      defaultLighting: 'low-key',
+      defaultPalette: 'desaturated',
+      promptModifiers: 'true crime documentary style, investigative mood, evidence aesthetic, Making a Murderer cinematography',
+      negativeModifiers: 'bright, cheerful, colorful, happy'
+    },
+    'documentary-social': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'natural',
+      defaultPalette: 'desaturated',
+      promptModifiers: 'social documentary style, real life aesthetic, authentic journalism, The Social Dilemma cinematography',
+      negativeModifiers: 'staged, fake, advertisement, commercial'
+    },
+    'documentary-historical': {
+      defaultComposition: 'rule-of-thirds',
+      defaultLighting: 'rembrandt',
+      defaultPalette: 'warm-tones',
+      promptModifiers: 'historical documentary style, Ken Burns aesthetic, archival quality, epic history cinematography',
+      negativeModifiers: 'modern, futuristic, contemporary technology'
+    },
+    'educational-explainer': {
+      defaultComposition: 'symmetrical',
+      defaultLighting: 'high-key',
+      defaultPalette: 'high-saturation',
+      promptModifiers: 'explainer video style, Kurzgesagt aesthetic, clear visual metaphor, educational illustration',
+      negativeModifiers: 'confusing, cluttered, dark, unclear'
+    },
+    'educational-tutorial': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'soft-diffused',
+      defaultPalette: 'pastel',
+      promptModifiers: 'tutorial style, hands-on demonstration, clear instructional view, maker aesthetic',
+      negativeModifiers: 'confusing angle, unclear, messy, unprofessional'
+    },
+    'educational-science': {
+      defaultComposition: 'extreme-close-up',
+      defaultLighting: 'high-key',
+      defaultPalette: 'cool-tones',
+      promptModifiers: 'science visualization, Veritasium aesthetic, experimental setup, discovery moment',
+      negativeModifiers: 'abstract, unclear, non-scientific, magical'
+    },
+    'entertainment-comedy': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'high-key',
+      defaultPalette: 'high-saturation',
+      promptModifiers: 'comedy style, sitcom lighting, expressive framing, comedic timing visual',
+      negativeModifiers: 'dark, serious, scary, dramatic'
+    },
+    'entertainment-drama': {
+      defaultComposition: 'close-up',
+      defaultLighting: 'rembrandt',
+      defaultPalette: 'teal-orange',
+      promptModifiers: 'dramatic cinematography, Breaking Bad aesthetic, emotional depth, prestige TV quality',
+      negativeModifiers: 'flat, boring, amateur, sitcom-like'
+    },
+    'entertainment-horror': {
+      defaultComposition: 'dutch-angle',
+      defaultLighting: 'low-key',
+      defaultPalette: 'desaturated',
+      promptModifiers: 'horror cinematography, unsettling framing, dread atmosphere, psychological terror aesthetic',
+      negativeModifiers: 'bright, cheerful, safe, comforting'
+    },
+    'business-brand': {
+      defaultComposition: 'low-angle',
+      defaultLighting: 'golden-hour',
+      defaultPalette: 'teal-orange',
+      promptModifiers: 'brand commercial style, Nike ad aesthetic, aspirational imagery, Apple commercial quality',
+      negativeModifiers: 'cheap, amateur, stock photo, generic'
+    },
+    'business-product': {
+      defaultComposition: 'symmetrical',
+      defaultLighting: 'high-key',
+      defaultPalette: 'cool-tones',
+      promptModifiers: 'product photography, Apple keynote aesthetic, clean showcase, premium product visualization',
+      negativeModifiers: 'messy background, poor lighting, unprofessional, cluttered'
+    },
+    'business-testimonial': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'soft-diffused',
+      defaultPalette: 'warm-tones',
+      promptModifiers: 'testimonial interview style, authentic documentary feel, real person in real environment',
+      negativeModifiers: 'staged, fake, studio backdrop, corporate sterile'
+    },
+    'social-viral': {
+      defaultComposition: 'close-up',
+      defaultLighting: 'neon',
+      defaultPalette: 'neon-pop',
+      promptModifiers: 'viral content style, high impact visual, scroll-stopping image, TikTok aesthetic',
+      negativeModifiers: 'boring, generic, slow, subtle'
+    },
+    'social-storytime': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'soft-diffused',
+      defaultPalette: 'warm-tones',
+      promptModifiers: 'storytime aesthetic, engaging visual, personality-driven, relatable imagery',
+      negativeModifiers: 'corporate, impersonal, sterile, distant'
+    },
+    'series-docuseries': {
+      defaultComposition: 'wide-establishing',
+      defaultLighting: 'natural',
+      defaultPalette: 'teal-orange',
+      promptModifiers: 'docuseries cinematography, Drive to Survive aesthetic, episodic visual language, Netflix documentary quality',
+      negativeModifiers: 'amateur, inconsistent, low budget, single-shot'
+    },
+    'cinematic': {
+      defaultComposition: 'leading-lines',
+      defaultLighting: 'golden-hour',
+      defaultPalette: 'teal-orange',
+      promptModifiers: 'cinematic film quality, Christopher Nolan aesthetic, IMAX visual, blockbuster cinematography, anamorphic lens feel',
+      negativeModifiers: 'TV quality, amateur, flat, documentary'
+    },
+    'standard': {
+      defaultComposition: 'rule-of-thirds',
+      defaultLighting: 'natural',
+      defaultPalette: 'cool-tones',
+      promptModifiers: 'professional quality, clean composition, well-lit, broadcast quality',
+      negativeModifiers: 'amateur, blurry, poorly lit, distorted'
+    }
+  }
+};
+
+/**
+ * buildVisualPrompt - Constructs an enhanced visual prompt using Visual Intelligence
+ * @param {string} basePrompt - The original visual description from the script
+ * @param {object} options - { genre, productionMode, mood, visualSettings }
+ * @returns {object} - { enhancedPrompt, negativePrompt, visualMetadata }
+ */
+function buildVisualPrompt(basePrompt, options = {}) {
+  const {
+    genre = null,
+    productionMode = 'standard',
+    mood = null,
+    visualSettings = {},
+    style = 'cinematic'
+  } = options;
+
+  // Get genre visuals or fall back to production mode or standard
+  const genreVisual = VISUAL_INTELLIGENCE.genreVisuals[genre] ||
+                      VISUAL_INTELLIGENCE.genreVisuals[productionMode] ||
+                      VISUAL_INTELLIGENCE.genreVisuals['standard'];
+
+  // Get specific visual components (allow override from visualSettings)
+  const compositionKey = visualSettings.composition || genreVisual.defaultComposition;
+  const lightingKey = visualSettings.lighting || genreVisual.defaultLighting;
+  const paletteKey = visualSettings.colorPalette || genreVisual.defaultPalette;
+
+  const composition = VISUAL_INTELLIGENCE.compositions[compositionKey] || VISUAL_INTELLIGENCE.compositions['rule-of-thirds'];
+  const lighting = VISUAL_INTELLIGENCE.lighting[lightingKey] || VISUAL_INTELLIGENCE.lighting['natural'];
+  const palette = VISUAL_INTELLIGENCE.colorPalettes[paletteKey] || VISUAL_INTELLIGENCE.colorPalettes['cool-tones'];
+
+  // Get mood if specified
+  const moodSettings = mood ? VISUAL_INTELLIGENCE.moods[mood] : null;
+
+  // Build the enhanced prompt
+  const promptParts = [
+    basePrompt,
+    `Composition: ${composition.prompt}`,
+    `Lighting: ${lighting.prompt}`,
+    `Color: ${palette.prompt}`,
+    genreVisual.promptModifiers,
+    moodSettings?.prompt || '',
+    'high quality, detailed, professional, 8K resolution, sharp focus'
+  ].filter(Boolean);
+
+  const enhancedPrompt = promptParts.join('. ');
+
+  // Build negative prompt
+  const negativeParts = [
+    'blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur',
+    genreVisual.negativeModifiers || ''
+  ].filter(Boolean);
+
+  const negativePrompt = negativeParts.join(', ');
+
+  // Return structured result
+  return {
+    enhancedPrompt,
+    negativePrompt,
+    visualMetadata: {
+      genre,
+      productionMode,
+      composition: compositionKey,
+      lighting: lightingKey,
+      colorPalette: paletteKey,
+      mood
+    }
+  };
+}
+
 /**
  * creationWizardGenerateSceneImage - Generate a single scene image using RunPod
  *
  * Uses existing RunPod HiDream integration to generate storyboard images
+ * Now enhanced with Phase 3B Visual Intelligence
  */
 exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { projectId, sceneId, prompt, style, aspectRatio, settings } = data;
+  const {
+    projectId,
+    sceneId,
+    prompt,
+    style,
+    aspectRatio,
+    settings,
+    // Phase 3B: Visual Intelligence parameters
+    genre = null,
+    productionMode = 'standard',
+    mood = null,
+    visualSettings = {}
+  } = data;
 
   if (!prompt || prompt.trim().length < 10) {
     throw new functions.https.HttpsError('invalid-argument', 'Image prompt is required (min 10 chars)');
@@ -23719,26 +24979,17 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
   }
 
   try {
-    // Enhance prompt with style and quality keywords
-    const styleKeywords = {
-      modern: 'modern, sleek, clean design, contemporary',
-      cinematic: 'cinematic, dramatic lighting, film quality, movie still',
-      energetic: 'vibrant, dynamic, energetic, bold colors',
-      documentary: 'realistic, documentary style, natural lighting',
-      retro: 'retro, vintage, nostalgic, classic aesthetic',
-      futuristic: 'futuristic, sci-fi, high-tech, neon',
-      cartoon: 'cartoon style, animated, colorful illustration',
-      elegant: 'elegant, sophisticated, refined, luxury',
-      nature: 'natural, organic, earthy tones, outdoor',
-      dark: 'dark, moody, dramatic shadows, noir'
-    };
+    // Phase 3B: Use Visual Intelligence to build enhanced prompt
+    const visualResult = buildVisualPrompt(prompt, {
+      genre,
+      productionMode,
+      mood,
+      visualSettings,
+      style
+    });
 
-    const styleEnhancement = styleKeywords[style] || styleKeywords.cinematic;
-
-    // Build enhanced prompt
-    const enhancedPrompt = `${prompt}. Style: ${styleEnhancement}. High quality, detailed, professional, 4K resolution.`;
-
-    const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur";
+    const enhancedPrompt = visualResult.enhancedPrompt;
+    const negativePrompt = visualResult.negativePrompt;
 
     // Determine dimensions based on aspect ratio
     const dimensions = {
@@ -23817,6 +25068,8 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
       imageUrl: publicUrl,
       fileName,
       prompt: enhancedPrompt,
+      // Phase 3B: Include visual metadata
+      visualMetadata: visualResult.visualMetadata,
       checkEndpoint: `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`
     };
 
@@ -23825,6 +25078,4515 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate scene image'));
   }
+});
+
+/**
+ * creationWizardGetVisualStyles - Get available Visual Intelligence options
+ * Phase 3B: Exposes compositions, lighting, color palettes for frontend UI
+ */
+exports.creationWizardGetVisualStyles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Build simplified options for frontend
+  const compositions = Object.entries(VISUAL_INTELLIGENCE.compositions).map(([id, comp]) => ({
+    id,
+    name: comp.name,
+    description: comp.useFor.join(', '),
+    genres: comp.genres
+  }));
+
+  const lighting = Object.entries(VISUAL_INTELLIGENCE.lighting).map(([id, light]) => ({
+    id,
+    name: light.name,
+    mood: light.mood,
+    genres: light.genres
+  }));
+
+  const colorPalettes = Object.entries(VISUAL_INTELLIGENCE.colorPalettes).map(([id, palette]) => ({
+    id,
+    name: palette.name,
+    mood: palette.mood,
+    genres: palette.genres
+  }));
+
+  const moods = Object.entries(VISUAL_INTELLIGENCE.moods).map(([id, mood]) => ({
+    id,
+    name: id.charAt(0).toUpperCase() + id.slice(1),
+    lighting: mood.lighting,
+    composition: mood.composition,
+    colorPalette: mood.colorPalette
+  }));
+
+  return {
+    success: true,
+    compositions,
+    lighting,
+    colorPalettes,
+    moods,
+    genreDefaults: VISUAL_INTELLIGENCE.genreVisuals
+  };
+});
+
+// ============================================================
+// PHASE 3C: MULTI-FORMAT EXPORT INTELLIGENCE
+// Platform optimization, aspect ratios, and series consistency
+// ============================================================
+
+const EXPORT_INTELLIGENCE = {
+  // Platform Profiles - comprehensive specs for each platform
+  platforms: {
+    'youtube-shorts': {
+      name: 'YouTube Shorts',
+      icon: '🎬',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 30, max: 58 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '256MB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'fast',
+      features: ['vertical', 'mobile-first', 'loop-friendly'],
+      titleStyle: 'bold-overlay',
+      captionStyle: 'large-centered',
+      musicVolume: 0.7,
+      algorithm: {
+        retentionFocus: true,
+        loopBonus: true,
+        hashtagLimit: 3
+      }
+    },
+    'youtube-standard': {
+      name: 'YouTube Standard',
+      icon: '📺',
+      aspectRatio: '16:9',
+      maxDuration: 720, // 12 hours technically, but 12 min optimal
+      optimalDuration: { min: 480, max: 900 }, // 8-15 minutes
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '256GB',
+      codec: 'h264',
+      bitrate: { video: '16M', audio: '320k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 30 },
+      pacing: 'balanced',
+      features: ['chapters', 'end-screens', 'cards', 'descriptions'],
+      titleStyle: 'thumbnail-bait',
+      captionStyle: 'standard-bottom',
+      musicVolume: 0.3,
+      algorithm: {
+        watchTimeKey: true,
+        ctrImportant: true,
+        retentionCurve: 'gradual'
+      }
+    },
+    'youtube-longform': {
+      name: 'YouTube Long-form',
+      icon: '🎥',
+      aspectRatio: '16:9',
+      maxDuration: 7200, // 2 hours
+      optimalDuration: { min: 900, max: 2700 }, // 15-45 minutes
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '256GB',
+      codec: 'h264',
+      bitrate: { video: '20M', audio: '320k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 60 },
+      pacing: 'contemplative',
+      features: ['chapters', 'timestamps', 'deep-dive', 'sponsorship-segments'],
+      titleStyle: 'curiosity-gap',
+      captionStyle: 'standard-bottom',
+      musicVolume: 0.2,
+      algorithm: {
+        sessionTimeBonus: true,
+        subscriberConversion: true
+      }
+    },
+    'youtube-premiere': {
+      name: 'YouTube Premiere',
+      icon: '🌟',
+      aspectRatio: '16:9',
+      maxDuration: 7200,
+      optimalDuration: { min: 600, max: 3600 },
+      resolution: { width: 3840, height: 2160 }, // 4K
+      maxFileSize: '256GB',
+      codec: 'h265',
+      bitrate: { video: '45M', audio: '320k' },
+      fps: 60,
+      hookTiming: { start: 0, critical: 30 },
+      pacing: 'cinematic',
+      features: ['live-chat', 'countdown', '4k', 'hdr'],
+      titleStyle: 'event-style',
+      captionStyle: 'cinematic-subtitles',
+      musicVolume: 0.4
+    },
+    'tiktok-quick': {
+      name: 'TikTok Quick',
+      icon: '⚡',
+      aspectRatio: '9:16',
+      maxDuration: 15,
+      optimalDuration: { min: 7, max: 15 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '287MB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 1 },
+      pacing: 'rapid-fire',
+      features: ['trending-sounds', 'duet-friendly', 'stitch-friendly'],
+      titleStyle: 'text-overlay',
+      captionStyle: 'tiktok-style',
+      musicVolume: 0.8,
+      algorithm: {
+        completionRate: true,
+        shareBoost: true,
+        soundTrending: true
+      }
+    },
+    'tiktok-standard': {
+      name: 'TikTok Standard',
+      icon: '🎵',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 21, max: 34 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '287MB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 2 },
+      pacing: 'fast',
+      features: ['trending-sounds', 'effects', 'text-to-speech'],
+      titleStyle: 'text-overlay',
+      captionStyle: 'tiktok-style',
+      musicVolume: 0.75
+    },
+    'tiktok-extended': {
+      name: 'TikTok Extended',
+      icon: '📱',
+      aspectRatio: '9:16',
+      maxDuration: 180, // 3 minutes
+      optimalDuration: { min: 60, max: 120 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '287MB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'balanced',
+      features: ['series', 'storytelling', 'educational'],
+      titleStyle: 'text-overlay',
+      captionStyle: 'tiktok-style',
+      musicVolume: 0.6
+    },
+    'instagram-reels': {
+      name: 'Instagram Reels',
+      icon: '📸',
+      aspectRatio: '9:16',
+      maxDuration: 90,
+      optimalDuration: { min: 15, max: 30 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '4GB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 2 },
+      pacing: 'fast',
+      features: ['audio-sync', 'effects', 'collab'],
+      titleStyle: 'aesthetic-overlay',
+      captionStyle: 'instagram-style',
+      musicVolume: 0.7,
+      algorithm: {
+        saveBoost: true,
+        shareBoost: true,
+        aestheticPriority: true
+      }
+    },
+    'instagram-stories': {
+      name: 'Instagram Stories',
+      icon: '📖',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 5, max: 15 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '4GB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '128k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 1 },
+      pacing: 'rapid-fire',
+      features: ['swipe-up', 'polls', 'questions', 'stickers'],
+      titleStyle: 'sticker-overlay',
+      captionStyle: 'story-text',
+      musicVolume: 0.5
+    },
+    'instagram-feed': {
+      name: 'Instagram Feed Video',
+      icon: '🖼️',
+      aspectRatio: '4:5',
+      maxDuration: 60,
+      optimalDuration: { min: 15, max: 45 },
+      resolution: { width: 1080, height: 1350 },
+      maxFileSize: '4GB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'balanced',
+      features: ['carousel-friendly', 'thumbnail-preview'],
+      titleStyle: 'minimal',
+      captionStyle: 'standard-bottom',
+      musicVolume: 0.4
+    },
+    'facebook-reels': {
+      name: 'Facebook Reels',
+      icon: '📘',
+      aspectRatio: '9:16',
+      maxDuration: 90,
+      optimalDuration: { min: 15, max: 60 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '4GB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'balanced',
+      features: ['cross-post-instagram', 'monetization'],
+      titleStyle: 'text-overlay',
+      captionStyle: 'facebook-style',
+      musicVolume: 0.6
+    },
+    'facebook-watch': {
+      name: 'Facebook Watch',
+      icon: '📺',
+      aspectRatio: '16:9',
+      maxDuration: 14400, // 4 hours
+      optimalDuration: { min: 180, max: 600 }, // 3-10 minutes
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '10GB',
+      codec: 'h264',
+      bitrate: { video: '12M', audio: '256k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 10 },
+      pacing: 'balanced',
+      features: ['ad-breaks', 'series', 'episodes'],
+      titleStyle: 'tv-style',
+      captionStyle: 'standard-bottom',
+      musicVolume: 0.3
+    },
+    'linkedin-video': {
+      name: 'LinkedIn Video',
+      icon: '💼',
+      aspectRatio: '16:9',
+      maxDuration: 600, // 10 minutes
+      optimalDuration: { min: 30, max: 120 },
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '5GB',
+      codec: 'h264',
+      bitrate: { video: '10M', audio: '256k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 5 },
+      pacing: 'professional',
+      features: ['native-captions', 'professional-tone'],
+      titleStyle: 'professional',
+      captionStyle: 'accessible-captions',
+      musicVolume: 0.15,
+      algorithm: {
+        dwellTimeKey: true,
+        commentBoost: true
+      }
+    },
+    'twitter-video': {
+      name: 'Twitter/X Video',
+      icon: '🐦',
+      aspectRatio: '16:9',
+      maxDuration: 140, // 2:20
+      optimalDuration: { min: 15, max: 60 },
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '512MB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'fast',
+      features: ['auto-loop', 'muted-default'],
+      titleStyle: 'minimal',
+      captionStyle: 'burned-in',
+      musicVolume: 0.4
+    },
+    'snapchat-spotlight': {
+      name: 'Snapchat Spotlight',
+      icon: '👻',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 10, max: 30 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '1GB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '128k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 1 },
+      pacing: 'rapid-fire',
+      features: ['ar-lenses', 'sounds'],
+      titleStyle: 'snap-style',
+      captionStyle: 'snap-text',
+      musicVolume: 0.8
+    },
+    'pinterest-idea': {
+      name: 'Pinterest Idea Pin',
+      icon: '📌',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 15, max: 45 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '2GB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 2 },
+      pacing: 'balanced',
+      features: ['multi-page', 'tutorial-friendly', 'save-focused'],
+      titleStyle: 'instructional',
+      captionStyle: 'step-by-step',
+      musicVolume: 0.4
+    },
+    'netflix-episode': {
+      name: 'Netflix-Style Episode',
+      icon: '🎬',
+      aspectRatio: '16:9',
+      maxDuration: 3600, // 60 minutes
+      optimalDuration: { min: 1320, max: 2700 }, // 22-45 minutes
+      resolution: { width: 3840, height: 2160 }, // 4K
+      maxFileSize: '100GB',
+      codec: 'h265',
+      bitrate: { video: '45M', audio: '640k' },
+      fps: 24, // Cinematic
+      hookTiming: { start: 0, critical: 180 }, // 3 minute cold open
+      pacing: 'cinematic',
+      features: ['hdr', 'dolby-atmos', 'chapters', 'skip-intro', 'credits'],
+      titleStyle: 'cinematic-title-card',
+      captionStyle: 'netflix-subtitles',
+      musicVolume: 0.35,
+      structure: {
+        coldOpen: { duration: 180, required: true },
+        titleSequence: { duration: 60, required: true },
+        actBreaks: 4,
+        credits: { duration: 90, required: true }
+      }
+    },
+    'netflix-movie': {
+      name: 'Netflix-Style Movie',
+      icon: '🎥',
+      aspectRatio: '2.39:1', // Cinemascope
+      maxDuration: 10800, // 3 hours
+      optimalDuration: { min: 5400, max: 9000 }, // 90-150 minutes
+      resolution: { width: 4096, height: 1716 }, // 4K Cinemascope
+      maxFileSize: '200GB',
+      codec: 'h265',
+      bitrate: { video: '80M', audio: '768k' },
+      fps: 24,
+      hookTiming: { start: 0, critical: 600 }, // 10 minute setup
+      pacing: 'cinematic',
+      features: ['hdr10+', 'dolby-vision', 'dolby-atmos', '4k-dcp'],
+      titleStyle: 'film-title-sequence',
+      captionStyle: 'film-subtitles',
+      musicVolume: 0.4,
+      structure: {
+        actOne: { percentage: 25 },
+        actTwo: { percentage: 50 },
+        actThree: { percentage: 25 }
+      }
+    },
+    'broadcast-tv': {
+      name: 'Broadcast TV',
+      icon: '📡',
+      aspectRatio: '16:9',
+      maxDuration: 2640, // 44 minutes (1 hour slot minus ads)
+      optimalDuration: { min: 1260, max: 2640 }, // 21-44 minutes
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '50GB',
+      codec: 'prores',
+      bitrate: { video: '220M', audio: '1536k' },
+      fps: 30, // 29.97 drop frame
+      hookTiming: { start: 0, critical: 120 },
+      pacing: 'balanced',
+      features: ['ad-breaks', 'act-structure', 'cold-open', 'broadcast-safe'],
+      titleStyle: 'broadcast-bumper',
+      captionStyle: 'cea-608',
+      musicVolume: 0.3,
+      structure: {
+        coldOpen: { duration: 120, required: false },
+        actBreaks: [420, 840, 1260, 1680], // Break points in seconds
+        bumpers: { duration: 5, required: true }
+      }
+    },
+    'documentary-feature': {
+      name: 'Documentary Feature',
+      icon: '🎞️',
+      aspectRatio: '16:9',
+      maxDuration: 7200, // 2 hours
+      optimalDuration: { min: 4800, max: 6600 }, // 80-110 minutes
+      resolution: { width: 3840, height: 2160 },
+      maxFileSize: '150GB',
+      codec: 'h265',
+      bitrate: { video: '50M', audio: '512k' },
+      fps: 24,
+      hookTiming: { start: 0, critical: 300 },
+      pacing: 'contemplative',
+      features: ['archival-footage', 'interviews', 'b-roll-heavy', 'voice-over'],
+      titleStyle: 'documentary-title',
+      captionStyle: 'documentary-subtitles',
+      musicVolume: 0.25
+    }
+  },
+
+  // Aspect Ratio Specifications
+  aspectRatios: {
+    '16:9': {
+      name: 'Landscape (16:9)',
+      ratio: 16/9,
+      width: 1920,
+      height: 1080,
+      use: ['youtube', 'facebook-watch', 'linkedin', 'twitter', 'broadcast'],
+      reframeFrom: {
+        '9:16': 'center-crop-or-letterbox',
+        '1:1': 'pillarbox',
+        '4:5': 'pillarbox',
+        '2.39:1': 'letterbox'
+      }
+    },
+    '9:16': {
+      name: 'Portrait (9:16)',
+      ratio: 9/16,
+      width: 1080,
+      height: 1920,
+      use: ['tiktok', 'instagram-reels', 'youtube-shorts', 'snapchat', 'pinterest'],
+      reframeFrom: {
+        '16:9': 'center-crop-or-pillarbox',
+        '1:1': 'extend-vertical',
+        '4:5': 'extend-top-bottom',
+        '2.39:1': 'pillarbox-heavy'
+      }
+    },
+    '1:1': {
+      name: 'Square (1:1)',
+      ratio: 1,
+      width: 1080,
+      height: 1080,
+      use: ['instagram-feed', 'facebook-feed', 'twitter-square'],
+      reframeFrom: {
+        '16:9': 'center-crop',
+        '9:16': 'center-crop',
+        '4:5': 'crop-top-bottom',
+        '2.39:1': 'center-crop-heavy'
+      }
+    },
+    '4:5': {
+      name: 'Portrait Feed (4:5)',
+      ratio: 4/5,
+      width: 1080,
+      height: 1350,
+      use: ['instagram-feed', 'facebook-feed'],
+      reframeFrom: {
+        '16:9': 'center-crop',
+        '9:16': 'crop-top-bottom',
+        '1:1': 'extend-bottom',
+        '2.39:1': 'center-crop'
+      }
+    },
+    '4:3': {
+      name: 'Classic (4:3)',
+      ratio: 4/3,
+      width: 1440,
+      height: 1080,
+      use: ['retro-style', 'archive-footage'],
+      reframeFrom: {
+        '16:9': 'crop-sides',
+        '9:16': 'letterbox-heavy',
+        '1:1': 'extend-sides'
+      }
+    },
+    '2.39:1': {
+      name: 'Cinemascope (2.39:1)',
+      ratio: 2.39,
+      width: 2560,
+      height: 1072,
+      use: ['film', 'netflix-movie', 'cinematic'],
+      reframeFrom: {
+        '16:9': 'extend-width-or-crop-height',
+        '9:16': 'not-recommended',
+        '1:1': 'not-recommended'
+      }
+    },
+    '2.35:1': {
+      name: 'Widescreen (2.35:1)',
+      ratio: 2.35,
+      width: 2540,
+      height: 1080,
+      use: ['film', 'theatrical'],
+      reframeFrom: {
+        '16:9': 'letterbox-or-crop'
+      }
+    },
+    '21:9': {
+      name: 'Ultra-Wide (21:9)',
+      ratio: 21/9,
+      width: 2560,
+      height: 1080,
+      use: ['gaming', 'ultra-wide-monitors'],
+      reframeFrom: {
+        '16:9': 'extend-sides'
+      }
+    }
+  },
+
+  // Duration Presets by Content Type
+  durationPresets: {
+    'micro-content': {
+      name: 'Micro Content',
+      icon: '⚡',
+      duration: { min: 5, max: 15 },
+      platforms: ['tiktok-quick', 'instagram-stories', 'snapchat-spotlight'],
+      structure: {
+        hook: { duration: 1, required: true },
+        content: { duration: 10, required: true },
+        cta: { duration: 2, required: false }
+      },
+      pacing: 'rapid-fire',
+      sceneCount: { min: 3, max: 8 }
+    },
+    'short-form': {
+      name: 'Short-Form',
+      icon: '🎬',
+      duration: { min: 15, max: 60 },
+      platforms: ['youtube-shorts', 'tiktok-standard', 'instagram-reels'],
+      structure: {
+        hook: { duration: 3, required: true },
+        setup: { duration: 10, required: true },
+        content: { duration: 35, required: true },
+        payoff: { duration: 10, required: true },
+        cta: { duration: 2, required: false }
+      },
+      pacing: 'fast',
+      sceneCount: { min: 6, max: 15 }
+    },
+    'medium-form': {
+      name: 'Medium-Form',
+      icon: '📺',
+      duration: { min: 60, max: 300 },
+      platforms: ['tiktok-extended', 'twitter-video', 'linkedin-video'],
+      structure: {
+        hook: { duration: 10, required: true },
+        intro: { duration: 20, required: true },
+        mainContent: { duration: 200, required: true },
+        conclusion: { duration: 30, required: true },
+        cta: { duration: 10, required: true }
+      },
+      pacing: 'balanced',
+      sceneCount: { min: 10, max: 30 }
+    },
+    'standard-youtube': {
+      name: 'Standard YouTube',
+      icon: '▶️',
+      duration: { min: 480, max: 900 },
+      platforms: ['youtube-standard'],
+      structure: {
+        hook: { duration: 30, required: true },
+        intro: { duration: 30, required: true },
+        chapterOne: { duration: 180, required: true },
+        chapterTwo: { duration: 180, required: true },
+        chapterThree: { duration: 120, required: true },
+        conclusion: { duration: 60, required: true },
+        cta: { duration: 30, required: true }
+      },
+      pacing: 'balanced',
+      sceneCount: { min: 20, max: 50 },
+      features: ['chapters', 'timestamps', 'pattern-interrupt']
+    },
+    'deep-dive': {
+      name: 'Deep Dive',
+      icon: '🔬',
+      duration: { min: 900, max: 2700 },
+      platforms: ['youtube-longform'],
+      structure: {
+        hook: { duration: 60, required: true },
+        overview: { duration: 120, required: true },
+        deepDive: { duration: 1800, required: true },
+        examples: { duration: 300, required: true },
+        conclusion: { duration: 180, required: true },
+        cta: { duration: 60, required: true }
+      },
+      pacing: 'contemplative',
+      sceneCount: { min: 40, max: 100 },
+      features: ['chapters', 'timestamps', 'sponsor-segments']
+    },
+    'tv-episode': {
+      name: 'TV Episode',
+      icon: '📡',
+      duration: { min: 1200, max: 2700 },
+      platforms: ['netflix-episode', 'broadcast-tv'],
+      structure: {
+        coldOpen: { duration: 180, required: true },
+        titleSequence: { duration: 60, required: true },
+        actOne: { duration: 600, required: true },
+        actBreak: { duration: 5, required: false },
+        actTwo: { duration: 600, required: true },
+        actBreak2: { duration: 5, required: false },
+        actThree: { duration: 480, required: true },
+        resolution: { duration: 180, required: true },
+        teaser: { duration: 60, required: false },
+        credits: { duration: 90, required: true }
+      },
+      pacing: 'cinematic',
+      sceneCount: { min: 30, max: 60 }
+    },
+    'feature-film': {
+      name: 'Feature Film',
+      icon: '🎥',
+      duration: { min: 5400, max: 10800 },
+      platforms: ['netflix-movie'],
+      structure: {
+        openingSequence: { duration: 300, required: true },
+        actOne: { percentage: 25, required: true },
+        firstPlotPoint: { duration: 60, required: true },
+        actTwo: { percentage: 50, required: true },
+        midpoint: { duration: 60, required: true },
+        actThree: { percentage: 25, required: true },
+        climax: { duration: 300, required: true },
+        resolution: { duration: 180, required: true },
+        credits: { duration: 300, required: true }
+      },
+      pacing: 'cinematic',
+      sceneCount: { min: 60, max: 150 }
+    },
+    'documentary': {
+      name: 'Documentary',
+      icon: '🎞️',
+      duration: { min: 2400, max: 7200 },
+      platforms: ['documentary-feature', 'youtube-longform'],
+      structure: {
+        opening: { duration: 300, required: true },
+        thesis: { duration: 180, required: true },
+        exploration: { duration: 3600, required: true },
+        counterpoint: { duration: 600, required: false },
+        conclusion: { duration: 300, required: true },
+        callToAction: { duration: 120, required: false },
+        credits: { duration: 180, required: true }
+      },
+      pacing: 'contemplative',
+      sceneCount: { min: 40, max: 120 }
+    }
+  },
+
+  // Series/Episode Consistency Templates
+  seriesTemplates: {
+    'youtube-series': {
+      name: 'YouTube Series',
+      episodeCount: { min: 5, max: 100 },
+      consistency: {
+        intro: { duration: 10, style: 'branded', required: true },
+        outro: { duration: 20, style: 'subscribe-cta', required: true },
+        thumbnailStyle: 'consistent-branding',
+        titleFormat: '[Series Name] - Episode {n}: {title}',
+        chaptersConsistent: true
+      },
+      branding: {
+        logoPlacement: 'corner-watermark',
+        colorScheme: 'from-brand',
+        fontFamily: 'consistent',
+        musicTheme: 'signature-intro'
+      },
+      scheduling: {
+        releasePattern: 'weekly',
+        suggestedDays: ['tuesday', 'thursday', 'saturday']
+      }
+    },
+    'netflix-series': {
+      name: 'Streaming Series',
+      episodeCount: { min: 6, max: 13 },
+      consistency: {
+        titleSequence: { duration: 60, style: 'cinematic', required: true },
+        recap: { duration: 60, style: 'previouslyOn', required: false },
+        teaser: { duration: 60, style: 'nextOn', required: false },
+        credits: { duration: 90, style: 'scrolling', required: true }
+      },
+      branding: {
+        showLogo: 'title-card',
+        episodeTitleCard: true,
+        creditStyle: 'network-style'
+      },
+      narrative: {
+        arcType: 'serialized',
+        cliffhangers: true,
+        characterDevelopment: 'progressive'
+      }
+    },
+    'docuseries': {
+      name: 'Documentary Series',
+      episodeCount: { min: 3, max: 10 },
+      consistency: {
+        intro: { duration: 90, style: 'thematic', required: true },
+        interviewStyle: 'consistent-framing',
+        graphicsPackage: 'unified',
+        archivalTreatment: 'consistent-grade'
+      },
+      branding: {
+        titleTreatment: 'documentary-style',
+        lowerThirds: 'consistent-design',
+        transitionStyle: 'thematic'
+      },
+      narrative: {
+        arcType: 'episodic-with-throughline',
+        interviewSubjects: 'recurring'
+      }
+    },
+    'tiktok-series': {
+      name: 'TikTok Series',
+      episodeCount: { min: 3, max: 20 },
+      consistency: {
+        hook: { style: 'series-branded', required: true },
+        partIndicator: { style: 'Part {n}', required: true },
+        cliffhanger: { required: true }
+      },
+      branding: {
+        soundSignature: 'consistent',
+        captionStyle: 'consistent',
+        visualSignature: 'recognizable-opening'
+      },
+      scheduling: {
+        releasePattern: 'daily-or-bidaily',
+        cliffhangerStrategy: 'engagement-bait'
+      }
+    },
+    'educational-course': {
+      name: 'Educational Course',
+      episodeCount: { min: 5, max: 50 },
+      consistency: {
+        intro: { duration: 15, style: 'lesson-number', required: true },
+        objectives: { duration: 30, style: 'learning-goals', required: true },
+        summary: { duration: 30, style: 'key-takeaways', required: true },
+        nextLesson: { duration: 10, style: 'preview', required: true }
+      },
+      branding: {
+        courseTitle: 'persistent-header',
+        progressIndicator: true,
+        chapterMarkers: true
+      },
+      structure: {
+        moduleGrouping: true,
+        prerequisites: true,
+        quizPoints: 'end-of-lesson'
+      }
+    }
+  },
+
+  // Smart Reframe Rules
+  reframeRules: {
+    'subject-tracking': {
+      description: 'Keep main subject in frame during reframe',
+      priority: 'high',
+      faceDetection: true,
+      safeZone: 0.8
+    },
+    'text-safe': {
+      description: 'Ensure text/graphics remain visible',
+      priority: 'high',
+      textDetection: true,
+      marginBuffer: 0.1
+    },
+    'action-safe': {
+      description: 'Keep action within safe zones',
+      priority: 'medium',
+      motionTracking: true,
+      safeZone: 0.9
+    },
+    'thirds-recompose': {
+      description: 'Recompose using rule of thirds',
+      priority: 'medium',
+      gridAlignment: true
+    },
+    'headroom-adjust': {
+      description: 'Maintain appropriate headroom for subjects',
+      priority: 'medium',
+      headroomRatio: 0.15
+    }
+  },
+
+  // Export Quality Presets
+  qualityPresets: {
+    'web-optimized': {
+      name: 'Web Optimized',
+      resolution: '1080p',
+      bitrate: 'adaptive',
+      codec: 'h264',
+      profile: 'high',
+      preset: 'medium',
+      twoPass: false
+    },
+    'high-quality': {
+      name: 'High Quality',
+      resolution: '1080p',
+      bitrate: 'high',
+      codec: 'h264',
+      profile: 'high',
+      preset: 'slow',
+      twoPass: true
+    },
+    '4k-master': {
+      name: '4K Master',
+      resolution: '2160p',
+      bitrate: 'very-high',
+      codec: 'h265',
+      profile: 'main10',
+      preset: 'slow',
+      twoPass: true,
+      hdr: 'optional'
+    },
+    'broadcast-master': {
+      name: 'Broadcast Master',
+      resolution: '1080i',
+      bitrate: 'broadcast-standard',
+      codec: 'prores',
+      profile: '422-hq',
+      colorSpace: 'rec709',
+      audioChannels: 8
+    },
+    'archive-master': {
+      name: 'Archive Master',
+      resolution: 'native',
+      bitrate: 'lossless',
+      codec: 'prores',
+      profile: '4444',
+      colorSpace: 'native',
+      preserveMetadata: true
+    }
+  }
+};
+
+/**
+ * Get recommended export settings based on content and platform
+ */
+function getExportRecommendations(options = {}) {
+  const {
+    platform,
+    contentType,
+    duration,
+    hasDialogue,
+    genre,
+    targetAudience,
+    seriesInfo
+  } = options;
+
+  const platformProfile = EXPORT_INTELLIGENCE.platforms[platform];
+  const recommendations = {
+    platform: platformProfile,
+    adjustments: [],
+    warnings: []
+  };
+
+  // Duration recommendations
+  if (duration && platformProfile) {
+    const { optimalDuration } = platformProfile;
+    if (duration < optimalDuration.min) {
+      recommendations.adjustments.push({
+        type: 'duration',
+        suggestion: `Consider extending to at least ${optimalDuration.min}s for better ${platform} performance`,
+        priority: 'medium'
+      });
+    } else if (duration > optimalDuration.max) {
+      recommendations.adjustments.push({
+        type: 'duration',
+        suggestion: `Consider trimming to under ${optimalDuration.max}s or splitting into parts`,
+        priority: 'high'
+      });
+    }
+  }
+
+  // Hook timing check
+  if (platformProfile?.hookTiming) {
+    recommendations.hookAdvice = {
+      criticalWindow: platformProfile.hookTiming.critical,
+      message: `Your hook must land within the first ${platformProfile.hookTiming.critical} seconds for ${platformProfile.name}`
+    };
+  }
+
+  // Pacing recommendation
+  if (platformProfile?.pacing) {
+    recommendations.pacingAdvice = {
+      style: platformProfile.pacing,
+      message: getPacingAdvice(platformProfile.pacing)
+    };
+  }
+
+  // Caption requirements
+  if (platformProfile) {
+    recommendations.captionAdvice = {
+      style: platformProfile.captionStyle,
+      required: ['tiktok', 'instagram', 'facebook', 'linkedin'].some(p => platform.includes(p)),
+      message: getCaptionAdvice(platform)
+    };
+  }
+
+  // Series consistency check
+  if (seriesInfo) {
+    const seriesTemplate = EXPORT_INTELLIGENCE.seriesTemplates[seriesInfo.template];
+    if (seriesTemplate) {
+      recommendations.seriesConsistency = {
+        template: seriesTemplate,
+        checks: getSeriesConsistencyChecks(seriesTemplate, seriesInfo)
+      };
+    }
+  }
+
+  return recommendations;
+}
+
+function getPacingAdvice(pacing) {
+  const advice = {
+    'rapid-fire': 'Use quick cuts (0.5-2s), high energy, constant motion. No dead space.',
+    'fast': 'Maintain momentum with 2-4s cuts. Quick transitions. Energetic music.',
+    'balanced': 'Mix of pacing. 3-6s average cuts. Allow breathing room at key moments.',
+    'contemplative': 'Longer shots (5-15s). Let scenes breathe. Atmospheric pacing.',
+    'cinematic': 'Film-style pacing. Motivated cuts only. Let emotion build.',
+    'professional': 'Clear, measured pacing. Emphasis on clarity over energy.'
+  };
+  return advice[pacing] || 'Standard pacing recommended';
+}
+
+function getCaptionAdvice(platform) {
+  if (platform.includes('tiktok') || platform.includes('instagram')) {
+    return 'Large, centered captions essential. 85%+ of viewers watch without sound.';
+  } else if (platform.includes('linkedin')) {
+    return 'Professional captions required. Accessibility-focused formatting.';
+  } else if (platform.includes('youtube')) {
+    return 'Optional but recommended. Use YouTube auto-captions or upload SRT.';
+  } else if (platform.includes('netflix')) {
+    return 'Multiple language subtitle tracks required. Follow Netflix Timed Text Style Guide.';
+  }
+  return 'Captions recommended for accessibility';
+}
+
+function getSeriesConsistencyChecks(template, seriesInfo) {
+  const checks = [];
+
+  if (template.consistency.intro) {
+    checks.push({
+      element: 'intro',
+      required: template.consistency.intro.required,
+      expectedDuration: template.consistency.intro.duration,
+      status: 'pending'
+    });
+  }
+
+  if (template.consistency.outro) {
+    checks.push({
+      element: 'outro',
+      required: template.consistency.outro.required,
+      expectedDuration: template.consistency.outro.duration,
+      status: 'pending'
+    });
+  }
+
+  if (template.branding) {
+    checks.push({
+      element: 'branding',
+      required: true,
+      elements: Object.keys(template.branding),
+      status: 'pending'
+    });
+  }
+
+  return checks;
+}
+
+/**
+ * Generate multi-platform export package
+ */
+function generateExportPackage(options = {}) {
+  const { primaryPlatform, additionalPlatforms = [], content, seriesInfo } = options;
+
+  const exportPackage = {
+    primary: null,
+    variants: [],
+    assets: [],
+    metadata: {}
+  };
+
+  // Primary platform export
+  const primaryProfile = EXPORT_INTELLIGENCE.platforms[primaryPlatform];
+  if (primaryProfile) {
+    exportPackage.primary = {
+      platform: primaryPlatform,
+      profile: primaryProfile,
+      recommendations: getExportRecommendations({
+        platform: primaryPlatform,
+        ...content,
+        seriesInfo
+      })
+    };
+  }
+
+  // Generate variants for additional platforms
+  for (const platform of additionalPlatforms) {
+    const profile = EXPORT_INTELLIGENCE.platforms[platform];
+    if (profile) {
+      const variant = {
+        platform,
+        profile,
+        recommendations: getExportRecommendations({ platform, ...content }),
+        reframeNeeded: profile.aspectRatio !== primaryProfile?.aspectRatio,
+        durationAdjustment: getDurationAdjustment(content.duration, profile)
+      };
+
+      if (variant.reframeNeeded) {
+        variant.reframeStrategy = getReframeStrategy(
+          primaryProfile?.aspectRatio,
+          profile.aspectRatio
+        );
+      }
+
+      exportPackage.variants.push(variant);
+    }
+  }
+
+  // Generate required assets list
+  exportPackage.assets = generateAssetsList(exportPackage);
+
+  return exportPackage;
+}
+
+function getDurationAdjustment(currentDuration, targetProfile) {
+  if (!currentDuration || !targetProfile) return null;
+
+  const { optimalDuration, maxDuration } = targetProfile;
+
+  if (currentDuration > maxDuration) {
+    return {
+      action: 'split',
+      message: `Content exceeds ${targetProfile.name} maximum. Split into ${Math.ceil(currentDuration / maxDuration)} parts.`,
+      partCount: Math.ceil(currentDuration / maxDuration)
+    };
+  } else if (currentDuration > optimalDuration.max) {
+    return {
+      action: 'trim',
+      message: `Consider trimming from ${currentDuration}s to ${optimalDuration.max}s for optimal ${targetProfile.name} performance.`,
+      trimAmount: currentDuration - optimalDuration.max
+    };
+  } else if (currentDuration < optimalDuration.min) {
+    return {
+      action: 'extend-or-micro',
+      message: `Content is ${currentDuration}s. Either extend to ${optimalDuration.min}s or use a micro-content format.`
+    };
+  }
+
+  return { action: 'none', message: 'Duration is optimal for this platform' };
+}
+
+function getReframeStrategy(sourceAspect, targetAspect) {
+  const sourceRatio = EXPORT_INTELLIGENCE.aspectRatios[sourceAspect];
+  const targetRatio = EXPORT_INTELLIGENCE.aspectRatios[targetAspect];
+
+  if (!sourceRatio || !targetRatio) {
+    return { strategy: 'manual', message: 'Manual reframing required' };
+  }
+
+  const reframeInfo = sourceRatio.reframeFrom?.[targetAspect];
+
+  return {
+    strategy: reframeInfo || 'smart-crop',
+    source: sourceAspect,
+    target: targetAspect,
+    rules: EXPORT_INTELLIGENCE.reframeRules,
+    message: `Reframe from ${sourceAspect} to ${targetAspect} using ${reframeInfo || 'smart crop'}`
+  };
+}
+
+function generateAssetsList(exportPackage) {
+  const assets = [];
+
+  // Thumbnail for each platform
+  if (exportPackage.primary) {
+    assets.push({
+      type: 'thumbnail',
+      platform: exportPackage.primary.platform,
+      specs: getThumbnailSpecs(exportPackage.primary.platform)
+    });
+  }
+
+  for (const variant of exportPackage.variants) {
+    assets.push({
+      type: 'thumbnail',
+      platform: variant.platform,
+      specs: getThumbnailSpecs(variant.platform)
+    });
+  }
+
+  // Caption files
+  assets.push({
+    type: 'captions',
+    formats: ['srt', 'vtt'],
+    languages: ['en']
+  });
+
+  return assets;
+}
+
+function getThumbnailSpecs(platform) {
+  const specs = {
+    'youtube-shorts': { width: 1080, height: 1920, format: 'jpg' },
+    'youtube-standard': { width: 1280, height: 720, format: 'jpg' },
+    'youtube-longform': { width: 1280, height: 720, format: 'jpg' },
+    'tiktok-quick': { width: 1080, height: 1920, format: 'jpg' },
+    'tiktok-standard': { width: 1080, height: 1920, format: 'jpg' },
+    'instagram-reels': { width: 1080, height: 1920, format: 'jpg' },
+    'instagram-feed': { width: 1080, height: 1080, format: 'jpg' },
+    'netflix-episode': { width: 1920, height: 1080, format: 'jpg' },
+    'netflix-movie': { width: 1920, height: 1080, format: 'jpg' }
+  };
+
+  return specs[platform] || { width: 1920, height: 1080, format: 'jpg' };
+}
+
+/**
+ * Cloud function to get export intelligence data
+ */
+exports.creationWizardGetExportProfiles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Format platforms for frontend
+  const platforms = Object.entries(EXPORT_INTELLIGENCE.platforms).map(([id, platform]) => ({
+    id,
+    name: platform.name,
+    icon: platform.icon,
+    aspectRatio: platform.aspectRatio,
+    maxDuration: platform.maxDuration,
+    optimalDuration: platform.optimalDuration,
+    pacing: platform.pacing,
+    features: platform.features,
+    hookTiming: platform.hookTiming
+  }));
+
+  // Format aspect ratios
+  const aspectRatios = Object.entries(EXPORT_INTELLIGENCE.aspectRatios).map(([id, ratio]) => ({
+    id,
+    name: ratio.name,
+    ratio: ratio.ratio,
+    width: ratio.width,
+    height: ratio.height,
+    use: ratio.use
+  }));
+
+  // Format duration presets
+  const durationPresets = Object.entries(EXPORT_INTELLIGENCE.durationPresets).map(([id, preset]) => ({
+    id,
+    name: preset.name,
+    icon: preset.icon,
+    duration: preset.duration,
+    platforms: preset.platforms,
+    pacing: preset.pacing,
+    sceneCount: preset.sceneCount
+  }));
+
+  // Format series templates
+  const seriesTemplates = Object.entries(EXPORT_INTELLIGENCE.seriesTemplates).map(([id, template]) => ({
+    id,
+    name: template.name,
+    episodeCount: template.episodeCount,
+    consistency: template.consistency,
+    branding: template.branding
+  }));
+
+  // Format quality presets
+  const qualityPresets = Object.entries(EXPORT_INTELLIGENCE.qualityPresets).map(([id, preset]) => ({
+    id,
+    name: preset.name,
+    resolution: preset.resolution,
+    codec: preset.codec
+  }));
+
+  return {
+    success: true,
+    platforms,
+    aspectRatios,
+    durationPresets,
+    seriesTemplates,
+    qualityPresets
+  };
+});
+
+/**
+ * Cloud function to get export recommendations
+ */
+exports.creationWizardGetExportRecommendations = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { platform, duration, contentType, genre, hasDialogue, seriesInfo } = data;
+
+  const recommendations = getExportRecommendations({
+    platform,
+    duration,
+    contentType,
+    genre,
+    hasDialogue,
+    seriesInfo
+  });
+
+  return {
+    success: true,
+    recommendations
+  };
+});
+
+/**
+ * Cloud function to generate multi-platform export package
+ */
+exports.creationWizardGenerateExportPackage = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { primaryPlatform, additionalPlatforms, content, seriesInfo } = data;
+
+  const exportPackage = generateExportPackage({
+    primaryPlatform,
+    additionalPlatforms,
+    content,
+    seriesInfo
+  });
+
+  return {
+    success: true,
+    exportPackage
+  };
+});
+
+// ============================================================
+// PHASE 3D: AUDIO INTELLIGENCE SYSTEM
+// Music scoring, sound design, and dynamic mixing
+// ============================================================
+
+const AUDIO_INTELLIGENCE = {
+  // Music Scoring Engine - Genre and mood-based music selection
+  musicScoring: {
+    // Genre-to-music style mapping
+    genreMusic: {
+      'documentary-nature': {
+        primaryStyle: 'ambient-orchestral',
+        secondaryStyle: 'world-music',
+        tempo: { min: 60, max: 90 },
+        energy: 'low-medium',
+        instruments: ['strings', 'piano', 'flute', 'ambient-pads'],
+        avoid: ['heavy-drums', 'electronic-beats', 'distortion'],
+        reference: 'Planet Earth, Our Planet soundtracks'
+      },
+      'documentary-historical': {
+        primaryStyle: 'cinematic-orchestral',
+        secondaryStyle: 'period-appropriate',
+        tempo: { min: 70, max: 110 },
+        energy: 'medium',
+        instruments: ['full-orchestra', 'piano', 'choir'],
+        avoid: ['modern-synths', 'trap-beats'],
+        reference: 'Ken Burns documentaries, The Crown'
+      },
+      'documentary-crime': {
+        primaryStyle: 'dark-ambient',
+        secondaryStyle: 'tension-underscore',
+        tempo: { min: 50, max: 80 },
+        energy: 'low-tension',
+        instruments: ['low-strings', 'synth-drones', 'prepared-piano'],
+        avoid: ['upbeat', 'major-key', 'cheerful'],
+        reference: 'Making a Murderer, The Jinx'
+      },
+      'documentary-social': {
+        primaryStyle: 'indie-acoustic',
+        secondaryStyle: 'emotional-piano',
+        tempo: { min: 70, max: 100 },
+        energy: 'medium-emotional',
+        instruments: ['acoustic-guitar', 'piano', 'strings', 'ambient'],
+        avoid: ['aggressive', 'heavy'],
+        reference: '13th, Won\'t You Be My Neighbor'
+      },
+      'educational-explainer': {
+        primaryStyle: 'upbeat-corporate',
+        secondaryStyle: 'tech-minimal',
+        tempo: { min: 100, max: 130 },
+        energy: 'medium-high',
+        instruments: ['synth', 'light-percussion', 'piano', 'ukulele'],
+        avoid: ['dark', 'heavy', 'distracting'],
+        reference: 'Kurzgesagt, TED-Ed'
+      },
+      'educational-tutorial': {
+        primaryStyle: 'lo-fi-chill',
+        secondaryStyle: 'ambient-focus',
+        tempo: { min: 70, max: 95 },
+        energy: 'low-background',
+        instruments: ['lo-fi-keys', 'soft-drums', 'ambient-pads'],
+        avoid: ['lyrics', 'dramatic', 'distracting'],
+        reference: 'Focus music, study beats'
+      },
+      'entertainment-comedy': {
+        primaryStyle: 'playful-quirky',
+        secondaryStyle: 'upbeat-fun',
+        tempo: { min: 110, max: 140 },
+        energy: 'high',
+        instruments: ['pizzicato-strings', 'woodwinds', 'xylophone', 'bouncy-synth'],
+        avoid: ['serious', 'dark', 'slow'],
+        reference: 'The Office, Parks and Rec'
+      },
+      'entertainment-drama': {
+        primaryStyle: 'emotional-orchestral',
+        secondaryStyle: 'piano-driven',
+        tempo: { min: 60, max: 100 },
+        energy: 'medium-emotional',
+        instruments: ['strings', 'piano', 'cello', 'subtle-choir'],
+        avoid: ['upbeat', 'quirky', 'electronic'],
+        reference: 'This Is Us, Breaking Bad'
+      },
+      'entertainment-action': {
+        primaryStyle: 'epic-hybrid',
+        secondaryStyle: 'electronic-orchestral',
+        tempo: { min: 120, max: 160 },
+        energy: 'high-intense',
+        instruments: ['brass', 'percussion', 'synth-bass', 'electric-guitar'],
+        avoid: ['soft', 'ambient', 'slow'],
+        reference: 'Mission Impossible, John Wick'
+      },
+      'entertainment-horror': {
+        primaryStyle: 'dark-atmospheric',
+        secondaryStyle: 'dissonant-tension',
+        tempo: { min: 40, max: 80 },
+        energy: 'tension-building',
+        instruments: ['low-drones', 'dissonant-strings', 'prepared-piano', 'reversed-sounds'],
+        avoid: ['major-key', 'upbeat', 'cheerful'],
+        reference: 'Hereditary, The Conjuring'
+      },
+      'entertainment-romance': {
+        primaryStyle: 'romantic-orchestral',
+        secondaryStyle: 'indie-love',
+        tempo: { min: 60, max: 100 },
+        energy: 'soft-emotional',
+        instruments: ['strings', 'piano', 'acoustic-guitar', 'soft-vocals'],
+        avoid: ['aggressive', 'dark', 'electronic'],
+        reference: 'The Notebook, La La Land'
+      },
+      'marketing-product': {
+        primaryStyle: 'modern-corporate',
+        secondaryStyle: 'upbeat-inspiring',
+        tempo: { min: 100, max: 130 },
+        energy: 'medium-high',
+        instruments: ['synth', 'claps', 'piano', 'light-strings'],
+        avoid: ['dark', 'slow', 'complex'],
+        reference: 'Apple keynotes, premium brand ads'
+      },
+      'marketing-brand': {
+        primaryStyle: 'emotional-uplifting',
+        secondaryStyle: 'cinematic-inspiring',
+        tempo: { min: 80, max: 120 },
+        energy: 'building-to-high',
+        instruments: ['piano', 'strings', 'drums-build', 'choir'],
+        avoid: ['generic', 'stock-sounding'],
+        reference: 'Nike, Google Year in Search'
+      },
+      'marketing-social': {
+        primaryStyle: 'trending-pop',
+        secondaryStyle: 'viral-hooks',
+        tempo: { min: 100, max: 140 },
+        energy: 'high-catchy',
+        instruments: ['synth-bass', 'trap-hats', 'catchy-melody'],
+        avoid: ['slow', 'complex', 'dated'],
+        reference: 'TikTok trending sounds'
+      },
+      'cinematic': {
+        primaryStyle: 'epic-orchestral',
+        secondaryStyle: 'hans-zimmer-style',
+        tempo: { min: 60, max: 140 },
+        energy: 'dynamic-range',
+        instruments: ['full-orchestra', 'choir', 'percussion', 'brass', 'synth-hybrid'],
+        avoid: ['thin', 'cheap', 'stock-sounding'],
+        reference: 'Inception, Interstellar, Gladiator'
+      },
+      'vlog-lifestyle': {
+        primaryStyle: 'indie-chill',
+        secondaryStyle: 'acoustic-happy',
+        tempo: { min: 90, max: 120 },
+        energy: 'medium-positive',
+        instruments: ['acoustic-guitar', 'ukulele', 'light-percussion', 'whistling'],
+        avoid: ['heavy', 'dark', 'complex'],
+        reference: 'Casey Neistat style vlogs'
+      },
+      'gaming': {
+        primaryStyle: 'electronic-energetic',
+        secondaryStyle: 'chiptune-hybrid',
+        tempo: { min: 120, max: 160 },
+        energy: 'high-constant',
+        instruments: ['synth', 'electronic-drums', 'bass', '8-bit-elements'],
+        avoid: ['slow', 'acoustic', 'orchestral'],
+        reference: 'Twitch streams, gaming montages'
+      },
+      'fitness': {
+        primaryStyle: 'edm-workout',
+        secondaryStyle: 'hip-hop-energy',
+        tempo: { min: 120, max: 150 },
+        energy: 'high-driving',
+        instruments: ['heavy-bass', 'synth', 'claps', 'build-ups'],
+        avoid: ['slow', 'ambient', 'soft'],
+        reference: 'Workout playlists, Nike Training'
+      }
+    },
+
+    // Mood-to-music mapping (links to Visual Intelligence moods)
+    moodMusic: {
+      'epic': {
+        style: 'epic-orchestral-hybrid',
+        tempo: { min: 90, max: 140 },
+        energy: 'high-building',
+        dynamics: 'wide-range',
+        elements: ['brass-fanfares', 'timpani', 'choir', 'synth-layers'],
+        buildPattern: 'gradual-crescendo'
+      },
+      'intimate': {
+        style: 'minimal-emotional',
+        tempo: { min: 60, max: 85 },
+        energy: 'low-gentle',
+        dynamics: 'soft-consistent',
+        elements: ['solo-piano', 'soft-strings', 'ambient-pads'],
+        buildPattern: 'subtle-swells'
+      },
+      'mysterious': {
+        style: 'dark-ambient-tension',
+        tempo: { min: 50, max: 80 },
+        energy: 'low-unsettling',
+        dynamics: 'quiet-with-stings',
+        elements: ['drones', 'reversed-sounds', 'sparse-piano', 'low-strings'],
+        buildPattern: 'tension-hold'
+      },
+      'energetic': {
+        style: 'upbeat-driving',
+        tempo: { min: 120, max: 150 },
+        energy: 'high-constant',
+        dynamics: 'loud-punchy',
+        elements: ['driving-drums', 'synth-bass', 'brass-stabs'],
+        buildPattern: 'verse-chorus'
+      },
+      'contemplative': {
+        style: 'ambient-reflective',
+        tempo: { min: 55, max: 75 },
+        energy: 'very-low',
+        dynamics: 'soft-flowing',
+        elements: ['ambient-textures', 'soft-piano', 'gentle-pads'],
+        buildPattern: 'static-evolving'
+      },
+      'tense': {
+        style: 'suspense-thriller',
+        tempo: { min: 70, max: 100 },
+        energy: 'medium-anxious',
+        dynamics: 'building-pressure',
+        elements: ['staccato-strings', 'ticking', 'low-pulse', 'dissonance'],
+        buildPattern: 'escalating'
+      },
+      'hopeful': {
+        style: 'uplifting-inspiring',
+        tempo: { min: 80, max: 110 },
+        energy: 'medium-rising',
+        dynamics: 'building-to-bright',
+        elements: ['major-keys', 'strings-swell', 'piano', 'light-percussion'],
+        buildPattern: 'dawn-chorus'
+      },
+      'professional': {
+        style: 'corporate-clean',
+        tempo: { min: 90, max: 115 },
+        energy: 'medium-steady',
+        dynamics: 'consistent-polished',
+        elements: ['clean-synth', 'light-percussion', 'piano-accents'],
+        buildPattern: 'structured'
+      },
+      'nostalgic': {
+        style: 'vintage-warm',
+        tempo: { min: 70, max: 100 },
+        energy: 'medium-wistful',
+        dynamics: 'warm-soft',
+        elements: ['vinyl-texture', 'retro-keys', 'warm-strings', 'music-box'],
+        buildPattern: 'memory-waves'
+      },
+      'dark': {
+        style: 'ominous-heavy',
+        tempo: { min: 50, max: 90 },
+        energy: 'low-heavy',
+        dynamics: 'rumbling-powerful',
+        elements: ['sub-bass', 'distorted-elements', 'industrial', 'dark-choir'],
+        buildPattern: 'doom-build'
+      }
+    },
+
+    // Tempo categories
+    tempoCategories: {
+      'very-slow': { bpm: { min: 40, max: 60 }, use: ['ambient', 'horror', 'meditation'] },
+      'slow': { bpm: { min: 60, max: 80 }, use: ['emotional', 'documentary', 'romance'] },
+      'medium-slow': { bpm: { min: 80, max: 100 }, use: ['narrative', 'corporate', 'drama'] },
+      'medium': { bpm: { min: 100, max: 120 }, use: ['explainer', 'marketing', 'lifestyle'] },
+      'medium-fast': { bpm: { min: 120, max: 140 }, use: ['action', 'sports', 'gaming'] },
+      'fast': { bpm: { min: 140, max: 160 }, use: ['workout', 'edm', 'high-energy'] },
+      'very-fast': { bpm: { min: 160, max: 200 }, use: ['extreme-sports', 'drum-and-bass'] }
+    },
+
+    // Energy levels
+    energyLevels: {
+      'minimal': { volume: 0.15, presence: 'background', dynamics: 'flat' },
+      'low': { volume: 0.25, presence: 'underscore', dynamics: 'subtle' },
+      'medium-low': { volume: 0.35, presence: 'supporting', dynamics: 'gentle' },
+      'medium': { volume: 0.45, presence: 'balanced', dynamics: 'moderate' },
+      'medium-high': { volume: 0.55, presence: 'prominent', dynamics: 'active' },
+      'high': { volume: 0.65, presence: 'driving', dynamics: 'punchy' },
+      'intense': { volume: 0.75, presence: 'dominant', dynamics: 'powerful' }
+    }
+  },
+
+  // Sound Design Library
+  soundDesign: {
+    // Ambient backgrounds per setting
+    ambience: {
+      'nature-forest': {
+        layers: ['birds-distant', 'leaves-rustle', 'wind-gentle', 'creek-subtle'],
+        volume: 0.2,
+        stereoWidth: 'wide'
+      },
+      'nature-ocean': {
+        layers: ['waves-crashing', 'seagulls-distant', 'wind-coastal'],
+        volume: 0.25,
+        stereoWidth: 'wide'
+      },
+      'nature-rain': {
+        layers: ['rain-steady', 'thunder-distant', 'drips'],
+        volume: 0.3,
+        stereoWidth: 'full'
+      },
+      'nature-night': {
+        layers: ['crickets', 'owl-distant', 'wind-night'],
+        volume: 0.15,
+        stereoWidth: 'wide'
+      },
+      'urban-city': {
+        layers: ['traffic-distant', 'people-murmur', 'city-hum'],
+        volume: 0.2,
+        stereoWidth: 'medium'
+      },
+      'urban-cafe': {
+        layers: ['coffee-shop-ambience', 'cups-clinking', 'murmur-conversations'],
+        volume: 0.15,
+        stereoWidth: 'medium'
+      },
+      'urban-office': {
+        layers: ['office-hum', 'keyboard-distant', 'hvac'],
+        volume: 0.1,
+        stereoWidth: 'narrow'
+      },
+      'indoor-room': {
+        layers: ['room-tone', 'clock-ticking', 'hvac-subtle'],
+        volume: 0.08,
+        stereoWidth: 'narrow'
+      },
+      'space-scifi': {
+        layers: ['ship-hum', 'electronic-beeps', 'air-systems'],
+        volume: 0.15,
+        stereoWidth: 'surround'
+      },
+      'historical-medieval': {
+        layers: ['fire-crackling', 'distant-crowd', 'wind-stone'],
+        volume: 0.2,
+        stereoWidth: 'wide'
+      }
+    },
+
+    // Transition sounds
+    transitions: {
+      'whoosh-soft': { duration: 0.5, energy: 'low', use: ['cuts', 'gentle-transitions'] },
+      'whoosh-medium': { duration: 0.4, energy: 'medium', use: ['standard-transitions'] },
+      'whoosh-hard': { duration: 0.3, energy: 'high', use: ['fast-cuts', 'action'] },
+      'swoosh-magical': { duration: 0.6, energy: 'medium', use: ['fantasy', 'reveal'] },
+      'glitch': { duration: 0.2, energy: 'high', use: ['tech', 'modern', 'error'] },
+      'tape-stop': { duration: 0.4, energy: 'medium', use: ['retro', 'comedy', 'pause'] },
+      'reverse-cymbal': { duration: 1.5, energy: 'building', use: ['builds', 'transitions'] },
+      'sub-drop': { duration: 0.8, energy: 'impact', use: ['reveals', 'statements'] },
+      'paper-flip': { duration: 0.3, energy: 'low', use: ['text', 'pages', 'chapters'] },
+      'camera-shutter': { duration: 0.2, energy: 'low', use: ['photo-reveals', 'memories'] }
+    },
+
+    // Impact and hit sounds
+    impacts: {
+      'hit-deep': { power: 'high', frequency: 'low', use: ['major-reveals', 'statements'] },
+      'hit-punchy': { power: 'medium', frequency: 'mid', use: ['text-hits', 'beats'] },
+      'hit-bright': { power: 'medium', frequency: 'high', use: ['accents', 'highlights'] },
+      'boom-cinematic': { power: 'very-high', frequency: 'sub', use: ['trailers', 'epic'] },
+      'slam': { power: 'high', frequency: 'mid-low', use: ['action', 'emphasis'] },
+      'snap': { power: 'low', frequency: 'high', use: ['quick-cuts', 'beats'] },
+      'thud': { power: 'medium', frequency: 'low', use: ['grounded', 'solid'] }
+    },
+
+    // Risers and stingers
+    risersStingers: {
+      'riser-tension': { duration: 3, type: 'build', mood: 'anxious' },
+      'riser-epic': { duration: 4, type: 'build', mood: 'exciting' },
+      'riser-horror': { duration: 5, type: 'build', mood: 'dread' },
+      'stinger-reveal': { duration: 1, type: 'accent', mood: 'dramatic' },
+      'stinger-comedy': { duration: 0.5, type: 'accent', mood: 'funny' },
+      'stinger-horror': { duration: 1.5, type: 'accent', mood: 'scary' },
+      'drone-tension': { duration: 'loop', type: 'sustain', mood: 'uneasy' },
+      'swell-emotional': { duration: 3, type: 'build-release', mood: 'moving' }
+    },
+
+    // UI and notification sounds
+    uiSounds: {
+      'notification-positive': { duration: 0.3, mood: 'success' },
+      'notification-negative': { duration: 0.4, mood: 'error' },
+      'click-soft': { duration: 0.1, mood: 'neutral' },
+      'pop-playful': { duration: 0.15, mood: 'fun' },
+      'ding': { duration: 0.2, mood: 'attention' },
+      'typing': { duration: 0.05, mood: 'activity' }
+    }
+  },
+
+  // Dynamic Mixing System
+  dynamicMixing: {
+    // Voice-to-music balance presets
+    voiceMixPresets: {
+      'dialogue-focus': {
+        voiceVolume: 1.0,
+        musicVolume: 0.15,
+        musicDucking: 0.6,
+        duckingAttack: 100,
+        duckingRelease: 500
+      },
+      'narration-standard': {
+        voiceVolume: 1.0,
+        musicVolume: 0.25,
+        musicDucking: 0.5,
+        duckingAttack: 150,
+        duckingRelease: 600
+      },
+      'voice-with-music': {
+        voiceVolume: 0.95,
+        musicVolume: 0.35,
+        musicDucking: 0.4,
+        duckingAttack: 200,
+        duckingRelease: 800
+      },
+      'music-emphasis': {
+        voiceVolume: 0.85,
+        musicVolume: 0.5,
+        musicDucking: 0.3,
+        duckingAttack: 250,
+        duckingRelease: 1000
+      },
+      'music-only': {
+        voiceVolume: 0,
+        musicVolume: 0.7,
+        musicDucking: 0,
+        duckingAttack: 0,
+        duckingRelease: 0
+      }
+    },
+
+    // Scene energy to audio mapping
+    sceneEnergyMapping: {
+      'very-low': { musicEnergy: 'minimal', sfxPresence: 'subtle', ambienceLevel: 'prominent' },
+      'low': { musicEnergy: 'low', sfxPresence: 'occasional', ambienceLevel: 'present' },
+      'medium': { musicEnergy: 'medium', sfxPresence: 'balanced', ambienceLevel: 'supporting' },
+      'high': { musicEnergy: 'high', sfxPresence: 'active', ambienceLevel: 'minimal' },
+      'climax': { musicEnergy: 'intense', sfxPresence: 'impactful', ambienceLevel: 'none' }
+    },
+
+    // Fade presets
+    fadePresets: {
+      'quick-fade': { in: 200, out: 200 },
+      'standard-fade': { in: 500, out: 500 },
+      'slow-fade': { in: 1000, out: 1000 },
+      'cinematic-fade': { in: 2000, out: 2000 },
+      'crossfade-short': { duration: 500, curve: 'equal-power' },
+      'crossfade-long': { duration: 1500, curve: 'equal-power' }
+    },
+
+    // Master output presets
+    masterPresets: {
+      'broadcast': {
+        targetLoudness: -24,
+        truePeak: -2,
+        dynamicRange: 'controlled'
+      },
+      'streaming': {
+        targetLoudness: -14,
+        truePeak: -1,
+        dynamicRange: 'moderate'
+      },
+      'social-media': {
+        targetLoudness: -14,
+        truePeak: -1,
+        dynamicRange: 'punchy'
+      },
+      'cinematic': {
+        targetLoudness: -27,
+        truePeak: -3,
+        dynamicRange: 'wide'
+      }
+    }
+  },
+
+  // Voice Enhancement Profiles
+  voiceEnhancement: {
+    profiles: {
+      'narrator-warm': {
+        eq: { lowCut: 80, lowShelf: { freq: 200, gain: 2 }, presence: { freq: 3000, gain: 3 }, air: { freq: 12000, gain: 2 } },
+        compression: { threshold: -18, ratio: 3, attack: 10, release: 100 },
+        deEss: { frequency: 6000, threshold: -20 },
+        reverb: { type: 'room', mix: 0.05 }
+      },
+      'narrator-authoritative': {
+        eq: { lowCut: 60, lowShelf: { freq: 150, gain: 3 }, presence: { freq: 2500, gain: 4 }, air: { freq: 10000, gain: 1 } },
+        compression: { threshold: -15, ratio: 4, attack: 5, release: 80 },
+        deEss: { frequency: 5500, threshold: -18 },
+        reverb: { type: 'none', mix: 0 }
+      },
+      'narrator-intimate': {
+        eq: { lowCut: 100, lowShelf: { freq: 250, gain: 1 }, presence: { freq: 4000, gain: 2 }, air: { freq: 14000, gain: 3 } },
+        compression: { threshold: -20, ratio: 2.5, attack: 15, release: 150 },
+        deEss: { frequency: 6500, threshold: -22 },
+        reverb: { type: 'small-room', mix: 0.08 }
+      },
+      'narrator-energetic': {
+        eq: { lowCut: 100, lowShelf: { freq: 180, gain: 1 }, presence: { freq: 3500, gain: 5 }, air: { freq: 11000, gain: 2 } },
+        compression: { threshold: -12, ratio: 5, attack: 3, release: 50 },
+        deEss: { frequency: 5000, threshold: -16 },
+        reverb: { type: 'none', mix: 0 }
+      },
+      'documentary': {
+        eq: { lowCut: 80, lowShelf: { freq: 200, gain: 1 }, presence: { freq: 3000, gain: 2 }, air: { freq: 12000, gain: 2 } },
+        compression: { threshold: -16, ratio: 3, attack: 10, release: 100 },
+        deEss: { frequency: 6000, threshold: -20 },
+        reverb: { type: 'natural', mix: 0.03 }
+      },
+      'podcast': {
+        eq: { lowCut: 90, lowShelf: { freq: 180, gain: 2 }, presence: { freq: 2800, gain: 3 }, air: { freq: 10000, gain: 1 } },
+        compression: { threshold: -18, ratio: 3.5, attack: 8, release: 120 },
+        deEss: { frequency: 5500, threshold: -18 },
+        reverb: { type: 'none', mix: 0 }
+      },
+      'cinematic-trailer': {
+        eq: { lowCut: 60, lowShelf: { freq: 120, gain: 4 }, presence: { freq: 2000, gain: 3 }, air: { freq: 8000, gain: 2 } },
+        compression: { threshold: -10, ratio: 6, attack: 2, release: 40 },
+        deEss: { frequency: 5000, threshold: -15 },
+        reverb: { type: 'large-hall', mix: 0.15 }
+      }
+    },
+
+    // Voice style to profile mapping
+    styleToProfile: {
+      'professional': 'narrator-authoritative',
+      'friendly': 'narrator-warm',
+      'casual': 'narrator-intimate',
+      'excited': 'narrator-energetic',
+      'documentary': 'documentary',
+      'storytelling': 'narrator-warm',
+      'dramatic': 'cinematic-trailer'
+    }
+  },
+
+  // Audio Mood Presets (linked to Visual Intelligence)
+  audioMoodPresets: {
+    'epic': {
+      music: { style: 'epic-orchestral-hybrid', energy: 'high', tempo: 'variable' },
+      sfx: { impacts: true, risers: true, whooshes: 'hard' },
+      voice: { profile: 'cinematic-trailer', reverb: 'large' },
+      mixing: { musicVolume: 0.5, voiceDucking: 0.4, masterPreset: 'cinematic' }
+    },
+    'intimate': {
+      music: { style: 'minimal-piano', energy: 'low', tempo: 'slow' },
+      sfx: { impacts: false, risers: false, whooshes: 'soft' },
+      voice: { profile: 'narrator-intimate', reverb: 'small-room' },
+      mixing: { musicVolume: 0.2, voiceDucking: 0.6, masterPreset: 'streaming' }
+    },
+    'mysterious': {
+      music: { style: 'dark-ambient', energy: 'low', tempo: 'very-slow' },
+      sfx: { impacts: 'occasional', risers: 'tension', whooshes: 'swoosh-magical' },
+      voice: { profile: 'narrator-warm', reverb: 'none' },
+      mixing: { musicVolume: 0.3, voiceDucking: 0.5, masterPreset: 'streaming' }
+    },
+    'energetic': {
+      music: { style: 'upbeat-driving', energy: 'high', tempo: 'fast' },
+      sfx: { impacts: true, risers: false, whooshes: 'hard' },
+      voice: { profile: 'narrator-energetic', reverb: 'none' },
+      mixing: { musicVolume: 0.45, voiceDucking: 0.35, masterPreset: 'social-media' }
+    },
+    'contemplative': {
+      music: { style: 'ambient-reflective', energy: 'minimal', tempo: 'very-slow' },
+      sfx: { impacts: false, risers: false, whooshes: false },
+      voice: { profile: 'narrator-warm', reverb: 'natural' },
+      mixing: { musicVolume: 0.15, voiceDucking: 0.65, masterPreset: 'streaming' }
+    },
+    'tense': {
+      music: { style: 'suspense-underscore', energy: 'building', tempo: 'medium' },
+      sfx: { impacts: 'stingers', risers: 'tension', whooshes: false },
+      voice: { profile: 'narrator-authoritative', reverb: 'none' },
+      mixing: { musicVolume: 0.35, voiceDucking: 0.45, masterPreset: 'streaming' }
+    },
+    'hopeful': {
+      music: { style: 'uplifting-inspiring', energy: 'building', tempo: 'medium' },
+      sfx: { impacts: 'soft', risers: 'swell-emotional', whooshes: 'soft' },
+      voice: { profile: 'narrator-warm', reverb: 'small-room' },
+      mixing: { musicVolume: 0.35, voiceDucking: 0.5, masterPreset: 'streaming' }
+    },
+    'professional': {
+      music: { style: 'corporate-clean', energy: 'medium', tempo: 'medium' },
+      sfx: { impacts: 'subtle', risers: false, whooshes: 'soft' },
+      voice: { profile: 'narrator-authoritative', reverb: 'none' },
+      mixing: { musicVolume: 0.25, voiceDucking: 0.55, masterPreset: 'streaming' }
+    },
+    'nostalgic': {
+      music: { style: 'vintage-warm', energy: 'medium-low', tempo: 'medium-slow' },
+      sfx: { impacts: false, risers: false, whooshes: 'tape-stop' },
+      voice: { profile: 'narrator-warm', reverb: 'small-room' },
+      mixing: { musicVolume: 0.3, voiceDucking: 0.5, masterPreset: 'streaming' }
+    },
+    'dark': {
+      music: { style: 'ominous-heavy', energy: 'low-heavy', tempo: 'slow' },
+      sfx: { impacts: 'deep', risers: 'horror', whooshes: false },
+      voice: { profile: 'narrator-authoritative', reverb: 'large-hall' },
+      mixing: { musicVolume: 0.4, voiceDucking: 0.4, masterPreset: 'cinematic' }
+    }
+  },
+
+  // Genre to complete audio treatment
+  genreAudioTreatment: {
+    'documentary-nature': {
+      musicProfile: 'documentary-nature',
+      defaultAmbience: 'nature-forest',
+      voiceProfile: 'documentary',
+      transitionSound: 'whoosh-soft',
+      moodDefault: 'contemplative'
+    },
+    'documentary-crime': {
+      musicProfile: 'documentary-crime',
+      defaultAmbience: 'indoor-room',
+      voiceProfile: 'narrator-authoritative',
+      transitionSound: 'whoosh-medium',
+      moodDefault: 'tense'
+    },
+    'educational-explainer': {
+      musicProfile: 'educational-explainer',
+      defaultAmbience: null,
+      voiceProfile: 'narrator-energetic',
+      transitionSound: 'whoosh-medium',
+      moodDefault: 'professional'
+    },
+    'entertainment-action': {
+      musicProfile: 'entertainment-action',
+      defaultAmbience: null,
+      voiceProfile: 'cinematic-trailer',
+      transitionSound: 'whoosh-hard',
+      moodDefault: 'epic'
+    },
+    'entertainment-horror': {
+      musicProfile: 'entertainment-horror',
+      defaultAmbience: 'nature-night',
+      voiceProfile: 'narrator-warm',
+      transitionSound: 'swoosh-magical',
+      moodDefault: 'dark'
+    },
+    'marketing-brand': {
+      musicProfile: 'marketing-brand',
+      defaultAmbience: null,
+      voiceProfile: 'narrator-warm',
+      transitionSound: 'whoosh-medium',
+      moodDefault: 'hopeful'
+    },
+    'cinematic': {
+      musicProfile: 'cinematic',
+      defaultAmbience: null,
+      voiceProfile: 'cinematic-trailer',
+      transitionSound: 'whoosh-hard',
+      moodDefault: 'epic'
+    }
+  }
+};
+
+/**
+ * Get audio recommendations based on genre and mood
+ */
+function getAudioRecommendations(options = {}) {
+  const { genre, mood, productionMode, sceneEnergy, hasVoiceover } = options;
+
+  const recommendations = {
+    music: null,
+    sfx: null,
+    voice: null,
+    mixing: null,
+    ambience: null
+  };
+
+  // Get genre-based music
+  const genreMusic = AUDIO_INTELLIGENCE.musicScoring.genreMusic[genre];
+  if (genreMusic) {
+    recommendations.music = {
+      style: genreMusic.primaryStyle,
+      alternativeStyle: genreMusic.secondaryStyle,
+      tempo: genreMusic.tempo,
+      energy: genreMusic.energy,
+      instruments: genreMusic.instruments,
+      avoid: genreMusic.avoid,
+      reference: genreMusic.reference
+    };
+  }
+
+  // Get mood-based audio preset
+  const moodPreset = AUDIO_INTELLIGENCE.audioMoodPresets[mood];
+  if (moodPreset) {
+    recommendations.sfx = moodPreset.sfx;
+    recommendations.mixing = moodPreset.mixing;
+
+    // Override music style with mood if more specific
+    if (moodPreset.music) {
+      recommendations.music = {
+        ...recommendations.music,
+        ...moodPreset.music
+      };
+    }
+  }
+
+  // Get voice profile
+  if (hasVoiceover) {
+    const genreTreatment = AUDIO_INTELLIGENCE.genreAudioTreatment[genre];
+    if (genreTreatment) {
+      recommendations.voice = AUDIO_INTELLIGENCE.voiceEnhancement.profiles[genreTreatment.voiceProfile];
+    } else if (moodPreset?.voice) {
+      recommendations.voice = AUDIO_INTELLIGENCE.voiceEnhancement.profiles[moodPreset.voice.profile];
+    }
+  }
+
+  // Get ambience
+  const genreTreatment = AUDIO_INTELLIGENCE.genreAudioTreatment[genre];
+  if (genreTreatment?.defaultAmbience) {
+    recommendations.ambience = AUDIO_INTELLIGENCE.soundDesign.ambience[genreTreatment.defaultAmbience];
+  }
+
+  // Adjust for scene energy
+  if (sceneEnergy) {
+    const energyMapping = AUDIO_INTELLIGENCE.dynamicMixing.sceneEnergyMapping[sceneEnergy];
+    if (energyMapping) {
+      recommendations.energyAdjustments = energyMapping;
+    }
+  }
+
+  return recommendations;
+}
+
+/**
+ * Build complete audio treatment for a scene
+ */
+function buildSceneAudioTreatment(options = {}) {
+  const {
+    genre,
+    mood,
+    sceneType,
+    hasVoiceover,
+    sceneEnergy = 'medium',
+    isTransition = false,
+    previousMood = null
+  } = options;
+
+  const treatment = {
+    music: {},
+    sfx: [],
+    voice: {},
+    mixing: {},
+    transitions: {}
+  };
+
+  // Get base recommendations
+  const recommendations = getAudioRecommendations({ genre, mood, sceneEnergy, hasVoiceover });
+
+  // Music settings
+  if (recommendations.music) {
+    const energyLevel = AUDIO_INTELLIGENCE.musicScoring.energyLevels[sceneEnergy] ||
+                        AUDIO_INTELLIGENCE.musicScoring.energyLevels['medium'];
+
+    treatment.music = {
+      ...recommendations.music,
+      volume: energyLevel.volume,
+      presence: energyLevel.presence
+    };
+  }
+
+  // SFX for transitions
+  if (isTransition) {
+    const genreTreatment = AUDIO_INTELLIGENCE.genreAudioTreatment[genre];
+    const transitionSound = genreTreatment?.transitionSound || 'whoosh-soft';
+    treatment.sfx.push({
+      type: 'transition',
+      sound: AUDIO_INTELLIGENCE.soundDesign.transitions[transitionSound],
+      timing: 'on-cut'
+    });
+  }
+
+  // Add mood-based SFX
+  if (recommendations.sfx) {
+    if (recommendations.sfx.risers) {
+      treatment.sfx.push({
+        type: 'riser',
+        sound: AUDIO_INTELLIGENCE.soundDesign.risersStingers[recommendations.sfx.risers] ||
+               AUDIO_INTELLIGENCE.soundDesign.risersStingers['riser-tension'],
+        timing: 'before-climax'
+      });
+    }
+    if (recommendations.sfx.impacts) {
+      treatment.sfx.push({
+        type: 'impact',
+        sound: AUDIO_INTELLIGENCE.soundDesign.impacts['hit-punchy'],
+        timing: 'on-emphasis'
+      });
+    }
+  }
+
+  // Voice settings
+  if (hasVoiceover && recommendations.voice) {
+    treatment.voice = {
+      enhancement: recommendations.voice,
+      mixPreset: AUDIO_INTELLIGENCE.dynamicMixing.voiceMixPresets['narration-standard']
+    };
+  }
+
+  // Mixing settings
+  treatment.mixing = recommendations.mixing ||
+                     AUDIO_INTELLIGENCE.dynamicMixing.voiceMixPresets['narration-standard'];
+
+  // Ambience
+  if (recommendations.ambience) {
+    treatment.ambience = recommendations.ambience;
+  }
+
+  // Handle mood transitions
+  if (previousMood && previousMood !== mood) {
+    treatment.transitions.moodChange = {
+      from: previousMood,
+      to: mood,
+      crossfade: AUDIO_INTELLIGENCE.dynamicMixing.fadePresets['crossfade-long']
+    };
+  }
+
+  return treatment;
+}
+
+/**
+ * Cloud function to get audio intelligence data
+ */
+exports.creationWizardGetAudioProfiles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Format genre music profiles
+  const genreMusic = Object.entries(AUDIO_INTELLIGENCE.musicScoring.genreMusic).map(([id, profile]) => ({
+    id,
+    primaryStyle: profile.primaryStyle,
+    secondaryStyle: profile.secondaryStyle,
+    tempo: profile.tempo,
+    energy: profile.energy,
+    instruments: profile.instruments,
+    reference: profile.reference
+  }));
+
+  // Format mood music profiles
+  const moodMusic = Object.entries(AUDIO_INTELLIGENCE.musicScoring.moodMusic).map(([id, profile]) => ({
+    id,
+    style: profile.style,
+    tempo: profile.tempo,
+    energy: profile.energy,
+    elements: profile.elements
+  }));
+
+  // Format sound design categories
+  const ambience = Object.entries(AUDIO_INTELLIGENCE.soundDesign.ambience).map(([id, amb]) => ({
+    id,
+    layers: amb.layers,
+    volume: amb.volume
+  }));
+
+  const transitions = Object.entries(AUDIO_INTELLIGENCE.soundDesign.transitions).map(([id, trans]) => ({
+    id,
+    duration: trans.duration,
+    energy: trans.energy,
+    use: trans.use
+  }));
+
+  // Format voice profiles
+  const voiceProfiles = Object.entries(AUDIO_INTELLIGENCE.voiceEnhancement.profiles).map(([id, profile]) => ({
+    id,
+    eq: profile.eq,
+    compression: profile.compression
+  }));
+
+  // Format audio mood presets
+  const audioMoods = Object.entries(AUDIO_INTELLIGENCE.audioMoodPresets).map(([id, preset]) => ({
+    id,
+    music: preset.music,
+    sfx: preset.sfx,
+    mixing: preset.mixing
+  }));
+
+  return {
+    success: true,
+    genreMusic,
+    moodMusic,
+    ambience,
+    transitions,
+    voiceProfiles,
+    audioMoods,
+    tempoCategories: AUDIO_INTELLIGENCE.musicScoring.tempoCategories,
+    energyLevels: AUDIO_INTELLIGENCE.musicScoring.energyLevels,
+    mixingPresets: AUDIO_INTELLIGENCE.dynamicMixing.voiceMixPresets
+  };
+});
+
+/**
+ * Cloud function to get audio recommendations
+ */
+exports.creationWizardGetAudioRecommendations = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, mood, productionMode, sceneEnergy, hasVoiceover } = data;
+
+  const recommendations = getAudioRecommendations({
+    genre,
+    mood,
+    productionMode,
+    sceneEnergy,
+    hasVoiceover
+  });
+
+  return {
+    success: true,
+    recommendations
+  };
+});
+
+/**
+ * Cloud function to build scene audio treatment
+ */
+exports.creationWizardBuildAudioTreatment = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, mood, sceneType, hasVoiceover, sceneEnergy, isTransition, previousMood } = data;
+
+  const treatment = buildSceneAudioTreatment({
+    genre,
+    mood,
+    sceneType,
+    hasVoiceover,
+    sceneEnergy,
+    isTransition,
+    previousMood
+  });
+
+  return {
+    success: true,
+    treatment
+  };
+});
+
+// ============================================================
+// PHASE 3E: SMART ASSEMBLY ENGINE
+// Intelligent editing with transitions, pacing, and beat sync
+// ============================================================
+
+const ASSEMBLY_INTELLIGENCE = {
+  // Transition Intelligence - Genre and context-aware transitions
+  transitions: {
+    // Transition types with properties
+    types: {
+      'cut': {
+        name: 'Hard Cut',
+        duration: 0,
+        energy: 'high',
+        use: ['fast-paced', 'action', 'dialogue', 'emphasis'],
+        audioSync: false,
+        description: 'Instant switch between shots'
+      },
+      'dissolve': {
+        name: 'Cross Dissolve',
+        duration: { min: 0.5, max: 2 },
+        energy: 'low',
+        use: ['time-passage', 'emotional', 'dreamlike', 'memory'],
+        audioSync: true,
+        description: 'Gradual blend between shots'
+      },
+      'fade-black': {
+        name: 'Fade to Black',
+        duration: { min: 1, max: 3 },
+        energy: 'very-low',
+        use: ['scene-end', 'chapter-break', 'dramatic-pause', 'death'],
+        audioSync: true,
+        description: 'Fade out to black, then fade in'
+      },
+      'fade-white': {
+        name: 'Fade to White',
+        duration: { min: 1, max: 2 },
+        energy: 'transcendent',
+        use: ['flashback', 'revelation', 'spiritual', 'memory'],
+        audioSync: true,
+        description: 'Fade out to white, bright transition'
+      },
+      'wipe-left': {
+        name: 'Wipe Left',
+        duration: { min: 0.3, max: 1 },
+        energy: 'medium',
+        use: ['scene-change', 'location-change', 'retro-style'],
+        audioSync: true,
+        description: 'New scene wipes in from right'
+      },
+      'wipe-right': {
+        name: 'Wipe Right',
+        duration: { min: 0.3, max: 1 },
+        energy: 'medium',
+        use: ['scene-change', 'location-change', 'retro-style'],
+        audioSync: true,
+        description: 'New scene wipes in from left'
+      },
+      'push': {
+        name: 'Push',
+        duration: { min: 0.3, max: 0.8 },
+        energy: 'medium-high',
+        use: ['slide-show', 'list-items', 'fast-montage'],
+        audioSync: true,
+        description: 'New scene pushes old scene out'
+      },
+      'zoom-in': {
+        name: 'Zoom In',
+        duration: { min: 0.5, max: 1.5 },
+        energy: 'high',
+        use: ['focus', 'emphasis', 'reveal', 'dramatic'],
+        audioSync: true,
+        description: 'Zoom into transition point'
+      },
+      'zoom-out': {
+        name: 'Zoom Out',
+        duration: { min: 0.5, max: 1.5 },
+        energy: 'medium',
+        use: ['reveal', 'context', 'establishing'],
+        audioSync: true,
+        description: 'Zoom out to reveal new scene'
+      },
+      'glitch': {
+        name: 'Glitch',
+        duration: { min: 0.2, max: 0.5 },
+        energy: 'very-high',
+        use: ['tech', 'error', 'dramatic', 'modern'],
+        audioSync: true,
+        description: 'Digital glitch effect'
+      },
+      'flash': {
+        name: 'Flash',
+        duration: { min: 0.1, max: 0.3 },
+        energy: 'very-high',
+        use: ['impact', 'photo', 'memory', 'emphasis'],
+        audioSync: true,
+        description: 'Quick white flash between scenes'
+      },
+      'blur': {
+        name: 'Blur Transition',
+        duration: { min: 0.5, max: 1.5 },
+        energy: 'low',
+        use: ['dreamlike', 'memory', 'confusion', 'passage'],
+        audioSync: true,
+        description: 'Blur out then in'
+      },
+      'whip-pan': {
+        name: 'Whip Pan',
+        duration: { min: 0.2, max: 0.5 },
+        energy: 'very-high',
+        use: ['action', 'fast-paced', 'comedy', 'vlog'],
+        audioSync: true,
+        description: 'Fast motion blur pan'
+      },
+      'morph': {
+        name: 'Morph',
+        duration: { min: 1, max: 3 },
+        energy: 'medium',
+        use: ['transformation', 'comparison', 'before-after'],
+        audioSync: true,
+        description: 'Shape morphing between scenes'
+      },
+      'slide-up': {
+        name: 'Slide Up',
+        duration: { min: 0.3, max: 0.8 },
+        energy: 'medium',
+        use: ['vertical-content', 'social-media', 'lists'],
+        audioSync: true,
+        description: 'New scene slides up'
+      },
+      'slide-down': {
+        name: 'Slide Down',
+        duration: { min: 0.3, max: 0.8 },
+        energy: 'medium',
+        use: ['vertical-content', 'social-media', 'reveals'],
+        audioSync: true,
+        description: 'New scene slides down'
+      }
+    },
+
+    // Genre to transition style mapping
+    genreTransitions: {
+      'documentary-nature': {
+        primary: ['dissolve', 'fade-black'],
+        secondary: ['cut'],
+        avoid: ['glitch', 'whip-pan', 'flash'],
+        defaultDuration: 1.5,
+        rhythm: 'slow'
+      },
+      'documentary-historical': {
+        primary: ['dissolve', 'fade-black', 'fade-white'],
+        secondary: ['cut', 'wipe-left'],
+        avoid: ['glitch', 'whip-pan'],
+        defaultDuration: 1.5,
+        rhythm: 'measured'
+      },
+      'documentary-crime': {
+        primary: ['cut', 'fade-black'],
+        secondary: ['dissolve', 'flash'],
+        avoid: ['wipe-left', 'push', 'slide-up'],
+        defaultDuration: 1,
+        rhythm: 'tense'
+      },
+      'educational-explainer': {
+        primary: ['cut', 'push', 'slide-up'],
+        secondary: ['dissolve', 'wipe-left'],
+        avoid: ['fade-black', 'blur', 'morph'],
+        defaultDuration: 0.5,
+        rhythm: 'snappy'
+      },
+      'educational-tutorial': {
+        primary: ['cut', 'dissolve'],
+        secondary: ['fade-black', 'push'],
+        avoid: ['glitch', 'whip-pan', 'flash'],
+        defaultDuration: 0.8,
+        rhythm: 'steady'
+      },
+      'entertainment-comedy': {
+        primary: ['cut', 'whip-pan', 'push'],
+        secondary: ['flash', 'glitch', 'zoom-in'],
+        avoid: ['fade-black', 'dissolve', 'blur'],
+        defaultDuration: 0.3,
+        rhythm: 'punchy'
+      },
+      'entertainment-drama': {
+        primary: ['dissolve', 'fade-black', 'cut'],
+        secondary: ['fade-white', 'blur'],
+        avoid: ['glitch', 'whip-pan', 'push'],
+        defaultDuration: 1.5,
+        rhythm: 'emotional'
+      },
+      'entertainment-action': {
+        primary: ['cut', 'whip-pan', 'flash'],
+        secondary: ['glitch', 'zoom-in', 'push'],
+        avoid: ['dissolve', 'fade-black', 'blur'],
+        defaultDuration: 0.3,
+        rhythm: 'rapid'
+      },
+      'entertainment-horror': {
+        primary: ['cut', 'fade-black', 'flash'],
+        secondary: ['glitch', 'blur'],
+        avoid: ['dissolve', 'wipe-left', 'push'],
+        defaultDuration: 0.5,
+        rhythm: 'jarring'
+      },
+      'entertainment-romance': {
+        primary: ['dissolve', 'fade-white', 'blur'],
+        secondary: ['cut', 'fade-black'],
+        avoid: ['glitch', 'whip-pan', 'flash'],
+        defaultDuration: 1.5,
+        rhythm: 'dreamy'
+      },
+      'marketing-product': {
+        primary: ['cut', 'push', 'zoom-in'],
+        secondary: ['dissolve', 'slide-up'],
+        avoid: ['fade-black', 'blur', 'morph'],
+        defaultDuration: 0.4,
+        rhythm: 'dynamic'
+      },
+      'marketing-brand': {
+        primary: ['dissolve', 'cut', 'fade-white'],
+        secondary: ['zoom-in', 'push'],
+        avoid: ['glitch', 'whip-pan'],
+        defaultDuration: 1,
+        rhythm: 'emotional'
+      },
+      'marketing-social': {
+        primary: ['cut', 'whip-pan', 'push'],
+        secondary: ['glitch', 'flash', 'slide-up'],
+        avoid: ['dissolve', 'fade-black', 'blur'],
+        defaultDuration: 0.3,
+        rhythm: 'viral'
+      },
+      'cinematic': {
+        primary: ['cut', 'dissolve', 'fade-black'],
+        secondary: ['fade-white', 'zoom-in'],
+        avoid: ['wipe-left', 'push', 'glitch'],
+        defaultDuration: 1,
+        rhythm: 'cinematic'
+      },
+      'vlog-lifestyle': {
+        primary: ['cut', 'whip-pan', 'push'],
+        secondary: ['dissolve', 'zoom-in'],
+        avoid: ['fade-black', 'morph'],
+        defaultDuration: 0.4,
+        rhythm: 'casual'
+      },
+      'gaming': {
+        primary: ['cut', 'glitch', 'flash'],
+        secondary: ['whip-pan', 'zoom-in'],
+        avoid: ['dissolve', 'fade-black', 'blur'],
+        defaultDuration: 0.3,
+        rhythm: 'intense'
+      },
+      'fitness': {
+        primary: ['cut', 'whip-pan', 'flash'],
+        secondary: ['push', 'zoom-in'],
+        avoid: ['dissolve', 'fade-black', 'blur'],
+        defaultDuration: 0.25,
+        rhythm: 'energetic'
+      }
+    },
+
+    // Context-based transition rules
+    contextRules: {
+      'scene-start': { prefer: ['cut', 'fade-black'], avoid: ['dissolve'] },
+      'scene-end': { prefer: ['fade-black', 'dissolve'], avoid: ['cut', 'push'] },
+      'same-location': { prefer: ['cut', 'dissolve'], avoid: ['fade-black', 'wipe-left'] },
+      'location-change': { prefer: ['dissolve', 'fade-black', 'wipe-left'], avoid: ['cut'] },
+      'time-skip': { prefer: ['dissolve', 'fade-black', 'fade-white'], avoid: ['cut', 'push'] },
+      'flashback': { prefer: ['fade-white', 'blur', 'dissolve'], avoid: ['cut', 'glitch'] },
+      'montage': { prefer: ['cut', 'dissolve', 'push'], avoid: ['fade-black'] },
+      'emphasis': { prefer: ['cut', 'flash', 'zoom-in'], avoid: ['dissolve', 'fade-black'] },
+      'reveal': { prefer: ['zoom-out', 'fade-white', 'dissolve'], avoid: ['cut'] },
+      'climax': { prefer: ['cut', 'flash'], avoid: ['dissolve', 'fade-black'] }
+    }
+  },
+
+  // Pacing Algorithm - Scene duration and rhythm control
+  pacing: {
+    // Pacing profiles
+    profiles: {
+      'rapid-fire': {
+        name: 'Rapid Fire',
+        avgSceneDuration: { min: 1, max: 3 },
+        cutFrequency: 'very-high',
+        breathingRoom: 0,
+        energyCurve: 'constant-high',
+        use: ['tiktok', 'action', 'comedy', 'gaming']
+      },
+      'fast': {
+        name: 'Fast',
+        avgSceneDuration: { min: 2, max: 5 },
+        cutFrequency: 'high',
+        breathingRoom: 0.1,
+        energyCurve: 'building',
+        use: ['youtube-shorts', 'marketing', 'explainer']
+      },
+      'dynamic': {
+        name: 'Dynamic',
+        avgSceneDuration: { min: 3, max: 8 },
+        cutFrequency: 'medium-high',
+        breathingRoom: 0.15,
+        energyCurve: 'varied',
+        use: ['vlog', 'product', 'brand']
+      },
+      'balanced': {
+        name: 'Balanced',
+        avgSceneDuration: { min: 5, max: 12 },
+        cutFrequency: 'medium',
+        breathingRoom: 0.2,
+        energyCurve: 'wave',
+        use: ['youtube-standard', 'documentary', 'tutorial']
+      },
+      'contemplative': {
+        name: 'Contemplative',
+        avgSceneDuration: { min: 8, max: 20 },
+        cutFrequency: 'low',
+        breathingRoom: 0.3,
+        energyCurve: 'gradual',
+        use: ['nature-doc', 'art-film', 'meditation']
+      },
+      'cinematic': {
+        name: 'Cinematic',
+        avgSceneDuration: { min: 5, max: 30 },
+        cutFrequency: 'motivated',
+        breathingRoom: 0.25,
+        energyCurve: 'dramatic',
+        use: ['film', 'drama', 'epic']
+      },
+      'episodic': {
+        name: 'Episodic TV',
+        avgSceneDuration: { min: 4, max: 15 },
+        cutFrequency: 'structured',
+        breathingRoom: 0.2,
+        energyCurve: 'act-based',
+        use: ['tv-episode', 'series', 'streaming']
+      }
+    },
+
+    // Energy curves - how energy flows through the video
+    energyCurves: {
+      'constant-high': {
+        pattern: [0.8, 0.85, 0.9, 0.85, 0.9, 0.95, 0.9, 0.85],
+        description: 'Maintains high energy throughout'
+      },
+      'building': {
+        pattern: [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        description: 'Gradual build to climax'
+      },
+      'varied': {
+        pattern: [0.5, 0.7, 0.4, 0.8, 0.5, 0.9, 0.6, 0.8],
+        description: 'Dynamic ups and downs'
+      },
+      'wave': {
+        pattern: [0.4, 0.6, 0.8, 0.6, 0.4, 0.6, 0.8, 0.7],
+        description: 'Rolling wave pattern'
+      },
+      'gradual': {
+        pattern: [0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65],
+        description: 'Slow steady build'
+      },
+      'dramatic': {
+        pattern: [0.5, 0.4, 0.6, 0.5, 0.7, 0.6, 0.9, 1.0],
+        description: 'Tension and release'
+      },
+      'act-based': {
+        pattern: [0.5, 0.6, 0.7, 0.5, 0.6, 0.8, 0.7, 0.9],
+        description: 'Three-act structure'
+      }
+    },
+
+    // Scene duration modifiers based on content
+    durationModifiers: {
+      'dialogue-heavy': 1.5,
+      'action-sequence': 0.6,
+      'establishing-shot': 0.8,
+      'emotional-moment': 1.3,
+      'information-dense': 1.2,
+      'visual-spectacle': 0.9,
+      'transition-scene': 0.7,
+      'climax': 1.1,
+      'denouement': 1.4
+    }
+  },
+
+  // Beat Synchronization - Aligning cuts to music
+  beatSync: {
+    // Beat sync modes
+    modes: {
+      'off': {
+        name: 'Off',
+        description: 'No beat synchronization',
+        cutOnBeat: false
+      },
+      'subtle': {
+        name: 'Subtle',
+        description: 'Occasional cuts on strong beats',
+        cutOnBeat: true,
+        beatStrength: 'strong-only',
+        percentage: 0.3
+      },
+      'moderate': {
+        name: 'Moderate',
+        description: 'Regular cuts aligned to beats',
+        cutOnBeat: true,
+        beatStrength: 'medium-strong',
+        percentage: 0.5
+      },
+      'aggressive': {
+        name: 'Aggressive',
+        description: 'Most cuts on beats',
+        cutOnBeat: true,
+        beatStrength: 'all',
+        percentage: 0.8
+      },
+      'music-video': {
+        name: 'Music Video',
+        description: 'Nearly all cuts on beats',
+        cutOnBeat: true,
+        beatStrength: 'all',
+        percentage: 0.95
+      }
+    },
+
+    // Beat markers
+    beatMarkers: {
+      'downbeat': { strength: 1.0, prefer: ['cut', 'flash', 'zoom-in'] },
+      'backbeat': { strength: 0.8, prefer: ['cut', 'push'] },
+      'offbeat': { strength: 0.4, prefer: ['dissolve'] },
+      'measure-start': { strength: 1.0, prefer: ['cut', 'fade-black', 'scene-change'] },
+      'phrase-end': { strength: 0.9, prefer: ['dissolve', 'fade-black'] },
+      'drop': { strength: 1.0, prefer: ['flash', 'glitch', 'impact'] },
+      'build-peak': { strength: 0.9, prefer: ['cut', 'zoom-in'] }
+    },
+
+    // Tempo to cut frequency mapping
+    tempoMapping: {
+      'very-slow': { bpm: [40, 60], cutsPerMinute: [4, 8] },
+      'slow': { bpm: [60, 80], cutsPerMinute: [6, 12] },
+      'medium-slow': { bpm: [80, 100], cutsPerMinute: [8, 15] },
+      'medium': { bpm: [100, 120], cutsPerMinute: [10, 20] },
+      'medium-fast': { bpm: [120, 140], cutsPerMinute: [15, 30] },
+      'fast': { bpm: [140, 160], cutsPerMinute: [20, 40] },
+      'very-fast': { bpm: [160, 200], cutsPerMinute: [30, 60] }
+    }
+  },
+
+  // Pattern Interrupts - Strategic engagement hooks
+  patternInterrupts: {
+    // Types of pattern interrupts
+    types: {
+      'visual-change': {
+        name: 'Visual Change',
+        description: 'Sudden visual style shift',
+        elements: ['color-grade-shift', 'aspect-ratio-change', 'zoom-level'],
+        frequency: 'every-45-90s',
+        impact: 'medium'
+      },
+      'audio-shift': {
+        name: 'Audio Shift',
+        description: 'Music or sound change',
+        elements: ['music-change', 'silence', 'sfx-hit'],
+        frequency: 'every-30-60s',
+        impact: 'medium'
+      },
+      'pacing-change': {
+        name: 'Pacing Change',
+        description: 'Speed up or slow down',
+        elements: ['faster-cuts', 'slower-shots', 'freeze-frame'],
+        frequency: 'every-60-120s',
+        impact: 'high'
+      },
+      'direct-address': {
+        name: 'Direct Address',
+        description: 'Speaker looks at camera',
+        elements: ['eye-contact', 'question', 'call-to-action'],
+        frequency: 'every-90-180s',
+        impact: 'very-high'
+      },
+      'b-roll-burst': {
+        name: 'B-Roll Burst',
+        description: 'Rapid B-roll sequence',
+        elements: ['quick-cuts', 'montage', 'visual-variety'],
+        frequency: 'every-30-60s',
+        impact: 'medium'
+      },
+      'text-graphic': {
+        name: 'Text/Graphic',
+        description: 'On-screen text or graphic',
+        elements: ['title-card', 'statistic', 'quote'],
+        frequency: 'every-45-90s',
+        impact: 'medium'
+      },
+      'perspective-shift': {
+        name: 'Perspective Shift',
+        description: 'Camera angle change',
+        elements: ['angle-change', 'pov-shot', 'drone-shot'],
+        frequency: 'every-60-120s',
+        impact: 'medium'
+      },
+      'humor-break': {
+        name: 'Humor Break',
+        description: 'Light moment or joke',
+        elements: ['funny-aside', 'blooper', 'self-deprecation'],
+        frequency: 'every-120-180s',
+        impact: 'high'
+      }
+    },
+
+    // Platform-specific interrupt strategies
+    platformStrategies: {
+      'tiktok': {
+        maxAttentionSpan: 8,
+        interruptFrequency: 'very-high',
+        preferredTypes: ['visual-change', 'audio-shift', 'text-graphic'],
+        hookWindow: 1
+      },
+      'youtube-shorts': {
+        maxAttentionSpan: 15,
+        interruptFrequency: 'high',
+        preferredTypes: ['visual-change', 'pacing-change', 'b-roll-burst'],
+        hookWindow: 3
+      },
+      'instagram-reels': {
+        maxAttentionSpan: 10,
+        interruptFrequency: 'high',
+        preferredTypes: ['visual-change', 'audio-shift', 'text-graphic'],
+        hookWindow: 2
+      },
+      'youtube-standard': {
+        maxAttentionSpan: 60,
+        interruptFrequency: 'medium',
+        preferredTypes: ['pacing-change', 'direct-address', 'b-roll-burst'],
+        hookWindow: 30
+      },
+      'youtube-longform': {
+        maxAttentionSpan: 120,
+        interruptFrequency: 'low',
+        preferredTypes: ['pacing-change', 'perspective-shift', 'humor-break'],
+        hookWindow: 60
+      },
+      'netflix-episode': {
+        maxAttentionSpan: 300,
+        interruptFrequency: 'very-low',
+        preferredTypes: ['pacing-change', 'perspective-shift'],
+        hookWindow: 180
+      }
+    }
+  },
+
+  // B-Roll Intelligence - Smart supplementary footage placement
+  bRoll: {
+    // B-roll placement strategies
+    strategies: {
+      'illustrative': {
+        name: 'Illustrative',
+        description: 'Shows what narrator describes',
+        timing: 'on-keyword',
+        duration: { min: 2, max: 5 },
+        overlap: 0.5
+      },
+      'atmospheric': {
+        name: 'Atmospheric',
+        description: 'Sets mood and tone',
+        timing: 'continuous',
+        duration: { min: 3, max: 8 },
+        overlap: 0.3
+      },
+      'transitional': {
+        name: 'Transitional',
+        description: 'Bridges between scenes',
+        timing: 'between-scenes',
+        duration: { min: 1, max: 3 },
+        overlap: 0
+      },
+      'emphasis': {
+        name: 'Emphasis',
+        description: 'Reinforces key points',
+        timing: 'on-emphasis',
+        duration: { min: 1.5, max: 4 },
+        overlap: 0.4
+      },
+      'variety': {
+        name: 'Variety',
+        description: 'Breaks visual monotony',
+        timing: 'periodic',
+        duration: { min: 2, max: 4 },
+        overlap: 0.5
+      }
+    },
+
+    // B-roll density by genre
+    genreDensity: {
+      'documentary-nature': { density: 0.7, strategy: 'atmospheric' },
+      'documentary-crime': { density: 0.5, strategy: 'illustrative' },
+      'educational-explainer': { density: 0.6, strategy: 'illustrative' },
+      'educational-tutorial': { density: 0.3, strategy: 'illustrative' },
+      'entertainment-action': { density: 0.8, strategy: 'variety' },
+      'marketing-product': { density: 0.7, strategy: 'emphasis' },
+      'marketing-brand': { density: 0.6, strategy: 'atmospheric' },
+      'vlog-lifestyle': { density: 0.5, strategy: 'variety' },
+      'cinematic': { density: 0.4, strategy: 'atmospheric' }
+    },
+
+    // Keywords that trigger B-roll
+    triggerKeywords: {
+      'location': ['city', 'beach', 'mountain', 'office', 'home', 'street', 'park'],
+      'action': ['running', 'walking', 'driving', 'flying', 'building', 'creating'],
+      'emotion': ['happy', 'sad', 'excited', 'worried', 'peaceful', 'angry'],
+      'time': ['morning', 'evening', 'night', 'sunset', 'sunrise', 'season'],
+      'abstract': ['growth', 'success', 'failure', 'change', 'innovation', 'future']
+    }
+  },
+
+  // Assembly Presets - Complete assembly configurations
+  presets: {
+    'documentary-standard': {
+      name: 'Documentary Standard',
+      transitions: 'documentary-nature',
+      pacing: 'balanced',
+      beatSync: 'subtle',
+      patternInterrupts: 'youtube-standard',
+      bRoll: { density: 0.5, strategy: 'illustrative' }
+    },
+    'explainer-fast': {
+      name: 'Fast Explainer',
+      transitions: 'educational-explainer',
+      pacing: 'fast',
+      beatSync: 'moderate',
+      patternInterrupts: 'youtube-shorts',
+      bRoll: { density: 0.6, strategy: 'illustrative' }
+    },
+    'social-viral': {
+      name: 'Social Viral',
+      transitions: 'marketing-social',
+      pacing: 'rapid-fire',
+      beatSync: 'aggressive',
+      patternInterrupts: 'tiktok',
+      bRoll: { density: 0.7, strategy: 'variety' }
+    },
+    'cinematic-epic': {
+      name: 'Cinematic Epic',
+      transitions: 'cinematic',
+      pacing: 'cinematic',
+      beatSync: 'subtle',
+      patternInterrupts: 'netflix-episode',
+      bRoll: { density: 0.4, strategy: 'atmospheric' }
+    },
+    'brand-emotional': {
+      name: 'Brand Emotional',
+      transitions: 'marketing-brand',
+      pacing: 'dynamic',
+      beatSync: 'moderate',
+      patternInterrupts: 'youtube-standard',
+      bRoll: { density: 0.6, strategy: 'atmospheric' }
+    },
+    'action-intense': {
+      name: 'Action Intense',
+      transitions: 'entertainment-action',
+      pacing: 'rapid-fire',
+      beatSync: 'aggressive',
+      patternInterrupts: 'youtube-shorts',
+      bRoll: { density: 0.8, strategy: 'variety' }
+    },
+    'tutorial-clear': {
+      name: 'Tutorial Clear',
+      transitions: 'educational-tutorial',
+      pacing: 'balanced',
+      beatSync: 'off',
+      patternInterrupts: 'youtube-standard',
+      bRoll: { density: 0.3, strategy: 'illustrative' }
+    },
+    'drama-emotional': {
+      name: 'Drama Emotional',
+      transitions: 'entertainment-drama',
+      pacing: 'contemplative',
+      beatSync: 'subtle',
+      patternInterrupts: 'netflix-episode',
+      bRoll: { density: 0.4, strategy: 'atmospheric' }
+    }
+  }
+};
+
+// =============================================================================
+// PHASE 3F: NARRATIVE STRUCTURE INTELLIGENCE
+// Complete story structure system for professional narrative pacing
+// =============================================================================
+
+const NARRATIVE_STRUCTURE = {
+  // Story Arc Templates - Classic narrative frameworks
+  storyArcs: {
+    'three-act': {
+      name: 'Three-Act Structure',
+      description: 'Classic Hollywood narrative structure',
+      acts: [
+        { name: 'Setup', percentage: 25, purpose: 'Establish world, characters, conflict', energyRange: [0.3, 0.5] },
+        { name: 'Confrontation', percentage: 50, purpose: 'Rising action, complications, midpoint', energyRange: [0.5, 0.9] },
+        { name: 'Resolution', percentage: 25, purpose: 'Climax, falling action, resolution', energyRange: [0.8, 0.4] }
+      ],
+      beats: ['hook', 'inciting-incident', 'plot-point-1', 'midpoint', 'plot-point-2', 'climax', 'resolution'],
+      bestFor: ['film', 'drama', 'documentary', 'brand-story']
+    },
+    'five-act': {
+      name: 'Five-Act Structure',
+      description: 'Shakespearean dramatic structure',
+      acts: [
+        { name: 'Exposition', percentage: 15, purpose: 'Introduction and setup', energyRange: [0.3, 0.4] },
+        { name: 'Rising Action', percentage: 25, purpose: 'Complications develop', energyRange: [0.4, 0.7] },
+        { name: 'Climax', percentage: 20, purpose: 'Peak tension and turning point', energyRange: [0.8, 1.0] },
+        { name: 'Falling Action', percentage: 25, purpose: 'Consequences unfold', energyRange: [0.7, 0.5] },
+        { name: 'Denouement', percentage: 15, purpose: 'Resolution and closure', energyRange: [0.4, 0.3] }
+      ],
+      beats: ['opening', 'complication', 'rising-stakes', 'crisis', 'climax', 'reversal', 'resolution'],
+      bestFor: ['drama', 'thriller', 'epic', 'series']
+    },
+    'heros-journey': {
+      name: "Hero's Journey",
+      description: "Campbell's monomyth structure",
+      acts: [
+        { name: 'Ordinary World', percentage: 8, purpose: 'Establish normal life', energyRange: [0.3, 0.4] },
+        { name: 'Call to Adventure', percentage: 7, purpose: 'Disruption occurs', energyRange: [0.4, 0.6] },
+        { name: 'Refusal of Call', percentage: 5, purpose: 'Initial hesitation', energyRange: [0.4, 0.5] },
+        { name: 'Meeting the Mentor', percentage: 5, purpose: 'Guidance received', energyRange: [0.5, 0.6] },
+        { name: 'Crossing Threshold', percentage: 10, purpose: 'Enter special world', energyRange: [0.6, 0.7] },
+        { name: 'Tests & Allies', percentage: 15, purpose: 'Face challenges', energyRange: [0.6, 0.8] },
+        { name: 'Approach', percentage: 10, purpose: 'Prepare for ordeal', energyRange: [0.7, 0.8] },
+        { name: 'Ordeal', percentage: 10, purpose: 'Central crisis', energyRange: [0.9, 1.0] },
+        { name: 'Reward', percentage: 8, purpose: 'Seize the prize', energyRange: [0.8, 0.7] },
+        { name: 'Road Back', percentage: 7, purpose: 'Return begins', energyRange: [0.6, 0.7] },
+        { name: 'Resurrection', percentage: 10, purpose: 'Final test', energyRange: [0.8, 0.9] },
+        { name: 'Return with Elixir', percentage: 5, purpose: 'Transformation complete', energyRange: [0.5, 0.4] }
+      ],
+      beats: ['ordinary', 'call', 'refusal', 'mentor', 'threshold', 'tests', 'cave', 'ordeal', 'reward', 'road-back', 'resurrection', 'return'],
+      bestFor: ['adventure', 'fantasy', 'inspirational', 'transformation']
+    },
+    'dan-harmon-circle': {
+      name: 'Story Circle',
+      description: "Dan Harmon's simplified hero's journey",
+      acts: [
+        { name: 'Comfort Zone', percentage: 12, purpose: 'Character in comfort', energyRange: [0.3, 0.4] },
+        { name: 'Want Something', percentage: 12, purpose: 'Desire established', energyRange: [0.4, 0.5] },
+        { name: 'Enter Unfamiliar', percentage: 12, purpose: 'Leave comfort zone', energyRange: [0.5, 0.7] },
+        { name: 'Adapt to It', percentage: 14, purpose: 'Learn and struggle', energyRange: [0.6, 0.8] },
+        { name: 'Get What Wanted', percentage: 12, purpose: 'Achieve goal', energyRange: [0.8, 0.9] },
+        { name: 'Pay the Price', percentage: 14, purpose: 'Face consequences', energyRange: [0.7, 0.8] },
+        { name: 'Return to Familiar', percentage: 12, purpose: 'Go back changed', energyRange: [0.5, 0.4] },
+        { name: 'Having Changed', percentage: 12, purpose: 'Show transformation', energyRange: [0.4, 0.5] }
+      ],
+      beats: ['you', 'need', 'go', 'search', 'find', 'take', 'return', 'change'],
+      bestFor: ['tv-series', 'web-series', 'youtube', 'short-film']
+    },
+    'freytags-pyramid': {
+      name: "Freytag's Pyramid",
+      description: 'Classic dramatic tension structure',
+      acts: [
+        { name: 'Exposition', percentage: 15, purpose: 'Background information', energyRange: [0.2, 0.4] },
+        { name: 'Rising Action', percentage: 30, purpose: 'Building tension', energyRange: [0.4, 0.8] },
+        { name: 'Climax', percentage: 10, purpose: 'Peak of tension', energyRange: [0.9, 1.0] },
+        { name: 'Falling Action', percentage: 30, purpose: 'Tension release', energyRange: [0.7, 0.4] },
+        { name: 'Catastrophe', percentage: 15, purpose: 'Final resolution', energyRange: [0.4, 0.3] }
+      ],
+      beats: ['introduction', 'complication', 'climax', 'reversal', 'catastrophe'],
+      bestFor: ['tragedy', 'drama', 'literary']
+    },
+    'kishotenketsu': {
+      name: 'Kishotenketsu',
+      description: 'Four-act structure without conflict (East Asian)',
+      acts: [
+        { name: 'Ki (Introduction)', percentage: 25, purpose: 'Introduce elements', energyRange: [0.3, 0.5] },
+        { name: 'Sho (Development)', percentage: 25, purpose: 'Develop elements', energyRange: [0.5, 0.6] },
+        { name: 'Ten (Twist)', percentage: 25, purpose: 'Unexpected turn', energyRange: [0.7, 0.8] },
+        { name: 'Ketsu (Conclusion)', percentage: 25, purpose: 'Reconcile elements', energyRange: [0.5, 0.4] }
+      ],
+      beats: ['introduction', 'development', 'twist', 'reconciliation'],
+      bestFor: ['anime', 'slice-of-life', 'contemplative', 'artistic']
+    },
+    'inverted-pyramid': {
+      name: 'Inverted Pyramid',
+      description: 'News/journalistic structure - most important first',
+      acts: [
+        { name: 'Lead', percentage: 20, purpose: 'Most important info', energyRange: [0.8, 0.9] },
+        { name: 'Body', percentage: 50, purpose: 'Supporting details', energyRange: [0.6, 0.5] },
+        { name: 'Tail', percentage: 30, purpose: 'Background context', energyRange: [0.4, 0.3] }
+      ],
+      beats: ['hook', 'key-facts', 'details', 'context', 'background'],
+      bestFor: ['news', 'documentary', 'explainer', 'educational']
+    },
+    'youtube-retention': {
+      name: 'YouTube Retention Structure',
+      description: 'Optimized for audience retention metrics',
+      acts: [
+        { name: 'Hook', percentage: 5, purpose: 'Grab attention instantly', energyRange: [0.9, 1.0] },
+        { name: 'Promise', percentage: 5, purpose: 'State value proposition', energyRange: [0.7, 0.8] },
+        { name: 'Setup', percentage: 10, purpose: 'Context and credibility', energyRange: [0.5, 0.6] },
+        { name: 'Content Block 1', percentage: 20, purpose: 'First main point', energyRange: [0.6, 0.8] },
+        { name: 'Pattern Break 1', percentage: 5, purpose: 'Re-engage attention', energyRange: [0.8, 0.9] },
+        { name: 'Content Block 2', percentage: 20, purpose: 'Second main point', energyRange: [0.6, 0.8] },
+        { name: 'Pattern Break 2', percentage: 5, purpose: 'Re-engage attention', energyRange: [0.8, 0.9] },
+        { name: 'Content Block 3', percentage: 15, purpose: 'Third main point', energyRange: [0.7, 0.9] },
+        { name: 'Climax/Reveal', percentage: 10, purpose: 'Biggest payoff', energyRange: [0.9, 1.0] },
+        { name: 'CTA/Outro', percentage: 5, purpose: 'Call to action', energyRange: [0.6, 0.7] }
+      ],
+      beats: ['hook', 'promise', 'setup', 'content-1', 'break-1', 'content-2', 'break-2', 'content-3', 'climax', 'cta'],
+      bestFor: ['youtube', 'educational', 'tutorial', 'listicle']
+    },
+    'tiktok-viral': {
+      name: 'TikTok Viral Structure',
+      description: 'Optimized for short-form viral content',
+      acts: [
+        { name: 'Hook', percentage: 10, purpose: 'Stop the scroll', energyRange: [1.0, 1.0] },
+        { name: 'Setup', percentage: 15, purpose: 'Quick context', energyRange: [0.7, 0.8] },
+        { name: 'Build', percentage: 25, purpose: 'Rising tension/curiosity', energyRange: [0.8, 0.9] },
+        { name: 'Payoff', percentage: 30, purpose: 'The reveal/punchline', energyRange: [0.9, 1.0] },
+        { name: 'Tag', percentage: 20, purpose: 'Reaction/loop point', energyRange: [0.8, 1.0] }
+      ],
+      beats: ['hook', 'setup', 'build', 'payoff', 'tag'],
+      bestFor: ['tiktok', 'reels', 'shorts', 'viral']
+    },
+    'problem-solution': {
+      name: 'Problem-Solution',
+      description: 'Classic marketing/educational structure',
+      acts: [
+        { name: 'Problem', percentage: 30, purpose: 'Establish pain point', energyRange: [0.5, 0.7] },
+        { name: 'Agitation', percentage: 20, purpose: 'Amplify the problem', energyRange: [0.7, 0.8] },
+        { name: 'Solution', percentage: 35, purpose: 'Present the answer', energyRange: [0.6, 0.8] },
+        { name: 'Proof/CTA', percentage: 15, purpose: 'Evidence and action', energyRange: [0.7, 0.9] }
+      ],
+      beats: ['problem', 'agitation', 'solution', 'proof', 'action'],
+      bestFor: ['commercial', 'explainer', 'sales', 'tutorial']
+    },
+    'before-after-bridge': {
+      name: 'Before-After-Bridge',
+      description: 'Transformation-focused narrative',
+      acts: [
+        { name: 'Before', percentage: 30, purpose: 'Current painful state', energyRange: [0.4, 0.5] },
+        { name: 'After', percentage: 30, purpose: 'Desired future state', energyRange: [0.7, 0.9] },
+        { name: 'Bridge', percentage: 40, purpose: 'How to get there', energyRange: [0.6, 0.8] }
+      ],
+      beats: ['current-state', 'future-vision', 'transformation-path', 'action-steps'],
+      bestFor: ['transformation', 'testimonial', 'coaching', 'inspirational']
+    },
+    'documentary-observational': {
+      name: 'Documentary Observational',
+      description: 'Cinéma vérité style structure',
+      acts: [
+        { name: 'Immersion', percentage: 20, purpose: 'Enter the world', energyRange: [0.3, 0.5] },
+        { name: 'Observation', percentage: 35, purpose: 'Witness events unfold', energyRange: [0.4, 0.7] },
+        { name: 'Revelation', percentage: 25, purpose: 'Truth emerges', energyRange: [0.6, 0.8] },
+        { name: 'Reflection', percentage: 20, purpose: 'Meaning and impact', energyRange: [0.5, 0.4] }
+      ],
+      beats: ['entry', 'observation', 'development', 'revelation', 'meaning'],
+      bestFor: ['documentary', 'reality', 'nature', 'portrait']
+    }
+  },
+
+  // Emotional Journey Mapping
+  emotionalJourneys: {
+    'triumph': {
+      name: 'Triumph Arc',
+      description: 'Low to high emotional journey',
+      curve: [0.3, 0.4, 0.5, 0.6, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+      mood: 'hopeful',
+      endFeeling: 'inspired'
+    },
+    'tragedy': {
+      name: 'Tragedy Arc',
+      description: 'High to low emotional journey',
+      curve: [0.7, 0.8, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2],
+      mood: 'melancholic',
+      endFeeling: 'reflective'
+    },
+    'redemption': {
+      name: 'Redemption Arc',
+      description: 'Fall then rise pattern',
+      curve: [0.6, 0.5, 0.4, 0.3, 0.2, 0.3, 0.5, 0.7, 0.8, 0.9],
+      mood: 'hopeful',
+      endFeeling: 'uplifted'
+    },
+    'rags-to-riches': {
+      name: 'Rags to Riches',
+      description: 'Steady climb from bottom',
+      curve: [0.2, 0.3, 0.4, 0.5, 0.6, 0.65, 0.7, 0.8, 0.9, 0.95],
+      mood: 'inspirational',
+      endFeeling: 'satisfied'
+    },
+    'riches-to-rags': {
+      name: 'Riches to Rags',
+      description: 'Decline from prosperity',
+      curve: [0.9, 0.85, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25],
+      mood: 'cautionary',
+      endFeeling: 'sobered'
+    },
+    'icarus': {
+      name: 'Icarus Arc',
+      description: 'Rise then fall pattern',
+      curve: [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.7, 0.5, 0.3, 0.2],
+      mood: 'cautionary',
+      endFeeling: 'thoughtful'
+    },
+    'oedipus': {
+      name: 'Oedipus Arc',
+      description: 'Fall, rise, then fall',
+      curve: [0.7, 0.5, 0.3, 0.4, 0.6, 0.8, 0.7, 0.5, 0.3, 0.2],
+      mood: 'tragic',
+      endFeeling: 'cathartic'
+    },
+    'cinderella': {
+      name: 'Cinderella Arc',
+      description: 'Rise, fall, rise pattern',
+      curve: [0.3, 0.5, 0.7, 0.8, 0.5, 0.3, 0.5, 0.7, 0.9, 1.0],
+      mood: 'magical',
+      endFeeling: 'delighted'
+    },
+    'thriller': {
+      name: 'Thriller Arc',
+      description: 'Tension building with peaks',
+      curve: [0.5, 0.6, 0.7, 0.6, 0.8, 0.7, 0.9, 0.8, 1.0, 0.6],
+      mood: 'tense',
+      endFeeling: 'relieved'
+    },
+    'mystery': {
+      name: 'Mystery Arc',
+      description: 'Curiosity building to revelation',
+      curve: [0.4, 0.5, 0.6, 0.55, 0.65, 0.7, 0.75, 0.85, 1.0, 0.7],
+      mood: 'curious',
+      endFeeling: 'satisfied'
+    },
+    'comedy': {
+      name: 'Comedy Arc',
+      description: 'Ups and downs with happy ending',
+      curve: [0.6, 0.7, 0.5, 0.8, 0.4, 0.9, 0.5, 0.7, 0.85, 0.95],
+      mood: 'playful',
+      endFeeling: 'joyful'
+    },
+    'horror': {
+      name: 'Horror Arc',
+      description: 'Dread building with shocks',
+      curve: [0.5, 0.6, 0.7, 0.5, 0.8, 0.6, 0.9, 0.7, 1.0, 0.3],
+      mood: 'dread',
+      endFeeling: 'unsettled'
+    },
+    'meditative': {
+      name: 'Meditative Arc',
+      description: 'Calm and contemplative throughout',
+      curve: [0.4, 0.45, 0.5, 0.55, 0.5, 0.55, 0.5, 0.45, 0.5, 0.45],
+      mood: 'peaceful',
+      endFeeling: 'centered'
+    },
+    'educational': {
+      name: 'Educational Arc',
+      description: 'Steady engagement with peaks',
+      curve: [0.7, 0.6, 0.65, 0.7, 0.8, 0.65, 0.7, 0.8, 0.85, 0.9],
+      mood: 'curious',
+      endFeeling: 'enlightened'
+    }
+  },
+
+  // Narrative Beat Types
+  narrativeBeats: {
+    'hook': {
+      name: 'Hook',
+      purpose: 'Capture immediate attention',
+      position: 'opening',
+      duration: { percentage: 3, min: 3, max: 15 },
+      energy: 0.9,
+      techniques: ['question', 'statement', 'visual-shock', 'mystery', 'promise'],
+      transitionIn: 'none',
+      transitionOut: 'cut'
+    },
+    'inciting-incident': {
+      name: 'Inciting Incident',
+      purpose: 'Disrupt the status quo',
+      position: 'act-1',
+      duration: { percentage: 5, min: 10, max: 60 },
+      energy: 0.7,
+      techniques: ['event', 'revelation', 'arrival', 'discovery'],
+      transitionIn: 'dissolve',
+      transitionOut: 'cut'
+    },
+    'plot-point': {
+      name: 'Plot Point',
+      purpose: 'Major story turning point',
+      position: 'act-break',
+      duration: { percentage: 8, min: 15, max: 90 },
+      energy: 0.8,
+      techniques: ['revelation', 'decision', 'confrontation', 'discovery'],
+      transitionIn: 'cut',
+      transitionOut: 'dissolve'
+    },
+    'midpoint': {
+      name: 'Midpoint',
+      purpose: 'Central pivot of the story',
+      position: 'center',
+      duration: { percentage: 10, min: 20, max: 120 },
+      energy: 0.85,
+      techniques: ['revelation', 'reversal', 'commitment', 'false-victory'],
+      transitionIn: 'dissolve',
+      transitionOut: 'fade'
+    },
+    'climax': {
+      name: 'Climax',
+      purpose: 'Peak emotional/narrative moment',
+      position: 'act-3',
+      duration: { percentage: 12, min: 30, max: 180 },
+      energy: 1.0,
+      techniques: ['confrontation', 'revelation', 'sacrifice', 'transformation'],
+      transitionIn: 'cut',
+      transitionOut: 'dissolve'
+    },
+    'resolution': {
+      name: 'Resolution',
+      purpose: 'Tie up loose ends',
+      position: 'ending',
+      duration: { percentage: 8, min: 15, max: 90 },
+      energy: 0.5,
+      techniques: ['new-normal', 'reflection', 'callback', 'future-glimpse'],
+      transitionIn: 'dissolve',
+      transitionOut: 'fade'
+    },
+    'pattern-break': {
+      name: 'Pattern Break',
+      purpose: 'Re-engage wandering attention',
+      position: 'throughout',
+      duration: { percentage: 2, min: 2, max: 10 },
+      energy: 0.85,
+      techniques: ['visual-change', 'tone-shift', 'direct-address', 'humor', 'surprise'],
+      transitionIn: 'cut',
+      transitionOut: 'cut'
+    },
+    'tension-peak': {
+      name: 'Tension Peak',
+      purpose: 'Moment of maximum suspense',
+      position: 'pre-climax',
+      duration: { percentage: 5, min: 10, max: 60 },
+      energy: 0.95,
+      techniques: ['pause', 'escalation', 'countdown', 'confrontation'],
+      transitionIn: 'cut',
+      transitionOut: 'cut'
+    },
+    'relief-moment': {
+      name: 'Relief Moment',
+      purpose: 'Release built-up tension',
+      position: 'post-tension',
+      duration: { percentage: 3, min: 5, max: 30 },
+      energy: 0.4,
+      techniques: ['humor', 'breath', 'beauty-shot', 'quiet-moment'],
+      transitionIn: 'dissolve',
+      transitionOut: 'dissolve'
+    },
+    'callback': {
+      name: 'Callback',
+      purpose: 'Reference earlier moment',
+      position: 'resolution',
+      duration: { percentage: 2, min: 3, max: 15 },
+      energy: 0.6,
+      techniques: ['visual-echo', 'dialogue-repeat', 'motif-return'],
+      transitionIn: 'match-cut',
+      transitionOut: 'dissolve'
+    },
+    'montage': {
+      name: 'Montage',
+      purpose: 'Compress time/show progression',
+      position: 'transition',
+      duration: { percentage: 10, min: 20, max: 120 },
+      energy: 0.7,
+      techniques: ['time-lapse', 'parallel-action', 'training', 'relationship-build'],
+      transitionIn: 'dissolve',
+      transitionOut: 'dissolve'
+    },
+    'revelation': {
+      name: 'Revelation',
+      purpose: 'Major information reveal',
+      position: 'variable',
+      duration: { percentage: 5, min: 10, max: 45 },
+      energy: 0.85,
+      techniques: ['twist', 'discovery', 'confession', 'flashback'],
+      transitionIn: 'cut',
+      transitionOut: 'beat-pause'
+    },
+    'cliffhanger': {
+      name: 'Cliffhanger',
+      purpose: 'Create anticipation for next segment',
+      position: 'episode-end',
+      duration: { percentage: 3, min: 5, max: 20 },
+      energy: 0.9,
+      techniques: ['question', 'danger', 'revelation-partial', 'arrival'],
+      transitionIn: 'cut',
+      transitionOut: 'fade-to-black'
+    }
+  },
+
+  // Genre-Specific Narrative Patterns
+  genrePatterns: {
+    'horror': {
+      arc: 'heros-journey',
+      emotionalJourney: 'horror',
+      requiredBeats: ['hook', 'inciting-incident', 'tension-peak', 'climax', 'relief-moment'],
+      pacing: 'dynamic',
+      tensionStyle: 'building-with-releases',
+      scareIntervals: { min: 45, max: 90 },
+      endingTypes: ['twist', 'ambiguous', 'survivor', 'cycle-continues']
+    },
+    'thriller': {
+      arc: 'five-act',
+      emotionalJourney: 'thriller',
+      requiredBeats: ['hook', 'inciting-incident', 'plot-point', 'tension-peak', 'climax', 'resolution'],
+      pacing: 'escalating',
+      tensionStyle: 'ratcheting',
+      twistPlacement: 0.75,
+      endingTypes: ['reveal', 'confrontation', 'escape', 'sacrifice']
+    },
+    'drama': {
+      arc: 'three-act',
+      emotionalJourney: 'redemption',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'climax', 'resolution'],
+      pacing: 'contemplative',
+      tensionStyle: 'emotional-stakes',
+      characterMoments: 0.4,
+      endingTypes: ['transformation', 'acceptance', 'sacrifice', 'reconciliation']
+    },
+    'comedy': {
+      arc: 'dan-harmon-circle',
+      emotionalJourney: 'comedy',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'climax', 'resolution'],
+      pacing: 'varied',
+      tensionStyle: 'comic-escalation',
+      jokeIntervals: { min: 15, max: 45 },
+      endingTypes: ['happy', 'ironic', 'callback', 'absurd']
+    },
+    'documentary': {
+      arc: 'inverted-pyramid',
+      emotionalJourney: 'educational',
+      requiredBeats: ['hook', 'revelation', 'midpoint', 'climax', 'resolution'],
+      pacing: 'measured',
+      tensionStyle: 'curiosity-building',
+      interviewRatio: 0.4,
+      endingTypes: ['reflection', 'call-to-action', 'update', 'question']
+    },
+    'action': {
+      arc: 'heros-journey',
+      emotionalJourney: 'triumph',
+      requiredBeats: ['hook', 'inciting-incident', 'montage', 'tension-peak', 'climax', 'resolution'],
+      pacing: 'fast',
+      tensionStyle: 'physical-stakes',
+      actionSequenceRatio: 0.4,
+      endingTypes: ['victory', 'sacrifice', 'setup-sequel', 'hero-walk-away']
+    },
+    'romance': {
+      arc: 'three-act',
+      emotionalJourney: 'cinderella',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'revelation', 'climax', 'resolution'],
+      pacing: 'balanced',
+      tensionStyle: 'will-they-wont-they',
+      romanticBeatInterval: 0.2,
+      endingTypes: ['together', 'apart-but-growth', 'reunion', 'sacrifice']
+    },
+    'sci-fi': {
+      arc: 'five-act',
+      emotionalJourney: 'mystery',
+      requiredBeats: ['hook', 'inciting-incident', 'revelation', 'midpoint', 'climax', 'resolution'],
+      pacing: 'dynamic',
+      tensionStyle: 'world-building-mystery',
+      expositionStyle: 'show-dont-tell',
+      endingTypes: ['resolution', 'open-question', 'transformation', 'cycle']
+    },
+    'fantasy': {
+      arc: 'heros-journey',
+      emotionalJourney: 'triumph',
+      requiredBeats: ['hook', 'inciting-incident', 'montage', 'midpoint', 'climax', 'resolution'],
+      pacing: 'epic',
+      tensionStyle: 'quest-stakes',
+      worldBuildingRatio: 0.25,
+      endingTypes: ['victory', 'sacrifice', 'transformation', 'new-beginning']
+    },
+    'tutorial': {
+      arc: 'problem-solution',
+      emotionalJourney: 'educational',
+      requiredBeats: ['hook', 'pattern-break', 'revelation', 'resolution'],
+      pacing: 'instructional',
+      tensionStyle: 'curiosity',
+      stepInterval: 60,
+      endingTypes: ['summary', 'call-to-action', 'next-steps', 'challenge']
+    },
+    'vlog': {
+      arc: 'youtube-retention',
+      emotionalJourney: 'comedy',
+      requiredBeats: ['hook', 'pattern-break', 'climax', 'resolution'],
+      pacing: 'conversational',
+      tensionStyle: 'authenticity',
+      personalMomentRatio: 0.5,
+      endingTypes: ['cta', 'tease', 'callback', 'outro-bit']
+    },
+    'commercial': {
+      arc: 'before-after-bridge',
+      emotionalJourney: 'rags-to-riches',
+      requiredBeats: ['hook', 'revelation', 'climax'],
+      pacing: 'punchy',
+      tensionStyle: 'desire-creation',
+      brandMomentPlacement: 0.7,
+      endingTypes: ['cta', 'brand-reveal', 'tagline', 'offer']
+    },
+    'music-video': {
+      arc: 'kishotenketsu',
+      emotionalJourney: 'triumph',
+      requiredBeats: ['hook', 'midpoint', 'climax'],
+      pacing: 'music-driven',
+      tensionStyle: 'visual-narrative',
+      performanceRatio: 0.6,
+      endingTypes: ['fade', 'callback', 'visual-punctuation', 'loop-point']
+    },
+    'asmr': {
+      arc: 'documentary-observational',
+      emotionalJourney: 'meditative',
+      requiredBeats: ['hook', 'resolution'],
+      pacing: 'slow',
+      tensionStyle: 'relaxation-deepening',
+      triggerInterval: 30,
+      endingTypes: ['fade', 'ambient', 'whispered-outro']
+    }
+  },
+
+  // Tension Curve Patterns
+  tensionCurves: {
+    'steady-build': {
+      name: 'Steady Build',
+      description: 'Continuous tension increase',
+      curve: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.5],
+      bestFor: ['thriller', 'horror', 'action']
+    },
+    'waves': {
+      name: 'Tension Waves',
+      description: 'Build and release cycles',
+      curve: [0.3, 0.5, 0.7, 0.4, 0.6, 0.8, 0.5, 0.7, 0.9, 0.6],
+      bestFor: ['drama', 'romance', 'adventure']
+    },
+    'flat-with-spikes': {
+      name: 'Flat with Spikes',
+      description: 'Calm baseline with sudden peaks',
+      curve: [0.4, 0.4, 0.9, 0.4, 0.4, 0.4, 0.95, 0.4, 0.4, 1.0],
+      bestFor: ['horror', 'mystery', 'thriller']
+    },
+    'escalating-steps': {
+      name: 'Escalating Steps',
+      description: 'Stepped increases in tension',
+      curve: [0.3, 0.3, 0.5, 0.5, 0.5, 0.7, 0.7, 0.7, 0.9, 0.9],
+      bestFor: ['action', 'heist', 'competition']
+    },
+    'slow-burn': {
+      name: 'Slow Burn',
+      description: 'Very gradual build to explosive climax',
+      curve: [0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.55, 0.7, 0.9, 1.0],
+      bestFor: ['psychological', 'drama', 'mystery']
+    },
+    'rollercoaster': {
+      name: 'Rollercoaster',
+      description: 'Extreme ups and downs',
+      curve: [0.5, 0.9, 0.3, 0.8, 0.4, 0.95, 0.3, 0.85, 1.0, 0.5],
+      bestFor: ['comedy', 'adventure', 'animation']
+    },
+    'inverted-u': {
+      name: 'Inverted U',
+      description: 'Build to middle peak then decline',
+      curve: [0.3, 0.5, 0.7, 0.85, 0.95, 1.0, 0.85, 0.7, 0.5, 0.4],
+      bestFor: ['tragedy', 'rise-and-fall', 'cautionary']
+    },
+    'double-peak': {
+      name: 'Double Peak',
+      description: 'Two major tension climaxes',
+      curve: [0.3, 0.5, 0.8, 1.0, 0.5, 0.6, 0.8, 0.95, 1.0, 0.5],
+      bestFor: ['epic', 'series-finale', 'action']
+    }
+  },
+
+  // Scene-Level Structure
+  sceneStructure: {
+    'standard': {
+      name: 'Standard Scene',
+      components: ['setup', 'conflict', 'resolution'],
+      timing: [0.2, 0.6, 0.2]
+    },
+    'action': {
+      name: 'Action Scene',
+      components: ['stakes-reminder', 'action', 'consequence'],
+      timing: [0.1, 0.7, 0.2]
+    },
+    'dialogue': {
+      name: 'Dialogue Scene',
+      components: ['context', 'exchange', 'shift'],
+      timing: [0.15, 0.7, 0.15]
+    },
+    'revelation': {
+      name: 'Revelation Scene',
+      components: ['setup', 'build', 'reveal', 'reaction'],
+      timing: [0.2, 0.3, 0.2, 0.3]
+    },
+    'montage': {
+      name: 'Montage Scene',
+      components: ['establish', 'progression', 'culmination'],
+      timing: [0.1, 0.7, 0.2]
+    },
+    'transition': {
+      name: 'Transition Scene',
+      components: ['exit-previous', 'bridge', 'enter-next'],
+      timing: [0.3, 0.4, 0.3]
+    }
+  },
+
+  // Narrative Presets combining all elements
+  narrativePresets: {
+    'youtube-standard': {
+      name: 'YouTube Standard',
+      arc: 'youtube-retention',
+      emotionalJourney: 'educational',
+      tensionCurve: 'waves',
+      requiredBeats: ['hook', 'pattern-break', 'climax', 'resolution'],
+      patternBreakInterval: 45,
+      hookDuration: 5,
+      endingStyle: 'cta'
+    },
+    'tiktok-viral': {
+      name: 'TikTok Viral',
+      arc: 'tiktok-viral',
+      emotionalJourney: 'comedy',
+      tensionCurve: 'steady-build',
+      requiredBeats: ['hook', 'payoff'],
+      hookDuration: 1,
+      payoffPlacement: 0.8,
+      endingStyle: 'loop'
+    },
+    'cinematic-short': {
+      name: 'Cinematic Short Film',
+      arc: 'three-act',
+      emotionalJourney: 'redemption',
+      tensionCurve: 'slow-burn',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'climax', 'resolution'],
+      characterDevelopment: 0.3,
+      endingStyle: 'emotional-resolution'
+    },
+    'documentary-feature': {
+      name: 'Documentary Feature',
+      arc: 'documentary-observational',
+      emotionalJourney: 'mystery',
+      tensionCurve: 'escalating-steps',
+      requiredBeats: ['hook', 'revelation', 'midpoint', 'revelation', 'climax', 'resolution'],
+      interviewRatio: 0.4,
+      endingStyle: 'reflection'
+    },
+    'series-episode': {
+      name: 'Series Episode',
+      arc: 'dan-harmon-circle',
+      emotionalJourney: 'cinderella',
+      tensionCurve: 'double-peak',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'climax', 'cliffhanger'],
+      serialElements: true,
+      endingStyle: 'cliffhanger'
+    },
+    'commercial-spot': {
+      name: 'Commercial Spot',
+      arc: 'problem-solution',
+      emotionalJourney: 'rags-to-riches',
+      tensionCurve: 'steady-build',
+      requiredBeats: ['hook', 'revelation', 'climax'],
+      brandMoment: 0.8,
+      endingStyle: 'cta'
+    },
+    'music-video-narrative': {
+      name: 'Music Video (Narrative)',
+      arc: 'kishotenketsu',
+      emotionalJourney: 'triumph',
+      tensionCurve: 'waves',
+      requiredBeats: ['hook', 'midpoint', 'climax'],
+      performanceRatio: 0.6,
+      endingStyle: 'visual-punctuation'
+    },
+    'thriller-short': {
+      name: 'Thriller Short',
+      arc: 'five-act',
+      emotionalJourney: 'thriller',
+      tensionCurve: 'slow-burn',
+      requiredBeats: ['hook', 'inciting-incident', 'tension-peak', 'revelation', 'climax'],
+      twistPlacement: 0.75,
+      endingStyle: 'twist'
+    },
+    'horror-short': {
+      name: 'Horror Short',
+      arc: 'freytags-pyramid',
+      emotionalJourney: 'horror',
+      tensionCurve: 'flat-with-spikes',
+      requiredBeats: ['hook', 'tension-peak', 'climax', 'relief-moment'],
+      scareIntervals: 45,
+      endingStyle: 'ambiguous'
+    },
+    'inspirational': {
+      name: 'Inspirational Story',
+      arc: 'heros-journey',
+      emotionalJourney: 'triumph',
+      tensionCurve: 'escalating-steps',
+      requiredBeats: ['hook', 'inciting-incident', 'montage', 'climax', 'resolution'],
+      emotionalPeaks: 3,
+      endingStyle: 'uplifting'
+    }
+  }
+};
+
+/**
+ * Build narrative structure for a project
+ */
+function buildNarrativeStructure(options = {}) {
+  const {
+    genre,
+    duration,
+    platform,
+    preset,
+    sceneCount,
+    mood,
+    customArc
+  } = options;
+
+  // Get narrative preset or build from genre
+  let narrativeConfig;
+  if (preset && NARRATIVE_STRUCTURE.narrativePresets[preset]) {
+    narrativeConfig = NARRATIVE_STRUCTURE.narrativePresets[preset];
+  } else {
+    // Build from genre pattern
+    const genrePattern = NARRATIVE_STRUCTURE.genrePatterns[genre] ||
+                         NARRATIVE_STRUCTURE.genrePatterns['drama'];
+    narrativeConfig = {
+      arc: genrePattern.arc,
+      emotionalJourney: genrePattern.emotionalJourney,
+      tensionCurve: 'waves',
+      requiredBeats: genrePattern.requiredBeats,
+      pacing: genrePattern.pacing
+    };
+  }
+
+  // Get story arc
+  const storyArc = customArc || NARRATIVE_STRUCTURE.storyArcs[narrativeConfig.arc] ||
+                   NARRATIVE_STRUCTURE.storyArcs['three-act'];
+
+  // Get emotional journey
+  const emotionalJourney = NARRATIVE_STRUCTURE.emotionalJourneys[narrativeConfig.emotionalJourney] ||
+                           NARRATIVE_STRUCTURE.emotionalJourneys['triumph'];
+
+  // Get tension curve
+  const tensionCurve = NARRATIVE_STRUCTURE.tensionCurves[narrativeConfig.tensionCurve] ||
+                       NARRATIVE_STRUCTURE.tensionCurves['waves'];
+
+  // Calculate act timings
+  const acts = storyArc.acts.map((act, index) => {
+    const startPercentage = storyArc.acts.slice(0, index)
+      .reduce((sum, a) => sum + a.percentage, 0);
+    const startTime = (startPercentage / 100) * duration;
+    const actDuration = (act.percentage / 100) * duration;
+
+    return {
+      name: act.name,
+      startTime,
+      endTime: startTime + actDuration,
+      duration: actDuration,
+      purpose: act.purpose,
+      energyRange: act.energyRange,
+      percentage: act.percentage
+    };
+  });
+
+  // Map required beats to timeline
+  const beatTimings = narrativeConfig.requiredBeats.map(beatId => {
+    const beat = NARRATIVE_STRUCTURE.narrativeBeats[beatId];
+    if (!beat) return null;
+
+    // Calculate position based on beat type
+    let position;
+    switch (beat.position) {
+      case 'opening':
+        position = 0;
+        break;
+      case 'act-1':
+        position = 0.15;
+        break;
+      case 'center':
+        position = 0.5;
+        break;
+      case 'act-break':
+        position = 0.25;
+        break;
+      case 'pre-climax':
+        position = 0.75;
+        break;
+      case 'act-3':
+        position = 0.85;
+        break;
+      case 'ending':
+        position = 0.92;
+        break;
+      default:
+        position = 0.5;
+    }
+
+    const beatDuration = Math.min(
+      beat.duration.max,
+      Math.max(beat.duration.min, (beat.duration.percentage / 100) * duration)
+    );
+
+    return {
+      id: beatId,
+      name: beat.name,
+      purpose: beat.purpose,
+      startTime: position * duration,
+      duration: beatDuration,
+      energy: beat.energy,
+      techniques: beat.techniques,
+      transitionIn: beat.transitionIn,
+      transitionOut: beat.transitionOut
+    };
+  }).filter(Boolean);
+
+  // Generate emotional curve mapped to timeline
+  const emotionalCurve = emotionalJourney.curve.map((value, index) => ({
+    position: index / (emotionalJourney.curve.length - 1),
+    time: (index / (emotionalJourney.curve.length - 1)) * duration,
+    energy: value,
+    mood: emotionalJourney.mood
+  }));
+
+  // Generate tension curve mapped to timeline
+  const tensionPoints = tensionCurve.curve.map((value, index) => ({
+    position: index / (tensionCurve.curve.length - 1),
+    time: (index / (tensionCurve.curve.length - 1)) * duration,
+    tension: value
+  }));
+
+  // Calculate scene assignments to acts
+  const sceneAssignments = [];
+  if (sceneCount > 0) {
+    let sceneIndex = 0;
+    acts.forEach(act => {
+      const scenesInAct = Math.round((act.percentage / 100) * sceneCount);
+      for (let i = 0; i < scenesInAct && sceneIndex < sceneCount; i++) {
+        sceneAssignments.push({
+          sceneIndex,
+          act: act.name,
+          suggestedEnergy: (act.energyRange[0] + act.energyRange[1]) / 2,
+          purpose: act.purpose
+        });
+        sceneIndex++;
+      }
+    });
+    // Assign remaining scenes to last act
+    while (sceneIndex < sceneCount) {
+      const lastAct = acts[acts.length - 1];
+      sceneAssignments.push({
+        sceneIndex,
+        act: lastAct.name,
+        suggestedEnergy: lastAct.energyRange[1],
+        purpose: lastAct.purpose
+      });
+      sceneIndex++;
+    }
+  }
+
+  return {
+    structure: {
+      arc: storyArc.name,
+      arcId: narrativeConfig.arc,
+      description: storyArc.description
+    },
+    acts,
+    beats: beatTimings,
+    emotionalJourney: {
+      type: emotionalJourney.name,
+      mood: emotionalJourney.mood,
+      endFeeling: emotionalJourney.endFeeling,
+      curve: emotionalCurve
+    },
+    tension: {
+      type: tensionCurve.name,
+      description: tensionCurve.description,
+      curve: tensionPoints
+    },
+    sceneAssignments,
+    recommendations: {
+      hookDuration: narrativeConfig.hookDuration || 5,
+      patternBreakInterval: narrativeConfig.patternBreakInterval || 60,
+      endingStyle: narrativeConfig.endingStyle || 'resolution',
+      pacing: narrativeConfig.pacing || 'balanced'
+    }
+  };
+}
+
+/**
+ * Get narrative beat suggestions for a specific scene
+ */
+function getSceneBeatSuggestion(options = {}) {
+  const { sceneIndex, totalScenes, genre, currentEnergy, duration } = options;
+
+  const position = sceneIndex / (totalScenes - 1);
+  const genrePattern = NARRATIVE_STRUCTURE.genrePatterns[genre] ||
+                       NARRATIVE_STRUCTURE.genrePatterns['drama'];
+
+  // Determine most likely beat based on position
+  let suggestedBeat = 'standard';
+  let suggestedEnergy = 0.5;
+  let purpose = '';
+
+  if (position === 0) {
+    suggestedBeat = 'hook';
+    suggestedEnergy = 0.9;
+    purpose = 'Capture immediate attention';
+  } else if (position < 0.15) {
+    suggestedBeat = 'inciting-incident';
+    suggestedEnergy = 0.7;
+    purpose = 'Establish the central conflict';
+  } else if (position >= 0.45 && position <= 0.55) {
+    suggestedBeat = 'midpoint';
+    suggestedEnergy = 0.85;
+    purpose = 'Central turning point';
+  } else if (position >= 0.8 && position < 0.9) {
+    suggestedBeat = 'climax';
+    suggestedEnergy = 1.0;
+    purpose = 'Peak emotional moment';
+  } else if (position >= 0.9) {
+    suggestedBeat = 'resolution';
+    suggestedEnergy = 0.5;
+    purpose = 'Conclude and resolve';
+  } else if (position % 0.25 < 0.05) {
+    suggestedBeat = 'plot-point';
+    suggestedEnergy = 0.8;
+    purpose = 'Major story development';
+  }
+
+  const beat = NARRATIVE_STRUCTURE.narrativeBeats[suggestedBeat];
+
+  return {
+    beat: suggestedBeat,
+    name: beat?.name || 'Scene',
+    energy: suggestedEnergy,
+    purpose,
+    techniques: beat?.techniques || [],
+    transitionIn: beat?.transitionIn || 'cut',
+    transitionOut: beat?.transitionOut || 'cut',
+    sceneDuration: calculateSceneDurationForBeat(suggestedBeat, duration)
+  };
+}
+
+/**
+ * Calculate appropriate scene duration for a narrative beat
+ */
+function calculateSceneDurationForBeat(beatType, totalDuration) {
+  const beat = NARRATIVE_STRUCTURE.narrativeBeats[beatType];
+  if (!beat) return 5;
+
+  const targetDuration = (beat.duration.percentage / 100) * totalDuration;
+  return Math.min(beat.duration.max, Math.max(beat.duration.min, targetDuration));
+}
+
+/**
+ * Get emotional journey recommendation based on genre and mood
+ */
+function getEmotionalJourneyRecommendation(options = {}) {
+  const { genre, mood, targetFeeling } = options;
+
+  const genrePattern = NARRATIVE_STRUCTURE.genrePatterns[genre];
+  let recommendedJourney = 'triumph';
+
+  if (genrePattern) {
+    recommendedJourney = genrePattern.emotionalJourney;
+  } else if (mood) {
+    // Match mood to journey
+    const moodToJourney = {
+      'epic': 'triumph',
+      'dark': 'tragedy',
+      'hopeful': 'redemption',
+      'mysterious': 'mystery',
+      'tense': 'thriller',
+      'playful': 'comedy',
+      'peaceful': 'meditative'
+    };
+    recommendedJourney = moodToJourney[mood] || 'triumph';
+  }
+
+  const journey = NARRATIVE_STRUCTURE.emotionalJourneys[recommendedJourney];
+
+  return {
+    type: recommendedJourney,
+    name: journey.name,
+    description: journey.description,
+    mood: journey.mood,
+    endFeeling: journey.endFeeling,
+    curve: journey.curve,
+    alternatives: Object.keys(NARRATIVE_STRUCTURE.emotionalJourneys)
+      .filter(j => j !== recommendedJourney)
+      .slice(0, 3)
+  };
+}
+
+/**
+ * Get recommended transition for scene change
+ */
+function getTransitionRecommendation(options = {}) {
+  const { genre, fromScene, toScene, context, mood, tempo } = options;
+
+  const genreTransitions = ASSEMBLY_INTELLIGENCE.transitions.genreTransitions[genre] ||
+                           ASSEMBLY_INTELLIGENCE.transitions.genreTransitions['cinematic'];
+
+  // Check context rules first
+  let preferredTransitions = [];
+  let avoidTransitions = [];
+
+  if (context) {
+    const contextRule = ASSEMBLY_INTELLIGENCE.transitions.contextRules[context];
+    if (contextRule) {
+      preferredTransitions = contextRule.prefer || [];
+      avoidTransitions = contextRule.avoid || [];
+    }
+  }
+
+  // Combine with genre preferences
+  const genrePrimary = genreTransitions.primary || [];
+  const genreSecondary = genreTransitions.secondary || [];
+  const genreAvoid = genreTransitions.avoid || [];
+
+  // Filter and prioritize
+  const allPreferred = [...new Set([...preferredTransitions, ...genrePrimary])];
+  const allAvoid = [...new Set([...avoidTransitions, ...genreAvoid])];
+
+  // Select transition
+  let selectedTransition = 'cut';
+  for (const trans of allPreferred) {
+    if (!allAvoid.includes(trans)) {
+      selectedTransition = trans;
+      break;
+    }
+  }
+
+  // Get transition details
+  const transitionType = ASSEMBLY_INTELLIGENCE.transitions.types[selectedTransition];
+  let duration = genreTransitions.defaultDuration || 0.5;
+
+  if (transitionType.duration && typeof transitionType.duration === 'object') {
+    duration = (transitionType.duration.min + transitionType.duration.max) / 2;
+  }
+
+  return {
+    type: selectedTransition,
+    name: transitionType.name,
+    duration,
+    audioSync: transitionType.audioSync,
+    alternatives: genreSecondary.filter(t => !allAvoid.includes(t))
+  };
+}
+
+/**
+ * Calculate scene pacing based on content and energy
+ */
+function calculateScenePacing(options = {}) {
+  const { genre, platform, sceneCount, totalDuration, energyLevel, contentType } = options;
+
+  // Get pacing profile
+  let pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['balanced'];
+
+  // Determine profile based on platform/genre
+  if (platform?.includes('tiktok') || platform?.includes('shorts')) {
+    pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['rapid-fire'];
+  } else if (genre?.includes('action') || genre?.includes('gaming')) {
+    pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['fast'];
+  } else if (genre?.includes('documentary') || genre?.includes('nature')) {
+    pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['contemplative'];
+  } else if (genre?.includes('cinematic')) {
+    pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['cinematic'];
+  }
+
+  // Get energy curve
+  const energyCurve = ASSEMBLY_INTELLIGENCE.pacing.energyCurves[pacingProfile.energyCurve];
+
+  // Calculate scene durations
+  const avgDuration = totalDuration / sceneCount;
+  const sceneDurations = [];
+
+  for (let i = 0; i < sceneCount; i++) {
+    const curvePosition = i / (sceneCount - 1 || 1);
+    const curveIndex = Math.floor(curvePosition * (energyCurve.pattern.length - 1));
+    const energyFactor = energyCurve.pattern[curveIndex];
+
+    // Higher energy = shorter scenes
+    const durationMultiplier = 1.5 - (energyFactor * 0.8);
+    let sceneDuration = avgDuration * durationMultiplier;
+
+    // Apply content type modifier
+    if (contentType) {
+      const modifier = ASSEMBLY_INTELLIGENCE.pacing.durationModifiers[contentType] || 1;
+      sceneDuration *= modifier;
+    }
+
+    // Clamp to profile limits
+    sceneDuration = Math.max(pacingProfile.avgSceneDuration.min,
+                            Math.min(pacingProfile.avgSceneDuration.max, sceneDuration));
+
+    sceneDurations.push({
+      index: i,
+      duration: sceneDuration,
+      energy: energyFactor
+    });
+  }
+
+  return {
+    profile: pacingProfile.name,
+    energyCurve: pacingProfile.energyCurve,
+    sceneDurations,
+    breathingRoom: pacingProfile.breathingRoom
+  };
+}
+
+/**
+ * Generate pattern interrupt suggestions
+ */
+function getPatternInterruptSuggestions(options = {}) {
+  const { platform, duration, sceneCount, genre } = options;
+
+  const strategy = ASSEMBLY_INTELLIGENCE.patternInterrupts.platformStrategies[platform] ||
+                   ASSEMBLY_INTELLIGENCE.patternInterrupts.platformStrategies['youtube-standard'];
+
+  const interrupts = [];
+  const interruptInterval = strategy.maxAttentionSpan;
+
+  // Calculate interrupt positions
+  for (let time = interruptInterval; time < duration; time += interruptInterval) {
+    // Select interrupt type
+    const typeIndex = interrupts.length % strategy.preferredTypes.length;
+    const interruptTypeKey = strategy.preferredTypes[typeIndex];
+    const interruptType = ASSEMBLY_INTELLIGENCE.patternInterrupts.types[interruptTypeKey];
+
+    interrupts.push({
+      time,
+      type: interruptTypeKey,
+      name: interruptType.name,
+      description: interruptType.description,
+      elements: interruptType.elements,
+      impact: interruptType.impact
+    });
+  }
+
+  return {
+    strategy: platform,
+    hookWindow: strategy.hookWindow,
+    interrupts,
+    frequency: strategy.interruptFrequency
+  };
+}
+
+/**
+ * Get B-roll placement suggestions
+ */
+function getBRollPlacements(options = {}) {
+  const { genre, scenes, keywords } = options;
+
+  const genreConfig = ASSEMBLY_INTELLIGENCE.bRoll.genreDensity[genre] ||
+                      { density: 0.5, strategy: 'illustrative' };
+
+  const strategy = ASSEMBLY_INTELLIGENCE.bRoll.strategies[genreConfig.strategy];
+  const placements = [];
+
+  // Determine B-roll placement for each scene
+  scenes.forEach((scene, index) => {
+    const shouldHaveBRoll = Math.random() < genreConfig.density;
+
+    if (shouldHaveBRoll) {
+      // Check for keyword triggers
+      const sceneText = (scene.narration || scene.visual || '').toLowerCase();
+      let triggerType = null;
+
+      for (const [category, words] of Object.entries(ASSEMBLY_INTELLIGENCE.bRoll.triggerKeywords)) {
+        for (const word of words) {
+          if (sceneText.includes(word)) {
+            triggerType = category;
+            break;
+          }
+        }
+        if (triggerType) break;
+      }
+
+      placements.push({
+        sceneIndex: index,
+        strategy: genreConfig.strategy,
+        duration: (strategy.duration.min + strategy.duration.max) / 2,
+        timing: strategy.timing,
+        trigger: triggerType,
+        overlap: strategy.overlap
+      });
+    }
+  });
+
+  return {
+    density: genreConfig.density,
+    strategy: genreConfig.strategy,
+    placements
+  };
+}
+
+/**
+ * Build complete assembly plan for a video
+ */
+function buildAssemblyPlan(options = {}) {
+  const {
+    genre,
+    platform,
+    scenes,
+    totalDuration,
+    musicTempo,
+    mood
+  } = options;
+
+  // Get preset or build custom
+  let preset = null;
+  if (genre?.includes('documentary')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['documentary-standard'];
+  } else if (genre?.includes('explainer')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['explainer-fast'];
+  } else if (platform?.includes('tiktok') || platform?.includes('shorts')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['social-viral'];
+  } else if (genre?.includes('cinematic')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['cinematic-epic'];
+  } else if (genre?.includes('brand')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['brand-emotional'];
+  } else {
+    preset = ASSEMBLY_INTELLIGENCE.presets['documentary-standard'];
+  }
+
+  const plan = {
+    preset: preset.name,
+    transitions: [],
+    pacing: null,
+    patternInterrupts: [],
+    bRollPlacements: []
+  };
+
+  // Generate transition plan
+  for (let i = 0; i < scenes.length - 1; i++) {
+    const transition = getTransitionRecommendation({
+      genre,
+      fromScene: scenes[i],
+      toScene: scenes[i + 1],
+      mood
+    });
+    plan.transitions.push({
+      afterScene: i,
+      ...transition
+    });
+  }
+
+  // Calculate pacing
+  plan.pacing = calculateScenePacing({
+    genre,
+    platform,
+    sceneCount: scenes.length,
+    totalDuration
+  });
+
+  // Generate pattern interrupts
+  plan.patternInterrupts = getPatternInterruptSuggestions({
+    platform,
+    duration: totalDuration,
+    sceneCount: scenes.length,
+    genre
+  }).interrupts;
+
+  // Generate B-roll placements
+  plan.bRollPlacements = getBRollPlacements({
+    genre,
+    scenes
+  }).placements;
+
+  return plan;
+}
+
+/**
+ * Cloud function to get assembly intelligence profiles
+ */
+exports.creationWizardGetAssemblyProfiles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Format transitions
+  const transitions = Object.entries(ASSEMBLY_INTELLIGENCE.transitions.types).map(([id, trans]) => ({
+    id,
+    name: trans.name,
+    duration: trans.duration,
+    energy: trans.energy,
+    use: trans.use,
+    description: trans.description
+  }));
+
+  // Format pacing profiles
+  const pacingProfiles = Object.entries(ASSEMBLY_INTELLIGENCE.pacing.profiles).map(([id, profile]) => ({
+    id,
+    name: profile.name,
+    avgSceneDuration: profile.avgSceneDuration,
+    cutFrequency: profile.cutFrequency,
+    energyCurve: profile.energyCurve,
+    use: profile.use
+  }));
+
+  // Format beat sync modes
+  const beatSyncModes = Object.entries(ASSEMBLY_INTELLIGENCE.beatSync.modes).map(([id, mode]) => ({
+    id,
+    name: mode.name,
+    description: mode.description,
+    percentage: mode.percentage
+  }));
+
+  // Format pattern interrupt types
+  const patternInterrupts = Object.entries(ASSEMBLY_INTELLIGENCE.patternInterrupts.types).map(([id, type]) => ({
+    id,
+    name: type.name,
+    description: type.description,
+    elements: type.elements,
+    impact: type.impact
+  }));
+
+  // Format presets
+  const presets = Object.entries(ASSEMBLY_INTELLIGENCE.presets).map(([id, preset]) => ({
+    id,
+    name: preset.name,
+    transitions: preset.transitions,
+    pacing: preset.pacing,
+    beatSync: preset.beatSync
+  }));
+
+  return {
+    success: true,
+    transitions,
+    pacingProfiles,
+    beatSyncModes,
+    patternInterrupts,
+    presets,
+    genreTransitions: ASSEMBLY_INTELLIGENCE.transitions.genreTransitions,
+    bRollStrategies: ASSEMBLY_INTELLIGENCE.bRoll.strategies
+  };
+});
+
+/**
+ * Cloud function to build assembly plan
+ */
+exports.creationWizardBuildAssemblyPlan = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, platform, scenes, totalDuration, musicTempo, mood } = data;
+
+  const plan = buildAssemblyPlan({
+    genre,
+    platform,
+    scenes,
+    totalDuration,
+    musicTempo,
+    mood
+  });
+
+  return {
+    success: true,
+    plan
+  };
+});
+
+/**
+ * Cloud function to get transition recommendation
+ */
+exports.creationWizardGetTransitionRecommendation = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, fromScene, toScene, context: transContext, mood, tempo } = data;
+
+  const recommendation = getTransitionRecommendation({
+    genre,
+    fromScene,
+    toScene,
+    context: transContext,
+    mood,
+    tempo
+  });
+
+  return {
+    success: true,
+    recommendation
+  };
+});
+
+// =============================================================================
+// PHASE 3F: NARRATIVE STRUCTURE CLOUD FUNCTIONS
+// =============================================================================
+
+/**
+ * creationWizardGetNarrativeProfiles - Get all available narrative structures
+ */
+exports.creationWizardGetNarrativeProfiles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Get story arcs
+  const storyArcs = Object.entries(NARRATIVE_STRUCTURE.storyArcs).map(([id, arc]) => ({
+    id,
+    name: arc.name,
+    description: arc.description,
+    actCount: arc.acts.length,
+    bestFor: arc.bestFor
+  }));
+
+  // Get emotional journeys
+  const emotionalJourneys = Object.entries(NARRATIVE_STRUCTURE.emotionalJourneys).map(([id, journey]) => ({
+    id,
+    name: journey.name,
+    description: journey.description,
+    mood: journey.mood,
+    endFeeling: journey.endFeeling
+  }));
+
+  // Get tension curves
+  const tensionCurves = Object.entries(NARRATIVE_STRUCTURE.tensionCurves).map(([id, curve]) => ({
+    id,
+    name: curve.name,
+    description: curve.description,
+    bestFor: curve.bestFor
+  }));
+
+  // Get narrative beats
+  const narrativeBeats = Object.entries(NARRATIVE_STRUCTURE.narrativeBeats).map(([id, beat]) => ({
+    id,
+    name: beat.name,
+    purpose: beat.purpose,
+    position: beat.position,
+    energy: beat.energy
+  }));
+
+  // Get presets
+  const presets = Object.entries(NARRATIVE_STRUCTURE.narrativePresets).map(([id, preset]) => ({
+    id,
+    name: preset.name,
+    arc: preset.arc,
+    emotionalJourney: preset.emotionalJourney,
+    endingStyle: preset.endingStyle
+  }));
+
+  // Get genre patterns
+  const genrePatterns = Object.entries(NARRATIVE_STRUCTURE.genrePatterns).map(([id, pattern]) => ({
+    id,
+    arc: pattern.arc,
+    emotionalJourney: pattern.emotionalJourney,
+    pacing: pattern.pacing,
+    requiredBeats: pattern.requiredBeats
+  }));
+
+  return {
+    success: true,
+    profiles: {
+      storyArcs,
+      emotionalJourneys,
+      tensionCurves,
+      narrativeBeats,
+      presets,
+      genrePatterns
+    }
+  };
+});
+
+/**
+ * creationWizardBuildNarrativeStructure - Build complete narrative structure for a project
+ */
+exports.creationWizardBuildNarrativeStructure = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, duration, platform, preset, sceneCount, mood, customArc } = data;
+
+  const structure = buildNarrativeStructure({
+    genre,
+    duration: duration || 120,
+    platform,
+    preset,
+    sceneCount: sceneCount || 10,
+    mood,
+    customArc
+  });
+
+  return {
+    success: true,
+    structure
+  };
+});
+
+/**
+ * creationWizardGetSceneBeatSuggestion - Get narrative beat suggestion for a specific scene
+ */
+exports.creationWizardGetSceneBeatSuggestion = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { sceneIndex, totalScenes, genre, currentEnergy, duration } = data;
+
+  const suggestion = getSceneBeatSuggestion({
+    sceneIndex: sceneIndex || 0,
+    totalScenes: totalScenes || 10,
+    genre: genre || 'drama',
+    currentEnergy,
+    duration: duration || 120
+  });
+
+  return {
+    success: true,
+    suggestion
+  };
+});
+
+/**
+ * creationWizardGetEmotionalJourney - Get emotional journey recommendation
+ */
+exports.creationWizardGetEmotionalJourney = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, mood, targetFeeling } = data;
+
+  const recommendation = getEmotionalJourneyRecommendation({
+    genre,
+    mood,
+    targetFeeling
+  });
+
+  return {
+    success: true,
+    recommendation
+  };
+});
+
+/**
+ * creationWizardAnalyzeNarrativePacing - Analyze and optimize narrative pacing for scenes
+ */
+exports.creationWizardAnalyzeNarrativePacing = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { scenes, genre, preset, targetDuration } = data;
+
+  if (!scenes || !Array.isArray(scenes)) {
+    return { success: false, error: 'Scenes array is required' };
+  }
+
+  // Build narrative structure
+  const structure = buildNarrativeStructure({
+    genre: genre || 'drama',
+    duration: targetDuration || scenes.reduce((sum, s) => sum + (s.duration || 5), 0),
+    preset,
+    sceneCount: scenes.length
+  });
+
+  // Analyze each scene against the structure
+  const analysis = scenes.map((scene, index) => {
+    const assignment = structure.sceneAssignments[index];
+    const beatSuggestion = getSceneBeatSuggestion({
+      sceneIndex: index,
+      totalScenes: scenes.length,
+      genre: genre || 'drama',
+      duration: targetDuration
+    });
+
+    // Calculate how well scene aligns with structure
+    const currentDuration = scene.duration || 5;
+    const suggestedDuration = beatSuggestion.sceneDuration;
+    const durationAlignment = 1 - Math.abs(currentDuration - suggestedDuration) / suggestedDuration;
+
+    return {
+      sceneIndex: index,
+      sceneId: scene.id,
+      currentDuration,
+      act: assignment?.act,
+      suggestedBeat: beatSuggestion.beat,
+      beatName: beatSuggestion.name,
+      suggestedEnergy: beatSuggestion.energy,
+      suggestedDuration,
+      purpose: beatSuggestion.purpose,
+      techniques: beatSuggestion.techniques,
+      transitionIn: beatSuggestion.transitionIn,
+      transitionOut: beatSuggestion.transitionOut,
+      alignment: {
+        duration: Math.round(durationAlignment * 100),
+        overall: Math.round(durationAlignment * 100)
+      },
+      suggestions: durationAlignment < 0.7 ? [
+        `Consider adjusting duration to ~${Math.round(suggestedDuration)}s for better pacing`
+      ] : []
+    };
+  });
+
+  return {
+    success: true,
+    structure: {
+      arc: structure.structure.arc,
+      emotionalJourney: structure.emotionalJourney.type,
+      acts: structure.acts.map(a => ({ name: a.name, percentage: a.percentage }))
+    },
+    analysis,
+    overallRecommendations: {
+      hookDuration: structure.recommendations.hookDuration,
+      patternBreakInterval: structure.recommendations.patternBreakInterval,
+      endingStyle: structure.recommendations.endingStyle,
+      pacing: structure.recommendations.pacing
+    }
+  };
 });
 
 /**
@@ -24306,6 +30068,495 @@ exports.creationWizardUpdateAnimation = functions.https.onCall(async (data, cont
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to update animation'));
   }
+});
+
+// ==============================================
+// CREATION WIZARD - MINIMAX VIDEO GENERATION
+// ==============================================
+
+/**
+ * Minimax Video Model Configuration
+ */
+const MINIMAX_VIDEO_MODELS = {
+  'hailuo-2.3': {
+    name: 'Hailuo 2.3 Quality',
+    modelId: 'T2V-01',
+    inputTypes: ['text', 'image'],
+    durations: {
+      '6s': ['768p', '1080p'],
+      '10s': ['768p']
+    },
+    pricing: { '6s-768p': 0.28, '6s-1080p': 0.49, '10s-768p': 0.40 },
+    features: ['camera_control', 'prompt_optimizer']
+  },
+  'hailuo-2.3-fast': {
+    name: 'Hailuo 2.3 Fast',
+    modelId: 'T2V-01-Fast',
+    inputTypes: ['image'],
+    durations: {
+      '6s': ['768p', '1080p'],
+      '10s': ['768p']
+    },
+    pricing: { '6s-768p': 0.14, '6s-1080p': 0.25, '10s-768p': 0.20 },
+    features: ['camera_control', 'fast_generation']
+  },
+  'hailuo-02': {
+    name: 'Hailuo 02',
+    modelId: 'T2V-02',
+    inputTypes: ['text', 'image'],
+    durations: {
+      '6s': ['512p', '768p', '1080p'],
+      '10s': ['512p', '768p']
+    },
+    pricing: { '6s-768p': 0.28, '6s-1080p': 0.49, '10s-768p': 0.40 },
+    features: ['camera_control', 'last_frame_conditioning']
+  }
+};
+
+/**
+ * Camera movement commands supported by Minimax
+ */
+const MINIMAX_CAMERA_MOVEMENTS = [
+  'Truck left', 'Truck right',
+  'Pan left', 'Pan right',
+  'Push in', 'Pull out',
+  'Pedestal up', 'Pedestal down',
+  'Tilt up', 'Tilt down',
+  'Zoom in', 'Zoom out',
+  'Shake', 'Tracking shot', 'Static shot'
+];
+
+/**
+ * creationWizardGenerateMinimaxVideo - Generate video using Minimax API
+ *
+ * Supports both text-to-video and image-to-video generation
+ */
+exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    projectId,
+    sceneId,
+    prompt,
+    imageUrl = null,
+    model = 'hailuo-2.3',
+    duration = '6s',
+    resolution = '768p',
+    cameraMovements = [],
+    promptOptimizer = true
+  } = data;
+
+  if (!prompt || prompt.trim().length < 5) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video prompt is required (min 5 chars)');
+  }
+
+  // Validate model
+  const modelConfig = MINIMAX_VIDEO_MODELS[model];
+  if (!modelConfig) {
+    throw new functions.https.HttpsError('invalid-argument', `Invalid model: ${model}`);
+  }
+
+  // Validate duration/resolution combination
+  const allowedResolutions = modelConfig.durations[duration];
+  if (!allowedResolutions) {
+    throw new functions.https.HttpsError('invalid-argument', `Duration ${duration} not supported for model ${model}`);
+  }
+  if (!allowedResolutions.includes(resolution)) {
+    throw new functions.https.HttpsError('invalid-argument', `Resolution ${resolution} not supported for ${duration} duration. Allowed: ${allowedResolutions.join(', ')}`);
+  }
+
+  // Get Minimax API key
+  const minimaxKey = functions.config().minimax?.key;
+  if (!minimaxKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured. Set with: firebase functions:config:set minimax.key="YOUR_KEY"');
+  }
+
+  try {
+    // Build prompt with camera movements
+    let enhancedPrompt = prompt.trim();
+    if (cameraMovements.length > 0) {
+      // Validate camera movements
+      const validMovements = cameraMovements.filter(m => MINIMAX_CAMERA_MOVEMENTS.includes(m));
+      if (validMovements.length > 0) {
+        // Add up to 3 camera movements
+        const movementString = validMovements.slice(0, 3).join(', ');
+        enhancedPrompt = `[${movementString}] ${enhancedPrompt}`;
+      }
+    }
+
+    // Determine API endpoint and payload
+    const isImageToVideo = imageUrl && modelConfig.inputTypes.includes('image');
+    const apiEndpoint = isImageToVideo
+      ? 'https://api.minimax.io/v1/video_generation'
+      : 'https://api.minimax.io/v1/video_generation';
+
+    // Build request payload
+    const payload = {
+      model: modelConfig.modelId,
+      prompt: enhancedPrompt,
+      prompt_optimizer: promptOptimizer
+    };
+
+    // Add image for I2V
+    if (isImageToVideo) {
+      payload.first_frame_image = imageUrl;
+    }
+
+    // Map duration string to seconds
+    const durationSeconds = duration === '6s' ? 6 : 10;
+
+    // Map resolution to Minimax format
+    const resolutionMap = {
+      '512p': '512',
+      '768p': '768',
+      '1080p': '1080'
+    };
+
+    // Add optional parameters if supported
+    if (modelConfig.features.includes('fast_generation')) {
+      payload.fast_pretreatment = true;
+    }
+
+    // Call Minimax API
+    const minimaxResponse = await axios.post(apiEndpoint, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${minimaxKey}`
+      },
+      timeout: 60000
+    });
+
+    const taskId = minimaxResponse.data.task_id;
+    const baseResp = minimaxResponse.data.base_resp;
+
+    if (baseResp && baseResp.status_code !== 0) {
+      throw new Error(`Minimax API error: ${baseResp.status_msg || 'Unknown error'}`);
+    }
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'minimax_video_generation',
+      model: model,
+      modelId: modelConfig.modelId,
+      projectId: projectId || null,
+      sceneId: sceneId || null,
+      duration,
+      resolution,
+      isImageToVideo,
+      estimatedCost: modelConfig.pricing[`${duration}-${resolution}`] || 0,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      taskId,
+      sceneId,
+      model,
+      duration,
+      resolution,
+      provider: 'minimax',
+      status: 'processing'
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateMinimaxVideo] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to start Minimax video generation'));
+  }
+});
+
+/**
+ * creationWizardCheckMinimaxVideoStatus - Check Minimax video generation status
+ */
+exports.creationWizardCheckMinimaxVideoStatus = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { taskId } = data;
+
+  if (!taskId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Task ID is required');
+  }
+
+  const minimaxKey = functions.config().minimax?.key;
+  if (!minimaxKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured');
+  }
+
+  try {
+    // Query task status
+    const statusResponse = await axios.get(
+      `https://api.minimax.io/v1/query/video_generation?task_id=${taskId}`,
+      {
+        headers: { 'Authorization': `Bearer ${minimaxKey}` },
+        timeout: 15000
+      }
+    );
+
+    const { status, file_id, base_resp } = statusResponse.data;
+
+    if (base_resp && base_resp.status_code !== 0) {
+      return {
+        success: false,
+        taskId,
+        status: 'failed',
+        error: base_resp.status_msg || 'Unknown error'
+      };
+    }
+
+    // Map Minimax status to our status
+    const statusMap = {
+      'Queueing': 'queued',
+      'Processing': 'processing',
+      'Success': 'completed',
+      'Fail': 'failed'
+    };
+
+    const result = {
+      success: true,
+      taskId,
+      status: statusMap[status] || status.toLowerCase(),
+      fileId: file_id || null
+    };
+
+    // If completed, get the video URL
+    if (status === 'Success' && file_id) {
+      try {
+        const fileResponse = await axios.get(
+          `https://api.minimax.io/v1/files/retrieve?file_id=${file_id}`,
+          {
+            headers: { 'Authorization': `Bearer ${minimaxKey}` },
+            timeout: 15000
+          }
+        );
+
+        if (fileResponse.data.file && fileResponse.data.file.download_url) {
+          result.videoUrl = fileResponse.data.file.download_url;
+        }
+      } catch (fileError) {
+        console.error('[creationWizardCheckMinimaxVideoStatus] Error fetching file:', fileError);
+      }
+    }
+
+    return result;
+
+  } catch (error) {
+    console.error('[creationWizardCheckMinimaxVideoStatus] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check Minimax video status'));
+  }
+});
+
+/**
+ * creationWizardGetMinimaxModels - Get available Minimax video models
+ */
+exports.creationWizardGetMinimaxModels = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  return {
+    success: true,
+    models: MINIMAX_VIDEO_MODELS,
+    cameraMovements: MINIMAX_CAMERA_MOVEMENTS,
+    recommendations: {
+      quality: 'hailuo-2.3',
+      speed: 'hailuo-2.3-fast',
+      continuity: 'hailuo-02'
+    }
+  };
+});
+
+/**
+ * creationWizardGetGenres - Get available genres and content formats
+ * Phase 3A: Genre Reference Library for premium content creation
+ */
+exports.creationWizardGetGenres = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Simplified genre data for the frontend
+  const genres = {
+    // Documentary Genres
+    'documentary-nature': {
+      id: 'documentary-nature',
+      name: 'Nature Documentary',
+      category: 'documentary',
+      icon: '🌍',
+      description: 'Planet Earth style - epic scale, intimate moments',
+      references: ['Planet Earth', 'Our Planet', 'Blue Planet']
+    },
+    'documentary-true-crime': {
+      id: 'documentary-true-crime',
+      name: 'True Crime',
+      category: 'documentary',
+      icon: '🔍',
+      description: 'Mystery-driven, investigative storytelling',
+      references: ['Making a Murderer', 'The Jinx', 'Tiger King']
+    },
+    'documentary-social': {
+      id: 'documentary-social',
+      name: 'Social Documentary',
+      category: 'documentary',
+      icon: '📢',
+      description: 'Issues-driven, awareness-building content',
+      references: ['The Social Dilemma', 'Blackfish', '13th']
+    },
+    'documentary-historical': {
+      id: 'documentary-historical',
+      name: 'Historical Documentary',
+      category: 'documentary',
+      icon: '📜',
+      description: 'Ken Burns style - bringing history to life',
+      references: ['The Civil War', 'The Last Dance', 'Apollo 11']
+    },
+    // Educational Genres
+    'educational-explainer': {
+      id: 'educational-explainer',
+      name: 'Explainer',
+      category: 'educational',
+      icon: '💡',
+      description: 'Complex topics made simple and engaging',
+      references: ['Kurzgesagt', 'Vox', 'Wendover Productions']
+    },
+    'educational-tutorial': {
+      id: 'educational-tutorial',
+      name: 'Tutorial/How-To',
+      category: 'educational',
+      icon: '🛠️',
+      description: 'Personality-driven teaching and making',
+      references: ['Mark Rober', 'Binging with Babish', 'Adam Savage']
+    },
+    'educational-science': {
+      id: 'educational-science',
+      name: 'Science/Tech',
+      category: 'educational',
+      icon: '🔬',
+      description: 'Wonder-filled exploration of how things work',
+      references: ['Veritasium', 'SmarterEveryDay', 'Vsauce']
+    },
+    // Entertainment Genres
+    'entertainment-comedy': {
+      id: 'entertainment-comedy',
+      name: 'Comedy',
+      category: 'entertainment',
+      icon: '😂',
+      description: 'Timing, subversion, and commitment to the bit',
+      references: ['The Office', 'Key & Peele', 'Brooklyn 99']
+    },
+    'entertainment-drama': {
+      id: 'entertainment-drama',
+      name: 'Drama',
+      category: 'entertainment',
+      icon: '🎭',
+      description: 'Stakes, conflict, and moral complexity',
+      references: ['Breaking Bad', 'Succession', 'Chernobyl']
+    },
+    'entertainment-horror': {
+      id: 'entertainment-horror',
+      name: 'Horror/Thriller',
+      category: 'entertainment',
+      icon: '👻',
+      description: 'Dread, psychological tension, and the unknown',
+      references: ['Black Mirror', 'Get Out', 'A Quiet Place']
+    },
+    // Business Genres
+    'business-brand': {
+      id: 'business-brand',
+      name: 'Brand Story',
+      category: 'business',
+      icon: '✨',
+      description: 'Values-driven, aspirational brand content',
+      references: ['Apple keynotes', 'Nike campaigns', 'Patagonia']
+    },
+    'business-product': {
+      id: 'business-product',
+      name: 'Product Launch',
+      category: 'business',
+      icon: '🚀',
+      description: 'Anticipation, reveals, and product excellence',
+      references: ['Apple reveals', 'Tesla unveilings', 'MKBHD']
+    },
+    'business-testimonial': {
+      id: 'business-testimonial',
+      name: 'Testimonial',
+      category: 'business',
+      icon: '💬',
+      description: 'Real people, real results, authentic stories',
+      references: ['Salesforce stories', 'Shot on iPhone']
+    },
+    // Social Media Native Genres
+    'social-viral': {
+      id: 'social-viral',
+      name: 'Viral/Hook-Driven',
+      category: 'social',
+      icon: '🔥',
+      description: 'Stop-scrolling hooks, instant value',
+      references: ['MrBeast', 'TikTok trends', 'Top Reels']
+    },
+    'social-storytime': {
+      id: 'social-storytime',
+      name: 'Storytime',
+      category: 'social',
+      icon: '📖',
+      description: 'Bingeable narratives with personality',
+      references: ['Reddit stories', 'Commentary channels']
+    },
+    // Series Genres
+    'series-docuseries': {
+      id: 'series-docuseries',
+      name: 'Docuseries',
+      category: 'series',
+      icon: '📺',
+      description: 'Episodic storytelling with overarching narrative',
+      references: ['The Last Dance', 'Drive to Survive', 'Chef\'s Table']
+    }
+  };
+
+  const contentFormats = {
+    'short-form': {
+      id: 'short-form',
+      name: 'Short-Form',
+      duration: '< 60s',
+      icon: '⚡',
+      platforms: ['TikTok', 'Reels', 'Shorts'],
+      description: 'Hook in 0.5s, one key idea, strong loop'
+    },
+    'medium-form': {
+      id: 'medium-form',
+      name: 'Medium-Form',
+      duration: '1-5 min',
+      icon: '📱',
+      platforms: ['YouTube', 'Instagram', 'LinkedIn'],
+      description: 'Full narrative arc, room for nuance'
+    },
+    'long-form': {
+      id: 'long-form',
+      name: 'Long-Form',
+      duration: '5-20 min',
+      icon: '🎬',
+      platforms: ['YouTube', 'Podcasts', 'Courses'],
+      description: 'Deep exploration, varied pacing'
+    },
+    'episodic': {
+      id: 'episodic',
+      name: 'Episodic',
+      duration: 'Series',
+      icon: '📺',
+      platforms: ['YouTube series', 'Courses'],
+      description: 'Connected episodes, cliffhangers'
+    }
+  };
+
+  const categories = [
+    { id: 'documentary', name: 'Documentary', icon: '🎬' },
+    { id: 'educational', name: 'Educational', icon: '💡' },
+    { id: 'entertainment', name: 'Entertainment', icon: '🎭' },
+    { id: 'business', name: 'Business', icon: '💼' },
+    { id: 'social', name: 'Social Native', icon: '📱' },
+    { id: 'series', name: 'Series', icon: '📺' }
+  ];
+
+  return {
+    success: true,
+    genres,
+    contentFormats,
+    categories
+  };
 });
 
 // ==============================================
