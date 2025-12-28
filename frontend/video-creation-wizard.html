@@ -1639,6 +1639,116 @@
             color: #a78bfa;
         }
 
+        /* Floating Preview (Picture-in-Picture) Styles */
+        @keyframes floatPreviewSlideIn {
+            from { opacity: 0; transform: scale(0.8) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .floating-preview-container {
+            position: fixed;
+            z-index: 1000;
+            width: 320px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,92,246,0.3);
+            animation: floatPreviewSlideIn 0.25s ease-out;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .floating-preview-container.minimized {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .floating-preview-container.top-left { top: 1rem; left: 1rem; }
+        .floating-preview-container.top-right { top: 1rem; right: 1rem; }
+        .floating-preview-container.bottom-left { bottom: 1rem; left: 1rem; }
+        .floating-preview-container.bottom-right { bottom: 1rem; right: 1rem; }
+
+        .floating-preview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            cursor: grab;
+        }
+
+        .floating-preview-header:active {
+            cursor: grabbing;
+        }
+
+        .floating-preview-content {
+            aspect-ratio: 16/9;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .floating-preview-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .floating-preview-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            transition: all 0.15s;
+        }
+
+        .floating-preview-btn:hover {
+            background: rgba(139,92,246,0.3);
+            color: white;
+        }
+
+        .floating-preview-position-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            padding: 0.5rem;
+            background: rgba(0,0,0,0.3);
+        }
+
+        .floating-preview-position-btn {
+            padding: 0.25rem;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.5);
+            font-size: 0.6rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .floating-preview-position-btn:hover {
+            background: rgba(139,92,246,0.2);
+            border-color: rgba(139,92,246,0.3);
+            color: white;
+        }
+
+        .floating-preview-position-btn.active {
+            background: rgba(139,92,246,0.3);
+            border-color: #8b5cf6;
+            color: #a78bfa;
+        }
+
         .fade-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
@@ -3025,6 +3135,12 @@
                     isOpen: false,                  // Modal open state
                     device: 'laptop',               // 'mobile' | 'laptop' | 'tablet' (default laptop for 16:9)
                     currentClipIndex: 0             // Current clip being previewed
+                },
+                // Floating Preview (PiP mode)
+                floatingPreview: {
+                    enabled: false,                 // Whether PiP mode is active
+                    position: 'bottom-right',       // 'top-left', 'top-right', 'bottom-left', 'bottom-right'
+                    minimized: false                // Whether preview is minimized to icon
                 }
             },
 
@@ -3836,15 +3952,56 @@
         function updateSceneNarration(sceneId, value) {
             const scene = state.script.scenes.find(s => s.id === sceneId);
             if (scene) {
-                scene.narration = value;
+                scene.narration = value && value.trim() ? value.trim() : null;
+                scene.hasNarration = !!(value && value.trim());
+                // Recalculate word count and narration duration
+                if (scene.hasNarration) {
+                    scene.wordCount = scene.narration.split(/\s+/).filter(w => w.length > 0).length;
+                    scene.narrationDuration = Math.ceil(scene.wordCount / 2.5);
+                } else {
+                    scene.wordCount = 0;
+                    scene.narrationDuration = 0;
+                }
                 scheduleAutoSave();
+            }
+        }
+
+        function toggleSceneNarration(sceneId, hasNarration) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                scene.hasNarration = hasNarration;
+                if (!hasNarration) {
+                    // Clear narration when toggling off
+                    scene.narration = null;
+                    scene.wordCount = 0;
+                    scene.narrationDuration = 0;
+                } else if (!scene.narration) {
+                    // Set placeholder when toggling on
+                    scene.narration = '';
+                }
+                scheduleAutoSave();
+                render();
+            }
+        }
+
+        // Enable narration on a scene that was music-only
+        function enableSceneNarration(sceneId) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (scene) {
+                scene.hasNarration = true;
+                scene.narration = scene.narration || '';
+                scheduleAutoSave();
+                render();
+                showToast('Voiceover enabled for this scene', 'success');
             }
         }
 
         function updateSceneVisual(sceneId, value) {
             const scene = state.script.scenes.find(s => s.id === sceneId);
             if (scene) {
+                // Update both visual and visualPrompt for compatibility
                 scene.visual = value;
+                scene.visualPrompt = value;
                 scheduleAutoSave();
             }
         }
@@ -6701,6 +6858,8 @@
 
         function renderSceneCard(scene, index) {
             const isExpanded = state.script.expandedScene === scene.id;
+            const hasNarration = scene.hasNarration !== false && scene.narration && scene.narration.trim() !== '';
+            const visualPrompt = scene.visualPrompt || scene.visual || '';
 
             return `
                 <div class="scene-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; overflow: hidden;">
@@ -6712,10 +6871,10 @@
                         </div>
                         <div style="flex: 1; min-width: 0;">
                             <div style="color: white; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                ${scene.narration?.substring(0, 60) || 'No narration'}${scene.narration?.length > 60 ? '...' : ''}
+                                ${hasNarration ? (scene.narration?.substring(0, 60) + (scene.narration?.length > 60 ? '...' : '')) : '<span style="color: rgba(255,255,255,0.4); font-style: italic;">🎵 Music only (no voiceover)</span>'}
                             </div>
                             <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">
-                                ${scene.duration}s • ${scene.transition || 'cut'}
+                                ${scene.duration}s • ${scene.transition || 'cut'} ${scene.mood ? '• ' + scene.mood : ''}
                             </div>
                         </div>
                         <div style="color: rgba(255,255,255,0.5); transform: rotate(${isExpanded ? '180deg' : '0deg'}); transition: transform 0.2s;">▼</div>
@@ -6724,20 +6883,43 @@
                     ${isExpanded ? `
                         <!-- Expanded Content -->
                         <div style="padding: 1rem;">
-                            <!-- Narration -->
+                            <!-- Visual Prompt (What we SEE) -->
                             <div style="margin-bottom: 1rem;">
-                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">🎙️ Narration</label>
-                                <textarea id="scene-narration-${scene.id}"
-                                          onchange="updateSceneNarration(${scene.id}, this.value)"
-                                          style="width: 100%; min-height: 60px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem; resize: vertical;">${scene.narration || ''}</textarea>
-                            </div>
-
-                            <!-- Visual Description -->
-                            <div style="margin-bottom: 1rem;">
-                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">🎨 Visual Description (for AI image generation)</label>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">🎬 Visual Prompt</label>
+                                    <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(6,182,212,0.2); color: #06b6d4; border-radius: 0.25rem;">What we SEE</span>
+                                </div>
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.4rem;">Describe the visual scene for AI video generation. Include camera movement, lighting, mood.</div>
                                 <textarea id="scene-visual-${scene.id}"
                                           onchange="updateSceneVisual(${scene.id}, this.value)"
-                                          style="width: 100%; min-height: 80px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem; resize: vertical;">${scene.visual || ''}</textarea>
+                                          placeholder="[Push in] A man stands at a rain-soaked window, his reflection fractured by droplets. Dim blue lighting, contemplative mood."
+                                          style="width: 100%; min-height: 80px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(6,182,212,0.3); background: rgba(6,182,212,0.05); color: white; font-size: 0.9rem; resize: vertical;">${visualPrompt}</textarea>
+                            </div>
+
+                            <!-- Narration Toggle + Text (What we HEAR) -->
+                            <div style="margin-bottom: 1rem;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">🎙️ Voiceover</label>
+                                        <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(139,92,246,0.2); color: #a78bfa; border-radius: 0.25rem;">What we HEAR</span>
+                                    </div>
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.7rem; color: rgba(255,255,255,0.5);">
+                                        <input type="checkbox" ${hasNarration ? 'checked' : ''} onchange="toggleSceneNarration(${scene.id}, this.checked)" style="cursor: pointer;">
+                                        Has voiceover
+                                    </label>
+                                </div>
+                                ${hasNarration ? `
+                                    <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.4rem;">What the narrator says. Should complement the visuals, NOT describe them literally.</div>
+                                    <textarea id="scene-narration-${scene.id}"
+                                              onchange="updateSceneNarration(${scene.id}, this.value)"
+                                              placeholder="In moments like these, clarity emerges. When the noise fades, truth remains."
+                                              style="width: 100%; min-height: 60px; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(139,92,246,0.3); background: rgba(139,92,246,0.05); color: white; font-size: 0.9rem; resize: vertical;">${scene.narration || ''}</textarea>
+                                ` : `
+                                    <div style="padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; border: 1px dashed rgba(255,255,255,0.2); text-align: center;">
+                                        <div style="font-size: 0.8rem; color: rgba(255,255,255,0.4);">🎵 Music/ambient only - no voiceover for this scene</div>
+                                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-top: 0.25rem;">Great for cinematic moments or letting visuals breathe</div>
+                                    </div>
+                                `}
                             </div>
 
                             <!-- Duration & Transition -->
@@ -7321,6 +7503,9 @@
             // Device Preview Modal
             html += renderDevicePreviewModal();
 
+            // Floating Preview (PiP mode)
+            html += renderFloatingPreview();
+
             return html;
         }
 
@@ -7711,6 +7896,12 @@
             }
             html += '</div>';
             html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            // PiP Toggle Button
+            var isPipEnabled = state.animation.floatingPreview && state.animation.floatingPreview.enabled;
+            html += '<button onclick="toggleFloatingPreview()" title="' + (isPipEnabled ? 'Exit Picture-in-Picture' : 'Picture-in-Picture mode') + '" style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.6rem; border-radius: 0.35rem; border: 1px solid ' + (isPipEnabled ? 'rgba(16,185,129,0.5)' : 'rgba(6,182,212,0.3)') + '; background: ' + (isPipEnabled ? 'rgba(16,185,129,0.2)' : 'rgba(6,182,212,0.1)') + '; color: ' + (isPipEnabled ? '#10b981' : '#06b6d4') + '; font-size: 0.65rem; cursor: pointer; transition: all 0.2s;">';
+            html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="11" y="9" width="10" height="8" rx="1" fill="currentColor" opacity="0.3"/></svg>';
+            html += isPipEnabled ? 'Exit PiP' : 'PiP';
+            html += '</button>';
             // Device Preview Button
             html += '<button onclick="openDevicePreview()" style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.6rem; border-radius: 0.35rem; border: 1px solid rgba(139,92,246,0.3); background: rgba(139,92,246,0.1); color: #a78bfa; font-size: 0.65rem; cursor: pointer; transition: all 0.2s;" onmouseenter="this.style.background=\'rgba(139,92,246,0.2)\'" onmouseleave="this.style.background=\'rgba(139,92,246,0.1)\'">';
             html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>';
@@ -7970,6 +8161,9 @@
             var speed = animScene.speed || state.animation.voiceover.speed || 1.0;
             var emotions = state.animation.emotionPresets || { emotion: 'neutral', energy: 0.5, tone: 0.5 };
 
+            // Check if scene has narration (supports new hasNarration flag)
+            var sceneHasNarration = scriptScene.hasNarration !== false && narration && narration.trim() !== '';
+
             // Voice roles configuration (narrator vs character)
             var voiceRoles = state.animation.voiceRoles || {};
             var sceneVoiceRole = voiceRoles[scriptScene.id] || 'narrator';
@@ -7988,21 +8182,37 @@
             html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
             html += '<span style="font-size: 1rem;">🎙️</span>';
             html += '<span style="font-size: 0.85rem; font-weight: 600; color: white;">Voiceover Pro</span>';
-            if (voiceoverStatus === 'ready') {
+            if (!sceneHasNarration) {
+                html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); border-radius: 1rem; font-weight: 600;">🎵 Music Only</span>';
+            } else if (voiceoverStatus === 'ready') {
                 html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(16,185,129,0.2); color: #10b981; border-radius: 1rem; font-weight: 600;">Ready</span>';
             } else if (voiceoverStatus === 'generating') {
                 html += '<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(251,191,36,0.2); color: #fbbf24; border-radius: 1rem; font-weight: 600;" class="animate-pulse">Generating...</span>';
             }
             html += '</div>';
-            // Voice role indicator
-            html += '<div style="display: flex; align-items: center; gap: 0.35rem;">';
-            html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: ' + (sceneVoiceRole === 'narrator' ? 'rgba(6,182,212,0.2)' : 'rgba(251,191,36,0.2)') + '; color: ' + (sceneVoiceRole === 'narrator' ? '#06b6d4' : '#fbbf24') + '; border-radius: 1rem;">' + (sceneVoiceRole === 'narrator' ? '📖 Narrator' : '🎭 Character') + '</span>';
-            html += '</div>';
+            // Voice role indicator (only show if has narration)
+            if (sceneHasNarration) {
+                html += '<div style="display: flex; align-items: center; gap: 0.35rem;">';
+                html += '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: ' + (sceneVoiceRole === 'narrator' ? 'rgba(6,182,212,0.2)' : 'rgba(251,191,36,0.2)') + '; color: ' + (sceneVoiceRole === 'narrator' ? '#06b6d4' : '#fbbf24') + '; border-radius: 1rem;">' + (sceneVoiceRole === 'narrator' ? '📖 Narrator' : '🎭 Character') + '</span>';
+                html += '</div>';
+            }
             html += '</div>';
 
-            // Narration preview
+            // If no narration, show music-only mode
+            if (!sceneHasNarration) {
+                html += '<div style="text-align: center; padding: 1.5rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; border: 1px dashed rgba(255,255,255,0.15);">';
+                html += '<div style="font-size: 2rem; margin-bottom: 0.5rem;">🎵</div>';
+                html += '<div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); font-weight: 500;">Cinematic Music Scene</div>';
+                html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.35rem;">No voiceover - visuals and music speak for themselves</div>';
+                html += '<button onclick="enableSceneNarration(' + scriptScene.id + ')" style="margin-top: 0.75rem; padding: 0.4rem 0.75rem; border-radius: 0.35rem; border: 1px solid rgba(139,92,246,0.4); background: transparent; color: #a78bfa; font-size: 0.7rem; cursor: pointer;">+ Add Voiceover</button>';
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Narration preview (only if has narration)
             html += '<div style="background: rgba(0,0,0,0.2); border-radius: 0.5rem; padding: 0.6rem; margin-bottom: 0.75rem;">';
-            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">NARRATION</div>';
+            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">VOICEOVER TEXT</div>';
             html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); line-height: 1.4; font-style: italic;">"' + narration.substring(0, 150) + (narration.length > 150 ? '...' : '') + '"</div>';
             html += '</div>';
 
@@ -8721,6 +8931,149 @@
             var storyboardScenes = state.storyboard.scenes || [];
             if (devicePreview && devicePreview.currentClipIndex < storyboardScenes.length - 1) {
                 devicePreview.currentClipIndex++;
+                render();
+            }
+        }
+
+        // ==========================================
+        // FLOATING PREVIEW (PiP MODE)
+        // ==========================================
+
+        function toggleFloatingPreview() {
+            if (!state.animation.floatingPreview) {
+                state.animation.floatingPreview = { enabled: false, position: 'bottom-right', minimized: false };
+            }
+            state.animation.floatingPreview.enabled = !state.animation.floatingPreview.enabled;
+            state.animation.floatingPreview.minimized = false;
+            render();
+            if (state.animation.floatingPreview.enabled) {
+                showToast('Picture-in-Picture mode enabled', 'success');
+            }
+        }
+
+        function setFloatingPreviewPosition(position) {
+            if (!state.animation.floatingPreview) {
+                state.animation.floatingPreview = { enabled: true, position: 'bottom-right', minimized: false };
+            }
+            state.animation.floatingPreview.position = position;
+            render();
+        }
+
+        function toggleFloatingPreviewMinimize() {
+            if (!state.animation.floatingPreview) return;
+            state.animation.floatingPreview.minimized = !state.animation.floatingPreview.minimized;
+            render();
+        }
+
+        function renderFloatingPreview() {
+            var floatingPreview = state.animation.floatingPreview;
+            if (!floatingPreview || !floatingPreview.enabled) {
+                return '';
+            }
+
+            var position = floatingPreview.position || 'bottom-right';
+            var isMinimized = floatingPreview.minimized;
+            var selectedId = state.animation.selectedSceneId;
+            var scriptScenes = state.script.scenes || [];
+            var storyboardScenes = state.storyboard.scenes || [];
+            var animationScenes = state.animation.scenes || [];
+
+            var scriptScene = scriptScenes.find(function(s) { return s.id === selectedId; });
+            var storyboardScene = storyboardScenes.find(function(s) { return s.sceneId === selectedId; }) || {};
+            var animScene = animationScenes.find(function(s) { return s.sceneId === selectedId; }) || {};
+
+            var sceneIndex = scriptScenes.findIndex(function(s) { return s.id === selectedId; });
+            var imageUrl = storyboardScene.imageUrl || '';
+            var videoUrl = animScene.videoUrl || '';
+
+            var html = '';
+
+            // Minimized state - just a floating icon
+            if (isMinimized) {
+                html += '<div class="floating-preview-container minimized ' + position + '" onclick="toggleFloatingPreviewMinimize()" title="Expand Preview">';
+                html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #8b5cf6, #6366f1);">';
+                html += '<span style="font-size: 1.5rem;">🎬</span>';
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            html += '<div class="floating-preview-container ' + position + '">';
+
+            // Header with drag handle and controls
+            html += '<div class="floating-preview-header">';
+            html += '<div style="display: flex; align-items: center; gap: 0.4rem;">';
+            html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">⋮⋮</span>';
+            html += '<span style="font-size: 0.7rem; font-weight: 600; color: white;">Scene ' + (sceneIndex + 1) + '</span>';
+            if (videoUrl) {
+                html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(16,185,129,0.3); color: #10b981; border-radius: 0.25rem;">✓</span>';
+            }
+            html += '</div>';
+            html += '<div style="display: flex; align-items: center; gap: 0.25rem;">';
+            html += '<button onclick="toggleFloatingPreviewMinimize()" class="floating-preview-btn" title="Minimize"><span style="font-size: 0.8rem;">−</span></button>';
+            html += '<button onclick="toggleFloatingPreview()" class="floating-preview-btn" title="Close PiP"><span style="font-size: 0.7rem;">✕</span></button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Preview content
+            html += '<div class="floating-preview-content">';
+            if (videoUrl) {
+                html += '<video id="floating-preview-video" src="' + videoUrl + '" style="width: 100%; height: 100%; object-fit: cover;" onclick="playFloatingPreviewVideo()"></video>';
+                html += '<div onclick="playFloatingPreviewVideo()" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); cursor: pointer;" id="floating-play-overlay">';
+                html += '<div style="width: 40px; height: 40px; background: rgba(16,185,129,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">';
+                html += '<span style="font-size: 1rem; margin-left: 2px;">▶</span>';
+                html += '</div>';
+                html += '</div>';
+            } else if (imageUrl) {
+                html += '<img src="' + imageUrl + '" style="width: 115%; height: 115%; object-fit: cover; animation: kenBurnsPreview 8s ease-in-out infinite alternate;">';
+            } else {
+                html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">';
+                html += '<span style="font-size: 2rem;">🖼️</span>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Position controls
+            html += '<div class="floating-preview-position-grid">';
+            html += '<button onclick="setFloatingPreviewPosition(\'top-left\')" class="floating-preview-position-btn ' + (position === 'top-left' ? 'active' : '') + '">↖ Top Left</button>';
+            html += '<button onclick="setFloatingPreviewPosition(\'top-right\')" class="floating-preview-position-btn ' + (position === 'top-right' ? 'active' : '') + '">↗ Top Right</button>';
+            html += '<button onclick="setFloatingPreviewPosition(\'bottom-left\')" class="floating-preview-position-btn ' + (position === 'bottom-left' ? 'active' : '') + '">↙ Bottom Left</button>';
+            html += '<button onclick="setFloatingPreviewPosition(\'bottom-right\')" class="floating-preview-position-btn ' + (position === 'bottom-right' ? 'active' : '') + '">↘ Bottom Right</button>';
+            html += '</div>';
+
+            // Quick navigation
+            html += '<div class="floating-preview-controls">';
+            html += '<button onclick="navigateFloatingPreview(-1)" class="floating-preview-btn" title="Previous scene" ' + (sceneIndex <= 0 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : '') + '>◀</button>';
+            html += '<span style="flex: 1; text-align: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">' + (sceneIndex + 1) + ' / ' + scriptScenes.length + '</span>';
+            html += '<button onclick="navigateFloatingPreview(1)" class="floating-preview-btn" title="Next scene" ' + (sceneIndex >= scriptScenes.length - 1 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : '') + '>▶</button>';
+            html += '</div>';
+
+            html += '</div>';
+            return html;
+        }
+
+        function playFloatingPreviewVideo() {
+            var video = document.getElementById('floating-preview-video');
+            var overlay = document.getElementById('floating-play-overlay');
+            if (video) {
+                if (video.paused) {
+                    video.play();
+                    if (overlay) overlay.style.display = 'none';
+                } else {
+                    video.pause();
+                    if (overlay) overlay.style.display = 'flex';
+                }
+            }
+        }
+
+        function navigateFloatingPreview(direction) {
+            var scriptScenes = state.script.scenes || [];
+            var currentId = state.animation.selectedSceneId;
+            var currentIndex = scriptScenes.findIndex(function(s) { return s.id === currentId; });
+            var newIndex = currentIndex + direction;
+
+            if (newIndex >= 0 && newIndex < scriptScenes.length) {
+                state.animation.selectedSceneId = scriptScenes[newIndex].id;
                 render();
             }
         }
