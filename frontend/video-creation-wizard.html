@@ -3082,6 +3082,30 @@
                     colorPalette: null,     // null = auto from genre
                     mood: null              // optional mood override
                 },
+                // Phase 4: Scene Memory System - Layered Prompt Architecture
+                // Ensures visual consistency across all scenes by using the same
+                // Style Bible + Character Bible + Scene Content + Technical Specs
+                styleBible: {
+                    enabled: false,         // Toggle to enable/disable style bible
+                    style: '',              // Overall visual style (e.g., "ultra-cinematic photoreal, noir thriller")
+                    colorGrade: '',         // Color grading approach (e.g., "desaturated teal shadows, amber highlights")
+                    lighting: '',           // Lighting philosophy (e.g., "harsh single-source, dramatic rim lights")
+                    atmosphere: '',         // Environmental elements (e.g., "smoke, rain reflections, wet surfaces")
+                    camera: ''              // Camera language (e.g., "slow dolly, low angles, stabilized gimbal")
+                },
+                characterBible: {
+                    enabled: false,         // Toggle to enable/disable character bible
+                    characters: []          // Array of { id, name, description, appliedToScenes[] }
+                },
+                technicalSpecs: {
+                    enabled: true,          // Usually enabled by default
+                    positive: '4K, ultra detailed, shallow DOF, cinematic, professional lighting',
+                    negative: 'blurry, low quality, watermark, text, logo, deformed, extra fingers, bad anatomy'
+                },
+                // Scene Memory UI state
+                showStyleBibleModal: false,
+                showCharacterBibleModal: false,
+                editingCharacterId: null,   // Currently editing character ID
                 // Edit with AI state
                 editingScene: null,     // Scene ID being edited
                 editMaskCanvas: null,   // Canvas element for mask
@@ -3478,6 +3502,8 @@
                     // Restore storyboard data
                     if (project.storyboard) {
                         state.storyboard = { ...state.storyboard, ...project.storyboard };
+                        // Phase 4: Initialize Scene Memory defaults for older projects
+                        initSceneMemory();
                     }
 
                     // Restore animation data
@@ -3842,6 +3868,332 @@
             } else {
                 showToast(`${propertyNames[property]} set to auto (genre-based)`, 'info');
             }
+        }
+
+        // ==========================================
+        // Phase 4: SCENE MEMORY SYSTEM
+        // 4-Layer Prompt Architecture for Visual Consistency
+        // ==========================================
+
+        // Initialize Scene Memory defaults if needed
+        function initSceneMemory() {
+            if (!state.storyboard.styleBible) {
+                state.storyboard.styleBible = {
+                    enabled: false,
+                    style: '',
+                    colorGrade: '',
+                    lighting: '',
+                    atmosphere: '',
+                    camera: ''
+                };
+            }
+            if (!state.storyboard.characterBible) {
+                state.storyboard.characterBible = {
+                    enabled: false,
+                    characters: []
+                };
+            }
+            if (!state.storyboard.technicalSpecs) {
+                state.storyboard.technicalSpecs = {
+                    enabled: true,
+                    positive: '4K, ultra detailed, shallow DOF, cinematic, professional lighting',
+                    negative: 'blurry, low quality, watermark, text, logo, deformed, extra fingers, bad anatomy'
+                };
+            }
+        }
+
+        // Style Bible Management
+        function toggleStyleBible(enabled) {
+            initSceneMemory();
+            state.storyboard.styleBible.enabled = enabled;
+            render();
+            scheduleAutoSave();
+            showToast(enabled ? 'Style Bible enabled' : 'Style Bible disabled', 'info');
+        }
+
+        function setStyleBibleField(field, value) {
+            initSceneMemory();
+            state.storyboard.styleBible[field] = value;
+            scheduleAutoSave();
+        }
+
+        function openStyleBibleModal() {
+            initSceneMemory();
+            state.storyboard.showStyleBibleModal = true;
+            render();
+        }
+
+        function closeStyleBibleModal() {
+            state.storyboard.showStyleBibleModal = false;
+            render();
+        }
+
+        function applyStyleBibleTemplate(templateName) {
+            initSceneMemory();
+            const templates = {
+                'cinematic-thriller': {
+                    style: 'ultra-cinematic photoreal, noir thriller, high contrast',
+                    colorGrade: 'desaturated teal shadows, amber highlights, crushed blacks',
+                    lighting: 'harsh single-source, dramatic rim lights, deep shadows',
+                    atmosphere: 'smoke, rain reflections, wet surfaces, urban grit',
+                    camera: 'slow dolly, low angles, stabilized gimbal, anamorphic lens feel'
+                },
+                'documentary-nature': {
+                    style: 'cinematic documentary, National Geographic quality, epic landscapes',
+                    colorGrade: 'rich earth tones, golden highlights, deep greens',
+                    lighting: 'natural golden hour, soft diffused daylight',
+                    atmosphere: 'volumetric fog, dust particles, lens flares',
+                    camera: 'smooth tracking, wide establishing shots, intimate close-ups'
+                },
+                'tech-explainer': {
+                    style: 'clean modern, minimal, high-tech aesthetic',
+                    colorGrade: 'cool blues, clean whites, accent neon highlights',
+                    lighting: 'high-key soft lighting, no harsh shadows',
+                    atmosphere: 'clean gradient backgrounds, subtle particle effects',
+                    camera: 'smooth dolly, symmetrical framing, focus pulls'
+                },
+                'horror-suspense': {
+                    style: 'psychological horror, unsettling, dreamlike quality',
+                    colorGrade: 'desaturated, sickly greens, deep blacks, red accents',
+                    lighting: 'low-key, single source, harsh shadows, flickering',
+                    atmosphere: 'fog, dust motes, decayed textures, uncanny valley',
+                    camera: 'dutch angles, slow creeping push-ins, unstable handheld'
+                },
+                'inspirational': {
+                    style: 'uplifting cinematic, warm and hopeful, epic scale',
+                    colorGrade: 'warm golden tones, soft orange highlights, lifted shadows',
+                    lighting: 'golden hour, backlit subjects, natural lens flares',
+                    atmosphere: 'morning mist, sunbeams, floating particles',
+                    camera: 'rising crane shots, slow push-ins, sweeping wide angles'
+                }
+            };
+
+            const template = templates[templateName];
+            if (template) {
+                state.storyboard.styleBible = {
+                    ...state.storyboard.styleBible,
+                    enabled: true,
+                    ...template
+                };
+                render();
+                scheduleAutoSave();
+                showToast(`Applied "${templateName}" style template`, 'success');
+            }
+        }
+
+        // Character Bible Management
+        function toggleCharacterBible(enabled) {
+            initSceneMemory();
+            state.storyboard.characterBible.enabled = enabled;
+            render();
+            scheduleAutoSave();
+            showToast(enabled ? 'Character Bible enabled' : 'Character Bible disabled', 'info');
+        }
+
+        function openCharacterBibleModal() {
+            initSceneMemory();
+            state.storyboard.showCharacterBibleModal = true;
+            state.storyboard.editingCharacterId = null;
+            render();
+        }
+
+        function closeCharacterBibleModal() {
+            state.storyboard.showCharacterBibleModal = false;
+            state.storyboard.editingCharacterId = null;
+            render();
+        }
+
+        function addCharacter() {
+            initSceneMemory();
+            const newChar = {
+                id: 'char-' + Date.now(),
+                name: 'New Character',
+                description: '',
+                appliedToScenes: [] // Will apply to all scenes if empty
+            };
+            state.storyboard.characterBible.characters.push(newChar);
+            state.storyboard.editingCharacterId = newChar.id;
+            render();
+            scheduleAutoSave();
+        }
+
+        function editCharacter(charId) {
+            state.storyboard.editingCharacterId = charId;
+            render();
+        }
+
+        function updateCharacter(charId, field, value) {
+            const char = state.storyboard.characterBible.characters.find(c => c.id === charId);
+            if (char) {
+                char[field] = value;
+                scheduleAutoSave();
+            }
+        }
+
+        function deleteCharacter(charId) {
+            state.storyboard.characterBible.characters =
+                state.storyboard.characterBible.characters.filter(c => c.id !== charId);
+            if (state.storyboard.editingCharacterId === charId) {
+                state.storyboard.editingCharacterId = null;
+            }
+            render();
+            scheduleAutoSave();
+            showToast('Character deleted', 'info');
+        }
+
+        function toggleCharacterInScene(charId, sceneId) {
+            const char = state.storyboard.characterBible.characters.find(c => c.id === charId);
+            if (char) {
+                if (!char.appliedToScenes) char.appliedToScenes = [];
+                const idx = char.appliedToScenes.indexOf(sceneId);
+                if (idx >= 0) {
+                    char.appliedToScenes.splice(idx, 1);
+                } else {
+                    char.appliedToScenes.push(sceneId);
+                }
+                render();
+                scheduleAutoSave();
+            }
+        }
+
+        function applyCharacterToAllScenes(charId) {
+            const char = state.storyboard.characterBible.characters.find(c => c.id === charId);
+            if (char) {
+                // Empty array means applies to all scenes
+                char.appliedToScenes = [];
+                render();
+                scheduleAutoSave();
+                showToast(`"${char.name}" will appear in all scenes`, 'success');
+            }
+        }
+
+        function applyCharacterTemplate(charId, templateName) {
+            const templates = {
+                'action-hero': {
+                    name: 'Action Hero',
+                    description: 'Male protagonist, early 30s, athletic muscular build, weathered tan skin, short cropped dark brown hair with grey at temples, 3-day stubble, intense steel-grey eyes, thin scar across left cheekbone, wearing worn charcoal tactical jacket with velcro patches, fitted black cargo pants with utility pockets, brown leather belt, dusty military-style boots, carrying weathered leather satchel'
+                },
+                'tech-professional': {
+                    name: 'Tech Professional',
+                    description: 'Female lead, late 20s, slender athletic build, light olive complexion, shoulder-length straight black hair often tucked behind ear, dark brown eyes with sharp focus, minimalist silver earrings, wearing fitted navy blazer over white crew neck t-shirt, high-waisted dark grey wool trousers, clean white sneakers, silver smartwatch on left wrist, thin-frame glasses'
+                },
+                'mysterious-figure': {
+                    name: 'Mysterious Figure',
+                    description: 'Gender-ambiguous figure, age indeterminate, tall lean silhouette, face often obscured or in shadow, pale porcelain-like skin when visible, long dark hair that partially covers face, eyes that reflect light unnaturally, wearing floor-length black coat with high collar, dark formless clothing underneath, barefoot or in silent shoes, moves with fluid unnatural grace'
+                },
+                'narrator': {
+                    name: 'Narrator',
+                    description: 'Warm and authoritative presence, middle-aged, distinguished appearance, kind eyes that convey wisdom, dressed in timeless casual elegance, natural lighting on face, often shown from shoulders up, calm and trustworthy demeanor'
+                }
+            };
+
+            const template = templates[templateName];
+            const char = state.storyboard.characterBible.characters.find(c => c.id === charId);
+            if (template && char) {
+                char.name = template.name;
+                char.description = template.description;
+                render();
+                scheduleAutoSave();
+                showToast(`Applied "${templateName}" character template`, 'success');
+            }
+        }
+
+        // Technical Specs Management
+        function toggleTechnicalSpecs(enabled) {
+            initSceneMemory();
+            state.storyboard.technicalSpecs.enabled = enabled;
+            render();
+            scheduleAutoSave();
+        }
+
+        function setTechnicalSpec(field, value) {
+            initSceneMemory();
+            state.storyboard.technicalSpecs[field] = value;
+            scheduleAutoSave();
+        }
+
+        // Assemble the full prompt using 4-layer architecture
+        function assembleScenePrompt(scene) {
+            initSceneMemory();
+            const parts = [];
+
+            // Layer 1: Style Bible (SAME for every scene)
+            if (state.storyboard.styleBible?.enabled) {
+                const bible = state.storyboard.styleBible;
+                if (bible.style) parts.push(`Style: ${bible.style}`);
+                if (bible.colorGrade) parts.push(`Color Grade: ${bible.colorGrade}`);
+                if (bible.lighting) parts.push(`Lighting: ${bible.lighting}`);
+                if (bible.atmosphere) parts.push(`Atmosphere: ${bible.atmosphere}`);
+                if (bible.camera) parts.push(`Camera: ${bible.camera}`);
+            }
+
+            // Layer 2: Character Bible (SAME for characters that appear in this scene)
+            if (state.storyboard.characterBible?.enabled) {
+                const chars = state.storyboard.characterBible.characters || [];
+                for (const char of chars) {
+                    // Include if character has no scene restrictions OR is assigned to this scene
+                    const includeInAll = !char.appliedToScenes || char.appliedToScenes.length === 0;
+                    const includeInScene = char.appliedToScenes && char.appliedToScenes.includes(scene.id);
+
+                    if ((includeInAll || includeInScene) && char.description) {
+                        parts.push(char.description);
+                    }
+                }
+            }
+
+            // Layer 3: Scene Content (UNIQUE per scene)
+            // This is the original visual prompt from the scene
+            if (scene.visual || scene.visualPrompt) {
+                parts.push(scene.visual || scene.visualPrompt);
+            }
+
+            // Layer 4: Technical Specs (positive prompt additions)
+            if (state.storyboard.technicalSpecs?.enabled && state.storyboard.technicalSpecs?.positive) {
+                parts.push(state.storyboard.technicalSpecs.positive);
+            }
+
+            // Build negative prompt
+            let negativePrompt = state.storyboard.technicalSpecs?.enabled
+                ? state.storyboard.technicalSpecs.negative || ''
+                : '';
+
+            return {
+                assembledPrompt: parts.filter(Boolean).join('. '),
+                negativePrompt: negativePrompt,
+                layerInfo: {
+                    hasStyleBible: state.storyboard.styleBible?.enabled,
+                    hasCharacterBible: state.storyboard.characterBible?.enabled,
+                    characterCount: state.storyboard.characterBible?.characters?.length || 0,
+                    hasTechnicalSpecs: state.storyboard.technicalSpecs?.enabled
+                }
+            };
+        }
+
+        // Get characters assigned to a specific scene
+        function getCharactersForScene(sceneId) {
+            if (!state.storyboard.characterBible?.enabled) return [];
+            const chars = state.storyboard.characterBible.characters || [];
+            return chars.filter(char => {
+                const includeInAll = !char.appliedToScenes || char.appliedToScenes.length === 0;
+                const includeInScene = char.appliedToScenes && char.appliedToScenes.includes(sceneId);
+                return includeInAll || includeInScene;
+            });
+        }
+
+        // Preview assembled prompt for a scene
+        function previewAssembledPrompt(sceneId) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (!scene) return;
+
+            const assembled = assembleScenePrompt(scene);
+
+            // Show in a toast or modal
+            console.log('=== ASSEMBLED PROMPT PREVIEW ===');
+            console.log('Prompt:', assembled.assembledPrompt);
+            console.log('Negative:', assembled.negativePrompt);
+            console.log('Layers:', assembled.layerInfo);
+
+            showToast('Assembled prompt logged to console (F12)', 'info');
         }
 
         function applyTopicSuggestion(topic) {
@@ -4254,6 +4606,15 @@
             const prompt = scene.visual || scene.narration || 'A cinematic scene';
 
             try {
+                // Phase 4: Build Scene Memory data for this specific scene
+                initSceneMemory(); // Ensure defaults are set
+                const sceneMemoryData = {
+                    styleBible: state.storyboard.styleBible,
+                    // Get character descriptions that apply to this scene
+                    characterDescriptions: getCharactersForScene(sceneId).map(c => c.description).filter(Boolean),
+                    technicalSpecs: state.storyboard.technicalSpecs
+                };
+
                 // Check if using HiDream (RunPod) or NanoBanana (Gemini)
                 if (modelId === 'hidream') {
                     // Use RunPod HiDream endpoint
@@ -4272,7 +4633,9 @@
                             composition: state.storyboard.visualStyle?.composition || null,
                             lighting: state.storyboard.visualStyle?.lighting || null,
                             colorPalette: state.storyboard.visualStyle?.colorPalette || null
-                        }
+                        },
+                        // Phase 4: Scene Memory System
+                        sceneMemory: sceneMemoryData
                     });
 
                     if (result.data.success) {
@@ -7115,8 +7478,103 @@
                             💡 "Auto" uses genre-appropriate defaults based on your content settings
                         </div>
                     </div>
+
+                    <!-- Phase 4: Scene Memory System -->
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.9rem;">🧠</span>
+                                <span style="color: rgba(255,255,255,0.7); font-size: 0.75rem; font-weight: 600;">Scene Memory</span>
+                            </div>
+                            <span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #06b6d4, #8b5cf6); border-radius: 0.75rem; color: white; font-weight: 600;">NEW</span>
+                        </div>
+                        <div style="color: rgba(255,255,255,0.4); font-size: 0.65rem; margin-bottom: 0.75rem;">
+                            Keep visual consistency across all scenes with Style & Character Bibles
+                        </div>
+
+                        <!-- Style Bible Card -->
+                        <div style="background: ${state.storyboard.styleBible?.enabled ? 'rgba(139, 92, 246, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.styleBible?.enabled ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.85rem;">🎨</span>
+                                    <div>
+                                        <div style="color: white; font-size: 0.8rem; font-weight: 600;">Style Bible</div>
+                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.6rem;">${state.storyboard.styleBible?.enabled ? (state.storyboard.styleBible?.style ? 'Custom style defined' : 'No style defined yet') : 'Visual DNA for all scenes'}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <button onclick="openStyleBibleModal()" style="padding: 0.3rem 0.6rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.35rem; color: white; font-size: 0.65rem; cursor: pointer;">
+                                        ${state.storyboard.styleBible?.enabled ? 'Edit' : 'Setup'}
+                                    </button>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;">
+                                        <input type="checkbox" ${state.storyboard.styleBible?.enabled ? 'checked' : ''} onchange="toggleStyleBible(this.checked)" style="accent-color: #8b5cf6;">
+                                    </label>
+                                </div>
+                            </div>
+                            ${state.storyboard.styleBible?.enabled && state.storyboard.styleBible?.style ? `
+                                <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                    <div style="color: rgba(255,255,255,0.5); font-size: 0.6rem; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        "${state.storyboard.styleBible.style}"
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- Character Bible Card -->
+                        <div style="background: ${state.storyboard.characterBible?.enabled ? 'rgba(6, 182, 212, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.characterBible?.enabled ? 'rgba(6, 182, 212, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.85rem;">👤</span>
+                                    <div>
+                                        <div style="color: white; font-size: 0.8rem; font-weight: 600;">Character Bible</div>
+                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.6rem;">${state.storyboard.characterBible?.enabled ? ((state.storyboard.characterBible?.characters?.length || 0) + ' character(s) defined') : 'Consistent character appearances'}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <button onclick="openCharacterBibleModal()" style="padding: 0.3rem 0.6rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.35rem; color: white; font-size: 0.65rem; cursor: pointer;">
+                                        ${state.storyboard.characterBible?.enabled ? 'Edit' : 'Setup'}
+                                    </button>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;">
+                                        <input type="checkbox" ${state.storyboard.characterBible?.enabled ? 'checked' : ''} onchange="toggleCharacterBible(this.checked)" style="accent-color: #06b6d4;">
+                                    </label>
+                                </div>
+                            </div>
+                            ${state.storyboard.characterBible?.enabled && state.storyboard.characterBible?.characters?.length > 0 ? `
+                                <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                                    ${state.storyboard.characterBible.characters.slice(0, 3).map(c => `
+                                        <span style="background: rgba(6, 182, 212, 0.2); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem; color: rgba(255,255,255,0.7);">${c.name}</span>
+                                    `).join('')}
+                                    ${state.storyboard.characterBible.characters.length > 3 ? `<span style="color: rgba(255,255,255,0.4); font-size: 0.6rem;">+${state.storyboard.characterBible.characters.length - 3} more</span>` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- Technical Specs (Collapsed) -->
+                        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; padding: 0.5rem 0.75rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.75rem;">⚙️</span>
+                                    <span style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">Technical Specs</span>
+                                </div>
+                                <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;">
+                                    <span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">4K quality</span>
+                                    <input type="checkbox" ${state.storyboard.technicalSpecs?.enabled !== false ? 'checked' : ''} onchange="toggleTechnicalSpecs(this.checked)" style="accent-color: #10b981;">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
+
+            // Style Bible Modal
+            if (state.storyboard.showStyleBibleModal) {
+                html += renderStyleBibleModal();
+            }
+
+            // Character Bible Modal
+            if (state.storyboard.showCharacterBibleModal) {
+                html += renderCharacterBibleModal();
+            }
 
             // Storyboard Grid
             html += `<div class="storyboard-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem;">`;
@@ -7299,6 +7757,225 @@
                         <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">PROMPT</div>
                         <div style="font-size: 0.8rem; color: rgba(255,255,255,0.8); line-height: 1.4; max-height: 3.6em; overflow: hidden; text-overflow: ellipsis;">
                             ${prompt.substring(0, 120)}${prompt.length > 120 ? '...' : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==========================================
+        // Phase 4: SCENE MEMORY MODALS
+        // ==========================================
+
+        function renderStyleBibleModal() {
+            const bible = state.storyboard.styleBible || {};
+
+            return `
+                <div id="style-bible-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;" onclick="if(event.target.id === 'style-bible-modal') closeStyleBibleModal()">
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 700px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+                        <!-- Header -->
+                        <div style="padding: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 1.1rem; font-weight: 700; color: white;">🎨 Style Bible</div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Define the visual DNA for ALL scenes</div>
+                            </div>
+                            <button onclick="closeStyleBibleModal()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">×</button>
+                        </div>
+
+                        <!-- Content -->
+                        <div style="padding: 1.25rem; overflow-y: auto; flex: 1;">
+                            <!-- Quick Templates -->
+                            <div style="margin-bottom: 1.25rem;">
+                                <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Quick Templates</div>
+                                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                    <button onclick="applyStyleBibleTemplate('cinematic-thriller')" style="padding: 0.4rem 0.75rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: pointer;">🎬 Cinematic Thriller</button>
+                                    <button onclick="applyStyleBibleTemplate('documentary-nature')" style="padding: 0.4rem 0.75rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: pointer;">🌿 Documentary</button>
+                                    <button onclick="applyStyleBibleTemplate('tech-explainer')" style="padding: 0.4rem 0.75rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: pointer;">💻 Tech Explainer</button>
+                                    <button onclick="applyStyleBibleTemplate('horror-suspense')" style="padding: 0.4rem 0.75rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: pointer;">👻 Horror</button>
+                                    <button onclick="applyStyleBibleTemplate('inspirational')" style="padding: 0.4rem 0.75rem; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: pointer;">🌅 Inspirational</button>
+                                </div>
+                            </div>
+
+                            <!-- Style Field -->
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Visual Style</label>
+                                <textarea id="style-bible-style"
+                                          placeholder="e.g., ultra-cinematic photoreal, noir thriller, high contrast"
+                                          onchange="setStyleBibleField('style', this.value)"
+                                          style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: none; height: 60px;">${bible.style || ''}</textarea>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">Overall artistic direction</div>
+                            </div>
+
+                            <!-- Color Grade Field -->
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Color Grade</label>
+                                <textarea id="style-bible-colorgrade"
+                                          placeholder="e.g., desaturated teal shadows, amber highlights, crushed blacks"
+                                          onchange="setStyleBibleField('colorGrade', this.value)"
+                                          style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: none; height: 60px;">${bible.colorGrade || ''}</textarea>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">Color palette and grading approach</div>
+                            </div>
+
+                            <!-- Lighting Field -->
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Lighting</label>
+                                <textarea id="style-bible-lighting"
+                                          placeholder="e.g., harsh single-source, dramatic rim lights, deep shadows"
+                                          onchange="setStyleBibleField('lighting', this.value)"
+                                          style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: none; height: 60px;">${bible.lighting || ''}</textarea>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">Lighting philosophy and setup</div>
+                            </div>
+
+                            <!-- Atmosphere Field -->
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Atmosphere</label>
+                                <textarea id="style-bible-atmosphere"
+                                          placeholder="e.g., smoke, rain reflections, wet surfaces, urban grit"
+                                          onchange="setStyleBibleField('atmosphere', this.value)"
+                                          style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: none; height: 60px;">${bible.atmosphere || ''}</textarea>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">Environmental elements and mood</div>
+                            </div>
+
+                            <!-- Camera Field -->
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Camera Language</label>
+                                <textarea id="style-bible-camera"
+                                          placeholder="e.g., slow dolly, low angles, stabilized gimbal, anamorphic lens feel"
+                                          onchange="setStyleBibleField('camera', this.value)"
+                                          style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: none; height: 60px;">${bible.camera || ''}</textarea>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">Camera movement and lens choices</div>
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">
+                                ${bible.enabled ? '✅ Style Bible is active' : '⚠️ Enable toggle to apply'}
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button onclick="closeStyleBibleModal()" style="padding: 0.6rem 1.25rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; cursor: pointer;">Close</button>
+                                <button onclick="toggleStyleBible(true); closeStyleBibleModal();" style="padding: 0.6rem 1.25rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border: none; border-radius: 0.5rem; color: white; font-size: 0.85rem; cursor: pointer; font-weight: 600;">Save & Enable</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCharacterBibleModal() {
+            const bible = state.storyboard.characterBible || { characters: [] };
+            const characters = bible.characters || [];
+            const editingChar = characters.find(c => c.id === state.storyboard.editingCharacterId);
+            const scenes = state.script.scenes || [];
+
+            return `
+                <div id="character-bible-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;" onclick="if(event.target.id === 'character-bible-modal') closeCharacterBibleModal()">
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 800px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+                        <!-- Header -->
+                        <div style="padding: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 1.1rem; font-weight: 700; color: white;">👤 Character Bible</div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Define consistent character appearances</div>
+                            </div>
+                            <button onclick="closeCharacterBibleModal()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">×</button>
+                        </div>
+
+                        <!-- Content -->
+                        <div style="display: flex; flex: 1; overflow: hidden;">
+                            <!-- Character List (Left Panel) -->
+                            <div style="width: 200px; border-right: 1px solid rgba(255,255,255,0.1); padding: 1rem; overflow-y: auto;">
+                                <button onclick="addCharacter()" style="width: 100%; padding: 0.5rem; background: rgba(6, 182, 212, 0.2); border: 1px dashed rgba(6, 182, 212, 0.5); border-radius: 0.5rem; color: #06b6d4; font-size: 0.75rem; cursor: pointer; margin-bottom: 0.75rem;">+ Add Character</button>
+
+                                ${characters.length === 0 ? `
+                                    <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 0.75rem; padding: 1rem;">
+                                        No characters yet.<br>Add one to get started.
+                                    </div>
+                                ` : characters.map(char => `
+                                    <div onclick="editCharacter('${char.id}')"
+                                         style="padding: 0.6rem; background: ${state.storyboard.editingCharacterId === char.id ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.editingCharacterId === char.id ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;">
+                                        <div style="color: white; font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${char.name || 'Unnamed'}</div>
+                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.65rem;">${char.appliedToScenes?.length || 0 ? char.appliedToScenes.length + ' scenes' : 'All scenes'}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <!-- Character Editor (Right Panel) -->
+                            <div style="flex: 1; padding: 1rem; overflow-y: auto;">
+                                ${editingChar ? `
+                                    <!-- Character Name -->
+                                    <div style="margin-bottom: 1rem;">
+                                        <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Character Name</label>
+                                        <input type="text"
+                                               value="${editingChar.name || ''}"
+                                               onchange="updateCharacter('${editingChar.id}', 'name', this.value)"
+                                               style="width: 100%; padding: 0.6rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.9rem;">
+                                    </div>
+
+                                    <!-- Quick Templates -->
+                                    <div style="margin-bottom: 1rem;">
+                                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">Quick Templates</div>
+                                        <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                                            <button onclick="applyCharacterTemplate('${editingChar.id}', 'action-hero')" style="padding: 0.3rem 0.6rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Action Hero</button>
+                                            <button onclick="applyCharacterTemplate('${editingChar.id}', 'tech-professional')" style="padding: 0.3rem 0.6rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Tech Pro</button>
+                                            <button onclick="applyCharacterTemplate('${editingChar.id}', 'mysterious-figure')" style="padding: 0.3rem 0.6rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Mysterious</button>
+                                            <button onclick="applyCharacterTemplate('${editingChar.id}', 'narrator')" style="padding: 0.3rem 0.6rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Narrator</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Character Description -->
+                                    <div style="margin-bottom: 1rem;">
+                                        <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Visual Description</label>
+                                        <textarea id="char-description-${editingChar.id}"
+                                                  placeholder="Describe physical appearance, clothing, distinguishing features..."
+                                                  onchange="updateCharacter('${editingChar.id}', 'description', this.value)"
+                                                  style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: none; height: 140px;">${editingChar.description || ''}</textarea>
+                                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">Be specific: age, build, hair, eyes, clothing colors, accessories</div>
+                                    </div>
+
+                                    <!-- Scene Assignment -->
+                                    <div style="margin-bottom: 1rem;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Appears in Scenes</label>
+                                            <button onclick="applyCharacterToAllScenes('${editingChar.id}')" style="padding: 0.25rem 0.5rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.25rem; color: white; font-size: 0.6rem; cursor: pointer;">Apply to All</button>
+                                        </div>
+                                        <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                                            ${scenes.map((scene, idx) => {
+                                                const isAssigned = !editingChar.appliedToScenes?.length || editingChar.appliedToScenes.includes(scene.id);
+                                                return `
+                                                    <button onclick="toggleCharacterInScene('${editingChar.id}', ${scene.id})"
+                                                            style="padding: 0.35rem 0.6rem; background: ${isAssigned ? 'rgba(6, 182, 212, 0.3)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isAssigned ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255,255,255,0.15)'}; border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: pointer;">
+                                                        ${idx + 1}
+                                                    </button>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.35rem;">${!editingChar.appliedToScenes?.length ? 'Appears in ALL scenes (default)' : 'Click scene numbers to toggle'}</div>
+                                    </div>
+
+                                    <!-- Delete Character -->
+                                    <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; margin-top: 1rem;">
+                                        <button onclick="if(confirm('Delete this character?')) deleteCharacter('${editingChar.id}')" style="padding: 0.5rem 1rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.5rem; color: #ef4444; font-size: 0.75rem; cursor: pointer;">Delete Character</button>
+                                    </div>
+                                ` : `
+                                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.4);">
+                                        <span style="font-size: 3rem; margin-bottom: 1rem;">👤</span>
+                                        <div style="font-size: 0.9rem;">Select or add a character</div>
+                                        <div style="font-size: 0.75rem; margin-top: 0.5rem;">to define their appearance</div>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">
+                                ${bible.enabled ? '✅ Character Bible is active' : '⚠️ Enable toggle to apply'}
+                                ${characters.length > 0 ? ' • ' + characters.length + ' character(s)' : ''}
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button onclick="closeCharacterBibleModal()" style="padding: 0.6rem 1.25rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; cursor: pointer;">Close</button>
+                                <button onclick="toggleCharacterBible(true); closeCharacterBibleModal();" style="padding: 0.6rem 1.25rem; background: linear-gradient(135deg, #06b6d4, #8b5cf6); border: none; border-radius: 0.5rem; color: white; font-size: 0.85rem; cursor: pointer; font-weight: 600;">Save & Enable</button>
+                            </div>
                         </div>
                     </div>
                 </div>
