@@ -32450,6 +32450,677 @@ exports.searchStockMusic = functions.https.onCall(async (data, context) => {
   }
 });
 
+// ==============================================
+// AUDIO INTELLIGENCE - PHASE 3: STOCK AUDIO API
+// ==============================================
+
+/**
+ * Enhanced Music Library with preview URLs and detailed metadata
+ * Using royalty-free sources (Pixabay, Freesound)
+ */
+const ENHANCED_MUSIC_LIBRARY = [
+  // Corporate & Business
+  {
+    id: 'corporate-inspiring-01',
+    name: 'Inspiring Corporate',
+    artist: 'Stock Audio',
+    category: 'corporate',
+    subcategory: 'inspiring',
+    mood: 'Uplifting, Professional',
+    energy: 0.7,
+    duration: 147,
+    bpm: 110,
+    key: 'C major',
+    tags: ['corporate', 'business', 'inspiring', 'presentation', 'success'],
+    instruments: ['piano', 'strings', 'light percussion'],
+    previewUrl: null, // Will be populated from API or storage
+    source: 'curated',
+    license: 'royalty-free'
+  },
+  {
+    id: 'corporate-tech-01',
+    name: 'Tech Innovation',
+    artist: 'Stock Audio',
+    category: 'corporate',
+    subcategory: 'tech',
+    mood: 'Modern, Innovative',
+    energy: 0.6,
+    duration: 135,
+    bpm: 118,
+    key: 'G major',
+    tags: ['tech', 'innovation', 'startup', 'digital', 'modern'],
+    instruments: ['synth', 'electronic drums', 'bass'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+  {
+    id: 'corporate-motivational-01',
+    name: 'Motivational Achievement',
+    artist: 'Stock Audio',
+    category: 'corporate',
+    subcategory: 'motivational',
+    mood: 'Powerful, Triumphant',
+    energy: 0.8,
+    duration: 180,
+    bpm: 125,
+    key: 'D major',
+    tags: ['motivational', 'achievement', 'success', 'triumph', 'corporate'],
+    instruments: ['orchestra', 'drums', 'brass'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+
+  // Cinematic & Epic
+  {
+    id: 'cinematic-epic-01',
+    name: 'Epic Cinematic Trailer',
+    artist: 'Stock Audio',
+    category: 'cinematic',
+    subcategory: 'epic',
+    mood: 'Epic, Powerful',
+    energy: 0.9,
+    duration: 120,
+    bpm: 95,
+    key: 'D minor',
+    tags: ['cinematic', 'epic', 'trailer', 'movie', 'dramatic'],
+    instruments: ['orchestra', 'choir', 'percussion', 'brass'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+  {
+    id: 'cinematic-emotional-01',
+    name: 'Emotional Piano',
+    artist: 'Stock Audio',
+    category: 'cinematic',
+    subcategory: 'emotional',
+    mood: 'Emotional, Moving',
+    energy: 0.5,
+    duration: 195,
+    bpm: 72,
+    key: 'A minor',
+    tags: ['emotional', 'piano', 'sad', 'touching', 'cinematic'],
+    instruments: ['piano', 'strings'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+  {
+    id: 'cinematic-tension-01',
+    name: 'Building Tension',
+    artist: 'Stock Audio',
+    category: 'cinematic',
+    subcategory: 'tension',
+    mood: 'Suspenseful, Intense',
+    energy: 0.7,
+    duration: 150,
+    bpm: 85,
+    key: 'E minor',
+    tags: ['tension', 'suspense', 'thriller', 'mystery', 'dark'],
+    instruments: ['strings', 'synth', 'percussion'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+
+  // Ambient & Chill
+  {
+    id: 'ambient-peaceful-01',
+    name: 'Peaceful Meditation',
+    artist: 'Stock Audio',
+    category: 'ambient',
+    subcategory: 'peaceful',
+    mood: 'Calm, Relaxing',
+    energy: 0.2,
+    duration: 240,
+    bpm: 60,
+    key: 'F major',
+    tags: ['ambient', 'meditation', 'peaceful', 'relaxing', 'calm'],
+    instruments: ['synth pads', 'nature sounds'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+  {
+    id: 'ambient-lofi-01',
+    name: 'Lo-Fi Chill Beats',
+    artist: 'Stock Audio',
+    category: 'ambient',
+    subcategory: 'lofi',
+    mood: 'Chill, Relaxed',
+    energy: 0.4,
+    duration: 180,
+    bpm: 85,
+    key: 'C major',
+    tags: ['lofi', 'chill', 'study', 'beats', 'relaxed'],
+    instruments: ['vinyl crackle', 'piano', 'drums'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+
+  // Electronic & EDM
+  {
+    id: 'electronic-energetic-01',
+    name: 'Electronic Energy',
+    artist: 'Stock Audio',
+    category: 'electronic',
+    subcategory: 'energetic',
+    mood: 'High Energy, Exciting',
+    energy: 0.9,
+    duration: 165,
+    bpm: 140,
+    key: 'F minor',
+    tags: ['electronic', 'edm', 'energy', 'dance', 'exciting'],
+    instruments: ['synth', 'bass', 'drums'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+  {
+    id: 'electronic-future-01',
+    name: 'Future Bass',
+    artist: 'Stock Audio',
+    category: 'electronic',
+    subcategory: 'future',
+    mood: 'Modern, Uplifting',
+    energy: 0.8,
+    duration: 150,
+    bpm: 150,
+    key: 'G minor',
+    tags: ['future bass', 'electronic', 'modern', 'uplifting'],
+    instruments: ['synth', 'vocal chops', 'bass'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+
+  // Acoustic & Indie
+  {
+    id: 'acoustic-warm-01',
+    name: 'Warm Acoustic',
+    artist: 'Stock Audio',
+    category: 'acoustic',
+    subcategory: 'warm',
+    mood: 'Warm, Friendly',
+    energy: 0.5,
+    duration: 175,
+    bpm: 95,
+    key: 'G major',
+    tags: ['acoustic', 'guitar', 'warm', 'friendly', 'organic'],
+    instruments: ['acoustic guitar', 'light percussion'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+  {
+    id: 'acoustic-upbeat-01',
+    name: 'Upbeat Acoustic',
+    artist: 'Stock Audio',
+    category: 'acoustic',
+    subcategory: 'upbeat',
+    mood: 'Happy, Positive',
+    energy: 0.7,
+    duration: 145,
+    bpm: 115,
+    key: 'C major',
+    tags: ['acoustic', 'happy', 'positive', 'cheerful', 'upbeat'],
+    instruments: ['acoustic guitar', 'ukulele', 'claps'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+
+  // Dark & Horror
+  {
+    id: 'dark-horror-01',
+    name: 'Dark Horror Ambience',
+    artist: 'Stock Audio',
+    category: 'dark',
+    subcategory: 'horror',
+    mood: 'Dark, Eerie',
+    energy: 0.4,
+    duration: 200,
+    bpm: 70,
+    key: 'D minor',
+    tags: ['horror', 'dark', 'eerie', 'scary', 'suspense'],
+    instruments: ['drones', 'strings', 'fx'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+  {
+    id: 'dark-mysterious-01',
+    name: 'Mysterious Dark',
+    artist: 'Stock Audio',
+    category: 'dark',
+    subcategory: 'mysterious',
+    mood: 'Mysterious, Intriguing',
+    energy: 0.5,
+    duration: 165,
+    bpm: 80,
+    key: 'B minor',
+    tags: ['mysterious', 'dark', 'intrigue', 'cinematic'],
+    instruments: ['piano', 'strings', 'synth'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+
+  // News & Documentary
+  {
+    id: 'news-urgent-01',
+    name: 'Breaking News',
+    artist: 'Stock Audio',
+    category: 'news',
+    subcategory: 'urgent',
+    mood: 'Urgent, Professional',
+    energy: 0.6,
+    duration: 90,
+    bpm: 120,
+    key: 'C major',
+    tags: ['news', 'breaking', 'urgent', 'broadcast', 'professional'],
+    instruments: ['synth', 'percussion'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  },
+  {
+    id: 'documentary-nature-01',
+    name: 'Nature Documentary',
+    artist: 'Stock Audio',
+    category: 'documentary',
+    subcategory: 'nature',
+    mood: 'Majestic, Natural',
+    energy: 0.6,
+    duration: 210,
+    bpm: 85,
+    key: 'G major',
+    tags: ['documentary', 'nature', 'wildlife', 'majestic', 'earth'],
+    instruments: ['orchestra', 'ethnic percussion', 'flute'],
+    previewUrl: null,
+    source: 'curated',
+    license: 'royalty-free'
+  }
+];
+
+/**
+ * Music categories with metadata
+ */
+const MUSIC_CATEGORIES = [
+  { id: 'corporate', name: 'Corporate & Business', icon: '💼', count: 0 },
+  { id: 'cinematic', name: 'Cinematic & Epic', icon: '🎬', count: 0 },
+  { id: 'ambient', name: 'Ambient & Chill', icon: '🌿', count: 0 },
+  { id: 'electronic', name: 'Electronic & EDM', icon: '🎧', count: 0 },
+  { id: 'acoustic', name: 'Acoustic & Indie', icon: '🎸', count: 0 },
+  { id: 'dark', name: 'Dark & Horror', icon: '🌑', count: 0 },
+  { id: 'news', name: 'News & Documentary', icon: '📰', count: 0 },
+  { id: 'documentary', name: 'Documentary', icon: '🎥', count: 0 }
+];
+
+/**
+ * searchEnhancedMusicLibrary - Advanced music search with AI matching
+ */
+exports.searchEnhancedMusicLibrary = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const {
+    query = '',
+    category,
+    subcategory,
+    mood,
+    minBpm,
+    maxBpm,
+    minDuration,
+    maxDuration,
+    energy, // 0-1 scale
+    tags = [],
+    sortBy = 'relevance', // 'relevance', 'duration', 'bpm', 'energy'
+    page = 1,
+    perPage = 20
+  } = data;
+
+  try {
+    let results = [...ENHANCED_MUSIC_LIBRARY, ...MUSIC_LIBRARY];
+
+    // Text search
+    if (query) {
+      const queryLower = query.toLowerCase();
+      results = results.filter(track =>
+        track.name.toLowerCase().includes(queryLower) ||
+        (track.mood || '').toLowerCase().includes(queryLower) ||
+        (track.tags || []).some(t => t.toLowerCase().includes(queryLower)) ||
+        (track.instruments || []).some(i => i.toLowerCase().includes(queryLower))
+      );
+    }
+
+    // Category filter
+    if (category) {
+      results = results.filter(track => track.category === category);
+    }
+
+    // Subcategory filter
+    if (subcategory) {
+      results = results.filter(track => track.subcategory === subcategory);
+    }
+
+    // Mood filter
+    if (mood) {
+      const moodLower = mood.toLowerCase();
+      results = results.filter(track =>
+        (track.mood || '').toLowerCase().includes(moodLower)
+      );
+    }
+
+    // BPM range
+    if (minBpm !== undefined) {
+      results = results.filter(track => !track.bpm || track.bpm >= minBpm);
+    }
+    if (maxBpm !== undefined) {
+      results = results.filter(track => !track.bpm || track.bpm <= maxBpm);
+    }
+
+    // Duration range
+    if (minDuration !== undefined) {
+      results = results.filter(track => track.duration >= minDuration);
+    }
+    if (maxDuration !== undefined) {
+      results = results.filter(track => track.duration <= maxDuration);
+    }
+
+    // Energy filter (with tolerance)
+    if (energy !== undefined) {
+      const tolerance = 0.2;
+      results = results.filter(track =>
+        !track.energy || Math.abs(track.energy - energy) <= tolerance
+      );
+    }
+
+    // Tag filtering
+    if (tags.length > 0) {
+      results = results.filter(track =>
+        track.tags && tags.some(tag =>
+          track.tags.some(t => t.toLowerCase().includes(tag.toLowerCase()))
+        )
+      );
+    }
+
+    // Sorting
+    switch (sortBy) {
+      case 'duration':
+        results.sort((a, b) => a.duration - b.duration);
+        break;
+      case 'bpm':
+        results.sort((a, b) => (a.bpm || 0) - (b.bpm || 0));
+        break;
+      case 'energy':
+        results.sort((a, b) => (b.energy || 0.5) - (a.energy || 0.5));
+        break;
+      case 'relevance':
+      default:
+        // Keep original order (most relevant first from search)
+        break;
+    }
+
+    // Pagination
+    const total = results.length;
+    const paginatedResults = results.slice((page - 1) * perPage, page * perPage);
+
+    // Calculate category counts
+    const categoryCounts = {};
+    [...ENHANCED_MUSIC_LIBRARY, ...MUSIC_LIBRARY].forEach(track => {
+      categoryCounts[track.category] = (categoryCounts[track.category] || 0) + 1;
+    });
+
+    const categoriesWithCounts = MUSIC_CATEGORIES.map(cat => ({
+      ...cat,
+      count: categoryCounts[cat.id] || 0
+    }));
+
+    return {
+      success: true,
+      results: paginatedResults,
+      total,
+      page,
+      perPage,
+      categories: categoriesWithCounts,
+      filters: {
+        category,
+        subcategory,
+        mood,
+        minBpm,
+        maxBpm,
+        energy
+      }
+    };
+
+  } catch (error) {
+    console.error('[searchEnhancedMusicLibrary] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to search music library');
+  }
+});
+
+/**
+ * getAudioRecommendationsForScene - Get AI-powered audio recommendations for specific scenes
+ */
+exports.getAudioRecommendationsForScene = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const {
+    sceneId,
+    sceneContent, // { visual, narration, mood }
+    genre,
+    pacing,
+    position, // 0-1 position in video
+    emotionalPhase
+  } = data;
+
+  try {
+    // Get genre config
+    const genreConfig = GENRE_AUDIO_MAPPING[genre] || GENRE_AUDIO_MAPPING['general'];
+
+    // Calculate energy based on position and emotional phase
+    const emotionalCurve = EMOTIONAL_AUDIO_CURVES['hero-journey'];
+    let targetEnergy = 0.5;
+    for (const phase of emotionalCurve.phases) {
+      if (position >= phase.position) {
+        targetEnergy = phase.energy;
+      }
+    }
+
+    // Find best matching tracks
+    const allTracks = [...ENHANCED_MUSIC_LIBRARY, ...MUSIC_LIBRARY];
+    const scoredTracks = allTracks.map(track => {
+      let score = 0;
+
+      // Genre mood matching
+      for (const genreMood of genreConfig.musicMoods) {
+        if ((track.mood || '').toLowerCase().includes(genreMood)) {
+          score += 25;
+        }
+      }
+
+      // Category matching
+      if (genreConfig.musicCategories.includes(track.category)) {
+        score += 20;
+      }
+
+      // Energy matching
+      if (track.energy) {
+        const energyDiff = Math.abs(track.energy - targetEnergy);
+        score += Math.max(0, 15 - energyDiff * 30);
+      }
+
+      // BPM matching
+      const pacingConfig = PACING_BPM_CONFIG[pacing] || PACING_BPM_CONFIG['balanced'];
+      if (track.bpm && track.bpm >= pacingConfig.bpmRange.min && track.bpm <= pacingConfig.bpmRange.max) {
+        score += 15;
+      }
+
+      return { ...track, sceneMatchScore: Math.round(score) };
+    });
+
+    // Sort by score and get top recommendations
+    const recommendations = scoredTracks
+      .filter(t => t.sceneMatchScore > 20)
+      .sort((a, b) => b.sceneMatchScore - a.sceneMatchScore)
+      .slice(0, 5);
+
+    // Get SFX recommendations
+    const sfxRecommendations = genreConfig.sfxTypes.slice(0, 3).map(sfxType => {
+      return SFX_LIBRARY.find(s => s.id === sfxType || s.id.includes(sfxType));
+    }).filter(Boolean);
+
+    // Get ambience recommendations
+    const ambienceRecommendations = genreConfig.ambienceTypes.slice(0, 2).map(ambType => {
+      return AMBIENCE_LIBRARY.find(a => a.id === ambType || a.id.includes(ambType));
+    }).filter(Boolean);
+
+    return {
+      success: true,
+      sceneId,
+      recommendations: {
+        music: recommendations,
+        sfx: sfxRecommendations,
+        ambience: ambienceRecommendations,
+        suggestedEnergy: targetEnergy,
+        emotionalPhase
+      }
+    };
+
+  } catch (error) {
+    console.error('[getAudioRecommendationsForScene] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get audio recommendations');
+  }
+});
+
+/**
+ * importStockAudio - Download and cache stock audio to Firebase Storage
+ */
+exports.importStockAudio = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  const {
+    audioId,
+    sourceUrl,
+    type = 'music', // 'music' | 'sfx' | 'ambience'
+    projectId,
+    metadata = {}
+  } = data;
+
+  if (!sourceUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Audio source URL required');
+  }
+
+  try {
+    // Download the audio file
+    const response = await axios.get(sourceUrl, {
+      responseType: 'arraybuffer',
+      timeout: 60000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; VideoWizard/1.0)'
+      }
+    });
+
+    const buffer = Buffer.from(response.data);
+    const contentType = response.headers['content-type'] || 'audio/mpeg';
+
+    // Determine file extension
+    let extension = 'mp3';
+    if (contentType.includes('wav')) extension = 'wav';
+    else if (contentType.includes('ogg')) extension = 'ogg';
+    else if (contentType.includes('m4a') || contentType.includes('mp4')) extension = 'm4a';
+
+    // Generate storage path
+    const timestamp = Date.now();
+    const filename = `${audioId || 'audio'}-${timestamp}.${extension}`;
+    const storagePath = `users/${uid}/audio/${type}/${filename}`;
+
+    // Upload to Firebase Storage
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(storagePath);
+
+    await file.save(buffer, {
+      metadata: {
+        contentType,
+        metadata: {
+          originalUrl: sourceUrl,
+          audioId,
+          type,
+          projectId: projectId || '',
+          ...metadata
+        }
+      }
+    });
+
+    // Make file publicly accessible (or use signed URL)
+    await file.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+
+    // Also generate a signed URL for preview (expires in 1 hour)
+    const [signedUrl] = await file.getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 3600000 // 1 hour
+    });
+
+    return {
+      success: true,
+      audioId,
+      type,
+      url: publicUrl,
+      previewUrl: signedUrl,
+      storagePath,
+      contentType,
+      size: buffer.length
+    };
+
+  } catch (error) {
+    console.error('[importStockAudio] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to import audio');
+  }
+});
+
+/**
+ * getMusicCategories - Get all music categories with counts
+ */
+exports.getMusicCategories = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const allTracks = [...ENHANCED_MUSIC_LIBRARY, ...MUSIC_LIBRARY];
+
+  // Calculate counts per category
+  const categoryCounts = {};
+  const subcategoryCounts = {};
+
+  allTracks.forEach(track => {
+    categoryCounts[track.category] = (categoryCounts[track.category] || 0) + 1;
+    if (track.subcategory) {
+      const key = `${track.category}:${track.subcategory}`;
+      subcategoryCounts[key] = (subcategoryCounts[key] || 0) + 1;
+    }
+  });
+
+  const categories = MUSIC_CATEGORIES.map(cat => ({
+    ...cat,
+    count: categoryCounts[cat.id] || 0,
+    subcategories: Object.entries(subcategoryCounts)
+      .filter(([key]) => key.startsWith(cat.id + ':'))
+      .map(([key, count]) => ({
+        id: key.split(':')[1],
+        name: key.split(':')[1].charAt(0).toUpperCase() + key.split(':')[1].slice(1),
+        count
+      }))
+  }));
+
+  return {
+    success: true,
+    categories,
+    totalTracks: allTracks.length
+  };
+});
+
 /**
  * importStockMedia - Download and cache stock media to Firebase Storage
  * Needed because some APIs don't allow hotlinking
