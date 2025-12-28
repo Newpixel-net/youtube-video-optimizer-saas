@@ -3199,6 +3199,15 @@
                     loading: false,
                     page: 1,
                     total: 0
+                },
+                // Phase 5: Beat Synchronization
+                beatSync: {
+                    syncMode: 'balanced',
+                    analyzing: false,
+                    beatMap: null,
+                    suggestions: null,
+                    summary: null,
+                    applied: false
                 }
             },
 
@@ -10694,6 +10703,169 @@
 
             html += '</div>'; // Close Audio Intelligence section
 
+            // Phase 5: Beat Synchronization Section
+            html += renderBeatSyncSection();
+
+            return html;
+        }
+
+        // Phase 5: Beat Sync Section
+        function renderBeatSyncSection() {
+            const beatSync = state.assembly.beatSync || {};
+            const musicEnabled = state.assembly.music.enabled;
+            const selectedTrack = state.assembly.musicLibrary?.find(t => t.id === state.assembly.music.trackId);
+            const scenes = state.script.scenes || [];
+            const hasSuggestions = beatSync.suggestions && beatSync.suggestions.length > 0;
+
+            let html = '';
+            html += '<div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">';
+
+            // Header
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span style="font-size: 1rem;">🎼</span>';
+            html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px;">Beat Sync</span>';
+            html += '</div>';
+            html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #06b6d4, #8b5cf6); border-radius: 0.2rem; color: white; font-weight: 600;">PRO</span>';
+            html += '</div>';
+
+            // Description
+            html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.75rem; line-height: 1.4;">';
+            html += 'Align scene cuts with music beats for professional rhythm. Scene transitions will snap to measure boundaries.';
+            html += '</div>';
+
+            if (!musicEnabled) {
+                // Music not enabled warning
+                html += '<div style="padding: 0.75rem; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 0.5rem; text-align: center;">';
+                html += '<div style="font-size: 0.7rem; color: #f59e0b;">Enable background music to use Beat Sync</div>';
+                html += '</div>';
+            } else if (!selectedTrack) {
+                // No track selected warning
+                html += '<div style="padding: 0.75rem; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 0.5rem; text-align: center;">';
+                html += '<div style="font-size: 0.7rem; color: #f59e0b;">Select a music track to enable Beat Sync</div>';
+                html += '</div>';
+            } else {
+                // Track info
+                var trackBpm = selectedTrack.bpm || 120;
+                html += '<div style="padding: 0.5rem; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 0.4rem; margin-bottom: 0.75rem;">';
+                html += '<div style="display: flex; align-items: center; justify-content: space-between;">';
+                html += '<div style="font-size: 0.7rem; color: white;">' + selectedTrack.name + '</div>';
+                html += '<div style="font-size: 0.65rem; color: #06b6d4; font-weight: 600;">' + trackBpm + ' BPM</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Sync Mode Selector
+                var syncMode = beatSync.syncMode || 'balanced';
+                html += '<div style="margin-bottom: 0.75rem;">';
+                html += '<label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Sync Precision</label>';
+                html += '<div style="display: flex; gap: 0.4rem;">';
+                html += '<button onclick="setBeatSyncMode(\'tight\')" style="flex: 1; padding: 0.4rem; border-radius: 0.3rem; border: 1px solid ' + (syncMode === 'tight' ? '#06b6d4' : 'rgba(255,255,255,0.2)') + '; background: ' + (syncMode === 'tight' ? 'rgba(6,182,212,0.2)' : 'transparent') + '; color: ' + (syncMode === 'tight' ? '#06b6d4' : 'rgba(255,255,255,0.6)') + '; font-size: 0.65rem; cursor: pointer;">';
+                html += 'Tight';
+                html += '</button>';
+                html += '<button onclick="setBeatSyncMode(\'balanced\')" style="flex: 1; padding: 0.4rem; border-radius: 0.3rem; border: 1px solid ' + (syncMode === 'balanced' ? '#06b6d4' : 'rgba(255,255,255,0.2)') + '; background: ' + (syncMode === 'balanced' ? 'rgba(6,182,212,0.2)' : 'transparent') + '; color: ' + (syncMode === 'balanced' ? '#06b6d4' : 'rgba(255,255,255,0.6)') + '; font-size: 0.65rem; cursor: pointer;">';
+                html += 'Balanced';
+                html += '</button>';
+                html += '<button onclick="setBeatSyncMode(\'relaxed\')" style="flex: 1; padding: 0.4rem; border-radius: 0.3rem; border: 1px solid ' + (syncMode === 'relaxed' ? '#06b6d4' : 'rgba(255,255,255,0.2)') + '; background: ' + (syncMode === 'relaxed' ? 'rgba(6,182,212,0.2)' : 'transparent') + '; color: ' + (syncMode === 'relaxed' ? '#06b6d4' : 'rgba(255,255,255,0.6)') + '; font-size: 0.65rem; cursor: pointer;">';
+                html += 'Relaxed';
+                html += '</button>';
+                html += '</div>';
+                html += '<div style="font-size: 0.55rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">';
+                if (syncMode === 'tight') html += 'Cuts every 2 measures - fast paced editing';
+                else if (syncMode === 'balanced') html += 'Cuts every 4 measures - natural rhythm';
+                else html += 'Cuts every 8 measures - cinematic pacing';
+                html += '</div>';
+                html += '</div>';
+
+                // Analysis/Preview
+                if (beatSync.analyzing) {
+                    html += '<div style="display: flex; align-items: center; justify-content: center; padding: 1rem; gap: 0.5rem;">';
+                    html += '<div class="animate-spin" style="width: 20px; height: 20px; border: 2px solid rgba(6,182,212,0.3); border-top-color: #06b6d4; border-radius: 50%;"></div>';
+                    html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">Analyzing beat alignment...</span>';
+                    html += '</div>';
+                } else if (hasSuggestions) {
+                    // Show analysis results
+                    var summary = beatSync.summary || {};
+                    var score = summary.overallScore || 0;
+                    var scoreColor = score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
+
+                    html += '<div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; margin-bottom: 0.75rem;">';
+
+                    // Score display
+                    html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">';
+                    html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">Alignment Score</span>';
+                    html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+                    html += '<div style="width: 60px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">';
+                    html += '<div style="width: ' + score + '%; height: 100%; background: ' + scoreColor + '; border-radius: 3px;"></div>';
+                    html += '</div>';
+                    html += '<span style="font-size: 0.75rem; font-weight: 600; color: ' + scoreColor + ';">' + score + '%</span>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    // Sync breakdown
+                    html += '<div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">';
+                    if (summary.perfectSyncs > 0) {
+                        html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(16,185,129,0.2); color: #10b981; border-radius: 0.2rem;">✓ ' + summary.perfectSyncs + ' perfect</span>';
+                    }
+                    if (summary.greatSyncs > 0) {
+                        html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(6,182,212,0.2); color: #06b6d4; border-radius: 0.2rem;">◉ ' + summary.greatSyncs + ' great</span>';
+                    }
+                    if (summary.goodSyncs > 0) {
+                        html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(245,158,11,0.2); color: #f59e0b; border-radius: 0.2rem;">○ ' + summary.goodSyncs + ' good</span>';
+                    }
+                    if (summary.keptOriginal > 0) {
+                        html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); border-radius: 0.2rem;">— ' + summary.keptOriginal + ' kept</span>';
+                    }
+                    html += '</div>';
+
+                    html += '</div>';
+
+                    // Scene adjustments preview
+                    html += '<div style="max-height: 120px; overflow-y: auto; margin-bottom: 0.75rem;">';
+                    beatSync.suggestions.forEach(function(s, i) {
+                        if (s.quality === 'keep') return; // Skip unchanged scenes
+
+                        var qualityColors = { perfect: '#10b981', great: '#06b6d4', good: '#f59e0b' };
+                        var qualityIcons = { perfect: '✓', great: '◉', good: '○' };
+                        var adjustText = s.adjustmentSeconds > 0 ? '+' + s.adjustmentSeconds + 's' : s.adjustmentSeconds + 's';
+
+                        html += '<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.5rem; background: rgba(255,255,255,0.03); border-radius: 0.25rem; margin-bottom: 0.25rem;">';
+                        html += '<div style="display: flex; align-items: center; gap: 0.4rem;">';
+                        html += '<span style="font-size: 0.65rem; color: ' + qualityColors[s.quality] + ';">' + qualityIcons[s.quality] + '</span>';
+                        html += '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.7);">Scene ' + (i + 1) + '</span>';
+                        html += '</div>';
+                        html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+                        html += '<span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">' + (s.originalDuration / 1000).toFixed(1) + 's → ' + (s.suggestedDuration / 1000).toFixed(1) + 's</span>';
+                        html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.25rem; background: rgba(6,182,212,0.2); color: #06b6d4; border-radius: 0.15rem;">' + adjustText + '</span>';
+                        html += '</div>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+
+                    // Action buttons
+                    html += '<div style="display: flex; gap: 0.5rem;">';
+                    html += '<button onclick="applyBeatSyncSuggestions()" style="flex: 1; padding: 0.6rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #06b6d4, #8b5cf6); color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer;">';
+                    html += '🎼 Apply Beat Sync';
+                    html += '</button>';
+                    html += '<button onclick="analyzeBeatSync()" style="padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: rgba(255,255,255,0.7); font-size: 0.75rem; cursor: pointer;" title="Re-analyze">';
+                    html += '🔄';
+                    html += '</button>';
+                    html += '</div>';
+
+                } else {
+                    // No analysis yet - show analyze button
+                    html += '<button onclick="analyzeBeatSync()" style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #06b6d4, #0891b2); color: white; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">';
+                    html += '<span style="font-size: 1rem;">🎼</span>';
+                    html += 'Analyze Beat Alignment';
+                    html += '</button>';
+
+                    html += '<div style="font-size: 0.55rem; color: rgba(255,255,255,0.4); text-align: center; margin-top: 0.5rem;">';
+                    html += scenes.length + ' scenes will be analyzed against ' + trackBpm + ' BPM rhythm';
+                    html += '</div>';
+                }
+            }
+
+            html += '</div>'; // Close Beat Sync section
+
             return html;
         }
 
@@ -12057,6 +12229,191 @@
                 showToast('Ambience layer disabled', 'info');
             }
 
+            scheduleAutoSave();
+            render();
+        }
+
+        // ==========================================
+        // PHASE 5: BEAT SYNCHRONIZATION FUNCTIONS
+        // ==========================================
+
+        function setBeatSyncMode(mode) {
+            if (!state.assembly.beatSync) {
+                state.assembly.beatSync = { syncMode: 'balanced', analyzing: false };
+            }
+            state.assembly.beatSync.syncMode = mode;
+
+            // Clear previous suggestions when mode changes
+            state.assembly.beatSync.suggestions = null;
+            state.assembly.beatSync.summary = null;
+
+            showToast(`Beat sync mode: ${mode}`, 'info');
+            scheduleAutoSave();
+            render();
+        }
+
+        async function analyzeBeatSync() {
+            const selectedTrack = state.assembly.musicLibrary?.find(t => t.id === state.assembly.music.trackId);
+            const scenes = state.script.scenes || [];
+
+            if (!selectedTrack || scenes.length === 0) {
+                showToast('Select music and ensure scenes exist', 'error');
+                return;
+            }
+
+            if (!state.assembly.beatSync) {
+                state.assembly.beatSync = { syncMode: 'balanced', analyzing: false };
+            }
+
+            state.assembly.beatSync.analyzing = true;
+            render();
+
+            try {
+                const bpm = selectedTrack.bpm || 120;
+                const duration = selectedTrack.duration || 180;
+                const syncMode = state.assembly.beatSync.syncMode || 'balanced';
+
+                // Step 1: Generate beat map
+                const generateBeatMap = functions.httpsCallable('generateBeatMap');
+                const beatMapResult = await generateBeatMap({
+                    trackId: selectedTrack.id,
+                    bpm: bpm,
+                    duration: duration,
+                    timeSignature: '4/4',
+                    musicStyle: state.content.genre || 'corporate'
+                });
+
+                if (!beatMapResult.data.success) {
+                    throw new Error('Failed to generate beat map');
+                }
+
+                const beatMap = beatMapResult.data.beatMap;
+                state.assembly.beatSync.beatMap = beatMap;
+
+                // Step 2: Get cut suggestions
+                const suggestCuts = functions.httpsCallable('suggestBeatSyncCuts');
+                const suggestResult = await suggestCuts({
+                    scenes: scenes.map(s => ({ id: s.id, duration: s.duration || 5 })),
+                    beatMap: beatMap,
+                    syncMode: syncMode,
+                    preserveMinDuration: 3000,
+                    preserveMaxAdjustment: 2000
+                });
+
+                if (!suggestResult.data.success) {
+                    throw new Error('Failed to generate sync suggestions');
+                }
+
+                state.assembly.beatSync.suggestions = suggestResult.data.suggestions;
+                state.assembly.beatSync.summary = suggestResult.data.summary;
+
+                const score = suggestResult.data.summary.overallScore;
+                if (score >= 80) {
+                    showToast(`Excellent alignment! ${score}% score`, 'success');
+                } else if (score >= 60) {
+                    showToast(`Good alignment: ${score}% score`, 'success');
+                } else {
+                    showToast(`Alignment analyzed: ${score}% score`, 'info');
+                }
+
+            } catch (error) {
+                console.error('Beat sync analysis failed:', error);
+                showToast('Beat sync analysis failed', 'error');
+            } finally {
+                state.assembly.beatSync.analyzing = false;
+                render();
+            }
+        }
+
+        async function applyBeatSyncSuggestions() {
+            const beatSync = state.assembly.beatSync;
+
+            if (!beatSync || !beatSync.suggestions || beatSync.suggestions.length === 0) {
+                showToast('No beat sync suggestions to apply', 'error');
+                return;
+            }
+
+            try {
+                // Apply suggestions locally to scene durations
+                const scenes = state.script.scenes || [];
+                let appliedCount = 0;
+
+                beatSync.suggestions.forEach(suggestion => {
+                    if (suggestion.quality === 'keep') return;
+
+                    const scene = scenes.find(s => s.id === suggestion.sceneId);
+                    if (scene) {
+                        // Store original duration before modifying
+                        scene.originalDuration = scene.duration;
+                        // Apply new duration (convert from ms to seconds)
+                        scene.duration = Math.round(suggestion.suggestedDuration / 100) / 10;
+                        scene.beatSynced = true;
+                        scene.syncQuality = suggestion.quality;
+                        appliedCount++;
+                    }
+                });
+
+                // Mark as applied
+                state.assembly.beatSync.applied = true;
+
+                // If project is saved, persist to backend
+                if (state.project.id) {
+                    try {
+                        const applySync = functions.httpsCallable('applyBeatSync');
+                        await applySync({
+                            projectId: state.project.id,
+                            suggestions: beatSync.suggestions,
+                            applyAll: true
+                        });
+                    } catch (backendError) {
+                        console.warn('Backend sync apply failed, but local changes applied:', backendError);
+                    }
+                }
+
+                showToast(`Applied beat sync to ${appliedCount} scenes`, 'success');
+
+                // Update preview engine if running
+                if (previewEngine) {
+                    previewEngine.scenes = scenes.map((scene, i) => ({
+                        ...previewEngine.scenes[i],
+                        duration: scene.duration
+                    }));
+                    previewEngine.calculateTotalDuration();
+                }
+
+                scheduleAutoSave();
+                render();
+
+            } catch (error) {
+                console.error('Apply beat sync failed:', error);
+                showToast('Failed to apply beat sync', 'error');
+            }
+        }
+
+        function resetBeatSync() {
+            const scenes = state.script.scenes || [];
+
+            // Restore original durations
+            scenes.forEach(scene => {
+                if (scene.beatSynced && scene.originalDuration) {
+                    scene.duration = scene.originalDuration;
+                    delete scene.beatSynced;
+                    delete scene.originalDuration;
+                    delete scene.syncQuality;
+                }
+            });
+
+            // Reset beat sync state
+            state.assembly.beatSync = {
+                syncMode: state.assembly.beatSync?.syncMode || 'balanced',
+                analyzing: false,
+                beatMap: null,
+                suggestions: null,
+                summary: null,
+                applied: false
+            };
+
+            showToast('Beat sync reset to original durations', 'info');
             scheduleAutoSave();
             render();
         }
