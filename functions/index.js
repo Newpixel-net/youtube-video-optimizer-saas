@@ -24475,15 +24475,60 @@ ${productionSettings.specialInstructions ? `\nPRODUCTION SPECIAL: ${productionSe
 
 ${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
 
+=== HOLLYWOOD CINEMATOGRAPHY REQUIREMENTS FOR visualPrompt ===
+Each visualPrompt MUST be a RICH, DETAILED cinematographic description with ALL these elements:
+
+1. SUBJECT DESCRIPTION (Required):
+   - Specific appearance: age, build, distinguishing features
+   - Clothing: specific garments, textures, condition
+   - Pose/body language: specific position and posture
+   - Expression: emotional state visible on face
+   - Action: what they're actively doing
+
+2. ENVIRONMENT IN THREE LAYERS (Required):
+   - FOREGROUND: Elements closest to camera (objects, textures, frame elements)
+   - MIDGROUND: Main action area where subject exists
+   - BACKGROUND: Distant elements providing depth and context
+
+3. ATMOSPHERE & PARTICLES (Required):
+   - Time of day and specific lighting conditions
+   - Atmospheric effects: dust motes, smoke wisps, embers, rain, mist, god rays
+   - Weather and environmental mood
+
+4. LIGHTING DESIGN (Required):
+   - Key light: main source, direction, color temperature (warm/cool/Kelvin)
+   - Shadow quality: hard, soft, dramatic, chiaroscuro
+   - Practical lights: visible light sources in scene (lamps, screens, fire)
+   - Overall contrast level
+
+5. CAMERA LANGUAGE (Required):
+   - Shot type: extreme-wide, wide, medium, close-up, extreme-close-up
+   - Camera angle: eye-level, low-angle (power), high-angle (vulnerability), dutch (tension)
+   - Movement in [brackets]: push-in, tracking, handheld, crane, static
+   - Subject placement: center, rule-of-thirds left/right, leading space
+
+6. STYLE & TEXTURE (Required):
+   - Film look: cinematic reference if applicable
+   - Depth of field: shallow with bokeh, or deep focus
+   - Color palette: dominant and accent colors
+   - Quality markers: 8K, photorealistic, detailed textures
+
+POOR EXAMPLE (DO NOT DO THIS):
+"[Push in] A workshop with an inventor working on something."
+
+EXCELLENT EXAMPLE (DO THIS):
+"[Slow push-in, low-angle] A weathered inventor in his 60s with wild gray hair and oil-stained leather apron hunches intensely over a glowing brass mechanism, his calloused hands carefully adjusting delicate gears, determined expression lit by sparks. Foreground: scattered brass gears and burnt-out bulbs on worn wooden table. Midground: cluttered workbench with smoking apparatus, copper tubing, half-assembled devices. Background: brick walls covered in yellowed blueprints and shelves of failed prototypes. Late night atmosphere, single overhead work lamp casting harsh amber tungsten light (3200K), deep dramatic shadows across his face, dust motes and tiny sparks floating in the warm glow. Steam rising from cooling metal. Shallow depth of field with bokeh on background lights. Steampunk industrial aesthetic, Ridley Scott visual style."
+
 === CRITICAL: VISUAL VS NARRATION SEPARATION ===
 You MUST output TWO SEPARATE fields for each scene:
 
 1. "visualPrompt" - What we SEE (for AI video generation)
+   - MUST include ALL cinematography elements listed above
    - Optimized for Minimax AI video generation
-   - Describes the visual scene, characters, actions, lighting, mood
+   - Rich, detailed description: minimum 150 words per scene
    - Should NOT be spoken aloud - this is camera/visual direction
    - Start with [Camera Movement] in brackets
-   - Example: "[Push in] A man stands alone at a rain-soaked window, his reflection fractured by droplets. Dim blue lighting. Contemplative mood."
+   - Example: "[Slow push-in] A weathered man in his 50s wearing a faded denim jacket stands at a rain-soaked window, his weathered hands pressed against the cold glass, reflection fractured by rivulets of water. Foreground: condensation droplets on glass, dead plant on windowsill. Midground: sparse apartment, single lamp casting warm amber pool. Background: city lights blurred through rain, distant neon signs. Dim blue-hour twilight mixed with warm practical lamp light, chiaroscuro shadows across his contemplative face, rain streaking down glass creating moving light patterns. Melancholic atmosphere, subtle dust particles in lamp beam. Close-up shot, eye-level, static camera with subtle handheld drift. Shallow depth of field, Denis Villeneuve mood, desaturated teal-orange color grade."
 
 2. "narration" - What we HEAR (for voiceover/TTS)
    - The actual words that will be SPOKEN by a narrator
@@ -34965,115 +35010,581 @@ const SCENE_SCRIPT_STRUCTURE = {
 };
 
 // =============================================================================
+// SECTION 9.0: BLUEPRINT EXTRACTOR - Extract Cinematography from Visual Text
+// =============================================================================
+
+/**
+ * BLUEPRINT_EXTRACTOR
+ * Extracts structured cinematographic data from plain-text visual descriptions.
+ * This bridges the gap between simple scene.visual text and the structured
+ * visualBlueprint/actionBlueprint that IMAGE_PROMPT_GENERATOR expects.
+ */
+const BLUEPRINT_EXTRACTOR = {
+
+  /**
+   * Quick pattern-based extraction for common cinematography elements
+   * Used for immediate prompt enhancement without AI calls
+   */
+  quickExtract: (sceneVisual) => {
+    if (!sceneVisual || typeof sceneVisual !== 'string') {
+      return { visualBlueprint: {}, actionBlueprint: {} };
+    }
+
+    const visual = sceneVisual.toLowerCase();
+    const blueprint = {
+      visualBlueprint: {
+        rawVisual: sceneVisual.replace(/\[.*?\]\s*/, '') // Store cleaned visual
+      },
+      actionBlueprint: {}
+    };
+
+    // Extract camera movement from brackets [Push in, etc]
+    const cameraMatch = sceneVisual.match(/\[(.*?)\]/);
+    if (cameraMatch) {
+      const movement = cameraMatch[1].toLowerCase();
+      if (movement.includes('push') && movement.includes('in')) blueprint.visualBlueprint.cameraMovement = 'push-in';
+      else if (movement.includes('pull') || movement.includes('out')) blueprint.visualBlueprint.cameraMovement = 'pull-out';
+      else if (movement.includes('pan') && movement.includes('left')) blueprint.visualBlueprint.cameraMovement = 'pan-left';
+      else if (movement.includes('pan') && movement.includes('right')) blueprint.visualBlueprint.cameraMovement = 'pan-right';
+      else if (movement.includes('track')) blueprint.visualBlueprint.cameraMovement = 'tracking';
+      else if (movement.includes('static') || movement.includes('hold')) blueprint.visualBlueprint.cameraMovement = 'static';
+      else if (movement.includes('crane')) blueprint.visualBlueprint.cameraMovement = 'crane';
+      else if (movement.includes('handheld')) blueprint.visualBlueprint.cameraMovement = 'handheld';
+      else if (movement.includes('zoom') && movement.includes('in')) blueprint.visualBlueprint.cameraMovement = 'push-in';
+      else if (movement.includes('tilt') && movement.includes('up')) blueprint.visualBlueprint.cameraMovement = 'tilt-up';
+      else if (movement.includes('tilt') && movement.includes('down')) blueprint.visualBlueprint.cameraMovement = 'tilt-down';
+
+      // Also store for action blueprint
+      blueprint.actionBlueprint.cameraAction = {
+        movement: blueprint.visualBlueprint.cameraMovement || movement,
+        speed: movement.includes('slow') ? 'slow' : movement.includes('fast') ? 'fast' : 'medium'
+      };
+    }
+
+    // Extract lighting keywords
+    if (visual.includes('golden hour') || visual.includes('sunset') || visual.includes('sunrise')) {
+      blueprint.visualBlueprint.lightingSetup = 'golden-hour';
+      blueprint.visualBlueprint.colorTemperature = 'warm 3000K-4000K';
+    } else if (visual.includes('blue hour') || visual.includes('twilight') || visual.includes('dusk')) {
+      blueprint.visualBlueprint.lightingSetup = 'blue-hour';
+      blueprint.visualBlueprint.colorTemperature = 'cool 6000K-8000K';
+    } else if (visual.includes('shadow') || visual.includes('noir') || visual.includes('dark') || visual.includes('chiaroscuro')) {
+      blueprint.visualBlueprint.lightingSetup = 'low-key';
+    } else if (visual.includes('neon') || visual.includes('cyberpunk') || visual.includes('electric')) {
+      blueprint.visualBlueprint.lightingSetup = 'neon';
+    } else if (visual.includes('bright') || visual.includes('even light') || visual.includes('well-lit')) {
+      blueprint.visualBlueprint.lightingSetup = 'high-key';
+    } else if (visual.includes('lamp') || visual.includes('screen') || visual.includes('fire') || visual.includes('candle')) {
+      blueprint.visualBlueprint.lightingSetup = 'practical';
+    }
+
+    // Extract shot type keywords
+    if (visual.includes('extreme close') || visual.includes('macro')) {
+      blueprint.visualBlueprint.shotType = 'extreme-close-up';
+    } else if (visual.includes('close-up') || visual.includes('closeup') || visual.includes('close up')) {
+      blueprint.visualBlueprint.shotType = 'close-up';
+    } else if (visual.includes('extreme wide') || visual.includes('vast') || visual.includes('panoramic')) {
+      blueprint.visualBlueprint.shotType = 'extreme-wide';
+    } else if (visual.includes('wide shot') || visual.includes('wide-shot') || visual.includes('establishing')) {
+      blueprint.visualBlueprint.shotType = 'wide';
+    } else if (visual.includes('medium close') || visual.includes('mid-close')) {
+      blueprint.visualBlueprint.shotType = 'medium-close';
+    } else if (visual.includes('medium shot') || visual.includes('medium-shot') || visual.includes('mid shot')) {
+      blueprint.visualBlueprint.shotType = 'medium';
+    }
+
+    // Extract camera angle
+    if (visual.includes('low angle') || visual.includes('low-angle') || visual.includes('looking up')) {
+      blueprint.visualBlueprint.cameraAngle = 'low-angle';
+    } else if (visual.includes('high angle') || visual.includes('high-angle') || visual.includes('looking down') || visual.includes('bird')) {
+      blueprint.visualBlueprint.cameraAngle = 'high-angle';
+    } else if (visual.includes('dutch') || visual.includes('tilted') || visual.includes('canted')) {
+      blueprint.visualBlueprint.cameraAngle = 'dutch-angle';
+    } else if (visual.includes('over shoulder') || visual.includes('over-shoulder') || visual.includes('over the shoulder')) {
+      blueprint.visualBlueprint.cameraAngle = 'over-shoulder';
+    }
+
+    // Extract atmospheric elements
+    const particles = [];
+    if (visual.includes('dust') || visual.includes('motes')) particles.push('dust motes floating in light');
+    if (visual.includes('smoke') || visual.includes('smoking')) particles.push('wisps of smoke');
+    if (visual.includes('ember') || visual.includes('spark')) particles.push('floating embers and sparks');
+    if (visual.includes('rain')) particles.push('rain droplets');
+    if (visual.includes('mist') || visual.includes('fog')) particles.push('atmospheric mist');
+    if (visual.includes('snow')) particles.push('falling snowflakes');
+    if (visual.includes('god ray') || visual.includes('light beam') || visual.includes('rays of light')) particles.push('volumetric god rays');
+    if (particles.length > 0) {
+      blueprint.visualBlueprint.particles = particles.join(', ');
+    }
+
+    // Extract mood
+    if (visual.includes('tense') || visual.includes('tension') || visual.includes('anxious')) {
+      blueprint.visualBlueprint.mood = 'tense';
+    } else if (visual.includes('contemplative') || visual.includes('thoughtful') || visual.includes('reflective')) {
+      blueprint.visualBlueprint.mood = 'contemplative';
+    } else if (visual.includes('hopeful') || visual.includes('optimistic') || visual.includes('uplifting')) {
+      blueprint.visualBlueprint.mood = 'hopeful';
+    } else if (visual.includes('mysterious') || visual.includes('enigmatic') || visual.includes('cryptic')) {
+      blueprint.visualBlueprint.mood = 'mysterious';
+    } else if (visual.includes('epic') || visual.includes('grand') || visual.includes('majestic')) {
+      blueprint.visualBlueprint.mood = 'epic';
+    } else if (visual.includes('intimate') || visual.includes('personal') || visual.includes('close')) {
+      blueprint.visualBlueprint.mood = 'intimate';
+    } else if (visual.includes('melanchol') || visual.includes('sad') || visual.includes('somber')) {
+      blueprint.visualBlueprint.mood = 'melancholic';
+    }
+
+    // Extract environment layers using pattern matching
+    const fgMatch = sceneVisual.match(/foreground[:\s]+([^.]+)/i);
+    const mgMatch = sceneVisual.match(/midground[:\s]+([^.]+)/i);
+    const bgMatch = sceneVisual.match(/background[:\s]+([^.]+)/i);
+
+    if (fgMatch) blueprint.visualBlueprint.foreground = fgMatch[1].trim();
+    if (mgMatch) blueprint.visualBlueprint.midground = mgMatch[1].trim();
+    if (bgMatch) blueprint.visualBlueprint.background = bgMatch[1].trim();
+
+    // If no layers found, try to identify them from context
+    if (!blueprint.visualBlueprint.foreground && !blueprint.visualBlueprint.midground) {
+      blueprint.visualBlueprint.midground = sceneVisual.replace(/\[.*?\]\s*/, '').trim();
+    }
+
+    return blueprint;
+  },
+
+  /**
+   * Apply genre-specific cinematography defaults
+   */
+  applyGenreDefaults: (blueprint, genre, productionMode) => {
+    const defaults = {
+      'documentary-nature': {
+        shotType: 'wide',
+        cameraAngle: 'eye-level',
+        lightingSetup: 'golden-hour',
+        colorTemperature: 'warm natural',
+        mood: 'epic',
+        filmLook: 'National Geographic cinematography, BBC Earth quality'
+      },
+      'thriller': {
+        shotType: 'close-up',
+        cameraAngle: 'dutch-angle',
+        lightingSetup: 'low-key',
+        colorTemperature: 'cool desaturated',
+        mood: 'tense',
+        filmLook: 'David Fincher aesthetic, paranoid framing'
+      },
+      'cinematic': {
+        shotType: 'medium-wide',
+        cameraAngle: 'eye-level',
+        lightingSetup: 'practical',
+        colorTemperature: 'cinematic balanced',
+        mood: 'epic',
+        filmLook: 'Roger Deakins cinematography, Denis Villeneuve composition'
+      },
+      'documentary': {
+        shotType: 'medium',
+        cameraAngle: 'eye-level',
+        lightingSetup: 'motivated',
+        colorTemperature: 'natural',
+        mood: 'authentic',
+        filmLook: 'documentary realism, observational style'
+      },
+      'inspirational': {
+        shotType: 'wide',
+        cameraAngle: 'low-angle',
+        lightingSetup: 'golden-hour',
+        colorTemperature: 'warm 4000K',
+        mood: 'hopeful',
+        filmLook: 'aspirational imagery, uplifting visual style'
+      },
+      'story': {
+        shotType: 'medium',
+        cameraAngle: 'eye-level',
+        lightingSetup: 'motivated',
+        colorTemperature: 'natural',
+        mood: 'engaging',
+        filmLook: 'prestige television cinematography'
+      },
+      'horror': {
+        shotType: 'close-up',
+        cameraAngle: 'dutch-angle',
+        lightingSetup: 'low-key',
+        colorTemperature: 'cool blue-green',
+        mood: 'dread',
+        filmLook: 'atmospheric horror, deep shadows, negative space'
+      }
+    };
+
+    const genreDefaults = defaults[genre] || defaults[productionMode] || defaults['cinematic'];
+
+    // Apply defaults only for missing properties
+    const vb = blueprint.visualBlueprint;
+    if (!vb.shotType) vb.shotType = genreDefaults.shotType;
+    if (!vb.cameraAngle) vb.cameraAngle = genreDefaults.cameraAngle;
+    if (!vb.lightingSetup) vb.lightingSetup = genreDefaults.lightingSetup;
+    if (!vb.colorTemperature) vb.colorTemperature = genreDefaults.colorTemperature;
+    if (!vb.mood) vb.mood = genreDefaults.mood;
+    if (!vb.filmLook) vb.filmLook = genreDefaults.filmLook;
+
+    return blueprint;
+  },
+
+  /**
+   * Full extraction: pattern matching + genre defaults
+   * This is the main entry point
+   */
+  extractFromScene: (scene, genre, productionMode) => {
+    const visual = scene.visual || scene.visualPrompt || '';
+
+    // First, do pattern-based quick extraction
+    let blueprint = BLUEPRINT_EXTRACTOR.quickExtract(visual);
+
+    // Apply genre-specific defaults for missing elements
+    blueprint = BLUEPRINT_EXTRACTOR.applyGenreDefaults(blueprint, genre, productionMode);
+
+    // Merge with any existing blueprint data from the scene
+    if (scene.visualBlueprint) {
+      blueprint.visualBlueprint = { ...blueprint.visualBlueprint, ...scene.visualBlueprint };
+    }
+    if (scene.actionBlueprint) {
+      blueprint.actionBlueprint = { ...blueprint.actionBlueprint, ...scene.actionBlueprint };
+    }
+
+    return blueprint;
+  }
+};
+
+// =============================================================================
 // SECTION 9.1: IMAGE PROMPT GENERATOR - Scene to Image Transformation
 // =============================================================================
 
 /**
  * IMAGE PROMPT GENERATOR
  * Transforms scene visual blueprints into precise AI image prompts
+ *
+ * UPGRADED: Now produces Hollywood-quality cinematographic prompts
  */
 const IMAGE_PROMPT_GENERATOR = {
 
   /**
-   * Generate image prompt from scene script
+   * Generate HOLLYWOOD-QUALITY image prompt from scene script
+   * Uses BLUEPRINT_EXTRACTOR to enhance simple scene.visual text
    */
-  generateFromScene: (scene, styleBible, characterBible) => {
-    const vb = scene.visualBlueprint || {};
+  generateFromScene: (scene, styleBible, characterBible, genre, productionMode) => {
+    // STEP 1: Extract blueprint from scene visual description
+    // This converts simple text like "[Push in] A workshop..." into structured cinematography data
+    const extracted = BLUEPRINT_EXTRACTOR.extractFromScene(scene, genre, productionMode);
+    const vb = { ...extracted.visualBlueprint, ...scene.visualBlueprint };
+    const ab = { ...extracted.actionBlueprint, ...scene.actionBlueprint };
 
-    // Build subject description
-    const subject = IMAGE_PROMPT_GENERATOR.buildSubjectDescription(scene, characterBible);
+    // STEP 2: Build subject description (the main visual focus)
+    const subject = IMAGE_PROMPT_GENERATOR.buildSubjectDescription(scene, characterBible, vb);
 
-    // Get shot type prompt
-    const shotPrompt = SCENE_SCRIPT_STRUCTURE.shotTypes[vb.shotType]?.prompt || '';
+    // STEP 3: Build camera and composition description
+    const camera = IMAGE_PROMPT_GENERATOR.buildCameraDescription(vb);
 
-    // Get camera angle prompt
-    const anglePrompt = SCENE_SCRIPT_STRUCTURE.cameraAngles[vb.cameraAngle]?.prompt || '';
+    // STEP 4: Build environment layers (FG/MG/BG)
+    const environment = IMAGE_PROMPT_GENERATOR.buildEnvironmentDescription(vb);
 
-    // Build composition description
-    const composition = [shotPrompt, anglePrompt, vb.subjectPlacement].filter(Boolean).join(', ');
+    // STEP 5: Build lighting design
+    const lighting = IMAGE_PROMPT_GENERATOR.buildLightingDescription(vb);
 
-    // Build environment description
-    const environment = [
-      vb.foreground ? `foreground: ${vb.foreground}` : null,
-      vb.midground ? `midground: ${vb.midground}` : null,
-      vb.background ? `background: ${vb.background}` : null
-    ].filter(Boolean).join(', ');
+    // STEP 6: Build atmosphere and particles
+    const atmosphere = IMAGE_PROMPT_GENERATOR.buildAtmosphereDescription(vb);
 
-    // Build lighting description
-    const lighting = [
-      vb.keyLight ? `key light: ${vb.keyLight}` : null,
-      vb.fillLight ? `fill light: ${vb.fillLight}` : null,
-      vb.practicalLights?.length ? `practical lights: ${vb.practicalLights.join(', ')}` : null
-    ].filter(Boolean).join(', ');
+    // STEP 7: Build style and film look
+    const style = IMAGE_PROMPT_GENERATOR.buildStyleDescription(vb, styleBible, genre);
 
-    // Build atmosphere description
-    const atmosphere = [
-      vb.weather,
-      vb.particles,
-      vb.mood ? `${vb.mood} mood` : null
-    ].filter(Boolean).join(', ');
+    // STEP 8: Technical quality specs
+    const technical = IMAGE_PROMPT_GENERATOR.buildTechnicalDescription(styleBible);
 
-    // Build color description
-    const colors = [
-      vb.dominantColors?.length ? `dominant colors: ${vb.dominantColors.join(', ')}` : null,
-      vb.colorTemperature ? `color temperature: ${vb.colorTemperature}` : null
-    ].filter(Boolean).join(', ');
-
-    // Get style from style bible
-    const stylePrompt = styleBible ? IMAGE_PROMPT_GENERATOR.buildStylePrompt(styleBible) : '';
-
-    // Build technical specifications
-    const technical = styleBible?.technicalSpecs?.positive || '8K, photorealistic, cinematic composition, high detail';
+    // STEP 9: Compile into Hollywood-quality flowing prompt
+    const prompt = IMAGE_PROMPT_GENERATOR.compileHollywoodPrompt({
+      subject,
+      camera,
+      environment,
+      lighting,
+      atmosphere,
+      style,
+      technical
+    });
 
     // Build negative prompt
-    const negative = styleBible?.technicalSpecs?.negative || 'blurry, low quality, distorted, amateur';
+    const negative = styleBible?.technicalSpecs?.negative ||
+      'blurry, low quality, distorted, amateur, cartoon, anime, illustration, painting, drawing, text, watermark, signature, ugly, deformed';
 
     return {
-      prompt: IMAGE_PROMPT_GENERATOR.compileImagePrompt({
-        subject,
-        composition,
-        environment,
-        lighting,
-        atmosphere,
-        colors,
-        style: stylePrompt,
-        technical
-      }),
+      prompt,
       negativePrompt: negative,
       metadata: {
         shotType: vb.shotType,
         cameraAngle: vb.cameraAngle,
+        cameraMovement: vb.cameraMovement,
         mood: vb.mood,
-        colors: vb.dominantColors
+        lightingSetup: vb.lightingSetup,
+        filmLook: vb.filmLook
       }
     };
   },
 
   /**
-   * Build subject description from scene and character bible
+   * Build camera and composition description
    */
-  buildSubjectDescription: (scene, characterBible) => {
-    const ab = scene.actionBlueprint?.characterAction;
-    if (!ab?.who) return scene.visualBlueprint?.midground || '';
+  buildCameraDescription: (vb) => {
+    const parts = [];
 
-    // Look up character in bible
-    const character = characterBible?.find(c =>
-      c.name?.toLowerCase() === ab.who.toLowerCase() ||
-      c.id === ab.who
-    );
-
-    if (character) {
-      // Build detailed character description
-      const charDesc = [
-        character.physicalDescription,
-        character.clothingDescription,
-        ab.startPose ? `in ${ab.startPose} pose` : null
-      ].filter(Boolean).join(', ');
-      return charDesc;
+    // Shot type with descriptive text
+    const shotDescriptors = {
+      'extreme-wide': 'extreme wide shot showing vast scale',
+      'wide': 'wide establishing shot',
+      'medium-wide': 'medium-wide shot',
+      'medium': 'medium shot framing',
+      'medium-close': 'medium close-up',
+      'close-up': 'intimate close-up',
+      'extreme-close-up': 'extreme close-up on fine detail'
+    };
+    if (vb.shotType && shotDescriptors[vb.shotType]) {
+      parts.push(shotDescriptors[vb.shotType]);
     }
 
-    // Fallback to basic description
-    return `${ab.who} ${ab.startPose ? `in ${ab.startPose} pose` : ''}`.trim();
+    // Camera angle with cinematic impact
+    const angleDescriptors = {
+      'low-angle': 'low-angle looking up conveying power',
+      'high-angle': 'high-angle looking down',
+      'dutch-angle': 'dutch angle creating visual tension',
+      'eye-level': 'eye-level natural framing',
+      'birds-eye': 'birds eye aerial view',
+      'worms-eye': 'extreme low worms-eye perspective',
+      'over-shoulder': 'over-the-shoulder POV'
+    };
+    if (vb.cameraAngle && angleDescriptors[vb.cameraAngle]) {
+      parts.push(angleDescriptors[vb.cameraAngle]);
+    }
+
+    // Camera movement (for context, though image is static)
+    const movementContext = {
+      'push-in': 'composed as if mid push-in',
+      'pull-out': 'framed for pull-out reveal',
+      'tracking': 'dynamic tracking composition',
+      'handheld': 'handheld energy in framing',
+      'crane': 'sweeping crane perspective',
+      'static': 'locked-off composed frame'
+    };
+    if (vb.cameraMovement && movementContext[vb.cameraMovement]) {
+      parts.push(movementContext[vb.cameraMovement]);
+    }
+
+    // Subject placement
+    if (vb.subjectPlacement && vb.subjectPlacement !== 'center') {
+      parts.push(`subject positioned ${vb.subjectPlacement.replace(/-/g, ' ')}`);
+    }
+
+    return parts.length > 0 ? parts.join(', ') : '';
+  },
+
+  /**
+   * Build environment layers description
+   */
+  buildEnvironmentDescription: (vb) => {
+    const layers = [];
+
+    if (vb.foreground) {
+      layers.push(`foreground: ${vb.foreground}`);
+    }
+    if (vb.midground && !vb.rawVisual) {
+      layers.push(`midground: ${vb.midground}`);
+    }
+    if (vb.background) {
+      layers.push(`background: ${vb.background}`);
+    }
+
+    return layers.length > 0 ? layers.join('; ') : '';
+  },
+
+  /**
+   * Build lighting design description
+   */
+  buildLightingDescription: (vb) => {
+    const parts = [];
+
+    // Lighting setup with detailed description
+    const lightingDescriptors = {
+      'low-key': 'low-key dramatic lighting with deep shadows and high contrast',
+      'high-key': 'bright high-key lighting with even illumination',
+      'golden-hour': 'warm golden hour sunlight with soft shadows',
+      'blue-hour': 'cool blue hour twilight ambiance',
+      'chiaroscuro': 'Renaissance chiaroscuro with extreme light-dark contrast',
+      'neon': 'vibrant neon lighting with colorful electric glow',
+      'practical': 'realistic practical lighting from visible sources',
+      'motivated': 'motivated lighting from natural scene sources',
+      'three-point': 'balanced three-point studio lighting'
+    };
+
+    if (vb.lightingSetup && lightingDescriptors[vb.lightingSetup]) {
+      parts.push(lightingDescriptors[vb.lightingSetup]);
+    }
+
+    // Add specific light sources if available
+    if (vb.keyLight) parts.push(`key light: ${vb.keyLight}`);
+    if (vb.fillLight) parts.push(`fill: ${vb.fillLight}`);
+    if (vb.practicalLights?.length) {
+      parts.push(`practicals: ${vb.practicalLights.join(', ')}`);
+    }
+
+    // Color temperature
+    if (vb.colorTemperature) {
+      parts.push(`${vb.colorTemperature} color temperature`);
+    }
+
+    return parts.length > 0 ? parts.join(', ') : '';
+  },
+
+  /**
+   * Build atmosphere and particle description
+   */
+  buildAtmosphereDescription: (vb) => {
+    const parts = [];
+
+    // Time of day if available
+    if (vb.timeOfDay) parts.push(vb.timeOfDay);
+
+    // Weather conditions
+    if (vb.weather && vb.weather !== 'clear') parts.push(vb.weather);
+
+    // Atmospheric particles (critical for cinematic feel)
+    if (vb.particles) parts.push(vb.particles);
+
+    // Mood descriptor
+    if (vb.mood) {
+      const moodDescriptors = {
+        'tense': 'tense atmosphere with palpable tension',
+        'contemplative': 'contemplative reflective mood',
+        'hopeful': 'hopeful uplifting atmosphere',
+        'mysterious': 'mysterious enigmatic ambiance',
+        'epic': 'epic grand scale feeling',
+        'intimate': 'intimate personal atmosphere',
+        'melancholic': 'melancholic somber mood',
+        'dread': 'atmosphere of creeping dread',
+        'authentic': 'authentic grounded realism'
+      };
+      parts.push(moodDescriptors[vb.mood] || `${vb.mood} mood`);
+    }
+
+    return parts.length > 0 ? parts.join(', ') : '';
+  },
+
+  /**
+   * Build style and film look description
+   */
+  buildStyleDescription: (vb, styleBible, genre) => {
+    const parts = [];
+
+    // Film look from blueprint or style bible
+    if (vb.filmLook) parts.push(vb.filmLook);
+    if (styleBible?.cinematicReference) parts.push(styleBible.cinematicReference);
+    if (styleBible?.visualStyle) parts.push(styleBible.visualStyle);
+    if (styleBible?.colorGrade) parts.push(styleBible.colorGrade);
+
+    // Color palette
+    if (vb.dominantColors?.length) {
+      parts.push(`color palette: ${vb.dominantColors.join(', ')}`);
+    }
+
+    // Depth of field (default to shallow for cinematic look)
+    if (vb.depthOfField) {
+      parts.push(`${vb.depthOfField} depth of field`);
+    } else {
+      parts.push('shallow depth of field with cinematic bokeh');
+    }
+
+    return parts.length > 0 ? parts.join(', ') : '';
+  },
+
+  /**
+   * Build technical quality specifications
+   */
+  buildTechnicalDescription: (styleBible) => {
+    if (styleBible?.technicalSpecs?.positive) {
+      return styleBible.technicalSpecs.positive;
+    }
+    return '8K resolution, photorealistic, ultra-detailed textures, sharp focus, professional color grading, cinematic aspect ratio';
+  },
+
+  /**
+   * Compile all parts into HOLLYWOOD-QUALITY flowing prompt
+   * Outputs as natural prose, not labeled sections
+   */
+  compileHollywoodPrompt: (parts) => {
+    const segments = [];
+
+    // Subject/scene is always first and most important
+    if (parts.subject) segments.push(parts.subject);
+
+    // Environment adds depth
+    if (parts.environment) segments.push(parts.environment);
+
+    // Atmosphere for mood
+    if (parts.atmosphere) segments.push(parts.atmosphere);
+
+    // Lighting is crucial for cinematic quality
+    if (parts.lighting) segments.push(parts.lighting);
+
+    // Camera for composition context
+    if (parts.camera) segments.push(parts.camera);
+
+    // Style for film look
+    if (parts.style) segments.push(parts.style);
+
+    // Technical specs at the end
+    if (parts.technical) segments.push(parts.technical);
+
+    // Join with commas for flowing prose, not newlines
+    return segments.filter(s => s && s.trim()).join(', ');
+  },
+
+  /**
+   * Build subject description from scene and character bible
+   * UPGRADED: Uses extracted blueprint rawVisual for rich scene descriptions
+   */
+  buildSubjectDescription: (scene, characterBible, vb = {}) => {
+    const ab = scene.actionBlueprint?.characterAction;
+
+    // PRIORITY 1: Use rawVisual from blueprint extraction (this is the cleaned visual text)
+    // This contains the full cinematographic description from script generation
+    if (vb.rawVisual && vb.rawVisual.length > 20) {
+      // rawVisual already contains the rich description, use it directly
+      return vb.rawVisual;
+    }
+
+    // PRIORITY 2: Check for character action in blueprint
+    if (ab?.who) {
+      // Look up character in bible
+      const character = characterBible?.find(c =>
+        c.name?.toLowerCase() === ab.who.toLowerCase() ||
+        c.id === ab.who
+      );
+
+      if (character) {
+        // Build detailed character description
+        const charDesc = [
+          character.physicalDescription,
+          character.clothingDescription,
+          ab.startPose ? `in ${ab.startPose} pose` : null,
+          ab.action || null
+        ].filter(Boolean).join(', ');
+        return charDesc;
+      }
+
+      // Use action blueprint if available
+      return `${ab.who} ${ab.startPose ? `in ${ab.startPose} pose` : ''} ${ab.action || ''}`.trim();
+    }
+
+    // PRIORITY 3: Fall back to midground or direct visual
+    if (vb.midground) return vb.midground;
+
+    // PRIORITY 4: Use scene.visual or visualPrompt (original script text)
+    const visual = scene.visual || scene.visualPrompt || '';
+    // Strip camera movement brackets and return
+    return visual.replace(/\[.*?\]\s*/, '').trim();
   },
 
   /**
@@ -35112,15 +35623,18 @@ const IMAGE_PROMPT_GENERATOR = {
 
   /**
    * Enhanced prompt generation with genre-specific adjustments
+   * UPGRADED: Now passes genre and productionMode to generateFromScene for blueprint extraction
    */
   generateWithGenre: (scene, styleBible, characterBible, genre, productionMode) => {
-    const basePrompt = IMAGE_PROMPT_GENERATOR.generateFromScene(scene, styleBible, characterBible);
+    // generateFromScene now uses genre/productionMode for blueprint extraction
+    const basePrompt = IMAGE_PROMPT_GENERATOR.generateFromScene(scene, styleBible, characterBible, genre, productionMode);
 
-    // Apply genre-specific enhancements
+    // Apply additional genre-specific enhancements as prefix/suffix
     const genreEnhancements = IMAGE_PROMPT_GENERATOR.getGenreEnhancements(genre, productionMode);
 
     if (genreEnhancements) {
-      basePrompt.prompt = `${genreEnhancements.prefix}\n\n${basePrompt.prompt}\n\n${genreEnhancements.suffix}`;
+      // Add genre enhancements to the already Hollywood-quality prompt
+      basePrompt.prompt = `${genreEnhancements.prefix}, ${basePrompt.prompt}, ${genreEnhancements.suffix}`;
       basePrompt.negativePrompt = `${basePrompt.negativePrompt}, ${genreEnhancements.negative}`;
     }
 
@@ -35179,124 +35693,217 @@ const IMAGE_PROMPT_GENERATOR = {
 
 /**
  * VIDEO PROMPT GENERATOR
- * The video prompt STARTS with the generated image and ADDS the motion
- * This creates visual consistency and prevents drift
+ * UPGRADED: Produces Hollywood-quality motion prompts
+ * The video prompt STARTS with the generated image and ADDS cinematic motion
  */
 const VIDEO_PROMPT_GENERATOR = {
 
   /**
-   * Generate video prompt from generated image and scene action
+   * Generate HOLLYWOOD-QUALITY video prompt from image and scene
+   * Uses BLUEPRINT_EXTRACTOR for enhanced motion descriptions
    */
-  generateFromImageAndScene: (generatedImageUrl, scene, styleBible) => {
-    const ab = scene.actionBlueprint || {};
+  generateFromImageAndScene: (generatedImageUrl, scene, styleBible, genre, productionMode) => {
+    // Extract blueprint to enhance motion understanding
+    const extracted = BLUEPRINT_EXTRACTOR.extractFromScene(scene, genre, productionMode);
+    const vb = { ...extracted.visualBlueprint, ...scene.visualBlueprint };
+    const ab = { ...extracted.actionBlueprint, ...scene.actionBlueprint };
     const timing = scene.timing || {};
 
     // Build character motion description
-    const characterMotion = VIDEO_PROMPT_GENERATOR.describeCharacterMotion(ab.characterAction);
+    const characterMotion = VIDEO_PROMPT_GENERATOR.describeCharacterMotion(ab.characterAction, vb);
 
-    // Build camera motion description
-    const cameraMotion = VIDEO_PROMPT_GENERATOR.describeCameraMotion(ab.cameraAction);
+    // Build camera motion description with cinematic language
+    const cameraMotion = VIDEO_PROMPT_GENERATOR.describeCameraMotion(ab.cameraAction, vb);
 
-    // Build environment motion description
-    const environmentMotion = VIDEO_PROMPT_GENERATOR.describeEnvironmentMotion(ab.environmentAction);
+    // Build environment motion description with atmospheric effects
+    const environmentMotion = VIDEO_PROMPT_GENERATOR.describeEnvironmentMotion(ab.environmentAction, vb);
+
+    // Build atmospheric motion (particles, lighting changes)
+    const atmosphericMotion = VIDEO_PROMPT_GENERATOR.describeAtmosphericMotion(vb);
 
     return {
-      prompt: VIDEO_PROMPT_GENERATOR.compileVideoPrompt({
+      prompt: VIDEO_PROMPT_GENERATOR.compileHollywoodVideoPrompt({
         startFrame: generatedImageUrl,
         characterMotion,
         cameraMotion,
         environmentMotion,
+        atmosphericMotion,
         duration: timing.duration || 6,
-        pacing: timing.pacingNote
+        pacing: timing.pacingNote,
+        mood: vb.mood,
+        filmLook: vb.filmLook
       }),
       metadata: {
         duration: timing.duration,
         hasCharacterMotion: !!ab.characterAction,
-        hasCameraMotion: !!ab.cameraAction,
-        hasEnvironmentMotion: ab.environmentAction?.length > 0
+        hasCameraMotion: !!ab.cameraAction || !!vb.cameraMovement,
+        hasEnvironmentMotion: ab.environmentAction?.length > 0,
+        hasAtmosphericMotion: !!vb.particles
       },
       technicalSettings: VIDEO_PROMPT_GENERATOR.getTechnicalSettings(scene, styleBible)
     };
   },
 
   /**
-   * Describe character motion for video prompt
+   * Describe character motion with cinematic detail
    */
-  describeCharacterMotion: (characterAction) => {
-    if (!characterAction) return null;
+  describeCharacterMotion: (characterAction, vb = {}) => {
+    if (!characterAction?.action && !vb.rawVisual) {
+      return 'subtle natural micro-movements, gentle breathing motion, lifelike presence';
+    }
 
-    const { who, startPose, action, endPose, timing } = characterAction;
+    if (characterAction) {
+      const { who, startPose, action, endPose, timing } = characterAction;
+      const parts = [];
 
-    const parts = [];
-    if (who) parts.push(`${who}`);
-    if (startPose) parts.push(`begins ${startPose}`);
-    if (action) parts.push(action);
-    if (endPose) parts.push(`ends ${endPose}`);
-    if (timing) parts.push(`(timing: ${timing})`);
+      if (who) parts.push(who);
+      if (action) parts.push(action);
+      if (startPose && endPose) {
+        parts.push(`transitions smoothly from ${startPose} to ${endPose}`);
+      }
+      if (timing) parts.push(`paced ${timing}`);
 
-    return parts.join(', ');
+      return parts.join(', ') || 'subtle natural movement';
+    }
+
+    // Infer motion from visual description
+    return 'subtle movement, natural micro-expressions, lifelike presence';
   },
 
   /**
-   * Describe camera motion for video prompt
+   * Describe camera motion with Hollywood cinematography language
    */
-  describeCameraMotion: (cameraAction) => {
-    if (!cameraAction) return null;
+  describeCameraMotion: (cameraAction, vb = {}) => {
+    const movement = cameraAction?.movement || vb.cameraMovement;
+    const speed = cameraAction?.speed || 'slow';
 
-    const { movement, speed, focus } = cameraAction;
+    if (!movement || movement === 'static') {
+      return 'static locked-off frame with subtle atmospheric drift';
+    }
 
-    const parts = [];
-    if (movement) parts.push(`Camera: ${movement}`);
-    if (speed) parts.push(`Speed: ${speed}`);
-    if (focus) parts.push(`Focus: ${focus}`);
+    // Hollywood camera motion phrases
+    const cinematicMovements = {
+      'push-in': `${speed} deliberate push-in creating intimacy and focus`,
+      'pull-out': `${speed} pull-out revealing wider context`,
+      'pan-left': `${speed} pan left scanning the environment`,
+      'pan-right': `${speed} pan right following the action`,
+      'tilt-up': `${speed} tilt up revealing vertical space`,
+      'tilt-down': `${speed} tilt down grounding the scene`,
+      'tracking': `${speed} tracking shot moving with the subject`,
+      'handheld': 'subtle handheld drift adding organic energy',
+      'crane': `${speed} crane movement adding grandeur`,
+      'dolly': `${speed} dolly movement creating depth`
+    };
 
-    return parts.join(', ');
+    const baseMovement = cinematicMovements[movement] || `${speed} ${movement}`;
+
+    // Add focus information if available
+    if (cameraAction?.focus) {
+      return `${baseMovement}, focus on ${cameraAction.focus}`;
+    }
+
+    return baseMovement;
   },
 
   /**
-   * Describe environment motion for video prompt
+   * Describe environment motion for living world feel
    */
-  describeEnvironmentMotion: (environmentAction) => {
-    if (!environmentAction || environmentAction.length === 0) return null;
+  describeEnvironmentMotion: (environmentAction, vb = {}) => {
+    const motions = [];
 
-    return environmentAction.map(action => `- ${action}`).join('\n');
+    // Add explicit environment actions
+    if (environmentAction?.length > 0) {
+      motions.push(...environmentAction);
+    }
+
+    // Infer environmental motion from visual blueprint
+    if (vb.weather) {
+      if (vb.weather.includes('wind')) motions.push('leaves and fabric gently swaying in breeze');
+      if (vb.weather.includes('rain')) motions.push('rain continuously falling, drops on surfaces');
+      if (vb.weather.includes('storm')) motions.push('dramatic wind movement, shifting light');
+    }
+
+    // Light-based environment motion
+    if (vb.lightingSetup === 'practical') {
+      motions.push('subtle flicker from practical light sources');
+    }
+    if (vb.lightingSetup === 'neon') {
+      motions.push('neon lights gently pulsing with electric energy');
+    }
+
+    return motions.length > 0 ? motions.join(', ') : null;
   },
 
   /**
-   * Compile video prompt from components
+   * Describe atmospheric particle motion (critical for cinematic feel)
    */
-  compileVideoPrompt: (parts) => {
-    const sections = [];
+  describeAtmosphericMotion: (vb = {}) => {
+    const motions = [];
 
-    sections.push(`Starting from this exact image: [reference_image]`);
-    sections.push(''); // Empty line
+    if (vb.particles) {
+      if (vb.particles.includes('dust')) motions.push('dust motes drifting slowly through light beams');
+      if (vb.particles.includes('smoke')) motions.push('wisps of smoke curling and dissipating');
+      if (vb.particles.includes('ember')) motions.push('glowing embers floating gently upward');
+      if (vb.particles.includes('rain')) motions.push('rain falling in continuous sheets');
+      if (vb.particles.includes('mist')) motions.push('mist slowly swirling and drifting');
+      if (vb.particles.includes('snow')) motions.push('snowflakes falling gently');
+      if (vb.particles.includes('god ray')) motions.push('volumetric light rays shifting subtly');
+    }
+
+    // Add mood-based atmospheric motion
+    if (vb.mood === 'tense') motions.push('nervous energy in the air');
+    if (vb.mood === 'melancholic') motions.push('heavy atmospheric stillness');
+    if (vb.mood === 'epic') motions.push('grand atmospheric scale');
+
+    return motions.length > 0 ? motions.join(', ') : null;
+  },
+
+  /**
+   * Compile HOLLYWOOD-QUALITY video prompt as flowing prose
+   */
+  compileHollywoodVideoPrompt: (parts) => {
+    const promptParts = [];
+
+    // Core motion description
+    promptParts.push('Animate this image with cinematic motion:');
 
     if (parts.characterMotion) {
-      sections.push(`CHARACTER ACTION:`);
-      sections.push(parts.characterMotion);
-      sections.push('');
+      promptParts.push(parts.characterMotion);
     }
 
     if (parts.cameraMotion) {
-      sections.push(`CAMERA MOVEMENT:`);
-      sections.push(parts.cameraMotion);
-      sections.push('');
+      promptParts.push(parts.cameraMotion);
     }
 
     if (parts.environmentMotion) {
-      sections.push(`ENVIRONMENT ANIMATION:`);
-      sections.push(parts.environmentMotion);
-      sections.push('');
+      promptParts.push(parts.environmentMotion);
     }
 
-    sections.push(`Duration: ${parts.duration} seconds`);
-    if (parts.pacing) sections.push(`Pacing: ${parts.pacing}`);
+    if (parts.atmosphericMotion) {
+      promptParts.push(parts.atmosphericMotion);
+    }
 
-    sections.push('');
-    sections.push('CRITICAL: Maintain exact visual style, lighting, and color from the starting image.');
-    sections.push('The video is this image coming to life.');
+    // Add pacing and mood
+    if (parts.pacing) {
+      promptParts.push(`${parts.pacing} pacing throughout`);
+    }
 
-    return sections.join('\n');
+    if (parts.mood) {
+      promptParts.push(`maintaining ${parts.mood} atmosphere`);
+    }
+
+    // Add film look consistency
+    if (parts.filmLook) {
+      promptParts.push(parts.filmLook);
+    }
+
+    // Critical consistency instruction
+    promptParts.push('Maintain exact lighting, colors, and visual style from the starting image');
+    promptParts.push(`Duration: ${parts.duration} seconds`);
+    promptParts.push('Smooth, cinematic motion quality');
+
+    // Join as flowing prose
+    return promptParts.filter(p => p).join('. ') + '.';
   },
 
   /**
@@ -35315,9 +35922,10 @@ const VIDEO_PROMPT_GENERATOR = {
 
   /**
    * Generate optimized video prompt for specific AI models
+   * UPGRADED: Now passes genre and productionMode for enhanced extraction
    */
-  generateForModel: (generatedImageUrl, scene, styleBible, modelType) => {
-    const basePrompt = VIDEO_PROMPT_GENERATOR.generateFromImageAndScene(generatedImageUrl, scene, styleBible);
+  generateForModel: (generatedImageUrl, scene, styleBible, modelType, genre, productionMode) => {
+    const basePrompt = VIDEO_PROMPT_GENERATOR.generateFromImageAndScene(generatedImageUrl, scene, styleBible, genre, productionMode);
 
     // Apply model-specific optimizations
     const optimizers = {
@@ -35391,6 +35999,185 @@ const VIDEO_PROMPT_GENERATOR = {
       aspectRatio: scene.visualBlueprint?.aspectRatio || '16:9'
     };
     return prompt;
+  }
+};
+
+// =============================================================================
+// SECTION 9.4: PROMPT QUALITY ANALYZER - Validate & Enhance Prompt Quality
+// =============================================================================
+
+/**
+ * PROMPT_QUALITY_ANALYZER
+ * Analyzes prompts to ensure Hollywood-quality output
+ * Can detect missing elements and suggest improvements
+ */
+const PROMPT_QUALITY_ANALYZER = {
+
+  /**
+   * Quality thresholds for different production levels
+   */
+  thresholds: {
+    minimum: { length: 80, score: 30, elements: 2 },
+    standard: { length: 150, score: 50, elements: 4 },
+    hollywood: { length: 250, score: 70, elements: 6 },
+    premium: { length: 350, score: 85, elements: 8 }
+  },
+
+  /**
+   * Required cinematographic elements to detect
+   */
+  elements: {
+    subject: {
+      keywords: ['man', 'woman', 'person', 'figure', 'character', 'he', 'she', 'they', 'face', 'hands', 'silhouette'],
+      weight: 15
+    },
+    lighting: {
+      keywords: ['light', 'shadow', 'glow', 'illuminat', 'lamp', 'sun', 'moon', 'ambient', 'backlight', 'rim', 'key light', 'fill', 'chiaroscuro', 'golden hour', 'blue hour', 'neon'],
+      weight: 15
+    },
+    camera: {
+      keywords: ['shot', 'angle', 'frame', 'close', 'wide', 'medium', 'track', 'pan', 'push', 'pull', 'crane', 'dolly', 'handheld', 'POV', 'low-angle', 'high-angle'],
+      weight: 12
+    },
+    environment: {
+      keywords: ['background', 'foreground', 'midground', 'setting', 'location', 'room', 'space', 'city', 'forest', 'interior', 'exterior', 'landscape'],
+      weight: 12
+    },
+    atmosphere: {
+      keywords: ['dust', 'smoke', 'mist', 'fog', 'rain', 'particles', 'embers', 'steam', 'haze', 'atmosphere', 'mood', 'ambiance'],
+      weight: 10
+    },
+    color: {
+      keywords: ['color', 'palette', 'teal', 'orange', 'warm', 'cool', 'saturate', 'tone', 'grade', 'hue', 'contrast', 'vibrant', 'muted'],
+      weight: 8
+    },
+    style: {
+      keywords: ['cinematic', 'film', 'aesthetic', 'photorealistic', '8K', '4K', 'detailed', 'professional', 'blockbuster', 'documentary'],
+      weight: 8
+    },
+    depth: {
+      keywords: ['depth of field', 'bokeh', 'focus', 'sharp', 'blur', 'shallow', 'deep focus'],
+      weight: 5
+    }
+  },
+
+  /**
+   * Analyze a prompt and return quality metrics
+   */
+  analyze: (prompt) => {
+    if (!prompt || typeof prompt !== 'string') {
+      return {
+        score: 0,
+        quality: 'invalid',
+        length: 0,
+        elements: {},
+        missing: Object.keys(PROMPT_QUALITY_ANALYZER.elements),
+        suggestions: ['Prompt is empty or invalid']
+      };
+    }
+
+    const lowerPrompt = prompt.toLowerCase();
+    let score = 0;
+    const foundElements = {};
+    const missing = [];
+
+    // Length scoring (0-20 points)
+    const length = prompt.length;
+    if (length >= 400) score += 20;
+    else if (length >= 300) score += 16;
+    else if (length >= 200) score += 12;
+    else if (length >= 100) score += 8;
+    else score += 4;
+
+    // Element detection and scoring
+    for (const [element, config] of Object.entries(PROMPT_QUALITY_ANALYZER.elements)) {
+      const found = config.keywords.some(kw => lowerPrompt.includes(kw));
+      foundElements[element] = found;
+      if (found) {
+        score += config.weight;
+      } else {
+        missing.push(element);
+      }
+    }
+
+    // Determine quality tier
+    const thresholds = PROMPT_QUALITY_ANALYZER.thresholds;
+    let quality = 'poor';
+    if (score >= thresholds.premium.score) quality = 'premium';
+    else if (score >= thresholds.hollywood.score) quality = 'hollywood';
+    else if (score >= thresholds.standard.score) quality = 'standard';
+    else if (score >= thresholds.minimum.score) quality = 'minimum';
+
+    // Generate improvement suggestions
+    const suggestions = [];
+    if (length < 150) suggestions.push('Increase prompt length with more visual detail');
+    missing.forEach(element => {
+      const suggestionMap = {
+        subject: 'Add specific subject description (appearance, clothing, pose, expression)',
+        lighting: 'Add lighting design (key light, color temperature, shadow quality)',
+        camera: 'Add camera language (shot type, angle, movement)',
+        environment: 'Add environment layers (foreground, midground, background)',
+        atmosphere: 'Add atmospheric elements (particles, weather, mood)',
+        color: 'Add color palette information (dominant colors, temperature)',
+        style: 'Add cinematic style reference (film look, quality markers)',
+        depth: 'Add depth of field description (shallow/deep, bokeh)'
+      };
+      if (suggestionMap[element]) suggestions.push(suggestionMap[element]);
+    });
+
+    return {
+      score: Math.min(100, score),
+      quality,
+      length,
+      elements: foundElements,
+      elementCount: Object.values(foundElements).filter(Boolean).length,
+      missing,
+      suggestions,
+      meetsHollywoodStandard: score >= thresholds.hollywood.score
+    };
+  },
+
+  /**
+   * Quick check if prompt meets minimum quality
+   */
+  meetsMinimum: (prompt) => {
+    const analysis = PROMPT_QUALITY_ANALYZER.analyze(prompt);
+    return analysis.score >= PROMPT_QUALITY_ANALYZER.thresholds.minimum.score;
+  },
+
+  /**
+   * Quick check if prompt meets Hollywood quality
+   */
+  meetsHollywoodStandard: (prompt) => {
+    const analysis = PROMPT_QUALITY_ANALYZER.analyze(prompt);
+    return analysis.meetsHollywoodStandard;
+  },
+
+  /**
+   * Get quality tier name
+   */
+  getQualityTier: (prompt) => {
+    return PROMPT_QUALITY_ANALYZER.analyze(prompt).quality;
+  },
+
+  /**
+   * Generate quality report for logging/debugging
+   */
+  generateReport: (prompt) => {
+    const analysis = PROMPT_QUALITY_ANALYZER.analyze(prompt);
+    return `
+=== PROMPT QUALITY REPORT ===
+Quality Tier: ${analysis.quality.toUpperCase()}
+Score: ${analysis.score}/100
+Length: ${analysis.length} characters
+Elements Found: ${analysis.elementCount}/8
+
+Found Elements:
+${Object.entries(analysis.elements).map(([el, found]) => `  ${found ? '✓' : '✗'} ${el}`).join('\n')}
+
+${analysis.suggestions.length > 0 ? `Improvement Suggestions:\n${analysis.suggestions.map(s => `  - ${s}`).join('\n')}` : 'No suggestions - prompt meets Hollywood standard!'}
+==============================
+    `.trim();
   }
 };
 
