@@ -11412,8 +11412,8 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
 
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
-      console.log(`Generating image with Gemini model: ${geminiImageModelId}`);
-      console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}`);
+      console.log(`Generating image with Gemini model: ${geminiImageModelId}, aspect ratio: ${validAspectRatio}`);
+      console.log(`Prompt length: ${finalPrompt.length} chars, template: ${templateId || 'none'}, images: ${imageCount}`);
 
       // Build the content parts for the request
       const contentParts = [];
@@ -11467,11 +11467,33 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
         // Generate images (Gemini generates one at a time)
         for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
           try {
+            // Build generation config with aspect ratio support
+            // Reference: https://ai.google.dev/gemini-api/docs/image-generation
+            // Gemini supports: 1:1, 3:2, 2:3, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9
+            const geminiAspectRatioMap = {
+              '1:1': '1:1',
+              '16:9': '16:9',
+              '9:16': '9:16',
+              '4:3': '4:3',
+              '3:4': '3:4',
+              '4:5': '4:5',
+              '5:4': '5:4',
+              '3:2': '3:2',
+              '2:3': '2:3',
+              '21:9': '21:9'
+            };
+            const geminiAspectRatio = geminiAspectRatioMap[validAspectRatio] || '16:9';
+
             const result = await ai.models.generateContent({
               model: geminiImageModelId,
               contents: [{ role: 'user', parts: contentParts }],
               config: {
-                responseModalities: ['image', 'text']
+                responseModalities: ['image', 'text'],
+                // CRITICAL FIX: Pass aspect ratio to Gemini image generation
+                // This ensures 16:9, 9:16, etc. selections are respected
+                imageConfig: {
+                  aspectRatio: geminiAspectRatio
+                }
               }
             });
 
@@ -11498,6 +11520,7 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                       metadata: {
                         prompt: finalPrompt.substring(0, 500),
                         model: geminiImageModelId,
+                        aspectRatio: geminiAspectRatio,  // Track aspect ratio in metadata
                         generatedAt: new Date().toISOString()
                       }
                     }
@@ -11510,10 +11533,11 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                   generatedImages.push({
                     url: publicUrl,
                     fileName: fileName,
-                    seed: Math.floor(Math.random() * 1000000)
+                    seed: Math.floor(Math.random() * 1000000),
+                    aspectRatio: geminiAspectRatio  // Include in response
                   });
 
-                  console.log(`Gemini image ${imgIdx + 1} saved: ${fileName}`);
+                  console.log(`Gemini image ${imgIdx + 1} saved: ${fileName} (aspect: ${geminiAspectRatio})`);
                   break; // Only take first image from this response
                 }
               }

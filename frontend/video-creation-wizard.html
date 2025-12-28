@@ -4161,12 +4161,19 @@
                         // Restore full config objects from constants
                         if (project.production.format && FORMAT_PRESETS[project.production.format]) {
                             state.production.formatConfig = FORMAT_PRESETS[project.production.format];
+                            // CRITICAL: Sync aspect ratio to legacy platform state for image generation
+                            // This ensures image generators receive the correct aspect ratio
+                            state.platform.aspectRatio = FORMAT_PRESETS[project.production.format].aspectRatio;
                         }
                         if (project.production.type && PRODUCTION_TYPES[project.production.type]) {
                             state.production.typeConfig = PRODUCTION_TYPES[project.production.type];
                             if (project.production.subType) {
                                 state.production.subTypeConfig = PRODUCTION_TYPES[project.production.type].subTypes[project.production.subType];
                             }
+                        }
+                        // Sync target duration to legacy state
+                        if (project.production.targetDuration) {
+                            state.platform.targetDuration = project.production.targetDuration;
                         }
                     }
 
