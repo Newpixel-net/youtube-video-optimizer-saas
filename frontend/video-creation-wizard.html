@@ -1639,6 +1639,116 @@
             color: #a78bfa;
         }
 
+        /* Floating Preview (Picture-in-Picture) Styles */
+        @keyframes floatPreviewSlideIn {
+            from { opacity: 0; transform: scale(0.8) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .floating-preview-container {
+            position: fixed;
+            z-index: 1000;
+            width: 320px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,92,246,0.3);
+            animation: floatPreviewSlideIn 0.25s ease-out;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .floating-preview-container.minimized {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .floating-preview-container.top-left { top: 1rem; left: 1rem; }
+        .floating-preview-container.top-right { top: 1rem; right: 1rem; }
+        .floating-preview-container.bottom-left { bottom: 1rem; left: 1rem; }
+        .floating-preview-container.bottom-right { bottom: 1rem; right: 1rem; }
+
+        .floating-preview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            cursor: grab;
+        }
+
+        .floating-preview-header:active {
+            cursor: grabbing;
+        }
+
+        .floating-preview-content {
+            aspect-ratio: 16/9;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .floating-preview-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .floating-preview-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            transition: all 0.15s;
+        }
+
+        .floating-preview-btn:hover {
+            background: rgba(139,92,246,0.3);
+            color: white;
+        }
+
+        .floating-preview-position-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            padding: 0.5rem;
+            background: rgba(0,0,0,0.3);
+        }
+
+        .floating-preview-position-btn {
+            padding: 0.25rem;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.5);
+            font-size: 0.6rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .floating-preview-position-btn:hover {
+            background: rgba(139,92,246,0.2);
+            border-color: rgba(139,92,246,0.3);
+            color: white;
+        }
+
+        .floating-preview-position-btn.active {
+            background: rgba(139,92,246,0.3);
+            border-color: #8b5cf6;
+            color: #a78bfa;
+        }
+
         .fade-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
@@ -3025,6 +3135,12 @@
                     isOpen: false,                  // Modal open state
                     device: 'laptop',               // 'mobile' | 'laptop' | 'tablet' (default laptop for 16:9)
                     currentClipIndex: 0             // Current clip being previewed
+                },
+                // Floating Preview (PiP mode)
+                floatingPreview: {
+                    enabled: false,                 // Whether PiP mode is active
+                    position: 'bottom-right',       // 'top-left', 'top-right', 'bottom-left', 'bottom-right'
+                    minimized: false                // Whether preview is minimized to icon
                 }
             },
 
@@ -7387,6 +7503,9 @@
             // Device Preview Modal
             html += renderDevicePreviewModal();
 
+            // Floating Preview (PiP mode)
+            html += renderFloatingPreview();
+
             return html;
         }
 
@@ -7777,6 +7896,12 @@
             }
             html += '</div>';
             html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            // PiP Toggle Button
+            var isPipEnabled = state.animation.floatingPreview && state.animation.floatingPreview.enabled;
+            html += '<button onclick="toggleFloatingPreview()" title="' + (isPipEnabled ? 'Exit Picture-in-Picture' : 'Picture-in-Picture mode') + '" style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.6rem; border-radius: 0.35rem; border: 1px solid ' + (isPipEnabled ? 'rgba(16,185,129,0.5)' : 'rgba(6,182,212,0.3)') + '; background: ' + (isPipEnabled ? 'rgba(16,185,129,0.2)' : 'rgba(6,182,212,0.1)') + '; color: ' + (isPipEnabled ? '#10b981' : '#06b6d4') + '; font-size: 0.65rem; cursor: pointer; transition: all 0.2s;">';
+            html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="11" y="9" width="10" height="8" rx="1" fill="currentColor" opacity="0.3"/></svg>';
+            html += isPipEnabled ? 'Exit PiP' : 'PiP';
+            html += '</button>';
             // Device Preview Button
             html += '<button onclick="openDevicePreview()" style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.6rem; border-radius: 0.35rem; border: 1px solid rgba(139,92,246,0.3); background: rgba(139,92,246,0.1); color: #a78bfa; font-size: 0.65rem; cursor: pointer; transition: all 0.2s;" onmouseenter="this.style.background=\'rgba(139,92,246,0.2)\'" onmouseleave="this.style.background=\'rgba(139,92,246,0.1)\'">';
             html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>';
@@ -8806,6 +8931,149 @@
             var storyboardScenes = state.storyboard.scenes || [];
             if (devicePreview && devicePreview.currentClipIndex < storyboardScenes.length - 1) {
                 devicePreview.currentClipIndex++;
+                render();
+            }
+        }
+
+        // ==========================================
+        // FLOATING PREVIEW (PiP MODE)
+        // ==========================================
+
+        function toggleFloatingPreview() {
+            if (!state.animation.floatingPreview) {
+                state.animation.floatingPreview = { enabled: false, position: 'bottom-right', minimized: false };
+            }
+            state.animation.floatingPreview.enabled = !state.animation.floatingPreview.enabled;
+            state.animation.floatingPreview.minimized = false;
+            render();
+            if (state.animation.floatingPreview.enabled) {
+                showToast('Picture-in-Picture mode enabled', 'success');
+            }
+        }
+
+        function setFloatingPreviewPosition(position) {
+            if (!state.animation.floatingPreview) {
+                state.animation.floatingPreview = { enabled: true, position: 'bottom-right', minimized: false };
+            }
+            state.animation.floatingPreview.position = position;
+            render();
+        }
+
+        function toggleFloatingPreviewMinimize() {
+            if (!state.animation.floatingPreview) return;
+            state.animation.floatingPreview.minimized = !state.animation.floatingPreview.minimized;
+            render();
+        }
+
+        function renderFloatingPreview() {
+            var floatingPreview = state.animation.floatingPreview;
+            if (!floatingPreview || !floatingPreview.enabled) {
+                return '';
+            }
+
+            var position = floatingPreview.position || 'bottom-right';
+            var isMinimized = floatingPreview.minimized;
+            var selectedId = state.animation.selectedSceneId;
+            var scriptScenes = state.script.scenes || [];
+            var storyboardScenes = state.storyboard.scenes || [];
+            var animationScenes = state.animation.scenes || [];
+
+            var scriptScene = scriptScenes.find(function(s) { return s.id === selectedId; });
+            var storyboardScene = storyboardScenes.find(function(s) { return s.sceneId === selectedId; }) || {};
+            var animScene = animationScenes.find(function(s) { return s.sceneId === selectedId; }) || {};
+
+            var sceneIndex = scriptScenes.findIndex(function(s) { return s.id === selectedId; });
+            var imageUrl = storyboardScene.imageUrl || '';
+            var videoUrl = animScene.videoUrl || '';
+
+            var html = '';
+
+            // Minimized state - just a floating icon
+            if (isMinimized) {
+                html += '<div class="floating-preview-container minimized ' + position + '" onclick="toggleFloatingPreviewMinimize()" title="Expand Preview">';
+                html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #8b5cf6, #6366f1);">';
+                html += '<span style="font-size: 1.5rem;">🎬</span>';
+                html += '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            html += '<div class="floating-preview-container ' + position + '">';
+
+            // Header with drag handle and controls
+            html += '<div class="floating-preview-header">';
+            html += '<div style="display: flex; align-items: center; gap: 0.4rem;">';
+            html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">⋮⋮</span>';
+            html += '<span style="font-size: 0.7rem; font-weight: 600; color: white;">Scene ' + (sceneIndex + 1) + '</span>';
+            if (videoUrl) {
+                html += '<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(16,185,129,0.3); color: #10b981; border-radius: 0.25rem;">✓</span>';
+            }
+            html += '</div>';
+            html += '<div style="display: flex; align-items: center; gap: 0.25rem;">';
+            html += '<button onclick="toggleFloatingPreviewMinimize()" class="floating-preview-btn" title="Minimize"><span style="font-size: 0.8rem;">−</span></button>';
+            html += '<button onclick="toggleFloatingPreview()" class="floating-preview-btn" title="Close PiP"><span style="font-size: 0.7rem;">✕</span></button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Preview content
+            html += '<div class="floating-preview-content">';
+            if (videoUrl) {
+                html += '<video id="floating-preview-video" src="' + videoUrl + '" style="width: 100%; height: 100%; object-fit: cover;" onclick="playFloatingPreviewVideo()"></video>';
+                html += '<div onclick="playFloatingPreviewVideo()" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); cursor: pointer;" id="floating-play-overlay">';
+                html += '<div style="width: 40px; height: 40px; background: rgba(16,185,129,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">';
+                html += '<span style="font-size: 1rem; margin-left: 2px;">▶</span>';
+                html += '</div>';
+                html += '</div>';
+            } else if (imageUrl) {
+                html += '<img src="' + imageUrl + '" style="width: 115%; height: 115%; object-fit: cover; animation: kenBurnsPreview 8s ease-in-out infinite alternate;">';
+            } else {
+                html += '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">';
+                html += '<span style="font-size: 2rem;">🖼️</span>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Position controls
+            html += '<div class="floating-preview-position-grid">';
+            html += '<button onclick="setFloatingPreviewPosition(\'top-left\')" class="floating-preview-position-btn ' + (position === 'top-left' ? 'active' : '') + '">↖ Top Left</button>';
+            html += '<button onclick="setFloatingPreviewPosition(\'top-right\')" class="floating-preview-position-btn ' + (position === 'top-right' ? 'active' : '') + '">↗ Top Right</button>';
+            html += '<button onclick="setFloatingPreviewPosition(\'bottom-left\')" class="floating-preview-position-btn ' + (position === 'bottom-left' ? 'active' : '') + '">↙ Bottom Left</button>';
+            html += '<button onclick="setFloatingPreviewPosition(\'bottom-right\')" class="floating-preview-position-btn ' + (position === 'bottom-right' ? 'active' : '') + '">↘ Bottom Right</button>';
+            html += '</div>';
+
+            // Quick navigation
+            html += '<div class="floating-preview-controls">';
+            html += '<button onclick="navigateFloatingPreview(-1)" class="floating-preview-btn" title="Previous scene" ' + (sceneIndex <= 0 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : '') + '>◀</button>';
+            html += '<span style="flex: 1; text-align: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">' + (sceneIndex + 1) + ' / ' + scriptScenes.length + '</span>';
+            html += '<button onclick="navigateFloatingPreview(1)" class="floating-preview-btn" title="Next scene" ' + (sceneIndex >= scriptScenes.length - 1 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : '') + '>▶</button>';
+            html += '</div>';
+
+            html += '</div>';
+            return html;
+        }
+
+        function playFloatingPreviewVideo() {
+            var video = document.getElementById('floating-preview-video');
+            var overlay = document.getElementById('floating-play-overlay');
+            if (video) {
+                if (video.paused) {
+                    video.play();
+                    if (overlay) overlay.style.display = 'none';
+                } else {
+                    video.pause();
+                    if (overlay) overlay.style.display = 'flex';
+                }
+            }
+        }
+
+        function navigateFloatingPreview(direction) {
+            var scriptScenes = state.script.scenes || [];
+            var currentId = state.animation.selectedSceneId;
+            var currentIndex = scriptScenes.findIndex(function(s) { return s.id === currentId; });
+            var newIndex = currentIndex + direction;
+
+            if (newIndex >= 0 && newIndex < scriptScenes.length) {
+                state.animation.selectedSceneId = scriptScenes[newIndex].id;
                 render();
             }
         }
